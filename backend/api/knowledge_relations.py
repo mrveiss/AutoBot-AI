@@ -120,9 +120,7 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     result = await kb.create_fact_relation(
         source_fact_id=body.source_fact_id,
@@ -155,9 +153,7 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     result = await kb.delete_fact_relation(
         source_fact_id=body.source_fact_id,
@@ -186,9 +182,7 @@ async def get_fact_relations(
     direction: str = Query(
         "both", description="Direction: 'outgoing', 'incoming', or 'both'"
     ),
-    relation_type: Optional[str] = Query(
-        None, description="Filter by relation type"
-    ),
+    relation_type: Optional[str] = Query(None, description="Filter by relation type"),
     include_details: bool = Query(
         False, description="Include full fact content for related facts"
     ),
@@ -201,9 +195,7 @@ async def get_fact_relations(
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     if direction not in _VALID_DIRECTIONS:
         raise HTTPException(
@@ -243,9 +235,7 @@ async def traverse_relations(req: Request, body: TraverseRequest):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     result = await kb.traverse_relations(
         start_fact_id=body.start_fact_id,
@@ -282,9 +272,7 @@ async def hybrid_search(req: Request, body: HybridSearchRequest):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     result = await kb.hybrid_search(
         query=body.query,
@@ -318,9 +306,7 @@ async def get_relation_stats(req: Request):
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb is None:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     result = await kb.get_relation_stats()
 

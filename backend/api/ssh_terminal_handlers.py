@@ -82,24 +82,27 @@ class SSHTerminalWebSocket:
 
     async def _send_error(self, content: str) -> None:
         """Send error message to client."""
-        await self.send_message({
-            "type": "error",
-            "content": content,
-            "timestamp": time.time(),
-            "redirect": {
-                "type": "slm",
-                "message": "Use SLM for infrastructure SSH connections",
-                "url": "/api/terminal/ssh/{host_id}",
-            },
-        })
+        await self.send_message(
+            {
+                "type": "error",
+                "content": content,
+                "timestamp": time.time(),
+                "redirect": {
+                    "type": "slm",
+                    "message": "Use SLM for infrastructure SSH connections",
+                    "url": "/api/terminal/ssh/{host_id}",
+                },
+            }
+        )
 
     async def send_to_terminal(self, text: str) -> None:
         """Send text input - not supported, redirects to SLM."""
-        await self._send_error("SSH terminal not available. Use SLM for infrastructure connections.")
+        await self._send_error(
+            "SSH terminal not available. Use SLM for infrastructure connections."
+        )
 
     async def send_output(self, content: str) -> None:
         """Send terminal output - stub."""
-        pass
 
     async def handle_message(self, message: dict) -> None:
         """Handle incoming WebSocket message - returns deprecation notice."""
@@ -114,7 +117,9 @@ class SSHTerminalManager:
         self.active_sessions: Dict[str, SSHTerminalWebSocket] = {}
         self._lock = asyncio.Lock()
 
-    async def add_session(self, session_id: str, terminal: SSHTerminalWebSocket) -> None:
+    async def add_session(
+        self, session_id: str, terminal: SSHTerminalWebSocket
+    ) -> None:
         """Add an SSH terminal session."""
         async with self._lock:
             self.active_sessions[session_id] = terminal

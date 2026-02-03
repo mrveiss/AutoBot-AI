@@ -12,11 +12,10 @@ import os
 from datetime import datetime
 from typing import Dict, List
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

@@ -474,9 +474,11 @@ async def test_destination(
             "name": name,
             "healthy": healthy,
             "last_error": dest._last_error,
-            "message": "Connection successful"
-            if healthy
-            else f"Connection failed: {dest._last_error}",
+            "message": (
+                "Connection successful"
+                if healthy
+                else f"Connection failed: {dest._last_error}"
+            ),
         }
     except HTTPException:
         raise
@@ -784,9 +786,11 @@ async def get_auto_start(
     forwarder = await _get_forwarder()
     return {
         "auto_start": forwarder.auto_start,
-        "message": "Auto-start is enabled"
-        if forwarder.auto_start
-        else "Auto-start is disabled",
+        "message": (
+            "Auto-start is enabled"
+            if forwarder.auto_start
+            else "Auto-start is disabled"
+        ),
     }
 
 

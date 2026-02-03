@@ -11,10 +11,10 @@ import asyncio
 import time
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
 from src.ai_hardware_accelerator import HardwareDevice
 
 # Import NPU semantic search components
@@ -35,9 +35,7 @@ class SearchRequest(BaseModel):
     similarity_top_k: int = Field(
         10, description="Number of results to return", ge=1, le=100
     )
-    filters: Optional[Metadata] = Field(
-        None, description="Optional metadata filters"
-    )
+    filters: Optional[Metadata] = Field(None, description="Optional metadata filters")
     enable_npu_acceleration: bool = Field(True, description="Enable NPU acceleration")
     force_device: Optional[str] = Field(
         None, description="Force specific device (npu/gpu/cpu)"
@@ -73,7 +71,7 @@ class OptimizationRequest(BaseModel):
         description=(
             "Workload type: latency_optimized, throughput_optimized, quality_optimized,"
             "balanced"
-        )
+        ),
     )
 
 
@@ -432,8 +430,10 @@ def _generate_performance_recommendations(
         else:
             recommendations.extend(
                 _evaluate_device_timing(
-                    npu_stats, "NPU",
-                    low_threshold=1000, high_threshold=3000,
+                    npu_stats,
+                    "NPU",
+                    low_threshold=1000,
+                    high_threshold=3000,
                     excellent_msg="NPU performance is excellent - consider routing more lightweight tasks to NPU",
                     slow_msg="NPU response times are high - consider model optimization or reduce batch sizes",
                 )
@@ -447,8 +447,10 @@ def _generate_performance_recommendations(
     gpu_stats = summary.get("gpu")
     recommendations.extend(
         _evaluate_device_timing(
-            gpu_stats, "GPU",
-            low_threshold=500, high_threshold=2000,
+            gpu_stats,
+            "GPU",
+            low_threshold=500,
+            high_threshold=2000,
             excellent_msg="GPU performance is excellent - consider routing more complex tasks to GPU",
             slow_msg="GPU response times are high - check GPU utilization and memory usage",
         )

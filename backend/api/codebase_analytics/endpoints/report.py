@@ -18,30 +18,12 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.code_intelligence.bug_predictor import BugPredictor, PredictionResult
-
-from src.utils.file_categorization import (
-    FILE_CATEGORY_CODE,
-    FILE_CATEGORY_BACKUP,
-    FILE_CATEGORY_ARCHIVE,
-    FILE_CATEGORY_DOCS,
-    FILE_CATEGORY_LOGS,
-    FILE_CATEGORY_CONFIG,
-    FILE_CATEGORY_TEST,
-    FILE_CATEGORY_DATA,
-    FILE_CATEGORY_ASSETS,
-    get_category_info,
-)
-from ..storage import get_code_collection
-from ..api_endpoint_scanner import APIEndpointChecker
-from ..models import APIEndpointAnalysis
-from ..duplicate_detector import DuplicateCodeDetector, DuplicateAnalysis  # noqa: F401
 
 # Issue #244: Cross-Language Pattern Detection
 from src.code_intelligence.cross_language_patterns import (
-    CrossLanguagePatternDetector,
     CrossLanguageAnalysis,
+    CrossLanguagePatternDetector,
 )
 
 # Issue #208: Code Pattern Detection & Optimization
@@ -49,6 +31,23 @@ from src.code_intelligence.pattern_analysis import (
     CodePatternAnalyzer,
     PatternAnalysisReport,
 )
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.utils.file_categorization import (
+    FILE_CATEGORY_ARCHIVE,
+    FILE_CATEGORY_ASSETS,
+    FILE_CATEGORY_BACKUP,
+    FILE_CATEGORY_CODE,
+    FILE_CATEGORY_CONFIG,
+    FILE_CATEGORY_DATA,
+    FILE_CATEGORY_DOCS,
+    FILE_CATEGORY_LOGS,
+    FILE_CATEGORY_TEST,
+)
+
+from ..api_endpoint_scanner import APIEndpointChecker
+from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401
+from ..models import APIEndpointAnalysis
+from ..storage import get_code_collection
 
 logger = logging.getLogger(__name__)
 
@@ -164,10 +163,12 @@ def _generate_category_section(
     ]
 
     if note:
-        lines.extend([
-            f"> {note}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"> {note}",
+                "",
+            ]
+        )
 
     grouped = _group_problems(problems)
 
@@ -179,19 +180,23 @@ def _generate_category_section(
         severity_issues = grouped[severity]
         severity_total = sum(len(issues) for issues in severity_issues.values())
 
-        lines.extend([
-            f"### {emoji} {severity.capitalize()} Severity ({severity_total} issues)",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {emoji} {severity.capitalize()} Severity ({severity_total} issues)",
+                "",
+            ]
+        )
 
         for issue_type in sorted(severity_issues.keys()):
             issues = severity_issues[issue_type]
             display_type = issue_type.replace("_", " ").title()
 
-            lines.extend([
-                f"#### {display_type} ({len(issues)})",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"#### {display_type} ({len(issues)})",
+                    "",
+                ]
+            )
 
             sorted_issues = sorted(
                 issues,
@@ -213,17 +218,17 @@ def _calculate_category_counts(by_category: Dict[str, List[Dict]]) -> Dict[str, 
     """Calculate issue counts by category type (Issue #398: extracted)."""
     return {
         "code": (
-            len(by_category[FILE_CATEGORY_CODE]) +
-            len(by_category[FILE_CATEGORY_CONFIG]) +
-            len(by_category[FILE_CATEGORY_TEST])
+            len(by_category[FILE_CATEGORY_CODE])
+            + len(by_category[FILE_CATEGORY_CONFIG])
+            + len(by_category[FILE_CATEGORY_TEST])
         ),
         "backup": len(by_category[FILE_CATEGORY_BACKUP]),
         "archive": len(by_category[FILE_CATEGORY_ARCHIVE]),
         "other": (
-            len(by_category[FILE_CATEGORY_DOCS]) +
-            len(by_category[FILE_CATEGORY_LOGS]) +
-            len(by_category[FILE_CATEGORY_DATA]) +
-            len(by_category[FILE_CATEGORY_ASSETS])
+            len(by_category[FILE_CATEGORY_DOCS])
+            + len(by_category[FILE_CATEGORY_LOGS])
+            + len(by_category[FILE_CATEGORY_DATA])
+            + len(by_category[FILE_CATEGORY_ASSETS])
         ),
     }
 
@@ -285,13 +290,15 @@ def _build_summary_section(
             emoji = _get_severity_emoji(sev)
             lines.append(f"| {emoji} {sev.capitalize()} | {count} |")
 
-    lines.extend([
-        "",
-        "### By Issue Type",
-        "",
-        "| Issue Type | Count |",
-        "|------------|-------|",
-    ])
+    lines.extend(
+        [
+            "",
+            "### By Issue Type",
+            "",
+            "| Issue Type | Count |",
+            "|------------|-------|",
+        ]
+    )
 
     sorted_types = sorted(type_counts.items(), key=lambda x: -x[1])
     for ptype, count in sorted_types:
@@ -331,7 +338,12 @@ def _generate_risk_overview(prediction: PredictionResult) -> List[str]:
 
 def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
     """Generate risk distribution table. Issue #484: Extracted from _generate_bug_risk_section."""
-    lines = ["### Risk Distribution", "", "| Risk Level | Files |", "|------------|-------|"]
+    lines = [
+        "### Risk Distribution",
+        "",
+        "| Risk Level | Files |",
+        "|------------|-------|",
+    ]
     for level in ["critical", "high", "medium", "low", "minimal"]:
         count = prediction.risk_distribution.get(level, 0)
         emoji = _get_risk_emoji(level)
@@ -344,7 +356,12 @@ def _generate_risk_factors(prediction: PredictionResult) -> List[str]:
     """Generate top risk factors table. Issue #484: Extracted from _generate_bug_risk_section."""
     if not prediction.top_risk_factors:
         return []
-    lines = ["### Top Risk Factors", "", "| Factor | Total Score |", "|--------|-------------|"]
+    lines = [
+        "### Top Risk Factors",
+        "",
+        "| Factor | Total Score |",
+        "|--------|-------------|",
+    ]
     for factor, score in prediction.top_risk_factors:
         display_factor = factor.replace("_", " ").title()
         lines.append(f"| {display_factor} | {score:.1f} |")
@@ -382,14 +399,20 @@ def _generate_file_assessment_details(fa) -> List[str]:
 def _generate_high_risk_files(prediction: PredictionResult) -> List[str]:
     """Generate high-risk files section. Issue #484: Extracted from _generate_bug_risk_section."""
     high_risk_files = [
-        fa for fa in prediction.file_assessments
+        fa
+        for fa in prediction.file_assessments
         if fa.risk_level.value in ("critical", "high")
     ][:TOP_HIGH_RISK_FILES_LIMIT]
 
     if not high_risk_files:
         return []
 
-    lines = ["### High-Risk Files", "", "> Files with the highest probability of containing bugs.", ""]
+    lines = [
+        "### High-Risk Files",
+        "",
+        "> Files with the highest probability of containing bugs.",
+        "",
+    ]
     for fa in high_risk_files:
         lines.extend(_generate_file_assessment_details(fa))
     return lines
@@ -417,7 +440,9 @@ def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
     if prediction.accuracy_score is not None:
         lines.append(f"**Prediction Accuracy:** {prediction.accuracy_score:.1f}%")
     else:
-        lines.append("**Prediction Accuracy:** *Historical accuracy data not yet available*")
+        lines.append(
+            "**Prediction Accuracy:** *Historical accuracy data not yet available*"
+        )
     lines.append("")
 
     # Compose from extracted helpers (Issue #484)
@@ -426,14 +451,16 @@ def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
     lines.extend(_generate_risk_factors(prediction))
     lines.extend(_generate_high_risk_files(prediction))
 
-    lines.extend([
-        "### Correlation with Detected Issues",
-        "",
-        "> Files appearing in both static analysis issues AND high bug risk prediction.",
-        "",
-        "---",
-        "",
-    ])
+    lines.extend(
+        [
+            "### Correlation with Detected Issues",
+            "",
+            "> Files appearing in both static analysis issues AND high bug risk prediction.",
+            "",
+            "---",
+            "",
+        ]
+    )
 
     return lines
 
@@ -502,10 +529,14 @@ def _generate_orphaned_section(analysis: APIEndpointAnalysis) -> List[str]:
     ]
 
     for ep in analysis.orphaned[:API_ENDPOINT_LIST_LIMIT]:
-        lines.append(f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |")
+        lines.append(
+            f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |"
+        )
 
     if len(analysis.orphaned) > API_ENDPOINT_LIST_LIMIT:
-        lines.append(f"| ... | *{len(analysis.orphaned) - API_ENDPOINT_LIST_LIMIT} more* | | |")
+        lines.append(
+            f"| ... | *{len(analysis.orphaned) - API_ENDPOINT_LIST_LIMIT} more* | | |"
+        )
 
     lines.append("")
     return lines
@@ -526,10 +557,14 @@ def _generate_missing_section(analysis: APIEndpointAnalysis) -> List[str]:
     ]
 
     for ep in analysis.missing[:API_ENDPOINT_LIST_LIMIT]:
-        lines.append(f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |")
+        lines.append(
+            f"| {ep.method} | `{ep.path}` | `{ep.file_path}` | {ep.line_number} |"
+        )
 
     if len(analysis.missing) > API_ENDPOINT_LIST_LIMIT:
-        lines.append(f"| ... | *{len(analysis.missing) - API_ENDPOINT_LIST_LIMIT} more* | | |")
+        lines.append(
+            f"| ... | *{len(analysis.missing) - API_ENDPOINT_LIST_LIMIT} more* | | |"
+        )
 
     lines.append("")
     return lines
@@ -558,7 +593,9 @@ def _generate_most_used_section(analysis: APIEndpointAnalysis) -> List[str]:
     return lines
 
 
-def _generate_api_endpoint_section(analysis: Optional[APIEndpointAnalysis]) -> List[str]:
+def _generate_api_endpoint_section(
+    analysis: Optional[APIEndpointAnalysis],
+) -> List[str]:
     """
     Generate the API Endpoint Analysis section for the report (Issue #527).
 
@@ -655,8 +692,7 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
 def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate medium similarity duplicates section."""
     medium_similarity_dups = [
-        d for d in analysis.duplicates
-        if 0.70 <= d.similarity < 0.90
+        d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90
     ]
     if not medium_similarity_dups:
         return []
@@ -696,7 +732,9 @@ def _shorten_path(path: str, max_length: int = 50) -> str:
     return path[-max_length:]
 
 
-def _generate_duplicate_code_section(analysis: Optional[DuplicateAnalysis]) -> List[str]:
+def _generate_duplicate_code_section(
+    analysis: Optional[DuplicateAnalysis],
+) -> List[str]:
     """
     Generate the Duplicate Code Analysis section for the report (Issue #528).
 
@@ -722,14 +760,16 @@ def _generate_duplicate_code_section(analysis: Optional[DuplicateAnalysis]) -> L
 
     # Add recommendations if high duplicates found
     if analysis.high_similarity_count > 0:
-        lines.extend([
-            "### Recommendations",
-            "",
-            "- **Extract common code** to shared utilities or base classes",
-            "- **Review high-similarity pairs** for potential consolidation",
-            "- **Consider design patterns** like Template Method or Strategy for similar logic",
-            "",
-        ])
+        lines.extend(
+            [
+                "### Recommendations",
+                "",
+                "- **Extract common code** to shared utilities or base classes",
+                "- **Review high-similarity pairs** for potential consolidation",
+                "- **Consider design patterns** like Template Method or Strategy for similar logic",
+                "",
+            ]
+        )
 
     lines.extend(["---", ""])
 
@@ -755,9 +795,9 @@ def _get_severity_color(severity: str) -> str:
 def _generate_cross_language_overview(analysis: CrossLanguageAnalysis) -> List[str]:
     """Generate cross-language analysis overview section."""
     total_files = (
-        analysis.python_files_analyzed +
-        analysis.typescript_files_analyzed +
-        analysis.vue_files_analyzed
+        analysis.python_files_analyzed
+        + analysis.typescript_files_analyzed
+        + analysis.vue_files_analyzed
     )
 
     lines = [
@@ -810,8 +850,16 @@ def _generate_api_mismatches_section(analysis: CrossLanguageAnalysis) -> List[st
     if not analysis.api_contract_mismatches:
         return []
 
-    orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
-    missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
+    orphaned = [
+        m
+        for m in analysis.api_contract_mismatches
+        if m.mismatch_type == "orphaned_endpoint"
+    ]
+    missing = [
+        m
+        for m in analysis.api_contract_mismatches
+        if m.mismatch_type == "missing_endpoint"
+    ]
 
     lines = [
         "### 🟠 API Contract Mismatches",
@@ -819,14 +867,16 @@ def _generate_api_mismatches_section(analysis: CrossLanguageAnalysis) -> List[st
     ]
 
     if missing:
-        lines.extend([
-            "#### Missing Endpoints (Called but not defined)",
-            "",
-            "> Frontend calls endpoints that don't exist in the backend.",
-            "",
-            "| Method | Path | Called From |",
-            "|--------|------|-------------|",
-        ])
+        lines.extend(
+            [
+                "#### Missing Endpoints (Called but not defined)",
+                "",
+                "> Frontend calls endpoints that don't exist in the backend.",
+                "",
+                "| Method | Path | Called From |",
+                "|--------|------|-------------|",
+            ]
+        )
         for m in missing[:10]:
             loc = m.frontend_location
             file_info = f"`{loc.file_path}:{loc.line_start}`" if loc else "Unknown"
@@ -836,14 +886,16 @@ def _generate_api_mismatches_section(analysis: CrossLanguageAnalysis) -> List[st
         lines.append("")
 
     if orphaned:
-        lines.extend([
-            "#### Orphaned Endpoints (Defined but not called)",
-            "",
-            "> Backend endpoints with no frontend usage.",
-            "",
-            "| Method | Path | Defined In |",
-            "|--------|------|------------|",
-        ])
+        lines.extend(
+            [
+                "#### Orphaned Endpoints (Defined but not called)",
+                "",
+                "> Backend endpoints with no frontend usage.",
+                "",
+                "| Method | Path | Defined In |",
+                "|--------|------|------------|",
+            ]
+        )
         for m in orphaned[:10]:
             loc = m.backend_location
             file_info = f"`{loc.file_path}:{loc.line_start}`" if loc else "Unknown"
@@ -855,7 +907,9 @@ def _generate_api_mismatches_section(analysis: CrossLanguageAnalysis) -> List[st
     return lines
 
 
-def _generate_validation_duplications_section(analysis: CrossLanguageAnalysis) -> List[str]:
+def _generate_validation_duplications_section(
+    analysis: CrossLanguageAnalysis,
+) -> List[str]:
     """Generate validation duplications section for report."""
     if not analysis.validation_duplications:
         return []
@@ -870,18 +924,29 @@ def _generate_validation_duplications_section(analysis: CrossLanguageAnalysis) -
     ]
 
     for v in analysis.validation_duplications[:10]:
-        py_loc = f"`{v.python_location.file_path}:{v.python_location.line_start}`" if v.python_location else "N/A"
-        ts_loc = f"`{v.typescript_location.file_path}:{v.typescript_location.line_start}`" if v.typescript_location else "N/A"
+        py_loc = (
+            f"`{v.python_location.file_path}:{v.python_location.line_start}`"
+            if v.python_location
+            else "N/A"
+        )
+        ts_loc = (
+            f"`{v.typescript_location.file_path}:{v.typescript_location.line_start}`"
+            if v.typescript_location
+            else "N/A"
+        )
         lines.append(f"| {v.validation_type} | {py_loc} | {ts_loc} |")
 
     if len(analysis.validation_duplications) > 10:
         lines.append(f"| ... | *{len(analysis.validation_duplications) - 10} more* | |")
 
-    lines.extend([
-        "",
-        "**Recommendation:** Consider using a shared validation schema (e.g., JSON Schema, Zod) to ensure consistency.",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "**Recommendation:** Consider using a shared validation schema "
+            "(e.g., JSON Schema, Zod) to ensure consistency.",
+            "",
+        ]
+    )
 
     return lines
 
@@ -908,17 +973,21 @@ def _generate_semantic_matches_section(analysis: CrossLanguageAnalysis) -> List[
 
     for m in high_similarity[:10]:
         py_name = m.metadata.get("python_name", "Unknown") if m.metadata else "Unknown"
-        ts_name = m.metadata.get("typescript_name", "Unknown") if m.metadata else "Unknown"
+        ts_name = (
+            m.metadata.get("typescript_name", "Unknown") if m.metadata else "Unknown"
+        )
         lines.append(f"| {m.similarity_score:.0%} | `{py_name}` | `{ts_name}` |")
 
     if len(high_similarity) > 10:
         lines.append(f"| ... | *{len(high_similarity) - 10} more* | |")
 
-    lines.extend([
-        "",
-        "**Note:** High semantic similarity may indicate duplicated business logic that could be consolidated.",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "**Note:** High semantic similarity may indicate duplicated business logic that could be consolidated.",
+            "",
+        ]
+    )
 
     return lines
 
@@ -950,7 +1019,13 @@ def _generate_severity_distribution(report: PatternAnalysisReport) -> List[str]:
         "| Severity | Count |",
         "|----------|-------|",
     ]
-    severity_emojis = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "🔵"}
+    severity_emojis = {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🟢",
+        "info": "🔵",
+    }
     for severity in ["critical", "high", "medium", "low", "info"]:
         count = report.severity_distribution.get(severity, 0)
         if count > 0:
@@ -973,16 +1048,19 @@ def _generate_duplicate_patterns_section(report: PatternAnalysisReport) -> List[
     ]
     for i, dup in enumerate(report.duplicate_patterns[:10], 1):  # Limit to 10
         severity_emoji = {"high": "🔴", "medium": "🟠", "low": "🟡"}.get(
-            dup.severity.value if hasattr(dup.severity, 'value') else str(dup.severity), "⚪"
+            dup.severity.value if hasattr(dup.severity, "value") else str(dup.severity),
+            "⚪",
         )
-        lines.extend([
-            f"#### {i}. {severity_emoji} {dup.description}",
-            f"- **Similarity:** {dup.similarity_score:.1%}",
-            f"- **Code Reduction:** ~{dup.code_reduction_potential} lines",
-            f"- **Locations:** {len(dup.locations)} occurrences",
-            f"- **Suggestion:** {dup.suggestion}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"#### {i}. {severity_emoji} {dup.description}",
+                f"- **Similarity:** {dup.similarity_score:.1%}",
+                f"- **Code Reduction:** ~{dup.code_reduction_potential} lines",
+                f"- **Locations:** {len(dup.locations)} occurrences",
+                f"- **Suggestion:** {dup.suggestion}",
+                "",
+            ]
+        )
     if len(report.duplicate_patterns) > 10:
         lines.append(f"*... and {len(report.duplicate_patterns) - 10} more duplicates*")
         lines.append("")
@@ -1003,16 +1081,20 @@ def _generate_regex_opportunities_section(report: PatternAnalysisReport) -> List
     for i, regex_opp in enumerate(report.regex_opportunities[:5], 1):  # Limit to 5
         suggested = regex_opp.suggested_regex[:80]
         if len(regex_opp.suggested_regex) > 80:
-            suggested += '...'
-        lines.extend([
-            f"#### {i}. {regex_opp.description}",
-            f"- **Performance Gain:** {regex_opp.performance_gain}",
-            f"- **Suggested Regex:** `{suggested}`",
-            f"- **File:** {regex_opp.locations[0].file_path if regex_opp.locations else 'N/A'}",
-            "",
-        ])
+            suggested += "..."
+        lines.extend(
+            [
+                f"#### {i}. {regex_opp.description}",
+                f"- **Performance Gain:** {regex_opp.performance_gain}",
+                f"- **Suggested Regex:** `{suggested}`",
+                f"- **File:** {regex_opp.locations[0].file_path if regex_opp.locations else 'N/A'}",
+                "",
+            ]
+        )
     if len(report.regex_opportunities) > 5:
-        lines.append(f"*... and {len(report.regex_opportunities) - 5} more opportunities*")
+        lines.append(
+            f"*... and {len(report.regex_opportunities) - 5} more opportunities*"
+        )
         lines.append("")
     return lines
 
@@ -1031,13 +1113,15 @@ def _generate_complexity_hotspots_section(report: PatternAnalysisReport) -> List
         "|----------|------|------------|-----------|---------|",
     ]
     sorted_hotspots = sorted(
-        report.complexity_hotspots,
-        key=lambda h: h.cyclomatic_complexity,
-        reverse=True
-    )[:15]  # Top 15
+        report.complexity_hotspots, key=lambda h: h.cyclomatic_complexity, reverse=True
+    )[
+        :15
+    ]  # Top 15
 
     for hotspot in sorted_hotspots:
-        func_name = hotspot.locations[0].function_name if hotspot.locations else "unknown"
+        func_name = (
+            hotspot.locations[0].function_name if hotspot.locations else "unknown"
+        )
         file_path = hotspot.locations[0].file_path if hotspot.locations else "N/A"
         short_path = file_path.split("/")[-1] if "/" in file_path else file_path
         lines.append(
@@ -1052,10 +1136,13 @@ def _generate_pattern_recommendations(report: PatternAnalysisReport) -> List[str
     """Generate recommendations section (Issue #560: extracted)."""
     high_severity_count = 0
     if report.duplicate_patterns:
-        high_severity_count = len([
-            d for d in report.duplicate_patterns
-            if hasattr(d.severity, 'value') and d.severity.value == 'high'
-        ])
+        high_severity_count = len(
+            [
+                d
+                for d in report.duplicate_patterns
+                if hasattr(d.severity, "value") and d.severity.value == "high"
+            ]
+        )
     regex_count = len(report.regex_opportunities) if report.regex_opportunities else 0
 
     return [
@@ -1070,7 +1157,9 @@ def _generate_pattern_recommendations(report: PatternAnalysisReport) -> List[str
     ]
 
 
-def _generate_pattern_analysis_section(report: Optional[PatternAnalysisReport]) -> List[str]:
+def _generate_pattern_analysis_section(
+    report: Optional[PatternAnalysisReport],
+) -> List[str]:
     """
     Generate the Code Pattern Analysis section for the report (Issue #208).
 
@@ -1102,7 +1191,9 @@ def _generate_pattern_analysis_section(report: Optional[PatternAnalysisReport]) 
     return lines
 
 
-def _generate_cross_language_section(analysis: Optional[CrossLanguageAnalysis]) -> List[str]:
+def _generate_cross_language_section(
+    analysis: Optional[CrossLanguageAnalysis],
+) -> List[str]:
     """
     Generate the Cross-Language Pattern Analysis section for the report (Issue #244).
 
@@ -1117,10 +1208,10 @@ def _generate_cross_language_section(analysis: Optional[CrossLanguageAnalysis]) 
 
     # Skip if no findings
     has_findings = (
-        analysis.dto_mismatches or
-        analysis.api_contract_mismatches or
-        analysis.validation_duplications or
-        analysis.pattern_matches
+        analysis.dto_mismatches
+        or analysis.api_contract_mismatches
+        or analysis.validation_duplications
+        or analysis.pattern_matches
     )
 
     if not has_findings:
@@ -1144,15 +1235,17 @@ def _generate_cross_language_section(analysis: Optional[CrossLanguageAnalysis]) 
     high_count = analysis.high_issues
 
     if critical_count > 0 or high_count > 0:
-        lines.extend([
-            "### Issue Summary",
-            "",
-            f"- 🔴 **Critical Issues:** {critical_count}",
-            f"- 🟠 **High Issues:** {high_count}",
-            f"- 🟡 **Medium Issues:** {analysis.medium_issues}",
-            f"- 🟢 **Low Issues:** {analysis.low_issues}",
-            "",
-        ])
+        lines.extend(
+            [
+                "### Issue Summary",
+                "",
+                f"- 🔴 **Critical Issues:** {critical_count}",
+                f"- 🟠 **High Issues:** {high_count}",
+                f"- 🟡 **Medium Issues:** {analysis.medium_issues}",
+                f"- 🟢 **Low Issues:** {analysis.low_issues}",
+                "",
+            ]
+        )
 
     lines.extend(["---", ""])
 
@@ -1180,15 +1273,19 @@ def _fetch_problems_from_chromadb() -> List[Dict]:
 
         if results and results.get("metadatas"):
             for metadata in results["metadatas"]:
-                problems.append({
-                    "type": metadata.get("problem_type", "unknown"),
-                    "severity": metadata.get("severity", "low"),
-                    "file_path": metadata.get("file_path", ""),
-                    "file_category": metadata.get("file_category", FILE_CATEGORY_CODE),
-                    "line_number": metadata.get("line_number"),
-                    "description": metadata.get("description", ""),
-                    "suggestion": metadata.get("suggestion", ""),
-                })
+                problems.append(
+                    {
+                        "type": metadata.get("problem_type", "unknown"),
+                        "severity": metadata.get("severity", "low"),
+                        "file_path": metadata.get("file_path", ""),
+                        "file_category": metadata.get(
+                            "file_category", FILE_CATEGORY_CODE
+                        ),
+                        "line_number": metadata.get("line_number"),
+                        "description": metadata.get("description", ""),
+                        "suggestion": metadata.get("suggestion", ""),
+                    }
+                )
 
         logger.info("Retrieved %s problems for report", len(problems))
     except Exception as e:
@@ -1222,7 +1319,9 @@ async def _run_parallel_analyses(
     analysis_tasks = []
 
     if include_bug_prediction:
-        analysis_tasks.append(("bug_prediction", _get_bug_prediction(use_semantic=use_semantic)))
+        analysis_tasks.append(
+            ("bug_prediction", _get_bug_prediction(use_semantic=use_semantic))
+        )
     if include_api_analysis:
         analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
     if include_duplicate_analysis:
@@ -1315,14 +1414,14 @@ def _generate_empty_report_with_analyses(
         lines.extend(_generate_bug_risk_section(bug_prediction))
 
     has_analyses = (
-        api_endpoint_analysis or
-        (duplicate_analysis and duplicate_analysis.total_duplicates > 0) or
-        (cross_language_analysis and cross_language_analysis.total_patterns > 0) or
-        (pattern_analysis and pattern_analysis.total_patterns > 0) or
-        (bug_prediction and bug_prediction.analyzed_files > 0)
+        api_endpoint_analysis
+        or (duplicate_analysis and duplicate_analysis.total_duplicates > 0)
+        or (cross_language_analysis and cross_language_analysis.total_patterns > 0)
+        or (pattern_analysis and pattern_analysis.total_patterns > 0)
+        or (bug_prediction and bug_prediction.analyzed_files > 0)
     )
     if not has_analyses:
-        lines.append("Run \"Index Codebase\" first to analyze the code.")
+        lines.append('Run "Index Codebase" first to analyze the code.')
         lines.append("")
 
     lines.append("*Report generated by AutoBot Code Analysis*")
@@ -1414,7 +1513,7 @@ async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
         analysis = await asyncio.wait_for(
             loop.run_in_executor(
                 None,
-                lambda: DuplicateCodeDetector(project_root=project_root).run_analysis()
+                lambda: DuplicateCodeDetector(project_root=project_root).run_analysis(),
             ),
             timeout=60.0,  # 60 second timeout for duplicate detection
         )
@@ -1505,9 +1604,7 @@ async def _get_bug_prediction(
         return result
 
     except asyncio.TimeoutError:
-        logger.warning(
-            "Bug prediction timed out after %ss", BUG_PREDICTION_TIMEOUT
-        )
+        logger.warning("Bug prediction timed out after %ss", BUG_PREDICTION_TIMEOUT)
         return None
     except FileNotFoundError as e:
         logger.warning("Project root not found for bug prediction: %s", e)
@@ -1523,50 +1620,58 @@ def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
 
     # Section 1: Code, Config & Test Issues (PRIORITY - must fix)
     code_problems = (
-        by_category[FILE_CATEGORY_CODE] +
-        by_category[FILE_CATEGORY_CONFIG] +
-        by_category[FILE_CATEGORY_TEST]
+        by_category[FILE_CATEGORY_CODE]
+        + by_category[FILE_CATEGORY_CONFIG]
+        + by_category[FILE_CATEGORY_TEST]
     )
     if code_problems:
-        lines.extend(_generate_category_section(
-            code_problems,
-            FILE_CATEGORY_CODE,
-            "📄 Code, Configuration & Test Issues",
-            note="**Priority:** These issues should be fixed.",
-        ))
+        lines.extend(
+            _generate_category_section(
+                code_problems,
+                FILE_CATEGORY_CODE,
+                "📄 Code, Configuration & Test Issues",
+                note="**Priority:** These issues should be fixed.",
+            )
+        )
         lines.extend(["---", ""])
 
     # Section 2: Backup File Issues (informational)
     if by_category[FILE_CATEGORY_BACKUP]:
-        lines.extend(_generate_category_section(
-            by_category[FILE_CATEGORY_BACKUP],
-            FILE_CATEGORY_BACKUP,
-            "📦 Backup File Issues",
-            note="**Note:** These are backup files kept for rollback. "
-                 "Fix only if restoring these files.",
-        ))
+        lines.extend(
+            _generate_category_section(
+                by_category[FILE_CATEGORY_BACKUP],
+                FILE_CATEGORY_BACKUP,
+                "📦 Backup File Issues",
+                note="**Note:** These are backup files kept for rollback. "
+                "Fix only if restoring these files.",
+            )
+        )
         lines.extend(["---", ""])
 
     # Section 3: Archive File Issues (informational)
     if by_category[FILE_CATEGORY_ARCHIVE]:
-        lines.extend(_generate_category_section(
-            by_category[FILE_CATEGORY_ARCHIVE],
-            FILE_CATEGORY_ARCHIVE,
-            "🗄️ Archived File Issues",
-            note="**Note:** These are archived/deprecated files. "
-                 "Usually do not require fixes.",
-        ))
+        lines.extend(
+            _generate_category_section(
+                by_category[FILE_CATEGORY_ARCHIVE],
+                FILE_CATEGORY_ARCHIVE,
+                "🗄️ Archived File Issues",
+                note="**Note:** These are archived/deprecated files. "
+                "Usually do not require fixes.",
+            )
+        )
         lines.extend(["---", ""])
 
     # Section 4: Docs & Logs Issues (informational)
     docs_logs = by_category[FILE_CATEGORY_DOCS] + by_category[FILE_CATEGORY_LOGS]
     if docs_logs:
-        lines.extend(_generate_category_section(
-            docs_logs,
-            FILE_CATEGORY_DOCS,
-            "📝 Documentation & Log File Issues",
-            note="**Note:** Issues in documentation or log files.",
-        ))
+        lines.extend(
+            _generate_category_section(
+                docs_logs,
+                FILE_CATEGORY_DOCS,
+                "📝 Documentation & Log File Issues",
+                note="**Note:** Issues in documentation or log files.",
+            )
+        )
         lines.extend(["---", ""])
 
     return lines
@@ -1592,7 +1697,9 @@ def _build_correlation_section(
     lines = []
 
     # Get files with issues
-    files_with_issues = set(p.get("file_path", "") for p in problems if p.get("file_path"))
+    files_with_issues = set(
+        p.get("file_path", "") for p in problems if p.get("file_path")
+    )
 
     # Get high-risk files
     high_risk_files = {
@@ -1605,12 +1712,14 @@ def _build_correlation_section(
     overlap = files_with_issues & set(high_risk_files.keys())
 
     if overlap:
-        lines.extend([
-            "**Priority Files (Issues + High Bug Risk):**",
-            "",
-            "| File | Issue Count | Risk Score | Risk Level |",
-            "|------|-------------|------------|------------|",
-        ])
+        lines.extend(
+            [
+                "**Priority Files (Issues + High Bug Risk):**",
+                "",
+                "| File | Issue Count | Risk Score | Risk Level |",
+                "|------|-------------|------------|------------|",
+            ]
+        )
 
         # Count issues per file
         issue_counts: Dict[str, int] = {}
@@ -1635,14 +1744,18 @@ def _build_correlation_section(
                 f"{emoji} {fa.risk_level.value.capitalize()} |"
             )
 
-        lines.extend([
-            "",
-            f"> **{len(overlap)} files** have both detected issues and high bug risk. "
-            "These should be prioritized for review.",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                f"> **{len(overlap)} files** have both detected issues and high bug risk. "
+                "These should be prioritized for review.",
+                "",
+            ]
+        )
     else:
-        lines.append("*No files appear in both static analysis issues and high bug risk.*")
+        lines.append(
+            "*No files appear in both static analysis issues and high bug risk.*"
+        )
         lines.append("")
 
     return lines
@@ -1678,9 +1791,7 @@ def _insert_correlation_into_bug_risk(
         # Remove placeholder and insert real data
         # Keep header + blank + note, then insert correlation, then final --- and blank
         return (
-            bug_risk_lines[:insert_idx + 3] +
-            correlation_lines +
-            bug_risk_lines[-2:]
+            bug_risk_lines[: insert_idx + 3] + correlation_lines + bug_risk_lines[-2:]
         )
 
     return bug_risk_lines

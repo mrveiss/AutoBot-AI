@@ -26,15 +26,17 @@ class IndexCodebaseRequest(BaseModel):
         default=None,
         description="Path to index. Defaults to PROJECT_ROOT if not provided.",
     )
+
+
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..scanner import (
-    do_indexing_with_progress,
-    indexing_tasks,
     _active_tasks,
+    _current_indexing_task_id,
     _tasks_lock,
     _tasks_sync_lock,
-    _current_indexing_task_id,
+    do_indexing_with_progress,
+    indexing_tasks,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,15 +50,17 @@ def _check_existing_task() -> Optional[JSONResponse]:
         existing_task = _active_tasks.get(_current_indexing_task_id)
         if existing_task and not existing_task.done():
             logger.info("🔒 Indexing already in progress: %s", _current_indexing_task_id)
-            return JSONResponse({
-                "task_id": _current_indexing_task_id,
-                "status": "already_running",
-                "message": (
-                    f"Indexing is already in progress. Poll "
-                    f"/api/analytics/codebase/index/status/{_current_indexing_task_id} "
-                    "for progress."
-                ),
-            })
+            return JSONResponse(
+                {
+                    "task_id": _current_indexing_task_id,
+                    "status": "already_running",
+                    "message": (
+                        f"Indexing is already in progress. Poll "
+                        f"/api/analytics/codebase/index/status/{_current_indexing_task_id} "
+                        "for progress."
+                    ),
+                }
+            )
     return None
 
 
@@ -80,6 +84,7 @@ def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
 
 def _create_cleanup_callback(task_id: str):
     """Create cleanup callback for task completion (Issue #398: extracted)."""
+
     def cleanup_task(t):
         global _current_indexing_task_id
         with _tasks_sync_lock:
@@ -87,6 +92,7 @@ def _create_cleanup_callback(task_id: str):
             if _current_indexing_task_id == task_id:
                 _current_indexing_task_id = None
         logger.info("🧹 Task %s cleaned up", task_id)
+
     return cleanup_task
 
 
@@ -134,14 +140,16 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     logger.info("🧹 Cleanup callback added")
 
     logger.info("📤 About to return JSONResponse")
-    return JSONResponse({
-        "task_id": task_id,
-        "status": "started",
-        "message": (
-            "Indexing started in background. Poll "
-            "/api/analytics/codebase/index/status/{task_id} for progress."
-        ),
-    })
+    return JSONResponse(
+        {
+            "task_id": task_id,
+            "status": "started",
+            "message": (
+                "Indexing started in background. Poll "
+                "/api/analytics/codebase/index/status/{task_id} for progress."
+            ),
+        }
+    )
 
 
 @with_error_handling(
@@ -206,12 +214,14 @@ async def get_current_indexing_job():
     # All accesses to shared state under lock
     async with _tasks_lock:
         if _current_indexing_task_id is None:
-            return JSONResponse({
-                "has_active_job": False,
-                "task_id": None,
-                "status": "idle",
-                "message": "No indexing job is currently running",
-            })
+            return JSONResponse(
+                {
+                    "has_active_job": False,
+                    "task_id": None,
+                    "status": "idle",
+                    "message": "No indexing job is currently running",
+                }
+            )
 
         current_task_id = _current_indexing_task_id
 
@@ -220,29 +230,33 @@ async def get_current_indexing_job():
         if existing_task is None or existing_task.done():
             # Task finished or was cleaned up
             task_data = dict(indexing_tasks.get(current_task_id, {}))
-            return JSONResponse({
-                "has_active_job": False,
-                "task_id": current_task_id,
-                "status": task_data.get("status", "unknown"),
-                "result": task_data.get("result"),
-                "error": task_data.get("error"),
-                "message": "Last indexing job has completed",
-            })
+            return JSONResponse(
+                {
+                    "has_active_job": False,
+                    "task_id": current_task_id,
+                    "status": task_data.get("status", "unknown"),
+                    "result": task_data.get("result"),
+                    "error": task_data.get("error"),
+                    "message": "Last indexing job has completed",
+                }
+            )
 
         # Task is still running - get a copy of task data
         task_data = dict(indexing_tasks.get(current_task_id, {}))
 
-    return JSONResponse({
-        "has_active_job": True,
-        "task_id": current_task_id,
-        "status": task_data.get("status", "running"),
-        "progress": task_data.get("progress"),
-        "phases": task_data.get("phases"),
-        "batches": task_data.get("batches"),
-        "stats": task_data.get("stats"),
-        "started_at": task_data.get("started_at"),
-        "message": "Indexing job is in progress",
-    })
+    return JSONResponse(
+        {
+            "has_active_job": True,
+            "task_id": current_task_id,
+            "status": task_data.get("status", "running"),
+            "progress": task_data.get("progress"),
+            "phases": task_data.get("phases"),
+            "batches": task_data.get("batches"),
+            "stats": task_data.get("stats"),
+            "started_at": task_data.get("started_at"),
+            "message": "Indexing job is in progress",
+        }
+    )
 
 
 @with_error_handling(
@@ -265,21 +279,25 @@ async def cancel_indexing_job():
     # All accesses to shared state under lock
     async with _tasks_lock:
         if _current_indexing_task_id is None:
-            return JSONResponse({
-                "success": False,
-                "task_id": None,
-                "message": "No indexing job is currently running",
-            })
+            return JSONResponse(
+                {
+                    "success": False,
+                    "task_id": None,
+                    "message": "No indexing job is currently running",
+                }
+            )
 
         task_id = _current_indexing_task_id
         existing_task = _active_tasks.get(task_id)
 
         if existing_task is None or existing_task.done():
-            return JSONResponse({
-                "success": False,
-                "task_id": task_id,
-                "message": "Indexing job has already completed or was not found",
-            })
+            return JSONResponse(
+                {
+                    "success": False,
+                    "task_id": task_id,
+                    "message": "Indexing job has already completed or was not found",
+                }
+            )
 
         # Cancel the task
         try:
@@ -296,16 +314,20 @@ async def cancel_indexing_job():
             _current_indexing_task_id = None
             _active_tasks.pop(task_id, None)
 
-            return JSONResponse({
-                "success": True,
-                "task_id": task_id,
-                "message": "Indexing job cancelled successfully",
-            })
+            return JSONResponse(
+                {
+                    "success": True,
+                    "task_id": task_id,
+                    "message": "Indexing job cancelled successfully",
+                }
+            )
 
         except Exception as e:
             logger.error("Failed to cancel task %s: %s", task_id, e)
-            return JSONResponse({
-                "success": False,
-                "task_id": task_id,
-                "message": f"Failed to cancel job: {str(e)}",
-            })
+            return JSONResponse(
+                {
+                    "success": False,
+                    "task_id": task_id,
+                    "message": f"Failed to cancel job: {str(e)}",
+                }
+            )

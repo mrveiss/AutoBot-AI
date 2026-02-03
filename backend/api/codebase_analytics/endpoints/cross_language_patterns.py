@@ -19,11 +19,8 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from src.code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.code_intelligence.cross_language_patterns import (
-    CrossLanguagePatternDetector,
-    CrossLanguageAnalysis,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +78,12 @@ async def run_cross_language_analysis(
     async with _analysis_cache_lock:
         _analysis_cache["latest"] = analysis
 
-    return JSONResponse({
-        "status": "success",
-        "analysis": analysis.to_dict(),
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "analysis": analysis.to_dict(),
+        }
+    )
 
 
 @with_error_handling(
@@ -106,50 +105,54 @@ async def get_cross_language_summary() -> JSONResponse:
             # Return empty status instead of auto-running full analysis
             # Full analysis can take minutes and should only be triggered
             # via POST /analyze endpoint explicitly
-            return JSONResponse({
-                "status": "empty",
-                "message": "No analysis available. Click 'Full Scan' to run analysis.",
-                "has_cached_data": False,
-            })
+            return JSONResponse(
+                {
+                    "status": "empty",
+                    "message": "No analysis available. Click 'Full Scan' to run analysis.",
+                    "has_cached_data": False,
+                }
+            )
         analysis = _analysis_cache["latest"]
 
-    return JSONResponse({
-        "status": "success",
-        "has_cached_data": True,
-        "summary": {
-            "analysis_id": analysis.analysis_id,
-            "scan_timestamp": analysis.scan_timestamp.isoformat(),
-            "files_analyzed": {
-                "python": analysis.python_files_analyzed,
-                "typescript": analysis.typescript_files_analyzed,
-                "vue": analysis.vue_files_analyzed,
-                "total": (
-                    analysis.python_files_analyzed +
-                    analysis.typescript_files_analyzed +
-                    analysis.vue_files_analyzed
-                ),
+    return JSONResponse(
+        {
+            "status": "success",
+            "has_cached_data": True,
+            "summary": {
+                "analysis_id": analysis.analysis_id,
+                "scan_timestamp": analysis.scan_timestamp.isoformat(),
+                "files_analyzed": {
+                    "python": analysis.python_files_analyzed,
+                    "typescript": analysis.typescript_files_analyzed,
+                    "vue": analysis.vue_files_analyzed,
+                    "total": (
+                        analysis.python_files_analyzed
+                        + analysis.typescript_files_analyzed
+                        + analysis.vue_files_analyzed
+                    ),
+                },
+                "issues": {
+                    "critical": analysis.critical_issues,
+                    "high": analysis.high_issues,
+                    "medium": analysis.medium_issues,
+                    "low": analysis.low_issues,
+                    "total": analysis.total_patterns,
+                },
+                "findings": {
+                    "dto_mismatches": len(analysis.dto_mismatches),
+                    "validation_duplications": len(analysis.validation_duplications),
+                    "api_contract_mismatches": len(analysis.api_contract_mismatches),
+                    "semantic_matches": len(analysis.pattern_matches),
+                },
+                "performance": {
+                    "analysis_time_ms": analysis.analysis_time_ms,
+                    "embeddings_generated": analysis.embeddings_generated,
+                    "cache_hits": analysis.cache_hits,
+                    "cache_misses": analysis.cache_misses,
+                },
             },
-            "issues": {
-                "critical": analysis.critical_issues,
-                "high": analysis.high_issues,
-                "medium": analysis.medium_issues,
-                "low": analysis.low_issues,
-                "total": analysis.total_patterns,
-            },
-            "findings": {
-                "dto_mismatches": len(analysis.dto_mismatches),
-                "validation_duplications": len(analysis.validation_duplications),
-                "api_contract_mismatches": len(analysis.api_contract_mismatches),
-                "semantic_matches": len(analysis.pattern_matches),
-            },
-            "performance": {
-                "analysis_time_ms": analysis.analysis_time_ms,
-                "embeddings_generated": analysis.embeddings_generated,
-                "cache_hits": analysis.cache_hits,
-                "cache_misses": analysis.cache_misses,
-            },
-        },
-    })
+        }
+    )
 
 
 @with_error_handling(
@@ -167,17 +170,22 @@ async def get_dto_mismatches() -> JSONResponse:
     # Check cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:
         if "latest" not in _analysis_cache:
-            return JSONResponse({
-                "status": "error",
-                "message": "No analysis available. Run /cross-language/analyze first.",
-            }, status_code=400)
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No analysis available. Run /cross-language/analyze first.",
+                },
+                status_code=400,
+            )
         analysis = _analysis_cache["latest"]
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(analysis.dto_mismatches),
-        "mismatches": [m.to_dict() for m in analysis.dto_mismatches],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(analysis.dto_mismatches),
+            "mismatches": [m.to_dict() for m in analysis.dto_mismatches],
+        }
+    )
 
 
 @with_error_handling(
@@ -195,17 +203,22 @@ async def get_validation_duplications() -> JSONResponse:
     # Check cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:
         if "latest" not in _analysis_cache:
-            return JSONResponse({
-                "status": "error",
-                "message": "No analysis available. Run /cross-language/analyze first.",
-            }, status_code=400)
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No analysis available. Run /cross-language/analyze first.",
+                },
+                status_code=400,
+            )
         analysis = _analysis_cache["latest"]
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(analysis.validation_duplications),
-        "duplications": [v.to_dict() for v in analysis.validation_duplications],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(analysis.validation_duplications),
+            "duplications": [v.to_dict() for v in analysis.validation_duplications],
+        }
+    )
 
 
 @with_error_handling(
@@ -225,23 +238,36 @@ async def get_api_contract_mismatches() -> JSONResponse:
     # Check cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:
         if "latest" not in _analysis_cache:
-            return JSONResponse({
-                "status": "error",
-                "message": "No analysis available. Run /cross-language/analyze first.",
-            }, status_code=400)
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No analysis available. Run /cross-language/analyze first.",
+                },
+                status_code=400,
+            )
         analysis = _analysis_cache["latest"]
 
-    orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
-    missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
+    orphaned = [
+        m
+        for m in analysis.api_contract_mismatches
+        if m.mismatch_type == "orphaned_endpoint"
+    ]
+    missing = [
+        m
+        for m in analysis.api_contract_mismatches
+        if m.mismatch_type == "missing_endpoint"
+    ]
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(analysis.api_contract_mismatches),
-        "orphaned_count": len(orphaned),
-        "missing_count": len(missing),
-        "orphaned": [m.to_dict() for m in orphaned],
-        "missing": [m.to_dict() for m in missing],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(analysis.api_contract_mismatches),
+            "orphaned_count": len(orphaned),
+            "missing_count": len(missing),
+            "orphaned": [m.to_dict() for m in orphaned],
+            "missing": [m.to_dict() for m in missing],
+        }
+    )
 
 
 @with_error_handling(
@@ -267,16 +293,18 @@ async def get_semantic_matches(
     # Check cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:
         if "latest" not in _analysis_cache:
-            return JSONResponse({
-                "status": "error",
-                "message": "No analysis available. Run /cross-language/analyze first.",
-            }, status_code=400)
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No analysis available. Run /cross-language/analyze first.",
+                },
+                status_code=400,
+            )
         analysis = _analysis_cache["latest"]
 
     # Filter by similarity threshold
     filtered_matches = [
-        m for m in analysis.pattern_matches
-        if m.similarity_score >= min_similarity
+        m for m in analysis.pattern_matches if m.similarity_score >= min_similarity
     ]
 
     # Sort by similarity (highest first)
@@ -285,12 +313,14 @@ async def get_semantic_matches(
     # Limit results
     filtered_matches = filtered_matches[:limit]
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(filtered_matches),
-        "min_similarity": min_similarity,
-        "matches": [m.to_dict() for m in filtered_matches],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(filtered_matches),
+            "min_similarity": min_similarity,
+            "matches": [m.to_dict() for m in filtered_matches],
+        }
+    )
 
 
 @with_error_handling(
@@ -315,10 +345,13 @@ async def get_patterns_by_category(
     # Check cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:
         if "latest" not in _analysis_cache:
-            return JSONResponse({
-                "status": "error",
-                "message": "No analysis available. Run /cross-language/analyze first.",
-            }, status_code=400)
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No analysis available. Run /cross-language/analyze first.",
+                },
+                status_code=400,
+            )
         analysis = _analysis_cache["latest"]
 
     patterns = analysis.patterns
@@ -333,15 +366,17 @@ async def get_patterns_by_category(
     # Limit results
     patterns = patterns[:limit]
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(patterns),
-        "filters": {
-            "category": category,
-            "severity": severity,
-        },
-        "patterns": [p.to_dict() for p in patterns],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(patterns),
+            "filters": {
+                "category": category,
+                "severity": severity,
+            },
+            "patterns": [p.to_dict() for p in patterns],
+        }
+    )
 
 
 @with_error_handling(
@@ -362,7 +397,9 @@ async def clear_cross_language_cache() -> JSONResponse:
     async with _analysis_cache_lock:
         _analysis_cache = {}
 
-    return JSONResponse({
-        "status": "success",
-        "message": "Cross-language analysis cache cleared",
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "message": "Cross-language analysis cache cleared",
+        }
+    )

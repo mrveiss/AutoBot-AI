@@ -9,13 +9,11 @@ Issue #54 - Advanced Wake Word Detection Optimization
 import logging
 from typing import List
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.services.wake_word_service import (
-    get_wake_word_detector,
-)
+from backend.services.wake_word_service import get_wake_word_detector
+from backend.type_defs.common import Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

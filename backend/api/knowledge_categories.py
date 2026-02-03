@@ -34,8 +34,8 @@ from backend.api.knowledge_models import (
     SearchCategoriesByPathRequest,
     UpdateCategoryRequest,
 )
-from src.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -94,9 +94,7 @@ async def create_category(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        "Creating category '%s' (parent: %s)", request.name, request.parent_id
-    )
+    logger.info("Creating category '%s' (parent: %s)", request.name, request.parent_id)
 
     result = await kb.create_category(
         name=request.name,
@@ -129,8 +127,15 @@ async def create_category(
 )
 @router.get("/categories/tree")
 async def get_category_tree(
-    root_id: Optional[str] = Query(default=None, description="Start from specific category"),
-    max_depth: int = Query(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=20, description="Maximum tree depth"),
+    root_id: Optional[str] = Query(
+        default=None, description="Start from specific category"
+    ),
+    max_depth: int = Query(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        ge=1,
+        le=20,
+        description="Maximum tree depth",
+    ),
     include_fact_counts: bool = Query(default=True, description="Include fact counts"),
     req: Request = None,
 ):
@@ -538,7 +543,9 @@ async def get_category_ancestors(
 @router.get("/categories/{category_id}/facts")
 async def get_facts_in_category(
     category_id: str = Path(..., description="Category UUID"),
-    include_descendants: bool = Query(default=False, description="Include facts from children"),
+    include_descendants: bool = Query(
+        default=False, description="Include facts from children"
+    ),
     limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     req: Request = None,

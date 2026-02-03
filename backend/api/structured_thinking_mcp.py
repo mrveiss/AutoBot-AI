@@ -27,10 +27,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -240,21 +240,63 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
         {
             "type": "object",
             "properties": {
-                "thought": {"type": "string", "description": "The content of the thought to record"},
-                "thought_number": {"type": "integer", "description": "Position in the thinking sequence", "minimum": 1},
-                "total_thoughts": {"type": "integer", "description": "Expected total number of thoughts", "minimum": 1},
-                "next_thought_needed": {"type": "boolean", "description": "Whether more thoughts will follow this one"},
+                "thought": {
+                    "type": "string",
+                    "description": "The content of the thought to record",
+                },
+                "thought_number": {
+                    "type": "integer",
+                    "description": "Position in the thinking sequence",
+                    "minimum": 1,
+                },
+                "total_thoughts": {
+                    "type": "integer",
+                    "description": "Expected total number of thoughts",
+                    "minimum": 1,
+                },
+                "next_thought_needed": {
+                    "type": "boolean",
+                    "description": "Whether more thoughts will follow this one",
+                },
                 "stage": {
                     "type": "string",
-                    "enum": ["Problem Definition", "Research", "Analysis", "Synthesis", "Conclusion"],
+                    "enum": [
+                        "Problem Definition",
+                        "Research",
+                        "Analysis",
+                        "Synthesis",
+                        "Conclusion",
+                    ],
                     "description": "Cognitive stage for this thought",
                 },
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "Keywords or categories for this thought"},
-                "axioms_used": {"type": "array", "items": {"type": "string"}, "description": "Fundamental principles or axioms applied"},
-                "assumptions_challenged": {"type": "array", "items": {"type": "string"}, "description": "Assumptions being questioned or challenged"},
-                "session_id": {"type": "string", "description": "Thinking session identifier", "default": "default"},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Keywords or categories for this thought",
+                },
+                "axioms_used": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Fundamental principles or axioms applied",
+                },
+                "assumptions_challenged": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Assumptions being questioned or challenged",
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Thinking session identifier",
+                    "default": "default",
+                },
             },
-            "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed", "stage"],
+            "required": [
+                "thought",
+                "thought_number",
+                "total_thoughts",
+                "next_thought_needed",
+                "stage",
+            ],
         },
     ),
     (
@@ -264,7 +306,13 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
         "timeline, tags used, axioms applied, and key insights identified.",
         {
             "type": "object",
-            "properties": {"session_id": {"type": "string", "description": "Session to summarize", "default": "default"}},
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session to summarize",
+                    "default": "default",
+                }
+            },
         },
     ),
     (
@@ -273,7 +321,13 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
         "Useful for starting a new thinking process while preserving other sessions.",
         {
             "type": "object",
-            "properties": {"session_id": {"type": "string", "description": "Session to clear", "default": "default"}},
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session to clear",
+                    "default": "default",
+                }
+            },
         },
     ),
 )
@@ -389,7 +443,9 @@ async def generate_summary_mcp(request: GenerateSummaryRequest) -> Metadata:
 
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session '{session_id}' not found"
+            )
         session_thoughts = list(structured_sessions[session_id])
 
     if not session_thoughts:
@@ -447,7 +503,9 @@ async def clear_history_mcp(request: ClearHistoryRequest) -> Metadata:
 
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session '{session_id}' not found"
+            )
 
         thought_count = len(structured_sessions[session_id])
         del structured_sessions[session_id]
@@ -470,7 +528,9 @@ async def get_structured_session(session_id: str) -> Metadata:
     """Get complete structured thinking session"""
     async with _structured_sessions_lock:
         if session_id not in structured_sessions:
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session '{session_id}' not found"
+            )
 
         # Create a copy of thoughts for processing outside the lock
         thoughts = list(structured_sessions[session_id])

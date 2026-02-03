@@ -1102,9 +1102,11 @@ async def get_complexity_metrics(
                 "file": h.get("file", ""),
                 "complexity": h.get("complexity", 0),
                 "lines": h.get("lines", 0),
-                "recommendation": "Consider refactoring this file"
-                if h.get("complexity", 0) > 15
-                else "Monitor complexity",
+                "recommendation": (
+                    "Consider refactoring this file"
+                    if h.get("complexity", 0) > 15
+                    else "Monitor complexity"
+                ),
             }
             for h in hotspots
         ],
@@ -1286,9 +1288,11 @@ async def drill_down_category(
         "display_name": category.replace("_", " ").title(),
         "total_files": len(result_files),
         "total_issues": sum(f["issues"] for f in result_files),
-        "average_score": sum(f["score"] for f in result_files) / len(result_files)
-        if result_files
-        else 0,
+        "average_score": (
+            sum(f["score"] for f in result_files) / len(result_files)
+            if result_files
+            else 0
+        ),
         "files": result_files[:limit],
         "filters_applied": {
             "file": file_filter,

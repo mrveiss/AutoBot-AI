@@ -9,15 +9,11 @@ System Validation API endpoints for AutoBot optimization suite
 import logging
 from typing import Dict, List
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from src.utils.catalog_http_exceptions import (
-    raise_not_found_error,
-    raise_server_error,
-)
+from backend.type_defs.common import Metadata
+from src.utils.catalog_http_exceptions import raise_not_found_error, raise_server_error
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.system_validator import get_system_validator
 
@@ -162,7 +158,9 @@ async def run_quick_validation():
         overall_status = (
             "healthy"
             if overall_score >= 80
-            else "degraded" if overall_score >= 60 else "unhealthy"
+            else "degraded"
+            if overall_score >= 60
+            else "unhealthy"
         )
 
         return {

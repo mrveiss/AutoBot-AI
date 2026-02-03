@@ -17,13 +17,13 @@ from pydantic import BaseModel, Field
 
 from backend.api.user_management.dependencies import (
     get_organization_service,
-    require_user_management_enabled,
     require_platform_admin,
+    require_user_management_enabled,
 )
 from src.user_management.services import OrganizationService
 from src.user_management.services.organization_service import (
-    OrganizationNotFoundError,
     DuplicateOrganizationError,
+    OrganizationNotFoundError,
 )
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
@@ -34,15 +34,22 @@ logger = logging.getLogger(__name__)
 # Request/Response Models
 # -------------------------------------------------------------------------
 
+
 class OrganizationCreate(BaseModel):
     """Request model for creating an organization."""
 
-    name: str = Field(..., min_length=1, max_length=255, description="Organization name")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="Organization name"
+    )
     slug: Optional[str] = Field(
-        None, max_length=100, description="URL-safe slug (auto-generated if not provided)"
+        None,
+        max_length=100,
+        description="URL-safe slug (auto-generated if not provided)",
     )
     description: Optional[str] = Field(None, max_length=500, description="Description")
-    settings: Optional[dict] = Field(default_factory=dict, description="Organization settings")
+    settings: Optional[dict] = Field(
+        default_factory=dict, description="Organization settings"
+    )
     subscription_tier: str = Field("free", description="Subscription tier")
     max_users: int = Field(-1, description="Maximum users (-1 for unlimited)")
 
@@ -115,6 +122,7 @@ class OrganizationStatsResponse(BaseModel):
 # -------------------------------------------------------------------------
 # Organization CRUD Endpoints
 # -------------------------------------------------------------------------
+
 
 @router.get(
     "",
@@ -299,6 +307,7 @@ async def delete_organization(
 # Organization Status Endpoints
 # -------------------------------------------------------------------------
 
+
 @router.post(
     "/{org_id}/deactivate",
     response_model=OrganizationResponse,
@@ -330,6 +339,7 @@ async def deactivate_organization(
 # Statistics Endpoint
 # -------------------------------------------------------------------------
 
+
 @router.get(
     "/{org_id}/stats",
     response_model=OrganizationStatsResponse,
@@ -356,6 +366,7 @@ async def get_organization_stats(
 # -------------------------------------------------------------------------
 # Helper Functions
 # -------------------------------------------------------------------------
+
 
 def _org_to_response(org) -> OrganizationResponse:
     """Convert Organization model to OrganizationResponse schema."""

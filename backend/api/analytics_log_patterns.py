@@ -15,9 +15,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,11 @@ class LogPatternMiner:
         (r"ERROR.*?memory", "memory_error", "Memory-related errors"),
         (r"WARNING.*?deprecated", "deprecation_warning", "Deprecation warnings"),
         (r"ERROR.*?authentication", "auth_error", "Authentication failures"),
-        (r"ERROR.*?permission.*?denied", "permission_error", "Permission denied errors"),
+        (
+            r"ERROR.*?permission.*?denied",
+            "permission_error",
+            "Permission denied errors",
+        ),
         (r"ERROR.*?disk.*?space", "disk_space_error", "Disk space issues"),
         (r"ERROR.*?database", "database_error", "Database errors"),
         (r"ERROR.*?network", "network_error", "Network errors"),
@@ -323,19 +328,21 @@ class LogPatternMiner:
         avg_errors = sum(error_counts.values()) / len(error_counts)
         for hour, count in error_counts.items():
             if count > avg_errors * 3 and count > 5:  # 3x average and >5 errors
-                anomalies.append(self._create_anomaly(
-                    anomaly_id=f"error_spike_{hour}",
-                    anomaly_type="error_surge",
-                    severity="high" if count > avg_errors * 5 else "medium",
-                    description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
-                    timestamp=hour,
-                    affected_sources=list(
-                        set(s for lines in hourly_counts.values() for s in lines)
-                    ),
-                    metric_before=avg_errors,
-                    metric_after=float(count),
-                    confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
-                ))
+                anomalies.append(
+                    self._create_anomaly(
+                        anomaly_id=f"error_spike_{hour}",
+                        anomaly_type="error_surge",
+                        severity="high" if count > avg_errors * 5 else "medium",
+                        description=f"Error spike detected: {count} errors vs {avg_errors:.1f} average",
+                        timestamp=hour,
+                        affected_sources=list(
+                            set(s for lines in hourly_counts.values() for s in lines)
+                        ),
+                        metric_before=avg_errors,
+                        metric_after=float(count),
+                        confidence=min(0.95, 0.5 + (count / avg_errors) * 0.1),
+                    )
+                )
         return anomalies
 
     def _detect_new_error_patterns(
@@ -357,17 +364,19 @@ class LogPatternMiner:
         for pattern in patterns:
             if pattern.occurrences >= 10 and pattern.frequency_per_hour > 50:
                 if pattern.is_error_pattern:
-                    anomalies.append(self._create_anomaly(
-                        anomaly_id=f"new_error_{pattern.pattern_id}",
-                        anomaly_type="new_pattern",
-                        severity="high",
-                        description=f"High-frequency error pattern detected: {pattern.pattern_template[:100]}",
-                        timestamp=pattern.first_seen,
-                        affected_sources=pattern.sources,
-                        metric_before=0,
-                        metric_after=pattern.frequency_per_hour,
-                        confidence=0.85,
-                    ))
+                    anomalies.append(
+                        self._create_anomaly(
+                            anomaly_id=f"new_error_{pattern.pattern_id}",
+                            anomaly_type="new_pattern",
+                            severity="high",
+                            description=f"High-frequency error pattern detected: {pattern.pattern_template[:100]}",
+                            timestamp=pattern.first_seen,
+                            affected_sources=pattern.sources,
+                            metric_before=0,
+                            metric_after=pattern.frequency_per_hour,
+                            confidence=0.85,
+                        )
+                    )
         return anomalies
 
     def _detect_log_gaps(
@@ -396,17 +405,19 @@ class LogPatternMiner:
             gap = (curr_hour - prev_hour).total_seconds() / 3600
 
             if gap > 2:  # More than 2 hours gap
-                anomalies.append(self._create_anomaly(
-                    anomaly_id=f"log_gap_{hours[i-1]}",
-                    anomaly_type="gap",
-                    severity="medium" if gap < 6 else "high",
-                    description=f"Log gap detected: {gap:.1f} hours without logs",
-                    timestamp=hours[i - 1],
-                    affected_sources=list(hourly_counts[hours[i - 1]].keys()),
-                    metric_before=sum(hourly_counts[hours[i - 1]].values()),
-                    metric_after=0,
-                    confidence=0.9,
-                ))
+                anomalies.append(
+                    self._create_anomaly(
+                        anomaly_id=f"log_gap_{hours[i-1]}",
+                        anomaly_type="gap",
+                        severity="medium" if gap < 6 else "high",
+                        description=f"Log gap detected: {gap:.1f} hours without logs",
+                        timestamp=hours[i - 1],
+                        affected_sources=list(hourly_counts[hours[i - 1]].keys()),
+                        metric_before=sum(hourly_counts[hours[i - 1]].values()),
+                        metric_after=0,
+                        confidence=0.9,
+                    )
+                )
         return anomalies
 
     def detect_anomalies(
@@ -519,14 +530,18 @@ class LogPatternMiner:
         totals = [float(hourly_data[h]["total"]) for h in hours]
         if not totals:
             return None
-        direction, change = self._calculate_trend_direction(totals, change_threshold=10.0)
+        direction, change = self._calculate_trend_direction(
+            totals, change_threshold=10.0
+        )
         return LogTrend(
             trend_id="log_volume",
             metric_name="Total Log Volume",
             direction=direction,
             change_percent=change,
             time_period=f"{hours[0]} to {hours[-1]}",
-            data_points=[{"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]],
+            data_points=[
+                {"hour": h, "count": hourly_data[h]["total"]} for h in hours[-24:]
+            ],
         )
 
     def _build_error_rate_trend(
@@ -536,14 +551,18 @@ class LogPatternMiner:
         Build error rate trend (Issue #665: extracted helper).
         """
         error_rates = [
-            hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
-            if hourly_data[h]["total"] > 0
-            else 0.0
+            (
+                hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
+                if hourly_data[h]["total"] > 0
+                else 0.0
+            )
             for h in hours
         ]
         if not error_rates:
             return None
-        direction, change = self._calculate_trend_direction(error_rates, change_threshold=20.0)
+        direction, change = self._calculate_trend_direction(
+            error_rates, change_threshold=20.0
+        )
         return LogTrend(
             trend_id="error_rate",
             metric_name="Error Rate",
@@ -554,9 +573,11 @@ class LogPatternMiner:
                 {
                     "hour": h,
                     "error_rate": round(
-                        hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
-                        if hourly_data[h]["total"] > 0
-                        else 0,
+                        (
+                            hourly_data[h]["errors"] / hourly_data[h]["total"] * 100
+                            if hourly_data[h]["total"] > 0
+                            else 0
+                        ),
                         2,
                     ),
                 }
@@ -564,9 +585,7 @@ class LogPatternMiner:
             ],
         )
 
-    def analyze_trends(
-        self, log_lines: List[Tuple[str, str, str]]
-    ) -> List[LogTrend]:
+    def analyze_trends(self, log_lines: List[Tuple[str, str, str]]) -> List[LogTrend]:
         """
         Analyze trends in log data.
 
@@ -815,15 +834,20 @@ def _build_mining_summary(
 async def mine_log_patterns(
     sources: Optional[str] = Query(None, description="Comma-separated log sources"),
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to analyze"),
-    min_occurrences: int = Query(2, ge=1, le=100, description="Minimum pattern occurrences"),
+    min_occurrences: int = Query(
+        2, ge=1, le=100, description="Minimum pattern occurrences"
+    ),
     include_anomalies: bool = Query(True, description="Include anomaly detection"),
     include_trends: bool = Query(True, description="Include trend analysis"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Mine patterns from log files.
 
     Discovers recurring patterns, detects anomalies, and analyzes trends
     in log data from the specified time period.
+
+    Issue #744: Requires admin authentication.
     """
     import time
 
@@ -837,13 +861,19 @@ async def mine_log_patterns(
         log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time, source_filter)
 
         if not log_lines:
-            return _build_empty_mining_result(round((time.time() - start_time) * 1000, 2))
+            return _build_empty_mining_result(
+                round((time.time() - start_time) * 1000, 2)
+            )
 
         # Mine patterns
         patterns = await pattern_miner.mine_patterns(log_lines, min_occurrences)
 
         # Detect anomalies
-        anomalies = pattern_miner.detect_anomalies(log_lines, patterns) if include_anomalies else []
+        anomalies = (
+            pattern_miner.detect_anomalies(log_lines, patterns)
+            if include_anomalies
+            else []
+        )
 
         # Analyze trends
         trends = pattern_miner.analyze_trends(log_lines) if include_trends else []
@@ -895,8 +925,12 @@ def _analyze_pattern_lines(
 async def get_pattern_details(
     pattern_id: str,
     hours: int = Query(24, ge=1, le=168, description="Hours of logs to search"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get detailed information about a specific pattern"""
+    """Get detailed information about a specific pattern.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
@@ -940,8 +974,12 @@ async def get_pattern_details(
 async def get_error_hotspots(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     limit: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get error hotspots - time periods with highest error rates"""
+    """Get error hotspots - time periods with highest error rates.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         hourly_errors: Dict[str, Dict] = defaultdict(
             lambda: {"errors": 0, "total": 0, "samples": []}
@@ -1013,8 +1051,12 @@ def _aggregate_log_stats(
 @router.get("/stats")
 async def get_log_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get overall log statistics"""
+    """Get overall log statistics.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         cutoff_time = datetime.now() - timedelta(hours=hours)
 
@@ -1022,7 +1064,9 @@ async def get_log_stats(
         log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time)
 
         # Aggregate stats using extracted helper
-        total, by_level, by_source, by_hour, timestamps = _aggregate_log_stats(log_lines)
+        total, by_level, by_source, by_hour, timestamps = _aggregate_log_stats(
+            log_lines
+        )
 
         earliest = min(timestamps).isoformat() if timestamps else None
         latest = max(timestamps).isoformat() if timestamps else None
@@ -1049,8 +1093,13 @@ async def get_log_stats(
     error_code_prefix="LOGPAT",
 )
 @router.get("/realtime")
-async def get_realtime_summary():
-    """Get real-time log summary for last 5 minutes"""
+async def get_realtime_summary(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get real-time log summary for last 5 minutes.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         cutoff = datetime.now() - timedelta(minutes=5)
         recent_logs = []
@@ -1070,7 +1119,8 @@ async def get_realtime_summary():
         return {
             "logs_last_5min": len(recent_logs),
             "level_counts": dict(level_counts),
-            "error_count": level_counts.get("ERROR", 0) + level_counts.get("CRITICAL", 0),
+            "error_count": level_counts.get("ERROR", 0)
+            + level_counts.get("CRITICAL", 0),
             "recent_errors": [
                 log for log in recent_logs if log["level"] in ERROR_LEVELS  # Issue #326
             ][:10],

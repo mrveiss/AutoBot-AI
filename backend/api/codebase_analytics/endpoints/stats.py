@@ -239,6 +239,64 @@ async def get_codebase_stats():
     return JSONResponse(response)
 
 
+def _fetch_hardcodes_from_redis(redis_client, hardcode_type: Optional[str]) -> list:
+    """
+    Fetch hardcoded values from Redis with pipeline batching.
+
+    Issue #620: Extracted from get_hardcoded_values.
+    Issue #561: Uses pipeline batching to fix N+1 query pattern.
+
+    Args:
+        redis_client: Redis client
+        hardcode_type: Optional type filter
+
+    Returns:
+        List of hardcoded values
+    """
+    results = []
+    if hardcode_type:
+        hardcodes_data = redis_client.get(f"codebase:hardcodes:{hardcode_type}")
+        if hardcodes_data:
+            results = json.loads(hardcodes_data)
+    else:
+        keys = list(redis_client.scan_iter(match="codebase:hardcodes:*"))
+        if keys:
+            pipe = redis_client.pipeline()
+            for key in keys:
+                pipe.get(key)
+            pipe_results = pipe.execute()
+            for hardcodes_data in pipe_results:
+                if hardcodes_data:
+                    results.extend(json.loads(hardcodes_data))
+    return results
+
+
+def _fetch_hardcodes_from_memory(storage, hardcode_type: Optional[str]) -> list:
+    """
+    Fetch hardcoded values from in-memory storage.
+
+    Issue #620: Extracted from get_hardcoded_values.
+
+    Args:
+        storage: In-memory storage dict
+        hardcode_type: Optional type filter
+
+    Returns:
+        List of hardcoded values
+    """
+    results = []
+    if hardcode_type:
+        hardcodes_data = storage.get(f"codebase:hardcodes:{hardcode_type}")
+        if hardcodes_data:
+            results = json.loads(hardcodes_data)
+    else:
+        for key in storage.scan_iter("codebase:hardcodes:*"):
+            hardcodes_data = storage.get(key)
+            if hardcodes_data:
+                results.extend(json.loads(hardcodes_data))
+    return results
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardcoded_values",
@@ -246,58 +304,31 @@ async def get_codebase_stats():
 )
 @router.get("/hardcodes")
 async def get_hardcoded_values(hardcode_type: Optional[str] = None):
-    """Get real hardcoded values found in the codebase"""
+    """
+    Get real hardcoded values found in the codebase.
+
+    Issue #620: Refactored to use helper functions.
+    """
     redis_client = await get_redis_connection()
 
-    all_hardcodes = []
-
     if redis_client:
-        # Issue #361 - avoid blocking - wrap Redis ops in thread pool
-        # Issue #561 - fix N+1 query pattern with pipeline batching
-        def _fetch_hardcodes():
-            results = []
-            if hardcode_type:
-                hardcodes_data = redis_client.get(f"codebase:hardcodes:{hardcode_type}")
-                if hardcodes_data:
-                    results = json.loads(hardcodes_data)
-            else:
-                # Issue #561: Collect keys first, then batch fetch with pipeline
-                keys = list(redis_client.scan_iter(match="codebase:hardcodes:*"))
-                if keys:
-                    pipe = redis_client.pipeline()
-                    for key in keys:
-                        pipe.get(key)
-                    pipe_results = pipe.execute()
-                    for hardcodes_data in pipe_results:
-                        if hardcodes_data:
-                            results.extend(json.loads(hardcodes_data))
-            return results
-
-        all_hardcodes = await asyncio.to_thread(_fetch_hardcodes)
+        # Issue #620: Use helper for Redis fetch
+        all_hardcodes = await asyncio.to_thread(
+            _fetch_hardcodes_from_redis, redis_client, hardcode_type
+        )
         storage_type = "redis"
-    else:
-        if not _in_memory_storage:
-            return JSONResponse(
-                {
-                    "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
-                    "hardcodes": [],
-                }
-            )
-
-        storage = _in_memory_storage
-        if hardcode_type:
-            hardcodes_data = storage.get(f"codebase:hardcodes:{hardcode_type}")
-            if hardcodes_data:
-                all_hardcodes = json.loads(hardcodes_data)
-        else:
-            # Note: In-memory storage uses dict, which is O(1) per access.
-            # No pipeline needed - N+1 is only a problem for network operations.
-            for key in storage.scan_iter("codebase:hardcodes:*"):
-                hardcodes_data = storage.get(key)
-                if hardcodes_data:
-                    all_hardcodes.extend(json.loads(hardcodes_data))
+    elif _in_memory_storage:
+        # Issue #620: Use helper for memory fetch
+        all_hardcodes = _fetch_hardcodes_from_memory(_in_memory_storage, hardcode_type)
         storage_type = "memory"
+    else:
+        return JSONResponse(
+            {
+                "status": "no_data",
+                "message": "No codebase data found. Run indexing first.",
+                "hardcodes": [],
+            }
+        )
 
     # Sort by file and line number
     all_hardcodes.sort(key=lambda x: (x.get("file_path", ""), x.get("line", 0)))

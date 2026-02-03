@@ -18,11 +18,15 @@ from typing import Any, Dict, List, Tuple
 import httpx
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-# Import models from dedicated module (Issue #185 - split oversized files)
-from backend.api.analytics_models import (
-    AnalyticsOverview,
-    RealTimeEvent,
+# Import controller class (extracted from this file - Issue #212)
+from backend.api.analytics_controller import (
+    analytics_controller,
+    analytics_state,
+    get_service_address,
 )
+
+# Import models from dedicated module (Issue #185 - split oversized files)
+from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -31,18 +35,15 @@ from src.utils.redis_client import RedisDatabase
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
 
-# Import controller class (extracted from this file - Issue #212)
-from backend.api.analytics_controller import (
-    analytics_controller,
-    analytics_state,
-    get_service_address,
-)
-
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
 
 # Module-level constants for O(1) lookups (Issue #326)
-ANALYTICS_REDIS_DATABASES = {RedisDatabase.METRICS, RedisDatabase.KNOWLEDGE, RedisDatabase.MAIN}
+ANALYTICS_REDIS_DATABASES = {
+    RedisDatabase.METRICS,
+    RedisDatabase.KNOWLEDGE,
+    RedisDatabase.MAIN,
+}
 
 
 # ============================================================================
@@ -58,9 +59,15 @@ def _handle_task_exception(result: Any, name: str) -> Any:
 async def _get_realtime_metrics() -> Dict[str, Any]:
     """Get real-time metrics from monitoring (Issue #398: extracted)."""
     try:
-        current_metrics = await analytics_controller.metrics_collector.collect_all_metrics()
+        current_metrics = (
+            await analytics_controller.metrics_collector.collect_all_metrics()
+        )
         return {
-            name: {"value": metric.value, "unit": metric.unit, "category": metric.category}
+            name: {
+                "value": metric.value,
+                "unit": metric.unit,
+                "category": metric.category,
+            }
             for name, metric in current_metrics.items()
         }
     except Exception as e:
@@ -69,12 +76,19 @@ async def _get_realtime_metrics() -> Dict[str, Any]:
 
 async def _get_code_analysis_status() -> Dict[str, Any]:
     """Get code analysis tool status (Issue #398: extracted)."""
-    code_analysis_exists = await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
-    code_index_exists = await asyncio.to_thread(analytics_controller.code_index_path.exists)
+    code_analysis_exists = await asyncio.to_thread(
+        analytics_controller.code_analysis_path.exists
+    )
+    code_index_exists = await asyncio.to_thread(
+        analytics_controller.code_index_path.exists
+    )
     return {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),
-        "tools_available": {"code_analysis_suite": code_analysis_exists, "code_index_mcp": code_index_exists},
+        "tools_available": {
+            "code_analysis_suite": code_analysis_exists,
+            "code_index_mcp": code_index_exists,
+        },
     }
 
 
@@ -104,9 +118,14 @@ async def get_dashboard_overview():
     trends = _handle_task_exception(results[4], "trends")
 
     return AnalyticsOverview(
-        timestamp=timestamp, system_health=system_health, performance_metrics=performance_metrics,
-        communication_patterns=communication_patterns, code_analysis_status=await _get_code_analysis_status(),
-        usage_statistics=usage_statistics, realtime_metrics=await _get_realtime_metrics(), trends=trends,
+        timestamp=timestamp,
+        system_health=system_health,
+        performance_metrics=performance_metrics,
+        communication_patterns=communication_patterns,
+        code_analysis_status=await _get_code_analysis_status(),
+        usage_statistics=usage_statistics,
+        realtime_metrics=await _get_realtime_metrics(),
+        trends=trends,
     )
 
 
@@ -152,20 +171,24 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
     cpu_data = system_resources.get("cpu", {})
     cpu_usage = cpu_data.get("usage_percent", 0)
     if cpu_usage > 90:
-        alerts.append({
-            "type": "cpu_high",
-            "message": f"CPU usage at {cpu_usage:.1f}%",
-            "severity": "warning",
-        })
+        alerts.append(
+            {
+                "type": "cpu_high",
+                "message": f"CPU usage at {cpu_usage:.1f}%",
+                "severity": "warning",
+            }
+        )
 
     memory_data = system_resources.get("memory", {})
     memory_usage = memory_data.get("usage_percent", 0)
     if memory_usage > 90:
-        alerts.append({
-            "type": "memory_high",
-            "message": f"Memory usage at {memory_usage:.1f}%",
-            "severity": "warning",
-        })
+        alerts.append(
+            {
+                "type": "memory_high",
+                "message": f"Memory usage at {memory_usage:.1f}%",
+                "severity": "warning",
+            }
+        )
 
     return alerts
 
@@ -194,8 +217,7 @@ async def get_detailed_system_health():
 
     # Issue #370: Check Redis connectivity for all databases in parallel
     redis_results = await asyncio.gather(
-        *[_check_redis_db(db) for db in RedisDatabase],
-        return_exceptions=True
+        *[_check_redis_db(db) for db in RedisDatabase], return_exceptions=True
     )
     for result in redis_results:
         if isinstance(result, Exception):
@@ -212,7 +234,7 @@ async def get_detailed_system_health():
     async with httpx.AsyncClient(timeout=5.0) as client:
         service_results = await asyncio.gather(
             *[_check_service(client, name, url) for name, url in services.items()],
-            return_exceptions=True
+            return_exceptions=True,
         )
         for result in service_results:
             if isinstance(result, Exception):
@@ -351,12 +373,16 @@ async def get_usage_statistics():
 # IMPORT SUB-ROUTERS FROM SPLIT MODULES
 # ============================================================================
 
+# Import new analytics modules (Issue #59 - Advanced Analytics & BI)
 # Import code analysis router (split to maintain <20 functions)
 # NOTE: analytics_monitoring.py removed in Issue #532 - monitoring endpoints consolidated in monitoring.py
-from backend.api import analytics_code
-
-# Import new analytics modules (Issue #59 - Advanced Analytics & BI)
-from backend.api import analytics_cost, analytics_agents, analytics_export, analytics_behavior
+from backend.api import (
+    analytics_agents,
+    analytics_behavior,
+    analytics_code,
+    analytics_cost,
+    analytics_export,
+)
 
 # Include sub-routers
 router.include_router(analytics_code.router)
@@ -430,7 +456,9 @@ async def get_realtime_metrics():
         # Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output
         "performance_snapshot": {
             "cpu_percent": system_resources.get("cpu", {}).get("usage_percent", 0),
-            "memory_percent": system_resources.get("memory", {}).get("usage_percent", 0),
+            "memory_percent": system_resources.get("memory", {}).get(
+                "usage_percent", 0
+            ),
             "disk_percent": system_resources.get("disk", {}).get("usage_percent", 0),
         },
     }
@@ -536,9 +564,7 @@ def _compute_hourly_stats(historical_calls: list) -> dict:
     for hour_data in hourly_stats.values():
         if hour_data["calls"] > 0:
             hour_data["avg_response_time"] /= hour_data["calls"]
-            hour_data["error_rate"] = (
-                hour_data["errors"] / hour_data["calls"] * 100
-            )
+            hour_data["error_rate"] = hour_data["errors"] / hour_data["calls"] * 100
 
     return dict(hourly_stats)
 
@@ -609,9 +635,7 @@ async def _handle_websocket_message_or_timeout(websocket: WebSocket) -> bool:
         True to continue loop, False to break
     """
     try:
-        message = await asyncio.wait_for(
-            websocket.receive_text(), timeout=10.0
-        )
+        message = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         await _handle_realtime_client_command(websocket, message)
         return True
     except asyncio.TimeoutError:
@@ -920,25 +944,31 @@ async def _handle_realtime_client_command(websocket: WebSocket, message: str) ->
         cmd_type = command.get("type")
 
         if cmd_type == "subscribe":
-            await websocket.send_json({
-                "type": "subscription_confirmed",
-                "subscribed_to": command.get("metrics", "all"),
-                "timestamp": datetime.now().isoformat(),
-            })
+            await websocket.send_json(
+                {
+                    "type": "subscription_confirmed",
+                    "subscribed_to": command.get("metrics", "all"),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
         elif cmd_type == "get_current":
             current_data = await get_realtime_metrics()
-            await websocket.send_json({
-                "type": "current_snapshot",
-                "data": current_data,
-                "timestamp": datetime.now().isoformat(),
-            })
+            await websocket.send_json(
+                {
+                    "type": "current_snapshot",
+                    "data": current_data,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
     except json.JSONDecodeError:
-        await websocket.send_json({
-            "type": "error",
-            "message": "Invalid JSON in client message",
-            "timestamp": datetime.now().isoformat(),
-        })
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "Invalid JSON in client message",
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
 
 
 def _build_periodic_update(current_data: dict) -> dict:
@@ -1021,9 +1051,7 @@ async def _send_health_update_if_due(
 async def _handle_client_message_with_timeout(websocket: WebSocket) -> None:
     """Handle client message with timeout, silently continuing on timeout. (Issue #315 - extracted)"""
     try:
-        message = await asyncio.wait_for(
-            websocket.receive_text(), timeout=1.0
-        )
+        message = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
         await _handle_websocket_command(websocket, message)
     except asyncio.TimeoutError:
         pass  # Continue with periodic updates

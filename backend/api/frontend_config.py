@@ -178,7 +178,9 @@ async def get_frontend_config():
             "project": _build_project_config(),
             "api": {
                 **api_config,
-                "timeout": full_config.get("api", {}).get("timeout", 30000),  # milliseconds
+                "timeout": full_config.get("api", {}).get(
+                    "timeout", 30000
+                ),  # milliseconds
                 "retry_attempts": full_config.get("api", {}).get("retry_attempts", 3),
                 # Issue #598: Include operation-specific timeouts
                 "timeouts": _build_timeouts_config(
@@ -196,7 +198,9 @@ async def get_frontend_config():
             },
             "features": _build_features_config(full_config.get("features", {})),
             "ui": _build_ui_config(full_config.get("ui", {})),
-            "performance": _build_performance_config(full_config.get("performance", {})),
+            "performance": _build_performance_config(
+                full_config.get("performance", {})
+            ),
             # Issue #372: Use NetworkConstants method for host configs
             "hosts": NetworkConstants.get_host_configs(),
         }

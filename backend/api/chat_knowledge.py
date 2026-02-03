@@ -17,10 +17,10 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.chat_history import ChatHistoryManager
 
 # Import existing components
@@ -263,7 +263,8 @@ class ChatKnowledgeManager:
         content_lower = content.lower()
 
         if any(
-            keyword in content_lower for keyword in TROUBLESHOOTING_KEYWORDS  # O(1) lookup (Issue #326)
+            keyword in content_lower
+            for keyword in TROUBLESHOOTING_KEYWORDS  # O(1) lookup (Issue #326)
         ):
             return KnowledgeDecision.ADD_TO_KB  # Useful for troubleshooting
         elif any(
@@ -819,9 +820,7 @@ async def get_session_facts(session_id: str, request: Request):
     # Get knowledge base from app state
     knowledge_base = getattr(request.app.state, "knowledge_base", None)
     if not knowledge_base:
-        raise HTTPException(
-            status_code=503, detail="Knowledge base not available"
-        )
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
         # Get facts for this session
@@ -830,18 +829,19 @@ async def get_session_facts(session_id: str, request: Request):
         # Format response with relevant fields for frontend
         formatted_facts = []
         for fact in facts:
-            formatted_facts.append({
-                "id": fact.get("id"),
-                "content": fact.get("content", "")[:200] + (
-                    "..." if len(fact.get("content", "")) > 200 else ""
-                ),
-                "full_content": fact.get("content", ""),
-                "category": fact.get("category", "general"),
-                "tags": fact.get("tags", []),
-                "important": fact.get("important", False),
-                "preserve": fact.get("preserve", False),
-                "created_at": fact.get("created_at"),
-            })
+            formatted_facts.append(
+                {
+                    "id": fact.get("id"),
+                    "content": fact.get("content", "")[:200]
+                    + ("..." if len(fact.get("content", "")) > 200 else ""),
+                    "full_content": fact.get("content", ""),
+                    "category": fact.get("category", "general"),
+                    "tags": fact.get("tags", []),
+                    "important": fact.get("important", False),
+                    "preserve": fact.get("preserve", False),
+                    "created_at": fact.get("created_at"),
+                }
+            )
 
         return {
             "status": "success",
@@ -880,7 +880,9 @@ async def _preserve_single_fact(
             metadata["preserved_at"] = preserve_time
             metadata["preserved_from_deletion"] = True
 
-            success = await knowledge_base.update_fact(fact_id=fact_id, metadata=metadata)
+            success = await knowledge_base.update_fact(
+                fact_id=fact_id, metadata=metadata
+            )
             if success:
                 return {"status": "success", "fact_id": fact_id}
             else:
@@ -943,8 +945,7 @@ async def preserve_session_facts(
     """
     if len(body.fact_ids) > 100:
         raise HTTPException(
-            status_code=400,
-            detail="Maximum 100 facts can be preserved at once"
+            status_code=400, detail="Maximum 100 facts can be preserved at once"
         )
 
     knowledge_base = getattr(request.app.state, "knowledge_base", None)
@@ -958,14 +959,21 @@ async def preserve_session_facts(
         results = await asyncio.gather(
             *[
                 _preserve_single_fact(
-                    knowledge_base, fid, session_id, body.preserve, preserve_time, semaphore
+                    knowledge_base,
+                    fid,
+                    session_id,
+                    body.preserve,
+                    preserve_time,
+                    semaphore,
                 )
                 for fid in body.fact_ids
             ],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
-        updated_count, failed_count, errors = _count_preserve_results(results, session_id)
+        updated_count, failed_count, errors = _count_preserve_results(
+            results, session_id
+        )
 
         return {
             "status": "success" if failed_count == 0 else "partial",

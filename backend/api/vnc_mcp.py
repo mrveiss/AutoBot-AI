@@ -12,11 +12,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import List
 
-from backend.type_defs.common import Metadata
 import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
@@ -59,7 +59,8 @@ VNC_MCP_TOOL_DEFINITIONS = (
         "observe_vnc_activity",
         (
             "Observe recent VNC activity and traffic. Returns statistics about WebSocket "
-            "traffic, connection state, and recent interactions. Useful for understanding what the human is viewing/doing in the browser or desktop."
+            "traffic, connection state, and recent interactions. Useful for understanding "
+            "what the human is viewing/doing in the browser or desktop."
         ),
         {
             "type": "object",
@@ -156,7 +157,9 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
     Check if specified VNC connection is active and accessible
     """
     vnc_type = request.vnc_type
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
 
     try:
         http_client = get_http_client()
@@ -258,7 +261,9 @@ async def get_browser_vnc_context_mcp() -> Metadata:
     - Recent VNC activity (user interactions)
     - Combined view for full situational awareness
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
     browser_vm_url = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
     context = {
@@ -337,9 +342,7 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
     # Thread-safe update of observations
     async with _vnc_observations_lock:
         if vnc_type not in vnc_observations:
-            raise HTTPException(
-                status_code=404, detail=f"Unknown VNC type: {vnc_type}"
-            )
+            raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
 
         # Append to recent activity (keep last 100)
         vnc_observations[vnc_type]["recent_activity"].append(observation)
@@ -348,6 +351,8 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
         ][-100:]
         vnc_observations[vnc_type]["last_check"] = datetime.now()
 
-    logger.debug("Recorded VNC observation for %s: %s", vnc_type, observation.get('type'))
+    logger.debug(
+        "Recorded VNC observation for %s: %s", vnc_type, observation.get("type")
+    )
 
     return {"success": True, "recorded": True}

@@ -23,6 +23,7 @@ router = APIRouter(prefix="/webhook", tags=["webhooks"])
 
 class AlertAnnotations(BaseModel):
     """Alert annotations from AlertManager"""
+
     summary: str
     description: str
     recommendation: str | None = None
@@ -30,6 +31,7 @@ class AlertAnnotations(BaseModel):
 
 class AlertLabels(BaseModel):
     """Alert labels from AlertManager"""
+
     alertname: str
     severity: str
     component: str
@@ -39,6 +41,7 @@ class AlertLabels(BaseModel):
 
 class AlertInstance(BaseModel):
     """Single alert instance from AlertManager"""
+
     status: str  # "firing" or "resolved"
     labels: Dict[str, str]
     annotations: Dict[str, str]
@@ -50,6 +53,7 @@ class AlertInstance(BaseModel):
 
 class AlertManagerWebhook(BaseModel):
     """AlertManager webhook payload structure"""
+
     version: str
     groupKey: str
     truncatedAlerts: int = 0
@@ -63,10 +67,7 @@ class AlertManagerWebhook(BaseModel):
 
 
 @router.post("/alertmanager")
-async def receive_alertmanager_webhook(
-    payload: AlertManagerWebhook,
-    request: Request
-):
+async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Request):
     """
     Receive alerts from Prometheus AlertManager
 
@@ -86,14 +87,14 @@ async def receive_alertmanager_webhook(
         return {
             "status": "success",
             "processed": len(payload.alerts),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logger.error("Failed to process AlertManager webhook: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process webhook: {str(e)}"
+            detail=f"Failed to process webhook: {str(e)}",
         )
 
 
@@ -128,7 +129,7 @@ async def _process_alert(alert: AlertInstance, group_status: str):
                     labels.get("component", ""),
                     labels.get("resource", ""),
                 ],
-            }
+            },
         }
 
         # Broadcast to all connected WebSocket clients
@@ -166,5 +167,5 @@ async def alertmanager_webhook_health():
         "status": "healthy",
         "endpoint": "/api/webhook/alertmanager",
         "websocket_manager": "connected" if ws_manager else "unavailable",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }

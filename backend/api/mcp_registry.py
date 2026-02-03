@@ -41,7 +41,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
@@ -291,7 +290,14 @@ MCP_BRIDGES = [
         "prometheus_mcp",
         "Prometheus Metrics - System Monitoring and Alerting",
         "/api/prometheus/mcp/tools",
-        ["query_metric", "query_range", "get_system_metrics", "get_service_health", "get_vm_metrics", "list_available_metrics"],
+        [
+            "query_metric",
+            "query_range",
+            "get_system_metrics",
+            "get_service_health",
+            "get_vm_metrics",
+            "list_available_metrics",
+        ],
     ),
 ]
 
@@ -317,8 +323,12 @@ def _build_tool_entry(
 
 
 async def _fetch_bridge_tools(
-    http_client, backend_url: str, bridge_name: str, bridge_desc: str,
-    endpoint: str, features: List[str]
+    http_client,
+    backend_url: str,
+    bridge_name: str,
+    bridge_desc: str,
+    endpoint: str,
+    features: List[str],
 ) -> tuple:
     """Fetch tools from a single bridge. Returns (tools_list, success). (Issue #315 - extracted)"""
     try:
@@ -327,10 +337,15 @@ async def _fetch_bridge_tools(
             timeout=aiohttp.ClientTimeout(total=3),
         ) as response:
             if response.status != 200:
-                logger.warning("MCP bridge %s returned status %s", bridge_name, response.status)
+                logger.warning(
+                    "MCP bridge %s returned status %s", bridge_name, response.status
+                )
                 return [], False
             tools = await response.json()
-            entries = [_build_tool_entry(t, bridge_name, bridge_desc, endpoint, features) for t in tools]
+            entries = [
+                _build_tool_entry(t, bridge_name, bridge_desc, endpoint, features)
+                for t in tools
+            ]
             return entries, True
     except aiohttp.ClientError as e:
         logger.error("HTTP error fetching tools from %s: %s", bridge_name, e)
@@ -345,7 +360,9 @@ async def _fetch_tools_from_bridges() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
     all_tools = []
     bridge_count = 0
 
@@ -376,7 +393,9 @@ async def _fetch_bridges_info() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
     bridges = []
     # Issue #380: Get http_client once before loop instead of per-iteration
     http_client = get_http_client()
@@ -595,7 +614,9 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
         - Usage examples
         - Bridge information
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
 
     # Find the bridge
     bridge = next(
@@ -651,7 +672,9 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
         raise
     except aiohttp.ClientError as e:
         logger.error("HTTP error fetching tool details from %s: %s", bridge_name, e)
-        raise HTTPException(status_code=502, detail=f"Failed to connect to MCP bridge: {str(e)}")
+        raise HTTPException(
+            status_code=502, detail=f"Failed to connect to MCP bridge: {str(e)}"
+        )
     except Exception as e:
         logger.error("Failed to get tool details: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -675,12 +698,19 @@ async def get_mcp_registry_health() -> Metadata:
     - Tool counts
     - Response times
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    )
     health_checks = []
     # Issue #380: Get http_client once before loop instead of per-iteration
     http_client = get_http_client()
 
-    for bridge_name, bridge_desc, endpoint, _ in MCP_BRIDGES:  # Issue #382: features unused
+    for (
+        bridge_name,
+        bridge_desc,
+        endpoint,
+        _,
+    ) in MCP_BRIDGES:  # Issue #382: features unused
         start_time = datetime.now()
         check = {
             "bridge": bridge_name,

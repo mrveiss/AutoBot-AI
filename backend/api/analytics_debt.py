@@ -438,9 +438,9 @@ def _extract_problem_from_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
         "type": meta.get("problem_type", "unknown"),
         "severity": meta.get("severity", "medium"),
         "file_path": meta.get("file_path", "unknown"),
-        "line_number": int(meta.get("line_number", 0))
-        if meta.get("line_number")
-        else None,
+        "line_number": (
+            int(meta.get("line_number", 0)) if meta.get("line_number") else None
+        ),
         "description": meta.get("description", ""),
         "suggestion": meta.get("suggestion", ""),
     }

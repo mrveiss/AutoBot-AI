@@ -7,7 +7,6 @@ Updated to use improved TerminalWebSocketManager for race condition fixes
 import asyncio
 import logging
 import os
-import pty
 import subprocess
 import threading
 from abc import ABC, abstractmethod
@@ -24,7 +23,7 @@ class BaseTerminalWebSocket(ABC):
     def __init__(self):
         # Use new terminal manager for race condition fixes
         self.terminal_adapter = TerminalWebSocketAdapter(self, self.terminal_type)
-        
+
         # Legacy compatibility properties
         self.websocket = None
         self.pty_fd: Optional[int] = None
@@ -48,11 +47,11 @@ class BaseTerminalWebSocket(ABC):
         try:
             self.active = True
             await self.terminal_adapter.start_session(self.websocket)
-            
+
             # Update legacy properties for compatibility
             self.pty_fd = self.terminal_adapter.manager.pty_fd
             self.process = self.terminal_adapter.manager.process
-            
+
             logger.info(f"PTY shell started for {self.terminal_type}")
 
         except Exception as e:
@@ -67,15 +66,15 @@ class BaseTerminalWebSocket(ABC):
 
     def _read_pty_output(self):
         """Read output from PTY in separate thread with queue-based delivery"""
-        import select
         import queue
+        import select
         import time
 
         # Create output queue for thread-safe message passing
         self.output_queue = queue.Queue()
 
         # Start async message sender task
-        if hasattr(self, '_output_sender_task'):
+        if hasattr(self, "_output_sender_task"):
             self._output_sender_task.cancel()
 
         # Schedule async output sender
@@ -106,7 +105,7 @@ class BaseTerminalWebSocket(ABC):
                                 message = {
                                     "type": "output",
                                     "content": processed_output,  # Standardized field name
-                                    "timestamp": time.time()
+                                    "timestamp": time.time(),
                                 }
 
                                 try:
@@ -133,7 +132,7 @@ class BaseTerminalWebSocket(ABC):
             logger.error(f"PTY reader thread error: {e}")
         finally:
             # Signal async sender to stop
-            if hasattr(self, 'output_queue'):
+            if hasattr(self, "output_queue"):
                 try:
                     self.output_queue.put_nowait({"type": "stop"})
                 except queue.Full:
@@ -143,7 +142,7 @@ class BaseTerminalWebSocket(ABC):
         """Async task to send queued output messages to WebSocket"""
         import queue
 
-        if not hasattr(self, 'output_queue'):
+        if not hasattr(self, "output_queue"):
             return
 
         try:
@@ -154,7 +153,7 @@ class BaseTerminalWebSocket(ABC):
                         asyncio.get_event_loop().run_in_executor(
                             None, self.output_queue.get, True, 0.1
                         ),
-                        timeout=0.2
+                        timeout=0.2,
                     )
 
                     if message.get("type") == "stop":
@@ -197,19 +196,21 @@ class BaseTerminalWebSocket(ABC):
         self.active = False
 
         # Cancel async output sender task
-        if hasattr(self, '_output_sender_task') and self._output_sender_task:
+        if hasattr(self, "_output_sender_task") and self._output_sender_task:
             try:
                 self._output_sender_task.cancel()
                 # Wait for task to complete cancellation
                 try:
-                    await asyncio.wait_for(asyncio.wrap_future(self._output_sender_task), timeout=1.0)
+                    await asyncio.wait_for(
+                        asyncio.wrap_future(self._output_sender_task), timeout=1.0
+                    )
                 except (asyncio.TimeoutError, asyncio.CancelledError):
                     pass
             except Exception as e:
                 logger.warning(f"Error cancelling output sender task: {e}")
 
         # Clear output queue
-        if hasattr(self, 'output_queue'):
+        if hasattr(self, "output_queue"):
             try:
                 # Drain the queue
                 while not self.output_queue.empty():
@@ -223,13 +224,13 @@ class BaseTerminalWebSocket(ABC):
         # Use new terminal manager for cleanup
         try:
             await self.terminal_adapter.stop_session()
-            
+
             # Clear legacy properties
             self.pty_fd = None
             self.process = None
             self.reader_thread = None
             self.websocket = None
-            
+
         except Exception as e:
             logger.error(f"Error during improved cleanup: {e}")
 
@@ -257,7 +258,7 @@ class BaseTerminalWebSocket(ABC):
     async def validate_command(self, command: str) -> bool:
         """Validate command before execution (override in subclasses)"""
         return True
-    
+
     def get_terminal_stats(self) -> dict:
         """Get terminal session statistics"""
         try:

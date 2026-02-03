@@ -19,8 +19,8 @@ from backend.services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
-from src.constants.network_constants import NetworkConstants
 from src.config import UnifiedConfigManager
+from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
 
@@ -147,7 +147,9 @@ async def web_search(request: SearchRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning("Web search failed: %s", result.get('error', 'Unknown error'))
+            logger.warning(
+                "Web search failed: %s", result.get("error", "Unknown error")
+            )
             raise HTTPException(
                 status_code=500, detail=result.get("error", "Web search failed")
             )
@@ -256,7 +258,9 @@ async def capture_screenshot(request: ScreenshotRequest):
         if result.get("success", False):
             return result
         else:
-            logger.warning("Screenshot failed: %s", result.get('error', 'Unknown error'))
+            logger.warning(
+                "Screenshot failed: %s", result.get("error", "Unknown error")
+            )
             raise HTTPException(
                 status_code=500, detail=result.get("error", "Screenshot capture failed")
             )
@@ -289,13 +293,15 @@ async def quick_automation_test(background_tasks: BackgroundTasks):
             # Test 1: Service health
             service = await get_playwright_service()
             health = await service.get_service_status()
-            logger.info("Service health: %s", health.get('status'))
+            logger.info("Service health: %s", health.get("status"))
 
             # Test 2: Web search
             search_result = await search_web_embedded(
                 "AutoBot system test", max_results=2
             )
-            logger.info("Search test: %s results", len(search_result.get('results', [])))
+            logger.info(
+                "Search test: %s results", len(search_result.get("results", []))
+            )
 
             # Test 3: Frontend test
             frontend_result = await test_frontend_embedded()
@@ -357,7 +363,7 @@ async def navigate_to_url(request: NavigateRequest):
             result = await response.json()
 
             if response.status == 200:
-                logger.info("Navigation successful: %s", result.get('url'))
+                logger.info("Navigation successful: %s", result.get("url"))
                 return result
             else:
                 logger.error("Navigation failed: %s", result)

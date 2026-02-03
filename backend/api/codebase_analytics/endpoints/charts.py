@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
-from ..storage import get_redis_connection, get_code_collection
+from ..storage import get_code_collection, get_redis_connection
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +153,7 @@ async def _aggregate_from_redis(
     Issue #361: Avoid blocking with asyncio.to_thread.
     Issue #561: Fixed N+1 query pattern - now uses pipeline batching.
     """
+
     def _scan_and_aggregate():
         # Issue #561: Collect all keys first, then batch fetch with pipeline
         keys = list(redis_client.scan_iter(match="codebase:problems:*"))
@@ -173,7 +174,11 @@ async def _aggregate_from_redis(
             for problem in problems:
                 total_problems += 1
                 _aggregate_problem_data(
-                    problem, problem_types, severity_counts, race_conditions, file_problems
+                    problem,
+                    problem_types,
+                    severity_counts,
+                    race_conditions,
+                    file_problems,
                 )
         return total_problems
 
@@ -244,25 +249,42 @@ async def get_chart_data():
         # Fallback to Redis if ChromaDB fails
         redis_client = await get_redis_connection()
         if not redis_client:
-            return JSONResponse({
-                "status": "no_data",
-                "message": "No codebase data found. Run indexing first.",
-                "chart_data": None,
-            })
+            return JSONResponse(
+                {
+                    "status": "no_data",
+                    "message": "No codebase data found. Run indexing first.",
+                    "chart_data": None,
+                }
+            )
 
         try:
             total_problems = await _aggregate_from_redis(
-                redis_client, problem_types, severity_counts, race_conditions, file_problems
+                redis_client,
+                problem_types,
+                severity_counts,
+                race_conditions,
+                file_problems,
             )
             storage_type = "redis"
         except Exception as redis_error:
             logger.error("Redis query failed: %s", redis_error)
             return JSONResponse(
-                {"status": "error", "message": "Failed to retrieve chart data", "error": str(redis_error)},
+                {
+                    "status": "error",
+                    "message": "Failed to retrieve chart data",
+                    "error": str(redis_error),
+                },
                 status_code=500,
             )
 
     # Build and return chart response (Issue #665: uses _build_chart_response helper)
-    return JSONResponse(_build_chart_response(
-        problem_types, severity_counts, race_conditions, file_problems, total_problems, storage_type
-    ))
+    return JSONResponse(
+        _build_chart_response(
+            problem_types,
+            severity_counts,
+            race_conditions,
+            file_problems,
+            total_problems,
+            storage_type,
+        )
+    )

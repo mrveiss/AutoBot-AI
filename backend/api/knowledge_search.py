@@ -21,7 +21,10 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
-from backend.api.knowledge_models import ConsolidatedSearchRequest, EnhancedSearchRequest
+from backend.api.knowledge_models import (
+    ConsolidatedSearchRequest,
+    EnhancedSearchRequest,
+)
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.type_defs.common import Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -123,7 +126,9 @@ def _build_search_response(
 # =============================================================================
 
 
-async def _execute_kb_search(kb_to_use, query: str, search_limit: int, mode: str) -> list:
+async def _execute_kb_search(
+    kb_to_use, query: str, search_limit: int, mode: str
+) -> list:
     """Execute search on knowledge base (Issue #398: extracted).
 
     Handles different KB implementations with correct parameters.
@@ -165,7 +170,9 @@ async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
         return None
 
 
-async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) -> dict | None:
+async def _apply_rag_enhancement(
+    query: str, results: list, kb_class_name: str
+) -> dict | None:
     """Apply RAG enhancement if available (Issue #398: extracted).
 
     Returns response dict if successful, None if RAG failed.
@@ -193,9 +200,7 @@ async def _apply_rag_enhancement(query: str, results: list, kb_class_name: str) 
 # =============================================================================
 
 
-def _build_no_results_response(
-    query: str, reformulated_queries: List[str]
-) -> Metadata:
+def _build_no_results_response(query: str, reformulated_queries: List[str]) -> Metadata:
     """
     Build response when no results are found.
 
@@ -246,8 +251,7 @@ async def _check_empty_kb_for_rag(kb_to_use, query: str) -> Metadata | None:
 
         if fact_count == 0:
             logger.info(
-                "Knowledge base is empty - "
-                "returning empty RAG results immediately"
+                "Knowledge base is empty - " "returning empty RAG results immediately"
             )
             return {
                 "status": "success",
@@ -341,17 +345,11 @@ def _convert_results_to_documents(
             {
                 "content": result.get("content", ""),
                 "metadata": {
-                    "filename": (
-                        result.get("metadata", {}).get("title", "Unknown")
-                    ),
+                    "filename": (result.get("metadata", {}).get("title", "Unknown")),
                     "source": (
-                        result.get("metadata", {}).get(
-                            "source", "knowledge_base"
-                        )
+                        result.get("metadata", {}).get("source", "knowledge_base")
                     ),
-                    "category": (
-                        result.get("metadata", {}).get("category", "general")
-                    ),
+                    "category": (result.get("metadata", {}).get("category", "general")),
                     "score": result.get("score", 0.0),
                     "source_query": result.get("source_query", original_query),
                 },
@@ -440,9 +438,7 @@ async def _check_kb_initialization(req: Request) -> tuple:
     return kb_to_use, None
 
 
-async def _check_empty_kb_for_search(
-    kb_to_use, query: str, mode: str
-) -> dict | None:
+async def _check_empty_kb_for_search(kb_to_use, query: str, mode: str) -> dict | None:
     """
     Check if KB is empty and return early response if so.
 
@@ -493,9 +489,7 @@ async def _execute_basic_search_with_reranking(
     kb_class_name = kb_to_use.__class__.__name__
 
     # Execute basic search
-    results = await _execute_kb_search(
-        kb_to_use, query, request.top_k, request.mode
-    )
+    results = await _execute_kb_search(kb_to_use, query, request.top_k, request.mode)
 
     # Apply reranking if requested
     if request.enable_reranking:
@@ -655,9 +649,7 @@ async def _consolidated_rag_search(
 
     # Apply min_score filter
     if request.min_score > 0:
-        all_results = [
-            r for r in all_results if r.get("score", 0) >= request.min_score
-        ]
+        all_results = [r for r in all_results if r.get("score", 0) >= request.min_score]
 
     # RAG processing for synthesis
     if all_results:
@@ -748,7 +740,9 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
     # Check if knowledge base supports enhanced_search
     if not hasattr(kb_to_use, "enhanced_search"):
         # Issue #372: Fallback using model method
-        logger.warning("KB implementation does not support enhanced_search, using fallback")
+        logger.warning(
+            "KB implementation does not support enhanced_search, using fallback"
+        )
         results = await kb_to_use.search(
             query=request.query,
             top_k=request.limit,
@@ -829,10 +823,14 @@ async def rag_enhanced_search(request: dict, req: Request):
 
     # Step 1: Query reformulation (Issue #281: uses helper)
     original_query = query
-    reformulated_queries = await _reformulate_query_if_requested(query, reformulate_query)
+    reformulated_queries = await _reformulate_query_if_requested(
+        query, reformulate_query
+    )
 
     # Step 2: Search with all queries (Issue #281: uses helper)
-    all_results = await _search_with_all_queries(kb_to_use, reformulated_queries, search_limit)
+    all_results = await _search_with_all_queries(
+        kb_to_use, reformulated_queries, search_limit
+    )
 
     # Step 3: RAG processing or empty response (Issue #665: uses helpers)
     if all_results:
@@ -882,7 +880,9 @@ async def similarity_search(request: dict, req: Request):
 
     # Execute search with appropriate parameters
     kb_class_name = kb_to_use.__class__.__name__
-    results = await _execute_kb_search(kb_to_use, kb_class_name, query, top_k)
+    results = await _execute_similarity_kb_search(
+        kb_to_use, kb_class_name, query, top_k
+    )
 
     # Filter by threshold if specified
     results = _filter_by_threshold(results, threshold)
@@ -893,10 +893,10 @@ async def similarity_search(request: dict, req: Request):
     )
 
 
-async def _execute_kb_search(
+async def _execute_similarity_kb_search(
     kb_to_use: Any, kb_class_name: str, query: str, top_k: int
 ) -> List[Dict[str, Any]]:
-    """Execute search with appropriate KB parameters (Issue #665: extracted helper)."""
+    """Execute similarity search with appropriate KB parameters (Issue #665: extracted helper)."""
     if kb_class_name == "KnowledgeBaseV2":
         # KnowledgeBaseV2 uses 'top_k' parameter
         return await kb_to_use.search(query=query, top_k=top_k)
@@ -1175,9 +1175,7 @@ async def expand_query(request: dict):
 # ===== HELPER FUNCTIONS =====
 
 
-async def _enhance_search_with_rag(
-    query: str, results: List[Metadata]
-) -> Metadata:
+async def _enhance_search_with_rag(query: str, results: List[Metadata]) -> Metadata:
     """Enhance search results with RAG analysis"""
     try:
         rag_agent = get_rag_agent()

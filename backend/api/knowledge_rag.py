@@ -19,6 +19,7 @@ from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.rag_config import get_rag_config, update_rag_config
 from backend.services.rag_service import RAGService
 from backend.type_defs.common import Metadata
+from src.auth_middleware import get_current_user
 from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -155,11 +156,13 @@ def _build_search_metrics(metrics) -> dict:
 async def advanced_search(
     request: AdvancedSearchRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Perform advanced RAG search with cross-encoder reranking.
 
     Issue #620: Refactored to use extracted helper methods.
+    Issue #744: Requires authenticated user.
 
     **Parameters:**
     - **query**: Search query string
@@ -216,12 +219,15 @@ async def advanced_search(
 async def rerank_results(
     request: RerankRequest,
     rag_service: RAGService = Depends(get_rag_service_dependency),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Rerank existing search results using cross-encoder model.
 
     This endpoint allows you to post-process results from basic searches
     with advanced cross-encoder reranking for improved relevance.
+
+    Issue #744: Requires authenticated user.
 
     **Parameters:**
     - **query**: Original search query
@@ -255,7 +261,9 @@ async def rerank_results(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/config/rag")
-async def get_rag_configuration():
+async def get_rag_configuration(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get current RAG configuration settings.
 
@@ -263,6 +271,8 @@ async def get_rag_configuration():
     - Hybrid search weights
     - Reranking settings
     - Performance parameters
+
+    Issue #744: Requires authenticated user.
     """
     config = get_rag_config()
 
@@ -278,12 +288,17 @@ async def get_rag_configuration():
     error_code_prefix="KNOWLEDGE",
 )
 @router.put("/config/rag")
-async def update_rag_configuration(request: RAGConfigUpdate):
+async def update_rag_configuration(
+    request: RAGConfigUpdate,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Update RAG configuration at runtime.
 
     Allows dynamic adjustment of RAG parameters without restarting the service.
     Only provided parameters will be updated; others remain unchanged.
+
+    Issue #744: Requires authenticated user.
 
     **Parameters:**
     - **hybrid_weight_semantic**: Weight for semantic search (0-1)
@@ -319,7 +334,10 @@ async def update_rag_configuration(request: RAGConfigUpdate):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/stats/rag")
-async def get_rag_stats(rag_service: RAGService = Depends(get_rag_service_dependency)):
+async def get_rag_stats(
+    rag_service: RAGService = Depends(get_rag_service_dependency),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get RAG service statistics and status.
 
@@ -328,6 +346,8 @@ async def get_rag_stats(rag_service: RAGService = Depends(get_rag_service_depend
     - Knowledge base implementation
     - Cache statistics
     - Current configuration
+
+    Issue #744: Requires authenticated user.
     """
     stats = rag_service.get_stats()
 

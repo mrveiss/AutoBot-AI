@@ -18,9 +18,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import get_current_user
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
@@ -64,9 +65,7 @@ class BatchJobCreate(BaseModel):
     schedule: Optional[str] = Field(
         None, description="Optional cron expression for scheduling"
     )
-    template_id: Optional[str] = Field(
-        None, description="Optional template ID to use"
-    )
+    template_id: Optional[str] = Field(None, description="Optional template ID to use")
 
 
 class BatchJob(BaseModel):
@@ -168,9 +167,14 @@ def _deserialize_job(data: str) -> BatchJob:
     error_code_prefix="BATCH_JOBS",
 )
 @router.post("", response_model=BatchJob)
-async def create_batch_job(job_data: BatchJobCreate):
+async def create_batch_job(
+    job_data: BatchJobCreate,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Create a new batch job.
+
+    Issue #744: Requires authenticated user.
 
     Args:
         job_data: Job creation request data
@@ -215,9 +219,12 @@ async def list_batch_jobs(
     job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
     limit: int = Query(50, ge=1, le=500, description="Max results"),
     offset: int = Query(0, ge=0, description="Results offset"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     List all batch jobs with optional filtering and pagination.
+
+    Issue #744: Requires authenticated user.
 
     Args:
         status: Filter by job status
@@ -268,9 +275,14 @@ async def list_batch_jobs(
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/{job_id}", response_model=BatchJob)
-async def get_batch_job(job_id: str):
+async def get_batch_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get detailed information about a specific job.
+
+    Issue #744: Requires authenticated user.
 
     Args:
         job_id: Job ID
@@ -297,9 +309,14 @@ async def get_batch_job(job_id: str):
     error_code_prefix="BATCH_JOBS",
 )
 @router.delete("/{job_id}")
-async def delete_batch_job(job_id: str):
+async def delete_batch_job(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Cancel and delete a batch job.
+
+    Issue #744: Requires authenticated user.
 
     Args:
         job_id: Job ID
@@ -340,9 +357,14 @@ async def delete_batch_job(job_id: str):
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/{job_id}/logs", response_model=List[LogEntry])
-async def get_job_logs(job_id: str):
+async def get_job_logs(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get execution logs for a specific job.
+
+    Issue #744: Requires authenticated user.
 
     Args:
         job_id: Job ID
@@ -380,8 +402,14 @@ async def get_job_logs(job_id: str):
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/templates/", response_model=List[BatchTemplate])
-async def list_batch_templates():
-    """List all batch job templates"""
+async def list_batch_templates(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List all batch job templates.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
@@ -408,9 +436,16 @@ async def list_batch_templates():
 )
 @router.post("/templates/", response_model=BatchTemplate)
 async def create_batch_template(
-    name: str, job_type: BatchJobType, parameters: Dict
+    name: str,
+    job_type: BatchJobType,
+    parameters: Dict,
+    current_user: dict = Depends(get_current_user),
 ):
-    """Create a new batch job template"""
+    """
+    Create a new batch job template.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
@@ -438,8 +473,15 @@ async def create_batch_template(
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/templates/{template_id}", response_model=BatchTemplate)
-async def get_batch_template(template_id: str):
-    """Get a specific batch job template"""
+async def get_batch_template(
+    template_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get a specific batch job template.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
@@ -448,9 +490,7 @@ async def get_batch_template(template_id: str):
     template_data = redis_client.get(template_key)
 
     if not template_data:
-        raise HTTPException(
-            status_code=404, detail=f"Template {template_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
 
     template_dict = json.loads(template_data.decode("utf-8"))
     return BatchTemplate(**template_dict)
@@ -462,17 +502,22 @@ async def get_batch_template(template_id: str):
     error_code_prefix="BATCH_JOBS",
 )
 @router.delete("/templates/{template_id}")
-async def delete_batch_template(template_id: str):
-    """Delete a batch job template"""
+async def delete_batch_template(
+    template_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Delete a batch job template.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
 
     template_key = _get_template_key(template_id)
     if not redis_client.exists(template_key):
-        raise HTTPException(
-            status_code=404, detail=f"Template {template_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
 
     redis_client.delete(template_key)
     redis_client.srem("batch:templates:all", template_id)
@@ -492,8 +537,14 @@ async def delete_batch_template(template_id: str):
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/schedules/", response_model=List[BatchSchedule])
-async def list_batch_schedules():
-    """List all batch job schedules"""
+async def list_batch_schedules(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List all batch job schedules.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
@@ -520,9 +571,16 @@ async def list_batch_schedules():
 )
 @router.post("/schedules/", response_model=BatchSchedule)
 async def create_batch_schedule(
-    job_id: str, cron_expression: str, enabled: bool = True
+    job_id: str,
+    cron_expression: str,
+    enabled: bool = True,
+    current_user: dict = Depends(get_current_user),
 ):
-    """Create a new batch job schedule"""
+    """
+    Create a new batch job schedule.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
@@ -554,17 +612,22 @@ async def create_batch_schedule(
     error_code_prefix="BATCH_JOBS",
 )
 @router.delete("/schedules/{schedule_id}")
-async def delete_batch_schedule(schedule_id: str):
-    """Delete a batch job schedule"""
+async def delete_batch_schedule(
+    schedule_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Delete a batch job schedule.
+
+    Issue #744: Requires authenticated user.
+    """
     redis_client = get_redis_client(database="main")
     if not redis_client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
 
     schedule_key = _get_schedule_key(schedule_id)
     if not redis_client.exists(schedule_key):
-        raise HTTPException(
-            status_code=404, detail=f"Schedule {schedule_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
 
     redis_client.delete(schedule_key)
     redis_client.srem("batch:schedules:all", schedule_id)
@@ -584,9 +647,13 @@ async def delete_batch_schedule(schedule_id: str):
     error_code_prefix="BATCH_JOBS",
 )
 @router.get("/health")
-async def get_batch_jobs_health():
+async def get_batch_jobs_health(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get batch jobs service health status.
+
+    Issue #744: Requires authenticated user.
 
     Returns:
         dict: Service health information

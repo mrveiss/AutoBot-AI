@@ -29,14 +29,13 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import List, Optional
-
-from backend.type_defs.common import JSONObject, Metadata
 from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import JSONObject, Metadata
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
@@ -48,7 +47,9 @@ router = APIRouter(tags=["browser_mcp", "mcp"])
 ALLOWED_URL_SCHEMES = {"http", "https"}
 
 # Security Configuration
-BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+BROWSER_VM_URL = (
+    f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+)
 
 # URL Whitelist - Only these domains are allowed
 ALLOWED_URL_PATTERNS = [

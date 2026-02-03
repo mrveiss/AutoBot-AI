@@ -32,12 +32,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from backend.type_defs.common import JSONObject, Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
-from src.constants.threshold_constants import QueryDefaults
 
+from backend.type_defs.common import JSONObject, Metadata
 from src.config.ssot_config import PROJECT_ROOT
+from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -244,7 +244,7 @@ async def check_rate_limit() -> bool:
             git_counter["reset_time"] = now
 
         if git_counter["count"] >= MAX_GIT_OPS_PER_MINUTE:
-            logger.warning("Rate limit exceeded: %s git ops/min", git_counter['count'])
+            logger.warning("Rate limit exceeded: %s git ops/min", git_counter["count"])
             return False
 
         git_counter["count"] += 1
@@ -279,9 +279,7 @@ def _validate_git_command(git_args: List[str]) -> None:
         )
 
 
-async def _run_git_process(
-    cmd: List[str], repo_path: str, timeout: int
-) -> Metadata:
+async def _run_git_process(cmd: List[str], repo_path: str, timeout: int) -> Metadata:
     """Execute git process and return result (Issue #665: extracted helper)."""
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -291,9 +289,7 @@ async def _run_git_process(
     )
 
     try:
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=timeout
-        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
         process.kill()
         await process.wait()

@@ -23,14 +23,16 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for allowed configuration keys
-_ALLOWED_CONFIG_KEYS = frozenset({
-    "auto_progression_enabled",
-    "minimum_phase_duration",
-    "validation_threshold",
-    "rollback_threshold",
-    "max_concurrent_phases",
-    "progression_cooldown",
-})
+_ALLOWED_CONFIG_KEYS = frozenset(
+    {
+        "auto_progression_enabled",
+        "minimum_phase_duration",
+        "validation_threshold",
+        "rollback_threshold",
+        "max_concurrent_phases",
+        "progression_cooldown",
+    }
+)
 
 
 class PhaseProgressionRequest(BaseModel):

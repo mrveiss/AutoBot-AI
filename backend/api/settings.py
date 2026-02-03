@@ -13,9 +13,9 @@ from pydantic import BaseModel
 from backend.celery_app import celery_app
 from backend.services.config_service import ConfigService
 from backend.tasks.system_tasks import (
+    check_available_updates,
     initialize_rbac,
     run_system_update,
-    check_available_updates,
 )
 from src.auth_middleware import check_admin_permission
 from src.utils.catalog_http_exceptions import raise_server_error
@@ -29,13 +29,13 @@ logger = logging.getLogger(__name__)
 # Issue #687: RBAC initialization request model
 import re
 
-
 # Issue #687: RBAC marker path constant
 RBAC_MARKER_PATH = Path("/etc/autobot/rbac-initialized")
 
 
 class RBACInitRequest(BaseModel):
     """Request model for RBAC initialization."""
+
     create_admin: bool = False
     admin_username: str = "admin"
 
@@ -44,7 +44,7 @@ class RBACInitRequest(BaseModel):
         """Validate admin username format."""
         if len(v) < 3 or len(v) > 32:
             raise ValueError("Username must be 3-32 characters")
-        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', v):
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", v):
             raise ValueError(
                 "Username must start with a letter and contain only letters, numbers, and underscores"
             )
@@ -364,6 +364,7 @@ UPDATES_MARKER_PATH = Path("/etc/autobot/last-update")
 
 class SystemUpdateRequest(BaseModel):
     """Request model for system updates (Issue #544)."""
+
     update_type: str = "dependencies"  # 'dependencies' or 'system'
     target_groups: Optional[list] = None  # Host groups to update (None = all)
     dry_run: bool = False  # Preview mode

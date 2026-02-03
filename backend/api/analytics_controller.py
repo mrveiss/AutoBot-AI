@@ -24,13 +24,12 @@ from typing import Dict, List
 import psutil
 import redis
 
-from backend.type_defs.common import Metadata
-from src.constants import PATH
-
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
-from src.constants.threshold_constants import TimingConstants
+from backend.type_defs.common import Metadata
 from src.config import UnifiedConfigManager
+from src.constants import PATH
+from src.constants.threshold_constants import TimingConstants
 from src.utils.redis_client import RedisDatabase, get_redis_client
 from src.utils.system_metrics import get_metrics_collector
 
@@ -94,7 +93,11 @@ class AnalyticsController:
     async def get_redis_connection(self, database: RedisDatabase) -> redis.Redis:
         """Get Redis connection for specific database"""
         try:
-            db_name = database.name.lower() if isinstance(database, RedisDatabase) else database
+            db_name = (
+                database.name.lower()
+                if isinstance(database, RedisDatabase)
+                else database
+            )
             return await get_redis_client(async_client=True, database=db_name)
         except Exception as e:
             logger.error("Failed to get Redis connection for %s: %s", database, e)
@@ -190,9 +193,7 @@ class AnalyticsController:
 
         return patterns
 
-    async def perform_code_analysis(
-        self, request: CodeAnalysisRequest
-    ) -> Metadata:
+    async def perform_code_analysis(self, request: CodeAnalysisRequest) -> Metadata:
         """Perform code analysis using integrated tools"""
         analysis_results = {
             "status": "success",
@@ -258,7 +259,9 @@ class AnalyticsController:
                 cwd=str(self.code_analysis_path),
             )
 
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=TimingConstants.VERY_LONG_TIMEOUT)
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=TimingConstants.VERY_LONG_TIMEOUT
+            )
 
             if process.returncode == 0:
                 analysis_data = json.loads(stdout.decode())

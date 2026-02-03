@@ -12,15 +12,12 @@ Author: mrveiss
 import logging
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.computer_vision_system import (
-    ElementType,
-    InteractionType,
-    ScreenAnalyzer,
-)
+from backend.type_defs.common import Metadata
+from src.auth_middleware import get_current_user
+from src.computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(tags=["vision", "gui-automation"])
@@ -73,7 +70,7 @@ class OCRRequest(BaseModel):
         description=(
             "Region to extract text from {x, y, width, height}. If None,"
             "analyzes full screen."
-        )
+        ),
     )
     session_id: Optional[str] = None
 
@@ -132,8 +129,14 @@ class VisionHealthResponse(BaseModel):
     error_code_prefix="VISION",
 )
 @router.get("/health", response_model=VisionHealthResponse)
-async def vision_health_check():
-    """Health check for computer vision service"""
+async def vision_health_check(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Health check for computer vision service.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         analyzer = get_screen_analyzer()
         # Verify analyzer is properly initialized
@@ -169,12 +172,17 @@ async def vision_health_check():
     error_code_prefix="VISION",
 )
 @router.post("/analyze", response_model=ScreenAnalysisResponse)
-async def analyze_screen(request: ScreenAnalysisRequest):
+async def analyze_screen(
+    request: ScreenAnalysisRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Perform comprehensive screen analysis.
 
     Returns detected UI elements, text regions, layout structure,
     and automation opportunities.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         analyzer = get_screen_analyzer()
@@ -224,11 +232,16 @@ async def analyze_screen(request: ScreenAnalysisRequest):
     error_code_prefix="VISION",
 )
 @router.post("/elements")
-async def detect_elements(request: ElementDetectionRequest):
+async def detect_elements(
+    request: ElementDetectionRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Detect UI elements on the current screen.
 
     Optionally filter by element type and confidence threshold.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         analyzer = get_screen_analyzer()
@@ -283,11 +296,16 @@ async def detect_elements(request: ElementDetectionRequest):
     error_code_prefix="VISION",
 )
 @router.post("/ocr")
-async def extract_text_ocr(request: OCRRequest):
+async def extract_text_ocr(
+    request: OCRRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Extract text from screen using OCR.
 
     Can extract from full screen or specified region.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         analyzer = get_screen_analyzer()
@@ -334,11 +352,16 @@ async def extract_text_ocr(request: OCRRequest):
     error_code_prefix="VISION",
 )
 @router.get("/automation-opportunities")
-async def get_automation_opportunities(session_id: Optional[str] = None):
+async def get_automation_opportunities(
+    session_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Identify automation opportunities on the current screen.
 
     Returns interactive elements and suggested automation actions.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         analyzer = get_screen_analyzer()
@@ -363,8 +386,14 @@ async def get_automation_opportunities(session_id: Optional[str] = None):
     error_code_prefix="VISION",
 )
 @router.get("/element-types")
-async def get_element_types():
-    """Get list of supported UI element types"""
+async def get_element_types(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get list of supported UI element types.
+
+    Issue #744: Requires authenticated user.
+    """
     return {
         "element_types": [
             {
@@ -384,8 +413,14 @@ async def get_element_types():
     error_code_prefix="VISION",
 )
 @router.get("/interaction-types")
-async def get_interaction_types():
-    """Get list of supported interaction types"""
+async def get_interaction_types(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get list of supported interaction types.
+
+    Issue #744: Requires authenticated user.
+    """
     return {
         "interaction_types": [
             {
@@ -405,11 +440,16 @@ async def get_interaction_types():
     error_code_prefix="VISION",
 )
 @router.get("/layout")
-async def get_layout_analysis(session_id: Optional[str] = None):
+async def get_layout_analysis(
+    session_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Analyze the screen layout structure.
 
     Returns hierarchical layout information and structural patterns.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         analyzer = get_screen_analyzer()
@@ -431,8 +471,14 @@ async def get_layout_analysis(session_id: Optional[str] = None):
     error_code_prefix="VISION",
 )
 @router.get("/status")
-async def get_vision_status():
-    """Get overall vision service status"""
+async def get_vision_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get overall vision service status.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         analyzer = get_screen_analyzer()
         return {

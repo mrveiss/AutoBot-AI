@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.auth_middleware import get_current_user
+from src.auth_middleware import check_admin_permission, get_current_user
 from src.enhanced_multi_agent_orchestrator import (
     create_and_execute_workflow,
     enhanced_orchestrator,
@@ -331,9 +331,13 @@ async def get_active_workflows(
     error_code_prefix="ORCHESTRATION",
 )
 @router.get("/strategies")
-async def get_execution_strategies():
+async def get_execution_strategies(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get available execution strategies and their descriptions.
+
+    Issue #744: Requires admin authentication.
     """
     strategies = {
         "sequential": {
@@ -423,9 +427,13 @@ async def get_agent_capabilities(
     error_code_prefix="ORCHESTRATION",
 )
 @router.get("/status")
-async def get_orchestration_status():
+async def get_orchestration_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get overall orchestration system status.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         performance_report = enhanced_orchestrator.get_performance_report()
@@ -464,9 +472,13 @@ async def get_orchestration_status():
     error_code_prefix="ORCHESTRATION",
 )
 @router.get("/examples")
-async def get_orchestration_examples():
+async def get_orchestration_examples(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get example workflows and usage patterns.
+
+    Issue #744: Requires admin authentication.
     """
     return JSONResponse(
         status_code=200,

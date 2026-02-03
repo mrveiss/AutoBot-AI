@@ -19,8 +19,7 @@ from fastapi.responses import JSONResponse
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
-from .shared import (COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext,
-                     get_project_root)
+from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, get_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +42,10 @@ def _get_cache_key(project_root: str) -> str:
         Cache key unique to this path
     """
     import hashlib
+
     path_hash = hashlib.md5(project_root.encode()).hexdigest()[:12]
     return f"{CALL_GRAPH_CACHE_PREFIX}:{path_hash}"
+
 
 router = APIRouter()
 
@@ -55,16 +56,52 @@ router = APIRouter()
 
 # Builtin functions to exclude from call graph
 BUILTIN_FUNCS = {
-    "print", "len", "range", "str", "int", "float", "list", "dict", "set",
-    "tuple", "bool", "type", "isinstance", "hasattr", "getattr", "setattr",
-    "open", "sorted", "enumerate", "zip", "map", "filter", "any", "all",
-    "min", "max", "sum", "abs", "round", "format", "input", "super",
+    "print",
+    "len",
+    "range",
+    "str",
+    "int",
+    "float",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "bool",
+    "type",
+    "isinstance",
+    "hasattr",
+    "getattr",
+    "setattr",
+    "open",
+    "sorted",
+    "enumerate",
+    "zip",
+    "map",
+    "filter",
+    "any",
+    "all",
+    "min",
+    "max",
+    "sum",
+    "abs",
+    "round",
+    "format",
+    "input",
+    "super",
 }
 
 # Directories to exclude from analysis
 EXCLUDED_DIRS = {
-    ".git", "__pycache__", "node_modules", ".venv", "venv",
-    "env", ".env", "archive", "dist", "build",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "archive",
+    "dist",
+    "build",
 }
 
 
@@ -72,7 +109,8 @@ async def _get_python_files(project_root) -> List:
     """Get filtered list of Python files for analysis (Issue #281: extracted)."""
     python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
     return [
-        f for f in python_files
+        f
+        for f in python_files
         if not any(excluded in f.parts for excluded in EXCLUDED_DIRS)
     ]
 
@@ -154,13 +192,15 @@ def _deduplicate_edges(call_edges: List[Dict]) -> List[Dict]:
         key = (edge["from"], edge["to"])
         if key not in seen_edges:
             seen_edges.add(key)
-            unique_edges.append({
-                "from": edge["from"],
-                "to": edge["to"],
-                "to_name": edge["to_name"],
-                "resolved": edge["resolved"],
-                "count": call_counts[key],
-            })
+            unique_edges.append(
+                {
+                    "from": edge["from"],
+                    "to": edge["to"],
+                    "to_name": edge["to_name"],
+                    "resolved": edge["resolved"],
+                    "count": call_counts[key],
+                }
+            )
     return unique_edges
 
 
@@ -169,18 +209,24 @@ def _calculate_metrics(unique_edges: List[Dict]) -> tuple:
     outgoing_calls = {}
     incoming_calls = {}
     for edge in unique_edges:
-        outgoing_calls[edge["from"]] = outgoing_calls.get(edge["from"], 0) + edge["count"]
+        outgoing_calls[edge["from"]] = (
+            outgoing_calls.get(edge["from"], 0) + edge["count"]
+        )
         if edge["resolved"]:
-            incoming_calls[edge["to"]] = incoming_calls.get(edge["to"], 0) + edge["count"]
+            incoming_calls[edge["to"]] = (
+                incoming_calls.get(edge["to"], 0) + edge["count"]
+            )
 
     top_callers = sorted(
         [{"function": k, "calls": v} for k, v in outgoing_calls.items()],
-        key=lambda x: x["calls"], reverse=True
+        key=lambda x: x["calls"],
+        reverse=True,
     )[:10]
 
     top_called = sorted(
         [{"function": k, "calls": v} for k, v in incoming_calls.items()],
-        key=lambda x: x["calls"], reverse=True
+        key=lambda x: x["calls"],
+        reverse=True,
     )[:10]
 
     return top_callers, top_called
@@ -431,21 +477,13 @@ def _extract_import_context(tree: ast.AST) -> ImportContext:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                ctx.add_import(
-                    module=alias.name,
-                    name=None,
-                    alias=alias.asname
-                )
+                ctx.add_import(module=alias.name, name=None, alias=alias.asname)
         elif isinstance(node, ast.ImportFrom) and node.module:
             for alias in node.names:
                 if alias.name == "*":
                     # Star import - can't track specific names
                     continue
-                ctx.add_import(
-                    module=node.module,
-                    name=alias.name,
-                    alias=alias.asname
-                )
+                ctx.add_import(module=node.module, name=alias.name, alias=alias.asname)
 
     return ctx
 
@@ -499,8 +537,12 @@ class FunctionCallVisitor(ast.NodeVisitor):
             node.name, self.module_path, self.current_class
         )
         self.functions[func_id] = _build_function_info(
-            node, func_id, full_name,
-            self.file_path, self.module_path, self.current_class
+            node,
+            func_id,
+            full_name,
+            self.file_path,
+            self.module_path,
+            self.current_class,
         )
 
         old_function = self.current_function
@@ -533,15 +575,17 @@ class FunctionCallVisitor(ast.NodeVisitor):
         )
 
         if is_external and self.external_calls is not None:
-            self.external_calls.append({
-                "from": self.current_function,
-                "to_name": callee_name,
-                "line": line,
-            })
+            self.external_calls.append(
+                {
+                    "from": self.current_function,
+                    "to_name": callee_name,
+                    "line": line,
+                }
+            )
         else:
-            self.call_edges.append(_build_call_edge(
-                self.current_function, callee_name, callee_id, line
-            ))
+            self.call_edges.append(
+                _build_call_edge(self.current_function, callee_name, callee_id, line)
+            )
 
 
 # =============================================================================
@@ -588,12 +632,12 @@ async def _set_cached_call_graph(project_root: str, data: dict) -> None:
     try:
         cache_key = _get_cache_key(project_root)
         redis_client = get_redis_client(async_client=False, database="cache")
-        redis_client.setex(
-            cache_key,
+        redis_client.setex(cache_key, CALL_GRAPH_CACHE_TTL, json.dumps(data))
+        logger.debug(
+            "Call graph cached for %d seconds (path: %s)",
             CALL_GRAPH_CACHE_TTL,
-            json.dumps(data)
+            project_root,
         )
-        logger.debug("Call graph cached for %d seconds (path: %s)", CALL_GRAPH_CACHE_TTL, project_root)
     except Exception as e:
         logger.debug("Cache write error (non-critical): %s", e)
 

@@ -6,12 +6,16 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
+from backend.type_defs.common import Metadata
+
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from backend.utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
 from backend.utils.chat_utils import (
@@ -22,14 +26,9 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-# Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from backend.utils.chat_exceptions import get_exceptions_lazy
-from pydantic import BaseModel, Field
 from src.auth_middleware import auth_middleware
 from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-
 
 # ====================================================================
 # Router Configuration
@@ -115,7 +114,9 @@ async def _handle_session_file_action(
 
 def log_request_context(request, endpoint, request_id):
     """Log request context for debugging"""
-    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
+    logger.info(
+        "[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path
+    )
 
 
 # ====================================================================
@@ -144,18 +145,26 @@ class ActivityCreate(BaseModel):
     """Single activity creation model"""
 
     activity_id: str = Field(..., description="Frontend-generated activity ID")
-    type: str = Field(..., description="Activity type: terminal, file, browser, desktop")
+    type: str = Field(
+        ..., description="Activity type: terminal, file, browser, desktop"
+    )
     user_id: str = Field(..., description="User who performed the activity")
-    content: str = Field(..., max_length=10000, description="Activity content/description")
+    content: str = Field(
+        ..., max_length=10000, description="Activity content/description"
+    )
     secrets_used: list[str] = Field(default_factory=list, description="Secret IDs used")
-    metadata: Optional[Metadata] = Field(default_factory=dict, description="Activity metadata")
+    metadata: Optional[Metadata] = Field(
+        default_factory=dict, description="Activity metadata"
+    )
     timestamp: str = Field(..., description="ISO format timestamp from frontend")
 
 
 class ActivityBatchCreate(BaseModel):
     """Batch activity creation model"""
 
-    activities: list[ActivityCreate] = Field(..., description="List of activities to create")
+    activities: list[ActivityCreate] = Field(
+        ..., description="List of activities to create"
+    )
 
 
 # ====================================================================
@@ -368,7 +377,9 @@ async def create_session(session_data: SessionCreate, request: Request):
     if user_data and user_data.get("username"):
         metadata["owner"] = user_data["username"]
         metadata["username"] = user_data["username"]  # For backward compatibility
-        logger.info("Session %s created with owner: %s", session_id, user_data['username'])
+        logger.info(
+            "Session %s created with owner: %s", session_id, user_data["username"]
+        )
 
     session = await chat_history_manager.create_session(
         session_id=session_id,
@@ -549,7 +560,9 @@ async def _handle_conversation_files(
                 conversation_file_manager, session_id, file_action, parsed_file_options
             )
         except Exception as file_error:
-            logger.error("Error handling files for session %s: %s", session_id, file_error)
+            logger.error(
+                "Error handling files for session %s: %s", session_id, file_error
+            )
             file_deletion_result = {
                 "files_handled": False,
                 "action_taken": file_action,
@@ -666,20 +679,25 @@ async def _cleanup_knowledge_base_facts(request: Request, session_id: str) -> di
         # Uses the new delete_facts_by_session method from Issue #547
         result = await knowledge_base.delete_facts_by_session(
             session_id=session_id,
-            preserve_important=True  # Keep user-marked important facts
+            preserve_important=True,  # Keep user-marked important facts
         )
 
         kb_cleanup_result["facts_deleted"] = result.get("deleted_count", 0)
         kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
 
         if result.get("errors"):
-            kb_cleanup_result["cleanup_error"] = f"{len(result['errors'])} errors during cleanup"
+            kb_cleanup_result[
+                "cleanup_error"
+            ] = f"{len(result['errors'])} errors during cleanup"
             logger.warning(
                 f"KB cleanup completed with errors for session {session_id}: "
                 f"{result['errors']}"
             )
 
-        if kb_cleanup_result["facts_deleted"] > 0 or kb_cleanup_result["facts_preserved"] > 0:
+        if (
+            kb_cleanup_result["facts_deleted"] > 0
+            or kb_cleanup_result["facts_preserved"] > 0
+        ):
             logger.info(
                 f"KB cleanup for session {session_id}: "
                 f"deleted={kb_cleanup_result['facts_deleted']}, "
@@ -778,9 +796,7 @@ async def _perform_all_session_cleanup(
     )
 
 
-async def _delete_session_and_verify(
-    chat_history_manager, session_id: str
-) -> None:
+async def _delete_session_and_verify(chat_history_manager, session_id: str) -> None:
     """Delete session from chat history and verify success.
 
     Issue #665: Extracted from delete_session to reduce function complexity.
@@ -965,7 +981,9 @@ async def export_session(session_id: str, request: Request, format: str = "json"
 class ChatResetRequest(BaseModel):
     """Request model for chat reset"""
 
-    session_id: Optional[str] = Field(None, description="Session ID to reset (optional)")
+    session_id: Optional[str] = Field(
+        None, description="Session ID to reset (optional)"
+    )
     clear_context: bool = Field(True, description="Clear conversation context")
     keep_system_prompt: bool = Field(True, description="Keep system prompt after reset")
 
@@ -1006,7 +1024,9 @@ def _clear_and_restore_session(
     error_code_prefix="CHAT",
 )
 @router.post("/chat/reset")
-async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest] = None):
+async def reset_chat(
+    request: Request, reset_request: Optional[ChatResetRequest] = None
+):
     """
     Reset the current chat session.
 
@@ -1032,18 +1052,33 @@ async def reset_chat(request: Request, reset_request: Optional[ChatResetRequest]
         if clear_context:
             messages_to_keep = (
                 _preserve_system_messages(chat_history_manager, session_id)
-                if keep_system_prompt else []
+                if keep_system_prompt
+                else []
             )
-            restored = _clear_and_restore_session(chat_history_manager, session_id, messages_to_keep)
-            logger.info("Reset chat session: %s, kept %d system messages", session_id, restored)
+            restored = _clear_and_restore_session(
+                chat_history_manager, session_id, messages_to_keep
+            )
+            logger.info(
+                "Reset chat session: %s, kept %d system messages", session_id, restored
+            )
 
     log_chat_event(
-        "session_reset", session_id,
-        {"request_id": request_id, "clear_context": clear_context, "keep_system_prompt": keep_system_prompt},
+        "session_reset",
+        session_id,
+        {
+            "request_id": request_id,
+            "clear_context": clear_context,
+            "keep_system_prompt": keep_system_prompt,
+        },
     )
 
     return create_success_response(
-        data={"session_id": session_id, "reset": True, "clear_context": clear_context, "keep_system_prompt": keep_system_prompt},
+        data={
+            "session_id": session_id,
+            "reset": True,
+            "clear_context": clear_context,
+            "keep_system_prompt": keep_system_prompt,
+        },
         message="Chat session reset successfully",
         request_id=request_id,
     )
@@ -1219,8 +1254,14 @@ async def add_session_activities_batch(
     total_activities = len(batch_data.activities)
 
     if not memory_graph:
-        logger.warning("[%s] Memory graph not available, %d activities not persisted", request_id, total_activities)
-        return _create_activity_unavailable_response(total_activities, request_id, is_batch=True)
+        logger.warning(
+            "[%s] Memory graph not available, %d activities not persisted",
+            request_id,
+            total_activities,
+        )
+        return _create_activity_unavailable_response(
+            total_activities, request_id, is_batch=True
+        )
 
     stored_count = 0
     failed_count = 0
@@ -1232,17 +1273,32 @@ async def add_session_activities_batch(
             stored_count += 1
             stored_ids.append(activity.activity_id)
         except Exception as activity_error:
-            logger.warning("[%s] Failed to store activity %s: %s", request_id, activity.activity_id, activity_error)
+            logger.warning(
+                "[%s] Failed to store activity %s: %s",
+                request_id,
+                activity.activity_id,
+                activity_error,
+            )
             failed_count += 1
 
     log_chat_event(
         "activities_batch_created",
         session_id,
-        {"total": total_activities, "stored": stored_count, "failed": failed_count, "request_id": request_id},
+        {
+            "total": total_activities,
+            "stored": stored_count,
+            "failed": failed_count,
+            "request_id": request_id,
+        },
     )
 
     return create_success_response(
-        data={"total": total_activities, "stored": stored_count, "failed": failed_count, "stored_ids": stored_ids},
+        data={
+            "total": total_activities,
+            "stored": stored_count,
+            "failed": failed_count,
+            "stored_ids": stored_ids,
+        },
         message=f"Batch processed: {stored_count} stored, {failed_count} failed",
         request_id=request_id,
         status_code=201 if stored_count > 0 else 200,

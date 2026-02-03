@@ -67,10 +67,18 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
                 return await response.json()
             else:
                 logger.warning("Charts endpoint returned %s", response.status)
-                return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
+                return {
+                    "chart_data": {
+                        "problem_types": [],
+                        "severity_counts": [],
+                        "top_files": [],
+                    }
+                }
     except Exception as e:
         logger.warning("Failed to fetch codebase charts: %s", e)
-        return {"chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}}
+        return {
+            "chart_data": {"problem_types": [], "severity_counts": [], "top_files": []}
+        }
 
 
 async def fetch_debt_summary() -> Dict[str, Any]:
@@ -163,7 +171,9 @@ def calculate_unified_health_score(
         perf_score = quality_data.get("breakdown", {}).get("performance", 70)
     perf_component = perf_score * 0.15
 
-    return round(quality_component + issues_component + debt_component + perf_component, 1)
+    return round(
+        quality_component + issues_component + debt_component + perf_component, 1
+    )
 
 
 def get_grade(score: float) -> str:
@@ -332,7 +342,8 @@ async def get_quick_summary():
             "health_score": quality_data.get("overall", 0),
             "grade": quality_data.get("grade", "N/A"),
             "total_issues": total_issues,
-            "high_priority": severity_totals.get("high", 0) + severity_totals.get("critical", 0),
+            "high_priority": severity_totals.get("high", 0)
+            + severity_totals.get("critical", 0),
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
     )

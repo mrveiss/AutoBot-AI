@@ -12,12 +12,12 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from redis.exceptions import RedisError
 
 from backend.background_vectorization import get_background_vectorizer
 from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.type_defs.common import Metadata
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -212,7 +212,9 @@ async def _cache_vectorization_result(
         # Issue #361 - avoid blocking
         await asyncio.to_thread(
             kb_instance.redis_client.setex,
-            cache_key, 60, json.dumps(result)  # 60 second TTL
+            cache_key,
+            60,
+            json.dumps(result),  # 60 second TTL
         )
         logger.debug("Cached vectorization status for %s facts", fact_count)
     except Exception as cache_err:
@@ -327,8 +329,7 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
 
     # Extract fact IDs
     fact_ids = [
-        fact_key.split(":")[-1] if ":" in fact_key else fact_key
-        for fact_key in batch
+        fact_key.split(":")[-1] if ":" in fact_key else fact_key for fact_key in batch
     ]
 
     # If skip_existing, also batch check vector existence
@@ -344,8 +345,12 @@ async def _fetch_batch_data(kb, batch: List[str], skip_existing: bool) -> tuple:
 
 
 async def _process_single_fact(
-    kb, fact_key: str, fact_data: dict, fact_id: str,
-    skip_existing: bool, vector_exists: dict
+    kb,
+    fact_key: str,
+    fact_data: dict,
+    fact_id: str,
+    skip_existing: bool,
+    vector_exists: dict,
 ) -> tuple:
     """
     Process a single fact for vectorization.
@@ -368,13 +373,17 @@ async def _process_single_fact(
     if result.get("status") == "success" and result.get("vector_indexed"):
         return True, False, {"fact_id": fact_id, "status": "vectorized"}
 
-    logger.warning("Failed to vectorize fact %s: %s", fact_id, result.get('message'))
+    logger.warning("Failed to vectorize fact %s: %s", fact_id, result.get("message"))
     return False, False, None
 
 
 async def _process_single_fact_safe(
-    kb, fact_key: str, fact_data: dict, fact_id: str,
-    skip_existing: bool, vector_exists: dict
+    kb,
+    fact_key: str,
+    fact_data: dict,
+    fact_id: str,
+    skip_existing: bool,
+    vector_exists: dict,
 ) -> tuple:
     """Process a single fact with exception handling. (Issue #315 - extracted)"""
     try:
@@ -400,7 +409,9 @@ async def _process_batch(
     skipped_count = 0
     processed_facts = []
 
-    logger.info("Processing batch %d/%d (%d facts)", batch_num + 1, total_batches, len(batch))
+    logger.info(
+        "Processing batch %d/%d (%d facts)", batch_num + 1, total_batches, len(batch)
+    )
 
     try:
         all_fact_data, fact_ids, vector_exists = await _fetch_batch_data(
@@ -458,7 +469,13 @@ async def _process_all_batches(
         if batch_num < total_batches - 1:
             await asyncio.sleep(batch_delay)
 
-    return total_success, total_failed, total_skipped, all_processed_facts, total_batches
+    return (
+        total_success,
+        total_failed,
+        total_skipped,
+        all_processed_facts,
+        total_batches,
+    )
 
 
 @router.post("/vectorize_facts")
@@ -487,15 +504,26 @@ async def vectorize_existing_facts(
         return {
             "status": "success",
             "message": "No facts found to vectorize",
-            "processed": 0, "success": 0, "failed": 0, "skipped": 0,
+            "processed": 0,
+            "success": 0,
+            "failed": 0,
+            "skipped": 0,
         }
 
     logger.info(
         "Starting batched vectorization of %d facts (batch_size=%d, delay=%ss)",
-        len(fact_keys), batch_size, batch_delay
+        len(fact_keys),
+        batch_size,
+        batch_delay,
     )
 
-    success, failed, skipped, processed_facts, total_batches = await _process_all_batches(
+    (
+        success,
+        failed,
+        skipped,
+        processed_facts,
+        total_batches,
+    ) = await _process_all_batches(
         kb, fact_keys, batch_size, batch_delay, skip_existing
     )
 
@@ -637,17 +665,19 @@ async def _handle_already_vectorized(
     logger.info(
         f"Fact {fact_id} already vectorized, skipping (use force=true to re-vectorize)"
     )
-    job_data.update({
-        "status": "completed",
-        "progress": 100,
-        "completed_at": datetime.now().isoformat(),
-        "result": {
-            "status": "skipped",
-            "message": "Fact already vectorized",
-            "fact_id": fact_id,
-            "vector_indexed": True,
-        },
-    })
+    job_data.update(
+        {
+            "status": "completed",
+            "progress": 100,
+            "completed_at": datetime.now().isoformat(),
+            "result": {
+                "status": "skipped",
+                "message": "Fact already vectorized",
+                "fact_id": fact_id,
+                "vector_indexed": True,
+            },
+        }
+    )
     await _update_job_status(kb_instance, job_id, job_data)
 
 
@@ -742,13 +772,15 @@ async def _vectorize_fact_background(
         )
 
         # Update job with error
-        job_data.update({
-            "status": "failed",
-            "progress": 0,
-            "completed_at": datetime.now().isoformat(),
-            "error": error_msg,
-            "result": None,
-        })
+        job_data.update(
+            {
+                "status": "failed",
+                "progress": 0,
+                "completed_at": datetime.now().isoformat(),
+                "error": error_msg,
+                "result": None,
+            }
+        )
         await _update_job_status(kb_instance, job_id, job_data)
 
 
@@ -803,7 +835,9 @@ async def vectorize_individual_fact(
     # Issue #361 - avoid blocking
     await asyncio.to_thread(
         kb.redis_client.setex,
-        f"vectorization_job:{job_id}", 3600, json.dumps(job_data)  # 1 hour TTL
+        f"vectorization_job:{job_id}",
+        3600,
+        json.dumps(job_data),  # 1 hour TTL
     )
 
     # Add background task
@@ -845,7 +879,9 @@ async def get_vectorization_job_status(job_id: str, req: Request):
 
     # Get job data from Redis
     # Issue #361 - avoid blocking
-    job_json = await asyncio.to_thread(kb.redis_client.get, f"vectorization_job:{job_id}")
+    job_json = await asyncio.to_thread(
+        kb.redis_client.get, f"vectorization_job:{job_id}"
+    )
 
     if not job_json:
         raise HTTPException(
@@ -962,7 +998,9 @@ async def retry_vectorization_job(
 
     # Get old job data
     # Issue #361 - avoid blocking
-    old_job_json = await asyncio.to_thread(kb.redis_client.get, f"vectorization_job:{job_id}")
+    old_job_json = await asyncio.to_thread(
+        kb.redis_client.get, f"vectorization_job:{job_id}"
+    )
 
     if not old_job_json:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -989,7 +1027,10 @@ async def retry_vectorization_job(
 
     # Issue #361 - avoid blocking
     await asyncio.to_thread(
-        kb.redis_client.setex, f"vectorization_job:{new_job_id}", 3600, json.dumps(job_data)
+        kb.redis_client.setex,
+        f"vectorization_job:{new_job_id}",
+        3600,
+        json.dumps(job_data),
     )
 
     # Add background task
@@ -1031,7 +1072,9 @@ async def delete_vectorization_job(job_id: str, req: Request):
 
     # Delete job from Redis
     # Issue #361 - avoid blocking
-    deleted = await asyncio.to_thread(kb.redis_client.delete, f"vectorization_job:{job_id}")
+    deleted = await asyncio.to_thread(
+        kb.redis_client.delete, f"vectorization_job:{job_id}"
+    )
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")

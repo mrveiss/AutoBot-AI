@@ -54,7 +54,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["long-running-operations"])
 
 # Performance optimization: O(1) lookup for failed operation statuses (Issue #326)
-FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT} if operation_integration_manager else set()
+FAILED_OPERATION_STATUSES = (
+    {OperationStatus.FAILED, OperationStatus.TIMEOUT}
+    if operation_integration_manager
+    else set()
+)
 
 
 # Additional models specific to AutoBot integration
@@ -201,7 +205,7 @@ async def start_codebase_indexing(
 
         result = await manager.router.routes[0].endpoint(create_request)
 
-        logger.info("Started codebase indexing operation: %s", result['operation_id'])
+        logger.info("Started codebase indexing operation: %s", result["operation_id"])
         return result
 
     except Exception as e:
@@ -383,7 +387,7 @@ async def start_security_scan(
 
         result = await manager.router.routes[0].endpoint(create_request)
 
-        logger.info("Started security scan operation: %s", result['operation_id'])
+        logger.info("Started security scan operation: %s", result["operation_id"])
         return result
 
     except Exception as e:
@@ -498,11 +502,7 @@ async def list_operations(
             [op for op in all_operations if op.status == OperationStatus.COMPLETED]
         )
         failed_count = len(
-            [
-                op
-                for op in all_operations
-                if op.status in FAILED_OPERATION_STATUSES
-            ]
+            [op for op in all_operations if op.status in FAILED_OPERATION_STATUSES]
         )
 
         return {
@@ -608,7 +608,9 @@ async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
         # Keep connection alive
         while True:
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
+                await asyncio.wait_for(
+                    websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT
+                )
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
                 await websocket.send_json({"type": "ping"})

@@ -158,7 +158,9 @@ async def get_system_metrics_current():
     Use Grafana dashboard 'autobot-system' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning("Deprecated endpoint called: /metrics/system/current - %s", DEPRECATION_MSG)
+    logger.warning(
+        "Deprecated endpoint called: /metrics/system/current - %s", DEPRECATION_MSG
+    )
 
     # Issue #379: Concurrent queries with asyncio.gather
     cpu, memory, disk, load_1m = await asyncio.gather(
@@ -192,7 +194,9 @@ async def get_system_metrics_history(
     Use Grafana dashboard 'autobot-system' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning("Deprecated endpoint called: /metrics/system/history - %s", DEPRECATION_MSG)
+    logger.warning(
+        "Deprecated endpoint called: /metrics/system/history - %s", DEPRECATION_MSG
+    )
 
     # Parse duration
     duration_map = {
@@ -230,13 +234,19 @@ async def get_workflow_summary():
     Use Grafana dashboard 'autobot-workflow' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning("Deprecated endpoint called: /metrics/workflow/summary - %s", DEPRECATION_MSG)
+    logger.warning(
+        "Deprecated endpoint called: /metrics/workflow/summary - %s", DEPRECATION_MSG
+    )
 
     # Issue #379: Concurrent queries with asyncio.gather
     total, completed, failed, active = await asyncio.gather(
         query_prometheus_instant("sum(autobot_workflow_executions_total)"),
-        query_prometheus_instant('sum(autobot_workflow_executions_total{status="completed"})'),
-        query_prometheus_instant('sum(autobot_workflow_executions_total{status="failed"})'),
+        query_prometheus_instant(
+            'sum(autobot_workflow_executions_total{status="completed"})'
+        ),
+        query_prometheus_instant(
+            'sum(autobot_workflow_executions_total{status="failed"})'
+        ),
         query_prometheus_instant("autobot_active_workflows"),
     )
 
@@ -269,7 +279,9 @@ async def get_recent_errors(
     Use Grafana dashboard 'autobot-errors' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning("Deprecated endpoint called: /metrics/errors/recent - %s", DEPRECATION_MSG)
+    logger.warning(
+        "Deprecated endpoint called: /metrics/errors/recent - %s", DEPRECATION_MSG
+    )
 
     # Issue #379: Concurrent queries with asyncio.gather
     total_errors, error_rate_1m, error_rate_5m = await asyncio.gather(
@@ -343,7 +355,9 @@ async def get_services_health():
     Use Grafana dashboard 'autobot-overview' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning("Deprecated endpoint called: /metrics/services/health - %s", DEPRECATION_MSG)
+    logger.warning(
+        "Deprecated endpoint called: /metrics/services/health - %s", DEPRECATION_MSG
+    )
 
     # Query service status for each service (Issue #380: use module-level constant)
     health_data = {}
@@ -381,7 +395,9 @@ async def get_github_status():
     Use Grafana dashboard 'autobot-github' instead.
     """
     warnings.warn(DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
-    logger.warning("Deprecated endpoint called: /metrics/github/status - %s", DEPRECATION_MSG)
+    logger.warning(
+        "Deprecated endpoint called: /metrics/github/status - %s", DEPRECATION_MSG
+    )
 
     # Issue #664: Parallelize independent Prometheus queries
     rate_limit, total_ops, p95_latency = await asyncio.gather(

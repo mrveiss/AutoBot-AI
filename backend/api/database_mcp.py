@@ -31,10 +31,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 
-from backend.type_defs.common import JSONObject, Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from backend.type_defs.common import JSONObject, Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,9 @@ async def check_rate_limit() -> bool:
             query_counter["reset_time"] = now
 
         if query_counter["count"] >= MAX_QUERIES_PER_MINUTE:
-            logger.warning("Rate limit exceeded: %s queries/min", query_counter['count'])
+            logger.warning(
+                "Rate limit exceeded: %s queries/min", query_counter["count"]
+            )
             return False
 
         query_counter["count"] += 1
@@ -378,9 +380,9 @@ class SQLQueryRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     query: str = Field(..., description="SQL SELECT query (parameterized)")
-    params: Optional[List[Any]] = Field(
-        default=None, description="Query parameters for ? placeholders"
-    ),
+    params: Optional[List[Any]] = (
+        Field(default=None, description="Query parameters for ? placeholders"),
+    )
     limit: Optional[int] = Field(
         default=100,
         ge=1,
@@ -415,7 +417,9 @@ class SQLExecuteRequest(BaseModel):
         """Ensure statement is DML operation (Issue #380: use module-level constant)"""
         normalized = v.strip().upper()
         if not any(normalized.startswith(op) for op in _ALLOWED_DML_OPERATIONS):
-            raise ValueError(f"Only {', '.join(_ALLOWED_DML_OPERATIONS)} statements allowed")
+            raise ValueError(
+                f"Only {', '.join(_ALLOWED_DML_OPERATIONS)} statements allowed"
+            )
         return v
 
 

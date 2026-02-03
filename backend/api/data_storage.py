@@ -11,7 +11,6 @@ Provides endpoints for managing the data folder:
 - Database file information
 """
 import logging
-import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -348,22 +347,32 @@ async def get_category_details(
         dir_path = DATA_DIR / category_path
 
         if not dir_path.exists():
-            raise HTTPException(status_code=404, detail=f"Category not found: {category_path}")
+            raise HTTPException(
+                status_code=404, detail=f"Category not found: {category_path}"
+            )
 
         if not dir_path.is_dir():
-            raise HTTPException(status_code=400, detail=f"Not a directory: {category_path}")
+            raise HTTPException(
+                status_code=400, detail=f"Not a directory: {category_path}"
+            )
 
         files = []
-        for item in sorted(dir_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)[:limit]:
+        for item in sorted(
+            dir_path.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True
+        )[:limit]:
             try:
                 stat = item.stat()
-                files.append({
-                    "name": item.name,
-                    "is_dir": item.is_dir(),
-                    "size_bytes": stat.st_size if item.is_file() else 0,
-                    "size_human": format_size(stat.st_size) if item.is_file() else "-",
-                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                })
+                files.append(
+                    {
+                        "name": item.name,
+                        "is_dir": item.is_dir(),
+                        "size_bytes": stat.st_size if item.is_file() else 0,
+                        "size_human": (
+                            format_size(stat.st_size) if item.is_file() else "-"
+                        ),
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    }
+                )
             except (OSError, PermissionError):
                 pass
 
@@ -400,7 +409,9 @@ async def cleanup_category(
         dir_path = DATA_DIR / request.category
 
         if not dir_path.exists():
-            raise HTTPException(status_code=404, detail=f"Category not found: {request.category}")
+            raise HTTPException(
+                status_code=404, detail=f"Category not found: {request.category}"
+            )
 
         categories = {c.path: c for c in get_storage_categories()}
         cat_info = categories.get(request.category)
@@ -417,7 +428,9 @@ async def cleanup_category(
 
         cutoff_time = None
         if request.older_than_days > 0:
-            cutoff_time = datetime.now().timestamp() - (request.older_than_days * 24 * 60 * 60)
+            cutoff_time = datetime.now().timestamp() - (
+                request.older_than_days * 24 * 60 * 60
+            )
 
         for item in dir_path.rglob("*"):
             if item.is_file():
@@ -438,7 +451,10 @@ async def cleanup_category(
 
         logger.info(
             "Cleanup %s: removed %d files, freed %s (dry_run=%s)",
-            request.category, files_removed, format_size(bytes_freed), request.dry_run,
+            request.category,
+            files_removed,
+            format_size(bytes_freed),
+            request.dry_run,
         )
 
         return CleanupResult(
@@ -473,13 +489,17 @@ async def cleanup_old_backups(
         bytes_freed = 0
 
         for item in DATA_DIR.iterdir():
-            if item.is_dir() and (item.name.endswith(".old") or item.name.endswith(".backup")):
+            if item.is_dir() and (
+                item.name.endswith(".old") or item.name.endswith(".backup")
+            ):
                 size, _ = get_dir_size(item)
-                directories_found.append({
-                    "name": item.name,
-                    "size_bytes": size,
-                    "size_human": format_size(size),
-                })
+                directories_found.append(
+                    {
+                        "name": item.name,
+                        "size_bytes": size,
+                        "size_human": format_size(size),
+                    }
+                )
                 bytes_freed += size
 
                 if not dry_run:
@@ -494,7 +514,8 @@ async def cleanup_old_backups(
             "dry_run": dry_run,
             "message": (
                 f"Would remove {len(directories_found)} directories"
-                if dry_run else f"Removed {len(directories_found)} directories"
+                if dry_run
+                else f"Removed {len(directories_found)} directories"
             ),
         }
 
@@ -518,7 +539,9 @@ async def delete_conversation(
         files_deleted = []
         errors = []
 
-        transcript_path = DATA_DIR / "conversation_transcripts" / f"{conversation_id}.json"
+        transcript_path = (
+            DATA_DIR / "conversation_transcripts" / f"{conversation_id}.json"
+        )
         if transcript_path.exists():
             try:
                 transcript_path.unlink()
@@ -537,7 +560,9 @@ async def delete_conversation(
                     errors.append(f"Error deleting chat file: {str(e)}")
 
         if not files_deleted and not errors:
-            raise HTTPException(status_code=404, detail=f"Conversation not found: {conversation_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Conversation not found: {conversation_id}"
+            )
 
         return {
             "conversation_id": conversation_id,
@@ -596,4 +621,6 @@ async def get_conversations_summary():
 
     except Exception as e:
         logger.error("Error getting conversations summary: %s", str(e))
-        raise_server_error("STORAGE_0007", f"Error getting conversations summary: {str(e)}")
+        raise_server_error(
+            "STORAGE_0007", f"Error getting conversations summary: {str(e)}"
+        )

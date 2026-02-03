@@ -13,8 +13,9 @@ analytics_controller.py imports. It provides basic local system metrics only.
 """
 
 import logging
-import psutil
 from typing import Any, Dict
+
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,11 @@ class HardwareMonitorStub:
             disk = psutil.disk_usage("/")
 
             return {
-                "status": "healthy" if cpu_percent < 90 and memory.percent < 90 else "degraded",
+                "status": (
+                    "healthy"
+                    if cpu_percent < 90 and memory.percent < 90
+                    else "degraded"
+                ),
                 "cpu_usage": cpu_percent,
                 "memory_usage": memory.percent,
                 "disk_usage": disk.percent,

@@ -132,7 +132,9 @@ class PatternDefinition(BaseModel):
     name: str = Field(..., description="Human-readable pattern name")
     description: str = Field(..., description="Pattern description")
     category: PatternCategory = Field(..., description="Pattern category")
-    regex_patterns: List[str] = Field(default_factory=list, description="Regex patterns")
+    regex_patterns: List[str] = Field(
+        default_factory=list, description="Regex patterns"
+    )
     ast_patterns: List[str] = Field(
         default_factory=list, description="AST pattern descriptions"
     )
@@ -554,7 +556,9 @@ class PatternLearningEngine:
 
         # Issue #372: Use stats property instead of accessing len() directly
         # Volume factor: confidence in score increases with more feedback
-        volume_factor = min(1.0, stats.feedback_count / 20)  # Max out at 20 feedback items
+        volume_factor = min(
+            1.0, stats.feedback_count / 20
+        )  # Max out at 20 feedback items
 
         # Time-weighted score
         now = datetime.now()
@@ -830,9 +834,7 @@ class PatternLearningEngine:
 
         return queries
 
-    def _generate_learning_question(
-        self, pattern_id: str, stats: PatternStats
-    ) -> str:
+    def _generate_learning_question(self, pattern_id: str, stats: PatternStats) -> str:
         """Generate a question for active learning."""
         if stats.confidence_score < 0.3:
             return (
@@ -1068,9 +1070,7 @@ async def submit_pattern_feedback(feedback: PatternFeedback) -> Dict[str, Any]:
 
 @router.get("/confidence", summary="Get pattern confidence scores")
 async def get_pattern_confidence(
-    pattern_ids: Optional[str] = Query(
-        None, description="Comma-separated pattern IDs"
-    ),
+    pattern_ids: Optional[str] = Query(None, description="Comma-separated pattern IDs"),
 ) -> Dict[str, Any]:
     """Get confidence scores for patterns."""
     engine = await get_learning_engine()

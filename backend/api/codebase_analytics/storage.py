@@ -11,10 +11,7 @@ import logging
 import re
 from pathlib import Path
 
-from src.utils.chromadb_client import (
-    get_async_chromadb_client,
-    get_chromadb_client,
-)
+from src.utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +56,7 @@ async def get_redis_connection_async():
 
     redis_client = await get_redis_client(database="analytics", async_client=True)
     if redis_client is None:
-        logger.warning(
-            "Async Redis client initialization returned None"
-        )
+        logger.warning("Async Redis client initialization returned None")
         return None
 
     return redis_client

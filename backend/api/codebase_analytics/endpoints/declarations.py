@@ -62,7 +62,9 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
                 all_declarations.append(decl)
 
             storage_type = "chromadb"
-            logger.info("Retrieved %s declarations from ChromaDB", len(all_declarations))
+            logger.info(
+                "Retrieved %s declarations from ChromaDB", len(all_declarations)
+            )
 
         except Exception as chroma_error:
             logger.warning(

@@ -56,15 +56,31 @@ SEARCH_EXAMPLES_DATA = {
         "exact_search": {
             "description": "Find exact string matches",
             "examples": [
-                {"query": "def authenticate", "type": "exact", "use_case": "Find exact function definitions"},
-                {"query": "import redis", "type": "exact", "use_case": "Find specific imports"},
+                {
+                    "query": "def authenticate",
+                    "type": "exact",
+                    "use_case": "Find exact function definitions",
+                },
+                {
+                    "query": "import redis",
+                    "type": "exact",
+                    "use_case": "Find specific imports",
+                },
             ],
         },
         "regex_search": {
             "description": "Pattern-based search using regular expressions",
             "examples": [
-                {"query": "def\\s+\\w+_test\\s*\\(", "type": "regex", "use_case": "Find all test functions"},
-                {"query": "class\\s+\\w+Exception", "type": "regex", "use_case": "Find exception classes"},
+                {
+                    "query": "def\\s+\\w+_test\\s*\\(",
+                    "type": "regex",
+                    "use_case": "Find all test functions",
+                },
+                {
+                    "query": "class\\s+\\w+Exception",
+                    "type": "regex",
+                    "use_case": "Find exception classes",
+                },
             ],
         },
         "element_search": {
@@ -75,14 +91,36 @@ SEARCH_EXAMPLES_DATA = {
                     "type": "element",
                     "use_case": "Find functions, classes, or variables named 'authenticate'",
                 },
-                {"query": "UserModel", "type": "element", "use_case": "Find specific class definitions"},
+                {
+                    "query": "UserModel",
+                    "type": "element",
+                    "use_case": "Find specific class definitions",
+                },
             ],
         },
     },
     "language_filters": (
-        "python", "javascript", "typescript", "java", "cpp", "c", "csharp",
-        "ruby", "go", "rust", "php", "swift", "kotlin", "scala", "bash",
-        "yaml", "json", "html", "css", "sql", "markdown",
+        "python",
+        "javascript",
+        "typescript",
+        "java",
+        "cpp",
+        "c",
+        "csharp",
+        "ruby",
+        "go",
+        "rust",
+        "php",
+        "swift",
+        "kotlin",
+        "scala",
+        "bash",
+        "yaml",
+        "json",
+        "html",
+        "css",
+        "sql",
+        "markdown",
     ),
     "usage_tips": (
         "Use semantic search for concept-based queries",
@@ -510,39 +548,38 @@ async def _count_usages(declaration_stats: dict) -> None:
         declaration_stats[name]["usage_count"] = len(usage_results)
 
 
-def _build_type_results(
-    declaration_stats: dict, pattern_type: str
-) -> List[dict]:
+def _build_type_results(declaration_stats: dict, pattern_type: str) -> List[dict]:
     """Build result list for a pattern type (Issue #315)."""
     results = []
     for name, stats in declaration_stats.items():
         if stats["definition_count"] > 0:
-            results.append({
-                "name": name,
-                "type": pattern_type[:-1],  # Remove 's' from end
-                "definition_count": stats["definition_count"],
-                "usage_count": stats["usage_count"],
-                "files": list(stats["files"]),
-                "reusability_score": min(
-                    stats["usage_count"] / max(stats["definition_count"], 1),
-                    10.0,
-                ),
-                "lines": stats["lines"][:10],  # Limit to first 10
-            })
+            results.append(
+                {
+                    "name": name,
+                    "type": pattern_type[:-1],  # Remove 's' from end
+                    "definition_count": stats["definition_count"],
+                    "usage_count": stats["usage_count"],
+                    "files": list(stats["files"]),
+                    "reusability_score": min(
+                        stats["usage_count"] / max(stats["definition_count"], 1),
+                        10.0,
+                    ),
+                    "lines": stats["lines"][:10],  # Limit to first 10
+                }
+            )
     return sorted(results, key=lambda x: x["usage_count"], reverse=True)[:50]
 
 
 def _build_reusability_insights(analysis_results: dict) -> dict:
     """Build reusability insights from analysis results (Issue #315)."""
-    all_items = [
-        item for results in analysis_results.values() for item in results
-    ]
+    all_items = [item for results in analysis_results.values() for item in results]
     return {
         "highly_reusable": [
             item for item in all_items if item["reusability_score"] > 5
         ][:20],
         "underutilized": [
-            item for item in all_items
+            item
+            for item in all_items
             if item["definition_count"] > 1 and item["usage_count"] < 3
         ][:20],
         "potential_duplicates": [
@@ -583,8 +620,7 @@ _REFACTOR_SUGGESTIONS = (
         "type": "Extract Utility Functions",
         "priority": "high",
         "description": (
-            "Functions with high usage but multiple definitions "
-            "can be centralized"
+            "Functions with high usage but multiple definitions " "can be centralized"
         ),
         "impact": "Reduces code duplication and improves maintainability",
         "effort": "medium",
@@ -593,8 +629,7 @@ _REFACTOR_SUGGESTIONS = (
         "type": "Create Base Classes",
         "priority": "medium",
         "description": (
-            "Similar classes can be refactored to use inheritance "
-            "or composition"
+            "Similar classes can be refactored to use inheritance " "or composition"
         ),
         "impact": "Improves code organization and reduces repetition",
         "effort": "high",
@@ -650,7 +685,9 @@ async def _search_pattern_for_duplicates(pattern: str) -> Optional[dict]:
     Returns:
         Duplicate candidate dict if multiple similar blocks found, None otherwise
     """
-    results = await search_codebase(query=pattern, search_type="semantic", max_results=20)
+    results = await search_codebase(
+        query=pattern, search_type="semantic", max_results=20
+    )
 
     if len(results) <= 1:
         return None
@@ -663,9 +700,7 @@ async def _search_pattern_for_duplicates(pattern: str) -> Optional[dict]:
     return None
 
 
-def _build_duplicates_response(
-    patterns_count: int, duplicate_candidates: list
-) -> dict:
+def _build_duplicates_response(patterns_count: int, duplicate_candidates: list) -> dict:
     """
     Build the response dictionary for duplicate detection.
 
@@ -710,12 +745,9 @@ def _build_duplicate_candidate(pattern: str, similar_blocks: list) -> dict:
     return {
         "pattern": pattern,
         "similar_blocks": similar_blocks,
-        "potential_savings": (
-            f"Could refactor {len(similar_blocks)} similar blocks"
-        ),
+        "potential_savings": (f"Could refactor {len(similar_blocks)} similar blocks"),
         "refactor_priority": (
-            len(similar_blocks)
-            * max(block["confidence"] for block in similar_blocks)
+            len(similar_blocks) * max(block["confidence"] for block in similar_blocks)
         ),
     }
 

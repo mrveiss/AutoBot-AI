@@ -13,10 +13,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
+from src.auth_middleware import get_current_user
 from src.enhanced_orchestrator import EnhancedOrchestrator
 
 # Import existing orchestrator and workflow components
@@ -625,8 +626,15 @@ workflow_manager = WorkflowAutomationManager()
 
 # API Endpoints
 @router.post("/create_workflow")
-async def create_workflow(request: AutomatedWorkflowRequest):
-    """Create new automated workflow"""
+async def create_workflow(
+    request: AutomatedWorkflowRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create new automated workflow.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         workflow_steps = [
             WorkflowStep(
@@ -663,8 +671,15 @@ async def create_workflow(request: AutomatedWorkflowRequest):
 
 
 @router.post("/start_workflow/{workflow_id}")
-async def start_workflow(workflow_id: str):
-    """Start executing automated workflow"""
+async def start_workflow(
+    workflow_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Start executing automated workflow.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         success = await workflow_manager.start_workflow_execution(workflow_id)
 
@@ -682,8 +697,15 @@ async def start_workflow(workflow_id: str):
 
 
 @router.post("/control_workflow")
-async def control_workflow(request: WorkflowControlRequest):
-    """Control workflow execution (pause, resume, cancel, approve, skip)"""
+async def control_workflow(
+    request: WorkflowControlRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Control workflow execution (pause, resume, cancel, approve, skip).
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         success = await workflow_manager.handle_workflow_control(request)
 
@@ -703,8 +725,15 @@ async def control_workflow(request: WorkflowControlRequest):
 
 
 @router.get("/workflow_status/{workflow_id}")
-async def get_workflow_status(workflow_id: str):
-    """Get current workflow status"""
+async def get_workflow_status(
+    workflow_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get current workflow status.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         status = workflow_manager.get_workflow_status(workflow_id)
 
@@ -719,8 +748,14 @@ async def get_workflow_status(workflow_id: str):
 
 
 @router.get("/active_workflows")
-async def get_active_workflows():
-    """Get list of all active workflows"""
+async def get_active_workflows(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get list of all active workflows.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         workflows = []
         for workflow_id in workflow_manager.active_workflows:
@@ -736,8 +771,15 @@ async def get_active_workflows():
 
 
 @router.post("/create_from_chat")
-async def create_workflow_from_chat(request: dict):
-    """Create workflow from natural language chat request"""
+async def create_workflow_from_chat(
+    request: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create workflow from natural language chat request.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         user_request = request.get("user_request", "")
         session_id = request.get("session_id", "")

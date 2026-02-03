@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..storage import get_code_collection
-from .shared import get_project_root, STDLIB_MODULES
+from .shared import STDLIB_MODULES, get_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,9 @@ def _build_visualization_graph(
     # Sort external dependencies by usage
     sorted_external = [
         {"package": pkg, "usage_count": count}
-        for pkg, count in sorted(external_deps.items(), key=lambda x: x[1], reverse=True)
+        for pkg, count in sorted(
+            external_deps.items(), key=lambda x: x[1], reverse=True
+        )
     ]
 
     return {
@@ -285,11 +287,20 @@ async def get_dependencies():
 
     # Filter out unwanted directories
     excluded_dirs = {
-        ".git", "__pycache__", "node_modules", ".venv",
-        "venv", "env", ".env", "archive", "dist", "build",
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        "env",
+        ".env",
+        "archive",
+        "dist",
+        "build",
     }
     python_files = [
-        f for f in python_files
+        f
+        for f in python_files
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
 

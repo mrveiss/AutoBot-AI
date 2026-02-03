@@ -27,7 +27,4 @@ async def metrics_endpoint():
     # Generate metrics in Prometheus text format
     metrics_data = generate_latest(metrics_manager.registry)
 
-    return Response(
-        content=metrics_data,
-        media_type=CONTENT_TYPE_LATEST
-    )
+    return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)

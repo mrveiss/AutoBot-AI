@@ -675,9 +675,11 @@ async def add_facts_to_knowledge(
         "success": True,
         "document_id": fact_id,
         "title": request.title,
-        "content": request.content[:100] + "..."
-        if len(request.content) > 100
-        else request.content,
+        "content": (
+            request.content[:100] + "..."
+            if len(request.content) > 100
+            else request.content
+        ),
         "message": "Document added successfully",
     }
 

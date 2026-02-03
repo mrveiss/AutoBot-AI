@@ -8,7 +8,6 @@ FastAPI dependencies for user management endpoints.
 """
 
 import uuid
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth_middleware import auth_middleware
 from src.user_management.config import DeploymentMode, get_deployment_config
 from src.user_management.database import get_async_session
-from src.user_management.services import TenantContext, UserService, TeamService, OrganizationService
+from src.user_management.services import (
+    OrganizationService,
+    TeamService,
+    TenantContext,
+    UserService,
+)
 
 
 async def get_db_session() -> AsyncSession:

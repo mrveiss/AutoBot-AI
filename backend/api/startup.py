@@ -24,6 +24,7 @@ router = APIRouter(tags=["startup", "status"])
 
 # Thread lock for synchronous access to startup_state
 import threading
+
 _startup_lock = threading.Lock()
 
 # Async lock for WebSocket client access

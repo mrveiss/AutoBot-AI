@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
 from backend.type_defs.common import Metadata
+from src.auth_middleware import get_current_user
 from src.services.graph_rag_service import GraphRAGService
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -196,11 +197,13 @@ def _determine_overall_status(components: Dict[str, str]) -> str:
 async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Perform graph-aware RAG search combining semantic search with graph traversal.
 
     Issue #398: Refactored with extracted serialization helper.
+    Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
 
@@ -257,12 +260,15 @@ async def graph_rag_search(
 @router.get("/health", response_model=GraphRAGHealthResponse)
 async def graph_rag_health(
     service: GraphRAGService = Depends(get_graph_rag_service),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Check Graph-RAG service health.
 
     Returns health status of the service and its components (RAGService,
     AutoBotMemoryGraph).
+
+    Issue #744: Requires authenticated user.
 
     Returns:
         JSONResponse with health status
@@ -321,11 +327,14 @@ async def graph_rag_health(
 @router.get("/metrics")
 async def graph_rag_metrics(
     service: GraphRAGService = Depends(get_graph_rag_service),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Get Graph-RAG service performance metrics.
 
     Returns detailed metrics about service configuration and performance.
+
+    Issue #744: Requires authenticated user.
 
     Returns:
         JSONResponse with service metrics

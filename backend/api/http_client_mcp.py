@@ -29,14 +29,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
-from backend.type_defs.common import JSONObject, Metadata
 from urllib.parse import urlparse
 
 import aiohttp
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from backend.type_defs.common import JSONObject, Metadata
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
@@ -200,7 +199,7 @@ async def _read_response_body_chunked(response, chunk_size: int = 8192) -> str:
                 detail=(
                     f"Response exceeded size limit during streaming:"
                     f"{total_size} bytes (max: {MAX_RESPONSE_SIZE})"
-                )
+                ),
             )
         chunks.append(chunk)
 
@@ -465,12 +464,21 @@ def _build_url_property() -> dict:
 
 def _build_headers_property() -> dict:
     """Build common headers property schema. Issue #484: Extracted for DRY."""
-    return {"type": "object", "description": "Optional HTTP headers", "additionalProperties": {"type": "string"}}
+    return {
+        "type": "object",
+        "description": "Optional HTTP headers",
+        "additionalProperties": {"type": "string"},
+    }
 
 
 def _build_timeout_property() -> dict:
     """Build common timeout property schema. Issue #484: Extracted for DRY."""
-    return {"type": "integer", "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)", "minimum": 1, "maximum": MAX_TIMEOUT}
+    return {
+        "type": "integer",
+        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
+        "minimum": 1,
+        "maximum": MAX_TIMEOUT,
+    }
 
 
 def _build_json_body_property(desc: str = "JSON request body") -> dict:
@@ -482,14 +490,21 @@ def _get_http_post_tool() -> MCPTool:
     """Build HTTP POST tool definition. Issue #484: Extracted from _get_http_write_tools."""
     return MCPTool(
         name="http_post",
-        description="Perform HTTP POST request to send data to a URL. Supports JSON body or form data. Rate limited to 120 requests/minute.",
+        description=(
+            "Perform HTTP POST request to send data to a URL. "
+            "Supports JSON body or form data. Rate limited to 120 requests/minute."
+        ),
         input_schema={
             "type": "object",
             "properties": {
                 "url": _build_url_property(),
                 "headers": _build_headers_property(),
                 "json_body": _build_json_body_property(),
-                "form_data": {"type": "object", "description": "Form data (mutually exclusive with json_body)", "additionalProperties": {"type": "string"}},
+                "form_data": {
+                    "type": "object",
+                    "description": "Form data (mutually exclusive with json_body)",
+                    "additionalProperties": {"type": "string"},
+                },
                 "timeout": _build_timeout_property(),
             },
             "required": ["url"],
@@ -501,13 +516,18 @@ def _get_http_put_tool() -> MCPTool:
     """Build HTTP PUT tool definition. Issue #484: Extracted from _get_http_write_tools."""
     return MCPTool(
         name="http_put",
-        description="Perform HTTP PUT request to update/replace resource. Typically used for complete resource replacement. Rate limited.",
+        description=(
+            "Perform HTTP PUT request to update/replace resource. "
+            "Typically used for complete resource replacement. Rate limited."
+        ),
         input_schema={
             "type": "object",
             "properties": {
                 "url": _build_url_property(),
                 "headers": _build_headers_property(),
-                "json_body": _build_json_body_property("JSON request body for replacement"),
+                "json_body": _build_json_body_property(
+                    "JSON request body for replacement"
+                ),
                 "timeout": _build_timeout_property(),
             },
             "required": ["url"],
@@ -519,13 +539,18 @@ def _get_http_patch_tool() -> MCPTool:
     """Build HTTP PATCH tool definition. Issue #484: Extracted from _get_http_write_tools."""
     return MCPTool(
         name="http_patch",
-        description="Perform HTTP PATCH request for partial resource update. More efficient than PUT for small changes. Rate limited.",
+        description=(
+            "Perform HTTP PATCH request for partial resource update. "
+            "More efficient than PUT for small changes. Rate limited."
+        ),
         input_schema={
             "type": "object",
             "properties": {
                 "url": _build_url_property(),
                 "headers": _build_headers_property(),
-                "json_body": _build_json_body_property("JSON body with fields to update"),
+                "json_body": _build_json_body_property(
+                    "JSON body with fields to update"
+                ),
                 "timeout": _build_timeout_property(),
             },
             "required": ["url"],
@@ -537,11 +562,17 @@ def _get_http_delete_tool() -> MCPTool:
     """Build HTTP DELETE tool definition. Issue #484: Extracted from _get_http_write_tools."""
     return MCPTool(
         name="http_delete",
-        description="Perform HTTP DELETE request to remove a resource. Use with caution as this is destructive. Rate limited.",
+        description=(
+            "Perform HTTP DELETE request to remove a resource. "
+            "Use with caution as this is destructive. Rate limited."
+        ),
         input_schema={
             "type": "object",
             "properties": {
-                "url": {"type": "string", "description": "Target URL of resource to delete"},
+                "url": {
+                    "type": "string",
+                    "description": "Target URL of resource to delete",
+                },
                 "headers": _build_headers_property(),
                 "timeout": _build_timeout_property(),
             },
@@ -560,7 +591,12 @@ def _get_http_write_tools() -> List[MCPTool]:
     Returns:
         List of MCPTool definitions for write operations
     """
-    return [_get_http_post_tool(), _get_http_put_tool(), _get_http_patch_tool(), _get_http_delete_tool()]
+    return [
+        _get_http_post_tool(),
+        _get_http_put_tool(),
+        _get_http_patch_tool(),
+        _get_http_delete_tool(),
+    ]
 
 
 def _load_tools_from_yaml() -> List[MCPTool]:
@@ -650,11 +686,15 @@ async def execute_http_request(
             if content_length and int(content_length) > MAX_RESPONSE_SIZE:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"Response too large: {content_length} bytes (max: {MAX_RESPONSE_SIZE})"
+                    detail=f"Response too large: {content_length} bytes (max: {MAX_RESPONSE_SIZE})",
                 )
 
             # Read response body (Issue #315 - uses helper)
-            body = None if method.upper() == "HEAD" else await _read_response_body_chunked(response)
+            body = (
+                None
+                if method.upper() == "HEAD"
+                else await _read_response_body_chunked(response)
+            )
             json_response = _try_parse_json(body)
 
             # Build response (Issue #665: uses extracted helper)
@@ -662,7 +702,9 @@ async def execute_http_request(
 
     except asyncio.TimeoutError:
         logger.error("HTTP request timed out after %s seconds: %s", timeout, url)
-        raise HTTPException(status_code=504, detail=f"Request timed out after {timeout} seconds")
+        raise HTTPException(
+            status_code=504, detail=f"Request timed out after {timeout} seconds"
+        )
     except aiohttp.ClientError as e:
         logger.error("HTTP client error: %s", e)
         raise HTTPException(status_code=502, detail=f"HTTP request failed: {str(e)}")

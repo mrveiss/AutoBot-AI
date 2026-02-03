@@ -319,9 +319,7 @@ async def _generate_npu_embeddings(
             )
 
             if result is None or len(result.embeddings) != len(batch_docs):
-                logger.warning(
-                    "NPU batch returned incomplete results at index %d", i
-                )
+                logger.warning("NPU batch returned incomplete results at index %d", i)
                 return None
 
             all_embeddings.extend(result.embeddings)
@@ -451,9 +449,9 @@ async def warmup_npu_for_codebase() -> Dict[str, Any]:
             result["npu_available"] = True
             result["warmup_time_ms"] = warmup_time
             result["embedding_dimensions"] = len(embeddings[0])
-            result["message"] = (
-                f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
-            )
+            result[
+                "message"
+            ] = f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
 
             # Get device info
             if client:

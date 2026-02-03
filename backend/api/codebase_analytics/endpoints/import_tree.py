@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
-from .shared import get_project_root, STDLIB_MODULES, INTERNAL_MODULE_PREFIXES
+from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +76,12 @@ def _add_imported_by_relation(
     if target_file and target_file != source_file:
         if target_file not in file_imported_by:
             file_imported_by[target_file] = []
-        file_imported_by[target_file].append({
-            "file": source_file,
-            "module": module_name,
-        })
+        file_imported_by[target_file].append(
+            {
+                "file": source_file,
+                "module": module_name,
+            }
+        )
 
 
 def _extract_imports_from_ast(
@@ -101,9 +103,7 @@ def _extract_imports_from_ast(
     elif isinstance(node, ast.ImportFrom) and node.module:
         import_info, target_file = _process_import_node(node.module, module_to_file)
         file_imports[rel_path].append(import_info)
-        _add_imported_by_relation(
-            file_imported_by, target_file, rel_path, node.module
-        )
+        _add_imported_by_relation(file_imported_by, target_file, rel_path, node.module)
 
 
 def _deduplicate_imports(imports: List[Dict]) -> List[Dict]:
@@ -140,11 +140,20 @@ async def get_import_tree():
 
     # Filter out unwanted directories
     excluded_dirs = {
-        ".git", "__pycache__", "node_modules", ".venv",
-        "venv", "env", ".env", "archive", "dist", "build",
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        "env",
+        ".env",
+        "archive",
+        "dist",
+        "build",
     }
     python_files = [
-        f for f in python_files
+        f
+        for f in python_files
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
 
@@ -164,11 +173,13 @@ async def get_import_tree():
     # Build result with bidirectional relationships
     import_tree = _build_import_tree(file_imports, file_imported_by)
 
-    return JSONResponse({
-        "status": "success",
-        "import_tree": import_tree,
-        "summary": _build_summary(import_tree),
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "import_tree": import_tree,
+            "summary": _build_summary(import_tree),
+        }
+    )
 
 
 async def _analyze_file_imports(
@@ -213,16 +224,17 @@ def _build_import_tree(
         imports = file_imports.get(file_path, [])
         unique_imports = _deduplicate_imports(imports)
 
-        import_tree.append({
-            "path": file_path,
-            "imports": unique_imports,
-            "imported_by": file_imported_by.get(file_path, []),
-        })
+        import_tree.append(
+            {
+                "path": file_path,
+                "imports": unique_imports,
+                "imported_by": file_imported_by.get(file_path, []),
+            }
+        )
 
     # Sort by connectivity (most connected files first)
     import_tree.sort(
-        key=lambda x: len(x["imports"]) + len(x["imported_by"]),
-        reverse=True
+        key=lambda x: len(x["imports"]) + len(x["imported_by"]), reverse=True
     )
     return import_tree
 
@@ -240,8 +252,8 @@ def _build_summary(import_tree: List[Dict]) -> Dict:
         ],
         "most_importing_files": [
             {"file": f["path"], "count": len(f["imports"])}
-            for f in sorted(
-                import_tree, key=lambda x: len(x["imports"]), reverse=True
-            )[:10]
+            for f in sorted(import_tree, key=lambda x: len(x["imports"]), reverse=True)[
+                :10
+            ]
         ],
     }

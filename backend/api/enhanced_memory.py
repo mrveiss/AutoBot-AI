@@ -13,11 +13,10 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     TaskEntry,
@@ -69,7 +68,9 @@ async def _apply_task_status_update(
     return await memory_manager.update_task_status(task_id, status_enum, metadata)
 
 
-async def get_memory_manager() -> tuple[AsyncEnhancedMemoryManager, MarkdownReferenceSystem]:
+async def get_memory_manager() -> (
+    tuple[AsyncEnhancedMemoryManager, MarkdownReferenceSystem]
+):
     """Lazy initialization of async memory manager to prevent startup blocking.
 
     Issue #357: Now uses AsyncEnhancedMemoryManager for non-blocking operations.
@@ -84,6 +85,7 @@ async def get_memory_manager() -> tuple[AsyncEnhancedMemoryManager, MarkdownRefe
                 # Note: MarkdownReferenceSystem still uses sync manager internally
                 # This is a compatibility bridge until it's also converted
                 from src.enhanced_memory_manager import EnhancedMemoryManager
+
                 _sync_memory_manager = EnhancedMemoryManager()
                 _markdown_system = MarkdownReferenceSystem(_sync_memory_manager)
     return memory_manager, _markdown_system
@@ -277,7 +279,11 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
 
             # Use helper for status-specific logic (Issue #315, #357)
             success = await _apply_task_status_update(
-                memory_manager, task_id, status_enum, request.outputs, request.error_message
+                memory_manager,
+                task_id,
+                status_enum,
+                request.outputs,
+                request.error_message,
             )
 
         if not success:
@@ -314,6 +320,7 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
 
         # Wrap sync operation in thread (MarkdownReferenceSystem uses sync memory manager)
         from src.enhanced_memory_manager import EnhancedMemoryManager
+
         sync_manager = EnhancedMemoryManager()
 
         success = await asyncio.to_thread(
@@ -386,8 +393,7 @@ async def search_markdown(
     try:
         _, markdown_system = await get_memory_manager()
         results = await asyncio.to_thread(
-            markdown_system.search_markdown_content,
-            query, document_type, tags, limit
+            markdown_system.search_markdown_content, query, document_type, tags, limit
         )
 
         return {
@@ -444,6 +450,7 @@ async def get_embedding_cache_stats():
     try:
         # Use sync memory manager for embedding cache (async manager doesn't have this)
         from src.enhanced_memory_manager import EnhancedMemoryManager
+
         sync_manager = EnhancedMemoryManager()
         cache_size = await asyncio.to_thread(sync_manager._get_embedding_cache_size)
 

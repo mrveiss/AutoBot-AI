@@ -12,23 +12,23 @@ import time
 import uuid
 from typing import Dict, List, Optional, Union
 
-from backend.type_defs.common import Metadata
-
 import torch
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-from src.constants.threshold_constants import QueryDefaults
 
+from backend.type_defs.common import Metadata
 from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
-
-# Import AutoBot multi-modal components
-from src.npu_semantic_search import get_npu_search_engine
+from src.auth_middleware import get_current_user
+from src.constants.threshold_constants import QueryDefaults
 from src.multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
     unified_processor,
 )
+
+# Import AutoBot multi-modal components
+from src.npu_semantic_search import get_npu_search_engine
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,10 @@ class CrossModalSearchRequest(BaseModel):
         default=None, description="Target modalities to search"
     )
     limit: int = Field(
-        default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Maximum results per modality"
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        ge=1,
+        le=100,
+        description="Maximum results per modality",
     )
     similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
@@ -122,8 +125,13 @@ async def process_image(
     file: UploadFile = File(...),
     intent: str = Form(default="analysis"),
     question: Optional[str] = Form(default=None),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Process uploaded image with GPU-accelerated vision models."""
+    """
+    Process uploaded image with GPU-accelerated vision models.
+
+    Issue #744: Requires authenticated user.
+    """
     start_time = time.time()
 
     try:
@@ -189,9 +197,15 @@ async def process_image(
 )
 @router.post("/process/audio", response_model=MultiModalResponse)
 async def process_audio(
-    file: UploadFile = File(...), intent: str = Form(default="voice_command")
+    file: UploadFile = File(...),
+    intent: str = Form(default="voice_command"),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Process uploaded audio with GPU-accelerated speech models."""
+    """
+    Process uploaded audio with GPU-accelerated speech models.
+
+    Issue #744: Requires authenticated user.
+    """
     start_time = time.time()
 
     try:
@@ -254,8 +268,15 @@ async def process_audio(
     error_code_prefix="MULTIMODAL",
 )
 @router.post("/process/text", response_model=MultiModalResponse)
-async def process_text(request: TextProcessingRequest):
-    """Process text with contextual understanding."""
+async def process_text(
+    request: TextProcessingRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Process text with contextual understanding.
+
+    Issue #744: Requires authenticated user.
+    """
     start_time = time.time()
 
     try:
@@ -306,8 +327,15 @@ async def process_text(request: TextProcessingRequest):
     error_code_prefix="MULTIMODAL",
 )
 @router.post("/embeddings/generate")
-async def generate_embedding(request: EmbeddingRequest):
-    """Generate embeddings for any modality."""
+async def generate_embedding(
+    request: EmbeddingRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Generate embeddings for any modality.
+
+    Issue #744: Requires authenticated user.
+    """
     start_time = time.time()
 
     try:
@@ -351,8 +379,15 @@ async def generate_embedding(request: EmbeddingRequest):
     error_code_prefix="MULTIMODAL",
 )
 @router.post("/search/cross-modal", response_model=CrossModalSearchResponse)
-async def cross_modal_search(request: CrossModalSearchRequest):
-    """Perform cross-modal similarity search."""
+async def cross_modal_search(
+    request: CrossModalSearchRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Perform cross-modal similarity search.
+
+    Issue #744: Requires authenticated user.
+    """
     start_time = time.time()
 
     try:
@@ -417,8 +452,14 @@ async def cross_modal_search(request: CrossModalSearchRequest):
     error_code_prefix="MULTIMODAL",
 )
 @router.get("/stats")
-async def get_multimodal_stats():
-    """Get multi-modal processing statistics and system status."""
+async def get_multimodal_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get multi-modal processing statistics and system status.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         # Get unified processor stats
         processor_stats = unified_processor.get_stats()
@@ -568,8 +609,13 @@ async def combine_multimodal_inputs(
     image_file: Optional[UploadFile] = File(default=None),
     audio_file: Optional[UploadFile] = File(default=None),
     intent: str = Form(default="decision_making"),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Combine multiple modalities using attention-based fusion (Issue #398: refactored)."""
+    """
+    Combine multiple modalities using attention-based fusion (Issue #398: refactored).
+
+    Issue #744: Requires authenticated user.
+    """
     start_time = time.time()
 
     try:
@@ -582,7 +628,9 @@ async def combine_multimodal_inputs(
             )
 
         # Process all inputs
-        results = [await unified_processor.process(modal_input) for modal_input in inputs]
+        results = [
+            await unified_processor.process(modal_input) for modal_input in inputs
+        ]
 
         # Create combined input and process fusion
         combined_input = _create_combined_input(text, image_file, audio_file, intent)
@@ -594,7 +642,11 @@ async def combine_multimodal_inputs(
             "success": fusion_result.success,
             "fusion_result": fusion_result.result_data,
             "individual_results": [
-                {"modality": r.modality_type.value, "confidence": r.confidence, "data": r.result_data}
+                {
+                    "modality": r.modality_type.value,
+                    "confidence": r.confidence,
+                    "data": r.result_data,
+                }
                 for r in results
             ],
             "processing_time": processing_time,
@@ -617,8 +669,14 @@ async def combine_multimodal_inputs(
     error_code_prefix="MULTIMODAL",
 )
 @router.get("/performance/stats")
-async def get_performance_stats():
-    """Get comprehensive performance statistics for multi-modal processing."""
+async def get_performance_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get comprehensive performance statistics for multi-modal processing.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         # Get performance metrics from monitor
         performance_metrics = (
@@ -653,8 +711,14 @@ async def get_performance_stats():
     error_code_prefix="MULTIMODAL",
 )
 @router.post("/performance/optimize")
-async def optimize_performance():
-    """Manually trigger performance optimization."""
+async def optimize_performance(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Manually trigger performance optimization.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         optimization_result = (
             await unified_processor.performance_monitor.optimize_gpu_memory()
@@ -678,8 +742,14 @@ async def optimize_performance():
     error_code_prefix="MULTIMODAL",
 )
 @router.get("/performance/summary")
-async def get_performance_summary():
-    """Get a concise performance summary."""
+async def get_performance_summary(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get a concise performance summary.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         summary = unified_processor.performance_monitor.get_performance_summary()
 
@@ -696,8 +766,16 @@ async def get_performance_summary():
     error_code_prefix="MULTIMODAL",
 )
 @router.post("/performance/batch-size")
-async def update_batch_size(modality: str, batch_size: int):
-    """Update optimal batch size for a specific modality."""
+async def update_batch_size(
+    modality: str,
+    batch_size: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Update optimal batch size for a specific modality.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         if modality not in unified_processor.performance_monitor.batch_sizes:
             return {
@@ -735,8 +813,14 @@ async def update_batch_size(modality: str, batch_size: int):
     error_code_prefix="MULTIMODAL",
 )
 @router.get("/health")
-async def health_check():
-    """Health check for multi-modal API."""
+async def health_check(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Health check for multi-modal API.
+
+    Issue #744: Requires authenticated user.
+    """
     return {
         "status": "healthy",
         "timestamp": time.time(),

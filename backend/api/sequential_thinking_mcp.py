@@ -19,10 +19,10 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -176,9 +176,7 @@ class SequentialThinkingRequest(BaseModel):
 
     def is_valid_thought_number(self) -> bool:
         """Check if thought number is valid (Issue #372 - reduces feature envy)."""
-        return (
-            self.thought_number <= self.total_thoughts or self.needs_more_thoughts
-        )
+        return self.thought_number <= self.total_thoughts or self.needs_more_thoughts
 
     def has_revision(self) -> bool:
         """Check if this is a revision (Issue #372 - reduces feature envy)."""
@@ -229,16 +227,25 @@ async def get_sequential_thinking_mcp_tools() -> List[MCPTool]:
     return [MCPTool(name=name, description=description, input_schema=input_schema)]
 
 
-def _enrich_thought_record(thought_record: dict, request: SequentialThinkingRequest) -> None:
+def _enrich_thought_record(
+    thought_record: dict, request: SequentialThinkingRequest
+) -> None:
     """Add revision/branch info to thought record (Issue #398: extracted)."""
     if request.is_revision and request.revises_thought:
         thought_record["revision_of"] = request.revises_thought
-        logger.info("Thought %s revises thought %s", request.thought_number, request.revises_thought)
+        logger.info(
+            "Thought %s revises thought %s",
+            request.thought_number,
+            request.revises_thought,
+        )
 
     if request.branch_from_thought:
         thought_record["branched_from"] = request.branch_from_thought
         logger.info(
-            f"Thought {request.thought_number} branches from thought {request.branch_from_thought} (branch: {request.branch_id})"
+            "Thought %d branches from thought %d (branch: %s)",
+            request.thought_number,
+            request.branch_from_thought,
+            request.branch_id,
         )
 
 
@@ -247,7 +254,9 @@ def _calculate_session_summary(session_thoughts: list, thought_number: int) -> d
     return {
         "total_thoughts_recorded": len(session_thoughts),
         "revisions_made": sum(1 for t in session_thoughts if t.get("is_revision")),
-        "branches_created": len(set(t.get("branch_id") for t in session_thoughts if t.get("branch_id"))),
+        "branches_created": len(
+            set(t.get("branch_id") for t in session_thoughts if t.get("branch_id"))
+        ),
         "thinking_duration_thoughts": thought_number,
     }
 
@@ -269,7 +278,10 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
     if not request.is_valid_thought_number():
         raise HTTPException(
             status_code=400,
-            detail=f"Thought number {request.thought_number} exceeds total thoughts {request.total_thoughts}. Set needs_more_thoughts=true to extend."
+            detail=(
+                f"Thought number {request.thought_number} exceeds total thoughts "
+                f"{request.total_thoughts}. Set needs_more_thoughts=true to extend."
+            ),
         )
 
     thought_record = request.to_thought_record()
@@ -299,8 +311,14 @@ async def sequential_thinking_mcp(request: SequentialThinkingRequest) -> Metadat
 
     if thinking_complete:
         async with _thinking_sessions_lock:
-            response["summary"] = _calculate_session_summary(thinking_sessions[session_id], request.thought_number)
-        logger.info("Sequential thinking session '%s' completed with %s thoughts", session_id, request.thought_number)
+            response["summary"] = _calculate_session_summary(
+                thinking_sessions[session_id], request.thought_number
+            )
+        logger.info(
+            "Sequential thinking session '%s' completed with %s thoughts",
+            session_id,
+            request.thought_number,
+        )
 
     return response
 
@@ -315,7 +333,9 @@ async def get_thinking_session(session_id: str) -> Metadata:
     """Get complete thinking session history"""
     async with _thinking_sessions_lock:
         if session_id not in thinking_sessions:
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session '{session_id}' not found"
+            )
 
         # Create a copy under lock to prevent race conditions
         thoughts = list(thinking_sessions[session_id])
@@ -343,7 +363,9 @@ async def clear_thinking_session(session_id: str) -> Metadata:
     """Clear a thinking session"""
     async with _thinking_sessions_lock:
         if session_id not in thinking_sessions:
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Session '{session_id}' not found"
+            )
 
         thought_count = len(thinking_sessions[session_id])
         del thinking_sessions[session_id]

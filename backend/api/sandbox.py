@@ -10,7 +10,7 @@ API endpoints for executing commands in the secure Docker sandbox environment.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from backend.utils.response_builder import (
@@ -18,7 +18,7 @@ from backend.utils.response_builder import (
     service_unavailable_response,
     success_response,
 )
-
+from src.auth_middleware import check_admin_permission, get_current_user
 from src.constants.network_constants import NetworkConstants
 from src.secure_sandbox_executor import (
     SandboxConfig,
@@ -64,7 +64,10 @@ class SandboxBatchRequest(BaseModel):
     error_code_prefix="SANDBOX",
 )
 @router.post("/execute")
-async def execute_command(request: SandboxExecuteRequest):
+async def execute_command(
+    request: SandboxExecuteRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Execute a command in the secure sandbox.
 
@@ -73,6 +76,8 @@ async def execute_command(request: SandboxExecuteRequest):
     - Resource usage monitoring
     - Command validation
     - Security event logging
+
+    Issue #744: Requires admin authentication.
     """
     try:
         logger.info("Sandbox execution request: %s...", request.command[:50])
@@ -83,7 +88,7 @@ async def execute_command(request: SandboxExecuteRequest):
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
+                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}",
             )
 
         # Create sandbox configuration
@@ -140,13 +145,18 @@ async def execute_command(request: SandboxExecuteRequest):
     error_code_prefix="SANDBOX",
 )
 @router.post("/execute/script")
-async def execute_script(request: SandboxScriptRequest):
+async def execute_script(
+    request: SandboxScriptRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Execute a script in the secure sandbox.
 
     Supports multiple languages:
     - bash/sh: Shell scripts
     - python/python3: Python scripts
+
+    Issue #744: Requires admin authentication.
     """
     try:
         logger.info("Sandbox script execution: %s", request.language)
@@ -157,7 +167,7 @@ async def execute_script(request: SandboxScriptRequest):
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
+                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}",
             )
 
         # Create sandbox configuration
@@ -216,7 +226,10 @@ async def execute_script(request: SandboxScriptRequest):
     error_code_prefix="SANDBOX",
 )
 @router.post("/execute/batch")
-async def execute_batch(request: SandboxBatchRequest):
+async def execute_batch(
+    request: SandboxBatchRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Execute multiple commands in sequence within a single sandbox (Issue #665: refactored).
 
@@ -224,6 +237,8 @@ async def execute_batch(request: SandboxBatchRequest):
     - Sequential command execution
     - Optional stop on error
     - Aggregate results
+
+    Issue #744: Requires admin authentication.
     """
     try:
         logger.info("Batch execution: %s commands", len(request.commands))
@@ -279,7 +294,7 @@ def _validate_batch_security_level(security_level_str: str) -> SandboxSecurityLe
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}"
+            detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}",
         )
 
 
@@ -317,7 +332,9 @@ def _build_batch_result_data(commands: List[str], result: Any) -> Dict[str, Any]
     error_code_prefix="SANDBOX",
 )
 @router.get("/stats")
-async def get_sandbox_stats():
+async def get_sandbox_stats(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get sandbox execution statistics.
 
@@ -325,6 +342,8 @@ async def get_sandbox_stats():
     - Successful/failed execution counts
     - Active container count
     - Available security levels
+
+    Issue #744: Requires authenticated user.
     """
     try:
         # Get sandbox instance with lazy initialization
@@ -368,9 +387,13 @@ async def get_sandbox_stats():
     error_code_prefix="SANDBOX",
 )
 @router.get("/security-levels")
-async def get_security_levels():
+async def get_security_levels(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get detailed information about available security levels.
+
+    Issue #744: Requires authenticated user.
     """
     return success_response(
         data={
@@ -433,9 +456,13 @@ async def get_security_levels():
     error_code_prefix="SANDBOX",
 )
 @router.get("/examples")
-async def get_sandbox_examples():
+async def get_sandbox_examples(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get example sandbox execution requests.
+
+    Issue #744: Requires authenticated user.
     """
     return success_response(
         data={

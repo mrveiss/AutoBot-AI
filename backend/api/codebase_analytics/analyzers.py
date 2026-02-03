@@ -12,11 +12,11 @@ import logging
 import re
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 import aiofiles
-from backend.type_defs.common import Metadata
 
+from backend.type_defs.common import Metadata
 from src.constants.network_constants import NetworkConstants
 from src.llm_interface import LLMInterface
 
@@ -28,8 +28,8 @@ _analyzers_lock = threading.Lock()
 
 try:
     from src.code_intelligence.anti_pattern_detector import AntiPatternDetector
-    from src.code_intelligence.performance_analyzer import PerformanceAnalyzer
     from src.code_intelligence.bug_predictor import BugPredictor
+    from src.code_intelligence.performance_analyzer import PerformanceAnalyzer
 
     _anti_pattern_detector: Optional[AntiPatternDetector] = None
     _performance_analyzer: Optional[PerformanceAnalyzer] = None
@@ -75,11 +75,25 @@ _JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 # Issue #380: Module-level frozensets for file operation safety patterns
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
 # nosec B108 - These are string patterns for detection, not actual temp directory usage
-_TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})  # nosec B108
-_SAFE_FILE_TYPES = frozenset({
-    ".pid", ".lock", ".json", ".yaml", ".yml", ".toml", ".ini",
-    ".md", ".txt", ".csv", ".html", ".xml"
-})
+_TEMP_INDICATORS = frozenset(
+    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
+)  # nosec B108
+_SAFE_FILE_TYPES = frozenset(
+    {
+        ".pid",
+        ".lock",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".md",
+        ".txt",
+        ".csv",
+        ".html",
+        ".xml",
+    }
+)
 
 # Issue #380: Module-level tuple for collection AST types
 _COLLECTION_AST_TYPES = (ast.Dict, ast.List, ast.Set)
@@ -173,7 +187,9 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
     Returns:
         True if the value creates a mutable type
     """
-    if isinstance(value, _COLLECTION_AST_TYPES):  # Issue #380: Use module-level constant
+    if isinstance(
+        value, _COLLECTION_AST_TYPES
+    ):  # Issue #380: Use module-level constant
         return True
 
     if not isinstance(value, ast.Call):
@@ -186,7 +202,13 @@ def _is_mutable_constructor(value: ast.AST) -> bool:
         func_name = value.func.attr
 
     mutable_constructors = (
-        "dict", "list", "set", "defaultdict", "OrderedDict", "Counter", "deque"
+        "dict",
+        "list",
+        "set",
+        "defaultdict",
+        "OrderedDict",
+        "Counter",
+        "deque",
     )
     return func_name in mutable_constructors
 
@@ -323,9 +345,19 @@ def _check_mutating_method_call(
     method_name = call.func.attr
 
     mutating_methods = {
-        "append", "extend", "insert", "remove", "pop", "clear",
-        "update", "setdefault", "add", "discard", "difference_update",
-        "intersection_update", "symmetric_difference_update"
+        "append",
+        "extend",
+        "insert",
+        "remove",
+        "pop",
+        "clear",
+        "update",
+        "setdefault",
+        "add",
+        "discard",
+        "difference_update",
+        "intersection_update",
+        "symmetric_difference_update",
     }
 
     is_global = var_name in global_mutables or var_name in global_declarations
@@ -422,8 +454,17 @@ def _is_safe_file_write_context(
 
     # Safe pattern 5: Context indicators in file path
     safe_contexts = {
-        "scripts/", "test", "setup", "init", "install", "deploy",
-        "archive", "backup", "migration", "fixture", "mock"
+        "scripts/",
+        "test",
+        "setup",
+        "init",
+        "install",
+        "deploy",
+        "archive",
+        "backup",
+        "migration",
+        "fixture",
+        "mock",
     }
     file_path_lower = file_path.lower()
     if any(ctx in file_path_lower for ctx in safe_contexts):
@@ -431,8 +472,17 @@ def _is_safe_file_write_context(
 
     # Safe pattern 6: Function name indicates non-concurrent context
     safe_func_names = {
-        "init", "setup", "configure", "install", "migrate", "backup",
-        "export", "save_config", "write_config", "dump", "serialize"
+        "init",
+        "setup",
+        "configure",
+        "install",
+        "migrate",
+        "backup",
+        "export",
+        "save_config",
+        "write_config",
+        "dump",
+        "serialize",
     }
     func_name_lower = func_name.lower()
     if any(safe in func_name_lower for safe in safe_func_names):
@@ -531,8 +581,12 @@ def _detect_global_state_modifications(
         # Check for subscript assignment (dict[key] = value, list[i] = value)
         if isinstance(stmt, ast.Assign):
             problem = _check_subscript_modification(
-                stmt, global_mutables, global_declarations,
-                lock_protected_vars, is_async, func_name
+                stmt,
+                global_mutables,
+                global_declarations,
+                lock_protected_vars,
+                is_async,
+                func_name,
             )
             if problem:
                 problems.append(problem)
@@ -540,8 +594,12 @@ def _detect_global_state_modifications(
         # Check for method calls on global mutables (.append, .update, etc.)
         if isinstance(stmt, ast.Expr):
             problem = _check_mutating_method_call(
-                stmt, global_mutables, global_declarations,
-                lock_protected_vars, is_async, func_name
+                stmt,
+                global_mutables,
+                global_declarations,
+                lock_protected_vars,
+                is_async,
+                func_name,
             )
             if problem:
                 problems.append(problem)
@@ -596,21 +654,21 @@ def _detect_augmented_assignment_issues(
             var_name = target.value.id
 
         if var_name and var_name in global_vars:
-            problems.append(_create_race_condition_problem(
-                lineno=stmt.lineno,
-                description=(
-                    f"Read-modify-write on global '{var_name}' is not atomic - "
-                    f"can cause lost updates under concurrency"
-                ),
-                suggestion="Use atomic operations or protect with a lock",
-            ))
+            problems.append(
+                _create_race_condition_problem(
+                    lineno=stmt.lineno,
+                    description=(
+                        f"Read-modify-write on global '{var_name}' is not atomic - "
+                        f"can cause lost updates under concurrency"
+                    ),
+                    suggestion="Use atomic operations or protect with a lock",
+                )
+            )
 
     return problems
 
 
-def _detect_file_handle_issues(
-    func_node: ast.AST, file_path: str = ""
-) -> List[Dict]:
+def _detect_file_handle_issues(func_node: ast.AST, file_path: str = "") -> List[Dict]:
     """Detect shared file handles without locks.
 
     Issue #378: Now passes file_path and func_name for context-aware detection.
@@ -683,10 +741,17 @@ def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[D
     ):
         return None
 
-    return {"type": "ip", "value": ip, "line": line_num, "context": line_content.strip()}
+    return {
+        "type": "ip",
+        "value": ip,
+        "line": line_num,
+        "context": line_content.strip(),
+    }
 
 
-def _check_hardcoded_port(port: str, line_num: int, line_content: str) -> Optional[Dict]:
+def _check_hardcoded_port(
+    port: str, line_num: int, line_content: str
+) -> Optional[Dict]:
     """Check if port is a known infrastructure port."""
     known_ports = [
         str(NetworkConstants.BACKEND_PORT),
@@ -700,7 +765,12 @@ def _check_hardcoded_port(port: str, line_num: int, line_content: str) -> Option
     if port not in known_ports:
         return None
 
-    return {"type": "port", "value": port, "line": line_num, "context": line_content.strip()}
+    return {
+        "type": "port",
+        "value": port,
+        "line": line_num,
+        "context": line_content.strip(),
+    }
 
 
 def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
@@ -717,7 +787,9 @@ def _detect_hardcodes_in_line(line_num: int, line: str) -> List[Dict]:
     # Check for URLs
     url_matches = _URL_IN_QUOTES_RE.findall(line)
     for url in url_matches:
-        hardcodes.append({"type": "url", "value": url, "line": line_num, "context": line.strip()})
+        hardcodes.append(
+            {"type": "url", "value": url, "line": line_num, "context": line.strip()}
+        )
 
     # Check for ports
     port_matches = _PORT_NUMBER_RE.findall(line)
@@ -754,21 +826,25 @@ def _detect_technical_debt_in_line(
 
         description = match.group(1).strip() if match.group(1) else ""
 
-        debt_items.append({
-            "type": debt_type,
-            "severity": severity,
-            "line": line_num,
-            "description": description[:200],
-            "file_path": file_path,
-        })
+        debt_items.append(
+            {
+                "type": debt_type,
+                "severity": severity,
+                "line": line_num,
+                "description": description[:200],
+                "file_path": file_path,
+            }
+        )
 
-        problem_items.append({
-            "type": f"technical_debt_{debt_type}",
-            "severity": severity,
-            "line": line_num,
-            "description": f"{debt_type.upper()}: {description[:100]}",
-            "suggestion": f"Address this {debt_type.upper()} comment",
-        })
+        problem_items.append(
+            {
+                "type": f"technical_debt_{debt_type}",
+                "severity": severity,
+                "line": line_num,
+                "description": f"{debt_type.upper()}: {description[:100]}",
+                "suggestion": f"Address this {debt_type.upper()} comment",
+            }
+        )
 
     return debt_items, problem_items
 
@@ -786,13 +862,15 @@ def _run_anti_pattern_analysis(file_path: str) -> List[Dict]:
                     _anti_pattern_detector = AntiPatternDetector()
         result = _anti_pattern_detector.analyze_file(file_path)
         for pattern in result.get("patterns", []):
-            problems.append({
-                "type": f"code_smell_{pattern.pattern_type.value}",
-                "severity": pattern.severity.value,
-                "line": pattern.line_number,
-                "description": pattern.description,
-                "suggestion": pattern.suggestion,
-            })
+            problems.append(
+                {
+                    "type": f"code_smell_{pattern.pattern_type.value}",
+                    "severity": pattern.severity.value,
+                    "line": pattern.line_number,
+                    "description": pattern.description,
+                    "suggestion": pattern.suggestion,
+                }
+            )
     except Exception as e:
         logger.debug("Anti-pattern detection skipped for %s: %s", file_path, e)
     return problems
@@ -811,13 +889,15 @@ def _run_performance_analysis(file_path: str) -> List[Dict]:
                     _performance_analyzer = PerformanceAnalyzer()
         perf_issues = _performance_analyzer.analyze_file(file_path)
         for issue in perf_issues:
-            problems.append({
-                "type": f"performance_{issue.issue_type.value}",
-                "severity": issue.severity.value,
-                "line": issue.line_start,
-                "description": issue.description,
-                "suggestion": issue.recommendation,
-            })
+            problems.append(
+                {
+                    "type": f"performance_{issue.issue_type.value}",
+                    "severity": issue.severity.value,
+                    "line": issue.line_start,
+                    "description": issue.description,
+                    "suggestion": issue.recommendation,
+                }
+            )
     except Exception as e:
         logger.debug("Performance analysis skipped for %s: %s", file_path, e)
     return problems
@@ -848,16 +928,18 @@ def _run_bug_prediction(file_path: str) -> List[Dict]:
                 if risk_assessment.recommendations
                 else "Review code complexity"
             )
-            problems.append({
-                "type": "bug_prediction_high_risk",
-                "severity": severity,
-                "line": 1,
-                "description": (
-                    f"High bug risk score: {risk_assessment.overall_risk:.0f}/100. "
-                    f"Risk level: {risk_assessment.risk_level.value}"
-                ),
-                "suggestion": suggestion,
-            })
+            problems.append(
+                {
+                    "type": "bug_prediction_high_risk",
+                    "severity": severity,
+                    "line": 1,
+                    "description": (
+                        f"High bug risk score: {risk_assessment.overall_risk:.0f}/100. "
+                        f"Risk level: {risk_assessment.risk_level.value}"
+                    ),
+                    "suggestion": suggestion,
+                }
+            )
     except Exception as e:
         logger.debug("Bug prediction skipped for %s: %s", file_path, e)
     return problems
@@ -1081,7 +1163,9 @@ def _extract_imports_from_node(node: ast.AST) -> List[str]:
     return []
 
 
-def _analyze_ast_nodes(tree: ast.AST) -> Tuple[List[Dict], List[Dict], List[str], List[Dict]]:
+def _analyze_ast_nodes(
+    tree: ast.AST,
+) -> Tuple[List[Dict], List[Dict], List[str], List[Dict]]:
     """
     Walk AST and extract functions, classes, imports, and long function problems.
 
@@ -1206,30 +1290,32 @@ def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[
             continue
 
         # Check for global state modifications (Pass 3)
-        problems.extend(_detect_global_state_modifications(
-            node, global_vars, global_mutables, lock_protected_vars
-        ))
+        problems.extend(
+            _detect_global_state_modifications(
+                node, global_vars, global_mutables, lock_protected_vars
+            )
+        )
 
         # Check for thread-unsafe singleton patterns (Pass 4)
         problems.extend(_detect_singleton_patterns(node, global_vars))
 
         # Check for async functions modifying shared state (Pass 5)
         if isinstance(node, ast.AsyncFunctionDef):
-            uses_global = any(
-                isinstance(stmt, ast.Global) for stmt in ast.walk(node)
-            )
+            uses_global = any(isinstance(stmt, ast.Global) for stmt in ast.walk(node))
             if uses_global and not has_async_lock_import:
-                problems.append(_create_race_condition_problem(
-                    lineno=node.lineno,
-                    description=(
-                        f"Async function '{node.name}' uses global state "
-                        f"but no asyncio.Lock imported"
-                    ),
-                    suggestion=(
-                        "Consider using asyncio.Lock() to protect shared state in async context"
-                    ),
-                    severity="medium",
-                ))
+                problems.append(
+                    _create_race_condition_problem(
+                        lineno=node.lineno,
+                        description=(
+                            f"Async function '{node.name}' uses global state "
+                            f"but no asyncio.Lock imported"
+                        ),
+                        suggestion=(
+                            "Consider using asyncio.Lock() to protect shared state in async context"
+                        ),
+                        severity="medium",
+                    )
+                )
 
         # Check for read-modify-write patterns (Pass 6)
         problems.extend(_detect_augmented_assignment_issues(node, global_vars))
@@ -1257,7 +1343,9 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
         functions, classes, imports, problems = _analyze_ast_nodes(tree)
 
         # Phase 2: Line-by-line content analysis (hardcodes, technical debt)
-        hardcodes, technical_debt, line_problems = _analyze_content_lines(content, file_path)
+        hardcodes, technical_debt, line_problems = _analyze_content_lines(
+            content, file_path
+        )
         problems.extend(line_problems)
 
         # Phase 3: LLM semantic analysis (optional)
@@ -1328,16 +1416,27 @@ def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
     context = line.strip()
     # URLs
     for url in _URL_IN_QUOTES_RE.findall(line):
-        hardcodes.append({"type": "url", "value": url, "line": line_num, "context": context})
+        hardcodes.append(
+            {"type": "url", "value": url, "line": line_num, "context": context}
+        )
     # API paths
     for api_path in _JS_API_PATH_RE.findall(line):
-        hardcodes.append({
-            "type": "api_path", "value": api_path, "line": line_num, "context": context
-        })
+        hardcodes.append(
+            {
+                "type": "api_path",
+                "value": api_path,
+                "line": line_num,
+                "context": context,
+            }
+        )
     # IP addresses (only VM/local IPs)
     for ip in _IP_ADDRESS_RE.findall(line):
-        if ip.startswith(NetworkConstants.VM_IP_PREFIX) or ip.startswith(_LOCAL_IP_PREFIXES):
-            hardcodes.append({"type": "ip", "value": ip, "line": line_num, "context": context})
+        if ip.startswith(NetworkConstants.VM_IP_PREFIX) or ip.startswith(
+            _LOCAL_IP_PREFIXES
+        ):
+            hardcodes.append(
+                {"type": "ip", "value": ip, "line": line_num, "context": context}
+            )
     return hardcodes
 
 
@@ -1357,9 +1456,16 @@ def _check_js_console_log(line: str, line_num: int) -> Optional[Dict]:
 def _create_empty_js_analysis_result() -> Metadata:
     """Create empty JS/Vue analysis result (Issue #398: extracted)."""
     return {
-        "functions": [], "classes": [], "imports": [], "hardcodes": [], "problems": [],
-        "line_count": 0, "code_lines": 0, "comment_lines": 0,
-        "docstring_lines": 0, "blank_lines": 0,
+        "functions": [],
+        "classes": [],
+        "imports": [],
+        "hardcodes": [],
+        "problems": [],
+        "line_count": 0,
+        "code_lines": 0,
+        "comment_lines": 0,
+        "docstring_lines": 0,
+        "blank_lines": 0,
     }
 
 
@@ -1378,8 +1484,12 @@ def analyze_javascript_vue_file(file_path: str) -> Metadata:
 
         line_counts = _count_js_vue_line_types(content)
         return {
-            "functions": functions, "classes": [], "imports": [],
-            "hardcodes": hardcodes, "problems": problems, **line_counts,
+            "functions": functions,
+            "classes": [],
+            "imports": [],
+            "hardcodes": hardcodes,
+            "problems": problems,
+            **line_counts,
         }
     except Exception as e:
         logger.error("Error analyzing JS/Vue file %s: %s", file_path, e)

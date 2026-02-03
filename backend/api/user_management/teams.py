@@ -16,14 +16,14 @@ from pydantic import BaseModel, Field
 
 from backend.api.user_management.dependencies import (
     get_team_service,
-    require_user_management_enabled,
     require_org_context,
+    require_user_management_enabled,
 )
 from src.user_management.services import TeamService, TenantContext
 from src.user_management.services.team_service import (
-    TeamNotFoundError,
     DuplicateTeamError,
     MembershipError,
+    TeamNotFoundError,
 )
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
@@ -34,11 +34,14 @@ logger = logging.getLogger(__name__)
 # Request/Response Models
 # -------------------------------------------------------------------------
 
+
 class TeamCreate(BaseModel):
     """Request model for creating a team."""
 
     name: str = Field(..., min_length=1, max_length=255, description="Team name")
-    description: Optional[str] = Field(None, max_length=500, description="Team description")
+    description: Optional[str] = Field(
+        None, max_length=500, description="Team description"
+    )
     settings: Optional[dict] = Field(default_factory=dict, description="Team settings")
     is_default: bool = Field(False, description="Whether this is the default team")
 
@@ -46,8 +49,12 @@ class TeamCreate(BaseModel):
 class TeamUpdate(BaseModel):
     """Request model for updating a team."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Team name")
-    description: Optional[str] = Field(None, max_length=500, description="Team description")
+    name: Optional[str] = Field(
+        None, min_length=1, max_length=255, description="Team name"
+    )
+    description: Optional[str] = Field(
+        None, max_length=500, description="Team description"
+    )
     settings: Optional[dict] = Field(None, description="Team settings")
 
 
@@ -131,12 +138,16 @@ class MemberRemovedResponse(BaseModel):
 # Team CRUD Endpoints
 # -------------------------------------------------------------------------
 
+
 @router.get(
     "",
     response_model=TeamListResponse,
     summary="List teams",
     description="List teams in the current organization.",
-    dependencies=[Depends(require_user_management_enabled), Depends(require_org_context)],
+    dependencies=[
+        Depends(require_user_management_enabled),
+        Depends(require_org_context),
+    ],
 )
 async def list_teams(
     limit: int = Query(50, ge=1, le=100, description="Maximum number of teams"),
@@ -165,7 +176,10 @@ async def list_teams(
     status_code=status.HTTP_201_CREATED,
     summary="Create team",
     description="Create a new team in the current organization.",
-    dependencies=[Depends(require_user_management_enabled), Depends(require_org_context)],
+    dependencies=[
+        Depends(require_user_management_enabled),
+        Depends(require_org_context),
+    ],
 )
 async def create_team(
     team_data: TeamCreate,
@@ -279,6 +293,7 @@ async def delete_team(
 # Membership Endpoints
 # -------------------------------------------------------------------------
 
+
 @router.get(
     "/{team_id}/members",
     response_model=List[MemberResponse],
@@ -387,6 +402,7 @@ async def update_member_role(
 # User's Teams Endpoint
 # -------------------------------------------------------------------------
 
+
 @router.get(
     "/my-teams",
     response_model=List[TeamResponse],
@@ -413,9 +429,14 @@ async def get_my_teams(
 # Helper Functions
 # -------------------------------------------------------------------------
 
+
 def _team_to_response(team) -> TeamResponse:
     """Convert Team model to TeamResponse schema."""
-    member_count = len(team.memberships) if hasattr(team, "memberships") and team.memberships else 0
+    member_count = (
+        len(team.memberships)
+        if hasattr(team, "memberships") and team.memberships
+        else 0
+    )
 
     return TeamResponse(
         id=team.id,

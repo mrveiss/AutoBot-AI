@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, validator
 
 from backend.type_defs.common import Metadata
 from src.agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
+from src.auth_middleware import get_current_user
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Issue #756: Consolidated from src/utils/request_utils.py
@@ -253,6 +254,7 @@ def _build_extraction_response(
 async def extract_entities(
     extraction_request: EntityExtractionRequest = Body(...),
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Extract entities from conversation and populate graph.
@@ -300,6 +302,7 @@ async def extract_entities(
         }
         ```
     Issue #665: Refactored from 97 lines to use extracted helper methods.
+    Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
 
@@ -428,11 +431,13 @@ def _process_extraction_results(
 async def extract_entities_batch(
     batch_request: BatchExtractionRequest = Body(...),
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Extract entities from multiple conversations in batch.
 
     Issue #281: Refactored from 137 lines to use extracted helper methods.
+    Issue #744: Requires authenticated user.
 
     This endpoint processes multiple conversations in parallel for efficient
     batch entity extraction.
@@ -508,11 +513,14 @@ async def extract_entities_batch(
 @router.get("/extract/health", response_model=HealthResponse)
 async def entity_extraction_health(
     extractor: GraphEntityExtractor = Depends(get_entity_extractor),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Check entity extraction service health.
 
     Returns health status of the service and its components.
+
+    Issue #744: Requires authenticated user.
 
     Returns:
         JSONResponse with health status
@@ -536,12 +544,14 @@ async def entity_extraction_health(
         # Check component health
         components = {
             "entity_extractor": "healthy",
-            "knowledge_extraction_agent": "healthy"
-            if extractor.extractor
-            else "unavailable",
-            "memory_graph": "healthy"
-            if extractor.graph and extractor.graph.initialized
-            else "unavailable",
+            "knowledge_extraction_agent": (
+                "healthy" if extractor.extractor else "unavailable"
+            ),
+            "memory_graph": (
+                "healthy"
+                if extractor.graph and extractor.graph.initialized
+                else "unavailable"
+            ),
         }
 
         # Determine overall status

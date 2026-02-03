@@ -13,11 +13,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -350,7 +349,9 @@ async def log_rum_event(event: RumEvent):
 
         # Log to dedicated RUM log file based on event type (outside lock)
         log_message = format_rum_log_message(event_data)
-        _log_rum_event_by_type(event.type, log_message, interaction_tracking, rum_logger)
+        _log_rum_event_by_type(
+            event.type, log_message, interaction_tracking, rum_logger
+        )
 
         return {
             "status": "success",

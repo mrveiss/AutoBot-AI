@@ -14,7 +14,7 @@ Provides endpoints to:
 
 import asyncio
 import logging
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -22,12 +22,7 @@ from fastapi.responses import JSONResponse
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 from ..api_endpoint_scanner import APIEndpointChecker
-from ..models import (
-    APIEndpointAnalysis,
-    APIEndpointItem,
-    FrontendAPICallItem,
-    EndpointMismatchItem,
-)
+from ..models import APIEndpointAnalysis
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +54,13 @@ async def get_api_endpoints() -> JSONResponse:
     checker = _get_checker()
     endpoints = checker.get_backend_endpoints()
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(endpoints),
-        "endpoints": [ep.model_dump() for ep in endpoints],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(endpoints),
+            "endpoints": [ep.model_dump() for ep in endpoints],
+        }
+    )
 
 
 @with_error_handling(
@@ -81,11 +78,13 @@ async def get_frontend_api_calls() -> JSONResponse:
     checker = _get_checker()
     calls = checker.get_frontend_calls()
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(calls),
-        "api_calls": [call.model_dump() for call in calls],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(calls),
+            "api_calls": [call.model_dump() for call in calls],
+        }
+    )
 
 
 @with_error_handling(
@@ -113,18 +112,20 @@ async def get_endpoint_coverage() -> JSONResponse:
     async with _analysis_cache_lock:
         _analysis_cache["latest"] = analysis
 
-    return JSONResponse({
-        "status": "success",
-        "summary": {
-            "backend_endpoints": analysis.backend_endpoints,
-            "frontend_calls": analysis.frontend_calls,
-            "used_endpoints": analysis.used_endpoints,
-            "orphaned_endpoints": analysis.orphaned_endpoints,
-            "missing_endpoints": analysis.missing_endpoints,
-            "coverage_percentage": analysis.coverage_percentage,
-        },
-        "scan_timestamp": analysis.scan_timestamp,
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "summary": {
+                "backend_endpoints": analysis.backend_endpoints,
+                "frontend_calls": analysis.frontend_calls,
+                "used_endpoints": analysis.used_endpoints,
+                "orphaned_endpoints": analysis.orphaned_endpoints,
+                "missing_endpoints": analysis.missing_endpoints,
+                "coverage_percentage": analysis.coverage_percentage,
+            },
+            "scan_timestamp": analysis.scan_timestamp,
+        }
+    )
 
 
 @with_error_handling(
@@ -147,10 +148,12 @@ async def get_endpoint_analysis_full() -> JSONResponse:
     async with _analysis_cache_lock:
         _analysis_cache["latest"] = analysis
 
-    return JSONResponse({
-        "status": "success",
-        "analysis": analysis.model_dump(),
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "analysis": analysis.model_dump(),
+        }
+    )
 
 
 @with_error_handling(
@@ -175,11 +178,13 @@ async def get_orphaned_endpoints() -> JSONResponse:
             analysis = checker.run_full_analysis()
             _analysis_cache["latest"] = analysis
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(analysis.orphaned),
-        "orphaned_endpoints": [ep.model_dump() for ep in analysis.orphaned],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(analysis.orphaned),
+            "orphaned_endpoints": [ep.model_dump() for ep in analysis.orphaned],
+        }
+    )
 
 
 @with_error_handling(
@@ -204,11 +209,13 @@ async def get_missing_endpoints() -> JSONResponse:
             analysis = checker.run_full_analysis()
             _analysis_cache["latest"] = analysis
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(analysis.missing),
-        "missing_endpoints": [ep.model_dump() for ep in analysis.missing],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(analysis.missing),
+            "missing_endpoints": [ep.model_dump() for ep in analysis.missing],
+        }
+    )
 
 
 @with_error_handling(
@@ -239,18 +246,20 @@ async def get_used_endpoints() -> JSONResponse:
         reverse=True,
     )
 
-    return JSONResponse({
-        "status": "success",
-        "total": len(sorted_used),
-        "used_endpoints": [
-            {
-                "endpoint": u.endpoint.model_dump(),
-                "call_count": u.call_count,
-                "callers": [c.model_dump() for c in u.callers[:5]],  # Limit callers
-            }
-            for u in sorted_used
-        ],
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "total": len(sorted_used),
+            "used_endpoints": [
+                {
+                    "endpoint": u.endpoint.model_dump(),
+                    "call_count": u.call_count,
+                    "callers": [c.model_dump() for c in u.callers[:5]],  # Limit callers
+                }
+                for u in sorted_used
+            ],
+        }
+    )
 
 
 @with_error_handling(
@@ -275,12 +284,14 @@ async def refresh_endpoint_cache() -> JSONResponse:
         _analysis_cache = {}
         _analysis_cache["latest"] = analysis
 
-    return JSONResponse({
-        "status": "success",
-        "message": "Endpoint cache refreshed",
-        "summary": {
-            "backend_endpoints": analysis.backend_endpoints,
-            "frontend_calls": analysis.frontend_calls,
-            "coverage_percentage": analysis.coverage_percentage,
-        },
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "message": "Endpoint cache refreshed",
+            "summary": {
+                "backend_endpoints": analysis.backend_endpoints,
+                "frontend_calls": analysis.frontend_calls,
+                "coverage_percentage": analysis.coverage_percentage,
+            },
+        }
+    )

@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["elevation"])
 
 # Issue #380: Module-level frozenset for allowed elevated commands
-_ALLOWED_ELEVATED_COMMANDS = frozenset({"apt", "systemctl", "mount", "umount", "chmod", "chown"})
+_ALLOWED_ELEVATED_COMMANDS = frozenset(
+    {"apt", "systemctl", "mount", "umount", "chmod", "chown"}
+)
 
 # In-memory storage for elevation sessions (in production, use Redis)
 elevation_sessions: Dict[str, dict] = {}

@@ -12,14 +12,15 @@ import logging
 import time
 from typing import TYPE_CHECKING, Dict, List
 
-from backend.type_defs.common import Metadata
-
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
+from src.auth_middleware import check_admin_permission, get_current_user
 
 if TYPE_CHECKING:
     from src.intelligence.intelligent_agent import IntelligentAgent
+
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -31,20 +32,10 @@ prometheus_metrics = get_metrics_manager()
 
 # Global agent instance with module-level lock to prevent race condition on lock initialization
 _agent_instance = None
-_agent_initialization_lock = asyncio.Lock()  # Issue #395: Initialize at module level to prevent race
+_agent_initialization_lock = (
+    asyncio.Lock()
+)  # Issue #395: Initialize at module level to prevent race
 
-def get_lazy_dependencies():
-    """Lazy import of heavy dependencies to prevent startup blocking"""
-    try:
-        from src.intelligence.intelligent_agent import IntelligentAgent
-        from src.knowledge_base import KnowledgeBase
-        from src.llm_interface import LLMInterface
-        from src.utils.command_validator import CommandValidator
-        from src.worker_node import WorkerNode
-        return IntelligentAgent, KnowledgeBase, LLMInterface, CommandValidator, WorkerNode
-    except ImportError as e:
-        logger.error(f"Failed to import intelligent agent dependencies: {e}")
-        raise HTTPException(status_code=503, detail="Intelligent agent dependencies not available")
 
 def get_lazy_dependencies():
     """Lazy import of heavy dependencies to prevent startup blocking"""
@@ -159,12 +150,17 @@ router = APIRouter(tags=["intelligent-agent"])
     error_code_prefix="INTELLIGENT_AGENT",
 )
 @router.post("/process", response_model=GoalResponse)
-async def process_natural_language_goal(request: GoalRequest):
+async def process_natural_language_goal(
+    request: GoalRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Process a natural language goal and return the complete result.
 
     This endpoint processes the goal completely and returns the final result.
     For real-time streaming, use the WebSocket endpoint instead.
+
+    Issue #744: Requires authenticated user.
     """
     # Task type and agent type for Prometheus metrics
     task_type = "natural_language_goal"
@@ -212,8 +208,14 @@ async def process_natural_language_goal(request: GoalRequest):
     error_code_prefix="INTELLIGENT_AGENT",
 )
 @router.get("/system-info", response_model=SystemInfoResponse)
-async def get_system_info():
-    """Get comprehensive system information and capabilities."""
+async def get_system_info(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get comprehensive system information and capabilities.
+
+    Issue #744: Requires authenticated user.
+    """
     agent = await get_agent()
     system_info = await agent.get_system_status()
 
@@ -246,8 +248,14 @@ async def get_system_info():
     error_code_prefix="INTELLIGENT_AGENT",
 )
 @router.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check for the intelligent agent system."""
+async def health_check(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Health check for the intelligent agent system.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         await get_agent()
 
@@ -277,8 +285,14 @@ async def health_check():
     error_code_prefix="INTELLIGENT_AGENT",
 )
 @router.post("/reload")
-async def reload_agent():
-    """Reload the intelligent agent (development endpoint, thread-safe)."""
+async def reload_agent(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Reload the intelligent agent (development endpoint, thread-safe).
+
+    Issue #744: Requires admin authentication.
+    """
     global _agent_instance
     # Issue #481: Use lock when modifying global state to prevent race conditions
     async with _agent_initialization_lock:

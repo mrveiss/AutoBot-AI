@@ -84,15 +84,15 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
                 lambda: DuplicateCodeDetector(
                     project_root=project_root,
                     min_similarity=min_similarity,
-                ).run_analysis()
+                ).run_analysis(),
             ),
-            timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
+            timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return analysis
     except asyncio.TimeoutError:
         logger.warning(
             "Duplicate detection timed out after %d seconds",
-            AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT
+            AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return None
 
@@ -110,17 +110,19 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     """
     duplicates_for_frontend = []
     for dup in analysis.duplicates:
-        duplicates_for_frontend.append({
-            "file1": _make_relative_path(dup.file1, project_root),
-            "file2": _make_relative_path(dup.file2, project_root),
-            "start_line1": dup.start_line1,
-            "end_line1": dup.end_line1,
-            "start_line2": dup.start_line2,
-            "end_line2": dup.end_line2,
-            "similarity": round(dup.similarity * 100, 1),
-            "lines": dup.line_count,
-            "code_snippet": dup.code_snippet[:200] if dup.code_snippet else "",
-        })
+        duplicates_for_frontend.append(
+            {
+                "file1": _make_relative_path(dup.file1, project_root),
+                "file2": _make_relative_path(dup.file2, project_root),
+                "start_line1": dup.start_line1,
+                "end_line1": dup.end_line1,
+                "start_line2": dup.start_line2,
+                "end_line2": dup.end_line2,
+                "similarity": round(dup.similarity * 100, 1),
+                "lines": dup.line_count,
+                "code_snippet": dup.code_snippet[:200] if dup.code_snippet else "",
+            }
+        )
 
     return {
         "status": "success",
@@ -157,13 +159,15 @@ def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
 
         all_duplicates = []
         for metadata in results.get("metadatas", []):
-            all_duplicates.append({
-                "file1": metadata.get("file1", ""),
-                "file2": metadata.get("file2", ""),
-                "similarity": float(metadata.get("similarity", 0)),
-                "lines": int(metadata.get("lines", 0)),
-                "code_snippet": metadata.get("code_snippet", ""),
-            })
+            all_duplicates.append(
+                {
+                    "file1": metadata.get("file1", ""),
+                    "file2": metadata.get("file2", ""),
+                    "similarity": float(metadata.get("similarity", 0)),
+                    "lines": int(metadata.get("lines", 0)),
+                    "code_snippet": metadata.get("code_snippet", ""),
+                }
+            )
 
         return {
             "status": "success",
@@ -184,8 +188,12 @@ def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
 @router.get("/duplicates")
 async def get_duplicate_code(
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
-    min_similarity: float = Query(0.5, description="Minimum similarity threshold (0.0-1.0)"),
-    use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
+    min_similarity: float = Query(
+        0.5, description="Minimum similarity threshold (0.0-1.0)"
+    ),
+    use_semantic: bool = Query(
+        False, description="Enable LLM-based semantic analysis (Issue #554)"
+    ),
 ):
     """
     Get duplicate code detected in the codebase (Issue #528).
@@ -207,7 +215,10 @@ async def get_duplicate_code(
 
     # Use cached results if available and not refreshing
     if _duplicate_cache and not refresh:
-        logger.info("Returning cached duplicate analysis (%d duplicates)", _duplicate_cache.get("total_count", 0))
+        logger.info(
+            "Returning cached duplicate analysis (%d duplicates)",
+            _duplicate_cache.get("total_count", 0),
+        )
         return JSONResponse(_duplicate_cache)
 
     project_root = _get_project_root()
@@ -224,13 +235,18 @@ async def get_duplicate_code(
 
         # Handle timeout case
         if analysis is None:
-            return JSONResponse({
-                "status": "partial",
-                "message": f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. Try a higher min_similarity threshold.",
-                "duplicates": [],
-                "total_count": 0,
-                "storage_type": "timeout",
-            })
+            return JSONResponse(
+                {
+                    "status": "partial",
+                    "message": (
+                        f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. "
+                        "Try a higher min_similarity threshold."
+                    ),
+                    "duplicates": [],
+                    "total_count": 0,
+                    "storage_type": "timeout",
+                }
+            )
 
         # Convert and cache results
         result = _convert_analysis_to_result(analysis, project_root)
@@ -254,12 +270,14 @@ async def get_duplicate_code(
         if fallback:
             return JSONResponse(fallback)
 
-        return JSONResponse({
-            "status": "error",
-            "message": f"Duplicate detection failed: {str(e)}",
-            "duplicates": [],
-            "total_count": 0,
-        })
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": f"Duplicate detection failed: {str(e)}",
+                "duplicates": [],
+                "total_count": 0,
+            }
+        )
 
 
 def _make_relative_path(path: str, project_root: str) -> str:
@@ -277,7 +295,9 @@ def _make_relative_path(path: str, project_root: str) -> str:
 )
 @router.get("/config-duplicates")
 async def detect_config_duplicates_endpoint(
-    use_semantic: bool = Query(False, description="Enable LLM-based semantic analysis (Issue #554)"),
+    use_semantic: bool = Query(
+        False, description="Enable LLM-based semantic analysis (Issue #554)"
+    ),
 ):
     """
     Detect configuration value duplicates across codebase (Issue #341).
@@ -295,7 +315,10 @@ async def detect_config_duplicates_endpoint(
     Returns:
         JSONResponse with duplicate detection results
     """
-    from ..config_duplication_detector import ConfigDuplicationDetector, detect_config_duplicates
+    from ..config_duplication_detector import (
+        ConfigDuplicationDetector,
+        detect_config_duplicates,
+    )
 
     # Get project root (4 levels up from this file: endpoints -> codebase_analytics -> api -> backend -> root)
     project_root = Path(__file__).resolve().parents[4]
@@ -320,7 +343,9 @@ async def detect_config_duplicates_endpoint(
         except Exception as e:
             logger.warning("Semantic analysis failed, falling back to standard: %s", e)
             # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-            result = await asyncio.to_thread(detect_config_duplicates, str(project_root))
+            result = await asyncio.to_thread(
+                detect_config_duplicates, str(project_root)
+            )
     else:
         # Run standard detection
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -333,11 +358,15 @@ async def detect_config_duplicates_endpoint(
     duplicates_array = []
     for value, details in duplicates_dict.items():
         all_locations = details.get("sources", []) + details.get("duplicates", [])
-        duplicates_array.append({
-            "value": value,
-            "count": details.get("count", len(all_locations)),
-            "locations": [{"file": loc["file"], "line": loc["line"]} for loc in all_locations],
-        })
+        duplicates_array.append(
+            {
+                "value": value,
+                "count": details.get("count", len(all_locations)),
+                "locations": [
+                    {"file": loc["file"], "line": loc["line"]} for loc in all_locations
+                ],
+            }
+        )
 
     return JSONResponse(
         {

@@ -19,8 +19,9 @@ Related Issues: #185 (Split oversized files)
 
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
 from pydantic import BaseModel, Field
+
+from backend.type_defs.common import Metadata
 from src.constants import PATH
 
 

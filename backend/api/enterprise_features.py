@@ -132,7 +132,11 @@ def _build_deployment_phases() -> list:
         {"phase": "blue_environment_update", "status": "completed", "duration": "120s"},
         {"phase": "health_verification", "status": "completed", "duration": "60s"},
         {"phase": "traffic_switching", "status": "completed", "duration": "15s"},
-        {"phase": "green_environment_cleanup", "status": "completed", "duration": "45s"},
+        {
+            "phase": "green_environment_cleanup",
+            "status": "completed",
+            "duration": "45s",
+        },
     ]
 
 
@@ -223,7 +227,9 @@ async def enable_enterprise_feature(request: FeatureEnableRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error("Error enabling enterprise feature %s: %s", request.feature_name, e)
+        logger.error(
+            "Error enabling enterprise feature %s: %s", request.feature_name, e
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to enable feature: {str(e)}"
         )
@@ -284,7 +290,8 @@ async def enable_all_enterprise_features():
                 ),
             },
             "message": (
-                f"Phase 4 enterprise features enablement completed: {len(result['enabled_features'])}/{result['total_features']} features enabled"
+                f"Phase 4 enterprise features enablement completed: "
+                f"{len(result['enabled_features'])}/{result['total_features']} features enabled"
             ),
         }
 
@@ -415,7 +422,9 @@ async def bulk_enable_features(request: BulkFeatureRequest):
                 "status": "success",
                 "results": results,
                 "summary": (
-                    f"Enabled: {len(results['enabled'])}, Failed: {len(results['failed'])}, Skipped: {len(results['skipped'])}"
+                    f"Enabled: {len(results['enabled'])}, "
+                    f"Failed: {len(results['failed'])}, "
+                    f"Skipped: {len(results['skipped'])}"
                 ),
             },
         )
@@ -450,7 +459,8 @@ async def get_enterprise_health():
 
         # Get enabled features for health check
         enabled_features = [
-            (name, feature) for name, feature in manager.features.items()
+            (name, feature)
+            for name, feature in manager.features.items()
             if feature.status == FeatureStatus.ENABLED
         ]
 
@@ -458,12 +468,14 @@ async def get_enterprise_health():
         if enabled_features:
             health_results = await asyncio.gather(
                 *[manager._check_feature_health(name) for name, _ in enabled_features],
-                return_exceptions=True
+                return_exceptions=True,
             )
 
             # Process results using helper (Issue #315 - reduces nesting)
             for (name, _), feature_health in zip(enabled_features, health_results):
-                _process_feature_health_result(name, feature_health, health_status, counters)
+                _process_feature_health_result(
+                    name, feature_health, health_status, counters
+                )
 
         # Check for features in error state
         for name, feature in manager.features.items():
@@ -484,7 +496,8 @@ async def get_enterprise_health():
                 "status": "success",
                 "health": health_status,
                 "summary": (
-                    f"Health: {health_status['overall_health']}, Issues: {counters['critical']}, Warnings: {counters['warnings']}"
+                    f"Health: {health_status['overall_health']}, "
+                    f"Issues: {counters['critical']}, Warnings: {counters['warnings']}"
                 ),
             },
         )

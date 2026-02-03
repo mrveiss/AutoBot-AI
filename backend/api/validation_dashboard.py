@@ -14,13 +14,12 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-from backend.type_defs.common import Metadata
-
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
@@ -72,11 +71,17 @@ def _try_create_dashboard_generator() -> Optional[ValidationDashboardGenerator]:
         logger.info("Dashboard generator initialized")
         return generator
     except ImportError as e:
-        logger.error("Failed to initialize dashboard generator due to import error: %s", e)
+        logger.error(
+            "Failed to initialize dashboard generator due to import error: %s", e
+        )
     except (OSError, IOError) as e:
-        logger.error("Failed to initialize dashboard generator due to file system error: %s", e)
+        logger.error(
+            "Failed to initialize dashboard generator due to file system error: %s", e
+        )
     except Exception as e:
-        logger.error("Failed to initialize dashboard generator due to unexpected error: %s", e)
+        logger.error(
+            "Failed to initialize dashboard generator due to unexpected error: %s", e
+        )
     return None
 
 
@@ -107,9 +112,13 @@ def _try_create_validation_judges() -> Optional[Metadata]:
         logger.info("Validation judges initialized")
         return judges
     except ImportError as e:
-        logger.error("Failed to initialize validation judges due to import error: %s", e)
+        logger.error(
+            "Failed to initialize validation judges due to import error: %s", e
+        )
     except Exception as e:
-        logger.error("Failed to initialize validation judges due to unexpected error: %s", e)
+        logger.error(
+            "Failed to initialize validation judges due to unexpected error: %s", e
+        )
     return None
 
 
@@ -667,7 +676,9 @@ async def judge_agent_response(request: dict):
         }
 
     except (ImportError, AttributeError) as e:
-        logger.error("Error in agent response judgment due to missing dependency: %s", e)
+        logger.error(
+            "Error in agent response judgment due to missing dependency: %s", e
+        )
         raise_service_unavailable("API_0005", "Validation judges not available")
     except ValueError as e:
         logger.error("Error in agent response judgment due to invalid input: %s", e)

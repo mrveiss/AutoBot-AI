@@ -39,8 +39,9 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
 from pydantic import BaseModel, Field, validator
+
+from backend.type_defs.common import Metadata
 from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from src.utils.path_validation import contains_path_traversal
 
@@ -98,8 +99,15 @@ class EnhancedSearchRequest(BaseModel):
     """Enhanced search request with tag filtering and hybrid mode (Issue #78)"""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    limit: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=100, description="Max results to return")
-    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
+    limit: int = Field(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        ge=1,
+        le=100,
+        description="Max results to return",
+    )
+    offset: int = Field(
+        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
+    )
     category: Optional[str] = Field(default=None, max_length=100)
     tags: Optional[List[str]] = Field(
         default=None,
@@ -207,7 +215,12 @@ class ConsolidatedSearchRequest(BaseModel):
 
     # Core search parameters
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    top_k: int = Field(default=QueryDefaults.DEFAULT_TOP_K, ge=1, le=100, description="Maximum results to return")
+    top_k: int = Field(
+        default=QueryDefaults.DEFAULT_TOP_K,
+        ge=1,
+        le=100,
+        description="Maximum results to return",
+    )
     category: Optional[str] = Field(
         default=None, max_length=100, description="Filter by category"
     )
@@ -255,7 +268,9 @@ class ConsolidatedSearchRequest(BaseModel):
     )
 
     # Pagination
-    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
+    offset: int = Field(
+        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
+    )
 
     # Advanced filtering (Issue #78 v2 features)
     created_after: Optional[str] = Field(
@@ -358,10 +373,7 @@ class ConsolidatedSearchRequest(BaseModel):
             features.append(f"tags={len(self.tags)}")
 
         feature_str = f" [{', '.join(features)}]" if features else ""
-        return (
-            f"'{self.query}' (top_k={self.top_k}, mode={self.mode}"
-            f"{feature_str})"
-        )
+        return f"'{self.query}' (top_k={self.top_k}, mode={self.mode}" f"{feature_str})"
 
 
 class PaginationRequest(BaseModel):
@@ -418,7 +430,10 @@ class AdvancedSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     max_results: int = Field(
-        default=QueryDefaults.RAG_DEFAULT_RESULTS, ge=1, le=50, description="Maximum results to return"
+        default=QueryDefaults.RAG_DEFAULT_RESULTS,
+        ge=1,
+        le=50,
+        description="Maximum results to return",
     )
     enable_reranking: bool = Field(
         default=True, description="Enable cross-encoder reranking"
@@ -649,8 +664,15 @@ class MergeTagsRequest(BaseModel):
 class GetFactsByTagRequest(BaseModel):
     """Request model for getting facts by tag with pagination."""
 
-    limit: int = Field(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500, description="Max facts to return")
-    offset: int = Field(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset")
+    limit: int = Field(
+        default=QueryDefaults.DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=500,
+        description="Max facts to return",
+    )
+    offset: int = Field(
+        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Pagination offset"
+    )
     include_content: bool = Field(
         default=False,
         description="Include fact content in response",
@@ -713,7 +735,9 @@ class UpdateTagStyleRequest(BaseModel):
         if v is not None:
             # Only allow alphanumeric, hyphens, and spaces (for icon classes)
             if not re.match(r"^[a-zA-Z0-9\s\-]+$", v):
-                raise ValueError("Invalid icon format: only alphanumeric, spaces, hyphens")
+                raise ValueError(
+                    "Invalid icon format: only alphanumeric, spaces, hyphens"
+                )
         return v
 
 
@@ -1535,7 +1559,9 @@ class DeduplicationRequest(BaseModel):
     def validate_strategy(cls, v):
         """Validate keep strategy"""
         if v not in _VALID_SORT_OPTIONS:  # Issue #380: use module constant
-            raise ValueError(f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}")
+            raise ValueError(
+                f"Invalid strategy: {v}. Must be one of {_VALID_SORT_OPTIONS}"
+            )
         return v
 
 

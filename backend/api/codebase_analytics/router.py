@@ -7,22 +7,22 @@ Main router combining all codebase analytics endpoints
 
 from fastapi import APIRouter
 
-from .endpoints import (
-    indexing,
-    stats,
-    charts,
-    dependencies,
-    import_tree,
-    call_graph,
-    declarations,
-    duplicates,
+from .endpoints import api_endpoints  # Issue #527: API Endpoint Checker
+from .endpoints import environment  # Issue #538: Environment analysis
+from .endpoints import ownership  # Issue #248: Code Ownership and Expertise Map
+from .endpoints import (  # Issue #244: Cross-Language Pattern Detector; Issue #208: Code Pattern Detection & Optimization
     cache,
+    call_graph,
+    charts,
+    cross_language_patterns,
+    declarations,
+    dependencies,
+    duplicates,
+    import_tree,
+    indexing,
+    pattern_analysis,
     report,
-    api_endpoints,  # Issue #527: API Endpoint Checker
-    environment,    # Issue #538: Environment analysis
-    cross_language_patterns,  # Issue #244: Cross-Language Pattern Detector
-    pattern_analysis,  # Issue #208: Code Pattern Detection & Optimization
-    ownership,  # Issue #248: Code Ownership and Expertise Map
+    stats,
 )
 
 # Create main router with common prefix and tags
@@ -40,7 +40,9 @@ router.include_router(duplicates.router)
 router.include_router(cache.router)
 router.include_router(report.router)
 router.include_router(api_endpoints.router)  # Issue #527: API Endpoint Checker
-router.include_router(environment.router)    # Issue #538: Environment analysis
-router.include_router(cross_language_patterns.router)  # Issue #244: Cross-Language Patterns
+router.include_router(environment.router)  # Issue #538: Environment analysis
+router.include_router(
+    cross_language_patterns.router
+)  # Issue #244: Cross-Language Patterns
 router.include_router(pattern_analysis.router)  # Issue #208: Code Pattern Detection
 router.include_router(ownership.router)  # Issue #248: Code Ownership and Expertise Map

@@ -28,7 +28,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from backend.knowledge_factory import get_or_create_knowledge_base
 from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.template_loader import load_knowledge_data, knowledge_data_exists
+from src.utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +86,14 @@ async def _store_system_command(kb_to_use, cmd_info: dict) -> bool:
             result = await kb_to_use.store_fact(text=content, metadata=metadata)
 
         if result and result.get("fact_id"):
-            logger.info("Added command: %s", cmd_info['command'])
+            logger.info("Added command: %s", cmd_info["command"])
             return True
 
-        logger.warning("Failed to add command: %s", cmd_info['command'])
+        logger.warning("Failed to add command: %s", cmd_info["command"])
         return False
 
     except Exception as e:
-        logger.error("Error adding command %s: %s", cmd_info['command'], e)
+        logger.error("Error adding command %s: %s", cmd_info["command"], e)
         return False
 
 
@@ -508,7 +508,9 @@ async def _store_man_page(kb_to_use, command: str, content: str) -> bool:
     metadata = _get_man_page_metadata(command)
     try:
         if hasattr(kb_to_use, "store_fact"):
-            store_result = await kb_to_use.store_fact(content=content, metadata=metadata)
+            store_result = await kb_to_use.store_fact(
+                content=content, metadata=metadata
+            )
         else:
             store_result = await kb_to_use.store_fact(text=content, metadata=metadata)
 
@@ -533,12 +535,53 @@ async def _process_single_man_page(kb_to_use, command: str) -> bool:
 
 # Common commands for man pages
 COMMON_MAN_PAGE_COMMANDS = [
-    "ls", "cd", "cp", "mv", "rm", "mkdir", "rmdir", "chmod", "chown",
-    "find", "grep", "sed", "awk", "sort", "uniq", "head", "tail", "cat",
-    "less", "more", "ps", "top", "kill", "jobs", "nohup", "crontab",
-    "systemctl", "service", "curl", "wget", "ssh", "scp", "rsync",
-    "tar", "zip", "unzip", "gzip", "gunzip", "git", "docker", "npm",
-    "pip", "python", "node", "java", "gcc", "make",
+    "ls",
+    "cd",
+    "cp",
+    "mv",
+    "rm",
+    "mkdir",
+    "rmdir",
+    "chmod",
+    "chown",
+    "find",
+    "grep",
+    "sed",
+    "awk",
+    "sort",
+    "uniq",
+    "head",
+    "tail",
+    "cat",
+    "less",
+    "more",
+    "ps",
+    "top",
+    "kill",
+    "jobs",
+    "nohup",
+    "crontab",
+    "systemctl",
+    "service",
+    "curl",
+    "wget",
+    "ssh",
+    "scp",
+    "rsync",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "git",
+    "docker",
+    "npm",
+    "pip",
+    "python",
+    "node",
+    "java",
+    "gcc",
+    "make",
 ]
 
 
@@ -559,7 +602,9 @@ async def _populate_man_pages_background(kb_to_use):
             # Batch processing delay
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-        logger.info("Manual pages population completed. Added %s man pages.", items_added)
+        logger.info(
+            "Manual pages population completed. Added %s man pages.", items_added
+        )
         return items_added
 
     except Exception as e:
@@ -746,7 +791,9 @@ async def _store_doc_file(
 
     try:
         if hasattr(kb_to_use, "store_fact"):
-            return await kb_to_use.store_fact(content=structured_content, metadata=metadata)
+            return await kb_to_use.store_fact(
+                content=structured_content, metadata=metadata
+            )
         return await kb_to_use.store_fact(text=structured_content, metadata=metadata)
     except Exception as e:
         logger.error("Error storing doc %s: %s", doc_file, e)
@@ -801,7 +848,10 @@ async def _process_doc_file(
             file_path=str(file_path),
             category=category,
             facts_count=1,
-            metadata={"fact_id": result.get("fact_id"), "title": f"AutoBot: {doc_file}"},
+            metadata={
+                "fact_id": result.get("fact_id"),
+                "title": f"AutoBot: {doc_file}",
+            },
         )
         logger.info("Added AutoBot doc: %s", doc_file)
         return (1, 0, 0)
@@ -946,15 +996,18 @@ async def _process_all_doc_files(
 
 
 def _build_population_response(
-    items_added: int, items_skipped: int, items_failed: int,
-    doc_count: int, force_reindex: bool
+    items_added: int,
+    items_skipped: int,
+    items_failed: int,
+    doc_count: int,
+    force_reindex: bool,
 ) -> dict:
     """Build response dict for populate_autobot_docs. Issue #398: Extracted helper."""
     mode = "Force reindex" if force_reindex else "Incremental update"
     return {
         "status": "success",
         "message": f"{mode}: Successfully imported {items_added} AutoBot documents "
-                   f"({items_skipped} skipped, {items_failed} failed)",
+        f"({items_skipped} skipped, {items_failed} failed)",
         "items_added": items_added,
         "items_skipped": items_skipped,
         "items_failed": items_failed,
@@ -981,14 +1034,20 @@ async def populate_autobot_docs(request: dict, req: Request):
     force_reindex = request.get("force", False) if request else False
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
-        return {"status": "error", "message": "Knowledge base not initialized", "items_added": 0}
+        return {
+            "status": "error",
+            "message": "Knowledge base not initialized",
+            "items_added": 0,
+        }
 
     logger.info("Starting AutoBot documentation population with import tracking...")
 
     tracker = ImportTracker()
     autobot_base_path = PathLib(__file__).parent.parent.parent
 
-    doc_files, scan_skipped = await _scan_doc_files(autobot_base_path, tracker, force_reindex)
+    doc_files, scan_skipped = await _scan_doc_files(
+        autobot_base_path, tracker, force_reindex
+    )
     items_added, proc_skipped, items_failed = await _process_all_doc_files(
         kb_to_use, tracker, autobot_base_path, doc_files
     )
@@ -997,8 +1056,15 @@ async def populate_autobot_docs(request: dict, req: Request):
     if await _store_autobot_config_info(kb_to_use):
         items_added += 1
 
-    logger.info("AutoBot docs completed: %s added, %s skipped, %s failed", items_added, items_skipped, items_failed)
-    return _build_population_response(items_added, items_skipped, items_failed, len(doc_files), force_reindex)
+    logger.info(
+        "AutoBot docs completed: %s added, %s skipped, %s failed",
+        items_added,
+        items_skipped,
+        items_failed,
+    )
+    return _build_population_response(
+        items_added, items_skipped, items_failed, len(doc_files), force_reindex
+    )
 
 
 # =========================================================================
@@ -1019,7 +1085,7 @@ async def _store_single_man_page(kb_to_use, man_page: dict) -> bool:
         )
         return result and result.get("status") == "success"
     except Exception as e:
-        logger.error("Error storing man page %s: %s", man_page.get('command'), e)
+        logger.error("Error storing man page %s: %s", man_page.get("command"), e)
         return False
 
 
@@ -1064,8 +1130,8 @@ async def _scan_and_store_man_pages(
 
     Issue #423: Uses ManPageParser for structured content extraction.
     """
-    from src.utils.redis_client import get_redis_client
     from backend.services.fast_document_scanner import FastDocumentScanner
+    from src.utils.redis_client import get_redis_client
 
     try:
         redis_client = get_redis_client(async_client=False, database="main")
@@ -1075,26 +1141,42 @@ async def _scan_and_store_man_pages(
         # Issue #666: Wrap blocking scanner call in asyncio.to_thread to avoid event loop blocking
         man_pages = await asyncio.to_thread(
             scanner.get_all_man_pages_for_indexing,
-            limit=limit, sections=sections, system_context=system_context,
+            limit=limit,
+            sections=sections,
+            system_context=system_context,
         )
 
         if not man_pages:
-            return {"status": "success", "message": "No man pages found to index",
-                    "items_added": 0, "items_failed": 0}
+            return {
+                "status": "success",
+                "message": "No man pages found to index",
+                "items_added": 0,
+                "items_failed": 0,
+            }
 
         items_added, items_failed = await _store_man_pages_batch(kb_to_use, man_pages)
-        logger.info("Man page scan complete: %s added, %s failed", items_added, items_failed)
-        return _build_man_scan_result(items_added, items_failed, len(man_pages), machine_id)
+        logger.info(
+            "Man page scan complete: %s added, %s failed", items_added, items_failed
+        )
+        return _build_man_scan_result(
+            items_added, items_failed, len(man_pages), machine_id
+        )
 
     except Exception as e:
         logger.error("Man page scan failed: %s", e)
-        return {"status": "error", "message": str(e), "items_added": 0, "items_failed": 0}
+        return {
+            "status": "error",
+            "message": str(e),
+            "items_added": 0,
+            "items_failed": 0,
+        }
 
 
 def _get_system_context_safe(machine_id: str) -> dict:
     """Get system context for metadata, fallback to machine_id (Issue #398: extracted)."""
     try:
         from src.utils.system_context import get_system_context
+
         return get_system_context()
     except ImportError:
         return {"machine_id": machine_id}
@@ -1104,7 +1186,11 @@ def _parse_scan_request(request: dict | None) -> tuple[int | None, list | None, 
     """Parse scan request parameters (Issue #398: extracted)."""
     if not request:
         return None, None, True
-    return request.get("limit"), request.get("sections"), request.get("background", True)
+    return (
+        request.get("limit"),
+        request.get("sections"),
+        request.get("background", True),
+    )
 
 
 @with_error_handling(
@@ -1114,14 +1200,20 @@ def _parse_scan_request(request: dict | None) -> tuple[int | None, list | None, 
 )
 @router.post("/scan_man_pages")
 async def scan_man_pages(
-    request: dict, req: Request, background_tasks: BackgroundTasks,
+    request: dict,
+    req: Request,
+    background_tasks: BackgroundTasks,
 ):
     """Scan and index system man pages (Issue #398: refactored)."""
     import socket
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
-        return {"status": "error", "message": "Knowledge base not initialized", "items_added": 0}
+        return {
+            "status": "error",
+            "message": "Knowledge base not initialized",
+            "items_added": 0,
+        }
 
     limit, sections, run_background = _parse_scan_request(request)
     machine_id = socket.gethostname()
@@ -1129,12 +1221,25 @@ async def scan_man_pages(
 
     if run_background:
         background_tasks.add_task(
-            _scan_and_store_man_pages, kb_to_use, machine_id, limit, sections, system_context,
+            _scan_and_store_man_pages,
+            kb_to_use,
+            machine_id,
+            limit,
+            sections,
+            system_context,
         )
-        return {"status": "success", "message": "Man page scan started in background",
-                "background": True, "machine_id": machine_id, "limit": limit, "sections": sections}
+        return {
+            "status": "success",
+            "message": "Man page scan started in background",
+            "background": True,
+            "machine_id": machine_id,
+            "limit": limit,
+            "sections": sections,
+        }
 
-    result = await _scan_and_store_man_pages(kb_to_use, machine_id, limit, sections, system_context)
+    result = await _scan_and_store_man_pages(
+        kb_to_use, machine_id, limit, sections, system_context
+    )
     result["background"] = False
     return result
 
@@ -1162,12 +1267,15 @@ async def _store_parsed_man_pages(kb_to_use, parsed_content: list) -> int:
 )
 @router.post("/scan_man_pages_changes")
 async def scan_man_pages_changes(
-    request: dict, req: Request, background_tasks: BackgroundTasks,
+    request: dict,
+    req: Request,
+    background_tasks: BackgroundTasks,
 ):
     """Scan for changed man pages only (Issue #398: refactored)."""
     import socket
-    from src.utils.redis_client import get_redis_client
+
     from backend.services.fast_document_scanner import FastDocumentScanner
+    from src.utils.redis_client import get_redis_client
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
@@ -1183,14 +1291,20 @@ async def scan_man_pages_changes(
     # Issue #666: Wrap blocking scanner call in asyncio.to_thread to avoid event loop blocking
     scan_result = await asyncio.to_thread(
         scanner.scan_and_parse_changes,
-        machine_id=machine_id, limit=limit, system_context=system_context,
+        machine_id=machine_id,
+        limit=limit,
+        system_context=system_context,
     )
 
-    items_added = await _store_parsed_man_pages(kb_to_use, scan_result.get("parsed_content", []))
+    items_added = await _store_parsed_man_pages(
+        kb_to_use, scan_result.get("parsed_content", [])
+    )
 
     return {
-        "status": "success", "machine_id": machine_id,
+        "status": "success",
+        "machine_id": machine_id,
         "scan_duration_seconds": scan_result.get("scan_duration_seconds", 0),
         "summary": scan_result.get("summary", {}),
-        "items_stored": items_added, "parsed_count": scan_result.get("parsed_count", 0),
+        "items_stored": items_added,
+        "parsed_count": scan_result.get("parsed_count", 0),
     }

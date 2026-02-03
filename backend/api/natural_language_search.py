@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
 from src.constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,9 @@ _CLASS_DEF_RE = re.compile(r"class\s+(\w+)")
 _ASYNC_FUNC_RE = re.compile(r"async\s+def\s+(\w+)")
 
 # Issue #336: Keyword heuristics dispatch table for intent classification
-KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = {}  # Populated after enum defined
+KEYWORD_INTENT_FALLBACKS: Dict[
+    Tuple[str, ...], "QueryIntent"
+] = {}  # Populated after enum defined
 
 router = APIRouter(prefix="/nl-search", tags=["natural-language-search", "code-search"])
 
@@ -272,7 +275,15 @@ DOMAIN_KEYWORDS = {
         "json",
         "toml",
     ],
-    QueryDomain.LOGGING: ["log", "logger", "logging", "debug", "info", "warning", "error"],
+    QueryDomain.LOGGING: [
+        "log",
+        "logger",
+        "logging",
+        "debug",
+        "info",
+        "warning",
+        "error",
+    ],
     QueryDomain.CACHING: ["cache", "redis", "memcached", "ttl", "invalidate", "expire"],
     QueryDomain.SECURITY: [
         "security",
@@ -292,7 +303,16 @@ DOMAIN_KEYWORDS = {
         "connection",
         "port",
     ],
-    QueryDomain.FILE_IO: ["file", "read", "write", "open", "close", "path", "directory", "io"],
+    QueryDomain.FILE_IO: [
+        "file",
+        "read",
+        "write",
+        "open",
+        "close",
+        "path",
+        "directory",
+        "io",
+    ],
 }
 
 # Question type indicators
@@ -461,7 +481,9 @@ class NaturalLanguageQueryParser:
         question_type = self._determine_question_type(normalized)
 
         # Generate optimized search terms
-        search_terms = self._generate_search_terms(normalized, entities, keywords, intent)
+        search_terms = self._generate_search_terms(
+            normalized, entities, keywords, intent
+        )
 
         return ParsedQuery(
             original_query=original,
@@ -541,7 +563,9 @@ class NaturalLanguageQueryParser:
         """Extract important keywords from the query."""
         words = query.split()
         keywords = [
-            w for w in words if w not in self.stopwords and len(w) > 2 and not w.isdigit()
+            w
+            for w in words
+            if w not in self.stopwords and len(w) > 2 and not w.isdigit()
         ]
         return keywords
 
@@ -558,7 +582,13 @@ class NaturalLanguageQueryParser:
     # Issue #315: Intent to keywords dispatch table
     _INTENT_KEYWORDS = {
         QueryIntent.FIND_DEFINITION: ["def", "class", "function", "define"],
-        QueryIntent.FIND_ERROR_HANDLING: ["try", "except", "catch", "error", "exception"],
+        QueryIntent.FIND_ERROR_HANDLING: [
+            "try",
+            "except",
+            "catch",
+            "error",
+            "exception",
+        ],
         QueryIntent.FIND_TESTS: ["test", "assert", "pytest", "unittest"],
         QueryIntent.FIND_CONFIGURATION: ["config", "settings", "env", "yaml"],
     }
@@ -772,7 +802,9 @@ def _parse_llm_explanation_response(response: str) -> dict:
                 result[key] = line.replace(prefix, "").strip()
                 break
         if line.startswith("CONCEPTS:"):
-            result["concepts"] = [c.strip() for c in line.replace("CONCEPTS:", "").split(",")]
+            result["concepts"] = [
+                c.strip() for c in line.replace("CONCEPTS:", "").split(",")
+            ]
     return result
 
 
@@ -803,7 +835,9 @@ class CodeExplainer:
         # Try LLM-based explanation first
         if self.llm_available:
             try:
-                return await self._llm_explain(code_snippet, file_path, line_number, context)
+                return await self._llm_explain(
+                    code_snippet, file_path, line_number, context
+                )
             except Exception as e:
                 logger.warning("LLM explanation failed: %s, using heuristic", e)
 
@@ -857,7 +891,8 @@ CONCEPTS: <comma-separated list>
             file_path=file_path,
             line_number=line_number,
             summary=parsed.get("summary") or "Code snippet",
-            detailed_explanation=parsed.get("explanation") or "No detailed explanation available",
+            detailed_explanation=parsed.get("explanation")
+            or "No detailed explanation available",
             purpose=parsed.get("purpose") or "Unknown purpose",
             key_concepts=parsed.get("concepts") or ["code"],
             related_code=[],
@@ -929,7 +964,10 @@ class NLSearchRequest(BaseModel):
     """Request model for natural language search."""
 
     query: str = Field(..., description="Natural language query")
-    max_results: int = Field(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, description="Maximum results to return")
+    max_results: int = Field(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        description="Maximum results to return",
+    )
     include_explanations: bool = Field(
         default=True, description="Include LLM-generated explanations"
     )
@@ -994,10 +1032,26 @@ _code_explainer = CodeExplainer()
 def _convert_search_result_to_dict(result) -> dict:
     """Convert a search result to dictionary format (Issue #665: extracted helper)."""
     return {
-        "file_path": result.file_path if hasattr(result, "file_path") else str(result.get("file_path", "")),
-        "line_number": result.line_number if hasattr(result, "line_number") else result.get("line_number", 0),
-        "content": result.content[:500] if hasattr(result, "content") else str(result.get("content", ""))[:500],
-        "confidence": result.confidence if hasattr(result, "confidence") else result.get("confidence", 0.0),
+        "file_path": (
+            result.file_path
+            if hasattr(result, "file_path")
+            else str(result.get("file_path", ""))
+        ),
+        "line_number": (
+            result.line_number
+            if hasattr(result, "line_number")
+            else result.get("line_number", 0)
+        ),
+        "content": (
+            result.content[:500]
+            if hasattr(result, "content")
+            else str(result.get("content", ""))[:500]
+        ),
+        "confidence": (
+            result.confidence
+            if hasattr(result, "confidence")
+            else result.get("confidence", 0.0)
+        ),
     }
 
 
@@ -1140,7 +1194,9 @@ async def get_query_suggestions(query: str):
 
 
 @router.post("/explain")
-async def explain_code_snippet(code: str, file_path: str = "<unknown>", line_number: int = 0):
+async def explain_code_snippet(
+    code: str, file_path: str = "<unknown>", line_number: int = 0
+):
     """
     Generate an explanation for a code snippet.
 
@@ -1191,7 +1247,9 @@ async def list_supported_intents():
                     QueryIntent.FIND_ERROR_HANDLING: ["How are Redis errors handled?"],
                     QueryIntent.FIND_CONFIGURATION: ["Where is logging configured?"],
                     QueryIntent.FIND_TESTS: ["What tests exist for auth?"],
-                    QueryIntent.FIND_DEPENDENCIES: ["What does the API module depend on?"],
+                    QueryIntent.FIND_DEPENDENCIES: [
+                        "What does the API module depend on?"
+                    ],
                     QueryIntent.FIND_PATTERN: ["Find all async functions"],
                     QueryIntent.EXPLAIN_CODE: ["Explain the router initialization"],
                     QueryIntent.COMPARE_CODE: ["Compare Redis and in-memory cache"],

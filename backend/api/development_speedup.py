@@ -101,9 +101,7 @@ VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 class AnalysisRequest(BaseModel):
     root_path: str
-    analysis_type: str = (
-        "comprehensive"  # comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
-    )
+    analysis_type: str = "comprehensive"  # comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
 
 
 @with_error_handling(
@@ -126,7 +124,9 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
     - quality: Code quality consistency only
     """
     try:
-        logger.info("Starting %s analysis: %s", request.analysis_type, request.root_path)
+        logger.info(
+            "Starting %s analysis: %s", request.analysis_type, request.root_path
+        )
 
         # Issue #336: Dispatch table lookup replaces elif chain
         handler = ANALYSIS_TYPE_HANDLERS.get(request.analysis_type)

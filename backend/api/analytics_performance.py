@@ -705,12 +705,14 @@ async def get_summary(
             {
                 "pattern_id": k,
                 "count": v,
-                "name": PERFORMANCE_PATTERNS[k].name
-                if k in PERFORMANCE_PATTERNS
-                else k,
-                "impact": PERFORMANCE_PATTERNS[k].impact.value
-                if k in PERFORMANCE_PATTERNS
-                else "medium",
+                "name": (
+                    PERFORMANCE_PATTERNS[k].name if k in PERFORMANCE_PATTERNS else k
+                ),
+                "impact": (
+                    PERFORMANCE_PATTERNS[k].impact.value
+                    if k in PERFORMANCE_PATTERNS
+                    else "medium"
+                ),
             }
             for k, v in sorted(issue_counts.items(), key=lambda x: -x[1])[:10]
         ]

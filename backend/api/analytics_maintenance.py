@@ -18,15 +18,15 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from backend.services.analytics_service import (
-    AnalyticsService,
     MaintenancePriority,
     ResourceType,
     get_analytics_service,
 )
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -107,12 +107,16 @@ class CustomReportRequest(BaseModel):
     error_code_prefix="MAINT",
 )
 @router.get("/maintenance")
-async def get_maintenance_recommendations():
+async def get_maintenance_recommendations(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get predictive maintenance recommendations.
 
     Analyzes system metrics and predicts potential issues before they occur.
     Returns prioritized list of maintenance actions.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     recommendations = await service.get_predictive_maintenance()
@@ -121,10 +125,18 @@ async def get_maintenance_recommendations():
         "timestamp": datetime.utcnow().isoformat(),
         "total_recommendations": len(recommendations),
         "by_priority": {
-            "critical": sum(1 for r in recommendations if r.priority == MaintenancePriority.CRITICAL),
-            "high": sum(1 for r in recommendations if r.priority == MaintenancePriority.HIGH),
-            "medium": sum(1 for r in recommendations if r.priority == MaintenancePriority.MEDIUM),
-            "low": sum(1 for r in recommendations if r.priority == MaintenancePriority.LOW),
+            "critical": sum(
+                1 for r in recommendations if r.priority == MaintenancePriority.CRITICAL
+            ),
+            "high": sum(
+                1 for r in recommendations if r.priority == MaintenancePriority.HIGH
+            ),
+            "medium": sum(
+                1 for r in recommendations if r.priority == MaintenancePriority.MEDIUM
+            ),
+            "low": sum(
+                1 for r in recommendations if r.priority == MaintenancePriority.LOW
+            ),
         },
         "recommendations": [r.to_dict() for r in recommendations],
     }
@@ -136,11 +148,16 @@ async def get_maintenance_recommendations():
     error_code_prefix="MAINT",
 )
 @router.get("/maintenance/category/{category}")
-async def get_maintenance_by_category(category: str):
+async def get_maintenance_by_category(
+    category: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get maintenance recommendations for a specific category.
 
     Categories: agent_performance, cost_management, infrastructure, reliability
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     all_recommendations = await service.get_predictive_maintenance()
@@ -160,11 +177,15 @@ async def get_maintenance_by_category(category: str):
     error_code_prefix="MAINT",
 )
 @router.get("/maintenance/summary")
-async def get_maintenance_summary():
+async def get_maintenance_summary(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get maintenance summary with action items.
 
     Returns a condensed view suitable for dashboard widgets.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     recommendations = await service.get_predictive_maintenance()
@@ -177,7 +198,9 @@ async def get_maintenance_summary():
         by_category[rec.category].append(rec)
 
     # Get critical items
-    critical_items = [r for r in recommendations if r.priority == MaintenancePriority.CRITICAL]
+    critical_items = [
+        r for r in recommendations if r.priority == MaintenancePriority.CRITICAL
+    ]
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
@@ -197,7 +220,12 @@ async def get_maintenance_summary():
         "by_category": {
             cat: {
                 "count": len(items),
-                "highest_priority": min(items, key=lambda x: ["critical", "high", "medium", "low"].index(x.priority.value)).priority.value,
+                "highest_priority": min(
+                    items,
+                    key=lambda x: ["critical", "high", "medium", "low"].index(
+                        x.priority.value
+                    ),
+                ).priority.value,
             }
             for cat, items in by_category.items()
         },
@@ -215,18 +243,26 @@ async def get_maintenance_summary():
     error_code_prefix="OPT",
 )
 @router.get("/optimization")
-async def get_resource_optimizations():
+async def get_resource_optimizations(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get resource optimization recommendations.
 
     Analyzes usage patterns and identifies cost and performance improvements.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     optimizations = await service.get_resource_optimizations()
 
     # Calculate totals
-    total_cost_savings = sum(o.expected_savings.get("cost_usd", 0) for o in optimizations)
-    total_perf_improvement = sum(o.expected_savings.get("performance_percent", 0) for o in optimizations)
+    total_cost_savings = sum(
+        o.expected_savings.get("cost_usd", 0) for o in optimizations
+    )
+    total_perf_improvement = sum(
+        o.expected_savings.get("performance_percent", 0) for o in optimizations
+    )
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
@@ -249,11 +285,16 @@ async def get_resource_optimizations():
     error_code_prefix="OPT",
 )
 @router.get("/optimization/type/{resource_type}")
-async def get_optimization_by_type(resource_type: str):
+async def get_optimization_by_type(
+    resource_type: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get optimizations for a specific resource type.
 
     Types: llm_tokens, agent_tasks, memory, cache, database
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     all_optimizations = await service.get_resource_optimizations()
@@ -273,11 +314,15 @@ async def get_optimization_by_type(resource_type: str):
     error_code_prefix="OPT",
 )
 @router.get("/optimization/quick-wins")
-async def get_quick_wins():
+async def get_quick_wins(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get quick-win optimizations.
 
     Returns optimizations with low implementation effort and high impact.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     all_optimizations = await service.get_resource_optimizations()
@@ -293,7 +338,9 @@ async def get_quick_wins():
     return {
         "timestamp": datetime.utcnow().isoformat(),
         "total_quick_wins": len(quick_wins),
-        "estimated_savings": sum(o.expected_savings.get("cost_usd", 0) for o in quick_wins),
+        "estimated_savings": sum(
+            o.expected_savings.get("cost_usd", 0) for o in quick_wins
+        ),
         "recommendations": [o.to_dict() for o in quick_wins],
     }
 
@@ -311,11 +358,14 @@ async def get_quick_wins():
 @router.get("/dashboard")
 async def get_unified_dashboard(
     days: int = Query(default=30, ge=1, le=365, description="Days to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get unified analytics dashboard.
 
     Aggregates all analytics sources into a single comprehensive view.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     dashboard = await service.get_unified_dashboard(days)
@@ -329,11 +379,15 @@ async def get_unified_dashboard(
     error_code_prefix="HEALTH",
 )
 @router.get("/health")
-async def get_health_status():
+async def get_health_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get system health status.
 
     Returns overall health score and status indicators.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     dashboard = await service.get_unified_dashboard(7)  # Last 7 days for health
@@ -345,7 +399,9 @@ async def get_health_status():
             "cost_trend": dashboard["cost"]["trend"],
             "agent_success_rate": dashboard["agents"]["avg_success_rate"],
             "maintenance_issues": dashboard["maintenance"]["total_recommendations"],
-            "optimization_opportunities": dashboard["optimization"]["total_recommendations"],
+            "optimization_opportunities": dashboard["optimization"][
+                "total_recommendations"
+            ],
         },
     }
 
@@ -361,7 +417,10 @@ async def get_health_status():
     error_code_prefix="REPORT",
 )
 @router.post("/report")
-async def generate_custom_report(request: CustomReportRequest):
+async def generate_custom_report(
+    request: CustomReportRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Generate a custom analytics report.
 
@@ -370,6 +429,8 @@ async def generate_custom_report(request: CustomReportRequest):
     - technical: Detailed technical analysis
     - cost: Focus on cost metrics and optimization
     - performance: Focus on performance metrics
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
 
@@ -394,11 +455,14 @@ async def generate_custom_report(request: CustomReportRequest):
 @router.get("/report/executive")
 async def get_executive_summary(
     days: int = Query(default=30, ge=7, le=90, description="Days to summarize"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get executive summary report.
 
     A quick high-level overview suitable for stakeholders.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
 
@@ -426,12 +490,16 @@ async def get_executive_summary(
     error_code_prefix="INSIGHT",
 )
 @router.get("/insights")
-async def get_insights():
+async def get_insights(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get actionable insights from analytics data.
 
     Combines maintenance recommendations and optimization opportunities
     into prioritized action items.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
 
@@ -447,24 +515,31 @@ async def get_insights():
     # Add critical maintenance first
     for m in maintenance:
         if m.priority in [MaintenancePriority.CRITICAL, MaintenancePriority.HIGH]:
-            insights.append({
-                "type": "maintenance",
-                "priority": m.priority.value,
-                "title": m.title,
-                "action": m.recommended_action,
-                "impact": m.estimated_impact,
-            })
+            insights.append(
+                {
+                    "type": "maintenance",
+                    "priority": m.priority.value,
+                    "title": m.title,
+                    "action": m.recommended_action,
+                    "impact": m.estimated_impact,
+                }
+            )
 
     # Add high-value optimizations
     for o in optimizations:
-        if o.expected_savings.get("cost_usd", 0) > 5 or o.expected_savings.get("performance_percent", 0) > 10:
-            insights.append({
-                "type": "optimization",
-                "priority": o.priority.value,
-                "title": o.title,
-                "action": o.recommended_change,
-                "impact": f"Potential savings: ${o.expected_savings.get('cost_usd', 0):.2f}",
-            })
+        if (
+            o.expected_savings.get("cost_usd", 0) > 5
+            or o.expected_savings.get("performance_percent", 0) > 10
+        ):
+            insights.append(
+                {
+                    "type": "optimization",
+                    "priority": o.priority.value,
+                    "title": o.title,
+                    "action": o.recommended_change,
+                    "impact": f"Potential savings: ${o.expected_savings.get('cost_usd', 0):.2f}",
+                }
+            )
 
     # Sort by priority
     priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -485,11 +560,14 @@ async def get_insights():
 @router.get("/trends")
 async def get_trends_analysis(
     days: int = Query(default=30, ge=7, le=90, description="Days to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get trends analysis across all metrics.
 
     Shows how key metrics are changing over time.
+
+    Issue #744: Requires admin authentication.
     """
     service = get_analytics_service()
     # Issue #619: Parallelize independent trend fetches

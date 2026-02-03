@@ -14,21 +14,20 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_knowledge_base
-from src.auth_middleware import get_current_user
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
+from backend.type_defs.common import Metadata
 from backend.utils.response_helpers import (
     create_error_response,
     create_success_response,
     handle_ai_stack_error,
 )
+from src.auth_middleware import get_current_user
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -406,8 +405,12 @@ async def rag_search(
 
 
 async def _store_single_fact_with_semaphore(
-    kb, fact: Dict[str, Any], semaphore: asyncio.Semaphore,
-    title: Optional[str], source: Optional[str], category: Optional[str]
+    kb,
+    fact: Dict[str, Any],
+    semaphore: asyncio.Semaphore,
+    title: Optional[str],
+    source: Optional[str],
+    category: Optional[str],
 ) -> Dict[str, Any]:
     """Store a single fact with semaphore-bounded concurrency."""
     async with semaphore:
@@ -447,17 +450,22 @@ async def _store_extracted_facts(
     results = await asyncio.gather(
         *[
             _store_single_fact_with_semaphore(
-                kb_to_use, fact, semaphore,
-                request_data.title, request_data.source, request_data.category
+                kb_to_use,
+                fact,
+                semaphore,
+                request_data.title,
+                request_data.source,
+                request_data.category,
             )
             for fact in extracted_facts
         ],
-        return_exceptions=True
+        return_exceptions=True,
     )
 
     # Filter successful results
     stored_facts = [
-        result for result in results
+        result
+        for result in results
         if isinstance(result, dict) and result.get("status") != "error"
     ]
 
@@ -703,9 +711,13 @@ async def get_enhanced_stats(
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
 @router.get("/health/enhanced")
-async def enhanced_knowledge_health():
+async def enhanced_knowledge_health(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Enhanced health check including AI Stack connectivity.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         health_status = {

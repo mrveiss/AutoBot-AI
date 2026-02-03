@@ -11,12 +11,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.enhanced_project_state_tracker import (
     StateChangeType,
     TrackingMetric,

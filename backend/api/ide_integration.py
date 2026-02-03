@@ -318,7 +318,9 @@ class AnalysisRequest(BaseModel):
     file_path: str = Field(..., description="Path to the file being analyzed")
     content: str = Field(..., description="File content to analyze")
     language: str = Field(default="python", description="Programming language")
-    include_hints: bool = Field(default=True, description="Include hint-level diagnostics")
+    include_hints: bool = Field(
+        default=True, description="Include hint-level diagnostics"
+    )
     categories: Optional[List[PatternCategory]] = Field(
         None, description="Filter by categories"
     )
@@ -411,7 +413,11 @@ class IDEIntegrationEngine:
         """Check if a position falls within a diagnostic's range. (Issue #315 - extracted)"""
         if diagnostic.range.start.line != line_num:
             return False
-        return diagnostic.range.start.character <= character <= diagnostic.range.end.character
+        return (
+            diagnostic.range.start.character
+            <= character
+            <= diagnostic.range.end.character
+        )
 
     def _check_rule_on_lines(
         self,
@@ -472,13 +478,6 @@ class IDEIntegrationEngine:
         if rule.get("fix_template"):
             contents += f"\n**Suggested Fix:**\n```python\n{rule['fix_template']}\n```"
         return contents
-
-    def _find_rule_by_id(self, diagnostic_code: str) -> Optional[dict]:
-        """Find a rule by its ID (Issue #665: extracted helper)."""
-        for rule in self.rules:
-            if rule["id"] == diagnostic_code:
-                return rule
-        return None
 
     def _create_fix_action(
         self, rule: dict, file_path: str, edit_range: dict
@@ -608,9 +607,7 @@ class IDEIntegrationEngine:
             issues_found=len(diagnostics),
         )
 
-    async def _analyze_ast(
-        self, content: str, lines: List[str]
-    ) -> List[Diagnostic]:
+    async def _analyze_ast(self, content: str, lines: List[str]) -> List[Diagnostic]:
         """Perform AST-based analysis for Python code."""
         diagnostics = []
 
@@ -704,7 +701,9 @@ class IDEIntegrationEngine:
         # Issue #665: Use extracted helpers for action creation
         if rule.get("fix_template"):
             actions.append(
-                self._create_fix_action(rule, request.file_path, request.range.model_dump())
+                self._create_fix_action(
+                    rule, request.file_path, request.range.model_dump()
+                )
             )
 
         actions.append(self._create_disable_rule_action(rule))
@@ -886,8 +885,7 @@ async def batch_analyze(
 
     # Issue #619: Parallelize independent file analyses
     results = await asyncio.gather(
-        *[engine.analyze(request) for request in requests],
-        return_exceptions=True
+        *[engine.analyze(request) for request in requests], return_exceptions=True
     )
 
     # Filter out exceptions and count issues

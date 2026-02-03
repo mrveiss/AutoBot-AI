@@ -21,41 +21,41 @@ from fastapi import HTTPException
 from backend.type_defs.common import Metadata
 from src.constants.path_constants import PATH
 from src.utils.file_categorization import (
-    # Category constants
+    ALL_CODE_EXTENSIONS,
+    CONFIG_EXTENSIONS,
+    CSS_EXTENSIONS,
+    DOC_EXTENSIONS,
+    FILE_CATEGORY_ARCHIVE,
+    FILE_CATEGORY_ASSETS,
+    FILE_CATEGORY_BACKUP,
     FILE_CATEGORY_CODE,
     FILE_CATEGORY_CONFIG,
+    FILE_CATEGORY_DATA,
     FILE_CATEGORY_DOCS,
     FILE_CATEGORY_LOGS,
-    FILE_CATEGORY_BACKUP,
-    FILE_CATEGORY_ARCHIVE,
-    FILE_CATEGORY_DATA,
-    FILE_CATEGORY_ASSETS,
     FILE_CATEGORY_TEST,
-    # Extension sets
-    PYTHON_EXTENSIONS,
+    HTML_EXTENSIONS,
     JS_EXTENSIONS,
+    PYTHON_EXTENSIONS,
+    SKIP_DIRS,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
-    CSS_EXTENSIONS,
-    HTML_EXTENSIONS,
-    CONFIG_EXTENSIONS,
-    DOC_EXTENSIONS,
-    LOG_EXTENSIONS,
-    ALL_CODE_EXTENSIONS,
-    # Directory sets
-    SKIP_DIRS,
-    BACKUP_DIRS,
-    ARCHIVE_DIRS,
-    LOG_DIRS,
-    # Functions
-    get_file_category as _get_file_category,
-    should_skip_directory,
-    should_count_for_metrics,
+)
+from src.utils.file_categorization import (
+    get_file_category as _get_file_category,  # Category constants; Extension sets; Directory sets; Functions
 )
 
-from .analyzers import analyze_python_file, analyze_javascript_vue_file, analyze_documentation_file
-from .storage import get_code_collection_async, get_redis_connection, get_redis_connection_async
-from .types import FileAnalysisResult, ParallelProcessingStats
+from .analyzers import (
+    analyze_documentation_file,
+    analyze_javascript_vue_file,
+    analyze_python_file,
+)
+from .storage import (
+    get_code_collection_async,
+    get_redis_connection,
+    get_redis_connection_async,
+)
+from .types import FileAnalysisResult
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,12 @@ def _get_indexing_executor() -> ThreadPoolExecutor:
             if _INDEXING_EXECUTOR is None:
                 _INDEXING_EXECUTOR = ThreadPoolExecutor(
                     max_workers=_INDEXING_EXECUTOR_MAX_WORKERS,
-                    thread_name_prefix="indexing_worker"
+                    thread_name_prefix="indexing_worker",
                 )
-                logger.info("Created dedicated indexing thread pool (%d workers)", _INDEXING_EXECUTOR_MAX_WORKERS)
+                logger.info(
+                    "Created dedicated indexing thread pool (%d workers)",
+                    _INDEXING_EXECUTOR_MAX_WORKERS,
+                )
     return _INDEXING_EXECUTOR
 
 
@@ -97,6 +100,7 @@ async def _run_in_indexing_thread(func, *args):
         return await loop.run_in_executor(executor, func, *args)
     else:
         return await loop.run_in_executor(executor, func)
+
 
 # =============================================================================
 # Configuration Constants (Issue #539: Configurable via environment variables)
@@ -124,7 +128,9 @@ except ValueError:
 
 # Enable incremental indexing (only re-index changed files)
 # Default: False (full re-index - current behavior)
-INCREMENTAL_INDEXING_ENABLED = os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
+INCREMENTAL_INDEXING_ENABLED = (
+    os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
+)
 
 # Issue #659: File processing configuration
 # Controls progress update frequency during scanning (every N/5 files)
@@ -142,7 +148,9 @@ except ValueError:
 # Issue #660: Embedding mode for ChromaDB storage
 # Options: "precompute" (5-10x faster), "auto" (let ChromaDB handle), "skip" (no embeddings)
 # Default: "precompute" for optimal performance
-CHROMADB_EMBEDDING_MODE = os.getenv("CODEBASE_INDEX_EMBEDDING_MODE", "precompute").lower()
+CHROMADB_EMBEDDING_MODE = os.getenv(
+    "CODEBASE_INDEX_EMBEDDING_MODE", "precompute"
+).lower()
 if CHROMADB_EMBEDDING_MODE not in ("precompute", "auto", "skip"):
     logger.warning("Invalid CODEBASE_INDEX_EMBEDDING_MODE, using 'precompute'")
     CHROMADB_EMBEDDING_MODE = "precompute"
@@ -214,7 +222,9 @@ async def _generate_batch_embeddings(
 
     logger.info(
         "Generating embeddings for %d documents (batch_size=%d, mode=%s)",
-        len(documents), batch_size, CHROMADB_EMBEDDING_MODE
+        len(documents),
+        batch_size,
+        CHROMADB_EMBEDDING_MODE,
     )
 
     # Issue #681: Use NPU-accelerated embeddings with automatic fallback
@@ -452,7 +462,11 @@ async def _count_scannable_files(root_path_obj: Path) -> Tuple[int, list]:
     total_files, all_files = await _run_in_indexing_thread(
         _count_scannable_files_sync, root_path_obj
     )
-    logger.info("DEBUG: _count_scannable_files returned %d scannable, %d total files", total_files, len(all_files))
+    logger.info(
+        "DEBUG: _count_scannable_files returned %d scannable, %d total files",
+        total_files,
+        len(all_files),
+    )
     return total_files, all_files
 
 
@@ -470,7 +484,9 @@ _FILE_TYPE_MAP = [
 ]
 
 
-async def _get_file_analysis(file_path: Path, extension: str, stats: dict) -> Optional[dict]:
+async def _get_file_analysis(
+    file_path: Path, extension: str, stats: dict
+) -> Optional[dict]:
     """
     Get analysis for a file based on its type.
 
@@ -483,10 +499,14 @@ async def _get_file_analysis(file_path: Path, extension: str, stats: dict) -> Op
                 return await analyze_python_file(str(file_path))
             elif analyzer_type == "js":
                 # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-                return await asyncio.to_thread(analyze_javascript_vue_file, str(file_path))
+                return await asyncio.to_thread(
+                    analyze_javascript_vue_file, str(file_path)
+                )
             elif analyzer_type == "doc":
                 # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-                return await asyncio.to_thread(analyze_documentation_file, str(file_path))
+                return await asyncio.to_thread(
+                    analyze_documentation_file, str(file_path)
+                )
             return None
 
     stats["other_files"] += 1
@@ -593,7 +613,9 @@ Suggestion: {problem.get('suggestion', '')}
     return doc_id, problem_doc, metadata
 
 
-async def _store_problems_batch_to_chromadb(collection, problems: list, start_idx: int) -> None:
+async def _store_problems_batch_to_chromadb(
+    collection, problems: list, start_idx: int
+) -> None:
     """Store multiple problems to ChromaDB collection in batch (Issue #398: refactored)."""
     if not collection or not problems:
         return
@@ -601,7 +623,9 @@ async def _store_problems_batch_to_chromadb(collection, problems: list, start_id
     try:
         ids, documents, metadatas = [], [], []
         for i, problem in enumerate(problems):
-            doc_id, problem_doc, metadata = _prepare_problem_document(problem, start_idx + i)
+            doc_id, problem_doc, metadata = _prepare_problem_document(
+                problem, start_idx + i
+            )
             ids.append(doc_id)
             documents.append(problem_doc)
             metadatas.append(metadata)
@@ -612,7 +636,9 @@ async def _store_problems_batch_to_chromadb(collection, problems: list, start_id
         logger.debug("Failed to batch store problems: %s", e)
 
 
-def _aggregate_stats_for_countable(stats: Dict, file_analysis: Dict, file_line_count: int) -> None:
+def _aggregate_stats_for_countable(
+    stats: Dict, file_analysis: Dict, file_line_count: int
+) -> None:
     """
     Aggregate stats for countable file categories (code/config/test).
 
@@ -642,7 +668,9 @@ def _aggregate_items_to_list(
 
 
 def _aggregate_file_analysis(
-    analysis_results: Dict, file_analysis: Dict, relative_path: str,
+    analysis_results: Dict,
+    file_analysis: Dict,
+    relative_path: str,
     file_category: str = FILE_CATEGORY_CODE,
 ) -> None:
     """
@@ -657,7 +685,11 @@ def _aggregate_file_analysis(
     stats["lines_by_category"][file_category] += file_line_count
     stats["files_by_category"][file_category] += 1
 
-    is_countable = file_category in (FILE_CATEGORY_CODE, FILE_CATEGORY_CONFIG, FILE_CATEGORY_TEST)
+    is_countable = file_category in (
+        FILE_CATEGORY_CODE,
+        FILE_CATEGORY_CONFIG,
+        FILE_CATEGORY_TEST,
+    )
     if is_countable:
         _aggregate_stats_for_countable(stats, file_analysis, file_line_count)
 
@@ -666,9 +698,15 @@ def _aggregate_file_analysis(
     all_funcs = analysis_results["all_functions"]
     all_cls = analysis_results["all_classes"]
     all_hc = analysis_results["all_hardcodes"]
-    _aggregate_items_to_list(file_analysis.get("functions", []), all_funcs, relative_path, file_category)
-    _aggregate_items_to_list(file_analysis.get("classes", []), all_cls, relative_path, file_category)
-    _aggregate_items_to_list(file_analysis.get("hardcodes", []), all_hc, relative_path, file_category)
+    _aggregate_items_to_list(
+        file_analysis.get("functions", []), all_funcs, relative_path, file_category
+    )
+    _aggregate_items_to_list(
+        file_analysis.get("classes", []), all_cls, relative_path, file_category
+    )
+    _aggregate_items_to_list(
+        file_analysis.get("hardcodes", []), all_hc, relative_path, file_category
+    )
 
 
 async def _process_file_problems(
@@ -787,26 +825,44 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
     try:
         logger.info("[Task %s] Getting async Redis connection...", task_id)
         redis_client = await get_redis_connection_async()
-        logger.info("[Task %s] Redis client: %s", task_id, type(redis_client) if redis_client else None)
+        logger.info(
+            "[Task %s] Redis client: %s",
+            task_id,
+            type(redis_client) if redis_client else None,
+        )
         if redis_client:
             # Native async Redis scan - no thread pool dependency
             logger.info("[Task %s] Starting async scan for codebase:* keys...", task_id)
             keys_to_delete = []
             cursor = 0
             while True:
-                cursor, keys = await redis_client.scan(cursor=cursor, match="codebase:*", count=100)
+                cursor, keys = await redis_client.scan(
+                    cursor=cursor, match="codebase:*", count=100
+                )
                 keys_to_delete.extend(keys)
                 if cursor == 0:
                     break
-            logger.info("[Task %s] Async scan completed, found %d keys", task_id, len(keys_to_delete))
+            logger.info(
+                "[Task %s] Async scan completed, found %d keys",
+                task_id,
+                len(keys_to_delete),
+            )
             if keys_to_delete:
                 # Native async delete
                 await redis_client.delete(*keys_to_delete)
-                logger.info("[Task %s] Cleared %s Redis cache entries", task_id, len(keys_to_delete))
+                logger.info(
+                    "[Task %s] Cleared %s Redis cache entries",
+                    task_id,
+                    len(keys_to_delete),
+                )
         else:
-            logger.info("[Task %s] No Redis client available, skipping cache clear", task_id)
+            logger.info(
+                "[Task %s] No Redis client available, skipping cache clear", task_id
+            )
     except Exception as e:
-        logger.error("[Task %s] Error clearing Redis cache: %s", task_id, e, exc_info=True)
+        logger.error(
+            "[Task %s] Error clearing Redis cache: %s", task_id, e, exc_info=True
+        )
 
 
 async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
@@ -827,7 +883,8 @@ async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
                 await code_collection.delete(ids=ids_to_delete)
                 logger.info(
                     "[Task %s] Cleared %s existing items from ChromaDB (preserved codebase_stats)",
-                    task_id, len(ids_to_delete)
+                    task_id,
+                    len(ids_to_delete),
                 )
     except Exception as e:
         logger.warning("[Task %s] Error clearing collection: %s", task_id, e)
@@ -837,22 +894,31 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
     """Initialize and clear ChromaDB collection and Redis cache (Issue #281, #398: refactored)."""
     update_phase("init", "running")
     await update_progress(
-        operation="Preparing storage", current=0, total=2,
-        current_file="Clearing old cached data...", phase="init",
+        operation="Preparing storage",
+        current=0,
+        total=2,
+        current_file="Clearing old cached data...",
+        phase="init",
     )
 
     await _clear_redis_codebase_cache(task_id)
 
     await update_progress(
-        operation="Preparing ChromaDB", current=1, total=2,
-        current_file="Connecting to ChromaDB...", phase="init",
+        operation="Preparing ChromaDB",
+        current=1,
+        total=2,
+        current_file="Connecting to ChromaDB...",
+        phase="init",
     )
 
     code_collection = await get_code_collection_async()
     if code_collection:
         await update_progress(
-            operation="Clearing old ChromaDB data", current=1, total=2,
-            current_file="Removing existing entries...", phase="init",
+            operation="Clearing old ChromaDB data",
+            current=1,
+            total=2,
+            current_file="Removing existing entries...",
+            phase="init",
         )
         await _clear_chromadb_collection(code_collection, task_id)
 
@@ -876,9 +942,7 @@ Docstring: {func.get('docstring', 'No documentation')}
         "start_line": str(func.get("line", 0)),
         "parameters": ",".join(func.get("args", [])),
         "language": (
-            "python"
-            if func.get("file_path", "").endswith(".py")
-            else "javascript"
+            "python" if func.get("file_path", "").endswith(".py") else "javascript"
         ),
     }
 
@@ -1022,25 +1086,45 @@ async def _prepare_batch_data(
     batch_documents = []
     batch_metadatas = []
 
-    total_items = len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + 1
+    total_items = (
+        len(analysis_results["all_functions"])
+        + len(analysis_results["all_classes"])
+        + 1
+    )
 
     await update_progress(
-        operation="Preparing functions", current=0, total=total_items,
-        current_file="Processing functions...", phase="prepare",
+        operation="Preparing functions",
+        current=0,
+        total=total_items,
+        current_file="Processing functions...",
+        phase="prepare",
     )
 
     items_prepared = await _prepare_functions_batch(
-        analysis_results["all_functions"], batch_ids, batch_documents, batch_metadatas, update_progress, total_items
+        analysis_results["all_functions"],
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        update_progress,
+        total_items,
     )
 
     await update_progress(
-        operation="Storing classes", current=items_prepared, total=total_items, current_file="Processing classes..."
+        operation="Storing classes",
+        current=items_prepared,
+        total=total_items,
+        current_file="Processing classes...",
     )
 
     all_classes = analysis_results["all_classes"]
     await _prepare_classes_batch(
-        all_classes, batch_ids, batch_documents, batch_metadatas,
-        update_progress, total_items, items_prepared
+        all_classes,
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        update_progress,
+        total_items,
+        items_prepared,
     )
 
     stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results)
@@ -1053,9 +1137,18 @@ async def _prepare_batch_data(
 
 
 async def _store_single_batch(
-    code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
-    start_idx: int, batch_size: int, batch_num: int, total_batches: int, total_items: int,
-    task_id: str, update_progress, update_stats,
+    code_collection,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    start_idx: int,
+    batch_size: int,
+    batch_num: int,
+    total_batches: int,
+    total_items: int,
+    task_id: str,
+    update_progress,
+    update_stats,
     batch_embeddings: Optional[List[List[float]]] = None,
 ) -> int:
     """
@@ -1090,9 +1183,16 @@ async def _store_single_batch(
         indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
 
     await update_progress(
-        operation="Writing to ChromaDB", current=end_idx, total=total_items,
-        current_file=f"Batch {batch_num}/{total_batches}", phase="store",
-        batch_info={"current": batch_num, "total": total_batches, "items": items_in_batch}
+        operation="Writing to ChromaDB",
+        current=end_idx,
+        total=total_items,
+        current_file=f"Batch {batch_num}/{total_batches}",
+        phase="store",
+        batch_info={
+            "current": batch_num,
+            "total": total_batches,
+            "items": items_in_batch,
+        },
     )
     update_stats(items_stored=end_idx)
 
@@ -1117,13 +1217,18 @@ async def _precompute_embeddings(
     """
     if CHROMADB_EMBEDDING_MODE != "precompute":
         if CHROMADB_EMBEDDING_MODE == "skip":
-            logger.info("[Task %s] Skipping pre-computed embeddings (mode=skip)", task_id)
+            logger.info(
+                "[Task %s] Skipping pre-computed embeddings (mode=skip)", task_id
+            )
         return None
 
     update_phase("embed", "running")
     await update_progress(
-        operation="Generating embeddings", current=0, total=len(batch_documents),
-        current_file="Pre-computing embeddings...", phase="embed",
+        operation="Generating embeddings",
+        current=0,
+        total=len(batch_documents),
+        current_file="Pre-computing embeddings...",
+        phase="embed",
     )
 
     try:
@@ -1132,18 +1237,23 @@ async def _precompute_embeddings(
         if len(batch_embeddings) != len(batch_documents):
             logger.error(
                 "[Task %s] Embedding count mismatch: %d embeddings for %d documents",
-                task_id, len(batch_embeddings), len(batch_documents)
+                task_id,
+                len(batch_embeddings),
+                len(batch_documents),
             )
             batch_embeddings = None
         else:
             logger.info(
                 "[Task %s] Pre-computed %d embeddings (mode=%s)",
-                task_id, len(batch_embeddings), CHROMADB_EMBEDDING_MODE
+                task_id,
+                len(batch_embeddings),
+                CHROMADB_EMBEDDING_MODE,
             )
     except Exception as e:
         logger.warning(
             "[Task %s] Embedding pre-computation failed, falling back to auto: %s",
-            task_id, e
+            task_id,
+            e,
         )
         batch_embeddings = None
 
@@ -1152,10 +1262,19 @@ async def _precompute_embeddings(
 
 
 async def _process_batches_parallel(
-    code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
-    batch_indices: list, batch_size: int, parallel_count: int,
-    total_batches: int, total_items: int, task_id: str,
-    update_progress, update_stats, batch_embeddings: Optional[List[List[float]]],
+    code_collection,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    batch_indices: list,
+    batch_size: int,
+    parallel_count: int,
+    total_batches: int,
+    total_items: int,
+    task_id: str,
+    update_progress,
+    update_stats,
+    batch_embeddings: Optional[List[List[float]]],
 ) -> int:
     """
     Process batches with parallel execution.
@@ -1176,9 +1295,18 @@ async def _process_batches_parallel(
             i = batch_indices[idx]
             batch_num = idx + 1
             task = _store_single_batch(
-                code_collection, batch_ids, batch_documents, batch_metadatas,
-                i, batch_size, batch_num, total_batches, total_items,
-                task_id, update_progress, update_stats,
+                code_collection,
+                batch_ids,
+                batch_documents,
+                batch_metadatas,
+                i,
+                batch_size,
+                batch_num,
+                total_batches,
+                total_items,
+                task_id,
+                update_progress,
+                update_stats,
                 batch_embeddings=batch_embeddings,
             )
             parallel_tasks.append(task)
@@ -1195,8 +1323,15 @@ async def _process_batches_parallel(
 
 
 async def _store_batches_to_chromadb(
-    code_collection, batch_ids: list, batch_documents: list, batch_metadatas: list,
-    task_id: str, update_progress, update_phase, update_batch_info, update_stats,
+    code_collection,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    task_id: str,
+    update_progress,
+    update_phase,
+    update_batch_info,
+    update_stats,
 ) -> int:
     """
     Store prepared data to ChromaDB in batches.
@@ -1225,39 +1360,65 @@ async def _store_batches_to_chromadb(
 
     logger.info(
         "[Task %s] ChromaDB storage config: batch_size=%d, parallel_batches=%d, total_batches=%d, embeddings=%s",
-        task_id, batch_size, parallel_count, total_batches,
-        "precomputed" if batch_embeddings else "auto"
+        task_id,
+        batch_size,
+        parallel_count,
+        total_batches,
+        "precomputed" if batch_embeddings else "auto",
     )
 
     update_batch_info(0, total_batches, 0)
     await update_progress(
-        operation="Writing to ChromaDB", current=0, total=total_items,
-        current_file=f"Batch storage ({parallel_count} parallel)...", phase="store",
-        batch_info={"current": 0, "total": total_batches, "items": 0}
+        operation="Writing to ChromaDB",
+        current=0,
+        total=total_items,
+        current_file=f"Batch storage ({parallel_count} parallel)...",
+        phase="store",
+        batch_info={"current": 0, "total": total_batches, "items": 0},
     )
 
     batch_indices = list(range(0, total_items, batch_size))
 
     if parallel_count > 1:
         items_stored = await _process_batches_parallel(
-            code_collection, batch_ids, batch_documents, batch_metadatas,
-            batch_indices, batch_size, parallel_count,
-            total_batches, total_items, task_id,
-            update_progress, update_stats, batch_embeddings,
+            code_collection,
+            batch_ids,
+            batch_documents,
+            batch_metadatas,
+            batch_indices,
+            batch_size,
+            parallel_count,
+            total_batches,
+            total_items,
+            task_id,
+            update_progress,
+            update_stats,
+            batch_embeddings,
         )
     else:
         items_stored = 0
         for i in range(0, total_items, batch_size):
             batch_num = i // batch_size + 1
             items_stored += await _store_single_batch(
-                code_collection, batch_ids, batch_documents, batch_metadatas,
-                i, batch_size, batch_num, total_batches, total_items,
-                task_id, update_progress, update_stats,
+                code_collection,
+                batch_ids,
+                batch_documents,
+                batch_metadatas,
+                i,
+                batch_size,
+                batch_num,
+                total_batches,
+                total_items,
+                task_id,
+                update_progress,
+                update_stats,
                 batch_embeddings=batch_embeddings,
             )
 
     update_phase("store", "completed")
-    logger.info("[Task %s] ✅ Stored total of %s items in ChromaDB", task_id, items_stored)
+    logger.info(
+        "[Task %s] ✅ Stored total of %s items in ChromaDB", task_id, items_stored
+    )
     return items_stored
 
 
@@ -1286,7 +1447,9 @@ async def _store_hardcodes_to_redis(
 
     redis_client = await get_redis_connection()
     if not redis_client:
-        logger.warning("[Task %s] Redis unavailable, skipping hardcodes storage", task_id)
+        logger.warning(
+            "[Task %s] Redis unavailable, skipping hardcodes storage", task_id
+        )
         return 0
 
     # Group hardcodes by type
@@ -1305,11 +1468,20 @@ async def _store_hardcodes_to_redis(
         try:
             await asyncio.to_thread(redis_client.set, key, json.dumps(items))
             stored_count += len(items)
-            logger.debug("[Task %s] Stored %s hardcodes of type '%s'", task_id, len(items), htype)
+            logger.debug(
+                "[Task %s] Stored %s hardcodes of type '%s'", task_id, len(items), htype
+            )
         except Exception as e:
-            logger.error("[Task %s] Failed to store hardcodes type '%s': %s", task_id, htype, e)
+            logger.error(
+                "[Task %s] Failed to store hardcodes type '%s': %s", task_id, htype, e
+            )
 
-    logger.info("[Task %s] ✅ Stored %s hardcodes to Redis (%s types)", task_id, stored_count, len(grouped))
+    logger.info(
+        "[Task %s] ✅ Stored %s hardcodes to Redis (%s types)",
+        task_id,
+        stored_count,
+        len(grouped),
+    )
     return stored_count
 
 
@@ -1481,13 +1653,9 @@ async def _run_file_analyzer(
         if analyzer_type == "python":
             return await analyze_python_file(str(file_path))
         elif analyzer_type == "js":
-            return await asyncio.to_thread(
-                analyze_javascript_vue_file, str(file_path)
-            )
+            return await asyncio.to_thread(analyze_javascript_vue_file, str(file_path))
         elif analyzer_type == "doc":
-            return await asyncio.to_thread(
-                analyze_documentation_file, str(file_path)
-            )
+            return await asyncio.to_thread(analyze_documentation_file, str(file_path))
     except Exception as e:
         logger.debug("Error analyzing file %s: %s", file_path, e)
     return None
@@ -1608,9 +1776,13 @@ async def _analyze_single_file(
     )
     if not needs_reindex:
         return FileAnalysisResult(
-            file_path=file_path, relative_path=relative_path, extension=extension,
-            file_category=file_category, was_processed=False,
-            was_skipped_unchanged=True, file_hash=current_hash,
+            file_path=file_path,
+            relative_path=relative_path,
+            extension=extension,
+            file_category=file_category,
+            was_processed=False,
+            was_skipped_unchanged=True,
+            file_hash=current_hash,
         )
 
     # Determine analyzer and run analysis
@@ -1620,15 +1792,26 @@ async def _analyze_single_file(
     # Build result
     if file_analysis:
         result = _build_file_analysis_result(
-            file_path, relative_path, extension, file_category,
-            current_hash, file_analysis, analyzer_type, stat_key
+            file_path,
+            relative_path,
+            extension,
+            file_category,
+            current_hash,
+            file_analysis,
+            analyzer_type,
+            stat_key,
         )
     else:
         result = FileAnalysisResult(
-            file_path=file_path, relative_path=relative_path, extension=extension,
-            file_category=file_category, was_processed=True,
-            was_skipped_unchanged=False, file_hash=current_hash,
-            analyzer_type=analyzer_type, stat_key=stat_key,
+            file_path=file_path,
+            relative_path=relative_path,
+            extension=extension,
+            file_category=file_category,
+            was_processed=True,
+            was_skipped_unchanged=False,
+            file_hash=current_hash,
+            analyzer_type=analyzer_type,
+            stat_key=stat_key,
         )
 
     # Store file hash for incremental indexing (Issue #539)
@@ -1663,9 +1846,7 @@ async def _analyze_with_semaphore(
         return await _analyze_single_file(file_path, root_path_obj, redis_client)
 
 
-def _create_error_result(
-    file_path: Path, root_path_obj: Path
-) -> "FileAnalysisResult":
+def _create_error_result(file_path: Path, root_path_obj: Path) -> "FileAnalysisResult":
     """
     Create FileAnalysisResult for a failed file processing.
 
@@ -1746,7 +1927,9 @@ async def _process_files_parallel(
 
     logger.info(
         "[Parallel] Processing %d files with concurrency=%d, batch_size=%d",
-        total, PARALLEL_FILE_CONCURRENCY, batch_size
+        total,
+        PARALLEL_FILE_CONCURRENCY,
+        batch_size,
     )
 
     files_completed = 0
@@ -1819,7 +2002,9 @@ def _aggregate_from_file_result(
 
     # Update line counts for countable categories
     is_countable = file_category in (
-        FILE_CATEGORY_CODE, FILE_CATEGORY_CONFIG, FILE_CATEGORY_TEST
+        FILE_CATEGORY_CODE,
+        FILE_CATEGORY_CONFIG,
+        FILE_CATEGORY_TEST,
     )
     if is_countable:
         stats["total_lines"] += result.line_count
@@ -1891,6 +2076,7 @@ async def _iterate_and_process_files_parallel(
         Tuple of (analysis_results dict, files_processed, files_skipped)
     """
     import time
+
     start_time = time.time()
 
     # Process all files in parallel
@@ -1912,9 +2098,7 @@ async def _iterate_and_process_files_parallel(
     # Store all problems to ChromaDB in batch
     if immediate_store_collection and analysis_results["all_problems"]:
         await _store_problems_batch_to_chromadb(
-            immediate_store_collection,
-            analysis_results["all_problems"],
-            0
+            immediate_store_collection, analysis_results["all_problems"], 0
         )
 
     # Calculate statistics
@@ -1924,8 +2108,10 @@ async def _iterate_and_process_files_parallel(
     elapsed = time.time() - start_time
     logger.info(
         "[Parallel] Processed %d files, skipped %d, in %.2fs (%.1f files/sec)",
-        files_processed, files_skipped, elapsed,
-        files_processed / elapsed if elapsed > 0 else 0
+        files_processed,
+        files_skipped,
+        elapsed,
+        files_processed / elapsed if elapsed > 0 else 0,
     )
 
     return analysis_results, files_processed, files_skipped
@@ -1972,15 +2158,23 @@ async def _process_single_file(
 
     analysis_results["stats"]["total_files"] += 1
 
-    file_analysis = await _get_file_analysis(file_path, extension, analysis_results["stats"])
+    file_analysis = await _get_file_analysis(
+        file_path, extension, analysis_results["stats"]
+    )
     if not file_analysis:
         if current_hash and redis_client:
             await _store_file_hash(redis_client, relative_path, current_hash)
         return True, False
 
-    _aggregate_file_analysis(analysis_results, file_analysis, relative_path, file_category)
+    _aggregate_file_analysis(
+        analysis_results, file_analysis, relative_path, file_category
+    )
     await _process_file_problems(
-        file_analysis, relative_path, analysis_results, immediate_store_collection, file_category
+        file_analysis,
+        relative_path,
+        analysis_results,
+        immediate_store_collection,
+        file_category,
     )
 
     # Issue #539: Store file hash after successful processing
@@ -1991,8 +2185,12 @@ async def _process_single_file(
 
 
 async def _iterate_and_process_files(
-    all_files: list, root_path_obj: Path, analysis_results: Dict,
-    immediate_store_collection, progress_callback, total_files: int,
+    all_files: list,
+    root_path_obj: Path,
+    analysis_results: Dict,
+    immediate_store_collection,
+    progress_callback,
+    total_files: int,
     redis_client=None,
 ) -> Tuple[int, int]:
     """
@@ -2009,11 +2207,19 @@ async def _iterate_and_process_files(
     if PARALLEL_MODE_ENABLED:
         logger.info(
             "[Issue #711] Parallel mode enabled (concurrency=%d)",
-            PARALLEL_FILE_CONCURRENCY
+            PARALLEL_FILE_CONCURRENCY,
         )
-        parallel_results, files_processed, files_skipped = await _iterate_and_process_files_parallel(
-            all_files, root_path_obj, immediate_store_collection,
-            progress_callback, total_files, redis_client
+        (
+            parallel_results,
+            files_processed,
+            files_skipped,
+        ) = await _iterate_and_process_files_parallel(
+            all_files,
+            root_path_obj,
+            immediate_store_collection,
+            progress_callback,
+            total_files,
+            redis_client,
         )
         # Update analysis_results with parallel results
         analysis_results.update(parallel_results)
@@ -2029,8 +2235,11 @@ async def _iterate_and_process_files(
 
     for file_path in all_files:
         processed, skipped = await _process_single_file(
-            file_path, root_path_obj, analysis_results, immediate_store_collection,
-            redis_client
+            file_path,
+            root_path_obj,
+            analysis_results,
+            immediate_store_collection,
+            redis_client,
         )
         if skipped:
             files_skipped += 1
@@ -2039,8 +2248,10 @@ async def _iterate_and_process_files(
             if progress_callback and files_processed % progress_interval == 0:
                 relative_path = str(file_path.relative_to(root_path_obj))
                 await progress_callback(
-                    operation="Scanning files", current=files_processed,
-                    total=total_files, current_file=relative_path
+                    operation="Scanning files",
+                    current=files_processed,
+                    total=total_files,
+                    current_file=relative_path,
                 )
             elif files_processed % 5 == 0:
                 await asyncio.sleep(0)
@@ -2078,32 +2289,47 @@ async def scan_codebase(
             logger.info("DEBUG: about to call _count_scannable_files")
             # Get both count and file list to avoid duplicate rglob
             total_files, all_files = await _count_scannable_files(root_path_obj)
-            logger.info("DEBUG: Got %d scannable files from %d total files", total_files, len(all_files))
+            logger.info(
+                "DEBUG: Got %d scannable files from %d total files",
+                total_files,
+                len(all_files),
+            )
             logger.info("DEBUG: About to call progress_callback for scan init")
             await progress_callback(
-                operation="Scanning files", current=0,
-                total=total_files, current_file="Initializing..."
+                operation="Scanning files",
+                current=0,
+                total=total_files,
+                current_file="Initializing...",
             )
             logger.info("DEBUG: progress_callback returned, about to iterate")
         else:
             # No progress callback - still need file list but skip counting
             logger.info("DEBUG: No progress callback, doing direct rglob")
-            all_files = await _run_in_indexing_thread(lambda: list(root_path_obj.rglob("*")))
+            all_files = await _run_in_indexing_thread(
+                lambda: list(root_path_obj.rglob("*"))
+            )
             logger.info("DEBUG: Direct rglob returned %d files", len(all_files))
 
         # all_files is now already populated - no second rglob needed
-        logger.info("DEBUG: Starting _iterate_and_process_files with %d files", len(all_files))
+        logger.info(
+            "DEBUG: Starting _iterate_and_process_files with %d files", len(all_files)
+        )
         files_processed, files_skipped = await _iterate_and_process_files(
-            all_files, root_path_obj, analysis_results,
-            immediate_store_collection, progress_callback, total_files,
-            redis_client
+            all_files,
+            root_path_obj,
+            analysis_results,
+            immediate_store_collection,
+            progress_callback,
+            total_files,
+            redis_client,
         )
 
         # Issue #539: Log incremental indexing stats
         if INCREMENTAL_INDEXING_ENABLED:
             logger.info(
                 "Incremental indexing: %d files processed, %d files skipped (unchanged)",
-                files_processed, files_skipped
+                files_processed,
+                files_skipped,
             )
 
         # Issue #711: Statistics already calculated in parallel mode
@@ -2197,26 +2423,50 @@ def _create_progress_updater(task_id: str, update_phase, update_batch_info):
 
     Issue #398: Extracted from do_indexing_with_progress to reduce method length.
     """
+
     async def update_progress(
-        operation: str, current: int, total: int, current_file: str,
-        phase: str = None, batch_info: dict = None
+        operation: str,
+        current: int,
+        total: int,
+        current_file: str,
+        phase: str = None,
+        batch_info: dict = None,
     ):
         percent = int((current / total * 100)) if total > 0 else 0
         indexing_tasks[task_id]["progress"] = {
-            "current": current, "total": total, "percent": percent,
-            "current_file": current_file, "operation": operation,
+            "current": current,
+            "total": total,
+            "percent": percent,
+            "current_file": current_file,
+            "operation": operation,
         }
         if phase:
             update_phase(phase, "running")
         if batch_info:
-            update_batch_info(batch_info.get("current", 0), batch_info.get("total", 0), batch_info.get("items", 0))
-        logger.debug("[Task %s] Progress: %s - %s/%s (%s%)", task_id, operation, current, total, percent)
+            update_batch_info(
+                batch_info.get("current", 0),
+                batch_info.get("total", 0),
+                batch_info.get("items", 0),
+            )
+        logger.debug(
+            "[Task %s] Progress: %s - %s/%s (%s%)",
+            task_id,
+            operation,
+            current,
+            total,
+            percent,
+        )
+
     return update_progress
 
 
 async def _run_indexing_phases(
-    task_id: str, root_path: str, update_progress,
-    update_phase, update_batch_info, update_stats
+    task_id: str,
+    root_path: str,
+    update_progress,
+    update_phase,
+    update_batch_info,
+    update_stats,
 ):
     """
     Execute the core indexing phases.
@@ -2233,8 +2483,9 @@ async def _run_indexing_phases(
     update_phase("scan", "running")
 
     analysis_results = await scan_codebase(
-        root_path, progress_callback=update_progress,
-        immediate_store_collection=code_collection
+        root_path,
+        progress_callback=update_progress,
+        immediate_store_collection=code_collection,
     )
 
     update_stats(
@@ -2250,11 +2501,20 @@ async def _run_indexing_phases(
     )
     if batch_ids:
         await _store_batches_to_chromadb(
-            code_collection, batch_ids, batch_documents, batch_metadatas,
-            task_id, update_progress, update_phase, update_batch_info, update_stats,
+            code_collection,
+            batch_ids,
+            batch_documents,
+            batch_metadatas,
+            task_id,
+            update_progress,
+            update_phase,
+            update_batch_info,
+            update_stats,
         )
 
-    hardcodes_stored = await _store_hardcodes_to_redis(analysis_results.get("all_hardcodes", []), task_id)
+    hardcodes_stored = await _store_hardcodes_to_redis(
+        analysis_results.get("all_hardcodes", []), task_id
+    )
     return analysis_results, hardcodes_stored
 
 
@@ -2265,7 +2525,11 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
     Issue #281, #398: Refactored with extracted helpers for reduced complexity.
     """
     try:
-        logger.info("[Task %s] Starting background codebase indexing for: %s", task_id, root_path)
+        logger.info(
+            "[Task %s] Starting background codebase indexing for: %s",
+            task_id,
+            root_path,
+        )
 
         async with _tasks_lock:
             indexing_tasks[task_id] = _create_initial_task_state()
@@ -2280,10 +2544,17 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         def update_stats(**kwargs):
             _update_task_stats(task_id, **kwargs)
 
-        update_progress = _create_progress_updater(task_id, update_phase, update_batch_info)
+        update_progress = _create_progress_updater(
+            task_id, update_phase, update_batch_info
+        )
 
         analysis_results, hardcodes_stored = await _run_indexing_phases(
-            task_id, root_path, update_progress, update_phase, update_batch_info, update_stats
+            task_id,
+            root_path,
+            update_progress,
+            update_phase,
+            update_batch_info,
+            update_stats,
         )
 
         update_phase("finalize", "running")

@@ -49,22 +49,28 @@ def _validate_env_path_security(path: str, project_root: str) -> Optional[JSONRe
         resolved_path = Path(path).resolve()
         if not str(resolved_path).startswith(project_root):
             logger.warning("Path traversal attempt blocked: %s", path)
-            return JSONResponse({
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "Invalid path: must be within project root",
+                    "total_hardcoded_values": 0,
+                    "categories": {},
+                    "recommendations_count": 0,
+                },
+                status_code=400,
+            )
+    except Exception as e:
+        logger.warning("Invalid path provided: %s - %s", path, e)
+        return JSONResponse(
+            {
                 "status": "error",
-                "message": "Invalid path: must be within project root",
+                "message": f"Invalid path: {str(e)}",
                 "total_hardcoded_values": 0,
                 "categories": {},
                 "recommendations_count": 0,
-            }, status_code=400)
-    except Exception as e:
-        logger.warning("Invalid path provided: %s - %s", path, e)
-        return JSONResponse({
-            "status": "error",
-            "message": f"Invalid path: {str(e)}",
-            "total_hardcoded_values": 0,
-            "categories": {},
-            "recommendations_count": 0,
-        }, status_code=400)
+            },
+            status_code=400,
+        )
 
     return None
 
@@ -89,11 +95,12 @@ async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
         else:
             loop = asyncio.get_event_loop()
             return await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: coro),
-                timeout=ANALYSIS_TIMEOUT
+                loop.run_in_executor(None, lambda: coro), timeout=ANALYSIS_TIMEOUT
             )
     except asyncio.TimeoutError:
-        logger.warning("Environment analysis timed out after %d seconds", ANALYSIS_TIMEOUT)
+        logger.warning(
+            "Environment analysis timed out after %d seconds", ANALYSIS_TIMEOUT
+        )
         return None
 
 
@@ -131,18 +138,19 @@ async def _run_llm_filtered_analysis(
         else:
             loop = asyncio.get_event_loop()
             return await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: coro),
-                timeout=LLM_ANALYSIS_TIMEOUT
+                loop.run_in_executor(None, lambda: coro), timeout=LLM_ANALYSIS_TIMEOUT
             )
     except asyncio.TimeoutError:
         logger.warning(
             "LLM-filtered environment analysis timed out after %d seconds",
-            LLM_ANALYSIS_TIMEOUT
+            LLM_ANALYSIS_TIMEOUT,
         )
         return None
 
 
-def _build_environment_result(analysis: dict, path: str, for_display: bool = True) -> dict:
+def _build_environment_result(
+    analysis: dict, path: str, for_display: bool = True
+) -> dict:
     """
     Build result from analysis data.
 
@@ -176,9 +184,10 @@ def _build_environment_result(analysis: dict, path: str, for_display: bool = Tru
         "metrics": analysis.get("metrics", {}),
         "storage_type": "live_analysis",
         # Issue #631: Add truncation info for display mode
-        "is_truncated": for_display and (
-            len(analysis.get("hardcoded_details", [])) > 50 or
-            len(analysis.get("configuration_recommendations", [])) > 20
+        "is_truncated": for_display
+        and (
+            len(analysis.get("hardcoded_details", [])) > 50
+            or len(analysis.get("configuration_recommendations", [])) > 20
         ),
     }
 
@@ -206,10 +215,19 @@ def _get_environment_analyzer():
             sys.path.insert(0, project_root)
 
         # Issue #611: Load env_analyzer directly from file to avoid namespace conflict
-        env_analyzer_path = Path(__file__).resolve().parents[4] / "tools" / "code-analysis-suite" / "src" / "env_analyzer.py"
+        env_analyzer_path = (
+            Path(__file__).resolve().parents[4]
+            / "tools"
+            / "code-analysis-suite"
+            / "src"
+            / "env_analyzer.py"
+        )
 
         if not env_analyzer_path.exists():
-            logger.warning("EnvironmentAnalyzer not available: %s does not exist", env_analyzer_path)
+            logger.warning(
+                "EnvironmentAnalyzer not available: %s does not exist",
+                env_analyzer_path,
+            )
             return None
 
         spec = importlib.util.spec_from_file_location("env_analyzer", env_analyzer_path)
@@ -252,8 +270,6 @@ async def _check_env_analysis_cache(
     Returns:
         JSONResponse with cached data if valid, None if cache miss or refresh needed.
     """
-    global _env_analysis_cache
-
     # Issue #633: LLM filter results are dynamic, don't use cache
     cache_valid = not use_llm_filter
 
@@ -261,7 +277,7 @@ async def _check_env_analysis_cache(
         if _env_analysis_cache and not refresh and cache_valid:
             logger.info(
                 "Returning cached environment analysis (%d hardcoded values)",
-                _env_analysis_cache.get("total_hardcoded_values", 0)
+                _env_analysis_cache.get("total_hardcoded_values", 0),
             )
             return JSONResponse(_env_analysis_cache)
 
@@ -311,7 +327,9 @@ async def _cache_env_analysis_results(
             _env_analysis_full_cache = full_result
 
 
-def _add_llm_filtering_metadata(result: dict, analysis: dict, use_llm_filter: bool) -> None:
+def _add_llm_filtering_metadata(
+    result: dict, analysis: dict, use_llm_filter: bool
+) -> None:
     """
     Add LLM filtering metadata to result if applicable.
 
@@ -328,12 +346,21 @@ def _add_llm_filtering_metadata(result: dict, analysis: dict, use_llm_filter: bo
 )
 @router.get("/env-analysis")
 async def get_environment_analysis(
-    path: str = Query(None, description="Root path to analyze (defaults to project root)"),
+    path: str = Query(
+        None, description="Root path to analyze (defaults to project root)"
+    ),
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
-    patterns: str = Query("**/*.py", description="Glob patterns for files to scan, comma-separated"),
-    use_llm_filter: bool = Query(False, description="Issue #633: Use LLM to filter false positives"),
+    patterns: str = Query(
+        "**/*.py", description="Glob patterns for files to scan, comma-separated"
+    ),
+    use_llm_filter: bool = Query(
+        False, description="Issue #633: Use LLM to filter false positives"
+    ),
     llm_model: str = Query("llama3.2:1b", description="Ollama model for LLM filtering"),
-    filter_priority: str = Query("high", description="Priority level to filter: 'high', 'medium', 'low', or 'all'"),
+    filter_priority: str = Query(
+        "high",
+        description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
+    ),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -359,9 +386,11 @@ async def get_environment_analysis(
         # Get analyzer instance
         analyzer = _get_environment_analyzer()
         if not analyzer:
-            return JSONResponse(_build_error_response(
-                "EnvironmentAnalyzer not available. Check tools installation."
-            ))
+            return JSONResponse(
+                _build_error_response(
+                    "EnvironmentAnalyzer not available. Check tools installation."
+                )
+            )
 
         # Execute analysis
         analysis = await _execute_env_analysis(
@@ -369,10 +398,12 @@ async def get_environment_analysis(
         )
 
         if analysis is None:
-            return JSONResponse(_build_error_response(
-                "Analysis timed out after 120s. Try with fewer patterns.",
-                status="partial"
-            ))
+            return JSONResponse(
+                _build_error_response(
+                    "Analysis timed out after 120s. Try with fewer patterns.",
+                    status="partial",
+                )
+            )
 
         # Build results
         result = _build_environment_result(analysis, path, for_display=True)
@@ -395,9 +426,9 @@ async def get_environment_analysis(
 
     except Exception as e:
         logger.error("Environment analysis failed: %s", e, exc_info=True)
-        return JSONResponse(_build_error_response(
-            f"Environment analysis failed: {str(e)}"
-        ))
+        return JSONResponse(
+            _build_error_response(f"Environment analysis failed: {str(e)}")
+        )
 
 
 @with_error_handling(
@@ -407,7 +438,9 @@ async def get_environment_analysis(
 )
 @router.get("/env-recommendations")
 async def get_env_recommendations(
-    path: str = Query(None, description="Root path to analyze (defaults to project root)"),
+    path: str = Query(
+        None, description="Root path to analyze (defaults to project root)"
+    ),
 ):
     """
     Get environment variable recommendations for a codebase (Issue #538).
@@ -421,17 +454,17 @@ async def get_env_recommendations(
     Returns:
         JSON with prioritized recommendations
     """
-    global _env_analysis_cache
-
     # Check cache first (thread-safe, Issue #559)
     async with _env_analysis_cache_lock:
         if _env_analysis_cache and _env_analysis_cache.get("recommendations"):
-            return JSONResponse({
-                "status": "success",
-                "recommendations": _env_analysis_cache["recommendations"],
-                "total": len(_env_analysis_cache["recommendations"]),
-                "source": "cache",
-            })
+            return JSONResponse(
+                {
+                    "status": "success",
+                    "recommendations": _env_analysis_cache["recommendations"],
+                    "total": len(_env_analysis_cache["recommendations"]),
+                    "source": "cache",
+                }
+            )
 
     # Run fresh analysis if no cache
     if not path:
@@ -440,31 +473,37 @@ async def get_env_recommendations(
     try:
         analyzer = _get_environment_analyzer()
         if not analyzer:
-            return JSONResponse({
-                "status": "error",
-                "message": "EnvironmentAnalyzer not available",
-                "recommendations": [],
-                "total": 0,
-            })
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "EnvironmentAnalyzer not available",
+                    "recommendations": [],
+                    "total": 0,
+                }
+            )
 
         analysis = await analyzer.analyze_codebase(path)
         recommendations = analysis.get("configuration_recommendations", [])
 
-        return JSONResponse({
-            "status": "success",
-            "recommendations": recommendations[:20],
-            "total": len(recommendations),
-            "source": "live_analysis",
-        })
+        return JSONResponse(
+            {
+                "status": "success",
+                "recommendations": recommendations[:20],
+                "total": len(recommendations),
+                "source": "live_analysis",
+            }
+        )
 
     except Exception as e:
         logger.error("Failed to get env recommendations: %s", e, exc_info=True)
-        return JSONResponse({
-            "status": "error",
-            "message": str(e),
-            "recommendations": [],
-            "total": 0,
-        })
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": str(e),
+                "recommendations": [],
+                "total": 0,
+            }
+        )
 
 
 # =============================================================================
@@ -488,7 +527,9 @@ def _filter_hardcoded_values(
     if category:
         result = [v for v in result if v.get("type", "").lower() == category.lower()]
     if severity:
-        result = [v for v in result if v.get("severity", "").lower() == severity.lower()]
+        result = [
+            v for v in result if v.get("severity", "").lower() == severity.lower()
+        ]
     return result
 
 
@@ -499,8 +540,7 @@ def _sort_by_severity(values: list) -> list:
     Issue #665: Extracted helper for severity sorting.
     """
     return sorted(
-        values,
-        key=lambda v: _SEVERITY_ORDER.get(v.get("severity", "low").lower(), 3)
+        values, key=lambda v: _SEVERITY_ORDER.get(v.get("severity", "low").lower(), 3)
     )
 
 
@@ -524,34 +564,48 @@ def _calculate_category_breakdown(values: list) -> dict:
 )
 @router.get("/env-analysis/export")
 async def export_env_analysis(
-    category: str = Query(None, description="Filter by category (e.g., 'security', 'port', 'hostname')"),
-    severity: str = Query(None, description="Filter by severity ('high', 'medium', 'low')"),
+    category: str = Query(
+        None, description="Filter by category (e.g., 'security', 'port', 'hostname')"
+    ),
+    severity: str = Query(
+        None, description="Filter by severity ('high', 'medium', 'low')"
+    ),
     limit: int = Query(None, description="Limit number of results (default: all)"),
-    include_recommendations: bool = Query(True, description="Include recommendations in export"),
+    include_recommendations: bool = Query(
+        True, description="Include recommendations in export"
+    ),
 ):
     """
     Export full environment analysis results without truncation (Issue #631).
     Issue #665: Refactored to use extracted helpers for filtering and sorting.
     """
-    global _env_analysis_full_cache
-
     # Check cache (thread-safe, Issue #559)
     async with _env_analysis_cache_lock:
         if not _env_analysis_full_cache:
-            return JSONResponse({
-                "status": "error",
-                "message": "No cached analysis available. Run environment analysis first.",
-                "hardcoded_values": [], "recommendations": [], "total": 0,
-            }, status_code=404)
+            return JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No cached analysis available. Run environment analysis first.",
+                    "hardcoded_values": [],
+                    "recommendations": [],
+                    "total": 0,
+                },
+                status_code=404,
+            )
         full_data = _env_analysis_full_cache.copy()
 
     # Validate severity (Issue #665: use module constant)
     if severity and severity.lower() not in _VALID_SEVERITIES:
-        return JSONResponse({
-            "status": "error",
-            "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
-            "hardcoded_values": [], "recommendations": [], "total": 0,
-        }, status_code=400)
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
+                "hardcoded_values": [],
+                "recommendations": [],
+                "total": 0,
+            },
+            status_code=400,
+        )
 
     # Issue #631: Copy to avoid mutating cache; Issue #665: use helpers
     hardcoded_values = list(full_data.get("hardcoded_values", []))
@@ -567,19 +621,29 @@ async def export_env_analysis(
 
     logger.info(
         "Environment analysis export: %d/%d items (category=%s, severity=%s)",
-        len(hardcoded_values), full_data.get("total_hardcoded_values", 0),
-        category or "all", severity or "all",
+        len(hardcoded_values),
+        full_data.get("total_hardcoded_values", 0),
+        category or "all",
+        severity or "all",
     )
 
-    return JSONResponse({
-        "status": "success",
-        "path": full_data.get("path", ""),
-        "export_timestamp": full_data.get("analysis_time_seconds", 0),
-        "total_in_export": len(hardcoded_values),
-        "total_in_analysis": full_data.get("total_hardcoded_values", 0),
-        "categories": category_counts,
-        "filters_applied": {"category": category, "severity": severity, "limit": limit},
-        "hardcoded_values": hardcoded_values,
-        "recommendations": recommendations if include_recommendations else [],
-        "recommendations_count": len(recommendations) if include_recommendations else 0,
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "path": full_data.get("path", ""),
+            "export_timestamp": full_data.get("analysis_time_seconds", 0),
+            "total_in_export": len(hardcoded_values),
+            "total_in_analysis": full_data.get("total_hardcoded_values", 0),
+            "categories": category_counts,
+            "filters_applied": {
+                "category": category,
+                "severity": severity,
+                "limit": limit,
+            },
+            "hardcoded_values": hardcoded_values,
+            "recommendations": recommendations if include_recommendations else [],
+            "recommendations_count": (
+                len(recommendations) if include_recommendations else 0
+            ),
+        }
+    )

@@ -17,9 +17,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from src.config import UnifiedConfigManager
 from src.constants.network_constants import NetworkConstants
 from src.research_browser_manager import research_browser_manager
-from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,9 @@ async def download_mhtml(session_id: str, filename: str):
             break
 
     # Issue #358 - avoid blocking
-    mhtml_exists = await asyncio.to_thread(os.path.exists, mhtml_path) if mhtml_path else False
+    mhtml_exists = (
+        await asyncio.to_thread(os.path.exists, mhtml_path) if mhtml_path else False
+    )
     if not mhtml_path or not mhtml_exists:
         raise HTTPException(status_code=404, detail="MHTML file not found")
 
@@ -324,17 +326,18 @@ def _get_or_create_browser_session(session_id: str):
 async def _get_docker_browser_info(session) -> dict:
     """Get Docker browser container info (Issue #665: extracted helper)."""
     try:
-        from src.config import (
-            PLAYWRIGHT_VNC_URL,
-            get_vnc_direct_url,
-        )
+        from src.config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
 
         return {
             "available": True,
             "vnc_url": PLAYWRIGHT_VNC_URL.replace("vnc.html", ""),
             "direct_url": get_vnc_direct_url(),
             "session_active": session.status == "active",
-            "environment": "container" if await asyncio.to_thread(os.path.exists, "/.dockerenv") else "host",
+            "environment": (
+                "container"
+                if await asyncio.to_thread(os.path.exists, "/.dockerenv")
+                else "host"
+            ),
         }
     except Exception:
         return {"available": False}
@@ -416,15 +419,15 @@ async def get_or_create_chat_browser_session(request: CreateChatBrowserRequest):
         )
 
     # Create new session
-    logger.info(f"Creating new browser session for conversation {request.conversation_id}")
+    logger.info(
+        f"Creating new browser session for conversation {request.conversation_id}"
+    )
     session_id = await research_browser_manager.create_session(
         request.conversation_id, headless=request.headless
     )
 
     if not session_id:
-        raise HTTPException(
-            status_code=500, detail="Failed to create browser session"
-        )
+        raise HTTPException(status_code=500, detail="Failed to create browser session")
 
     session = research_browser_manager.get_session(session_id)
 
@@ -468,10 +471,7 @@ async def get_chat_browser_session(conversation_id: str):
     # Get VNC info for frontend integration
     docker_browser_info = None
     try:
-        from src.config import (
-            PLAYWRIGHT_VNC_URL,
-            get_vnc_direct_url,
-        )
+        from src.config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
 
         docker_browser_info = {
             "available": True,

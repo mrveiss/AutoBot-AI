@@ -82,11 +82,11 @@ async def get_cache_stats(
             return CacheStatsResponse(**global_stats)
 
         import asyncio
+
         data_types = global_stats["configured_data_types"]
         # Fetch all stats in parallel
         stats_results = await asyncio.gather(
-            *[advanced_cache.get_stats(dt) for dt in data_types],
-            return_exceptions=True
+            *[advanced_cache.get_stats(dt) for dt in data_types], return_exceptions=True
         )
         # Build result dict using helper (Issue #315 - reduces nesting)
         global_stats["data_type_stats"] = _process_data_type_stats_results(
@@ -210,9 +210,7 @@ async def clear_all_cache(
             return_exceptions=True,
         )
 
-        total_deleted = sum(
-            r for r in results if isinstance(r, int)
-        )
+        total_deleted = sum(r for r in results if isinstance(r, int))
 
         return {
             "success": True,

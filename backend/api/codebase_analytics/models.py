@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 class CodebaseStats(BaseModel):
     """Statistics about the codebase"""
+
     total_files: int
     total_lines: int
     python_files: int
@@ -26,6 +27,7 @@ class CodebaseStats(BaseModel):
 
 class ProblemItem(BaseModel):
     """Represents a code problem or issue"""
+
     type: str
     severity: str
     file_path: str
@@ -36,6 +38,7 @@ class ProblemItem(BaseModel):
 
 class HardcodeItem(BaseModel):
     """Represents a hardcoded value in the codebase"""
+
     file_path: str
     line_number: int
     type: str  # 'url', 'path', 'ip', 'port', 'api_key', 'string'
@@ -45,6 +48,7 @@ class HardcodeItem(BaseModel):
 
 class DeclarationItem(BaseModel):
     """Represents a code declaration (function, class, variable)"""
+
     name: str
     type: str  # 'function', 'class', 'variable'
     file_path: str
@@ -61,6 +65,7 @@ class DeclarationItem(BaseModel):
 
 class APIEndpointItem(BaseModel):
     """Represents a backend API endpoint definition"""
+
     method: str  # 'GET', 'POST', 'PUT', 'DELETE', 'PATCH'
     path: str  # Full API path (e.g., '/api/monitoring/status')
     file_path: str  # Source file containing the endpoint
@@ -73,6 +78,7 @@ class APIEndpointItem(BaseModel):
 
 class FrontendAPICallItem(BaseModel):
     """Represents a frontend API call"""
+
     method: str  # 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'UNKNOWN'
     path: str  # API path called (may include variables)
     file_path: str  # Source file containing the call
@@ -83,6 +89,7 @@ class FrontendAPICallItem(BaseModel):
 
 class EndpointUsageItem(BaseModel):
     """Represents an endpoint with its usage information"""
+
     endpoint: APIEndpointItem
     call_count: int  # Number of frontend calls
     callers: List[FrontendAPICallItem]  # List of frontend locations calling this
@@ -90,6 +97,7 @@ class EndpointUsageItem(BaseModel):
 
 class EndpointMismatchItem(BaseModel):
     """Represents an orphaned or missing endpoint"""
+
     type: str  # 'orphaned' (no frontend calls) or 'missing' (no backend endpoint)
     method: str
     path: str
@@ -100,6 +108,7 @@ class EndpointMismatchItem(BaseModel):
 
 class APIEndpointAnalysis(BaseModel):
     """Complete API endpoint analysis result"""
+
     backend_endpoints: int
     frontend_calls: int
     used_endpoints: int
@@ -121,6 +130,7 @@ class APIEndpointAnalysis(BaseModel):
 
 class PatternLocationItem(BaseModel):
     """Location of a pattern in source code"""
+
     file_path: str
     line_start: int
     line_end: int
@@ -131,6 +141,7 @@ class PatternLocationItem(BaseModel):
 
 class DTOMismatchItem(BaseModel):
     """Mismatch between backend and frontend data types"""
+
     mismatch_id: str
     backend_type: str
     frontend_type: str
@@ -146,6 +157,7 @@ class DTOMismatchItem(BaseModel):
 
 class ValidationDuplicationItem(BaseModel):
     """Duplicated validation logic across languages"""
+
     duplication_id: str
     validation_type: str  # "email", "phone", "required", etc.
     python_location: Optional[PatternLocationItem] = None
@@ -159,6 +171,7 @@ class ValidationDuplicationItem(BaseModel):
 
 class APIContractMismatchItem(BaseModel):
     """Mismatch between backend API endpoint and frontend API call"""
+
     mismatch_id: str
     endpoint_path: str
     http_method: str
@@ -174,6 +187,7 @@ class APIContractMismatchItem(BaseModel):
 
 class PatternMatchItem(BaseModel):
     """A match between patterns in different languages"""
+
     pattern_id: str
     similarity_score: float  # 0.0 to 1.0
     source_location: Optional[PatternLocationItem] = None
@@ -186,6 +200,7 @@ class PatternMatchItem(BaseModel):
 
 class CrossLanguagePatternItem(BaseModel):
     """A pattern detected across multiple languages"""
+
     pattern_id: str
     pattern_type: str
     category: str
@@ -204,6 +219,7 @@ class CrossLanguagePatternItem(BaseModel):
 
 class CrossLanguageAnalysisSummary(BaseModel):
     """Summary of cross-language analysis results"""
+
     analysis_id: str
     scan_timestamp: str
     python_files_analyzed: int
@@ -226,6 +242,7 @@ class CrossLanguageAnalysisSummary(BaseModel):
 
 class CrossLanguageAnalysisResult(BaseModel):
     """Complete cross-language analysis result"""
+
     analysis_id: str
     scan_timestamp: str
     files_analyzed: dict

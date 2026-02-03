@@ -28,7 +28,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-
 from redis.exceptions import RedisError
 
 from src.utils.redis_client import RedisDatabase, get_redis_client
@@ -48,6 +47,7 @@ EXPENSIVE_MODELS = {"opus", "gpt-4"}
 
 class PromptCategory(str, Enum):
     """Categories of LLM prompts"""
+
     CODE_GENERATION = "code_generation"
     CODE_REVIEW = "code_review"
     DOCUMENTATION = "documentation"
@@ -61,6 +61,7 @@ class PromptCategory(str, Enum):
 
 class OptimizationType(str, Enum):
     """Types of optimization opportunities"""
+
     CACHE_PROMPT = "cache_prompt"
     USE_SMALLER_MODEL = "use_smaller_model"
     REDUCE_CONTEXT = "reduce_context"
@@ -70,6 +71,7 @@ class OptimizationType(str, Enum):
 
 class CostLevel(str, Enum):
     """Cost level classification"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -164,6 +166,7 @@ PROMPT_PATTERNS = {
 @dataclass
 class PromptUsageRecord:
     """Record of a single prompt usage"""
+
     prompt_hash: str
     prompt_preview: str
     category: PromptCategory
@@ -180,6 +183,7 @@ class PromptUsageRecord:
 @dataclass
 class CacheOpportunity:
     """Identified caching opportunity"""
+
     prompt_hash: str
     prompt_preview: str
     occurrence_count: int
@@ -191,6 +195,7 @@ class CacheOpportunity:
 @dataclass
 class OptimizationRecommendation:
     """Optimization recommendation"""
+
     type: OptimizationType
     title: str
     description: str
@@ -203,6 +208,7 @@ class OptimizationRecommendation:
 @dataclass
 class ModelUsageStats:
     """Usage statistics for a model"""
+
     model: str
     request_count: int
     total_input_tokens: int
@@ -220,12 +226,14 @@ class ModelUsageStats:
 
 class PromptAnalysisRequest(BaseModel):
     """Request for prompt analysis"""
+
     prompt: str = Field(..., description="The prompt to analyze")
     model: Optional[str] = Field(None, description="Model used or planned")
 
 
 class UsageRecordRequest(BaseModel):
     """Request to record LLM usage"""
+
     prompt: str = Field(..., description="The prompt sent")
     model: str = Field(..., description="Model used")
     input_tokens: int = Field(..., description="Input token count")
@@ -261,6 +269,7 @@ class UsageRecordRequest(BaseModel):
 
 class DateRangeParams(BaseModel):
     """Date range parameters"""
+
     start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
     end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
 
@@ -284,8 +293,7 @@ class LLMPatternAnalyzer:
         """Get Redis client lazily"""
         if self._redis is None:
             self._redis = await get_redis_client(
-                async_client=True,
-                database=RedisDatabase.MAIN
+                async_client=True, database=RedisDatabase.MAIN
             )
         return self._redis
 
@@ -307,10 +315,7 @@ class LLMPatternAnalyzer:
         return PromptCategory.UNKNOWN
 
     def _calculate_cost(
-        self,
-        model: str,
-        input_tokens: int,
-        output_tokens: int
+        self, model: str, input_tokens: int, output_tokens: int
     ) -> float:
         """Calculate cost for a request"""
         # Find matching model pricing
@@ -335,9 +340,11 @@ class LLMPatternAnalyzer:
         """Get a preview of the prompt"""
         if len(prompt) <= max_length:
             return prompt
-        return prompt[:max_length - 3] + "..."
+        return prompt[: max_length - 3] + "..."
 
-    async def analyze_prompt(self, prompt: str, model: Optional[str] = None) -> Dict[str, Any]:
+    async def analyze_prompt(
+        self, prompt: str, model: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Analyze a single prompt for optimization opportunities"""
         prompt_hash = self._hash_prompt(prompt)
         category = self._categorize_prompt(prompt)
@@ -351,11 +358,13 @@ class LLMPatternAnalyzer:
 
         # Check prompt length
         if token_estimate > 2000:
-            issues.append({
-                "type": "long_prompt",
-                "message": "Prompt is very long, consider reducing context",
-                "severity": "warning"
-            })
+            issues.append(
+                {
+                    "type": "long_prompt",
+                    "message": "Prompt is very long, consider reducing context",
+                    "severity": "warning",
+                }
+            )
             recommendations.append("Consider extracting only relevant code sections")
 
         # Check for redundancy
@@ -367,11 +376,13 @@ class LLMPatternAnalyzer:
 
         repeated_words = [w for w, c in word_freq.items() if c > 3]
         if repeated_words:
-            issues.append({
-                "type": "redundancy",
-                "message": f"Possible redundancy detected: {', '.join(repeated_words[:5])}",
-                "severity": "info"
-            })
+            issues.append(
+                {
+                    "type": "redundancy",
+                    "message": f"Possible redundancy detected: {', '.join(repeated_words[:5])}",
+                    "severity": "info",
+                }
+            )
 
         # Check for caching potential
         try:
@@ -402,13 +413,11 @@ class LLMPatternAnalyzer:
             "category": category.value,
             "estimated_tokens": int(token_estimate),
             "estimated_cost": self._calculate_cost(
-                model or "gpt-4o",
-                int(token_estimate),
-                int(token_estimate * 1.5)
+                model or "gpt-4o", int(token_estimate), int(token_estimate * 1.5)
             ),
             "issues": issues,
             "recommendations": recommendations,
-            "cache_potential": cached is not None
+            "cache_potential": cached is not None,
         }
 
     async def record_usage(self, request: UsageRecordRequest) -> Dict[str, Any]:
@@ -416,9 +425,7 @@ class LLMPatternAnalyzer:
         prompt_hash = self._hash_prompt(request.prompt)
         category = self._categorize_prompt(request.prompt)
         cost = self._calculate_cost(
-            request.model,
-            request.input_tokens,
-            request.output_tokens
+            request.model, request.input_tokens, request.output_tokens
         )
 
         # Issue #372: Use model method to reduce feature envy
@@ -453,7 +460,7 @@ class LLMPatternAnalyzer:
                     "total_cost": cost,
                     "first_seen": datetime.now().isoformat(),
                     "last_seen": datetime.now().isoformat(),
-                    "preview": self._get_prompt_preview(request.prompt)
+                    "preview": self._get_prompt_preview(request.prompt),
                 }
 
             await redis.set(cache_key, json.dumps(data))
@@ -467,7 +474,7 @@ class LLMPatternAnalyzer:
                 "prompt_hash": prompt_hash,
                 "category": category.value,
                 "cost": cost,
-                "cache_count": data["count"]
+                "cache_count": data["count"],
             }
         except RedisError as e:
             logger.error("Failed to record LLM usage: %s", e)
@@ -513,12 +520,18 @@ class LLMPatternAnalyzer:
         stats["total_cost"] += day_cost
         stats["successful_requests"] += day_success
 
-        stats["by_date"].append({
-            "date": date,
-            "requests": day_requests,
-            "cost": round(day_cost, 4),
-            "success_rate": round(day_success / day_requests * 100, 1) if day_requests > 0 else 0
-        })
+        stats["by_date"].append(
+            {
+                "date": date,
+                "requests": day_requests,
+                "cost": round(day_cost, 4),
+                "success_rate": (
+                    round(day_success / day_requests * 100, 1)
+                    if day_requests > 0
+                    else 0
+                ),
+            }
+        )
 
         # Extract model stats
         for key, value in day_stats.items():
@@ -528,10 +541,7 @@ class LLMPatternAnalyzer:
                     stats["by_model"][model] = 0
                 stats["by_model"][model] += int(value)
 
-    async def get_usage_stats(
-        self,
-        days: int = 7
-    ) -> Dict[str, Any]:
+    async def get_usage_stats(self, days: int = 7) -> Dict[str, Any]:
         """Get usage statistics for the specified period"""
         stats = {
             "period_days": days,
@@ -540,14 +550,17 @@ class LLMPatternAnalyzer:
             "successful_requests": 0,
             "by_date": [],
             "by_model": {},
-            "by_category": {}
+            "by_category": {},
         }
 
         try:
             redis = await self._get_redis()
 
             # Build date keys and fetch all at once using pipeline - eliminates N+1 queries
-            dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+            dates = [
+                (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                for i in range(days)
+            ]
             stats_keys = [f"{self._stats_key}:{date}" for date in dates]
 
             async with redis.pipeline() as pipe:
@@ -594,12 +607,11 @@ class LLMPatternAnalyzer:
             "total_cost": round(cache_info.get("total_cost", 0), 4),
             "potential_savings": round(cache_info.get("total_cost", 0) * 0.9, 4),
             "first_seen": cache_info.get("first_seen"),
-            "last_seen": cache_info.get("last_seen")
+            "last_seen": cache_info.get("last_seen"),
         }
 
     async def identify_cache_opportunities(
-        self,
-        min_occurrences: int = 3
+        self, min_occurrences: int = 3
     ) -> List[Dict[str, Any]]:
         """Identify prompts that could benefit from caching"""
         opportunities = []
@@ -616,7 +628,10 @@ class LLMPatternAnalyzer:
                 # Batch fetch and parse (Issue #315 - use list comp to reduce depth)
                 if keys:
                     all_data = await redis.mget(keys)
-                    parsed = [self._parse_cache_opportunity(k, d, min_occurrences) for k, d in zip(keys, all_data)]
+                    parsed = [
+                        self._parse_cache_opportunity(k, d, min_occurrences)
+                        for k, d in zip(keys, all_data)
+                    ]
                     opportunities.extend(o for o in parsed if o)
 
                 if cursor == 0:
@@ -655,7 +670,8 @@ class LLMPatternAnalyzer:
     ) -> Optional[Dict[str, Any]]:
         """Build model downgrade recommendation if applicable (Issue #665: extracted helper)."""
         expensive_models = [
-            m for m in model_usage
+            m
+            for m in model_usage
             if any(keyword in m.lower() for keyword in EXPENSIVE_MODELS)
         ]
         if not expensive_models:
@@ -751,7 +767,9 @@ class LLMPatternAnalyzer:
         models = {}
 
         # Aggregate data from last 7 days - batch fetch all lists using pipeline
-        dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+        dates = [
+            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
+        ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
         async with redis.pipeline() as pipe:
@@ -773,14 +791,18 @@ class LLMPatternAnalyzer:
                             "total_output_tokens": 0,
                             "total_cost": 0.0,
                             "total_response_time": 0.0,
-                            "success_count": 0
+                            "success_count": 0,
                         }
 
                     models[model]["request_count"] += 1
                     models[model]["total_input_tokens"] += record.get("input_tokens", 0)
-                    models[model]["total_output_tokens"] += record.get("output_tokens", 0)
+                    models[model]["total_output_tokens"] += record.get(
+                        "output_tokens", 0
+                    )
                     models[model]["total_cost"] += record.get("cost", 0)
-                    models[model]["total_response_time"] += record.get("response_time", 0)
+                    models[model]["total_response_time"] += record.get(
+                        "response_time", 0
+                    )
 
                     if record.get("success", True):
                         models[model]["success_count"] += 1
@@ -793,15 +815,24 @@ class LLMPatternAnalyzer:
         for model_data in models.values():
             count = model_data["request_count"]
             if count > 0:
-                result.append({
-                    "model": model_data["model"],
-                    "request_count": count,
-                    "total_tokens": model_data["total_input_tokens"] + model_data["total_output_tokens"],
-                    "total_cost": round(model_data["total_cost"], 4),
-                    "avg_cost_per_request": round(model_data["total_cost"] / count, 6),
-                    "avg_response_time": round(model_data["total_response_time"] / count, 2),
-                    "success_rate": round(model_data["success_count"] / count * 100, 1)
-                })
+                result.append(
+                    {
+                        "model": model_data["model"],
+                        "request_count": count,
+                        "total_tokens": model_data["total_input_tokens"]
+                        + model_data["total_output_tokens"],
+                        "total_cost": round(model_data["total_cost"], 4),
+                        "avg_cost_per_request": round(
+                            model_data["total_cost"] / count, 6
+                        ),
+                        "avg_response_time": round(
+                            model_data["total_response_time"] / count, 2
+                        ),
+                        "success_rate": round(
+                            model_data["success_count"] / count * 100, 1
+                        ),
+                    }
+                )
 
         # Sort by total cost
         result.sort(key=lambda x: x["total_cost"], reverse=True)
@@ -815,7 +846,9 @@ class LLMPatternAnalyzer:
         categories = defaultdict(lambda: {"count": 0, "cost": 0.0})
 
         # Aggregate from last 7 days - batch fetch all lists using pipeline
-        dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+        dates = [
+            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
+        ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
         async with redis.pipeline() as pipe:
@@ -839,20 +872,30 @@ class LLMPatternAnalyzer:
 
         result = []
         for cat, data in categories.items():
-            result.append({
-                "category": cat,
-                "count": data["count"],
-                "percentage": round(data["count"] / total_count * 100, 1) if total_count > 0 else 0,
-                "cost": round(data["cost"], 4),
-                "cost_percentage": round(data["cost"] / total_cost * 100, 1) if total_cost > 0 else 0
-            })
+            result.append(
+                {
+                    "category": cat,
+                    "count": data["count"],
+                    "percentage": (
+                        round(data["count"] / total_count * 100, 1)
+                        if total_count > 0
+                        else 0
+                    ),
+                    "cost": round(data["cost"], 4),
+                    "cost_percentage": (
+                        round(data["cost"] / total_cost * 100, 1)
+                        if total_cost > 0
+                        else 0
+                    ),
+                }
+            )
 
         result.sort(key=lambda x: x["count"], reverse=True)
 
         return {
             "categories": result,
             "total_count": total_count,
-            "total_cost": round(total_cost, 4)
+            "total_cost": round(total_cost, 4),
         }
 
 
@@ -893,10 +936,10 @@ async def get_health():
             "usage_tracking",
             "cache_detection",
             "cost_optimization",
-            "model_comparison"
+            "model_comparison",
         ],
         "supported_categories": [c.value for c in PromptCategory],
-        "optimization_types": [o.value for o in OptimizationType]
+        "optimization_types": [o.value for o in OptimizationType],
     }
 
 
@@ -948,7 +991,7 @@ async def get_cache_opportunities(
     return {
         "opportunities": opportunities,
         "count": len(opportunities),
-        "min_occurrences": min_occurrences
+        "min_occurrences": min_occurrences,
     }
 
 
@@ -960,9 +1003,7 @@ async def get_recommendations():
     Returns prioritized list of optimization opportunities.
     """
     analyzer = get_pattern_analyzer()
-    return {
-        "recommendations": await analyzer.get_optimization_recommendations()
-    }
+    return {"recommendations": await analyzer.get_optimization_recommendations()}
 
 
 @router.get("/model-comparison")
@@ -973,10 +1014,7 @@ async def get_model_comparison():
     Returns per-model statistics for the last 7 days.
     """
     analyzer = get_pattern_analyzer()
-    return {
-        "models": await analyzer.get_model_comparison(),
-        "period_days": 7
-    }
+    return {"models": await analyzer.get_model_comparison(), "period_days": 7}
 
 
 @router.get("/category-distribution")
@@ -1010,5 +1048,5 @@ async def get_cost_breakdown(days: int = Query(default=7, ge=1, le=30)):
         "avg_cost_per_request": stats.get("avg_cost_per_request", 0),
         "by_model": models,
         "by_category": categories["categories"],
-        "daily_trend": stats["by_date"]
+        "daily_trend": stats["by_date"],
     }

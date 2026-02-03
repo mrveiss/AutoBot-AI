@@ -11,19 +11,16 @@ Provides WebSocket endpoints for:
 - Saving explanations to chat history
 """
 
-import asyncio
-import json
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from src.agents.overseer import (
     OverseerAgent,
     OverseerUpdate,
     StepExecutorAgent,
     StepResult,
-    StreamChunk,
 )
 from src.agents.overseer.types import (
     CommandBreakdownPart,
@@ -31,6 +28,7 @@ from src.agents.overseer.types import (
     OutputExplanation,
     StepStatus,
 )
+from src.auth_middleware import get_current_user
 from src.chat_history import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
@@ -108,6 +106,7 @@ def _get_chat_history_manager() -> ChatHistoryManager:
         _chat_history_manager = ChatHistoryManager()
     return _chat_history_manager
 
+
 router = APIRouter(prefix="/api/overseer", tags=["overseer"])
 
 # Active sessions (session_id -> OverseerAgent)
@@ -174,11 +173,13 @@ class OverseerWebSocketHandler:
         """Save execution plan to chat history."""
         try:
             # Format plan as a message
-            steps_text = "\n".join([
-                f"  {s.step_number}. {s.description}"
-                + (f"\n     $ {s.command}" if s.command else "")
-                for s in plan.steps
-            ])
+            steps_text = "\n".join(
+                [
+                    f"  {s.step_number}. {s.description}"
+                    + (f"\n     $ {s.command}" if s.command else "")
+                    for s in plan.steps
+                ]
+            )
 
             message_text = f"""📋 **Execution Plan**
 
@@ -222,10 +223,16 @@ class OverseerWebSocketHandler:
             # Build command explanation text for display
             cmd_explanation = ""
             if result.command_explanation:
-                breakdown_text = "\n".join([
-                    f"  • `{p['part']}`: {p['explanation']}"
-                    for p in (result.to_dict().get("command_explanation", {}).get("breakdown", []))
-                ])
+                breakdown_text = "\n".join(
+                    [
+                        f"  • `{p['part']}`: {p['explanation']}"
+                        for p in (
+                            result.to_dict()
+                            .get("command_explanation", {})
+                            .get("breakdown", [])
+                        )
+                    ]
+                )
                 cmd_explanation = f"""
 📖 **What this command does:**
 {result.command_explanation.summary}
@@ -236,9 +243,9 @@ class OverseerWebSocketHandler:
             # Build output explanation text for display
             output_explanation = ""
             if result.output_explanation:
-                findings_text = "\n".join([
-                    f"  • {f}" for f in result.output_explanation.key_findings
-                ])
+                findings_text = "\n".join(
+                    [f"  • {f}" for f in result.output_explanation.key_findings]
+                )
                 output_explanation = f"""
 📊 **What we found:**
 {result.output_explanation.summary}
@@ -254,7 +261,9 @@ class OverseerWebSocketHandler:
 """
             # Include full step object in metadata for frontend component rendering
             step_data = result.to_dict()
-            step_data["description"] = f"Step {result.step_number}: {result.command or 'N/A'}"
+            step_data[
+                "description"
+            ] = f"Step {result.step_number}: {result.command or 'N/A'}"
 
             await self.chat_history.add_message(
                 sender="assistant",
@@ -289,11 +298,13 @@ class OverseerWebSocketHandler:
 
         try:
             # Phase 1: Analyze and create plan
-            await self.send_json({
-                "type": "status",
-                "status": "planning",
-                "message": "Analyzing your request...",
-            })
+            await self.send_json(
+                {
+                    "type": "status",
+                    "status": "planning",
+                    "message": "Analyzing your request...",
+                }
+            )
 
             plan = await self.overseer.analyze_query(query, context)
 
@@ -335,20 +346,24 @@ class OverseerWebSocketHandler:
                         await self.save_step_result_to_chat(update.content)
 
             # Phase 3: Complete
-            await self.send_json({
-                "type": "status",
-                "status": "complete",
-                "message": "All steps completed.",
-                "plan_id": plan.plan_id,
-            })
+            await self.send_json(
+                {
+                    "type": "status",
+                    "status": "complete",
+                    "message": "All steps completed.",
+                    "plan_id": plan.plan_id,
+                }
+            )
 
         except Exception as e:
             logger.error("[OverseerWS] Query processing failed: %s", e)
-            await self.send_json({
-                "type": "error",
-                "error": str(e),
-                "message": "Failed to process query.",
-            })
+            await self.send_json(
+                {
+                    "type": "error",
+                    "error": str(e),
+                    "message": "Failed to process query.",
+                }
+            )
 
     async def handle_message(self, data: Dict[str, Any]):
         """
@@ -367,32 +382,40 @@ class OverseerWebSocketHandler:
             if query:
                 await self.handle_query(query, context)
             else:
-                await self.send_json({
-                    "type": "error",
-                    "error": "No query provided",
-                })
+                await self.send_json(
+                    {
+                        "type": "error",
+                        "error": "No query provided",
+                    }
+                )
 
         elif msg_type == "cancel":
             # TODO: Implement cancellation
-            await self.send_json({
-                "type": "status",
-                "status": "cancelled",
-                "message": "Execution cancelled.",
-            })
+            await self.send_json(
+                {
+                    "type": "status",
+                    "status": "cancelled",
+                    "message": "Execution cancelled.",
+                }
+            )
 
         elif msg_type == "status":
             summary = self.overseer.get_plan_summary() if self.overseer else None
-            await self.send_json({
-                "type": "status",
-                "status": "active" if self.overseer else "idle",
-                "summary": summary,
-            })
+            await self.send_json(
+                {
+                    "type": "status",
+                    "status": "active" if self.overseer else "idle",
+                    "summary": summary,
+                }
+            )
 
         else:
-            await self.send_json({
-                "type": "error",
-                "error": f"Unknown message type: {msg_type}",
-            })
+            await self.send_json(
+                {
+                    "type": "error",
+                    "error": f"Unknown message type: {msg_type}",
+                }
+            )
 
 
 @router.websocket("/ws/{session_id}")
@@ -424,11 +447,18 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
 
 
 @router.post("/query/{session_id}")
-async def submit_query(session_id: str, query: str, context: Optional[Dict] = None):
+async def submit_query(
+    session_id: str,
+    query: str,
+    context: Optional[Dict] = None,
+    current_user: dict = Depends(get_current_user),
+):
     """
     HTTP endpoint for submitting queries (non-WebSocket alternative).
 
     Returns immediately with plan_id. Use WebSocket for real-time updates.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         # Get or create overseer
@@ -462,8 +492,15 @@ async def submit_query(session_id: str, query: str, context: Optional[Dict] = No
 
 
 @router.get("/status/{session_id}")
-async def get_status(session_id: str):
-    """Get current overseer status for a session."""
+async def get_status(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get current overseer status for a session.
+
+    Issue #744: Requires authenticated user.
+    """
     if session_id in _active_overseers:
         overseer = _active_overseers[session_id]
         return {

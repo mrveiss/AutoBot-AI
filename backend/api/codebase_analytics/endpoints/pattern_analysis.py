@@ -82,9 +82,7 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
     """
     try:
         # Import here to avoid circular imports
-        from src.code_intelligence.pattern_analysis import (
-            CodePatternAnalyzer,
-        )
+        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         _analysis_tasks[task_id]["status"] = "running"
         _analysis_tasks[task_id]["started_at"] = datetime.now().isoformat()
@@ -177,7 +175,9 @@ async def start_pattern_analysis(
     # Auto-cleanup any stuck tasks before checking (Issue #647)
     cleaned = _cleanup_stuck_tasks()
     if cleaned > 0:
-        logger.info("Auto-recovered %d stuck task(s) before starting new analysis", cleaned)
+        logger.info(
+            "Auto-recovered %d stuck task(s) before starting new analysis", cleaned
+        )
 
     # Check if another analysis is genuinely running
     running_tasks = [
@@ -299,14 +299,16 @@ async def list_analysis_tasks() -> Dict[str, Any]:
     """
     tasks = []
     for task_id, task in _analysis_tasks.items():
-        tasks.append({
-            "task_id": task_id,
-            "status": task.get("status"),
-            "progress": task.get("progress", 0.0),
-            "started_at": task.get("started_at"),
-            "completed_at": task.get("completed_at"),
-            "error": task.get("error"),
-        })
+        tasks.append(
+            {
+                "task_id": task_id,
+                "status": task.get("status"),
+                "progress": task.get("progress", 0.0),
+                "started_at": task.get("started_at"),
+                "completed_at": task.get("completed_at"),
+                "error": task.get("error"),
+            }
+        )
 
     return {
         "total": len(tasks),
@@ -317,7 +319,10 @@ async def list_analysis_tasks() -> Dict[str, Any]:
 
 @router.post("/patterns/tasks/clear-stuck")
 async def clear_stuck_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks, not just timed-out ones")
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks, not just timed-out ones",
+    )
 ) -> Dict[str, Any]:
     """Clear tasks that are stuck in 'running' status.
 
@@ -354,10 +359,14 @@ async def clear_stuck_tasks(
 
             if should_clear:
                 _analysis_tasks[task_id]["status"] = "failed"
-                _analysis_tasks[task_id]["error"] = "Task cleared manually" if force else "Task timed out or was stuck"
+                _analysis_tasks[task_id]["error"] = (
+                    "Task cleared manually" if force else "Task timed out or was stuck"
+                )
                 _analysis_tasks[task_id]["completed_at"] = now.isoformat()
                 cleared.append(task_id)
-                logger.info("Cleared %s task %s", "forced" if force else "stuck", task_id)
+                logger.info(
+                    "Cleared %s task %s", "forced" if force else "stuck", task_id
+                )
 
     return {
         "cleared_count": len(cleared),
@@ -477,7 +486,11 @@ async def get_regex_opportunities(
 async def get_complexity_hotspots(
     path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
-    min_complexity: int = Query(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, description="Minimum cyclomatic complexity"),
+    min_complexity: int = Query(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        ge=1,
+        description="Minimum cyclomatic complexity",
+    ),
 ) -> List[Dict[str, Any]]:
     """Get complexity hotspots in the codebase.
 
@@ -499,7 +512,8 @@ async def get_complexity_hotspots(
 
         # Filter by minimum complexity
         filtered = [
-            h for h in report.complexity_hotspots
+            h
+            for h in report.complexity_hotspots
             if h.cyclomatic_complexity >= min_complexity
         ]
 
@@ -561,6 +575,7 @@ async def get_pattern_report(
 
         if format.lower() == "markdown":
             from fastapi.responses import PlainTextResponse
+
             return PlainTextResponse(
                 content=report.to_markdown(),
                 media_type="text/markdown",
@@ -782,8 +797,15 @@ def _format_pattern_results(
 async def get_cached_patterns(
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
-    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=200, description="Maximum results"),
-    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
+    limit: int = Query(
+        default=QueryDefaults.DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=200,
+        description="Maximum results",
+    ),
+    offset: int = Query(
+        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"
+    ),
 ) -> Dict[str, Any]:
     """Get cached patterns from ChromaDB with filtering and pagination.
 
@@ -857,18 +879,24 @@ async def clear_pattern_storage() -> Dict[str, str]:
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
     pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
-    limit: int = Query(default=QueryDefaults.DEFAULT_SEARCH_LIMIT, ge=1, le=50, description="Maximum results"),
+    limit: int = Query(
+        default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
+        ge=1,
+        le=50,
+        description="Maximum results",
+    ),
 ) -> List[Dict[str, Any]]:
     """Search for similar patterns using vector similarity.
 
     This endpoint uses ChromaDB to find patterns similar to the provided code.
     """
     try:
-        from src.code_intelligence.pattern_analysis.storage import search_similar_patterns
-
         # Generate embedding for query code
         # (Using the analyzer's embedding method)
         from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from src.code_intelligence.pattern_analysis.storage import (
+            search_similar_patterns,
+        )
 
         analyzer = CodePatternAnalyzer()
         query_embedding = await analyzer._generate_embedding(code)

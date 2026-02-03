@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 REFACTORING_KEYWORDS = {"method", "parameter", "lazy", "clump"}
 
 # Issue #380: Module-level frozenset for code smell pattern types
-_CODE_SMELL_TYPES = frozenset({"long_method", "long_parameter_list", "lazy_class", "data_clump"})
+_CODE_SMELL_TYPES = frozenset(
+    {"long_method", "long_parameter_list", "lazy_class", "data_clump"}
+)
 
 # Issue #281: Anti-pattern type definitions extracted from list_anti_pattern_types
 # Tuple of 8 anti-pattern type definitions with thresholds and severity
@@ -36,7 +38,11 @@ ANTI_PATTERN_TYPE_DEFINITIONS = (
         "type": "god_class",
         "name": "God Class",
         "description": "Classes with too many responsibilities",
-        "thresholds": {"method_count": ">20", "attribute_count": ">15", "lines_of_code": ">500"},
+        "thresholds": {
+            "method_count": ">20",
+            "attribute_count": ">15",
+            "lines_of_code": ">500",
+        },
         "severity_range": ["medium", "critical"],
         "principle_violated": "Single Responsibility Principle",
     },
@@ -118,9 +124,11 @@ async def _get_detector():
                 # Import using file path since directory has dashes
                 module_path = os.path.join(
                     os.path.dirname(__file__),
-                    "../../tools/code-analysis-suite/src/anti_pattern_detector.py"
+                    "../../tools/code-analysis-suite/src/anti_pattern_detector.py",
                 )
-                spec = importlib.util.spec_from_file_location("anti_pattern_detector", module_path)
+                spec = importlib.util.spec_from_file_location(
+                    "anti_pattern_detector", module_path
+                )
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
@@ -149,22 +157,28 @@ def _get_health_grade(score: float) -> tuple:
 
 class AnalysisRequest(BaseModel):
     """Request model for anti-pattern analysis"""
-    root_path: str = Field(
-        default=".",
-        description="Root path to analyze"
-    )
+
+    root_path: str = Field(default=".", description="Root path to analyze")
     patterns: List[str] = Field(
-        default=["**/*.py"],
-        description="Glob patterns for files to include"
+        default=["**/*.py"], description="Glob patterns for files to include"
     )
     exclude_patterns: List[str] = Field(
-        default=["__pycache__", ".git", "node_modules", ".venv", "venv", "test_", "_test.py"],
-        description="Patterns to exclude from analysis"
+        default=[
+            "__pycache__",
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "test_",
+            "_test.py",
+        ],
+        description="Patterns to exclude from analysis",
     )
 
 
 class SeveritySummary(BaseModel):
     """Summary of issues by severity"""
+
     critical: int = 0
     high: int = 0
     medium: int = 0
@@ -173,6 +187,7 @@ class SeveritySummary(BaseModel):
 
 class AntiPatternSummary(BaseModel):
     """Summary information about detected anti-patterns"""
+
     total_issues: int
     severity_counts: SeveritySummary
     health_score: float
@@ -182,6 +197,7 @@ class AntiPatternSummary(BaseModel):
 
 class AnalysisResponse(BaseModel):
     """Response model for anti-pattern analysis"""
+
     success: bool
     summary: AntiPatternSummary
     anti_patterns: List[dict]
@@ -220,7 +236,7 @@ async def analyze_anti_patterns(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Issue #372: Use model method to get severity counts (reduces feature envy)
@@ -232,10 +248,10 @@ async def analyze_anti_patterns(request: AnalysisRequest):
                 severity_counts=SeveritySummary(**severity_counts),
                 health_score=report.health_score,
                 summary_by_type=report.summary_by_type,
-                analysis_time_seconds=report.analysis_time_seconds
+                analysis_time_seconds=report.analysis_time_seconds,
             ),
             anti_patterns=[ap.to_dict() for ap in report.anti_patterns],
-            recommendations=report.recommendations
+            recommendations=report.recommendations,
         )
 
         # Issue #372: Use model method for log summary
@@ -245,10 +261,7 @@ async def analyze_anti_patterns(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Anti-pattern analysis failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @with_error_handling(
@@ -269,26 +282,21 @@ async def get_cached_analysis():
 
         if cached:
             return JSONResponse(
-                content={
-                    "success": True,
-                    "cached": True,
-                    "data": cached
-                }
+                content={"success": True, "cached": True, "data": cached}
             )
         else:
             return JSONResponse(
                 status_code=404,
                 content={
                     "success": False,
-                    "message": "No cached analysis available. Run /analyze first."
-                }
+                    "message": "No cached analysis available. Run /analyze first.",
+                },
             )
 
     except Exception as e:
         logger.error("Failed to retrieve cached analysis: %s", e)
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve cache: {str(e)}"
+            status_code=500, detail=f"Failed to retrieve cache: {str(e)}"
         )
 
 
@@ -315,12 +323,13 @@ async def detect_god_classes(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Filter to only god_class issues
         god_classes = [
-            ap.to_dict() for ap in report.anti_patterns
+            ap.to_dict()
+            for ap in report.anti_patterns
             if ap.pattern_type.value == "god_class"
         ]
 
@@ -332,7 +341,7 @@ async def detect_god_classes(request: AnalysisRequest):
                 "recommendation": (
                     "Break down large classes using Single Responsibility Principle. "
                     "Extract cohesive groups of methods into separate classes."
-                )
+                ),
             }
         )
 
@@ -359,12 +368,13 @@ async def detect_circular_dependencies(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Filter to only circular_dependency issues
         circular_deps = [
-            ap.to_dict() for ap in report.anti_patterns
+            ap.to_dict()
+            for ap in report.anti_patterns
             if ap.pattern_type.value == "circular_dependency"
         ]
 
@@ -376,7 +386,7 @@ async def detect_circular_dependencies(request: AnalysisRequest):
                 "recommendation": (
                     "Break cycles by: (1) Extract shared code into common module, "
                     "(2) Use dependency injection, (3) Apply Dependency Inversion Principle"
-                )
+                ),
             }
         )
 
@@ -404,12 +414,13 @@ async def detect_feature_envy(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Filter to only feature_envy issues
         feature_envy = [
-            ap.to_dict() for ap in report.anti_patterns
+            ap.to_dict()
+            for ap in report.anti_patterns
             if ap.pattern_type.value == "feature_envy"
         ]
 
@@ -421,7 +432,7 @@ async def detect_feature_envy(request: AnalysisRequest):
                 "recommendation": (
                     "Move methods to the class they reference most, "
                     "or extract shared logic into a common service."
-                )
+                ),
             }
         )
 
@@ -451,12 +462,13 @@ async def detect_code_smells(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Filter to code smell types (Issue #380: use module-level constant)
         code_smells = [
-            ap.to_dict() for ap in report.anti_patterns
+            ap.to_dict()
+            for ap in report.anti_patterns
             if ap.pattern_type.value in _CODE_SMELL_TYPES
         ]
 
@@ -474,9 +486,10 @@ async def detect_code_smells(request: AnalysisRequest):
                 "total_count": len(code_smells),
                 "by_type": by_type,
                 "recommendations": [
-                    rec for rec in report.recommendations
+                    rec
+                    for rec in report.recommendations
                     if any(t in rec.lower() for t in REFACTORING_KEYWORDS)
-                ]
+                ],
             }
         )
 
@@ -503,12 +516,13 @@ async def detect_dead_code(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Filter to only dead_code issues
         dead_code = [
-            ap.to_dict() for ap in report.anti_patterns
+            ap.to_dict()
+            for ap in report.anti_patterns
             if ap.pattern_type.value == "dead_code"
         ]
 
@@ -520,7 +534,7 @@ async def detect_dead_code(request: AnalysisRequest):
                 "recommendation": (
                     "Verify if code is used: check tests, external imports, dynamic loading. "
                     "Remove if confirmed unused."
-                )
+                ),
             }
         )
 
@@ -551,7 +565,7 @@ async def get_health_score(request: AnalysisRequest):
         report = await detector.analyze(
             root_path=request.root_path,
             patterns=request.patterns,
-            exclude_patterns=request.exclude_patterns
+            exclude_patterns=request.exclude_patterns,
         )
 
         # Determine grade using helper (Issue #315 - reduces nesting from chained if/elif)
@@ -569,10 +583,10 @@ async def get_health_score(request: AnalysisRequest):
                     "high": report.high_count,
                     "medium": report.medium_count,
                     "low": report.low_count,
-                    "total": report.total_issues
+                    "total": report.total_issues,
                 },
                 "top_recommendations": report.recommendations[:3],
-                "analysis_time_seconds": round(report.analysis_time_seconds, 3)
+                "analysis_time_seconds": round(report.analysis_time_seconds, 3),
             }
         )
 
@@ -591,4 +605,6 @@ async def list_anti_pattern_types():
 
     Returns descriptions and thresholds for each type.
     """
-    return JSONResponse(content={"anti_pattern_types": list(ANTI_PATTERN_TYPE_DEFINITIONS)})
+    return JSONResponse(
+        content={"anti_pattern_types": list(ANTI_PATTERN_TYPE_DEFINITIONS)}
+    )

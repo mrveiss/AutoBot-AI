@@ -241,7 +241,7 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
             user_id=user_id,
         )
 
-        logger.info("Command approval result: %s", result.get('status'))
+        logger.info("Command approval result: %s", result.get("status"))
 
         await websocket.send_json(
             {
@@ -263,7 +263,9 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
         )
 
 
-async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data: dict) -> None:
+async def _add_to_chat_history(
+    chat_history_manager, message_type: str, raw_data: dict
+) -> None:
     """Add message to chat history if conditions are met (Issue #315 - extracted).
 
     Args:
@@ -275,7 +277,11 @@ async def _add_to_chat_history(chat_history_manager, message_type: str, raw_data
 
     # Add to chat history if we have meaningful text and chat_history_manager is available
     # Issue #350 Root Cause Fix: Skip message types that are explicitly persisted elsewhere
-    if text and chat_history_manager and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES:
+    if (
+        text
+        and chat_history_manager
+        and message_type not in SKIP_WEBSOCKET_PERSISTENCE_TYPES
+    ):
         try:
             await chat_history_manager.add_message(sender, text, message_type, raw_data)
         except Exception as e:
@@ -292,6 +298,7 @@ async def _create_broadcast_event_handler(websocket: WebSocket, chat_history_man
     Returns:
         Async function that broadcasts events
     """
+
     async def broadcast_event(event_data: dict):
         """Broadcast event to WebSocket client and add to chat history."""
         try:
@@ -341,9 +348,7 @@ async def _websocket_message_receive_loop(websocket: WebSocket) -> None:
             logger.error("Error receiving message: %s", e)
             # Check if it's a connection error vs other error
             if "connection" in str(e).lower() or "closed" in str(e).lower():
-                logger.info(
-                    "Connection-related error detected, ending WebSocket loop"
-                )
+                logger.info("Connection-related error detected, ending WebSocket loop")
                 break
             else:
                 # Other errors, continue trying
@@ -373,6 +378,7 @@ async def _handle_websocket_message(websocket: WebSocket, message: str) -> None:
     except json.JSONDecodeError:
         logger.warning("Received invalid JSON via WebSocket: %s", message)
 
+
 # Connected WebSocket clients for NPU workers
 _npu_worker_ws_clients: list[WebSocket] = []
 _npu_events_subscribed = False
@@ -382,6 +388,7 @@ _ws_clients_lock = asyncio.Lock()
 
 # Lock for thread-safe access to _npu_events_subscribed (Issue #513 - race condition fix)
 import threading
+
 _npu_events_lock = threading.Lock()
 
 
@@ -514,7 +521,9 @@ async def websocket_endpoint(websocket: WebSocket):
     # Issue #665: Use helper for chat history manager access
     chat_history_manager = _get_chat_history_manager(websocket)
 
-    broadcast_event = await _create_broadcast_event_handler(websocket, chat_history_manager)
+    broadcast_event = await _create_broadcast_event_handler(
+        websocket, chat_history_manager
+    )
 
     # Issue #665: Use helper for event manager registration
     _register_event_manager_broadcast(broadcast_event)
@@ -669,9 +678,7 @@ async def _send_initial_worker_list(websocket: WebSocket) -> None:
         # Convert workers to frontend format
         workers_data = [_format_worker_for_frontend(w) for w in workers]
 
-        await websocket.send_json(
-            {"type": "initial_workers", "workers": workers_data}
-        )
+        await websocket.send_json({"type": "initial_workers", "workers": workers_data})
 
     except Exception as e:
         logger.error("Failed to send initial worker list: %s", e, exc_info=True)
@@ -781,7 +788,9 @@ def init_npu_worker_websocket():
             from src.event_manager import event_manager
 
             # Subscribe to all NPU worker events
-            event_manager.subscribe("npu.worker.status.changed", broadcast_npu_worker_event)
+            event_manager.subscribe(
+                "npu.worker.status.changed", broadcast_npu_worker_event
+            )
             event_manager.subscribe("npu.worker.added", broadcast_npu_worker_event)
             event_manager.subscribe("npu.worker.updated", broadcast_npu_worker_event)
             event_manager.subscribe("npu.worker.removed", broadcast_npu_worker_event)
@@ -793,4 +802,6 @@ def init_npu_worker_websocket():
             logger.info("NPU worker WebSocket event subscriptions initialized")
 
         except Exception as e:
-            logger.error("Failed to subscribe to NPU worker events: %s", e, exc_info=True)
+            logger.error(
+                "Failed to subscribe to NPU worker events: %s", e, exc_info=True
+            )

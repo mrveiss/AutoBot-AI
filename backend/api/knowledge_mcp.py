@@ -12,15 +12,16 @@ import logging
 import threading
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
+from src.auth_middleware import get_current_user
+from src.config import config as global_config_manager
 from src.knowledge_base import KnowledgeBase
 from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
-from src.config import config as global_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import get_redis_client
+from src.utils.redis_client import RedisDatabase, get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
@@ -327,8 +328,13 @@ def _get_knowledge_management_tools() -> List[MCPTool]:
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.get("/mcp/tools")
-async def get_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for knowledge base operations"""
+async def get_mcp_tools(
+    current_user: dict = Depends(get_current_user),
+) -> List[MCPTool]:
+    """Get available MCP tools for knowledge base operations.
+
+    Issue #744: Requires authenticated user.
+    """
     # Issue #281: Use extracted helpers for tool definitions by category
     tools = []
     tools.extend(_get_knowledge_search_tools())
@@ -342,8 +348,14 @@ async def get_mcp_tools() -> List[MCPTool]:
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/search_knowledge_base")
-async def mcp_search_knowledge_base(request: KnowledgeSearchRequest):
-    """MCP tool: Search the knowledge base"""
+async def mcp_search_knowledge_base(
+    request: KnowledgeSearchRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Search the knowledge base.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         kb = get_knowledge_base()
 
@@ -382,8 +394,14 @@ async def mcp_search_knowledge_base(request: KnowledgeSearchRequest):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/add_to_knowledge_base")
-async def mcp_add_to_knowledge_base(request: DocumentAddRequest):
-    """MCP tool: Add document to knowledge base"""
+async def mcp_add_to_knowledge_base(
+    request: DocumentAddRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Add document to knowledge base.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         kb = get_knowledge_base()
 
@@ -411,8 +429,14 @@ async def mcp_add_to_knowledge_base(request: DocumentAddRequest):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/get_knowledge_stats")
-async def mcp_get_knowledge_stats(request: KnowledgeStatsRequest):
-    """MCP tool: Get knowledge base statistics"""
+async def mcp_get_knowledge_stats(
+    request: KnowledgeStatsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Get knowledge base statistics.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         kb = get_knowledge_base()
 
@@ -448,8 +472,14 @@ async def mcp_get_knowledge_stats(request: KnowledgeStatsRequest):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/summarize_knowledge_topic")
-async def mcp_summarize_knowledge_topic(request: Metadata):
-    """MCP tool: Summarize knowledge on a topic"""
+async def mcp_summarize_knowledge_topic(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Summarize knowledge on a topic.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         kb = get_knowledge_base()
         topic = request.get("topic")
@@ -504,8 +534,14 @@ async def mcp_summarize_knowledge_topic(request: Metadata):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/vector_similarity_search")
-async def mcp_vector_similarity_search(request: Metadata):
-    """MCP tool: Perform vector similarity search in Redis"""
+async def mcp_vector_similarity_search(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Perform vector similarity search in Redis.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         kb = get_knowledge_base()
         query = request.get("query")
@@ -547,8 +583,14 @@ async def mcp_vector_similarity_search(request: Metadata):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/langchain_qa_chain")
-async def mcp_langchain_qa_chain(request: Metadata):
-    """MCP tool: Use LangChain QA chain for comprehensive answers"""
+async def mcp_langchain_qa_chain(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Use LangChain QA chain for comprehensive answers.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         kb = get_knowledge_base()
         question = request.get("question")
@@ -670,8 +712,15 @@ _VECTOR_OPERATIONS = {
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.post("/mcp/redis_vector_operations")
-async def mcp_redis_vector_operations(request: Metadata):
-    """MCP tool: Direct Redis vector store operations"""
+async def mcp_redis_vector_operations(
+    request: Metadata,
+    current_user: dict = Depends(get_current_user),
+):
+    """MCP tool: Direct Redis vector store operations.
+
+    Issue #744: Requires authenticated user. Admin operations (flush, reindex)
+    should be further restricted at the application level.
+    """
     try:
         operation = request.get("operation")
         params = request.get("params", {})
@@ -696,8 +745,13 @@ async def mcp_redis_vector_operations(request: Metadata):
     error_code_prefix="KNOWLEDGE_MCP",
 )
 @router.get("/mcp/schema")
-async def get_mcp_schema():
-    """Get the complete MCP schema for knowledge base tools"""
+async def get_mcp_schema(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get the complete MCP schema for knowledge base tools.
+
+    Issue #744: Requires authenticated user.
+    """
     return {
         "name": "autobot-knowledge-base",
         "version": "2.0.0",

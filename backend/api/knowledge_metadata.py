@@ -372,8 +372,7 @@ async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
         raise
     except Exception as e:
         logger.error(
-            "Failed to revert %s to version %d: %s",
-            fact_id, request.version, e
+            "Failed to revert %s to version %d: %s", fact_id, request.version, e
         )
         raise HTTPException(status_code=500, detail=str(e))
 

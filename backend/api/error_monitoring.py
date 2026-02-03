@@ -15,11 +15,10 @@ import os
 import sys
 from typing import Optional
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
+from backend.type_defs.common import Metadata
 from src.config import UnifiedConfigManager
 from src.utils.error_boundaries import (
     ErrorCategory,

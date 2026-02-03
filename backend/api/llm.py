@@ -445,9 +445,9 @@ def _build_cloud_provider_status(cloud_config: dict) -> dict:
         },
         "anthropic": {
             "configured": bool(anthropic_config.get("api_key")),
-            "status": "connected"
-            if anthropic_config.get("api_key")
-            else "disconnected",
+            "status": (
+                "connected" if anthropic_config.get("api_key") else "disconnected"
+            ),
             "model": anthropic_config.get("selected_model", ""),
             "endpoint": anthropic_config.get(
                 "endpoint", "https://api.anthropic.com/v1"

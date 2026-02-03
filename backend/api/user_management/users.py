@@ -9,29 +9,28 @@ REST API for user management operations.
 
 import logging
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel
 
 from backend.api.user_management.dependencies import (
+    get_current_user,
     get_user_service,
     require_user_management_enabled,
-    require_platform_admin,
-    get_current_user,
 )
 from src.user_management.schemas import (
-    UserCreate,
-    UserUpdate,
-    UserResponse,
-    UserListResponse,
     PasswordChange,
+    UserCreate,
+    UserListResponse,
+    UserResponse,
+    UserUpdate,
 )
 from src.user_management.services import UserService
 from src.user_management.services.user_service import (
-    UserNotFoundError,
     DuplicateUserError,
     InvalidCredentialsError,
+    UserNotFoundError,
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -41,6 +40,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
 # Response Models
 # -------------------------------------------------------------------------
+
 
 class UserCreatedResponse(BaseModel):
     """Response for user creation."""
@@ -76,6 +76,7 @@ class RoleAssignmentResponse(BaseModel):
 # User CRUD Endpoints
 # -------------------------------------------------------------------------
 
+
 @router.get(
     "",
     response_model=UserListResponse,
@@ -86,7 +87,9 @@ class RoleAssignmentResponse(BaseModel):
 async def list_users(
     limit: int = Query(50, ge=1, le=100, description="Maximum number of users"),
     offset: int = Query(0, ge=0, description="Number of users to skip"),
-    search: Optional[str] = Query(None, description="Search by email, username, or name"),
+    search: Optional[str] = Query(
+        None, description="Search by email, username, or name"
+    ),
     include_inactive: bool = Query(False, description="Include inactive users"),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -187,15 +190,10 @@ async def get_current_user_profile(
 
     # In other modes, try to fetch from database
     if config.postgres_enabled:
-        from backend.api.user_management.dependencies import (
-            get_db_session,
-            get_tenant_context,
-        )
-        from src.user_management.services import UserService
+        pass
 
         # This will need the Request object, so we handle it differently
         # For now, return session-based user if no DB
-        pass
 
     # Fallback: Return user from session data (config-based user)
     return UserResponse(
@@ -206,7 +204,8 @@ async def get_current_user_profile(
         is_active=True,
         is_verified=True,
         mfa_enabled=False,
-        is_platform_admin=current_user.get("role") == "admin" or current_user.get("is_platform_admin", False),
+        is_platform_admin=current_user.get("role") == "admin"
+        or current_user.get("is_platform_admin", False),
         preferences={},
         roles=[],
         created_at=None,
@@ -304,6 +303,7 @@ async def delete_user(
 # User Status Endpoints
 # -------------------------------------------------------------------------
 
+
 @router.post(
     "/{user_id}/activate",
     response_model=UserResponse,
@@ -356,6 +356,7 @@ async def deactivate_user(
 # Password Management
 # -------------------------------------------------------------------------
 
+
 @router.post(
     "/{user_id}/change-password",
     response_model=PasswordChangedResponse,
@@ -396,6 +397,7 @@ async def change_password(
 # -------------------------------------------------------------------------
 # Role Management
 # -------------------------------------------------------------------------
+
 
 @router.post(
     "/{user_id}/roles/{role_id}",
@@ -452,6 +454,7 @@ async def revoke_role(
 # -------------------------------------------------------------------------
 # Helper Functions
 # -------------------------------------------------------------------------
+
 
 def _user_to_response(user) -> UserResponse:
     """Convert User model to UserResponse schema."""

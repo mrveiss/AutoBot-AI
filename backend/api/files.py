@@ -11,7 +11,6 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
-import asyncio
 import logging
 import mimetypes
 import shutil
@@ -25,8 +24,8 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, field_validator
 
-from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from backend.utils.io_executor import run_in_file_executor
+from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from src.auth_middleware import auth_middleware
 from src.security_layer import SecurityLayer
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -123,16 +122,41 @@ INVALID_PATH_CHARACTERS = {"<", ">", ":", '"', "|", "?", "*"}
 _DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
 
 # Issue #398: Module-level sets for is_safe_file validation
-_DANGEROUS_FILENAMES = frozenset({
-    ".htaccess", ".env", "passwd", "shadow", "config",
-    "web.config", "autoexec.bat", "boot.ini", "hosts",
-    "httpd.conf", "nginx.conf",
-})
+_DANGEROUS_FILENAMES = frozenset(
+    {
+        ".htaccess",
+        ".env",
+        "passwd",
+        "shadow",
+        "config",
+        "web.config",
+        "autoexec.bat",
+        "boot.ini",
+        "hosts",
+        "httpd.conf",
+        "nginx.conf",
+    }
+)
 
-_DANGEROUS_EXTENSIONS = frozenset({
-    ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".vbs",
-    ".js", ".jar", ".app", ".deb", ".rpm", ".dmg", ".pkg", ".msi",
-})
+_DANGEROUS_EXTENSIONS = frozenset(
+    {
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".scr",
+        ".pif",
+        ".vbs",
+        ".js",
+        ".jar",
+        ".app",
+        ".deb",
+        ".rpm",
+        ".dmg",
+        ".pkg",
+        ".msi",
+    }
+)
 
 
 class FileInfo(BaseModel):
@@ -190,7 +214,6 @@ def get_security_layer(request: Request) -> SecurityLayer:
 # Path validation imported from src.utils.path_validation (Issue #328 - shared utility)
 
 
-
 def validate_and_resolve_path(path: str) -> Path:
     """
     Validate and resolve a path within the sandboxed directory.
@@ -235,7 +258,6 @@ def validate_and_resolve_path(path: str) -> Path:
 
     # Return the canonical (absolute) path to prevent CWD-related issues
     return canonical_full
-
 
 
 def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
@@ -465,7 +487,9 @@ def _validate_upload_file(file: UploadFile, content: bytes) -> None:
         )
 
 
-async def _write_upload_file(target_file: Path, content: bytes, overwrite: bool) -> None:
+async def _write_upload_file(
+    target_file: Path, content: bytes, overwrite: bool
+) -> None:
     """
     Write uploaded file to target location.
 

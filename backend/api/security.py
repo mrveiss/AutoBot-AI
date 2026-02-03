@@ -15,11 +15,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from backend.type_defs.common import Metadata
 from src.enhanced_security_layer import EnhancedSecurityLayer
 from src.security.domain_security import get_domain_security_manager
 from src.security.threat_intelligence import (
@@ -211,9 +210,7 @@ async def get_audit_log(request: Request, limit: int = 100):
             request.app.state.enhanced_security_layer = security_layer
 
         # Use extracted helper (Issue #315 - reduced depth)
-        audit_entries = await _read_audit_log_file(
-            security_layer.audit_log_file, limit
-        )
+        audit_entries = await _read_audit_log_file(security_layer.audit_log_file, limit)
 
         return {
             "success": True,

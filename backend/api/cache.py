@@ -10,10 +10,9 @@ import asyncio
 import json
 import logging
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, HTTPException
 
+from backend.type_defs.common import Metadata
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
@@ -57,7 +56,9 @@ def _clear_single_redis_database(db_name: str, db_number: int) -> Metadata:
             "keys_cleared": keys_before,
         }
     except Exception as e:
-        logger.error("Failed to clear Redis database %s (%s): %s", db_name, db_number, str(e))
+        logger.error(
+            "Failed to clear Redis database %s (%s): %s", db_name, db_number, str(e)
+        )
         return {
             "name": db_name,
             "database": db_number,
@@ -179,7 +180,7 @@ async def clear_redis_cache(database: str):
                     detail=(
                         f"Unknown database '{database}'. Available:"
                         f"{list(REDIS_DATABASES.keys())}"
-                    )
+                    ),
                 )
 
             db_number = REDIS_DATABASES[database]

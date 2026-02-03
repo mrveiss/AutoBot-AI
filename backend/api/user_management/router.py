@@ -9,9 +9,9 @@ Main router that aggregates all user management endpoints.
 
 from fastapi import APIRouter
 
-from backend.api.user_management.users import router as users_router
-from backend.api.user_management.teams import router as teams_router
 from backend.api.user_management.organizations import router as organizations_router
+from backend.api.user_management.teams import router as teams_router
+from backend.api.user_management.users import router as users_router
 
 router = APIRouter(prefix="/user-management", tags=["User Management"])
 
