@@ -384,6 +384,83 @@ def _make_relative_path(path: str, project_root: str) -> str:
         return path
 
 
+async def _run_semantic_config_detection(project_root: Path) -> Optional[dict]:
+    """
+    Run semantic config duplicate detection.
+
+    Issue #620: Extracted from detect_config_duplicates_endpoint.
+
+    Args:
+        project_root: Project root path
+
+    Returns:
+        Detection result dict or None if failed
+    """
+    from ..config_duplication_detector import ConfigDuplicationDetector
+
+    try:
+        detector = ConfigDuplicationDetector(
+            str(project_root),
+            use_semantic_analysis=True,
+        )
+        await asyncio.to_thread(detector.scan_directory)
+        result = {
+            "duplicates_found": 0,
+            "duplicates": await detector.find_duplicates_async(),
+            "report": await asyncio.to_thread(detector.generate_report),
+        }
+        result["duplicates_found"] = len(result["duplicates"])
+        logger.info("Semantic config duplicate analysis complete")
+        return result
+    except Exception as e:
+        logger.warning("Semantic analysis failed, falling back to standard: %s", e)
+        return None
+
+
+async def _run_standard_config_detection(project_root: Path) -> dict:
+    """
+    Run standard config duplicate detection.
+
+    Issue #620: Extracted from detect_config_duplicates_endpoint.
+
+    Args:
+        project_root: Project root path
+
+    Returns:
+        Detection result dict
+    """
+    from ..config_duplication_detector import detect_config_duplicates
+
+    return await asyncio.to_thread(detect_config_duplicates, str(project_root))
+
+
+def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
+    """
+    Convert duplicates dict to frontend-compatible array format.
+
+    Issue #620: Extracted from detect_config_duplicates_endpoint.
+
+    Args:
+        duplicates_dict: Backend format {value: {value, count, sources, duplicates}}
+
+    Returns:
+        Frontend format [{value, count, locations: [{file, line}]}]
+    """
+    duplicates_array = []
+    for value, details in duplicates_dict.items():
+        all_locations = details.get("sources", []) + details.get("duplicates", [])
+        duplicates_array.append(
+            {
+                "value": value,
+                "count": details.get("count", len(all_locations)),
+                "locations": [
+                    {"file": loc["file"], "line": loc["line"]} for loc in all_locations
+                ],
+            }
+        )
+    return duplicates_array
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_config_duplicates",
@@ -398,12 +475,8 @@ async def detect_config_duplicates_endpoint(
     """
     Detect configuration value duplicates across codebase (Issue #341).
 
-    Returns configuration values that appear in multiple files,
-    helping enforce single-source-of-truth principle.
-
-    Issue #554: Enhanced with optional semantic analysis:
-    - use_semantic=True enables LLM-based semantic config pattern matching
-    - Results cached in Redis for performance
+    Issue #554: Enhanced with optional semantic analysis.
+    Issue #620: Refactored to use helper functions.
 
     Args:
         use_semantic: Enable semantic duplicate detection via LLM embeddings
@@ -411,58 +484,18 @@ async def detect_config_duplicates_endpoint(
     Returns:
         JSONResponse with duplicate detection results
     """
-    from ..config_duplication_detector import (
-        ConfigDuplicationDetector,
-        detect_config_duplicates,
-    )
-
-    # Get project root (4 levels up from this file: endpoints -> codebase_analytics -> api -> backend -> root)
     project_root = Path(__file__).resolve().parents[4]
 
-    # Issue #554: Use async method with semantic analysis if enabled
+    # Issue #620: Use helpers for detection
+    result = None
     if use_semantic:
-        try:
-            detector = ConfigDuplicationDetector(
-                str(project_root),
-                use_semantic_analysis=True,
-            )
-            # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-            await asyncio.to_thread(detector.scan_directory)
-            result = {
-                "duplicates_found": 0,
-                "duplicates": await detector.find_duplicates_async(),
-                # Issue #666: Wrap blocking call in asyncio.to_thread
-                "report": await asyncio.to_thread(detector.generate_report),
-            }
-            result["duplicates_found"] = len(result["duplicates"])
-            logger.info("Semantic config duplicate analysis complete")
-        except Exception as e:
-            logger.warning("Semantic analysis failed, falling back to standard: %s", e)
-            # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-            result = await asyncio.to_thread(
-                detect_config_duplicates, str(project_root)
-            )
-    else:
-        # Run standard detection
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        result = await asyncio.to_thread(detect_config_duplicates, str(project_root))
+        result = await _run_semantic_config_detection(project_root)
 
-    # Convert duplicates dict to array format for frontend compatibility
-    # Backend returns: {value: {value, count, sources, duplicates}}
-    # Frontend expects: [{value, locations: [{file, line}]}]
-    duplicates_dict = result["duplicates"]
-    duplicates_array = []
-    for value, details in duplicates_dict.items():
-        all_locations = details.get("sources", []) + details.get("duplicates", [])
-        duplicates_array.append(
-            {
-                "value": value,
-                "count": details.get("count", len(all_locations)),
-                "locations": [
-                    {"file": loc["file"], "line": loc["line"]} for loc in all_locations
-                ],
-            }
-        )
+    if result is None:
+        result = await _run_standard_config_detection(project_root)
+
+    # Issue #620: Use helper for array conversion
+    duplicates_array = _convert_config_duplicates_to_array(result["duplicates"])
 
     return JSONResponse(
         {

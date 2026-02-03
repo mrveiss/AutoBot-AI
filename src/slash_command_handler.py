@@ -1080,22 +1080,42 @@ No secrets found.
 class SecretsAddSubcommand(Command):
     """Add a new secret."""
 
+    # Issue #620: Class constant for valid secret types
+    VALID_SECRET_TYPES = [
+        "ssh_key",
+        "password",
+        "api_key",
+        "token",
+        "certificate",
+        "database_url",
+        "other",
+    ]
+
     def __init__(self, manager, args: Optional[str], chat_id: Optional[str]):
         """Initialize add subcommand with manager and arguments."""
         self.manager = manager
         self.args = args
         self.chat_id = chat_id
 
-    async def execute(self) -> SlashCommandResult:
-        """Add a new secret."""
+    def _parse_and_validate_args(self) -> Optional[SlashCommandResult]:
+        """
+        Parse and validate arguments for add command.
+
+        Issue #620: Extracted from execute to reduce function length.
+
+        Returns:
+            SlashCommandResult on error, None on success (sets self._parsed_args)
+        """
         if not self.args:
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECRETS,
-                content="❌ Usage: `/secrets add <name> <type> <value>`\n\nExample: `/secrets add my-key api_key sk-xxx...`",
+                content=(
+                    "❌ Usage: `/secrets add <name> <type> <value>`\n\n"
+                    "Example: `/secrets add my-key api_key sk-xxx...`"
+                ),
             )
 
-        # Parse arguments: name type value
         parts = self.args.split(maxsplit=2)
         if len(parts) < 3:
             return SlashCommandResult(
@@ -1106,44 +1126,33 @@ class SecretsAddSubcommand(Command):
 
         name, secret_type, value = parts
 
-        # Validate secret type
-        valid_types = [
-            "ssh_key",
-            "password",
-            "api_key",
-            "token",
-            "certificate",
-            "database_url",
-            "other",
-        ]
-        if secret_type not in valid_types:
+        if secret_type not in self.VALID_SECRET_TYPES:
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECRETS,
-                content=f"❌ Invalid type `{secret_type}`.\n\nValid types: {', '.join(valid_types)}",
+                content=f"❌ Invalid type `{secret_type}`.\n\nValid types: {', '.join(self.VALID_SECRET_TYPES)}",
             )
 
-        try:
-            from backend.api.secrets import SecretCreateRequest, SecretScope, SecretType
+        self._parsed_name = name
+        self._parsed_type = secret_type
+        self._parsed_value = value
+        return None
 
-            # Create request - chat-scoped by default if chat_id is provided
-            scope = SecretScope.CHAT if self.chat_id else SecretScope.GENERAL
-            request = SecretCreateRequest(
-                name=name,
-                type=SecretType(secret_type),
-                scope=scope,
-                value=value,
-                chat_id=self.chat_id,
-                description="Created via /secrets add command",
-            )
+    def _build_success_response(
+        self, name: str, secret_type: str, scope
+    ) -> SlashCommandResult:
+        """
+        Build success response for secret creation.
 
-            self.manager.create_secret(request)  # Side effect: creates secret
+        Issue #620: Extracted from execute to reduce function length.
+        """
+        from backend.api.secrets import SecretScope
 
-            scope_text = "chat-scoped 💬" if scope == SecretScope.CHAT else "general 🌐"
-            return SlashCommandResult(
-                success=True,
-                command_type=CommandType.SECRETS,
-                content=f"""## ✅ Secret Created
+        scope_text = "chat-scoped 💬" if scope == SecretScope.CHAT else "general 🌐"
+        return SlashCommandResult(
+            success=True,
+            command_type=CommandType.SECRETS,
+            content=f"""## ✅ Secret Created
 
 **Name:** `{name}`
 **Type:** {secret_type}
@@ -1154,6 +1163,31 @@ Your secret has been securely encrypted and stored.
 **Next steps:**
   • `/secrets list` - View all secrets
   • `/secrets show {name}` - View the value""",
+        )
+
+    async def execute(self) -> SlashCommandResult:
+        """Add a new secret. Issue #620: Refactored to use helper methods."""
+        # Validate and parse arguments - Issue #620
+        validation_error = self._parse_and_validate_args()
+        if validation_error:
+            return validation_error
+
+        try:
+            from backend.api.secrets import SecretCreateRequest, SecretScope, SecretType
+
+            scope = SecretScope.CHAT if self.chat_id else SecretScope.GENERAL
+            request = SecretCreateRequest(
+                name=self._parsed_name,
+                type=SecretType(self._parsed_type),
+                scope=scope,
+                value=self._parsed_value,
+                chat_id=self.chat_id,
+                description="Created via /secrets add command",
+            )
+
+            self.manager.create_secret(request)
+            return self._build_success_response(
+                self._parsed_name, self._parsed_type, scope
             )
 
         except ValueError as e:
