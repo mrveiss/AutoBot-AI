@@ -59,19 +59,28 @@ if __name__ == "__main__":
     dev_mode = os.getenv("AUTOBOT_DEV_MODE", "false").lower() == "true"
     reload = dev_mode or "--reload" in sys.argv
 
-    # TLS Configuration - Issue #725
+    # TLS Configuration - Issue #725, #164
     tls_enabled = os.getenv("AUTOBOT_BACKEND_TLS_ENABLED", "false").lower() == "true"
     ssl_keyfile = None
     ssl_certfile = None
 
     if tls_enabled:
-        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
-        project_root = Path(__file__).parent.parent
-        ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
-        ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
+        # Check for explicit cert/key paths first (set by SLM enable-tls playbook)
+        ssl_certfile = os.getenv("AUTOBOT_TLS_CERT_PATH")
+        ssl_keyfile = os.getenv("AUTOBOT_TLS_KEY_PATH")
+
+        # Fallback to cert_dir + main-host pattern for legacy compatibility
+        if not ssl_certfile or not ssl_keyfile:
+            cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+            project_root = Path(__file__).parent.parent
+            ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
+            ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
+
         # Override port to TLS port when enabled
         port = int(os.getenv("AUTOBOT_BACKEND_TLS_PORT", "8443"))
         logger.info("🔒 TLS enabled - using HTTPS on port %s", port)
+        logger.info("🔒 TLS cert: %s", ssl_certfile)
+        logger.info("🔒 TLS key: %s", ssl_keyfile)
 
     # Log configuration
     logger.info("📡 Host: %s", host)
