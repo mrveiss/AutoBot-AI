@@ -373,93 +373,94 @@ class SystemKnowledgeManager:
             ],
         }
 
-    def _get_image_forensics_workflow_data(self) -> Dict[str, Any]:
-        """Get image forensics workflow data."""
+    def _get_workflow_metadata(self) -> Dict[str, Any]:
+        """Get metadata for image forensics workflow. Issue #620."""
         return {
-            "metadata": {
-                "name": "Image Steganography Analysis",
-                "category": "forensics",
-                "complexity": "medium",
-                "estimated_time": "10-30 minutes",
-                "version": "1.0.0",
+            "name": "Image Steganography Analysis",
+            "category": "forensics",
+            "complexity": "medium",
+            "estimated_time": "10-30 minutes",
+            "version": "1.0.0",
+        }
+
+    def _get_workflow_required_tools(self) -> List[Dict[str, Any]]:
+        """Get required tools for image forensics workflow. Issue #620."""
+        return [
+            {
+                "name": "steghide",
+                "purpose": "Extract hidden data from images",
+                "optional": False,
             },
-            "objective": (
-                "Analyze images for hidden files, steganographic content, "
-                "and embedded data"
-            ),
-            "prerequisites": [
-                "Target image file(s)",
-                "Basic understanding of steganography techniques",
-                "Sufficient disk space for extracted files",
-            ],
-            "required_tools": [
-                {
-                    "name": "steghide",
-                    "purpose": "Extract hidden data from images",
-                    "optional": False,
-                },
-                {
-                    "name": "binwalk",
-                    "purpose": "Detect and extract embedded files",
-                    "optional": False,
-                },
-                {
-                    "name": "exiftool",
-                    "purpose": "Analyze image metadata",
-                    "optional": True,
-                },
-            ],
-            "workflow_steps": [
-                {
-                    "step": 1,
-                    "action": "Initial image analysis",
-                    "details": "Gather basic information about the target image",
-                    "commands": [
-                        "file {image_file}",
-                        "ls -la {image_file}",
-                        "identify {image_file}",
-                    ],
-                    "expected_output": "Image format, size, and basic properties",
-                },
-                {
-                    "step": 2,
-                    "action": "Metadata examination",
-                    "details": "Check for hidden information in image metadata",
-                    "commands": [
-                        "exiftool {image_file}",
-                        "strings {image_file} | head -20",
-                    ],
-                    "expected_output": "EXIF data, embedded comments, text strings",
-                },
-                {
-                    "step": 3,
-                    "action": "Steganography detection",
-                    "details": "Check for steganographic content using steghide",
-                    "commands": ["steghide info {image_file}"],
-                    "expected_output": (
-                        "Capacity information or error if no hidden data"
-                    ),
-                },
-                {
-                    "step": 4,
-                    "action": "File signature analysis",
-                    "details": "Look for embedded files using binwalk",
-                    "commands": ["binwalk {image_file}", "binwalk -e {image_file}"],
-                    "expected_output": "List of detected files and extraction results",
-                },
-            ],
-            "decision_points": [
-                {
-                    "condition": "steghide reports capacity > 0",
-                    "if_true": "Attempt extraction with common passwords",
-                    "if_false": "Move to alternative steganography tools",
-                },
-                {
-                    "condition": "binwalk finds embedded files",
-                    "if_true": "Extract and analyze each file",
-                    "if_false": "Check for other steganography methods",
-                },
-            ],
+            {
+                "name": "binwalk",
+                "purpose": "Detect and extract embedded files",
+                "optional": False,
+            },
+            {
+                "name": "exiftool",
+                "purpose": "Analyze image metadata",
+                "optional": True,
+            },
+        ]
+
+    def _get_workflow_steps(self) -> List[Dict[str, Any]]:
+        """Get workflow steps for image forensics analysis. Issue #620."""
+        return [
+            {
+                "step": 1,
+                "action": "Initial image analysis",
+                "details": "Gather basic information about the target image",
+                "commands": [
+                    "file {image_file}",
+                    "ls -la {image_file}",
+                    "identify {image_file}",
+                ],
+                "expected_output": "Image format, size, and basic properties",
+            },
+            {
+                "step": 2,
+                "action": "Metadata examination",
+                "details": "Check for hidden information in image metadata",
+                "commands": [
+                    "exiftool {image_file}",
+                    "strings {image_file} | head -20",
+                ],
+                "expected_output": "EXIF data, embedded comments, text strings",
+            },
+            {
+                "step": 3,
+                "action": "Steganography detection",
+                "details": "Check for steganographic content using steghide",
+                "commands": ["steghide info {image_file}"],
+                "expected_output": "Capacity information or error if no hidden data",
+            },
+            {
+                "step": 4,
+                "action": "File signature analysis",
+                "details": "Look for embedded files using binwalk",
+                "commands": ["binwalk {image_file}", "binwalk -e {image_file}"],
+                "expected_output": "List of detected files and extraction results",
+            },
+        ]
+
+    def _get_workflow_decision_points(self) -> List[Dict[str, str]]:
+        """Get decision points for image forensics workflow. Issue #620."""
+        return [
+            {
+                "condition": "steghide reports capacity > 0",
+                "if_true": "Attempt extraction with common passwords",
+                "if_false": "Move to alternative steganography tools",
+            },
+            {
+                "condition": "binwalk finds embedded files",
+                "if_true": "Extract and analyze each file",
+                "if_false": "Check for other steganography methods",
+            },
+        ]
+
+    def _get_workflow_quality_and_pitfalls(self) -> Dict[str, Any]:
+        """Get quality checks and common pitfalls for workflow. Issue #620."""
+        return {
             "quality_checks": [
                 "Verify extracted files are not corrupted",
                 "Check that original image wasn't modified during analysis",
@@ -475,6 +476,27 @@ class SystemKnowledgeManager:
                     "prevention": "Test with multiple steganography tools",
                 },
             ],
+        }
+
+    def _get_image_forensics_workflow_data(self) -> Dict[str, Any]:
+        """Get image forensics workflow data. Issue #620."""
+        quality_and_pitfalls = self._get_workflow_quality_and_pitfalls()
+        return {
+            "metadata": self._get_workflow_metadata(),
+            "objective": (
+                "Analyze images for hidden files, steganographic content, "
+                "and embedded data"
+            ),
+            "prerequisites": [
+                "Target image file(s)",
+                "Basic understanding of steganography techniques",
+                "Sufficient disk space for extracted files",
+            ],
+            "required_tools": self._get_workflow_required_tools(),
+            "workflow_steps": self._get_workflow_steps(),
+            "decision_points": self._get_workflow_decision_points(),
+            "quality_checks": quality_and_pitfalls["quality_checks"],
+            "common_pitfalls": quality_and_pitfalls["common_pitfalls"],
         }
 
     async def _save_yaml_file(self, file_path: Path, data: Dict[str, Any]) -> bool:

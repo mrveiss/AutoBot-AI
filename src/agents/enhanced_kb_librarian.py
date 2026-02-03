@@ -107,11 +107,31 @@ class EnhancedKBLibrarian:
             return []
 
     async def store_tool_knowledge(self, tool_info: Dict[str, Any]):
-        """Store comprehensive tool information and documentation in KB"""
+        """Store comprehensive tool information and documentation in KB. Issue #620."""
         tool_name = tool_info.get("name", "unknown")
+        document_content = self._build_tool_document(tool_info, tool_name)
+        metadata = self._build_tool_metadata(tool_name)
 
-        # Create comprehensive structured document for the tool
-        document_content = """
+        await self.knowledge_base.store_fact(document_content, metadata=metadata)
+        logger.info(f"Stored knowledge for tool: {tool_name}")
+
+        await self._publish_tool_knowledge_event(tool_name)
+
+    def _build_tool_document(self, tool_info: Dict[str, Any], tool_name: str) -> str:
+        """Build comprehensive structured document for a tool. Issue #620."""
+        sections = [
+            self._build_tool_header(tool_info, tool_name),
+            self._build_tool_installation_section(tool_info),
+            self._build_tool_usage_section(tool_info),
+            self._build_tool_advanced_section(tool_info),
+            self._build_tool_resources_section(tool_info),
+            self._build_tool_metadata_section(tool_info),
+        ]
+        return "\n".join(sections)
+
+    def _build_tool_header(self, tool_info: Dict[str, Any], tool_name: str) -> str:
+        """Build tool document header with basic information. Issue #620."""
+        return f"""
 TOOL DOCUMENTATION: {tool_name}
 ==================================================
 
@@ -120,14 +140,20 @@ BASIC INFORMATION:
 - Type: {tool_info.get('type', 'command-line tool')}
 - Category: {tool_info.get('category', 'general')}
 - Platform: {tool_info.get('platform', 'linux')}
-- Purpose: {tool_info.get('purpose', 'N/A')}
+- Purpose: {tool_info.get('purpose', 'N/A')}"""
 
+    def _build_tool_installation_section(self, tool_info: Dict[str, Any]) -> str:
+        """Build installation and requirements section. Issue #620."""
+        return f"""
 INSTALLATION:
 {tool_info.get('installation', 'No installation information available')}
 
 SYSTEM REQUIREMENTS:
-{tool_info.get('requirements', 'Standard Linux system')}
+{tool_info.get('requirements', 'Standard Linux system')}"""
 
+    def _build_tool_usage_section(self, tool_info: Dict[str, Any]) -> str:
+        """Build usage and command examples section. Issue #620."""
+        return f"""
 BASIC USAGE:
 {tool_info.get('usage', 'No usage information available')}
 
@@ -135,8 +161,11 @@ COMMAND SYNTAX:
 {tool_info.get('syntax', 'See man page for syntax')}
 
 COMMON COMMANDS & EXAMPLES:
-{self._format_command_examples(tool_info.get('command_examples', []))}
+{self._format_command_examples(tool_info.get('command_examples', []))}"""
 
+    def _build_tool_advanced_section(self, tool_info: Dict[str, Any]) -> str:
+        """Build advanced usage and troubleshooting section. Issue #620."""
+        return f"""
 ADVANCED USAGE:
 {tool_info.get('advanced_usage', 'See documentation for advanced features')}
 
@@ -162,14 +191,20 @@ KNOWN LIMITATIONS:
 {tool_info.get('limitations', 'See documentation for limitations')}
 
 RELATED TOOLS:
-{tool_info.get('related_tools', [])}
+{tool_info.get('related_tools', [])}"""
 
+    def _build_tool_resources_section(self, tool_info: Dict[str, Any]) -> str:
+        """Build external resources section. Issue #620."""
+        return f"""
 EXTERNAL RESOURCES:
 - Official Documentation: {tool_info.get('documentation_url', 'N/A')}
 - Source Code: {tool_info.get('source_url', 'N/A')}
 - Tutorial Links: {tool_info.get('tutorials', [])}
-- Community Forums: {tool_info.get('forums', [])}
+- Community Forums: {tool_info.get('forums', [])}"""
 
+    def _build_tool_metadata_section(self, tool_info: Dict[str, Any]) -> str:
+        """Build metadata section with timestamps. Issue #620."""
+        return f"""
 METADATA:
 - Added: {datetime.now().isoformat()}
 - Last Updated: {datetime.now().isoformat()}
@@ -178,8 +213,9 @@ METADATA:
 - Success Rate: N/A
 """
 
-        # Store in knowledge base
-        metadata = {
+    def _build_tool_metadata(self, tool_name: str) -> Dict[str, Any]:
+        """Build metadata dictionary for tool storage. Issue #620."""
+        return {
             "tool_name": tool_name,
             "category": "tools",
             "type": "tool_documentation",
@@ -187,11 +223,8 @@ METADATA:
             "timestamp": datetime.now().isoformat(),
         }
 
-        await self.knowledge_base.store_fact(document_content, metadata=metadata)
-
-        logger.info(f"Stored knowledge for tool: {tool_name}")
-
-        # Notify that new tool knowledge is available
+    async def _publish_tool_knowledge_event(self, tool_name: str) -> None:
+        """Publish event for new tool knowledge availability. Issue #620."""
         await event_manager.publish(
             "knowledge_update",
             {
