@@ -342,21 +342,14 @@ class LLMPatternAnalyzer:
             return prompt
         return prompt[: max_length - 3] + "..."
 
-    async def analyze_prompt(
-        self, prompt: str, model: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Analyze a single prompt for optimization opportunities"""
-        prompt_hash = self._hash_prompt(prompt)
-        category = self._categorize_prompt(prompt)
+    def _check_prompt_length(
+        self, token_estimate: float, issues: List, recommendations: List
+    ) -> None:
+        """
+        Check if prompt is too long and add issues/recommendations.
 
-        # Count tokens (rough estimation)
-        token_estimate = len(prompt.split()) * 1.3
-
-        # Check for potential issues
-        issues = []
-        recommendations = []
-
-        # Check prompt length
+        Issue #620: Extracted from analyze_prompt.
+        """
         if token_estimate > 2000:
             issues.append(
                 {
@@ -367,7 +360,12 @@ class LLMPatternAnalyzer:
             )
             recommendations.append("Consider extracting only relevant code sections")
 
-        # Check for redundancy
+    def _check_prompt_redundancy(self, prompt: str, issues: List) -> None:
+        """
+        Check for word redundancy in prompt.
+
+        Issue #620: Extracted from analyze_prompt.
+        """
         words = prompt.lower().split()
         word_freq = defaultdict(int)
         for word in words:
@@ -384,7 +382,17 @@ class LLMPatternAnalyzer:
                 }
             )
 
-        # Check for caching potential
+    async def _check_cache_potential(
+        self, prompt_hash: str, recommendations: List
+    ) -> bool:
+        """
+        Check if prompt has caching potential.
+
+        Issue #620: Extracted from analyze_prompt.
+
+        Returns:
+            True if cached version exists, False otherwise
+        """
         try:
             redis = await self._get_redis()
             cache_key = f"{self._cache_key}:{prompt_hash}"
@@ -396,17 +404,47 @@ class LLMPatternAnalyzer:
                     f"This prompt has been used {cache_data.get('count', 1)} times. "
                     "Consider caching the response."
                 )
+                return True
         except RedisError as e:
             logger.warning("Failed to check cache for prompt analysis: %s", e)
-            cached = None
 
-        # Model recommendations
+        return False
+
+    def _check_model_efficiency(
+        self, model: str, category: PromptCategory, recommendations: List
+    ) -> None:
+        """
+        Check if a smaller model could be used.
+
+        Issue #620: Extracted from analyze_prompt.
+        """
+        if "opus" in model.lower() or "gpt-4" in model.lower():
+            if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
+                recommendations.append(
+                    "Consider using a smaller model (Haiku/GPT-3.5) for this task type"
+                )
+
+    async def analyze_prompt(
+        self, prompt: str, model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze a single prompt for optimization opportunities.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        prompt_hash = self._hash_prompt(prompt)
+        category = self._categorize_prompt(prompt)
+        token_estimate = len(prompt.split()) * 1.3
+
+        issues: List[Dict[str, Any]] = []
+        recommendations: List[str] = []
+
+        # Run all checks using helper methods
+        self._check_prompt_length(token_estimate, issues, recommendations)
+        self._check_prompt_redundancy(prompt, issues)
+        cache_exists = await self._check_cache_potential(prompt_hash, recommendations)
         if model:
-            if "opus" in model.lower() or "gpt-4" in model.lower():
-                if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
-                    recommendations.append(
-                        "Consider using a smaller model (Haiku/GPT-3.5) for this task type"
-                    )
+            self._check_model_efficiency(model, category, recommendations)
 
         return {
             "prompt_hash": prompt_hash,
@@ -417,7 +455,7 @@ class LLMPatternAnalyzer:
             ),
             "issues": issues,
             "recommendations": recommendations,
-            "cache_potential": cached is not None,
+            "cache_potential": cache_exists,
         }
 
     async def record_usage(self, request: UsageRecordRequest) -> Dict[str, Any]:

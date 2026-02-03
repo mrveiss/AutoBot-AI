@@ -989,6 +989,67 @@ class DuplicateCodeDetector(_BaseClass):
     # Issue #554: Async Semantic Analysis Methods
     # =========================================================================
 
+    def _sample_blocks_for_analysis(
+        self, all_blocks: List[CodeBlock], analysis_type: str = "semantic"
+    ) -> List[CodeBlock]:
+        """
+        Sample blocks if there are too many for efficient analysis.
+
+        Issue #620: Extracted from _find_semantic_duplicates_async.
+
+        Args:
+            all_blocks: List of all code blocks
+            analysis_type: Type of analysis for logging
+
+        Returns:
+            Sampled list of blocks (or original if under limit)
+        """
+        if (
+            MAX_BLOCKS_FOR_SIMILARITY > 0
+            and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY
+        ):
+            sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
+            sampled = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
+            logger.info(
+                "Sampling %d of %d blocks for %s analysis",
+                len(sampled),
+                len(all_blocks),
+                analysis_type,
+            )
+            return sampled
+        return all_blocks
+
+    def _create_duplicate_pair(
+        self,
+        block1: CodeBlock,
+        block2: CodeBlock,
+        similarity: float,
+    ) -> DuplicatePair:
+        """
+        Create a DuplicatePair from two code blocks.
+
+        Issue #620: Extracted from _find_semantic_duplicates_async.
+
+        Args:
+            block1: First code block
+            block2: Second code block
+            similarity: Similarity score between blocks
+
+        Returns:
+            DuplicatePair object
+        """
+        return DuplicatePair(
+            file1=block1.file_path,
+            file2=block2.file_path,
+            start_line1=block1.start_line,
+            end_line1=block1.end_line,
+            start_line2=block2.start_line,
+            end_line2=block2.end_line,
+            similarity=similarity,
+            line_count=(block1.line_count + block2.line_count) // 2,
+            code_snippet=block1.content[:200],
+        )
+
     async def _find_semantic_duplicates_async(
         self,
         all_blocks: List[CodeBlock],
@@ -997,9 +1058,8 @@ class DuplicateCodeDetector(_BaseClass):
         """
         Find semantically similar code blocks using LLM embeddings.
 
-        Issue #554: Uses ChromaDB vector storage and cosine similarity
-        to detect code that performs the same function but is written
-        differently (renamed variables, refactored structure, etc).
+        Issue #554: Uses ChromaDB vector storage and cosine similarity.
+        Issue #620: Refactored to use extracted helper methods.
 
         Args:
             all_blocks: List of code blocks to analyze
@@ -1012,33 +1072,17 @@ class DuplicateCodeDetector(_BaseClass):
             return []
 
         duplicates: List[DuplicatePair] = []
+        blocks_to_compare = self._sample_blocks_for_analysis(all_blocks, "semantic")
 
-        # Sample blocks if too many (same as token similarity)
-        blocks_to_compare = all_blocks
-        if (
-            MAX_BLOCKS_FOR_SIMILARITY > 0
-            and len(all_blocks) > MAX_BLOCKS_FOR_SIMILARITY
-        ):
-            sorted_blocks = sorted(all_blocks, key=lambda b: b.line_count, reverse=True)
-            blocks_to_compare = sorted_blocks[:MAX_BLOCKS_FOR_SIMILARITY]
-            logger.info(
-                "Sampling %d of %d blocks for semantic analysis",
-                len(blocks_to_compare),
-                len(all_blocks),
-            )
-
-        # Normalize and generate embeddings for all blocks
+        # Generate embeddings and compute similarities
         codes = [block.normalized_content for block in blocks_to_compare]
         embeddings = await self._get_embeddings_batch(codes)
-
-        # Use vectorized similarity computation from mixin
         similarity_pairs = self._compute_batch_similarities(
             embeddings, min_similarity=self.min_similarity
         )
 
         for i, j, similarity in similarity_pairs:
-            block1 = blocks_to_compare[i]
-            block2 = blocks_to_compare[j]
+            block1, block2 = blocks_to_compare[i], blocks_to_compare[j]
 
             # Skip same file
             if block1.file_path == block2.file_path:
@@ -1057,19 +1101,7 @@ class DuplicateCodeDetector(_BaseClass):
                 continue
             seen_pairs.add(pair_key)
 
-            duplicates.append(
-                DuplicatePair(
-                    file1=block1.file_path,
-                    file2=block2.file_path,
-                    start_line1=block1.start_line,
-                    end_line1=block1.end_line,
-                    start_line2=block2.start_line,
-                    end_line2=block2.end_line,
-                    similarity=similarity,
-                    line_count=(block1.line_count + block2.line_count) // 2,
-                    code_snippet=block1.content[:200],
-                )
-            )
+            duplicates.append(self._create_duplicate_pair(block1, block2, similarity))
 
         logger.info("Semantic analysis found %d additional duplicates", len(duplicates))
         return duplicates
