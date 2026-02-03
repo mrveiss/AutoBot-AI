@@ -18,20 +18,12 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, Optional
 
 from backend.dependencies import global_config_manager
 from src.utils.http_client import get_http_client
 
-from .types import (
-    AgentTask,
-    OverseerUpdate,
-    StepResult,
-    StepStatus,
-    TaskPlan,
-    TaskStatus,
-)
+from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
 
 logger = logging.getLogger(__name__)
 
@@ -372,48 +364,57 @@ Examples:
             Tuples of ("update", OverseerUpdate) or ("result", StepResult)
         """
         # Yield step start
-        yield ("update", OverseerUpdate(
-            update_type="step_start",
-            plan_id=plan_id,
-            task_id=task.task_id,
-            step_number=task.step_number,
-            total_steps=task.total_steps,
-            status="executing",
-            content={
-                "description": task.description,
-                "command": task.command,
-                "previous_context": previous_context if previous_context else None,
-            },
-        ))
+        yield (
+            "update",
+            OverseerUpdate(
+                update_type="step_start",
+                plan_id=plan_id,
+                task_id=task.task_id,
+                step_number=task.step_number,
+                total_steps=task.total_steps,
+                status="executing",
+                content={
+                    "description": task.description,
+                    "command": task.command,
+                    "previous_context": previous_context if previous_context else None,
+                },
+            ),
+        )
 
         try:
             # Execute the step through the executor
             async for update in executor.execute_step(task):
                 if isinstance(update, StepResult):
                     # Step completed - yield result for storage
-                    yield ("update", OverseerUpdate(
-                        update_type="step_complete",
-                        plan_id=plan_id,
-                        task_id=task.task_id,
-                        step_number=task.step_number,
-                        total_steps=task.total_steps,
-                        status=update.status.value,
-                        content=update.to_dict(),
-                    ))
+                    yield (
+                        "update",
+                        OverseerUpdate(
+                            update_type="step_complete",
+                            plan_id=plan_id,
+                            task_id=task.task_id,
+                            step_number=task.step_number,
+                            total_steps=task.total_steps,
+                            status=update.status.value,
+                            content=update.to_dict(),
+                        ),
+                    )
                     yield ("result", update)
                 else:
                     # Streaming update
-                    yield ("update", OverseerUpdate(
-                        update_type="stream",
-                        plan_id=plan_id,
-                        task_id=task.task_id,
-                        step_number=task.step_number,
-                        total_steps=task.total_steps,
-                        status="streaming",
-                        content=update.to_dict()
-                        if hasattr(update, "to_dict")
-                        else update,
-                    ))
+                    yield (
+                        "update",
+                        OverseerUpdate(
+                            update_type="stream",
+                            plan_id=plan_id,
+                            task_id=task.task_id,
+                            step_number=task.step_number,
+                            total_steps=task.total_steps,
+                            status="streaming",
+                            content=update.to_dict()
+                            if hasattr(update, "to_dict")
+                            else update,
+                        ),
+                    )
 
         except Exception as e:
             logger.error("[OverseerAgent] Step %d failed: %s", task.step_number, e)

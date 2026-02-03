@@ -16,7 +16,6 @@ from src.agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatte
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -65,7 +64,9 @@ class ClassificationAgent(StandardizedAgent):
 
         logger.info(
             "ClassificationAgent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
         self.capabilities = [
             "intent_classification",
@@ -88,7 +89,9 @@ class ClassificationAgent(StandardizedAgent):
                 )
         except RuntimeError:
             # Event loop not available yet, will initialize later
-            logger.debug("Event loop not available, will initialize communication later")
+            logger.debug(
+                "Event loop not available, will initialize communication later"
+            )
 
         # Initialize classification prompt
         self._initialize_classification_prompt()
@@ -466,8 +469,8 @@ if __name__ == "__main__":
         print("📊 Classification History:")
         for entry in history:
             print(f"   Message: {entry['user_message']}")
-            classification = entry['classification']
-            confidence = entry['confidence']
+            classification = entry["classification"]
+            confidence = entry["confidence"]
             print(f"   Classification: {classification} (confidence: {confidence})")
             print(f"   Reasoning: {entry['reasoning']}")
             print()

@@ -10,7 +10,7 @@ based on various metrics and thresholds.
 Part of Issue #381 - God Class Refactoring
 """
 
-from .types import AntiPatternSeverity, Thresholds
+from .types import AntiPatternSeverity
 
 
 def get_god_class_severity(method_count: int) -> AntiPatternSeverity:

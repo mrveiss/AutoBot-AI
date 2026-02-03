@@ -20,7 +20,6 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
 from typing import Any, Optional
 
 from src.agent_loop.think_tool import ThinkTool
@@ -35,7 +34,7 @@ from src.agent_loop.types import (
     ThinkCategory,
 )
 from src.events import EventStreamManager, EventType
-from src.events.types import create_message_event, create_observation_event
+from src.events.types import create_message_event
 from src.planner import PlannerModule
 from src.tools.parallel import ParallelToolExecutor
 
@@ -246,9 +245,7 @@ class AgentLoop:
         self._iteration_count += 1
         start_time = time.monotonic()
 
-        logger.debug(
-            "AgentLoop: Starting iteration %d", self._iteration_count
-        )
+        logger.debug("AgentLoop: Starting iteration %d", self._iteration_count)
 
         result = IterationResult(iteration_number=self._iteration_count)
 
@@ -271,7 +268,9 @@ class AgentLoop:
             # Phase 3: Wait for Execution
             self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
             tool_results = await self._execute_tools(tools_to_execute)
-            result.tools_executed = [t.get("tool_name", "unknown") for t in tools_to_execute]
+            result.tools_executed = [
+                t.get("tool_name", "unknown") for t in tools_to_execute
+            ]
             result.tool_results = tool_results
 
             # Record tools in context
@@ -386,7 +385,9 @@ class AgentLoop:
             tool_calls = create_tool_calls(tools)
             return await self.tool_executor.execute_batch(
                 tool_calls,
-                task_id=self._current_context.task_id if self._current_context else None,
+                task_id=self._current_context.task_id
+                if self._current_context
+                else None,
             )
 
         # Sequential execution (fallback)
@@ -516,17 +517,21 @@ class AgentLoop:
         # Check for git tools
         git_tools = {"git", "gh", "github"}
         has_git_tool = any(
-            tool.get("tool_name", "").lower() in git_tools or
-            "git" in tool.get("tool_name", "").lower()
+            tool.get("tool_name", "").lower() in git_tools
+            or "git" in tool.get("tool_name", "").lower()
             for tool in tools
         )
 
         if has_git_tool and self.config.think_on_git:
-            context = f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
+            context = (
+                f"About to execute git tools: {[t.get('tool_name') for t in tools]}"
+            )
             result = await self.think_tool.think(
                 ThinkCategory.GIT_DECISION,
                 context,
-                task_id=self._current_context.task_id if self._current_context else None,
+                task_id=self._current_context.task_id
+                if self._current_context
+                else None,
             )
             if self._current_context:
                 self._current_context.add_think(result)
@@ -575,9 +580,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         )
 
         if self._consecutive_errors >= self.config.max_consecutive_errors:
-            logger.error(
-                "AgentLoop: Max consecutive errors reached, stopping"
-            )
+            logger.error("AgentLoop: Max consecutive errors reached, stopping")
             return False
 
         # Think about error recovery
@@ -585,7 +588,9 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             result = await self.think_tool.think(
                 ThinkCategory.ERROR_RECOVERY,
                 f"Error: {error}",
-                task_id=self._current_context.task_id if self._current_context else None,
+                task_id=self._current_context.task_id
+                if self._current_context
+                else None,
             )
             if self._current_context:
                 self._current_context.add_think(result)

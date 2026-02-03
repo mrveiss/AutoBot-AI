@@ -13,7 +13,6 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -78,7 +77,9 @@ class SessionListingMixin:
             # Ensure chats directory exists
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(
+                    os.makedirs, chats_directory, exist_ok=True
+                )
                 return sessions
 
             # Clean up old session files if needed
@@ -133,9 +134,7 @@ class SessionListingMixin:
             logger.error("Error listing chat sessions: %s", str(e))
             return []
 
-    async def _read_chat_file_metadata(
-        self, chat_path: str
-    ) -> tuple[str | None, int]:
+    async def _read_chat_file_metadata(self, chat_path: str) -> tuple[str | None, int]:
         """Read chat name and message count from file (Issue #315: extracted).
 
         Args:
@@ -210,7 +209,9 @@ class SessionListingMixin:
             # Ensure chats directory exists
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(
+                    os.makedirs, chats_directory, exist_ok=True
+                )
                 return sessions
 
             # Process each chat file
@@ -327,7 +328,9 @@ class SessionListingMixin:
         orphaned_sessions_created = 0
 
         try:
-            orphan_filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
+            orphan_filenames = await run_in_chat_io_executor(
+                os.listdir, chats_directory
+            )
 
             for filename in orphan_filenames:
                 session_id = self._extract_session_id_from_terminal_file(filename)

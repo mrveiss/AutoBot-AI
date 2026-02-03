@@ -13,7 +13,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
@@ -1677,12 +1677,88 @@ def _build_issue_sections(by_category: Dict[str, List[Dict]]) -> List[str]:
     return lines
 
 
+def _compute_correlation_data(
+    problems: List[Dict],
+    prediction: PredictionResult,
+) -> Tuple[Set[str], Dict[str, Any], Set[str]]:
+    """
+    Compute file sets and overlap for correlation analysis.
+
+    Issue #620: Extracted from _build_correlation_section.
+
+    Returns:
+        Tuple of (files_with_issues, high_risk_files_dict, overlap_set)
+    """
+    files_with_issues = set(
+        p.get("file_path", "") for p in problems if p.get("file_path")
+    )
+    high_risk_files = {
+        fa.file_path: fa
+        for fa in prediction.file_assessments
+        if fa.risk_level.value in ("critical", "high")
+    }
+    overlap = files_with_issues & set(high_risk_files.keys())
+    return files_with_issues, high_risk_files, overlap
+
+
+def _format_correlation_table(
+    problems: List[Dict],
+    overlap: Set[str],
+    high_risk_files: Dict[str, Any],
+) -> List[str]:
+    """
+    Format the correlation table for overlapping files.
+
+    Issue #620: Extracted from _build_correlation_section.
+    """
+    lines = [
+        "**Priority Files (Issues + High Bug Risk):**",
+        "",
+        "| File | Issue Count | Risk Score | Risk Level |",
+        "|------|-------------|------------|------------|",
+    ]
+
+    # Count issues per file
+    issue_counts: Dict[str, int] = {}
+    for p in problems:
+        fp = p.get("file_path", "")
+        if fp in overlap:
+            issue_counts[fp] = issue_counts.get(fp, 0) + 1
+
+    # Sort by risk score
+    sorted_overlap = sorted(
+        overlap, key=lambda f: high_risk_files[f].risk_score, reverse=True
+    )
+
+    for file_path in sorted_overlap[:10]:
+        fa = high_risk_files[file_path]
+        issue_count = issue_counts.get(file_path, 0)
+        emoji = _get_risk_emoji(fa.risk_level.value)
+        lines.append(
+            f"| `{file_path}` | {issue_count} | {fa.risk_score:.1f} | "
+            f"{emoji} {fa.risk_level.value.capitalize()} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            f"> **{len(overlap)} files** have both detected issues and high bug risk. "
+            "These should be prioritized for review.",
+            "",
+        ]
+    )
+    return lines
+
+
 def _build_correlation_section(
     problems: List[Dict],
     prediction: Optional[PredictionResult],
 ) -> List[str]:
     """
-    Build cross-reference section showing files with both issues AND high risk (Issue #505).
+    Build cross-reference section showing files with both issues AND high risk.
+
+    Issue #505: Original implementation.
+    Issue #620: Refactored to use extracted helper methods.
 
     Args:
         problems: List of detected code issues
@@ -1694,71 +1770,15 @@ def _build_correlation_section(
     if not prediction:
         return []
 
-    lines = []
-
-    # Get files with issues
-    files_with_issues = set(
-        p.get("file_path", "") for p in problems if p.get("file_path")
-    )
-
-    # Get high-risk files
-    high_risk_files = {
-        fa.file_path: fa
-        for fa in prediction.file_assessments
-        if fa.risk_level.value in ("critical", "high")
-    }
-
-    # Find overlap
-    overlap = files_with_issues & set(high_risk_files.keys())
+    _, high_risk_files, overlap = _compute_correlation_data(problems, prediction)
 
     if overlap:
-        lines.extend(
-            [
-                "**Priority Files (Issues + High Bug Risk):**",
-                "",
-                "| File | Issue Count | Risk Score | Risk Level |",
-                "|------|-------------|------------|------------|",
-            ]
-        )
+        return _format_correlation_table(problems, overlap, high_risk_files)
 
-        # Count issues per file
-        issue_counts: Dict[str, int] = {}
-        for p in problems:
-            fp = p.get("file_path", "")
-            if fp in overlap:
-                issue_counts[fp] = issue_counts.get(fp, 0) + 1
-
-        # Sort by risk score
-        sorted_overlap = sorted(
-            overlap,
-            key=lambda f: high_risk_files[f].risk_score,
-            reverse=True,
-        )
-
-        for file_path in sorted_overlap[:10]:
-            fa = high_risk_files[file_path]
-            issue_count = issue_counts.get(file_path, 0)
-            emoji = _get_risk_emoji(fa.risk_level.value)
-            lines.append(
-                f"| `{file_path}` | {issue_count} | {fa.risk_score:.1f} | "
-                f"{emoji} {fa.risk_level.value.capitalize()} |"
-            )
-
-        lines.extend(
-            [
-                "",
-                f"> **{len(overlap)} files** have both detected issues and high bug risk. "
-                "These should be prioritized for review.",
-                "",
-            ]
-        )
-    else:
-        lines.append(
-            "*No files appear in both static analysis issues and high bug risk.*"
-        )
-        lines.append("")
-
-    return lines
+    return [
+        "*No files appear in both static analysis issues and high bug risk.*",
+        "",
+    ]
 
 
 def _insert_correlation_into_bug_risk(

@@ -29,9 +29,10 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
     from src.code_intelligence.analytics_infrastructure import (
-        SemanticAnalysisMixin,
         SIMILARITY_MEDIUM,
+        SemanticAnalysisMixin,
     )
+
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
@@ -40,7 +41,7 @@ except ImportError:
 # Issue #607: Import shared caches for performance optimization
 try:
     from src.code_intelligence.shared.ast_cache import get_ast_with_content
-    from src.code_intelligence.shared.file_cache import get_python_files
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -62,7 +63,9 @@ _YAML_LOADER_ARGS: FrozenSet[str] = frozenset({"Loader", "SafeLoader"})
 _DEBUG_MODE_VARS: FrozenSet[str] = frozenset({"DEBUG", "DEBUG_MODE"})
 _LOAD_FUNCS: FrozenSet[str] = frozenset({"load", "loads"})  # Issue #380
 _VALIDATION_FUNCS: FrozenSet[str] = frozenset({"validate", "Validator", "Schema"})
-_VALIDATION_ATTRS: FrozenSet[str] = frozenset({"validate", "parse_obj", "model_validate"})
+_VALIDATION_ATTRS: FrozenSet[str] = frozenset(
+    {"validate", "parse_obj", "model_validate"}
+)
 
 
 class SecuritySeverity(Enum):
@@ -87,10 +90,11 @@ class VulnerabilityType(Enum):
     TEMPLATE_INJECTION = "template_injection"
 
     # Sensitive Data Exposure (OWASP A02:2021)
-    HARDCODED_SECRET = "hardcoded_secret"
-    HARDCODED_PASSWORD = "hardcoded_password"
-    HARDCODED_API_KEY = "hardcoded_api_key"
-    HARDCODED_TOKEN = "hardcoded_token"
+    # nosec B105 - These are vulnerability TYPE NAMES, not actual secrets
+    HARDCODED_SECRET = "hardcoded_secret"  # nosec B105
+    HARDCODED_PASSWORD = "hardcoded_password"  # nosec B105
+    HARDCODED_API_KEY = "hardcoded_api_key"  # nosec B105
+    HARDCODED_TOKEN = "hardcoded_token"  # nosec B105
     SENSITIVE_DATA_LOGGING = "sensitive_data_logging"
     UNENCRYPTED_STORAGE = "unencrypted_storage"
 
@@ -129,10 +133,11 @@ class VulnerabilityType(Enum):
     INTEGER_OVERFLOW_RISK = "integer_overflow_risk"
 
     # Authentication Issues
-    WEAK_PASSWORD_POLICY = "weak_password_policy"
+    # nosec B105 - These are vulnerability TYPE NAMES, not actual secrets
+    WEAK_PASSWORD_POLICY = "weak_password_policy"  # nosec B105
     MISSING_RATE_LIMITING = "missing_rate_limiting"
     SESSION_FIXATION_RISK = "session_fixation_risk"
-    JWT_WEAK_SECRET = "jwt_weak_secret"
+    JWT_WEAK_SECRET = "jwt_weak_secret"  # nosec B105
     JWT_NO_EXPIRY = "jwt_no_expiry"
 
 
@@ -415,7 +420,9 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
     def _check_input_validation(self, node) -> None:
         """Check if web handler validates input."""
-        has_validation = self._has_validation_call(node) or self._has_type_annotations(node)
+        has_validation = self._has_validation_call(node) or self._has_type_annotations(
+            node
+        )
 
         if not has_validation:
             code = self._get_source_segment(node.lineno, node.end_lineno or node.lineno)
@@ -530,7 +537,10 @@ class SecurityASTVisitor(ast.NodeVisitor):
 
         if isinstance(func, ast.Attribute):
             # Pickle is dangerous
-            if func.attr in _LOAD_FUNCS and self._get_module_name(func) in _PICKLE_MODULES:
+            if (
+                func.attr in _LOAD_FUNCS
+                and self._get_module_name(func) in _PICKLE_MODULES
+            ):
                 code = self._get_source_segment(node.lineno, node.lineno)
                 self.findings.append(
                     SecurityFinding(
@@ -552,9 +562,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
             # yaml.load without Loader
             if func.attr == "load" and self._get_module_name(func) == "yaml":
                 # Check if safe_load or Loader is specified
-                has_loader = any(
-                    kw.arg in _YAML_LOADER_ARGS for kw in node.keywords
-                )
+                has_loader = any(kw.arg in _YAML_LOADER_ARGS for kw in node.keywords)
                 if not has_loader:
                     code = self._get_source_segment(node.lineno, node.lineno)
                     self.findings.append(
@@ -712,7 +720,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                 lines = self.source_lines[start - 1 : end]
                 return "\n".join(lines)
         except Exception:
-            pass  # Index error or other issue, return empty below
+            pass  # nosec B110 - Intentionally return empty for invalid ranges
         return ""
 
 
@@ -756,7 +764,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         ]
         self.results: List[SecurityFinding] = []
         self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
-        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        self.use_semantic_analysis = (
+            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        )
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
@@ -1006,8 +1016,10 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         high_count = by_severity.get("high", 0)
 
         # Issue #686: Use total_files_scanned instead of files with issues
-        files_analyzed = self.total_files_scanned if self.total_files_scanned > 0 else len(
-            set(f.file_path for f in self.results)
+        files_analyzed = (
+            self.total_files_scanned
+            if self.total_files_scanned > 0
+            else len(set(f.file_path for f in self.results))
         )
 
         return {
@@ -1178,7 +1190,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+                min_similarity=SIMILARITY_MEDIUM
+                if HAS_ANALYTICS_INFRASTRUCTURE
+                else 0.7,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

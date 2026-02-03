@@ -10,7 +10,7 @@ Provides web research capabilities for multi-agent workflows
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -86,7 +86,10 @@ class ResearchAgent:
                 "installation": "sudo apt-get install masscan",
                 "usage": "masscan -p1-65535 <target_network> --rate=1000",
                 "verification": "masscan --version",
-                "prerequisites": ["sudo privileges", "build-essential (if compiling from source)"],
+                "prerequisites": [
+                    "sudo privileges",
+                    "build-essential (if compiling from source)",
+                ],
             },
             "zmap": {
                 "installation": "sudo apt-get install zmap",
@@ -132,13 +135,16 @@ class ResearchAgent:
 
         logger.info(
             "Starting research for query: '%s' with focus: '%s'",
-            request.query, request.focus
+            request.query,
+            request.focus,
         )
 
         try:
             # Use real Playwright-based web research
             researcher = await self._get_web_researcher()
-            search_results = await researcher.search_web(request.query, request.max_results)
+            search_results = await researcher.search_web(
+                request.query, request.max_results
+            )
 
             # Convert search results to ResearchResult format
             results = []
@@ -178,7 +184,9 @@ class ResearchAgent:
         # Perform real web research for tool information
         try:
             researcher = await self._get_web_researcher()
-            search_results = await researcher.search_web(request.query, request.max_results)
+            search_results = await researcher.search_web(
+                request.query, request.max_results
+            )
 
             research_results = []
             if search_results.get("status") == "success":
@@ -206,7 +214,9 @@ class ResearchAgent:
                 "detailed_info": detailed_info,
                 "research_results": [r.model_dump() for r in research_results],
                 "web_search_results": search_results.get("results", []),
-                "summary": self._generate_research_summary(research_results, request.query),
+                "summary": self._generate_research_summary(
+                    research_results, request.query
+                ),
             }
 
         except Exception as e:
@@ -228,7 +238,11 @@ class ResearchAgent:
                 search_results = await researcher.search_web(
                     f"{tool_name} installation guide", max_results=3
                 )
-                web_results = search_results.get("results", []) if search_results.get("status") == "success" else []
+                web_results = (
+                    search_results.get("results", [])
+                    if search_results.get("status") == "success"
+                    else []
+                )
             except Exception:
                 web_results = []
 
@@ -238,7 +252,9 @@ class ResearchAgent:
                 "installation_command": tool_info.get("installation", "Not available"),
                 "usage_example": tool_info.get("usage", "Not available"),
                 "prerequisites": tool_info.get("prerequisites", ["sudo privileges"]),
-                "verification_command": tool_info.get("verification", f"{tool_name} --version"),
+                "verification_command": tool_info.get(
+                    "verification", f"{tool_name} --version"
+                ),
                 "web_resources": web_results,
             }
 
@@ -249,7 +265,9 @@ class ResearchAgent:
                 f"{tool_name} installation guide", max_results=5
             )
 
-            if search_results.get("status") == "success" and search_results.get("results"):
+            if search_results.get("status") == "success" and search_results.get(
+                "results"
+            ):
                 return {
                     "success": True,
                     "tool_name": tool_name,
@@ -273,7 +291,9 @@ class ResearchAgent:
         """Get command to verify tool installation."""
         tool_lower = tool_name.lower()
         if tool_lower in self._tool_reference_data:
-            return self._tool_reference_data[tool_lower].get("verification", f"{tool_name} --version")
+            return self._tool_reference_data[tool_lower].get(
+                "verification", f"{tool_name} --version"
+            )
         return f"{tool_name} --version"
 
     def _generate_research_summary(

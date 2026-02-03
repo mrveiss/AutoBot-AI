@@ -15,7 +15,6 @@ import shlex
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -41,25 +40,84 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
     def _init_allowed_commands(self) -> set:
         """Initialize set of allowed commands (Issue #398: extracted)."""
         return {
-            "ls", "dir", "pwd", "cd", "cat", "head", "tail", "grep", "find",
-            "ps", "top", "htop", "d", "du", "free", "lscpu", "lsblk",
-            "ifconfig", "ip", "netstat", "ss", "ping", "curl", "wget",
-            "systemctl", "service", "journalctl", "dmesg", "uname", "whoami",
-            "which", "whereis", "file", "stat", "chmod", "chown", "mkdir",
-            "rmdir", "cp", "mv", "touch", "ln", "tar", "gzip", "gunzip",
-            "zip", "unzip", "sort", "uniq", "wc", "awk", "sed", "cut",
+            "ls",
+            "dir",
+            "pwd",
+            "cd",
+            "cat",
+            "head",
+            "tail",
+            "grep",
+            "find",
+            "ps",
+            "top",
+            "htop",
+            "d",
+            "du",
+            "free",
+            "lscpu",
+            "lsblk",
+            "ifconfig",
+            "ip",
+            "netstat",
+            "ss",
+            "ping",
+            "curl",
+            "wget",
+            "systemctl",
+            "service",
+            "journalctl",
+            "dmesg",
+            "uname",
+            "whoami",
+            "which",
+            "whereis",
+            "file",
+            "stat",
+            "chmod",
+            "chown",
+            "mkdir",
+            "rmdir",
+            "cp",
+            "mv",
+            "touch",
+            "ln",
+            "tar",
+            "gzip",
+            "gunzip",
+            "zip",
+            "unzip",
+            "sort",
+            "uniq",
+            "wc",
+            "awk",
+            "sed",
+            "cut",
         }
 
     def _init_dangerous_patterns(self) -> list:
         """Initialize list of dangerous command patterns (Issue #398: extracted)."""
         return [
-            r"rm\s+-rf\s+/", r"rm\s+-rf\s+\*", r":(){ :|:& };:",
-            r"dd\s+.*of=/dev/", r"mkfs", r"fdisk", r"cfdisk",
-            r"iptables\s+-F", r"ufw\s+disable", r"firewall-cmd",
-            r"passwd", r"usermod", r"userdel", r"groupdel",
-            r"chmod\s+777", r"chmod\s+-R\s+777",
-            r"curl.*\|\s*bash", r"wget.*\|\s*sh",
-            r"sudo\s+su\s*-", r"su\s+-",
+            r"rm\s+-rf\s+/",
+            r"rm\s+-rf\s+\*",
+            r":(){ :|:& };:",
+            r"dd\s+.*of=/dev/",
+            r"mkfs",
+            r"fdisk",
+            r"cfdisk",
+            r"iptables\s+-F",
+            r"ufw\s+disable",
+            r"firewall-cmd",
+            r"passwd",
+            r"usermod",
+            r"userdel",
+            r"groupdel",
+            r"chmod\s+777",
+            r"chmod\s+-R\s+777",
+            r"curl.*\|\s*bash",
+            r"wget.*\|\s*sh",
+            r"sudo\s+su\s*-",
+            r"su\s+-",
         ]
 
     def __init__(self):
@@ -73,14 +131,19 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
         self.capabilities = [
-            "command_generation", "security_validation", "shell_operations",
-            "system_administration", "command_explanation",
+            "command_generation",
+            "security_validation",
+            "shell_operations",
+            "system_administration",
+            "command_explanation",
         ]
         self.allowed_commands = self._init_allowed_commands()
         self.dangerous_patterns = self._init_dangerous_patterns()
         logger.info(
             "System Commands Agent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
     async def action_process_command(self, request: AgentRequest) -> Dict[str, Any]:
@@ -151,7 +214,9 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
                 top_p=0.8,
             )
             command_info = self._extract_and_validate_command(response)
-            security_check = self._security_validate_command(command_info.get("command", ""))
+            security_check = self._security_validate_command(
+                command_info.get("command", "")
+            )
             command_info.update(security_check)
             return self._build_success_response(command_info)
         except Exception as e:

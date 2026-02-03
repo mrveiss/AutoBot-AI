@@ -13,13 +13,9 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Pattern, Set, Tuple
+from typing import Any, Dict, List, Optional, Pattern, Set
 
-from .models import (
-    PatternCategory,
-    PatternLocation,
-    PatternType,
-)
+from .models import PatternCategory, PatternLocation, PatternType
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +67,9 @@ _VUE_TEMPLATE_RE: Pattern = re.compile(r"<template>([\s\S]*?)</template>")
 
 # Validation patterns (cross-language)
 _VALIDATION_PATTERNS: Dict[str, Pattern] = {
-    "email": re.compile(r"['\"]?email['\"]?\s*[:=]|\.email\(|isEmail|email.*valid", re.I),
+    "email": re.compile(
+        r"['\"]?email['\"]?\s*[:=]|\.email\(|isEmail|email.*valid", re.I
+    ),
     "phone": re.compile(r"phone|telephone|mobile.*valid|isPhone", re.I),
     "required": re.compile(r"required|not\s*null|mandatory|\.required\(", re.I),
     "min_length": re.compile(r"min.*len|minLength|min_length|\.min\(", re.I),
@@ -83,10 +81,21 @@ _VALIDATION_PATTERNS: Dict[str, Pattern] = {
 }
 
 # Common skip directories
-_SKIP_DIRS: frozenset = frozenset({
-    "node_modules", "__pycache__", ".git", ".venv", "venv",
-    "dist", "build", ".next", ".nuxt", "coverage", ".pytest_cache",
-})
+_SKIP_DIRS: frozenset = frozenset(
+    {
+        "node_modules",
+        "__pycache__",
+        ".git",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        ".next",
+        ".nuxt",
+        "coverage",
+        ".pytest_cache",
+    }
+)
 
 
 class BasePatternExtractor(ABC):
@@ -102,18 +111,15 @@ class BasePatternExtractor(ABC):
     @abstractmethod
     def language(self) -> str:
         """Return language name."""
-        pass
 
     @property
     @abstractmethod
     def file_extensions(self) -> Set[str]:
         """Return supported file extensions."""
-        pass
 
     @abstractmethod
     def extract_patterns(self, file_path: Path) -> List[Dict[str, Any]]:
         """Extract patterns from a file."""
-        pass
 
     def supports_file(self, file_path: Path) -> bool:
         """Check if this extractor supports the file."""
@@ -143,7 +149,7 @@ class BasePatternExtractor(ABC):
             start_line = 1
         if end_line > len(self.lines):
             end_line = len(self.lines)
-        return "\n".join(self.lines[start_line - 1:end_line])
+        return "\n".join(self.lines[start_line - 1 : end_line])
 
     def _create_location(
         self, line_start: int, line_end: int = None
@@ -209,7 +215,9 @@ class PythonPatternExtractor(BasePatternExtractor):
                     patterns.append(pattern)
 
             # Extract function definitions
-            elif isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            elif isinstance(node, ast.FunctionDef) or isinstance(
+                node, ast.AsyncFunctionDef
+            ):
                 pattern = self._analyze_function(node)
                 if pattern:
                     patterns.append(pattern)
@@ -220,14 +228,16 @@ class PythonPatternExtractor(BasePatternExtractor):
         """Analyze a class definition."""
         # Check for Pydantic models
         base_names = [
-            base.id if isinstance(base, ast.Name) else
-            base.attr if isinstance(base, ast.Attribute) else ""
+            base.id
+            if isinstance(base, ast.Name)
+            else base.attr
+            if isinstance(base, ast.Attribute)
+            else ""
             for base in node.bases
         ]
 
         is_pydantic = any(
-            name in ("BaseModel", "BaseSettings", "RootModel")
-            for name in base_names
+            name in ("BaseModel", "BaseSettings", "RootModel") for name in base_names
         )
         is_dataclass = any(
             isinstance(dec, ast.Name) and dec.id == "dataclass"
@@ -247,8 +257,12 @@ class PythonPatternExtractor(BasePatternExtractor):
             "type": pattern_type,
             "category": category,
             "name": node.name,
-            "location": self._create_location(node.lineno, node.end_lineno or node.lineno),
-            "code": self._get_code_block(node.lineno, node.end_lineno or node.lineno + 10),
+            "location": self._create_location(
+                node.lineno, node.end_lineno or node.lineno
+            ),
+            "code": self._get_code_block(
+                node.lineno, node.end_lineno or node.lineno + 10
+            ),
             "is_pydantic": is_pydantic,
             "is_dataclass": is_dataclass,
             "fields": fields,
@@ -271,13 +285,15 @@ class PythonPatternExtractor(BasePatternExtractor):
                 field_type = self._get_type_annotation(item.annotation)
                 is_optional = "Optional" in field_type or "None" in field_type
 
-                fields.append({
-                    "name": field_name,
-                    "type": field_type,
-                    "optional": is_optional,
-                    "has_default": item.value is not None,
-                    "line": item.lineno,
-                })
+                fields.append(
+                    {
+                        "name": field_name,
+                        "type": field_type,
+                        "optional": is_optional,
+                        "has_default": item.value is not None,
+                        "line": item.lineno,
+                    }
+                )
 
         return fields
 
@@ -292,8 +308,7 @@ class PythonPatternExtractor(BasePatternExtractor):
                     return f"{base}[{annotation.slice.id}]"
                 elif isinstance(annotation.slice, ast.Tuple):
                     args = ", ".join(
-                        self._get_type_annotation(elt)
-                        for elt in annotation.slice.elts
+                        self._get_type_annotation(elt) for elt in annotation.slice.elts
                     )
                     return f"{base}[{args}]"
                 return f"{base}[...]"
@@ -314,7 +329,8 @@ class PythonPatternExtractor(BasePatternExtractor):
 
         is_async = isinstance(node, ast.AsyncFunctionDef)
         is_validator = any(
-            isinstance(dec, ast.Name) and dec.id in ("validator", "field_validator", "root_validator")
+            isinstance(dec, ast.Name)
+            and dec.id in ("validator", "field_validator", "root_validator")
             for dec in node.decorator_list
         )
 
@@ -328,22 +344,32 @@ class PythonPatternExtractor(BasePatternExtractor):
         # Extract parameters
         params = []
         for arg in node.args.args:
-            param_type = self._get_type_annotation(arg.annotation) if arg.annotation else "Any"
-            params.append({
-                "name": arg.arg,
-                "type": param_type,
-            })
+            param_type = (
+                self._get_type_annotation(arg.annotation) if arg.annotation else "Any"
+            )
+            params.append(
+                {
+                    "name": arg.arg,
+                    "type": param_type,
+                }
+            )
 
         return {
             "type": pattern_type,
             "category": category,
             "name": node.name,
-            "location": self._create_location(node.lineno, node.end_lineno or node.lineno),
-            "code": self._get_code_block(node.lineno, node.end_lineno or node.lineno + 5),
+            "location": self._create_location(
+                node.lineno, node.end_lineno or node.lineno
+            ),
+            "code": self._get_code_block(
+                node.lineno, node.end_lineno or node.lineno + 5
+            ),
             "is_async": is_async,
             "is_validator": is_validator,
             "parameters": params,
-            "return_type": self._get_type_annotation(node.returns) if node.returns else "None",
+            "return_type": self._get_type_annotation(node.returns)
+            if node.returns
+            else "None",
         }
 
     def _extract_regex_patterns(self) -> List[Dict[str, Any]]:
@@ -352,27 +378,31 @@ class PythonPatternExtractor(BasePatternExtractor):
 
         # Extract Pydantic models
         for match in _PY_PYDANTIC_MODEL_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
-            patterns.append({
-                "type": PatternType.DTO_DEFINITION,
-                "category": PatternCategory.DATA_TYPES,
-                "name": match.group(1),
-                "location": self._create_location(line_num),
-                "code": self._get_line_content(line_num),
-                "is_pydantic": True,
-            })
+            line_num = self.source_code[: match.start()].count("\n") + 1
+            patterns.append(
+                {
+                    "type": PatternType.DTO_DEFINITION,
+                    "category": PatternCategory.DATA_TYPES,
+                    "name": match.group(1),
+                    "location": self._create_location(line_num),
+                    "code": self._get_line_content(line_num),
+                    "is_pydantic": True,
+                }
+            )
 
         # Extract dataclasses
         for match in _PY_DATACLASS_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
-            patterns.append({
-                "type": PatternType.DTO_DEFINITION,
-                "category": PatternCategory.DATA_TYPES,
-                "name": match.group(1),
-                "location": self._create_location(line_num),
-                "code": self._get_line_content(line_num),
-                "is_dataclass": True,
-            })
+            line_num = self.source_code[: match.start()].count("\n") + 1
+            patterns.append(
+                {
+                    "type": PatternType.DTO_DEFINITION,
+                    "category": PatternCategory.DATA_TYPES,
+                    "name": match.group(1),
+                    "location": self._create_location(line_num),
+                    "code": self._get_line_content(line_num),
+                    "is_dataclass": True,
+                }
+            )
 
         return patterns
 
@@ -381,7 +411,7 @@ class PythonPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _PY_FASTAPI_ROUTE_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             path = match.group(1)
 
             # Determine HTTP method from decorator
@@ -392,15 +422,17 @@ class PythonPatternExtractor(BasePatternExtractor):
                     method = m.upper()
                     break
 
-            patterns.append({
-                "type": PatternType.API_ENDPOINT,
-                "category": PatternCategory.API_CONTRACT,
-                "name": f"{method} {path}",
-                "path": path,
-                "method": method,
-                "location": self._create_location(line_num),
-                "code": self._get_code_block(line_num, line_num + 3),
-            })
+            patterns.append(
+                {
+                    "type": PatternType.API_ENDPOINT,
+                    "category": PatternCategory.API_CONTRACT,
+                    "name": f"{method} {path}",
+                    "path": path,
+                    "method": method,
+                    "location": self._create_location(line_num),
+                    "code": self._get_code_block(line_num, line_num + 3),
+                }
+            )
 
         return patterns
 
@@ -409,18 +441,20 @@ class PythonPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _PY_VALIDATOR_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             code_block = self._get_code_block(line_num, line_num + 10)
             validation_type = self._find_validation_type(code_block)
 
-            patterns.append({
-                "type": PatternType.VALIDATION_RULE,
-                "category": PatternCategory.VALIDATION,
-                "name": f"validator_{line_num}",
-                "validation_type": validation_type,
-                "location": self._create_location(line_num, line_num + 5),
-                "code": code_block,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.VALIDATION_RULE,
+                    "category": PatternCategory.VALIDATION,
+                    "name": f"validator_{line_num}",
+                    "validation_type": validation_type,
+                    "location": self._create_location(line_num, line_num + 5),
+                    "code": code_block,
+                }
+            )
 
         return patterns
 
@@ -474,7 +508,7 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _TS_INTERFACE_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             interface_name = match.group(1)
 
             # Find the closing brace with proper handling of nested structures
@@ -484,7 +518,9 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
                 # Failed to find closing brace, skip this interface
                 logger.warning(
                     "Failed to find closing brace for interface %s in %s:%d",
-                    interface_name, self.current_file, line_num
+                    interface_name,
+                    self.current_file,
+                    line_num,
                 )
                 continue
 
@@ -494,15 +530,17 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
             # Extract fields from interface
             fields = self._extract_ts_fields(interface_code)
 
-            patterns.append({
-                "type": PatternType.DTO_DEFINITION,
-                "category": PatternCategory.DATA_TYPES,
-                "name": interface_name,
-                "location": self._create_location(line_num, end_line),
-                "code": interface_code,
-                "fields": fields,
-                "is_interface": True,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.DTO_DEFINITION,
+                    "category": PatternCategory.DATA_TYPES,
+                    "name": interface_name,
+                    "location": self._create_location(line_num, end_line),
+                    "code": interface_code,
+                    "fields": fields,
+                    "is_interface": True,
+                }
+            )
 
         return patterns
 
@@ -677,21 +715,20 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
     def _extract_ts_fields(self, interface_code: str) -> List[Dict[str, Any]]:
         """Extract fields from TypeScript interface."""
         fields = []
-        field_pattern = re.compile(
-            r"^\s*(\w+)(\?)?\s*:\s*([^;,\n]+)",
-            re.MULTILINE
-        )
+        field_pattern = re.compile(r"^\s*(\w+)(\?)?\s*:\s*([^;,\n]+)", re.MULTILINE)
 
         for match in field_pattern.finditer(interface_code):
             name = match.group(1)
             optional = match.group(2) == "?"
             field_type = match.group(3).strip()
 
-            fields.append({
-                "name": name,
-                "type": field_type,
-                "optional": optional,
-            })
+            fields.append(
+                {
+                    "name": name,
+                    "type": field_type,
+                    "optional": optional,
+                }
+            )
 
         return fields
 
@@ -700,12 +737,12 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _TS_TYPE_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             type_name = match.group(1)
 
             # Get the type definition (until semicolon or newline)
             start_pos = match.start()
-            end_match = re.search(r"[;\n]", self.source_code[match.end():])
+            end_match = re.search(r"[;\n]", self.source_code[match.end() :])
             if end_match:
                 end_pos = match.end() + end_match.start()
             else:
@@ -713,14 +750,16 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
             type_code = self.source_code[start_pos:end_pos]
 
-            patterns.append({
-                "type": PatternType.TYPE_DEFINITION,
-                "category": PatternCategory.DATA_TYPES,
-                "name": type_name,
-                "location": self._create_location(line_num),
-                "code": type_code,
-                "is_type_alias": True,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.TYPE_DEFINITION,
+                    "category": PatternCategory.DATA_TYPES,
+                    "name": type_name,
+                    "location": self._create_location(line_num),
+                    "code": type_code,
+                    "is_type_alias": True,
+                }
+            )
 
         return patterns
 
@@ -729,11 +768,11 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _TS_API_CALL_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             path = match.group(1)
 
             # Determine HTTP method
-            call_text = self.source_code[max(0, match.start() - 20):match.end()]
+            call_text = self.source_code[max(0, match.start() - 20) : match.end()]
             method = "GET"
             for m in ["post", "put", "delete", "patch"]:
                 if f".{m}(" in call_text.lower():
@@ -743,16 +782,18 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
             # Check if path contains template literals
             is_dynamic = "${" in path or "{" in path
 
-            patterns.append({
-                "type": PatternType.API_CALL,
-                "category": PatternCategory.API_CONTRACT,
-                "name": f"{method} {path}",
-                "path": path,
-                "method": method,
-                "is_dynamic": is_dynamic,
-                "location": self._create_location(line_num),
-                "code": self._get_line_content(line_num),
-            })
+            patterns.append(
+                {
+                    "type": PatternType.API_CALL,
+                    "category": PatternCategory.API_CONTRACT,
+                    "name": f"{method} {path}",
+                    "path": path,
+                    "method": method,
+                    "is_dynamic": is_dynamic,
+                    "location": self._create_location(line_num),
+                    "code": self._get_line_content(line_num),
+                }
+            )
 
         return patterns
 
@@ -762,32 +803,38 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
         # Regular functions
         for match in _TS_FUNCTION_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             func_name = match.group(1)
-            is_async = "async" in self.source_code[max(0, match.start() - 10):match.start()]
+            is_async = (
+                "async" in self.source_code[max(0, match.start() - 10) : match.start()]
+            )
 
-            patterns.append({
-                "type": PatternType.UTILITY_FUNCTION,
-                "category": PatternCategory.UTILITIES,
-                "name": func_name,
-                "location": self._create_location(line_num),
-                "code": self._get_code_block(line_num, line_num + 5),
-                "is_async": is_async,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.UTILITY_FUNCTION,
+                    "category": PatternCategory.UTILITIES,
+                    "name": func_name,
+                    "location": self._create_location(line_num),
+                    "code": self._get_code_block(line_num, line_num + 5),
+                    "is_async": is_async,
+                }
+            )
 
         # Arrow functions
         for match in _TS_ARROW_FUNCTION_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             func_name = match.group(1)
 
-            patterns.append({
-                "type": PatternType.UTILITY_FUNCTION,
-                "category": PatternCategory.UTILITIES,
-                "name": func_name,
-                "location": self._create_location(line_num),
-                "code": self._get_line_content(line_num),
-                "is_arrow": True,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.UTILITY_FUNCTION,
+                    "category": PatternCategory.UTILITIES,
+                    "name": func_name,
+                    "location": self._create_location(line_num),
+                    "code": self._get_line_content(line_num),
+                    "is_arrow": True,
+                }
+            )
 
         return patterns
 
@@ -796,18 +843,20 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _TS_VALIDATION_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
             code_block = self._get_code_block(line_num, line_num + 5)
             validation_type = self._find_validation_type(code_block)
 
-            patterns.append({
-                "type": PatternType.VALIDATION_RULE,
-                "category": PatternCategory.VALIDATION,
-                "name": f"validation_{line_num}",
-                "validation_type": validation_type,
-                "location": self._create_location(line_num),
-                "code": code_block,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.VALIDATION_RULE,
+                    "category": PatternCategory.VALIDATION,
+                    "name": f"validation_{line_num}",
+                    "validation_type": validation_type,
+                    "location": self._create_location(line_num),
+                    "code": code_block,
+                }
+            )
 
         return patterns
 
@@ -816,20 +865,22 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
         patterns = []
 
         for match in _TS_ZOD_RE.finditer(self.source_code):
-            line_num = self.source_code[:match.start()].count("\n") + 1
+            line_num = self.source_code[: match.start()].count("\n") + 1
 
             # Find the schema name (look for const/let/var before)
-            pre_context = self.source_code[max(0, match.start() - 50):match.start()]
+            pre_context = self.source_code[max(0, match.start() - 50) : match.start()]
             name_match = re.search(r"(?:const|let|var)\s+(\w+)\s*=\s*$", pre_context)
             schema_name = name_match.group(1) if name_match else f"zodSchema_{line_num}"
 
-            patterns.append({
-                "type": PatternType.VALIDATION_RULE,
-                "category": PatternCategory.VALIDATION,
-                "name": schema_name,
-                "location": self._create_location(line_num),
-                "code": self._get_code_block(line_num, line_num + 10),
-                "is_zod": True,
-            })
+            patterns.append(
+                {
+                    "type": PatternType.VALIDATION_RULE,
+                    "category": PatternCategory.VALIDATION,
+                    "name": schema_name,
+                    "location": self._create_location(line_num),
+                    "code": self._get_code_block(line_num, line_num + 10),
+                    "is_zod": True,
+                }
+            )
 
         return patterns

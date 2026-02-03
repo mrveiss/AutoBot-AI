@@ -19,7 +19,6 @@ from .patterns import (
     DB_OPERATIONS_CONTEXTUAL,
     DB_OPERATIONS_FALSE_POSITIVES,
     DB_OPERATIONS_HIGH_CONFIDENCE,
-    HTTP_OPERATIONS,
     LEGACY_DB_OPERATIONS,
     SAFE_PATTERNS,
 )
@@ -435,9 +434,11 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         Returns:
             True if a high confidence match was found and issue created.
         """
-        for pattern, (recommendation, confidence, is_exact) in (
-            BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items()
-        ):
+        for pattern, (
+            recommendation,
+            confidence,
+            is_exact,
+        ) in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE.items():
             if is_exact and call_name == pattern:
                 severity = (
                     PerformanceSeverity.HIGH
@@ -460,13 +461,20 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         Returns:
             True if a medium confidence match was found and issue created.
         """
-        for pattern, (recommendation, confidence, _) in (
-            BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items()
-        ):
+        for pattern, (
+            recommendation,
+            confidence,
+            _,
+        ) in BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE.items():
             if pattern in call_name_lower:
                 self._create_blocking_issue(
-                    call_name, node, code, PerformanceSeverity.MEDIUM, confidence,
-                    recommendation, is_potential=True,
+                    call_name,
+                    node,
+                    code,
+                    PerformanceSeverity.MEDIUM,
+                    confidence,
+                    recommendation,
+                    is_potential=True,
                     false_positive_reason="Generic pattern match - verify if this is actual I/O",
                 )
                 return True
@@ -488,8 +496,13 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 if blocking_op == "get" and ".get" in call_name_lower:
                     continue  # Skip dict.get() false positives
                 self._create_blocking_issue(
-                    call_name, node, code, PerformanceSeverity.LOW, 0.4,
-                    recommendation, is_potential=True,
+                    call_name,
+                    node,
+                    code,
+                    PerformanceSeverity.LOW,
+                    0.4,
+                    recommendation,
+                    is_potential=True,
                     false_positive_reason=f"Generic pattern '{blocking_op}' matched - may be safe",
                 )
                 return True
@@ -523,7 +536,9 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 return
 
         # Step 3: MEDIUM confidence patterns
-        if self._check_medium_confidence_blocking(call_name_lower, call_name, node, code):
+        if self._check_medium_confidence_blocking(
+            call_name_lower, call_name, node, code
+        ):
             return
 
         # Step 4: Legacy fallback patterns
@@ -657,5 +672,5 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 lines = self.source_lines[start - 1 : end]
                 return "\n".join(lines)
         except Exception:
-            pass  # Index error or other issue, return empty below
+            pass  # nosec B110 - Intentionally return empty for invalid ranges
         return ""

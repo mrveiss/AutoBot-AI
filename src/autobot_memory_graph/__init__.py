@@ -30,20 +30,20 @@ Backward Compatibility:
   `from src.autobot_memory_graph import AutoBotMemoryGraph`
 """
 
-from .core import (
-    AutoBotMemoryGraphCore,
+from .core import (  # noqa: F401 - re-exports for package API
     ENTITY_TYPES,
+    INCOMING_DIRECTIONS,
+    OUTGOING_DIRECTIONS,
     RELATION_TYPES,
     VALID_ACTIVITY_TYPES,
-    OUTGOING_DIRECTIONS,
-    INCOMING_DIRECTIONS,
+    AutoBotMemoryGraphCore,
     config,
 )
 from .entities import EntityOperationsMixin
-from .relations import RelationOperationsMixin
 from .queries import QueryOperationsMixin
-from .user_session import UserSessionMixin
+from .relations import RelationOperationsMixin
 from .secrets import SecretManagementMixin
+from .user_session import UserSessionMixin
 
 
 class AutoBotMemoryGraph(

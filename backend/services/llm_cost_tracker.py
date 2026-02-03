@@ -274,15 +274,29 @@ class LLMCostTracker:
                 request.metadata,
             )
 
-        if provider is None or model is None or input_tokens is None or output_tokens is None:
+        if (
+            provider is None
+            or model is None
+            or input_tokens is None
+            or output_tokens is None
+        ):
             raise ValueError(
                 "Either 'request' object or 'provider', 'model', "
                 "'input_tokens', 'output_tokens' are required"
             )
 
         return (
-            provider, model, input_tokens, output_tokens, session_id,
-            user_id, endpoint, latency_ms, success, error_message, metadata
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
         )
 
     def _create_usage_record(
@@ -368,19 +382,48 @@ class LLMCostTracker:
         """
         # Extract parameters using helper (Issue #665)
         (
-            provider, model, input_tokens, output_tokens, session_id,
-            user_id, endpoint, latency_ms, success, error_message, metadata
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
         ) = self._extract_usage_params(
-            request, provider, model, input_tokens, output_tokens,
-            session_id, user_id, endpoint, latency_ms, success, error_message, metadata
+            request,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
         )
 
         cost = self.calculate_cost(model, input_tokens, output_tokens)
 
         # Create record using helper (Issue #665)
         record = self._create_usage_record(
-            provider, model, input_tokens, output_tokens, cost,
-            session_id, user_id, endpoint, latency_ms, success, error_message, metadata
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
         )
 
         # Issue #379: Parallelize independent tracking operations
@@ -391,7 +434,11 @@ class LLMCostTracker:
 
         logger.debug(
             "Tracked LLM usage: %s/%s - %din/%dout = $%.6f",
-            provider, model, input_tokens, output_tokens, cost
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost,
         )
 
         return record
@@ -431,7 +478,9 @@ class LLMCostTracker:
                     session_key = f"{self.SESSION_TOTALS_KEY}:{record.session_id}"
                     await pipe.hincrbyfloat(session_key, "cost_usd", record.cost_usd)
                     await pipe.hincrby(session_key, "input_tokens", record.input_tokens)
-                    await pipe.hincrby(session_key, "output_tokens", record.output_tokens)
+                    await pipe.hincrby(
+                        session_key, "output_tokens", record.output_tokens
+                    )
                     await pipe.expire(session_key, 86400 * 30)  # Keep 30 days
 
                 # Execute all operations in single round-trip
@@ -443,7 +492,6 @@ class LLMCostTracker:
     async def _check_budget_alerts(self, cost: float) -> None:
         """Check if any budget alerts should be triggered"""
         # Implementation for budget alerts - can be extended
-        pass
 
     async def _fetch_daily_costs(
         self, redis, start_date: datetime, end_date: datetime
@@ -510,10 +558,20 @@ class LLMCostTracker:
             model_name = key_str.split(":")[-1]
 
             model_costs[model_name] = {
-                "cost_usd": float(model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)),
-                "input_tokens": int(model_data.get(b"input_tokens", 0) or model_data.get("input_tokens", 0)),
-                "output_tokens": int(model_data.get(b"output_tokens", 0) or model_data.get("output_tokens", 0)),
-                "call_count": int(model_data.get(b"call_count", 0) or model_data.get("call_count", 0)),
+                "cost_usd": float(
+                    model_data.get(b"cost_usd", 0) or model_data.get("cost_usd", 0)
+                ),
+                "input_tokens": int(
+                    model_data.get(b"input_tokens", 0)
+                    or model_data.get("input_tokens", 0)
+                ),
+                "output_tokens": int(
+                    model_data.get(b"output_tokens", 0)
+                    or model_data.get("output_tokens", 0)
+                ),
+                "call_count": int(
+                    model_data.get(b"call_count", 0) or model_data.get("call_count", 0)
+                ),
             }
 
         return model_costs
@@ -585,8 +643,12 @@ class LLMCostTracker:
                 "session_id": session_id,
                 "found": True,
                 "cost_usd": float(data.get(b"cost_usd", 0) or data.get("cost_usd", 0)),
-                "input_tokens": int(data.get(b"input_tokens", 0) or data.get("input_tokens", 0)),
-                "output_tokens": int(data.get(b"output_tokens", 0) or data.get("output_tokens", 0)),
+                "input_tokens": int(
+                    data.get(b"input_tokens", 0) or data.get("input_tokens", 0)
+                ),
+                "output_tokens": int(
+                    data.get(b"output_tokens", 0) or data.get("output_tokens", 0)
+                ),
             }
 
         except Exception as e:
@@ -617,10 +679,14 @@ class LLMCostTracker:
             second_half = sorted_dates[len(sorted_dates) // 2 :]
 
             first_half_avg = sum(daily_costs[d] for d in first_half) / len(first_half)
-            second_half_avg = sum(daily_costs[d] for d in second_half) / len(second_half)
+            second_half_avg = sum(daily_costs[d] for d in second_half) / len(
+                second_half
+            )
 
             if first_half_avg > 0:
-                growth_rate = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+                growth_rate = (
+                    (second_half_avg - first_half_avg) / first_half_avg
+                ) * 100
             else:
                 growth_rate = 0
         else:
@@ -630,7 +696,11 @@ class LLMCostTracker:
             "period_days": days,
             "total_cost_usd": summary.get("total_cost_usd", 0),
             "daily_costs": daily_costs,
-            "trend": "increasing" if growth_rate > 5 else "decreasing" if growth_rate < -5 else "stable",
+            "trend": "increasing"
+            if growth_rate > 5
+            else "decreasing"
+            if growth_rate < -5
+            else "stable",
             "growth_rate_percent": round(growth_rate, 2),
             "avg_daily_cost": summary.get("avg_daily_cost", 0),
         }

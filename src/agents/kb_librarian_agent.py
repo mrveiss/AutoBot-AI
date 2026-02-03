@@ -11,8 +11,8 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
+from src.config import config
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -20,7 +20,6 @@ from src.config.ssot_config import (
 from src.constants.path_constants import PATH
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,9 @@ class KBLibrarianAgent:
 
         logger.info(
             "KB Librarian Agent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
         if self.auto_learning_enabled:
@@ -62,7 +63,9 @@ class KBLibrarianAgent:
             results = await self.knowledge_base.search(query, limit=limit)
 
             if results:
-                logger.info("KB-LIBRARIAN: Found %s results for '%s'", len(results), query)
+                logger.info(
+                    "KB-LIBRARIAN: Found %s results for '%s'", len(results), query
+                )
                 # Return formatted results with sources
                 formatted_results = []
                 for result in results:

@@ -9,14 +9,13 @@ API modules. Extracted to eliminate code duplication (Issue #292).
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class AutoBotError(Exception):
     """Base exception class for AutoBot errors."""
-    pass
 
 
 class InternalError(AutoBotError):
@@ -31,12 +30,10 @@ class InternalError(AutoBotError):
 
 class ResourceNotFoundError(AutoBotError):
     """Resource not found error."""
-    pass
 
 
 class ValidationError(AutoBotError):
     """Validation error."""
-    pass
 
 
 class NetworkError(AutoBotError):
@@ -59,12 +56,10 @@ class NetworkError(AutoBotError):
 
 class ServiceUnavailableError(NetworkError):
     """Raised when an upstream service is unavailable or unreachable."""
-    pass
 
 
 class ServiceTimeoutError(NetworkError):
     """Raised when a service request times out."""
-    pass
 
 
 class HTTPClientError(NetworkError):
@@ -147,9 +142,7 @@ def get_error_code(error_type: str) -> str:
     return error_codes.get(error_type, "UNKNOWN_ERROR")
 
 
-def get_exceptions_lazy() -> Tuple[
-    type, type, type, type, Callable[[str], str]
-]:
+def get_exceptions_lazy() -> Tuple[type, type, type, type, Callable[[str], str]]:
     """
     Lazy load exception classes to avoid import errors.
 

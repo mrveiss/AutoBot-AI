@@ -22,17 +22,16 @@ import threading
 import uuid
 from typing import Any, Dict, List, Optional
 
-from src.config.ssot_config import (
-    AgentConfigurationError,
-    get_agent_endpoint_explicit,
-    get_agent_model_explicit,
-    get_agent_provider_explicit,
-)
-from src.llm_interface import LLMInterface
-
+# Re-export pattern constants for backward compatibility
 # Re-export all public API from the package for backward compatibility
-from src.agents.agent_orchestration import (
+from src.agents.agent_orchestration import (  # noqa: F401
+    CLASSIFICATION_TERMS,
+    CODE_SEARCH_TERMS,
     DEFAULT_AGENT_CAPABILITIES,
+    GREETING_PATTERNS,
+    KNOWLEDGE_PATTERNS,
+    RESEARCH_PATTERNS,
+    SYSTEM_COMMAND_PATTERNS,
     AgentCapability,
     AgentExecutor,
     AgentRouter,
@@ -40,16 +39,12 @@ from src.agents.agent_orchestration import (
     DistributedAgentInfo,
     DistributedAgentManager,
 )
-
-# Re-export pattern constants for backward compatibility
-from src.agents.agent_orchestration import (  # noqa: F401
-    CLASSIFICATION_TERMS,
-    CODE_SEARCH_TERMS,
-    GREETING_PATTERNS,
-    KNOWLEDGE_PATTERNS,
-    RESEARCH_PATTERNS,
-    SYSTEM_COMMAND_PATTERNS,
+from src.config.ssot_config import (
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
 )
+from src.llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +134,9 @@ class AgentOrchestrator:
 
         logger.info(
             "Agent Orchestrator initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
         # Initialize agent capabilities map

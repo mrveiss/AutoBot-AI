@@ -15,7 +15,6 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
-import asyncio
 import gc
 import logging
 import os
@@ -46,7 +45,7 @@ class MemoryMixin:
         if len(self.history) > self.cleanup_threshold:
             # Keep most recent messages within the limit
             old_count = len(self.history)
-            self.history = self.history[-self.max_messages:]
+            self.history = self.history[-self.max_messages :]
 
             # Force garbage collection to free memory immediately
             collected_objects = gc.collect()
@@ -108,13 +107,15 @@ class MemoryMixin:
 
             # Remove old files if exceeding limit
             if len(chat_files) > self.max_session_files:
-                files_to_remove = chat_files[self.max_session_files:]
+                files_to_remove = chat_files[self.max_session_files :]
                 for file_path, _, filename in files_to_remove:
                     try:
                         await run_in_chat_io_executor(os.remove, file_path)
                         logger.info("CLEANUP: Removed old session file: %s", filename)
                     except Exception as e:
-                        logger.error("Failed to remove session file %s: %s", filename, e)
+                        logger.error(
+                            "Failed to remove session file %s: %s", filename, e
+                        )
 
                 logger.info(
                     "SESSION CLEANUP: Removed %d old session files, "

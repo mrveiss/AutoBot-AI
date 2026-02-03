@@ -15,17 +15,23 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .constants import OWASP_MAPPING, PLACEHOLDER_PATTERNS, SecuritySeverity, VulnerabilityType
+from .ast_visitor import SecurityASTVisitor
+from .constants import (
+    OWASP_MAPPING,
+    PLACEHOLDER_PATTERNS,
+    SecuritySeverity,
+    VulnerabilityType,
+)
 from .finding import SecurityFinding
 from .patterns import SECRET_PATTERNS, SQL_INJECTION_PATTERNS
-from .ast_visitor import SecurityASTVisitor
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
     from src.code_intelligence.analytics_infrastructure import (
-        SemanticAnalysisMixin,
         SIMILARITY_MEDIUM,
+        SemanticAnalysisMixin,
     )
+
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
@@ -35,7 +41,7 @@ except ImportError:
 # Issue #607: Import shared caches for performance optimization
 try:
     from src.code_intelligence.shared.ast_cache import get_ast_with_content
-    from src.code_intelligence.shared.file_cache import get_python_files
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -62,12 +68,21 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         """Initialize security analyzer."""
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.exclude_patterns = exclude_patterns or [
-            "venv", "node_modules", ".git", "__pycache__", "*.pyc",
-            "test_*", "*_test.py", "archives", "migrations",
+            "venv",
+            "node_modules",
+            ".git",
+            "__pycache__",
+            "*.pyc",
+            "test_*",
+            "*_test.py",
+            "archives",
+            "migrations",
         ]
         self.results: List[SecurityFinding] = []
         self.total_files_scanned: int = 0
-        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        self.use_semantic_analysis = (
+            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        )
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         if self.use_semantic_analysis:
@@ -226,7 +241,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         findings.extend(self._check_path_traversal(file_path, content, lines))
         return findings
 
-    def analyze_directory(self, directory: Optional[str] = None) -> List[SecurityFinding]:
+    def analyze_directory(
+        self, directory: Optional[str] = None
+    ) -> List[SecurityFinding]:
         """Analyze all Python files in a directory."""
         target = Path(directory) if directory else self.project_root
         self.results = []
@@ -275,8 +292,10 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         total_findings = len(self.results)
         critical_count = by_severity.get("critical", 0)
         high_count = by_severity.get("high", 0)
-        files_analyzed = self.total_files_scanned if self.total_files_scanned > 0 else len(
-            set(f.file_path for f in self.results)
+        files_analyzed = (
+            self.total_files_scanned
+            if self.total_files_scanned > 0
+            else len(set(f.file_path for f in self.results))
         )
 
         return {
@@ -361,7 +380,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
             for finding in report["findings"][:20]:
                 md.append(f"### {finding['vulnerability_type']}\n")
                 md.append(f"- **Severity**: {finding['severity']}\n")
-                md.append(f"- **File**: {finding['file_path']}:{finding['line_start']}\n")
+                md.append(
+                    f"- **File**: {finding['file_path']}:{finding['line_start']}\n"
+                )
                 md.append(f"- **Description**: {finding['description']}\n")
                 md.append(f"- **OWASP**: {finding['owasp_category']}\n")
                 if finding.get("cwe_id"):
@@ -397,7 +418,8 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         return result
 
     async def _find_semantic_security_duplicates(
-        self, findings: List[SecurityFinding],
+        self,
+        findings: List[SecurityFinding],
     ) -> List[Dict[str, Any]]:
         """Find semantically similar security vulnerabilities using LLM embeddings."""
         try:
@@ -411,14 +433,18 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+                min_similarity=SIMILARITY_MEDIUM
+                if HAS_ANALYTICS_INFRASTRUCTURE
+                else 0.7,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
             return []
 
     async def cache_analysis_results(
-        self, directory: str, results: List[SecurityFinding],
+        self,
+        directory: str,
+        results: List[SecurityFinding],
     ) -> bool:
         """Cache analysis results in Redis for faster retrieval."""
         if not self.use_semantic_analysis:

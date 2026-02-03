@@ -32,12 +32,11 @@ Usage:
 import asyncio
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - Required for SSH key validation
 import tempfile
 import threading
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from src.services.agent_secrets_integration import (
     AgentSecretsIntegration,
@@ -127,9 +126,7 @@ class TerminalSecretsService:
         """
         for key_data in ssh_keys:
             try:
-                key_info = await self._prepare_ssh_key(
-                    key_data, session_state.temp_dir
-                )
+                key_info = await self._prepare_ssh_key(key_data, session_state.temp_dir)
                 session_state.keys.append(key_info)
                 result["keys_available"].append(key_data["name"])
                 result["keys_loaded"] += 1
@@ -192,7 +189,9 @@ class TerminalSecretsService:
 
             # Create session state with temp directory
             session_state = SessionKeyState(session_id=session_id, chat_id=chat_id)
-            session_state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{session_id}_")
+            session_state.temp_dir = tempfile.mkdtemp(
+                prefix=f"autobot_ssh_{session_id}_"
+            )
 
             # Prepare all keys (Issue #665: uses helper)
             await self._prepare_session_keys(session_state, ssh_keys, result)
@@ -203,7 +202,8 @@ class TerminalSecretsService:
 
             logger.info(
                 "SSH key setup complete for session %s: %d keys loaded",
-                session_id, result["keys_loaded"]
+                session_id,
+                result["keys_loaded"],
             )
 
         except Exception as e:
@@ -213,9 +213,7 @@ class TerminalSecretsService:
 
         return result
 
-    async def _prepare_ssh_key(
-        self, key_data: Dict, temp_dir: str
-    ) -> SSHKeyInfo:
+    async def _prepare_ssh_key(self, key_data: Dict, temp_dir: str) -> SSHKeyInfo:
         """Prepare an SSH key for use in a terminal session.
 
         Writes the key to a temporary file with proper permissions
@@ -269,7 +267,7 @@ class TerminalSecretsService:
         """
         try:
             # Try to read key without passphrase using ssh-keygen
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - ssh-keygen is a trusted system tool
                 ["ssh-keygen", "-y", "-P", "", "-f", key_path],
                 capture_output=True,
                 timeout=5,

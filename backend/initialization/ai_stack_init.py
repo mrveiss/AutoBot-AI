@@ -27,18 +27,14 @@ def log_initialization_step(
 async def update_init_status(key: str, value: str) -> None:
     """Update initialization status (imported from app_factory_enhanced)."""
     # This function will be called with the parent module's status dict
-    pass
 
 
 async def append_init_error(error: str) -> None:
     """Append initialization error (imported from app_factory_enhanced)."""
     # This function will be called with the parent module's error list
-    pass
 
 
-async def initialize_ai_stack(
-    app: FastAPI, update_status_fn, append_error_fn
-) -> None:
+async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -> None:
     """
     Initialize AI Stack connection and verify agent availability.
 

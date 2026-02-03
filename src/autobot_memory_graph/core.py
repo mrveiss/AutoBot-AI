@@ -12,16 +12,13 @@ Part of the modular autobot_memory_graph package (Issue #716).
 
 import asyncio
 import logging
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, FrozenSet, Optional
 
 import redis.asyncio as async_redis
 from cachetools import LRUCache
 
 from src.config import UnifiedConfigManager
-from src.utils.error_boundaries import (
-    error_boundary,
-    get_error_boundary_manager,
-)
+from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
 
 logger = logging.getLogger(__name__)
 
@@ -87,12 +84,14 @@ RELATION_TYPES = {
 }
 
 # Valid activity types (Issue #665)
-VALID_ACTIVITY_TYPES = frozenset({
-    "terminal_activity",
-    "file_activity",
-    "browser_activity",
-    "desktop_activity",
-})
+VALID_ACTIVITY_TYPES = frozenset(
+    {
+        "terminal_activity",
+        "file_activity",
+        "browser_activity",
+        "desktop_activity",
+    }
+)
 
 
 class AutoBotMemoryGraphCore:
@@ -223,15 +222,51 @@ class AutoBotMemoryGraphCore:
             List of schema arguments for FT.CREATE command
         """
         return [
-            "$.type", "AS", "type", "TAG", "SORTABLE",
-            "$.name", "AS", "name", "TEXT", "WEIGHT", "2.0", "SORTABLE",
-            "$.observations[*]", "AS", "observations", "TEXT",
-            "$.created_at", "AS", "created_at", "NUMERIC", "SORTABLE",
-            "$.updated_at", "AS", "updated_at", "NUMERIC", "SORTABLE",
-            "$.metadata.priority", "AS", "priority", "TAG",
-            "$.metadata.status", "AS", "status", "TAG", "SORTABLE",
-            "$.metadata.tags[*]", "AS", "tags", "TAG", "SEPARATOR", ",",
-            "$.metadata.session_id", "AS", "session_id", "TAG",
+            "$.type",
+            "AS",
+            "type",
+            "TAG",
+            "SORTABLE",
+            "$.name",
+            "AS",
+            "name",
+            "TEXT",
+            "WEIGHT",
+            "2.0",
+            "SORTABLE",
+            "$.observations[*]",
+            "AS",
+            "observations",
+            "TEXT",
+            "$.created_at",
+            "AS",
+            "created_at",
+            "NUMERIC",
+            "SORTABLE",
+            "$.updated_at",
+            "AS",
+            "updated_at",
+            "NUMERIC",
+            "SORTABLE",
+            "$.metadata.priority",
+            "AS",
+            "priority",
+            "TAG",
+            "$.metadata.status",
+            "AS",
+            "status",
+            "TAG",
+            "SORTABLE",
+            "$.metadata.tags[*]",
+            "AS",
+            "tags",
+            "TAG",
+            "SEPARATOR",
+            ",",
+            "$.metadata.session_id",
+            "AS",
+            "session_id",
+            "TAG",
         ]
 
     async def _check_index_exists(self, index_name: str) -> bool:
@@ -259,10 +294,15 @@ class AutoBotMemoryGraphCore:
 
             schema = self._get_entity_index_schema()
             await self.redis_client.execute_command(
-                "FT.CREATE", "memory_entity_idx",
-                "ON", "JSON",
-                "PREFIX", "1", "memory:entity:",
-                "SCHEMA", *schema
+                "FT.CREATE",
+                "memory_entity_idx",
+                "ON",
+                "JSON",
+                "PREFIX",
+                "1",
+                "memory:entity:",
+                "SCHEMA",
+                *schema
             )
             logger.info("Created RediSearch index: memory_entity_idx")
 

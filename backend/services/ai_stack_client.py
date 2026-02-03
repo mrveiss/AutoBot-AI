@@ -15,10 +15,9 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
-from backend.type_defs.common import Metadata
-
 import aiohttp
 
+from backend.type_defs.common import Metadata
 from src.constants.network_constants import NetworkConstants
 from src.utils.http_client import get_http_client
 
@@ -60,10 +59,14 @@ async def _process_ai_stack_response(
         if response.status >= 500 and attempt < retry_attempts - 1:
             return None, True, None  # Retry on server errors
 
-        return None, False, AIStackError(
-            f"AI Stack request failed: {response.status}",
-            status_code=response.status,
-            details={"response": response_text, "url": url},
+        return (
+            None,
+            False,
+            AIStackError(
+                f"AI Stack request failed: {response.status}",
+                status_code=response.status,
+                details={"response": response_text, "url": url},
+            ),
         )
 
     try:
@@ -83,7 +86,6 @@ class AIStackClient:
     def __init__(self, base_url: Optional[str] = None):
         """Initialize AI Stack client with base URL and HTTP client configuration."""
         # Get configuration
-        pass
 
         # Use NetworkConstants for AI Stack configuration
         ai_stack_config = {
@@ -602,9 +604,7 @@ class AIStackClient:
             "POST", self.agent_endpoints["system_knowledge_manager"], data=payload
         )
 
-    async def update_system_knowledge(
-        self, knowledge_update: Metadata
-    ) -> Metadata:
+    async def update_system_knowledge(self, knowledge_update: Metadata) -> Metadata:
         """
         Update system-wide knowledge.
 

@@ -10,7 +10,6 @@ Provides caching functionality for chat sessions:
 - TTL handling
 """
 
-import asyncio
 import json
 import logging
 from typing import Any, Dict

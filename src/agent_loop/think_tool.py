@@ -22,7 +22,6 @@ The Think Tool:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Optional
 
 from src.agent_loop.types import ThinkCategory, ThinkResult

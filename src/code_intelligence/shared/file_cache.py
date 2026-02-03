@@ -38,9 +38,9 @@ import logging
 import os
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional, Set
+from typing import Dict, FrozenSet, List, Optional
 
 from src.constants.path_constants import PATH
 from src.utils.file_categorization import SKIP_DIRS
@@ -58,11 +58,17 @@ JAVASCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".js", ".jsx", ".mjs"})
 VUE_EXTENSIONS: FrozenSet[str] = frozenset({".vue"})
 CSS_EXTENSIONS: FrozenSet[str] = frozenset({".css", ".scss", ".sass", ".less"})
 HTML_EXTENSIONS: FrozenSet[str] = frozenset({".html", ".htm"})
-CONFIG_EXTENSIONS: FrozenSet[str] = frozenset({".json", ".yaml", ".yml", ".toml", ".ini"})
+CONFIG_EXTENSIONS: FrozenSet[str] = frozenset(
+    {".json", ".yaml", ".yml", ".toml", ".ini"}
+)
 SHELL_EXTENSIONS: FrozenSet[str] = frozenset({".sh", ".bash", ".zsh"})
 
 FRONTEND_EXTENSIONS: FrozenSet[str] = (
-    TYPESCRIPT_EXTENSIONS | JAVASCRIPT_EXTENSIONS | VUE_EXTENSIONS | CSS_EXTENSIONS | HTML_EXTENSIONS
+    TYPESCRIPT_EXTENSIONS
+    | JAVASCRIPT_EXTENSIONS
+    | VUE_EXTENSIONS
+    | CSS_EXTENSIONS
+    | HTML_EXTENSIONS
 )
 
 ALL_CODE_EXTENSIONS: FrozenSet[str] = (
@@ -73,6 +79,7 @@ ALL_CODE_EXTENSIONS: FrozenSet[str] = (
 @dataclass
 class CacheEntry:
     """Single cache entry with metadata."""
+
     files: List[Path]
     timestamp: float
     root_path: str
@@ -82,6 +89,7 @@ class CacheEntry:
 @dataclass
 class CacheStats:
     """Statistics for cache monitoring."""
+
     hits: int = 0
     misses: int = 0
     invalidations: int = 0
@@ -148,8 +156,7 @@ class FileListCache:
         self._initialized = True
 
         logger.info(
-            "FileListCache initialized: ttl=%ds, root=%s",
-            self._ttl, self._root_path
+            "FileListCache initialized: ttl=%ds, root=%s", self._ttl, self._root_path
         )
 
     def _make_cache_key(self, extensions: FrozenSet[str], root_path: Path) -> str:
@@ -193,8 +200,7 @@ class FileListCache:
         self._stats.last_refresh_timestamp = time.time()
 
         logger.debug(
-            "FileListCache scan complete: %d files in %.1fms",
-            len(files), elapsed_ms
+            "FileListCache scan complete: %d files in %.1fms", len(files), elapsed_ms
         )
 
         return files
@@ -220,7 +226,11 @@ class FileListCache:
         with self._cache_lock:
             if cache_key in self._cache and self._is_valid(self._cache[cache_key]):
                 self._stats.hits += 1
-                logger.debug("FileListCache HIT: %s (%d files)", cache_key, len(self._cache[cache_key].files))
+                logger.debug(
+                    "FileListCache HIT: %s (%d files)",
+                    cache_key,
+                    len(self._cache[cache_key].files),
+                )
                 return self._cache[cache_key].files.copy()
 
             self._stats.misses += 1
@@ -257,13 +267,16 @@ class FileListCache:
                 logger.info("FileListCache: All entries invalidated")
             else:
                 keys_to_remove = [
-                    key for key, entry in self._cache.items()
+                    key
+                    for key, entry in self._cache.items()
                     if entry.extensions == extensions
                 ]
                 for key in keys_to_remove:
                     del self._cache[key]
                     self._stats.invalidations += 1
-                logger.info("FileListCache: Invalidated %d entries", len(keys_to_remove))
+                logger.info(
+                    "FileListCache: Invalidated %d entries", len(keys_to_remove)
+                )
 
     def get_stats(self) -> CacheStats:
         """Get cache statistics."""

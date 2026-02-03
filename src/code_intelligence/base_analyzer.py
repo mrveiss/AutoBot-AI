@@ -45,6 +45,7 @@ _STRING_PATTERNS_DEFAULT: List[Pattern] = [
 
 class Language(Enum):
     """Supported programming languages."""
+
     PYTHON = "python"
     TYPESCRIPT = "typescript"
     JAVASCRIPT = "javascript"
@@ -58,6 +59,7 @@ class Language(Enum):
 
 class IssueSeverity(Enum):
     """Unified severity levels across all analyzers."""
+
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -67,6 +69,7 @@ class IssueSeverity(Enum):
 
 class IssueCategory(Enum):
     """Categories of issues that can be detected."""
+
     PERFORMANCE = "performance"
     SECURITY = "security"
     CODE_QUALITY = "code_quality"
@@ -174,7 +177,9 @@ class AnalysisResult:
         language = issue.language.value
         self.issues_by_language[language] = self.issues_by_language.get(language, 0) + 1
 
-    def get_high_confidence_issues(self, min_confidence: float = 0.8) -> List[AnalysisIssue]:
+    def get_high_confidence_issues(
+        self, min_confidence: float = 0.8
+    ) -> List[AnalysisIssue]:
         """Get issues with confidence above threshold."""
         return [i for i in self.issues if i.confidence >= min_confidence]
 
@@ -244,13 +249,11 @@ class BaseLanguageAnalyzer(ABC):
     @abstractmethod
     def supported_languages(self) -> Set[Language]:
         """Return set of languages this analyzer supports."""
-        pass
 
     @property
     @abstractmethod
     def analyzer_name(self) -> str:
         """Return human-readable name of this analyzer."""
-        pass
 
     @abstractmethod
     def analyze_file(self, file_path: Path) -> List[AnalysisIssue]:
@@ -262,7 +265,6 @@ class BaseLanguageAnalyzer(ABC):
         Returns:
             List of AnalysisIssue objects found in the file
         """
-        pass
 
     def supports_language(self, language: Language) -> bool:
         """Check if this analyzer supports the given language."""
@@ -291,7 +293,7 @@ class BaseLanguageAnalyzer(ABC):
             start = 1
         if end > len(self.lines):
             end = len(self.lines)
-        return "\n".join(self.lines[start - 1:end])
+        return "\n".join(self.lines[start - 1 : end])
 
     def _load_file(self, file_path: Path) -> bool:
         """Load file content for analysis."""
@@ -434,6 +436,7 @@ class MultiLanguageAnalyzer:
             AnalysisResult with all issues found
         """
         import time
+
         start_time = time.time()
 
         result = AnalysisResult()
@@ -474,6 +477,7 @@ class MultiLanguageAnalyzer:
 
 # Utility functions for pattern matching across languages
 
+
 def find_pattern_in_code(
     source: str,
     pattern: str,
@@ -488,12 +492,14 @@ def find_pattern_in_code(
 
     for line_num, line in enumerate(lines, start=1):
         for match in re.finditer(pattern, line, flags):
-            matches.append({
-                "line_number": line_num,
-                "column": match.start(),
-                "match": match.group(),
-                "context": line.strip(),
-            })
+            matches.append(
+                {
+                    "line_number": line_num,
+                    "column": match.start(),
+                    "match": match.group(),
+                    "context": line.strip(),
+                }
+            )
 
     return matches
 

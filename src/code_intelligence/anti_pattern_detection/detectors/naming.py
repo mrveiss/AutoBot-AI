@@ -21,7 +21,6 @@ from ..models import AntiPatternResult
 from ..severity_utils import get_complex_conditional_severity
 from ..types import (
     ALLOWED_MAGIC_NUMBERS,
-    ALLOWED_SINGLE_LETTER_VARS,
     CAMEL_CASE_RE,
     SNAKE_CASE_RE,
     AntiPatternSeverity,
@@ -29,29 +28,38 @@ from ..types import (
     Thresholds,
 )
 
-
 # Issue #314: Comprehensive list of acceptable single-letter variables
-ACCEPTABLE_SINGLE_LETTER_VARS = frozenset({
-    # Loop counters (universal convention)
-    "i", "j", "k", "n",
-    # Coordinates (universal in graphics/math)
-    "x", "y", "z",
-    # Mathematical formulas (common in algorithms)
-    "a", "b", "c", "d",
-    # Common Python conventions
-    "e",  # Exception: except Exception as e
-    "f",  # File handle: with open(...) as f
-    "m",  # Match object: m = re.match(...)
-    "p",  # Path: p = Path(...)
-    "r",  # Response/result: r = requests.get(...)
-    "s",  # String: s = str(...)
-    "t",  # Time/tuple: t = time.time()
-    "v",  # Value (in dict iteration): for k, v in d.items()
-    "w",  # Width/writer
-    "h",  # Height/handle
-    "q",  # Queue: q = Queue()
-    "_",  # Unused variable (universal)
-})
+ACCEPTABLE_SINGLE_LETTER_VARS = frozenset(
+    {
+        # Loop counters (universal convention)
+        "i",
+        "j",
+        "k",
+        "n",
+        # Coordinates (universal in graphics/math)
+        "x",
+        "y",
+        "z",
+        # Mathematical formulas (common in algorithms)
+        "a",
+        "b",
+        "c",
+        "d",
+        # Common Python conventions
+        "e",  # Exception: except Exception as e
+        "f",  # File handle: with open(...) as f
+        "m",  # Match object: m = re.match(...)
+        "p",  # Path: p = Path(...)
+        "r",  # Response/result: r = requests.get(...)
+        "s",  # String: s = str(...)
+        "t",  # Time/tuple: t = time.time()
+        "v",  # Value (in dict iteration): for k, v in d.items()
+        "w",  # Width/writer
+        "h",  # Height/handle
+        "q",  # Queue: q = Queue()
+        "_",  # Unused variable (universal)
+    }
+)
 
 
 class NamingDetector:

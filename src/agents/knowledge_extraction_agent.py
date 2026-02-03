@@ -17,8 +17,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.config import config_manager
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -30,7 +30,6 @@ from src.models.atomic_fact import (
     FactType,
     TemporalType,
 )
-from src.config import config_manager
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_extraction")
@@ -83,39 +82,92 @@ class KnowledgeExtractionAgent:
 
         logger.info(
             "Knowledge Extraction Agent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
     def _get_dynamic_indicators(self) -> List[str]:
         """Get keywords indicating dynamic/changing information."""
         return [
-            "currently", "now", "today", "recently", "latest", "updated",
-            "changed", "modified", "new", "current", "present", "as of",
-            "this year", "this month", "upcoming", "planned", "scheduled",
+            "currently",
+            "now",
+            "today",
+            "recently",
+            "latest",
+            "updated",
+            "changed",
+            "modified",
+            "new",
+            "current",
+            "present",
+            "as of",
+            "this year",
+            "this month",
+            "upcoming",
+            "planned",
+            "scheduled",
         ]
 
     def _get_static_indicators(self) -> List[str]:
         """Get keywords indicating static/permanent information."""
         return [
-            "always", "never", "permanent", "constant", "inherent",
-            "fundamental", "basic", "definition", "concept", "principle",
-            "established", "traditional", "historical", "original",
+            "always",
+            "never",
+            "permanent",
+            "constant",
+            "inherent",
+            "fundamental",
+            "basic",
+            "definition",
+            "concept",
+            "principle",
+            "established",
+            "traditional",
+            "historical",
+            "original",
         ]
 
     def _get_future_indicators(self) -> List[str]:
         """Get keywords indicating future events."""
         return [
-            "will", "shall", "going to", "planned", "expected", "projected",
-            "forecast", "predicted", "anticipated", "scheduled", "upcoming",
-            "future", "next", "soon", "eventually", "later",
+            "will",
+            "shall",
+            "going to",
+            "planned",
+            "expected",
+            "projected",
+            "forecast",
+            "predicted",
+            "anticipated",
+            "scheduled",
+            "upcoming",
+            "future",
+            "next",
+            "soon",
+            "eventually",
+            "later",
         ]
 
     def _get_past_indicators(self) -> List[str]:
         """Get keywords indicating past events."""
         return [
-            "was", "were", "had", "did", "used to", "previously", "formerly",
-            "historically", "originally", "initially", "before", "earlier",
-            "past", "old", "legacy", "deprecated",
+            "was",
+            "were",
+            "had",
+            "did",
+            "used to",
+            "previously",
+            "formerly",
+            "historically",
+            "originally",
+            "initially",
+            "before",
+            "earlier",
+            "past",
+            "old",
+            "legacy",
+            "deprecated",
         ]
 
     def _load_temporal_keywords(self) -> Dict[str, List[str]]:
@@ -205,7 +257,9 @@ Respond only with valid JSON.
         ]
         return any(re.search(pattern, text_lower) for pattern in date_patterns)
 
-    def _classify_temporal_type(self, fact_text: str, context: str = "") -> TemporalType:
+    def _classify_temporal_type(
+        self, fact_text: str, context: str = ""
+    ) -> TemporalType:
         """Classify the temporal type of a fact based on linguistic indicators."""
         text_lower = f"{fact_text} {context}".lower()
 
@@ -214,7 +268,11 @@ Respond only with valid JSON.
         future_count = self._count_keyword_matches(text_lower, "future_indicators")
         past_count = self._count_keyword_matches(text_lower, "past_indicators")
 
-        if self._has_temporal_bound_pattern(text_lower) or future_count > 0 or past_count > 0:
+        if (
+            self._has_temporal_bound_pattern(text_lower)
+            or future_count > 0
+            or past_count > 0
+        ):
             return TemporalType.TEMPORAL_BOUND
         elif dynamic_count > static_count:
             return TemporalType.DYNAMIC
@@ -234,7 +292,20 @@ Respond only with valid JSON.
 
     def _get_common_words(self) -> set:
         """Get common words to filter from entities."""
-        return {"the", "is", "are", "was", "were", "has", "have", "had", "will", "can", "could", "should"}
+        return {
+            "the",
+            "is",
+            "are",
+            "was",
+            "were",
+            "has",
+            "have",
+            "had",
+            "will",
+            "can",
+            "could",
+            "should",
+        }
 
     def _extract_entities(self, fact_text: str) -> List[str]:
         """Extract entities from fact text using pattern matching."""
@@ -252,9 +323,9 @@ Respond only with valid JSON.
 
         # Remove duplicates and common words
         common_words = self._get_common_words()
-        unique_entities = list(set(
-            e for e in entities if e.lower() not in common_words and len(e) > 1
-        ))
+        unique_entities = list(
+            set(e for e in entities if e.lower() not in common_words and len(e) > 1)
+        )
 
         return unique_entities[:10]
 
@@ -284,7 +355,9 @@ Respond only with valid JSON.
 
         # Check confidence range
         confidence = fact_data.get("confidence", 0)
-        if not isinstance(confidence, _NUMERIC_TYPES) or not (0.0 <= confidence <= 1.0):  # Issue #380
+        if not isinstance(confidence, _NUMERIC_TYPES) or not (
+            0.0 <= confidence <= 1.0
+        ):  # Issue #380
             logger.debug("Invalid confidence value: %s", confidence)
             return False
 
@@ -333,9 +406,7 @@ Respond only with valid JSON.
             logger.error("Failed to parse LLM response as JSON: %s", e)
             return None
 
-    def _enhance_fact_data(
-        self, fact_data: Dict[str, Any], content: str
-    ) -> None:
+    def _enhance_fact_data(self, fact_data: Dict[str, Any], content: str) -> None:
         """Enhance fact with temporal classification and entity extraction."""
         fact_text = (
             f"{fact_data['subject']} {fact_data['predicate']} {fact_data['object']}"
@@ -435,7 +506,10 @@ Respond only with valid JSON.
             if raw_facts is None:
                 return FactExtractionResult(
                     facts=[],
-                    extraction_metadata={"error": "LLM extraction failed", "content_length": len(content)},
+                    extraction_metadata={
+                        "error": "LLM extraction failed",
+                        "content_length": len(content),
+                    },
                 )
 
             extracted_facts, validation_errors = self._convert_raw_facts(
@@ -468,12 +542,14 @@ Respond only with valid JSON.
             return FactExtractionResult(
                 facts=[],
                 processing_time=processing_time,
-                extraction_metadata={"error": str(e), "source": source, "content_length": len(content)},
+                extraction_metadata={
+                    "error": str(e),
+                    "source": source,
+                    "content_length": len(content),
+                },
             )
 
-    def _aggregate_chunk_results(
-        self, chunk_results: List[Any]
-    ) -> tuple:
+    def _aggregate_chunk_results(self, chunk_results: List[Any]) -> tuple:
         """Aggregate results from parallel chunk processing. Returns (facts, errors, success_count)."""
         all_facts = []
         total_errors = 0
@@ -515,7 +591,9 @@ Respond only with valid JSON.
             *[process_chunk(chunk) for chunk in chunks], return_exceptions=True
         )
 
-        all_facts, total_errors, successful = self._aggregate_chunk_results(chunk_results)
+        all_facts, total_errors, successful = self._aggregate_chunk_results(
+            chunk_results
+        )
         processing_time = time.time() - start_time
 
         logger.info(

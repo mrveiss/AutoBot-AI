@@ -17,7 +17,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from .detectors import (
     BloaterDetector,
@@ -26,19 +26,15 @@ from .detectors import (
     NamingDetector,
 )
 from .models import AnalysisReport, AntiPatternResult
-from .types import (
-    AntiPatternSeverity,
-    AntiPatternType,
-    DEFAULT_IGNORE_PATTERNS,
-    Thresholds,
-)
+from .types import DEFAULT_IGNORE_PATTERNS, Thresholds
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
     from src.code_intelligence.analytics_infrastructure import (
-        SemanticAnalysisMixin,
         SIMILARITY_MEDIUM,
+        SemanticAnalysisMixin,
     )
+
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
@@ -46,11 +42,11 @@ except ImportError:
 
 # Issue #607: Import shared caches for performance optimization
 try:
-    from src.code_intelligence.shared.ast_cache import get_ast_safe, get_ast_with_content
+    from src.code_intelligence.shared.ast_cache import get_ast_with_content
     from src.code_intelligence.shared.file_cache import (
         get_python_files as get_cached_python_files,
-        PYTHON_EXTENSIONS,
     )
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -110,7 +106,9 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         self.exclude_dirs = exclude_dirs or DEFAULT_IGNORE_PATTERNS
         self.detect_circular = detect_circular
         self.detect_naming = detect_naming
-        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        self.use_semantic_analysis = (
+            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        )
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Initialize specialized detectors
@@ -544,7 +542,9 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             report = await asyncio.to_thread(self.analyze_directory, directory)
 
         result = {
-            "report": report.to_dict() if hasattr(report, "to_dict") else {
+            "report": report.to_dict()
+            if hasattr(report, "to_dict")
+            else {
                 "scan_path": report.scan_path,
                 "total_files": report.total_files,
                 "total_classes": report.total_classes,
@@ -596,7 +596,9 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+                min_similarity=SIMILARITY_MEDIUM
+                if HAS_ANALYTICS_INFRASTRUCTURE
+                else 0.7,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
@@ -623,12 +625,16 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             return False
 
         cache_key = self._generate_content_hash(directory)
-        report_dict = report.to_dict() if hasattr(report, "to_dict") else {
-            "scan_path": report.scan_path,
-            "total_files": report.total_files,
-            "anti_patterns": [p.to_dict() for p in report.anti_patterns],
-            "summary": report.summary,
-        }
+        report_dict = (
+            report.to_dict()
+            if hasattr(report, "to_dict")
+            else {
+                "scan_path": report.scan_path,
+                "total_files": report.total_files,
+                "anti_patterns": [p.to_dict() for p in report.anti_patterns],
+                "summary": report.summary,
+            }
+        )
 
         return await self._cache_result(
             key=cache_key,

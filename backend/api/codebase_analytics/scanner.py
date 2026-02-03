@@ -1736,6 +1736,56 @@ def _build_file_analysis_result(
     )
 
 
+def _build_unchanged_file_result(
+    file_path: Path,
+    relative_path: str,
+    extension: str,
+    file_category: str,
+    file_hash: str,
+) -> FileAnalysisResult:
+    """
+    Build result for unchanged file that was skipped.
+
+    Issue #620: Extracted from _analyze_single_file.
+    """
+    return FileAnalysisResult(
+        file_path=file_path,
+        relative_path=relative_path,
+        extension=extension,
+        file_category=file_category,
+        was_processed=False,
+        was_skipped_unchanged=True,
+        file_hash=file_hash,
+    )
+
+
+def _build_empty_analysis_result(
+    file_path: Path,
+    relative_path: str,
+    extension: str,
+    file_category: str,
+    file_hash: str,
+    analyzer_type: str,
+    stat_key: str,
+) -> FileAnalysisResult:
+    """
+    Build result when file analysis returns no data.
+
+    Issue #620: Extracted from _analyze_single_file.
+    """
+    return FileAnalysisResult(
+        file_path=file_path,
+        relative_path=relative_path,
+        extension=extension,
+        file_category=file_category,
+        was_processed=True,
+        was_skipped_unchanged=False,
+        file_hash=file_hash,
+        analyzer_type=analyzer_type,
+        stat_key=stat_key,
+    )
+
+
 async def _analyze_single_file(
     file_path: Path,
     root_path_obj: Path,
@@ -1745,8 +1795,7 @@ async def _analyze_single_file(
     Analyze a single file and return immutable FileAnalysisResult.
 
     Issue #711: This function does NOT mutate any shared state.
-    All results are returned in a FileAnalysisResult dataclass,
-    enabling safe parallel processing with asyncio.gather().
+    Issue #620: Refactored to use extracted helper methods.
     """
     extension = file_path.suffix.lower()
     relative_path = str(file_path.relative_to(root_path_obj))
@@ -1775,14 +1824,8 @@ async def _analyze_single_file(
         file_path, relative_path, redis_client
     )
     if not needs_reindex:
-        return FileAnalysisResult(
-            file_path=file_path,
-            relative_path=relative_path,
-            extension=extension,
-            file_category=file_category,
-            was_processed=False,
-            was_skipped_unchanged=True,
-            file_hash=current_hash,
+        return _build_unchanged_file_result(
+            file_path, relative_path, extension, file_category, current_hash
         )
 
     # Determine analyzer and run analysis
@@ -1802,16 +1845,14 @@ async def _analyze_single_file(
             stat_key,
         )
     else:
-        result = FileAnalysisResult(
-            file_path=file_path,
-            relative_path=relative_path,
-            extension=extension,
-            file_category=file_category,
-            was_processed=True,
-            was_skipped_unchanged=False,
-            file_hash=current_hash,
-            analyzer_type=analyzer_type,
-            stat_key=stat_key,
+        result = _build_empty_analysis_result(
+            file_path,
+            relative_path,
+            extension,
+            file_category,
+            current_hash,
+            analyzer_type,
+            stat_key,
         )
 
     # Store file hash for incremental indexing (Issue #539)

@@ -346,9 +346,9 @@ class CrossLanguageAnalysis:
                 "typescript": self.typescript_files_analyzed,
                 "vue": self.vue_files_analyzed,
                 "total": (
-                    self.python_files_analyzed +
-                    self.typescript_files_analyzed +
-                    self.vue_files_analyzed
+                    self.python_files_analyzed
+                    + self.typescript_files_analyzed
+                    + self.vue_files_analyzed
                 ),
             },
             "statistics": {

@@ -12,7 +12,6 @@ Provides session management for chat history:
 - Session listing and updates
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -99,7 +98,9 @@ class SessionMixin:
                     file_content = await f.read()
                 return self._decrypt_data(file_content)
             except Exception as e:
-                logger.warning("Could not load existing chat data for %s: %s", session_id, e)
+                logger.warning(
+                    "Could not load existing chat data for %s: %s", session_id, e
+                )
                 return {}
 
         # Try old format for backward compatibility
@@ -175,9 +176,7 @@ class SessionMixin:
             logger.info("Created Memory Graph entity for session: %s", session_id)
 
         except Exception as e:
-            logger.warning(
-                "Failed to create Memory Graph entity (continuing): %s", e
-            )
+            logger.warning("Failed to create Memory Graph entity (continuing): %s", e)
 
     async def create_session(
         self,
@@ -240,7 +239,9 @@ class SessionMixin:
 
             # Cache miss - resolve file path (Issue #315 - uses helper)
             chats_directory = self._get_chats_directory()
-            chat_file = await self._resolve_session_file_path(session_id, chats_directory)
+            chat_file = await self._resolve_session_file_path(
+                session_id, chats_directory
+            )
             if not chat_file:
                 return []
 
@@ -275,7 +276,9 @@ class SessionMixin:
             logger.error("Error loading chat session %s: %s", session_id, e)
             return []
 
-    async def _warm_cache_safe(self, session_id: str, chat_data: Dict[str, Any]) -> None:
+    async def _warm_cache_safe(
+        self, session_id: str, chat_data: Dict[str, Any]
+    ) -> None:
         """Warm up Redis cache safely. (Issue #315 - extracted)"""
         if not self.redis_client:
             return
@@ -331,7 +334,7 @@ class SessionMixin:
                 f"Session {session_id} has {len(session_messages)} messages, "
                 f"truncating to {self.max_messages} most recent"
             )
-            session_messages = session_messages[-self.max_messages:]
+            session_messages = session_messages[-self.max_messages :]
 
         return session_messages
 
@@ -398,7 +401,9 @@ class SessionMixin:
             chats_directory = self._get_chats_directory()
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(
+                    os.makedirs, chats_directory, exist_ok=True
+                )
 
             chat_file = f"{chats_directory}/{session_id}_chat.json"
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -408,13 +413,15 @@ class SessionMixin:
             chat_data = await self._load_existing_chat_data(
                 session_id, chat_file, chats_directory
             )
-            chat_data.update({
-                "chatId": session_id,
-                "name": name or chat_data.get("name", ""),
-                "messages": session_messages,
-                "last_modified": current_time,
-                "created_time": chat_data.get("created_time", current_time),
-            })
+            chat_data.update(
+                {
+                    "chatId": session_id,
+                    "name": name or chat_data.get("name", ""),
+                    "messages": session_messages,
+                    "last_modified": current_time,
+                    "created_time": chat_data.get("created_time", current_time),
+                }
+            )
 
             await self._write_session_to_storage(chat_file, chat_data)
             await self._update_redis_cache_on_save(session_id, chat_data)
@@ -465,15 +472,14 @@ class SessionMixin:
                 await self.memory_graph.add_observations(
                     entity_name=entity_name, observations=observations
                 )
-                logger.debug(
-                    "Updated Memory Graph entity for session: %s", session_id
-                )
+                logger.debug("Updated Memory Graph entity for session: %s", session_id)
 
             except (ValueError, RuntimeError) as e:
                 # Entity doesn't exist yet - create it
                 if "Entity not found" in str(e):
                     logger.debug(
-                        "Entity not found, creating new entity for session: %s", session_id
+                        "Entity not found, creating new entity for session: %s",
+                        session_id,
                     )
 
                     entity_metadata = {
@@ -539,8 +545,12 @@ class SessionMixin:
                 logger.debug("Deleted terminal log for session %s", session_id)
 
             # Delete terminal transcript file
-            terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
-            transcript_exists = await run_in_chat_io_executor(os.path.exists, terminal_transcript)
+            terminal_transcript = (
+                f"{chats_directory}/{session_id}_terminal_transcript.txt"
+            )
+            transcript_exists = await run_in_chat_io_executor(
+                os.path.exists, terminal_transcript
+            )
             if transcript_exists:
                 await run_in_chat_io_executor(os.remove, terminal_transcript)
                 logger.debug("Deleted terminal transcript for session %s", session_id)
@@ -649,7 +659,9 @@ class SessionMixin:
                 chat_file = f"{chats_directory}/chat_{session_id}.json"
                 old_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
                 if not old_exists:
-                    logger.warning("Chat session %s not found for name update", session_id)
+                    logger.warning(
+                        "Chat session %s not found for name update", session_id
+                    )
                     return False
 
             # Load existing chat data
