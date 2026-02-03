@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - Required for nvidia-smi GPU queries
 import time
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass, field
@@ -225,7 +225,7 @@ class Phase9PerformanceMonitor:
     def _check_gpu_availability(self) -> bool:
         """Check if NVIDIA GPU is available and accessible"""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - nvidia-smi is a trusted system tool
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True,
                 text=True,
@@ -262,7 +262,7 @@ class Phase9PerformanceMonitor:
 
         try:
             # Extended nvidia-smi query for comprehensive metrics
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - nvidia-smi is trusted
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.used,memory.total,utilization.gpu,"
@@ -913,131 +913,151 @@ class Phase9PerformanceMonitor:
                 await asyncio.sleep(self.collection_interval)
 
     async def _analyze_performance_and_generate_alerts(self, metrics: Dict[str, Any]):
-        """Analyze metrics and generate performance alerts"""
+        """
+        Analyze metrics and generate performance alerts.
+
+        Issue #620: Refactored to use helper functions for each analysis type.
+        """
         try:
             alerts = []
-
-            # GPU performance analysis
-            if metrics.get("gpu"):
-                gpu = metrics["gpu"]
-
-                if (
-                    gpu["utilization_percent"]
-                    < self.performance_baselines["gpu_utilization_target"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "gpu",
-                            "severity": "warning",
-                            "message": f"GPU utilization below target: {gpu['utilization_percent']:.1f}% < {self.performance_baselines['gpu_utilization_target']}%",
-                            "recommendation": "Verify AI workloads are GPU-accelerated",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-                if gpu["thermal_throttling"]:
-                    alerts.append(
-                        {
-                            "category": "gpu",
-                            "severity": "critical",
-                            "message": f"GPU thermal throttling active at {gpu['temperature_celsius']}°C",
-                            "recommendation": "Check cooling and reduce workload",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-            # NPU performance analysis
-            if metrics.get("npu"):
-                npu = metrics["npu"]
-
-                if (
-                    npu["acceleration_ratio"]
-                    < self.performance_baselines["npu_acceleration_target"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "npu",
-                            "severity": "warning",
-                            "message": f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x < {self.performance_baselines['npu_acceleration_target']}x",
-                            "recommendation": "Optimize NPU utilization or check driver status",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-            # System performance analysis
-            if metrics.get("system"):
-                system = metrics["system"]
-
-                if (
-                    system["memory_usage_percent"]
-                    > self.performance_baselines["memory_usage_warning"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "memory",
-                            "severity": "warning",
-                            "message": f"High memory usage: {system['memory_usage_percent']:.1f}%",
-                            "recommendation": "Enable aggressive cleanup or check for memory leaks",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-                if (
-                    system["cpu_load_1m"]
-                    > self.performance_baselines["cpu_load_warning"]
-                ):
-                    alerts.append(
-                        {
-                            "category": "cpu",
-                            "severity": "warning",
-                            "message": f"High CPU load: {system['cpu_load_1m']:.1f} on {system['cpu_cores_logical']}-core system",
-                            "recommendation": "Check for CPU-intensive processes",
-                            "timestamp": time.time(),
-                        }
-                    )
-
-            # Service performance analysis
-            if metrics.get("services"):
-                for service in metrics["services"]:
-                    if service["status"] in ["critical", "offline"]:
-                        alerts.append(
-                            {
-                                "category": "service",
-                                "severity": "critical",
-                                "message": f"Service {service['service_name']} is {service['status']}",
-                                "recommendation": "Check service health and restart if necessary",
-                                "timestamp": time.time(),
-                            }
-                        )
-
-                    if (
-                        service["response_time_ms"]
-                        > self.performance_baselines["api_response_time_threshold"]
-                    ):
-                        alerts.append(
-                            {
-                                "category": "performance",
-                                "severity": "warning",
-                                "message": f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms",
-                                "recommendation": "Investigate service performance bottlenecks",
-                                "timestamp": time.time(),
-                            }
-                        )
-
-            # Store alerts
-            for alert in alerts:
-                self.performance_alerts.append(alert)
-
-            # Trigger alert callbacks
-            if alerts:
-                for callback in self.alert_callbacks:
-                    try:
-                        await callback(alerts)
-                    except Exception as e:
-                        self.logger.error(f"Error in alert callback: {e}")
-
+            self._analyze_gpu_performance(metrics.get("gpu"), alerts)
+            self._analyze_npu_performance(metrics.get("npu"), alerts)
+            self._analyze_system_performance(metrics.get("system"), alerts)
+            self._analyze_service_performance(metrics.get("services"), alerts)
+            await self._store_and_notify_alerts(alerts)
         except Exception as e:
             self.logger.error(f"Error analyzing performance: {e}")
+
+    def _analyze_gpu_performance(
+        self, gpu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]
+    ) -> None:
+        """Analyze GPU metrics and append alerts. Issue #620."""
+        if not gpu:
+            return
+        if (
+            gpu["utilization_percent"]
+            < self.performance_baselines["gpu_utilization_target"]
+        ):
+            alerts.append(
+                {
+                    "category": "gpu",
+                    "severity": "warning",
+                    "message": (
+                        f"GPU utilization below target: {gpu['utilization_percent']:.1f}% "
+                        f"< {self.performance_baselines['gpu_utilization_target']}%"
+                    ),
+                    "recommendation": "Verify AI workloads are GPU-accelerated",
+                    "timestamp": time.time(),
+                }
+            )
+        if gpu["thermal_throttling"]:
+            alerts.append(
+                {
+                    "category": "gpu",
+                    "severity": "critical",
+                    "message": f"GPU thermal throttling active at {gpu['temperature_celsius']}°C",
+                    "recommendation": "Check cooling and reduce workload",
+                    "timestamp": time.time(),
+                }
+            )
+
+    def _analyze_npu_performance(
+        self, npu: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]
+    ) -> None:
+        """Analyze NPU metrics and append alerts. Issue #620."""
+        if not npu:
+            return
+        if (
+            npu["acceleration_ratio"]
+            < self.performance_baselines["npu_acceleration_target"]
+        ):
+            alerts.append(
+                {
+                    "category": "npu",
+                    "severity": "warning",
+                    "message": (
+                        f"NPU acceleration ratio below target: {npu['acceleration_ratio']:.1f}x "
+                        f"< {self.performance_baselines['npu_acceleration_target']}x"
+                    ),
+                    "recommendation": "Optimize NPU utilization or check driver status",
+                    "timestamp": time.time(),
+                }
+            )
+
+    def _analyze_system_performance(
+        self, system: Optional[Dict[str, Any]], alerts: List[Dict[str, Any]]
+    ) -> None:
+        """Analyze system metrics and append alerts. Issue #620."""
+        if not system:
+            return
+        if (
+            system["memory_usage_percent"]
+            > self.performance_baselines["memory_usage_warning"]
+        ):
+            alerts.append(
+                {
+                    "category": "memory",
+                    "severity": "warning",
+                    "message": f"High memory usage: {system['memory_usage_percent']:.1f}%",
+                    "recommendation": "Enable aggressive cleanup or check for memory leaks",
+                    "timestamp": time.time(),
+                }
+            )
+        if system["cpu_load_1m"] > self.performance_baselines["cpu_load_warning"]:
+            alerts.append(
+                {
+                    "category": "cpu",
+                    "severity": "warning",
+                    "message": (
+                        f"High CPU load: {system['cpu_load_1m']:.1f} "
+                        f"on {system['cpu_cores_logical']}-core system"
+                    ),
+                    "recommendation": "Check for CPU-intensive processes",
+                    "timestamp": time.time(),
+                }
+            )
+
+    def _analyze_service_performance(
+        self, services: Optional[List[Dict[str, Any]]], alerts: List[Dict[str, Any]]
+    ) -> None:
+        """Analyze service metrics and append alerts. Issue #620."""
+        if not services:
+            return
+        for service in services:
+            if service["status"] in ["critical", "offline"]:
+                alerts.append(
+                    {
+                        "category": "service",
+                        "severity": "critical",
+                        "message": f"Service {service['service_name']} is {service['status']}",
+                        "recommendation": "Check service health and restart if necessary",
+                        "timestamp": time.time(),
+                    }
+                )
+            if (
+                service["response_time_ms"]
+                > self.performance_baselines["api_response_time_threshold"]
+            ):
+                alerts.append(
+                    {
+                        "category": "performance",
+                        "severity": "warning",
+                        "message": f"{service['service_name']} slow response: {service['response_time_ms']:.0f}ms",
+                        "recommendation": "Investigate service performance bottlenecks",
+                        "timestamp": time.time(),
+                    }
+                )
+
+    async def _store_and_notify_alerts(self, alerts: List[Dict[str, Any]]) -> None:
+        """Store alerts and trigger callbacks. Issue #620."""
+        for alert in alerts:
+            self.performance_alerts.append(alert)
+        if alerts:
+            for callback in self.alert_callbacks:
+                try:
+                    await callback(alerts)
+                except Exception as e:
+                    self.logger.error(f"Error in alert callback: {e}")
 
     def _log_performance_summary(self, metrics: Dict[str, Any]):
         """Log comprehensive performance summary"""
@@ -1341,7 +1361,7 @@ def monitor_performance(category: str = "general"):
                             key, 3600
                         )  # 1 hour retention
                     except Exception:
-                        pass
+                        pass  # nosec B110 - Non-critical metric logging
 
                 return result
             except Exception as e:

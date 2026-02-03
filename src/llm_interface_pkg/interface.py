@@ -740,6 +740,7 @@ class LLMInterface:
 
         Issue #551: Restored from archived llm_interface_unified.py
         Issue #717: Added rate limit handling for cloud providers.
+        Issue #620: Refactored to use helper functions.
         Automatically fails over to backup providers on error.
 
         Args:
@@ -749,84 +750,34 @@ class LLMInterface:
         Returns:
             LLMResponse from first successful provider
         """
-        # Build provider order: primary first, then fallbacks
-        if primary_provider in self.provider_routing:
-            provider_order = [primary_provider]
-        else:
-            provider_order = []
-
-        # Add fallback providers if enabled
-        if self._fallback_enabled:
-            for p in self._provider_priority:
-                if p not in provider_order and p in self.provider_routing:
-                    provider_order.append(p)
-
+        provider_order = self._build_fallback_provider_order(primary_provider)
         last_error = None
+
         for provider_name in provider_order:
+            is_healthy, health_error = await self._is_provider_healthy(provider_name)
+            if not is_healthy:
+                last_error = health_error
+                continue
             try:
-                # Issue #756: Quick health check before attempting provider
-                # Skip providers that are known to be unavailable (cached check)
-                if HEALTH_CHECK_AVAILABLE and provider_name in ("ollama", "openai"):
-                    try:
-                        health_result = (
-                            await ProviderHealthManager.check_provider_health(
-                                provider_name, timeout=2.0, use_cache=True
-                            )
-                        )
-                        if health_result.status == ProviderStatus.UNAVAILABLE:
-                            logger.debug(
-                                f"Skipping unavailable provider {provider_name}: "
-                                f"{health_result.message}"
-                            )
-                            last_error = (
-                                f"{provider_name} unavailable: {health_result.message}"
-                            )
-                            continue
-                    except Exception as health_err:
-                        # If health check fails, proceed anyway and let actual call fail
-                        logger.debug(
-                            f"Health check for {provider_name} failed: {health_err}"
-                        )
-
-                handler = self.provider_routing[provider_name]
-
-                # Issue #717: Apply rate limit handling for cloud providers
-                provider_type = self._get_provider_type_enum(provider_name)
-                if self._optimization_router.should_apply(
-                    OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
-                ):
-                    response = await self._rate_limiter.execute_with_retry(
-                        lambda h=handler, r=request: h(r),
-                        provider=provider_name,
-                    )
-                else:
-                    response = await handler(request)
-
-                # Check for error in response
+                response = await self._execute_provider_request(request, provider_name)
                 if response.error:
                     last_error = response.error
                     logger.warning(
                         f"Provider {provider_name} returned error: {response.error}"
                     )
                     continue
-
-                # Success!
                 if provider_name != primary_provider:
                     response.fallback_used = True
                     self._metrics["fallback_count"] += 1
                     logger.info(
-                        f"Fallback to {provider_name} succeeded "
-                        f"(primary: {primary_provider})"
+                        f"Fallback to {provider_name} succeeded (primary: {primary_provider})"
                     )
-
                 return response
-
             except Exception as e:
                 last_error = str(e)
                 logger.warning(f"Provider {provider_name} failed: {e}")
                 continue
 
-        # All providers failed
         logger.error(f"All providers failed. Last error: {last_error}")
         return LLMResponse(
             content="",
@@ -836,6 +787,63 @@ class LLMInterface:
             request_id=request.request_id,
             error=f"All providers failed. Last error: {last_error}",
         )
+
+    def _build_fallback_provider_order(self, primary_provider: str) -> list[str]:
+        """Build ordered list of providers to try. Issue #620."""
+        if primary_provider in self.provider_routing:
+            provider_order = [primary_provider]
+        else:
+            provider_order = []
+        if self._fallback_enabled:
+            for p in self._provider_priority:
+                if p not in provider_order and p in self.provider_routing:
+                    provider_order.append(p)
+        return provider_order
+
+    async def _is_provider_healthy(self, provider_name: str) -> tuple[bool, str | None]:
+        """
+        Check if provider is healthy via cached health check.
+
+        Issue #756: Quick health check before attempting provider.
+        Issue #620: Extracted from _execute_with_fallback.
+
+        Returns:
+            Tuple of (is_healthy, error_message_if_unhealthy)
+        """
+        if not HEALTH_CHECK_AVAILABLE or provider_name not in ("ollama", "openai"):
+            return True, None
+        try:
+            health_result = await ProviderHealthManager.check_provider_health(
+                provider_name, timeout=2.0, use_cache=True
+            )
+            if health_result.status == ProviderStatus.UNAVAILABLE:
+                logger.debug(
+                    f"Skipping unavailable provider {provider_name}: {health_result.message}"
+                )
+                return False, f"{provider_name} unavailable: {health_result.message}"
+        except Exception as health_err:
+            logger.debug(f"Health check for {provider_name} failed: {health_err}")
+        return True, None
+
+    async def _execute_provider_request(
+        self, request: LLMRequest, provider_name: str
+    ) -> LLMResponse:
+        """
+        Execute request on provider with rate limiting if applicable.
+
+        Issue #717: Rate limit handling for cloud providers.
+        Issue #620: Extracted from _execute_with_fallback.
+        """
+        handler = self.provider_routing[provider_name]
+        provider_type = self._get_provider_type_enum(provider_name)
+        if self._optimization_router.should_apply(
+            OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
+        ):
+            return await self._rate_limiter.execute_with_retry(
+                lambda h=handler, r=request: h(r),
+                provider=provider_name,
+            )
+        return await handler(request)
 
     def _determine_provider_and_model(self, llm_type: str, **kwargs) -> tuple[str, str]:
         """Determine the best provider and model for the request."""

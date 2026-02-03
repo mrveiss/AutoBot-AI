@@ -226,8 +226,32 @@ METADATA:
         return {"name": tool_name, "error": "Could not find instructions for this tool"}
 
     async def _research_specific_tool(self, tool_name: str) -> Optional[Dict[str, Any]]:
-        """Research a specific tool comprehensively"""
-        # Multiple research queries for comprehensive documentation
+        """
+        Research a specific tool comprehensively.
+
+        Issue #620: Refactored to use helper functions for each extraction type.
+        """
+        results = await self._execute_research_queries(tool_name)
+        if not results:
+            return None
+
+        tool_info = {
+            "name": tool_name,
+            "type": self._determine_tool_type(tool_name),
+            "category": self._categorize_tool(tool_name, ""),
+            "platform": "linux",
+        }
+        self._extract_installation_info(results, tool_info, tool_name)
+        self._extract_usage_info(results, tool_info)
+        self._extract_advanced_info(results, tool_info)
+        self._extract_troubleshooting_info(results, tool_info)
+        self._extract_integration_info(results, tool_info)
+        self._extract_security_info(results, tool_info)
+        self._add_research_metadata(results, tool_info)
+        return tool_info
+
+    async def _execute_research_queries(self, tool_name: str) -> Dict[str, Any]:
+        """Execute all research queries for a tool. Issue #620."""
         research_queries = {
             "installation": f"how to install {tool_name} linux ubuntu debian",
             "usage": f"{tool_name} tutorial examples command line",
@@ -236,7 +260,6 @@ METADATA:
             "integration": f"{tool_name} integration with other tools pipes",
             "security": f"{tool_name} security considerations best practices",
         }
-
         results = {}
         for query_type, query in research_queries.items():
             try:
@@ -245,89 +268,90 @@ METADATA:
                     results[query_type] = result
             except Exception as e:
                 logger.debug(f"Research query failed for {query_type}: {e}")
+        return results
 
-        if not results:
-            return None
+    def _extract_installation_info(
+        self, results: Dict, tool_info: Dict, tool_name: str
+    ) -> None:
+        """Extract installation information from research results. Issue #620."""
+        if "installation" not in results:
+            return
+        install_summary = results["installation"].get("summary", "")
+        tool_info.update(
+            {
+                "installation": self._extract_installation_commands(install_summary),
+                "requirements": self._extract_requirements(install_summary),
+                "package_name": self._determine_package_name(
+                    tool_name, install_summary
+                ),
+            }
+        )
 
-        # Build comprehensive tool information
-        tool_info = {
-            "name": tool_name,
-            "type": self._determine_tool_type(tool_name),
-            "category": self._categorize_tool(tool_name, ""),
-            "platform": "linux",
-        }
+    def _extract_usage_info(self, results: Dict, tool_info: Dict) -> None:
+        """Extract usage information from research results. Issue #620."""
+        if "usage" not in results:
+            return
+        usage_summary = results["usage"].get("summary", "")
+        tool_info.update(
+            {
+                "usage": usage_summary,
+                "syntax": self._extract_command_syntax(usage_summary),
+                "command_examples": self._extract_detailed_examples(usage_summary),
+                "output_formats": self._extract_output_formats(usage_summary),
+            }
+        )
 
-        # Extract installation information
-        if "installation" in results:
-            install_summary = results["installation"].get("summary", "")
-            tool_info.update(
-                {
-                    "installation": self._extract_installation_commands(
-                        install_summary
-                    ),
-                    "requirements": self._extract_requirements(install_summary),
-                    "package_name": self._determine_package_name(
-                        tool_name, install_summary
-                    ),
-                }
-            )
+    def _extract_advanced_info(self, results: Dict, tool_info: Dict) -> None:
+        """Extract advanced usage information. Issue #620."""
+        if "advanced" not in results:
+            return
+        advanced_summary = results["advanced"].get("summary", "")
+        tool_info.update(
+            {
+                "advanced_usage": advanced_summary,
+                "features": self._extract_advanced_features(advanced_summary),
+            }
+        )
 
-        # Extract usage information
-        if "usage" in results:
-            usage_summary = results["usage"].get("summary", "")
-            tool_info.update(
-                {
-                    "usage": usage_summary,
-                    "syntax": self._extract_command_syntax(usage_summary),
-                    "command_examples": self._extract_detailed_examples(usage_summary),
-                    "output_formats": self._extract_output_formats(usage_summary),
-                }
-            )
+    def _extract_troubleshooting_info(self, results: Dict, tool_info: Dict) -> None:
+        """Extract troubleshooting information. Issue #620."""
+        if "troubleshooting" not in results:
+            return
+        trouble_summary = results["troubleshooting"].get("summary", "")
+        tool_info.update(
+            {
+                "troubleshooting": trouble_summary,
+                "error_codes": self._extract_error_codes(trouble_summary),
+                "common_issues": self._extract_common_issues(trouble_summary),
+            }
+        )
 
-        # Extract advanced usage
-        if "advanced" in results:
-            advanced_summary = results["advanced"].get("summary", "")
-            tool_info.update(
-                {
-                    "advanced_usage": advanced_summary,
-                    "features": self._extract_advanced_features(advanced_summary),
-                }
-            )
+    def _extract_integration_info(self, results: Dict, tool_info: Dict) -> None:
+        """Extract integration information. Issue #620."""
+        if "integration" not in results:
+            return
+        integration_summary = results["integration"].get("summary", "")
+        tool_info.update(
+            {
+                "integrations": integration_summary,
+                "related_tools": self._extract_related_tools(integration_summary),
+            }
+        )
 
-        # Extract troubleshooting
-        if "troubleshooting" in results:
-            trouble_summary = results["troubleshooting"].get("summary", "")
-            tool_info.update(
-                {
-                    "troubleshooting": trouble_summary,
-                    "error_codes": self._extract_error_codes(trouble_summary),
-                    "common_issues": self._extract_common_issues(trouble_summary),
-                }
-            )
+    def _extract_security_info(self, results: Dict, tool_info: Dict) -> None:
+        """Extract security information. Issue #620."""
+        if "security" not in results:
+            return
+        security_summary = results["security"].get("summary", "")
+        tool_info.update(
+            {
+                "security_notes": security_summary,
+                "best_practices": self._extract_security_practices(security_summary),
+            }
+        )
 
-        # Extract integration information
-        if "integration" in results:
-            integration_summary = results["integration"].get("summary", "")
-            tool_info.update(
-                {
-                    "integrations": integration_summary,
-                    "related_tools": self._extract_related_tools(integration_summary),
-                }
-            )
-
-        # Extract security information
-        if "security" in results:
-            security_summary = results["security"].get("summary", "")
-            tool_info.update(
-                {
-                    "security_notes": security_summary,
-                    "best_practices": self._extract_security_practices(
-                        security_summary
-                    ),
-                }
-            )
-
-        # Add metadata
+    def _add_research_metadata(self, results: Dict, tool_info: Dict) -> None:
+        """Add metadata from research results. Issue #620."""
         tool_info.update(
             {
                 "documentation_url": self._find_official_docs(results),
@@ -336,8 +360,6 @@ METADATA:
                 "performance": self._extract_performance_notes(results),
             }
         )
-
-        return tool_info
 
     def _determine_tool_type(self, tool_name: str) -> str:
         """Determine tool type based on name patterns"""

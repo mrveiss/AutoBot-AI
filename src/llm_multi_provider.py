@@ -260,7 +260,7 @@ class OllamaProvider(LLMProvider):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(f"{self.base_url}/api/tags") as response:
                     return response.status == 200
-        except:
+        except Exception:
             return False
 
     async def get_available_models(self) -> List[str]:
@@ -275,8 +275,8 @@ class OllamaProvider(LLMProvider):
                         return [
                             model["name"] for model in models_data.get("models", [])
                         ]
-        except:
-            pass
+        except Exception:
+            pass  # nosec B110 - Fallback to config models on connection error
         return self.config.available_models
 
 
@@ -359,7 +359,7 @@ class OpenAIProvider(LLMProvider):
         try:
             await self.client.models.list()
             return True
-        except:
+        except Exception:
             return False
 
     def get_available_models(self) -> List[str]:
@@ -580,6 +580,8 @@ class UnifiedLLMInterface:
         """
         Main chat completion method with unified API.
 
+        Issue #620: Refactored to use helper functions for cleaner structure.
+
         Args:
             messages: List of message dicts with 'role' and 'content'
             llm_type: Type of LLM usage (orchestrator, task, chat, etc.)
@@ -591,21 +593,7 @@ class UnifiedLLMInterface:
             LLMResponse object with standardized format
         """
         self._total_requests += 1
-
-        # Convert string types to enums
-        if isinstance(llm_type, str):
-            try:
-                llm_type = LLMType(llm_type.lower())
-            except ValueError:
-                llm_type = LLMType.GENERAL
-
-        if isinstance(provider, str):
-            try:
-                provider = ProviderType(provider.lower())
-            except ValueError:
-                provider = None
-
-        # Build request object
+        llm_type, provider = self._normalize_request_types(llm_type, provider)
         request = LLMRequest(
             messages=messages,
             llm_type=llm_type,
@@ -613,8 +601,32 @@ class UnifiedLLMInterface:
             model_name=model_name,
             **kwargs,
         )
+        type_config = self._apply_type_config_defaults(request, llm_type)
+        provider_order = self._build_provider_order(request, type_config)
+        return await self._try_providers(request, provider_order)
 
-        # Apply LLM type defaults
+    def _normalize_request_types(
+        self,
+        llm_type: Union[str, LLMType],
+        provider: Optional[Union[str, ProviderType]],
+    ) -> tuple[LLMType, Optional[ProviderType]]:
+        """Convert string types to enums. Issue #620."""
+        if isinstance(llm_type, str):
+            try:
+                llm_type = LLMType(llm_type.lower())
+            except ValueError:
+                llm_type = LLMType.GENERAL
+        if isinstance(provider, str):
+            try:
+                provider = ProviderType(provider.lower())
+            except ValueError:
+                provider = None
+        return llm_type, provider
+
+    def _apply_type_config_defaults(
+        self, request: LLMRequest, llm_type: LLMType
+    ) -> Dict[str, Any]:
+        """Apply LLM type config defaults to request. Issue #620."""
         type_config = self.llm_type_configs.get(llm_type, {})
         if not hasattr(request, "temperature") or request.temperature == 0.7:
             request.temperature = type_config.get("temperature", request.temperature)
@@ -622,63 +634,54 @@ class UnifiedLLMInterface:
             request.max_tokens = type_config.get("max_tokens", request.max_tokens)
         if not hasattr(request, "structured_output"):
             request.structured_output = type_config.get("structured_output", False)
+        return type_config
 
-        # Determine provider selection order
+    def _build_provider_order(
+        self, request: LLMRequest, type_config: Dict[str, Any]
+    ) -> List[ProviderType]:
+        """Build ordered list of providers to try. Issue #620."""
         if request.provider and request.provider in self.providers:
-            provider_order = [request.provider]
-        else:
-            # Use preferred providers for this LLM type
-            preferred = type_config.get("preferred_providers", [])
-            provider_order = [p for p in preferred if p in self.providers]
+            return [request.provider]
+        preferred = type_config.get("preferred_providers", [])
+        provider_order = [p for p in preferred if p in self.providers]
+        remaining = [
+            p
+            for p in self.provider_priority
+            if p not in provider_order and p in self.providers
+        ]
+        provider_order.extend(remaining)
+        return provider_order
 
-            # Add remaining providers as fallbacks
-            remaining = [
-                p
-                for p in self.provider_priority
-                if p not in provider_order and p in self.providers
-            ]
-            provider_order.extend(remaining)
-
-        # Try providers in order
+    async def _try_providers(
+        self, request: LLMRequest, provider_order: List[ProviderType]
+    ) -> LLMResponse:
+        """Try providers in order until one succeeds. Issue #620."""
         last_error = None
         for provider_type in provider_order:
             if provider_type not in self.providers:
                 continue
-
             provider = self.providers[provider_type]
-
             try:
-                # Check if provider is available
                 if not await provider.is_available():
                     logger.warning(f"Provider {provider_type.value} is not available")
                     continue
-
-                # Execute request
                 response = await provider.chat_completion(request)
-
                 if response.error:
                     last_error = response.error
                     logger.warning(
                         f"Provider {provider_type.value} returned error: {response.error}"
                     )
                     continue
-
-                # Success!
                 self._successful_requests += 1
                 if provider_type != (request.provider or provider_order[0]):
                     response.fallback_used = True
-
                 return response
-
             except Exception as e:
                 last_error = str(e)
                 logger.error(f"Provider {provider_type.value} failed: {e}")
                 continue
-
-        # All providers failed
         self._failed_requests += 1
         logger.error("All providers failed for request")
-
         return LLMResponse(
             content="",
             provider=ProviderType.MOCK,
