@@ -108,17 +108,23 @@ def _process_fact_results(
             break
         context_parts.append(f"{i}. {content}\n")
         total_length += len(content)
-        citations.append({
-            "source": "knowledge_base",
-            "id": fact.get("id") or fact.get("fact_id"),
-            "category": fact.get("category"),
-        })
+        citations.append(
+            {
+                "source": "knowledge_base",
+                "id": fact.get("id") or fact.get("fact_id"),
+                "category": fact.get("category"),
+            }
+        )
     context_parts.append("\n")
     return total_length
 
 
 async def _process_relations_for_citations(
-    kb, citations: List[Dict], max_length: int, context_parts: List[str], total_length: int
+    kb,
+    citations: List[Dict],
+    max_length: int,
+    context_parts: List[str],
+    total_length: int,
 ) -> int:
     """Process relations for citations. (Issue #315 - extracted)"""
     for citation in citations[:2]:
@@ -159,15 +165,21 @@ def _process_single_doc_result(
         return total_length
     source = doc.get("metadata", {}).get("source", "docs")
     context_parts.append(f"[{source}]\n{content}\n\n")
-    citations.append({
-        "source": "documentation",
-        "file": doc.get("metadata", {}).get("source"),
-    })
+    citations.append(
+        {
+            "source": "documentation",
+            "file": doc.get("metadata", {}).get("source"),
+        }
+    )
     return total_length + len(content)
 
 
 def _process_documentation_context(
-    query: str, max_length: int, context_parts: List[str], citations: List[Dict], total_length: int
+    query: str,
+    max_length: int,
+    context_parts: List[str],
+    citations: List[Dict],
+    total_length: int,
 ) -> int:
     """Process documentation search into context. (Issue #315 - extracted)"""
     doc_searcher = get_documentation_searcher()
@@ -238,9 +250,7 @@ class UnifiedSearchRequest(BaseModel):
     query: str = Field(..., description="Search query text")
     top_k: int = Field(10, ge=1, le=50, description="Max results from fact search")
     doc_results: int = Field(3, ge=0, le=10, description="Max documentation results")
-    expand_relations: bool = Field(
-        True, description="Include related facts via graph"
-    )
+    expand_relations: bool = Field(True, description="Include related facts via graph")
     score_threshold: float = Field(
         0.6, ge=0.0, le=1.0, description="Minimum relevance score"
     )
@@ -270,6 +280,83 @@ class ContextRequest(BaseModel):
 # ============================================================================
 
 
+async def _search_facts(kb, query: str, top_k: int, result: dict) -> None:
+    """
+    Search facts via KnowledgeBase.
+
+    Issue #620: Extracted from unified_search.
+
+    Args:
+        kb: Knowledge base instance
+        query: Search query
+        top_k: Number of results to return
+        result: Result dict to populate
+    """
+    try:
+        fact_results = await kb.search(query, top_k=top_k)
+        if fact_results.get("results"):
+            for fact in fact_results["results"]:
+                fact["source"] = "knowledge_base"
+            result["facts"] = fact_results.get("results", [])
+        result["sources_searched"].append("facts")
+    except Exception as e:
+        logger.warning("Fact search failed: %s", e)
+
+
+async def _search_relations(kb, result: dict) -> None:
+    """
+    Expand facts with graph relations.
+
+    Issue #620: Extracted from unified_search.
+
+    Args:
+        kb: Knowledge base instance
+        result: Result dict with facts to expand
+    """
+    try:
+        related_ids: Set[str] = set()
+        fact_ids = [f.get("id") or f.get("fact_id") for f in result["facts"]]
+
+        for fact_id in fact_ids[:5]:  # Limit to top 5 to avoid too many queries
+            await _expand_fact_relations(
+                kb, fact_id, related_ids, result["related_facts"]
+            )
+
+        result["sources_searched"].append("relations")
+    except Exception as e:
+        logger.warning("Relation expansion failed: %s", e)
+
+
+def _search_documentation(
+    query: str, doc_results_count: int, score_threshold: float, result: dict
+) -> None:
+    """
+    Search documentation collection.
+
+    Issue #620: Extracted from unified_search.
+
+    Args:
+        query: Search query
+        doc_results_count: Number of doc results to return
+        score_threshold: Minimum score threshold
+        result: Result dict to populate
+    """
+    try:
+        doc_searcher = get_documentation_searcher()
+        if doc_searcher:
+            doc_results = doc_searcher.search(
+                query=query,
+                n_results=doc_results_count,
+                score_threshold=score_threshold,
+            )
+            for doc in doc_results:
+                doc["source"] = "documentation"
+            result["documentation"] = doc_results
+            result["sources_searched"].append("documentation")
+    except Exception as e:
+        logger.warning("Documentation search failed: %s", e)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="unified_search",
@@ -280,10 +367,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
     """
     Search across all knowledge sources in a unified query.
 
-    Combines:
-    - Vector similarity search on facts (KnowledgeBase)
-    - Graph traversal for related facts (Relations)
-    - Documentation search (autobot_docs collection)
+    Issue #620: Refactored to use extracted helper methods.
 
     Returns results from all sources with source attribution.
     """
@@ -298,50 +382,19 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
         "sources_searched": [],
     }
 
-    # Search facts via KnowledgeBase
+    # Search facts (Issue #620: uses helper)
     if "facts" in body.include_sources and kb is not None:
-        try:
-            fact_results = await kb.search(body.query, top_k=body.top_k)
-            if fact_results.get("results"):
-                for fact in fact_results["results"]:
-                    fact["source"] = "knowledge_base"
-                result["facts"] = fact_results.get("results", [])
-            result["sources_searched"].append("facts")
-        except Exception as e:
-            logger.warning("Fact search failed: %s", e)
+        await _search_facts(kb, body.query, body.top_k, result)
 
-    # Expand with relations if enabled
+    # Expand with relations (Issue #620: uses helper)
     if "relations" in body.include_sources and body.expand_relations and kb is not None:
-        try:
-            # Issue #336: Use extracted helpers for relation expansion
-            related_ids: Set[str] = set()
-            fact_ids = [f.get("id") or f.get("fact_id") for f in result["facts"]]
+        await _search_relations(kb, result)
 
-            for fact_id in fact_ids[:5]:  # Limit to top 5 to avoid too many queries
-                await _expand_fact_relations(
-                    kb, fact_id, related_ids, result["related_facts"]
-                )
-
-            result["sources_searched"].append("relations")
-        except Exception as e:
-            logger.warning("Relation expansion failed: %s", e)
-
-    # Search documentation
+    # Search documentation (Issue #620: uses helper)
     if "documentation" in body.include_sources and body.doc_results > 0:
-        try:
-            doc_searcher = get_documentation_searcher()
-            if doc_searcher:
-                doc_results = doc_searcher.search(
-                    query=body.query,
-                    n_results=body.doc_results,
-                    score_threshold=body.score_threshold,
-                )
-                for doc in doc_results:
-                    doc["source"] = "documentation"
-                result["documentation"] = doc_results
-                result["sources_searched"].append("documentation")
-        except Exception as e:
-            logger.warning("Documentation search failed: %s", e)
+        _search_documentation(
+            body.query, body.doc_results, body.score_threshold, result
+        )
 
     # Calculate totals
     result["total_results"] = (
@@ -457,7 +510,11 @@ async def get_llm_context(req: Request, body: ContextRequest):
         try:
             fact_results = await kb.search(body.query, top_k=5)
             total_length = _process_fact_results(
-                fact_results, body.max_context_length, context_parts, citations, total_length
+                fact_results,
+                body.max_context_length,
+                context_parts,
+                citations,
+                total_length,
             )
         except Exception as e:
             logger.warning("Fact context failed: %s", e)
@@ -475,7 +532,11 @@ async def get_llm_context(req: Request, body: ContextRequest):
     if body.include_documentation:
         try:
             total_length = _process_documentation_context(
-                body.query, body.max_context_length, context_parts, citations, total_length
+                body.query,
+                body.max_context_length,
+                context_parts,
+                citations,
+                total_length,
             )
         except Exception as e:
             logger.warning("Doc context failed: %s", e)
@@ -518,7 +579,7 @@ async def search_documentation(
         return {
             "success": False,
             "message": "Documentation not indexed. "
-                       "Run: python tools/index_documentation.py --tier 1",
+            "Run: python tools/index_documentation.py --tier 1",
             "results": [],
         }
 
@@ -643,7 +704,10 @@ def _create_fact_node(fact: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _process_category_tree(
-    tree: List[Dict[str, Any]], nodes: List[Dict], edges: List[Dict], parent_id: Optional[str] = None
+    tree: List[Dict[str, Any]],
+    nodes: List[Dict],
+    edges: List[Dict],
+    parent_id: Optional[str] = None,
 ) -> None:
     """Recursively process category tree into nodes and edges.
 
@@ -655,12 +719,14 @@ def _process_category_tree(
 
         # Add edge from parent category if exists
         if parent_id:
-            edges.append({
-                "from": parent_id,
-                "to": node["id"],
-                "type": "contains",
-                "strength": 1.0,
-            })
+            edges.append(
+                {
+                    "from": parent_id,
+                    "to": node["id"],
+                    "type": "contains",
+                    "strength": 1.0,
+                }
+            )
 
         # Process children recursively
         children = category.get("children", [])
@@ -712,16 +778,18 @@ async def _get_fact_relations_for_graph(
                 key = f"{fact_id}-{target_id}"
                 if key not in relation_set:
                     relation_set.add(key)
-                    relations.append({
-                        "from": fact_id,
-                        "to": target_id,
-                        "type": rel.get("relation_type", "relates_to"),
-                        "strength": rel.get("strength", 0.8),
-                    })
+                    relations.append(
+                        {
+                            "from": fact_id,
+                            "to": target_id,
+                            "type": rel.get("relation_type", "relates_to"),
+                            "strength": rel.get("strength", 0.8),
+                        }
+                    )
 
             if len(relations) >= max_relations:
                 break
-        except Exception:
+        except Exception:  # nosec B112 - continue on single fact failure is intentional
             continue
 
     return relations
@@ -756,19 +824,21 @@ def _create_dynamic_category_nodes(
             seen_categories.add(category)
             node_id = f"cat_{category}"
             category_map[category] = node_id
-            nodes.append({
-                "id": node_id,
-                "name": category.replace("-", " ").replace("_", " ").title(),
-                "type": "category",
-                "observations": [f"Knowledge category: {category}"],
-                "metadata": {
-                    "path": category,
-                    "fact_count": 0,
-                    "icon": "folder",
-                    "color": category_colors.get(category, "#6366f1"),
-                },
-                "created_at": 0,
-            })
+            nodes.append(
+                {
+                    "id": node_id,
+                    "name": category.replace("-", " ").replace("_", " ").title(),
+                    "type": "category",
+                    "observations": [f"Knowledge category: {category}"],
+                    "metadata": {
+                        "path": category,
+                        "fact_count": 0,
+                        "icon": "folder",
+                        "color": category_colors.get(category, "#6366f1"),
+                    },
+                    "created_at": 0,
+                }
+            )
 
     return category_map
 
@@ -816,7 +886,7 @@ def _process_facts_into_nodes(
     facts: List[Dict[str, Any]],
     nodes: List[Dict],
     edges: List[Dict],
-    category_map: Dict[str, str]
+    category_map: Dict[str, str],
 ) -> List[str]:
     """Process facts into graph nodes and create category edges.
 
@@ -842,12 +912,14 @@ def _process_facts_into_nodes(
         category = fact.get("category", "general")
         cat_node_id = category_map.get(category)
         if cat_node_id:
-            edges.append({
-                "from": cat_node_id,
-                "to": node["id"],
-                "type": "contains",
-                "strength": 0.6,
-            })
+            edges.append(
+                {
+                    "from": cat_node_id,
+                    "to": node["id"],
+                    "type": "contains",
+                    "strength": 0.6,
+                }
+            )
 
     return fact_ids
 
@@ -866,7 +938,9 @@ def _update_category_fact_counts(
     for node in nodes:
         if node["type"] == "category":
             cat_path = node.get("metadata", {}).get("path", "")
-            cat_name = cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
+            cat_name = (
+                cat_path.split("/")[-1] if cat_path else node["id"].replace("cat_", "")
+            )
             count = sum(1 for f in facts if f.get("category") == cat_name)
             node["metadata"]["fact_count"] = count
 

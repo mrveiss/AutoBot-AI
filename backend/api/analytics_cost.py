@@ -516,6 +516,77 @@ async def get_budget_alerts(
     }
 
 
+def _calculate_alert_status(name: str, data: str, current_costs: dict) -> dict:
+    """
+    Calculate budget status for a single alert.
+
+    Issue #620: Extracted from get_budget_status.
+
+    Args:
+        name: Alert name (may be bytes)
+        data: Alert data JSON (may be bytes)
+        current_costs: Current costs by period
+
+    Returns:
+        Status dict for the alert
+    """
+    import json
+
+    name_str = name if isinstance(name, str) else name.decode("utf-8")
+    data_str = data if isinstance(data, str) else data.decode("utf-8")
+    alert = json.loads(data_str)
+
+    period = alert.get("period", "monthly")
+    threshold = alert.get("threshold_usd", 0)
+    current = current_costs.get(period, 0)
+
+    percent_used = (current / threshold) * 100 if threshold > 0 else 0
+
+    return {
+        "name": name_str,
+        "period": period,
+        "threshold_usd": threshold,
+        "current_usd": current,
+        "percent_used": round(percent_used, 2),
+        "status": "exceeded"
+        if percent_used >= 100
+        else "warning"
+        if percent_used >= 75
+        else "ok",
+        "remaining_usd": max(threshold - current, 0),
+    }
+
+
+async def _get_current_costs(tracker, today: datetime) -> dict:
+    """
+    Get current costs for daily, weekly, and monthly periods.
+
+    Issue #620: Extracted from get_budget_status.
+    Issue #619: Uses parallel fetches for performance.
+
+    Args:
+        tracker: Cost tracker instance
+        today: Current date/time
+
+    Returns:
+        Dict with daily, weekly, monthly costs
+    """
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    daily_summary, weekly_summary, monthly_summary = await asyncio.gather(
+        tracker.get_cost_summary(today.replace(hour=0, minute=0, second=0), today),
+        tracker.get_cost_summary(week_start, today),
+        tracker.get_cost_summary(month_start, today),
+    )
+
+    return {
+        "daily": daily_summary.get("total_cost_usd", 0),
+        "weekly": weekly_summary.get("total_cost_usd", 0),
+        "monthly": monthly_summary.get("total_cost_usd", 0),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_budget_status",
@@ -528,69 +599,22 @@ async def get_budget_status(
     """
     Get current budget status against all configured alerts.
 
-    Shows how close spending is to each budget threshold.
-
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use extracted helper methods.
     """
     tracker = get_cost_tracker()
     redis = await tracker.get_redis()
-
-    import json
-
-    # Get alerts
-    alerts_data = await redis.hgetall(tracker.BUDGET_ALERTS_KEY)
-
-    # Get current costs
     today = datetime.utcnow()
-    week_start = today - timedelta(days=today.weekday())
-    month_start = today.replace(day=1)
 
-    # Issue #619: Parallelize independent cost summary fetches
-    daily_summary, weekly_summary, monthly_summary = await asyncio.gather(
-        tracker.get_cost_summary(today.replace(hour=0, minute=0, second=0), today),
-        tracker.get_cost_summary(week_start, today),
-        tracker.get_cost_summary(month_start, today),
-    )
+    # Get alerts and current costs (Issue #620: uses helper)
+    alerts_data = await redis.hgetall(tracker.BUDGET_ALERTS_KEY)
+    current_costs = await _get_current_costs(tracker, today)
 
-    current_costs = {
-        "daily": daily_summary.get("total_cost_usd", 0),
-        "weekly": weekly_summary.get("total_cost_usd", 0),
-        "monthly": monthly_summary.get("total_cost_usd", 0),
-    }
-
-    # Calculate status for each alert
-    statuses = []
-    for name, data in alerts_data.items():
-        name_str = name if isinstance(name, str) else name.decode("utf-8")
-        data_str = data if isinstance(data, str) else data.decode("utf-8")
-        alert = json.loads(data_str)
-
-        period = alert.get("period", "monthly")
-        threshold = alert.get("threshold_usd", 0)
-        current = current_costs.get(period, 0)
-
-        if threshold > 0:
-            percent_used = (current / threshold) * 100
-        else:
-            percent_used = 0
-
-        statuses.append(
-            {
-                "name": name_str,
-                "period": period,
-                "threshold_usd": threshold,
-                "current_usd": current,
-                "percent_used": round(percent_used, 2),
-                "status": (
-                    "exceeded"
-                    if percent_used >= 100
-                    else "warning"
-                    if percent_used >= 75
-                    else "ok"
-                ),
-                "remaining_usd": max(threshold - current, 0),
-            }
-        )
+    # Calculate status for each alert (Issue #620: uses helper)
+    statuses = [
+        _calculate_alert_status(name, data, current_costs)
+        for name, data in alerts_data.items()
+    ]
 
     return {
         "timestamp": today.isoformat(),
