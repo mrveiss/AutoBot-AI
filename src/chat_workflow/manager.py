@@ -779,6 +779,34 @@ before summarizing.
             "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
         }
 
+    def _log_and_parse_tool_calls(
+        self, llm_response: str, iteration: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Log response details and parse tool calls.
+
+        Issue #620: Extracted from _process_single_llm_iteration.
+        """
+        has_tool_call_tag = "<TOOL_CALL" in llm_response or "<tool_call" in llm_response
+        logger.info(
+            "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
+            iteration,
+            has_tool_call_tag,
+            llm_response[:500].replace("\n", " "),
+        )
+
+        # Issue #716: On first iteration, defer tool execution for plan-first
+        is_first_iteration = iteration == 1
+        tool_calls = self._parse_tool_calls(
+            llm_response, is_first_iteration=is_first_iteration
+        )
+        logger.info(
+            "[Issue #352] Iteration %d: Parsed %d tool calls",
+            iteration,
+            len(tool_calls),
+        )
+        return tool_calls
+
     async def _process_single_llm_iteration(
         self,
         http_client,
@@ -790,14 +818,17 @@ before summarizing.
         rag_citations: List[Dict[str, Any]],
         iteration: int,
     ):
-        """Process a single LLM iteration. Yields WorkflowMessage chunks, then (llm_response, tool_calls)."""
+        """
+        Process a single LLM iteration.
+
+        Yields WorkflowMessage chunks, then (llm_response, tool_calls).
+        Issue #620: Refactored to use extracted helper method.
+        """
         import aiohttp
 
         payload = self._get_llm_request_payload(selected_model, current_prompt)
-
-        # Issue #680: Use try/finally to properly track streaming request as active
-        # This prevents pool recreation from closing the connection mid-stream
         llm_response = ""
+
         try:
             async with await http_client.post(
                 ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
@@ -819,7 +850,12 @@ before summarizing.
                     yield (None, None)
                     return
 
-                async for chunk_msg, llm_response, is_done, is_segment_complete in self._stream_llm_response(
+                async for (
+                    chunk_msg,
+                    llm_response,
+                    is_done,
+                    _,
+                ) in self._stream_llm_response(
                     response,
                     selected_model,
                     terminal_session_id,
@@ -832,33 +868,14 @@ before summarizing.
                         break
 
                 logger.info(
-                    "[ChatWorkflowManager] Full LLM response length: %d characters (iteration %d)",
+                    "[ChatWorkflowManager] Full LLM response length: %d chars (iter %d)",
                     len(llm_response),
                     iteration,
                 )
         finally:
-            # Issue #680: Decrement active request count after streaming is complete
             await http_client.decrement_active()
 
-        # Issue #651: Log response snippet to debug multi-step issues
-        has_tool_call_tag = "<TOOL_CALL" in llm_response or "<tool_call" in llm_response
-        logger.info(
-            "[Issue #651] Iteration %d: Response has TOOL_CALL tag: %s, snippet: %s",
-            iteration,
-            has_tool_call_tag,
-            llm_response[:500].replace("\n", " "),
-        )
-        # Issue #716: Pass iteration info for plan-first execution
-        # On first iteration, if there's a planning block, defer tool execution to show plan first
-        is_first_iteration = iteration == 1
-        tool_calls = self._parse_tool_calls(
-            llm_response, is_first_iteration=is_first_iteration
-        )
-        logger.info(
-            "[Issue #352] Iteration %d: Parsed %d tool calls",
-            iteration,
-            len(tool_calls),
-        )
+        tool_calls = self._log_and_parse_tool_calls(llm_response, iteration)
         yield (llm_response, tool_calls)
 
     def _handle_break_loop_tuple(self, tool_msg: Any) -> tuple:
@@ -1517,7 +1534,9 @@ before summarizing.
                 message_type="default",
                 session_id=session_id,
             )
-            logger.debug("✅ Persisted user message immediately: session=%s", session_id)
+            logger.debug(
+                "✅ Persisted user message immediately: session=%s", session_id
+            )
         except Exception as persist_error:
             logger.error(
                 "Failed to persist user message immediately: %s", persist_error

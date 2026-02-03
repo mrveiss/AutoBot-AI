@@ -222,9 +222,11 @@ class SecurityAssessment:
             "name": self.name,
             "target": self.target,
             "scope": self.scope,
-            "phase": self.phase.value
-            if isinstance(self.phase, AssessmentPhase)
-            else self.phase,
+            "phase": (
+                self.phase.value
+                if isinstance(self.phase, AssessmentPhase)
+                else self.phase
+            ),
             "training_mode": self.training_mode,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -506,6 +508,59 @@ class SecurityWorkflowManager:
             logger.error("Failed to list active assessments: %s", e)
             raise RuntimeError(f"Failed to list active assessments: {e}")
 
+    def _determine_next_phase(
+        self,
+        current_phase: str,
+        valid_next: List[str],
+        target_phase: Optional[str],
+    ) -> Optional[str]:
+        """
+        Determine the next phase for workflow transition.
+
+        Issue #620: Extracted from advance_phase.
+
+        Returns:
+            Next phase name or None if invalid transition
+        """
+        if target_phase:
+            if target_phase not in valid_next:
+                logger.error(
+                    "Invalid transition: %s -> %s. Valid: %s",
+                    current_phase,
+                    target_phase,
+                    valid_next,
+                )
+                return None
+            return target_phase
+
+        # Auto-advance to first valid (non-error) phase
+        return next(
+            (p for p in valid_next if p != "ERROR"),
+            valid_next[0] if valid_next else None,
+        )
+
+    def _record_phase_transition(
+        self,
+        assessment: SecurityAssessment,
+        current_phase: str,
+        next_phase: str,
+        reason: str,
+    ) -> None:
+        """
+        Record phase transition in assessment history.
+
+        Issue #620: Extracted from advance_phase.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        transition = {
+            "from_phase": current_phase,
+            "to_phase": next_phase,
+            "timestamp": now,
+            "reason": reason or f"Advancing from {current_phase}",
+        }
+        assessment.phase = AssessmentPhase(next_phase)
+        assessment.phase_history.append(transition)
+
     async def advance_phase(
         self,
         assessment_id: str,
@@ -514,6 +569,8 @@ class SecurityWorkflowManager:
     ) -> Optional[SecurityAssessment]:
         """
         Advance to the next workflow phase.
+
+        Issue #620: Refactored to use extracted helper methods.
 
         Args:
             assessment_id: Assessment UUID
@@ -535,26 +592,9 @@ class SecurityWorkflowManager:
             logger.warning("No valid transitions from %s", current_phase)
             return assessment
 
-        # Determine target phase
-        if target_phase:
-            if target_phase not in valid_next:
-                logger.error(
-                    "Invalid transition: %s -> %s. Valid: %s",
-                    current_phase,
-                    target_phase,
-                    valid_next,
-                )
-                return None
-            next_phase = target_phase
-        else:
-            # Auto-advance to first valid (non-error) phase
-            next_phase = next(
-                (p for p in valid_next if p != "ERROR"),
-                valid_next[0] if valid_next else None,
-            )
-
+        next_phase = self._determine_next_phase(current_phase, valid_next, target_phase)
         if not next_phase:
-            return assessment
+            return None if target_phase else assessment
 
         # Check training mode requirement for exploitation
         if next_phase == "EXPLOITATION" and not assessment.training_mode:
@@ -564,24 +604,10 @@ class SecurityWorkflowManager:
             )
             next_phase = "REPORTING"
 
-        # Record transition
-        now = datetime.now(timezone.utc).isoformat()
-        transition = {
-            "from_phase": current_phase,
-            "to_phase": next_phase,
-            "timestamp": now,
-            "reason": reason or f"Advancing from {current_phase}",
-        }
-
-        assessment.phase = AssessmentPhase(next_phase)
-        assessment.phase_history.append(transition)
-
+        self._record_phase_transition(assessment, current_phase, next_phase, reason)
         await self._save_assessment(assessment)
 
-        logger.info(
-            "Assessment %s: %s -> %s ", assessment_id, current_phase, next_phase
-        )
-
+        logger.info("Assessment %s: %s -> %s", assessment_id, current_phase, next_phase)
         return assessment
 
     async def add_host(
