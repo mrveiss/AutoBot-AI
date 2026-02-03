@@ -21,11 +21,12 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse, Response
 
 from backend.services.agent_analytics import get_agent_analytics
 from backend.services.llm_cost_tracker import get_cost_tracker
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -45,11 +46,14 @@ router = APIRouter(prefix="/export", tags=["analytics", "export"])
 @router.get("/csv/costs")
 async def export_cost_csv(
     days: int = Query(default=30, ge=1, le=365, description="Number of days to export"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Export cost data as CSV.
 
     Returns daily cost data suitable for spreadsheet analysis.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     end_date = datetime.utcnow()
@@ -86,11 +90,15 @@ async def export_cost_csv(
     error_code_prefix="EXPORT",
 )
 @router.get("/csv/agents")
-async def export_agent_csv():
+async def export_agent_csv(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Export agent performance data as CSV.
 
     Returns agent metrics suitable for spreadsheet analysis.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     metrics_list = await analytics.get_all_agents_metrics()
@@ -100,19 +108,21 @@ async def export_agent_csv():
     writer = csv.writer(output)
 
     # Header
-    writer.writerow([
-        "agent_id",
-        "agent_type",
-        "total_tasks",
-        "completed_tasks",
-        "failed_tasks",
-        "timeout_tasks",
-        "success_rate_percent",
-        "error_rate_percent",
-        "avg_duration_ms",
-        "total_tokens_used",
-        "last_activity",
-    ])
+    writer.writerow(
+        [
+            "agent_id",
+            "agent_type",
+            "total_tasks",
+            "completed_tasks",
+            "failed_tasks",
+            "timeout_tasks",
+            "success_rate_percent",
+            "error_rate_percent",
+            "avg_duration_ms",
+            "total_tokens_used",
+            "last_activity",
+        ]
+    )
 
     # Data rows using model method (Issue #372 - reduces feature envy)
     for m in metrics_list:
@@ -123,9 +133,7 @@ async def export_agent_csv():
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=autobot_agents.csv"
-        },
+        headers={"Content-Disposition": "attachment; filename=autobot_agents.csv"},
     )
 
 
@@ -137,11 +145,14 @@ async def export_agent_csv():
 @router.get("/csv/usage")
 async def export_usage_csv(
     limit: int = Query(default=1000, ge=1, le=10000, description="Max records"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Export LLM usage records as CSV.
 
     Returns individual API call records.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     records = await tracker.get_recent_usage(limit)
@@ -151,31 +162,35 @@ async def export_usage_csv(
     writer = csv.writer(output)
 
     # Header
-    writer.writerow([
-        "timestamp",
-        "provider",
-        "model",
-        "input_tokens",
-        "output_tokens",
-        "cost_usd",
-        "session_id",
-        "success",
-        "latency_ms",
-    ])
+    writer.writerow(
+        [
+            "timestamp",
+            "provider",
+            "model",
+            "input_tokens",
+            "output_tokens",
+            "cost_usd",
+            "session_id",
+            "success",
+            "latency_ms",
+        ]
+    )
 
     # Data rows
     for r in records:
-        writer.writerow([
-            r.get("timestamp", ""),
-            r.get("provider", ""),
-            r.get("model", ""),
-            r.get("input_tokens", 0),
-            r.get("output_tokens", 0),
-            r.get("cost_usd", 0),
-            r.get("session_id", ""),
-            r.get("success", True),
-            r.get("latency_ms", ""),
-        ])
+        writer.writerow(
+            [
+                r.get("timestamp", ""),
+                r.get("provider", ""),
+                r.get("model", ""),
+                r.get("input_tokens", 0),
+                r.get("output_tokens", 0),
+                r.get("cost_usd", 0),
+                r.get("session_id", ""),
+                r.get("success", True),
+                r.get("latency_ms", ""),
+            ]
+        )
 
     csv_content = output.getvalue()
 
@@ -201,11 +216,14 @@ async def export_usage_csv(
 @router.get("/json/full")
 async def export_full_json(
     days: int = Query(default=30, ge=1, le=365, description="Number of days"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Export complete analytics data as JSON.
 
     Returns comprehensive analytics export for programmatic processing.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     analytics = get_agent_analytics()
@@ -259,11 +277,15 @@ async def export_full_json(
     error_code_prefix="EXPORT",
 )
 @router.get("/prometheus")
-async def export_prometheus():
+async def export_prometheus(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Export metrics in Prometheus format.
 
     Returns metrics compatible with Prometheus/Grafana scraping.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     analytics = get_agent_analytics()
@@ -300,8 +322,12 @@ async def export_prometheus():
     for model, data in cost_summary.get("by_model", {}).items():
         input_tokens = data.get("input_tokens", 0)
         output_tokens = data.get("output_tokens", 0)
-        lines.append(f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}')
-        lines.append(f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}')
+        lines.append(
+            f'autobot_llm_model_tokens{{model="{model}",type="input"}} {input_tokens}'
+        )
+        lines.append(
+            f'autobot_llm_model_tokens{{model="{model}",type="output"}} {output_tokens}'
+        )
 
     # Agent metrics using model methods (Issue #372 - reduces feature envy)
     lines.append("")
@@ -349,22 +375,38 @@ def _get_cost_panels() -> list:
             "title": "LLM Cost Overview",
             "type": "stat",
             "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
-            "targets": [{"expr": "autobot_llm_cost_total_usd", "legendFormat": "Total Cost (USD)"}],
-            "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto"},
+            "targets": [
+                {
+                    "expr": "autobot_llm_cost_total_usd",
+                    "legendFormat": "Total Cost (USD)",
+                }
+            ],
+            "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+            },
         },
         {
             "id": 2,
             "title": "Daily Cost Average",
             "type": "stat",
             "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
-            "targets": [{"expr": "autobot_llm_daily_cost_usd", "legendFormat": "Avg Daily Cost (USD)"}],
+            "targets": [
+                {
+                    "expr": "autobot_llm_daily_cost_usd",
+                    "legendFormat": "Avg Daily Cost (USD)",
+                }
+            ],
         },
         {
             "id": 3,
             "title": "Cost by Model",
             "type": "piechart",
             "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-            "targets": [{"expr": "autobot_llm_model_cost_usd", "legendFormat": "{{model}}"}],
+            "targets": [
+                {"expr": "autobot_llm_model_cost_usd", "legendFormat": "{{model}}"}
+            ],
         },
     ]
 
@@ -377,7 +419,9 @@ def _get_agent_panels() -> list:
             "title": "Agent Success Rates",
             "type": "bargauge",
             "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-            "targets": [{"expr": "autobot_agent_success_rate", "legendFormat": "{{agent_id}}"}],
+            "targets": [
+                {"expr": "autobot_agent_success_rate", "legendFormat": "{{agent_id}}"}
+            ],
             "options": {"orientation": "horizontal", "displayMode": "gradient"},
             "fieldConfig": {"defaults": {"max": 100, "min": 0, "unit": "percent"}},
         },
@@ -386,7 +430,12 @@ def _get_agent_panels() -> list:
             "title": "Agent Task Duration",
             "type": "timeseries",
             "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
-            "targets": [{"expr": "autobot_agent_avg_duration_ms", "legendFormat": "{{agent_id}}"}],
+            "targets": [
+                {
+                    "expr": "autobot_agent_avg_duration_ms",
+                    "legendFormat": "{{agent_id}}",
+                }
+            ],
             "fieldConfig": {"defaults": {"unit": "ms"}},
         },
         {
@@ -394,7 +443,9 @@ def _get_agent_panels() -> list:
             "title": "Agent Error Rates",
             "type": "timeseries",
             "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
-            "targets": [{"expr": "autobot_agent_error_rate", "legendFormat": "{{agent_id}}"}],
+            "targets": [
+                {"expr": "autobot_agent_error_rate", "legendFormat": "{{agent_id}}"}
+            ],
             "fieldConfig": {
                 "defaults": {
                     "unit": "percent",
@@ -420,8 +471,14 @@ def _get_token_usage_panel() -> dict:
         "type": "timeseries",
         "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
         "targets": [
-            {"expr": 'rate(autobot_llm_model_tokens{type="input"}[5m])', "legendFormat": "{{model}} - Input"},
-            {"expr": 'rate(autobot_llm_model_tokens{type="output"}[5m])', "legendFormat": "{{model}} - Output"},
+            {
+                "expr": 'rate(autobot_llm_model_tokens{type="input"}[5m])',
+                "legendFormat": "{{model}} - Input",
+            },
+            {
+                "expr": 'rate(autobot_llm_model_tokens{type="output"}[5m])',
+                "legendFormat": "{{model}} - Output",
+            },
         ],
     }
 
@@ -449,7 +506,9 @@ def _get_grafana_panels() -> list:
     error_code_prefix="EXPORT",
 )
 @router.get("/grafana-dashboard")
-async def export_grafana_dashboard():
+async def export_grafana_dashboard(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Export a Grafana dashboard JSON.
 
@@ -457,6 +516,7 @@ async def export_grafana_dashboard():
 
     Issue #281: Panel configurations extracted to _get_grafana_panels()
     to reduce function length from 166 to ~30 lines.
+    Issue #744: Requires admin authentication.
     """
     # Issue #281: Use extracted helper for panel configurations
     dashboard = {
@@ -502,11 +562,15 @@ async def export_grafana_dashboard():
     error_code_prefix="EXPORT",
 )
 @router.get("/formats")
-async def get_export_formats():
+async def get_export_formats(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get available export formats and endpoints.
 
     Returns documentation for all export options.
+
+    Issue #744: Requires admin authentication.
     """
     return {
         "formats": [
@@ -515,29 +579,44 @@ async def get_export_formats():
                 "description": "Comma-separated values for spreadsheet analysis",
                 "endpoints": [
                     {"path": "/export/csv/costs", "description": "Daily cost data"},
-                    {"path": "/export/csv/agents", "description": "Agent performance metrics"},
-                    {"path": "/export/csv/usage", "description": "Individual LLM usage records"},
+                    {
+                        "path": "/export/csv/agents",
+                        "description": "Agent performance metrics",
+                    },
+                    {
+                        "path": "/export/csv/usage",
+                        "description": "Individual LLM usage records",
+                    },
                 ],
             },
             {
                 "format": "JSON",
                 "description": "Full analytics export for programmatic access",
                 "endpoints": [
-                    {"path": "/export/json/full", "description": "Complete analytics export"},
+                    {
+                        "path": "/export/json/full",
+                        "description": "Complete analytics export",
+                    },
                 ],
             },
             {
                 "format": "Prometheus",
                 "description": "Metrics in Prometheus exposition format",
                 "endpoints": [
-                    {"path": "/export/prometheus", "description": "Prometheus-compatible metrics"},
+                    {
+                        "path": "/export/prometheus",
+                        "description": "Prometheus-compatible metrics",
+                    },
                 ],
             },
             {
                 "format": "Grafana",
                 "description": "Pre-configured Grafana dashboard",
                 "endpoints": [
-                    {"path": "/export/grafana-dashboard", "description": "Grafana dashboard JSON"},
+                    {
+                        "path": "/export/grafana-dashboard",
+                        "description": "Grafana dashboard JSON",
+                    },
                 ],
             },
         ],

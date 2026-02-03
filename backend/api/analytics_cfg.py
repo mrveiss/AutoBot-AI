@@ -22,10 +22,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class NodeType(str, Enum):
     RAISE = "raise"
     BREAK = "break"
     CONTINUE = "continue"
-    PASS = "pass"
+    PASS = "pass"  # nosec B105 - enum value for Python pass statement
 
 
 class EdgeType(str, Enum):
@@ -238,7 +239,9 @@ class CFGBuilder(ast.NodeVisitor):
         try:
             start_line = node.lineno - 1
             end_line = getattr(node, "end_lineno", node.lineno)
-            if start_line < len(self.source_lines) and end_line <= len(self.source_lines):
+            if start_line < len(self.source_lines) and end_line <= len(
+                self.source_lines
+            ):
                 return "\n".join(self.source_lines[start_line:end_line])
         except Exception as e:
             logger.debug("Failed to extract code snippet from AST node: %s", e)
@@ -602,7 +605,8 @@ class CFGBuilder(ast.NodeVisitor):
         if isinstance(stmt.test, ast.Constant) and stmt.test.value is True:
             # Check if body contains break
             has_break = any(
-                isinstance(node, ast.Break) for node in ast.walk(ast.Module(body=stmt.body, type_ignores=[]))
+                isinstance(node, ast.Break)
+                for node in ast.walk(ast.Module(body=stmt.body, type_ignores=[]))
             )
             if not has_break:
                 issue = CFGIssue(
@@ -682,7 +686,11 @@ class CFGBuilder(ast.NodeVisitor):
         return names
 
     def _create_except_issue(
-        self, handler: ast.ExceptHandler, issue_type: IssueType, message: str, suggestion: str
+        self,
+        handler: ast.ExceptHandler,
+        issue_type: IssueType,
+        message: str,
+        suggestion: str,
     ) -> CFGIssue:
         """
         Create a CFGIssue for an exception handler.
@@ -851,7 +859,9 @@ class CFGBuilder(ast.NodeVisitor):
 
         return []  # Continue terminates normal flow
 
-    def _check_high_complexity(self, graph: "ControlFlowGraph", complexity: int) -> None:
+    def _check_high_complexity(
+        self, graph: "ControlFlowGraph", complexity: int
+    ) -> None:
         """
         Check and add issue for high cyclomatic complexity.
 
@@ -990,7 +1000,9 @@ class CFGBuilder(ast.NodeVisitor):
             return
 
         # Count return nodes
-        return_nodes = [n for n in self._current_graph.nodes if n.node_type == NodeType.RETURN]
+        return_nodes = [
+            n for n in self._current_graph.nodes if n.node_type == NodeType.RETURN
+        ]
 
         if not return_nodes:
             # No explicit returns - might be intentional for void functions
@@ -1059,7 +1071,10 @@ class CFGResponse(BaseModel):
     error_code_prefix="CFG",
 )
 @router.post("/analyze")
-async def analyze_control_flow(request: AnalyzeRequest) -> JSONResponse:
+async def analyze_control_flow(
+    request: AnalyzeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
     """
     Analyze control flow in Python source code.
 
@@ -1068,6 +1083,8 @@ async def analyze_control_flow(request: AnalyzeRequest) -> JSONResponse:
     - Infinite loops
     - High cyclomatic complexity
     - Deep nesting
+
+    Issue #744: Requires admin authentication.
     """
     start_time = time.time()
 
@@ -1096,7 +1113,8 @@ async def analyze_control_flow(request: AnalyzeRequest) -> JSONResponse:
                 "low": sum(1 for i in all_issues if i["severity"] == "low"),
             },
             "avg_cyclomatic_complexity": (
-                sum(g.metrics.get("cyclomatic_complexity", 0) for g in graphs) / len(graphs)
+                sum(g.metrics.get("cyclomatic_complexity", 0) for g in graphs)
+                / len(graphs)
                 if graphs
                 else 0
             ),
@@ -1135,13 +1153,22 @@ async def analyze_control_flow(request: AnalyzeRequest) -> JSONResponse:
     error_code_prefix="CFG",
 )
 @router.post("/analyze-file")
-async def analyze_file_control_flow(request: AnalyzeFileRequest) -> JSONResponse:
-    """Analyze control flow in a Python file."""
+async def analyze_file_control_flow(
+    request: AnalyzeFileRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
+    """
+    Analyze control flow in a Python file.
+
+    Issue #744: Requires admin authentication.
+    """
     file_path = Path(request.file_path)
 
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(file_path.exists):
-        raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
+        raise HTTPException(
+            status_code=404, detail=f"File not found: {request.file_path}"
+        )
 
     if not file_path.suffix == ".py":
         raise HTTPException(status_code=400, detail="Only Python files are supported")
@@ -1162,9 +1189,14 @@ async def analyze_file_control_flow(request: AnalyzeFileRequest) -> JSONResponse
     error_code_prefix="CFG",
 )
 @router.post("/export/dot")
-async def export_cfg_dot(request: AnalyzeRequest) -> JSONResponse:
+async def export_cfg_dot(
+    request: AnalyzeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
     """
     Export CFG in DOT format for visualization with Graphviz.
+
+    Issue #744: Requires admin authentication.
     """
     builder = CFGBuilder(request.source_code, request.file_path)
     graphs = builder.build()
@@ -1173,8 +1205,8 @@ async def export_cfg_dot(request: AnalyzeRequest) -> JSONResponse:
 
     for graph in graphs:
         dot_lines = [f'digraph "{graph.function_name}" {{']
-        dot_lines.append('  rankdir=TB;')
-        dot_lines.append('  node [shape=box, style=filled];')
+        dot_lines.append("  rankdir=TB;")
+        dot_lines.append("  node [shape=box, style=filled];")
 
         # Add nodes with colors based on type
         node_colors = {
@@ -1189,9 +1221,7 @@ async def export_cfg_dot(request: AnalyzeRequest) -> JSONResponse:
         for node in graph.nodes:
             color = node_colors.get(node.node_type, "#FFFFFF")
             label = node.code_snippet.replace('"', '\\"')[:50]
-            dot_lines.append(
-                f'  "{node.id}" [label="{label}", fillcolor="{color}"];'
-            )
+            dot_lines.append(f'  "{node.id}" [label="{label}", fillcolor="{color}"];')
 
         # Add edges with labels
         edge_styles = {
@@ -1225,9 +1255,14 @@ async def export_cfg_dot(request: AnalyzeRequest) -> JSONResponse:
     error_code_prefix="CFG",
 )
 @router.post("/complexity")
-async def get_complexity_metrics(request: AnalyzeRequest) -> JSONResponse:
+async def get_complexity_metrics(
+    request: AnalyzeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
     """
     Get complexity metrics for all functions in source code.
+
+    Issue #744: Requires admin authentication.
     """
     builder = CFGBuilder(request.source_code, request.file_path)
     graphs = builder.build()
@@ -1279,9 +1314,14 @@ async def get_complexity_metrics(request: AnalyzeRequest) -> JSONResponse:
     error_code_prefix="CFG",
 )
 @router.post("/unreachable")
-async def detect_unreachable_code(request: AnalyzeRequest) -> JSONResponse:
+async def detect_unreachable_code(
+    request: AnalyzeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
     """
     Detect unreachable code in source.
+
+    Issue #744: Requires admin authentication.
     """
     builder = CFGBuilder(request.source_code, request.file_path)
     graphs = builder.build()
@@ -1310,9 +1350,14 @@ async def detect_unreachable_code(request: AnalyzeRequest) -> JSONResponse:
     error_code_prefix="CFG",
 )
 @router.post("/infinite-loops")
-async def detect_infinite_loops(request: AnalyzeRequest) -> JSONResponse:
+async def detect_infinite_loops(
+    request: AnalyzeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
     """
     Detect potential infinite loops in source.
+
+    Issue #744: Requires admin authentication.
     """
     builder = CFGBuilder(request.source_code, request.file_path)
     graphs = builder.build()
@@ -1349,8 +1394,14 @@ async def detect_infinite_loops(request: AnalyzeRequest) -> JSONResponse:
     error_code_prefix="CFG",
 )
 @router.get("/health")
-async def cfg_health() -> JSONResponse:
-    """Health check for CFG analyzer."""
+async def cfg_health(
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
+    """
+    Health check for CFG analyzer.
+
+    Issue #744: Requires admin authentication.
+    """
     return JSONResponse(
         status_code=200,
         content={

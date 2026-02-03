@@ -25,10 +25,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.utils.redis_client import RedisDatabase, get_redis_client
 
 router = APIRouter()
@@ -236,7 +237,9 @@ class EmbeddingPatternAnalyzer:
         """Record an embedding usage event"""
         try:
             redis = await self._get_redis()
-            operation_id = f"emb_{int(time.time() * 1000)}_{hash(request.model) % 10000}"
+            operation_id = (
+                f"emb_{int(time.time() * 1000)}_{hash(request.model) % 10000}"
+            )
 
             # Calculate cost
             cost = self._calculate_cost(request.model, request.token_count)
@@ -328,7 +331,10 @@ class EmbeddingPatternAnalyzer:
             successful_ops = 0
 
             # Aggregate daily stats - batch fetch using pipeline to eliminate N+1
-            dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+            dates = [
+                (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                for i in range(days)
+            ]
             daily_keys = [f"{self._stats_key}:daily:{date}" for date in dates]
 
             async with redis.pipeline() as pipe:
@@ -417,7 +423,9 @@ class EmbeddingPatternAnalyzer:
                 # Batch fetch and parse using helper (Issue #315 - reduced depth)
                 if keys:
                     all_stats = await self._fetch_model_stats_batch(redis, keys)
-                    parsed = [self._parse_model_stats(k, s) for k, s in zip(keys, all_stats)]
+                    parsed = [
+                        self._parse_model_stats(k, s) for k, s in zip(keys, all_stats)
+                    ]
                     models.extend(m for m in parsed if m)
 
                 if cursor == 0:
@@ -529,8 +537,14 @@ def get_embedding_analyzer() -> EmbeddingPatternAnalyzer:
 
 
 @router.post("/record")
-async def record_embedding_usage(request: EmbeddingUsageRequest):
-    """Record an embedding usage event"""
+async def record_embedding_usage(
+    request: EmbeddingUsageRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Record an embedding usage event
+
+    Issue #744: Requires admin authentication.
+    """
     analyzer = get_embedding_analyzer()
     result = await analyzer.record_usage(request)
 
@@ -547,8 +561,12 @@ async def record_embedding_usage(request: EmbeddingUsageRequest):
 async def get_embedding_stats(
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
     model: Optional[str] = Query(None, description="Filter by model"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get embedding usage statistics"""
+    """Get embedding usage statistics
+
+    Issue #744: Requires admin authentication.
+    """
     analyzer = get_embedding_analyzer()
     result = await analyzer.get_stats(days=days, model=model)
 
@@ -562,8 +580,13 @@ async def get_embedding_stats(
 
 
 @router.get("/model-comparison")
-async def get_model_comparison():
-    """Get comparison of embedding model usage"""
+async def get_model_comparison(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get comparison of embedding model usage
+
+    Issue #744: Requires admin authentication.
+    """
     analyzer = get_embedding_analyzer()
     result = await analyzer.get_model_comparison()
 
@@ -577,8 +600,13 @@ async def get_model_comparison():
 
 
 @router.get("/optimization-recommendations")
-async def get_optimization_recommendations():
-    """Get batch optimization recommendations"""
+async def get_optimization_recommendations(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get batch optimization recommendations
+
+    Issue #744: Requires admin authentication.
+    """
     analyzer = get_embedding_analyzer()
     result = await analyzer.get_batch_optimization_recommendations()
 
@@ -592,8 +620,13 @@ async def get_optimization_recommendations():
 
 
 @router.get("/health")
-async def embedding_analytics_health():
-    """Health check for embedding analytics"""
+async def embedding_analytics_health(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Health check for embedding analytics
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         analyzer = get_embedding_analyzer()
         redis = await analyzer._get_redis()

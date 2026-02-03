@@ -23,8 +23,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from src.auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +91,7 @@ class VulnerabilityType(str, Enum):
     CODE_INJECTION = "code_injection"
     DATA_EXPOSURE = "data_exposure"
     INSECURE_DESERIALIZATION = "insecure_deserialization"
-    HARDCODED_SECRET = "hardcoded_secret"
+    HARDCODED_SECRET = "hardcoded_secret"  # nosec B105 - vulnerability type enum
 
 
 class Severity(str, Enum):
@@ -224,29 +226,81 @@ TAINT_SOURCES: Dict[str, Tuple[SourceType, TaintLevel]] = {
 # Functions that are security-sensitive sinks
 TAINT_SINKS: Dict[str, Tuple[SinkType, VulnerabilityType, Severity]] = {
     # SQL injection risks
-    "execute": (SinkType.DATABASE_QUERY, VulnerabilityType.SQL_INJECTION, Severity.CRITICAL),
-    "executemany": (SinkType.DATABASE_QUERY, VulnerabilityType.SQL_INJECTION, Severity.CRITICAL),
-    "raw": (SinkType.DATABASE_QUERY, VulnerabilityType.SQL_INJECTION, Severity.CRITICAL),
+    "execute": (
+        SinkType.DATABASE_QUERY,
+        VulnerabilityType.SQL_INJECTION,
+        Severity.CRITICAL,
+    ),
+    "executemany": (
+        SinkType.DATABASE_QUERY,
+        VulnerabilityType.SQL_INJECTION,
+        Severity.CRITICAL,
+    ),
+    "raw": (
+        SinkType.DATABASE_QUERY,
+        VulnerabilityType.SQL_INJECTION,
+        Severity.CRITICAL,
+    ),
     # Command injection risks
-    "os.system": (SinkType.SUBPROCESS, VulnerabilityType.COMMAND_INJECTION, Severity.CRITICAL),
-    "os.popen": (SinkType.SUBPROCESS, VulnerabilityType.COMMAND_INJECTION, Severity.CRITICAL),
-    "subprocess.call": (SinkType.SUBPROCESS, VulnerabilityType.COMMAND_INJECTION, Severity.HIGH),
-    "subprocess.run": (SinkType.SUBPROCESS, VulnerabilityType.COMMAND_INJECTION, Severity.HIGH),
-    "subprocess.Popen": (SinkType.SUBPROCESS, VulnerabilityType.COMMAND_INJECTION, Severity.HIGH),
+    "os.system": (
+        SinkType.SUBPROCESS,
+        VulnerabilityType.COMMAND_INJECTION,
+        Severity.CRITICAL,
+    ),
+    "os.popen": (
+        SinkType.SUBPROCESS,
+        VulnerabilityType.COMMAND_INJECTION,
+        Severity.CRITICAL,
+    ),
+    "subprocess.call": (
+        SinkType.SUBPROCESS,
+        VulnerabilityType.COMMAND_INJECTION,
+        Severity.HIGH,
+    ),
+    "subprocess.run": (
+        SinkType.SUBPROCESS,
+        VulnerabilityType.COMMAND_INJECTION,
+        Severity.HIGH,
+    ),
+    "subprocess.Popen": (
+        SinkType.SUBPROCESS,
+        VulnerabilityType.COMMAND_INJECTION,
+        Severity.HIGH,
+    ),
     # Code injection risks
     "eval": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, Severity.CRITICAL),
     "exec": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, Severity.CRITICAL),
     "compile": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, Severity.HIGH),
     # Path traversal risks
     "open": (SinkType.FILE_WRITE, VulnerabilityType.PATH_TRAVERSAL, Severity.HIGH),
-    "os.path.join": (SinkType.FILE_WRITE, VulnerabilityType.PATH_TRAVERSAL, Severity.MEDIUM),
+    "os.path.join": (
+        SinkType.FILE_WRITE,
+        VulnerabilityType.PATH_TRAVERSAL,
+        Severity.MEDIUM,
+    ),
     # XSS risks (web frameworks)
-    "render_template_string": (SinkType.HTML_OUTPUT, VulnerabilityType.XSS, Severity.HIGH),
+    "render_template_string": (
+        SinkType.HTML_OUTPUT,
+        VulnerabilityType.XSS,
+        Severity.HIGH,
+    ),
     "Markup": (SinkType.HTML_OUTPUT, VulnerabilityType.XSS, Severity.MEDIUM),
     # Deserialization risks
-    "pickle.loads": (SinkType.EVAL, VulnerabilityType.INSECURE_DESERIALIZATION, Severity.CRITICAL),
-    "yaml.load": (SinkType.EVAL, VulnerabilityType.INSECURE_DESERIALIZATION, Severity.HIGH),
-    "marshal.loads": (SinkType.EVAL, VulnerabilityType.INSECURE_DESERIALIZATION, Severity.HIGH),
+    "pickle.loads": (
+        SinkType.EVAL,
+        VulnerabilityType.INSECURE_DESERIALIZATION,
+        Severity.CRITICAL,
+    ),
+    "yaml.load": (
+        SinkType.EVAL,
+        VulnerabilityType.INSECURE_DESERIALIZATION,
+        Severity.HIGH,
+    ),
+    "marshal.loads": (
+        SinkType.EVAL,
+        VulnerabilityType.INSECURE_DESERIALIZATION,
+        Severity.HIGH,
+    ),
 }
 
 # Functions that sanitize tainted data
@@ -440,7 +494,9 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return ""
 
-    def _check_taint_source(self, node: ast.Call) -> Optional[Tuple[SourceType, TaintLevel]]:
+    def _check_taint_source(
+        self, node: ast.Call
+    ) -> Optional[Tuple[SourceType, TaintLevel]]:
         """Check if a call is a taint source."""
         call_name = self._get_call_name(node)
 
@@ -455,7 +511,9 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         return None
 
-    def _check_taint_sink(self, node: ast.Call) -> Optional[Tuple[SinkType, VulnerabilityType, Severity]]:
+    def _check_taint_sink(
+        self, node: ast.Call
+    ) -> Optional[Tuple[SinkType, VulnerabilityType, Severity]]:
         """Check if a call is a taint sink."""
         call_name = self._get_call_name(node)
 
@@ -556,7 +614,10 @@ class DataFlowAnalyzer(ast.NodeVisitor):
                 target_taint = self.taint_map.get(edge.target_var, TaintLevel.UNTAINTED)
 
                 # Propagate taint
-                if source_taint == TaintLevel.TAINTED and target_taint != TaintLevel.TAINTED:
+                if (
+                    source_taint == TaintLevel.TAINTED
+                    and target_taint != TaintLevel.TAINTED
+                ):
                     self.taint_map[edge.target_var] = TaintLevel.TAINTED
                     changed = True
                 elif (
@@ -661,8 +722,11 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _process_assign_target(
-        self, target: ast.AST, node: ast.Assign, value_taint: TaintLevel,
-        source_type: Optional[SourceType]
+        self,
+        target: ast.AST,
+        node: ast.Assign,
+        value_taint: TaintLevel,
+        source_type: Optional[SourceType],
     ) -> None:
         """Process a single assignment target. (Issue #315 - extracted)"""
         if isinstance(target, ast.Name):
@@ -724,7 +788,9 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         """Visit augmented assignment (+=, -=, etc.)."""
         if isinstance(node.target, ast.Name):
             # The target is both used and defined
-            self._add_use(node.target.id, node.lineno, node.target.col_offset, "augassign")
+            self._add_use(
+                node.target.id, node.lineno, node.target.col_offset, "augassign"
+            )
 
             value_taint = self._get_taint_from_expr(node.value)
             current_taint = self.taint_map.get(node.target.id, TaintLevel.UNTAINTED)
@@ -846,15 +912,21 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         for arg in expr.args:
             self._extract_edges_from_expr(arg, target_var, target_line)
 
-    def _extract_from_subscript(self, expr: ast.Subscript, target_var: str, target_line: int):
+    def _extract_from_subscript(
+        self, expr: ast.Subscript, target_var: str, target_line: int
+    ):
         """Extract edges from Subscript (Issue #315)."""
         self._extract_edges_from_expr(expr.value, target_var, target_line)
 
-    def _extract_from_attribute(self, expr: ast.Attribute, target_var: str, target_line: int):
+    def _extract_from_attribute(
+        self, expr: ast.Attribute, target_var: str, target_line: int
+    ):
         """Extract edges from Attribute (Issue #315)."""
         self._extract_edges_from_expr(expr.value, target_var, target_line)
 
-    def _extract_from_joinedstr(self, expr: ast.JoinedStr, target_var: str, target_line: int):
+    def _extract_from_joinedstr(
+        self, expr: ast.JoinedStr, target_var: str, target_line: int
+    ):
         """Extract edges from f-string (Issue #315)."""
         for value in expr.values:
             if isinstance(value, ast.FormattedValue):
@@ -873,7 +945,9 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         for value in expr.values:
             self._extract_edges_from_expr(value, target_var, target_line)
 
-    def _extract_edges_from_expr(self, expr: ast.AST, target_var: str, target_line: int):
+    def _extract_edges_from_expr(
+        self, expr: ast.AST, target_var: str, target_line: int
+    ):
         """Extract data flow edges from an expression (Issue #315 - dispatch table)."""
         # Dispatch table for expression type handlers
         handlers = {
@@ -1044,9 +1118,13 @@ def _build_analysis_response(
 
 
 @router.post("/analyze", response_model=AnalysisResponse)
-async def analyze_code(request: AnalyzeRequest):
+async def analyze_code(
+    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Analyze Python source code for data flow and security vulnerabilities (Issue #665: uses helper).
+
+    Issue #744: Requires admin authentication.
 
     Performs:
     - Variable tracking (definitions and uses)
@@ -1066,8 +1144,14 @@ async def analyze_code(request: AnalyzeRequest):
 
 
 @router.post("/analyze-file", response_model=AnalysisResponse)
-async def analyze_file(request: AnalyzeFileRequest):
-    """Analyze a Python file for data flow and security vulnerabilities (Issue #665: uses helper)."""
+async def analyze_file(
+    request: AnalyzeFileRequest, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Analyze a Python file for data flow and security vulnerabilities (Issue #665: uses helper).
+
+    Issue #744: Requires admin authentication.
+    """
     import aiofiles
 
     try:
@@ -1079,7 +1163,9 @@ async def analyze_file(request: AnalyzeFileRequest):
         return _build_analysis_response(graphs, request.file_path)
 
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
+        raise HTTPException(
+            status_code=404, detail=f"File not found: {request.file_path}"
+        )
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
     except SyntaxError as e:
@@ -1090,8 +1176,14 @@ async def analyze_file(request: AnalyzeFileRequest):
 
 
 @router.post("/vulnerabilities")
-async def get_vulnerabilities(request: AnalyzeRequest):
-    """Get only security vulnerabilities from code analysis."""
+async def get_vulnerabilities(
+    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Get only security vulnerabilities from code analysis.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         analyzer = DataFlowAnalyzer(request.source_code, request.file_path)
         graphs = analyzer.analyze()
@@ -1129,8 +1221,11 @@ async def get_vulnerabilities(request: AnalyzeRequest):
 
 
 def _aggregate_graph_taint_stats(
-    graph, tainted_vars: set, vulns_by_type: Dict[str, int],
-    vulns_by_severity: Dict[str, int], counts: Dict[str, int]
+    graph,
+    tainted_vars: set,
+    vulns_by_type: Dict[str, int],
+    vulns_by_severity: Dict[str, int],
+    counts: Dict[str, int],
 ) -> None:
     """Aggregate taint statistics from a single graph. (Issue #315 - extracted)"""
     for d in graph.definitions:
@@ -1148,8 +1243,14 @@ def _aggregate_graph_taint_stats(
 
 
 @router.post("/taint-summary", response_model=TaintSummary)
-async def get_taint_summary(request: AnalyzeRequest):
-    """Get summary of taint analysis."""
+async def get_taint_summary(
+    request: AnalyzeRequest, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Get summary of taint analysis.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         analyzer = DataFlowAnalyzer(request.source_code, request.file_path)
         graphs = analyzer.analyze()
@@ -1179,8 +1280,12 @@ async def get_taint_summary(request: AnalyzeRequest):
 
 
 @router.get("/sources")
-async def list_taint_sources():
-    """List all recognized taint sources."""
+async def list_taint_sources(admin_check: bool = Depends(check_admin_permission)):
+    """
+    List all recognized taint sources.
+
+    Issue #744: Requires admin authentication.
+    """
     return {
         "sources": [
             {
@@ -1194,8 +1299,12 @@ async def list_taint_sources():
 
 
 @router.get("/sinks")
-async def list_taint_sinks():
-    """List all recognized security-sensitive sinks."""
+async def list_taint_sinks(admin_check: bool = Depends(check_admin_permission)):
+    """
+    List all recognized security-sensitive sinks.
+
+    Issue #744: Requires admin authentication.
+    """
     return {
         "sinks": [
             {
@@ -1210,14 +1319,22 @@ async def list_taint_sinks():
 
 
 @router.get("/sanitizers")
-async def list_sanitizers():
-    """List all recognized sanitizer functions."""
+async def list_sanitizers(admin_check: bool = Depends(check_admin_permission)):
+    """
+    List all recognized sanitizer functions.
+
+    Issue #744: Requires admin authentication.
+    """
     return {"sanitizers": sorted(SANITIZERS)}
 
 
 @router.get("/health")
-async def health_check():
-    """Health check endpoint."""
+async def health_check(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Health check endpoint.
+
+    Issue #744: Requires admin authentication.
+    """
     return {
         "status": "healthy",
         "service": "data-flow-analysis",

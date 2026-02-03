@@ -13,7 +13,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 # Import existing components
 from backend.api.workflow_automation import (
@@ -21,6 +21,7 @@ from backend.api.workflow_automation import (
     WorkflowAutomationManager,
     WorkflowStep,
 )
+from src.auth_middleware import check_admin_permission
 from src.enhanced_orchestrator import EnhancedOrchestrator
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
@@ -434,7 +435,7 @@ class AdvancedWorkflowOrchestrator:
             self.workflow_intelligence[workflow_id] = intelligence
 
             # Step 5: Create enhanced workflow
-            workflow = await self._create_enhanced_workflow(
+            _ = await self._create_enhanced_workflow(
                 workflow_id, user_request, optimized_steps, session_id, intelligence
             )
 
@@ -1126,8 +1127,13 @@ class WorkflowLearningEngine:
 
 # API Endpoints for Advanced Workflow Orchestration
 @router.post("/generate_intelligent")
-async def generate_intelligent_workflow(request: dict):
-    """Generate AI-optimized workflow from user request"""
+async def generate_intelligent_workflow(
+    request: dict, admin_check: bool = Depends(check_admin_permission)
+):
+    """Generate AI-optimized workflow from user request
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         orchestrator = AdvancedWorkflowOrchestrator()
 
@@ -1156,8 +1162,13 @@ async def generate_intelligent_workflow(request: dict):
 
 
 @router.get("/intelligence/{workflow_id}")
-async def get_workflow_intelligence(workflow_id: str):
-    """Get AI intelligence data for workflow"""
+async def get_workflow_intelligence(
+    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get AI intelligence data for workflow
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         orchestrator = AdvancedWorkflowOrchestrator()
 
@@ -1185,8 +1196,11 @@ async def get_workflow_intelligence(workflow_id: str):
 
 
 @router.get("/analytics")
-async def get_advanced_analytics():
-    """Get advanced workflow analytics"""
+async def get_advanced_analytics(admin_check: bool = Depends(check_admin_permission)):
+    """Get advanced workflow analytics
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         orchestrator = AdvancedWorkflowOrchestrator()
 
@@ -1215,8 +1229,11 @@ async def get_advanced_analytics():
 
 
 @router.get("/templates")
-async def get_workflow_templates():
-    """Get all available intelligent workflow templates"""
+async def get_workflow_templates(admin_check: bool = Depends(check_admin_permission)):
+    """Get all available intelligent workflow templates
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         orchestrator = AdvancedWorkflowOrchestrator()
 
@@ -1246,8 +1263,13 @@ async def get_workflow_templates():
 
 
 @router.post("/templates/{template_id}/execute")
-async def execute_workflow_template(template_id: str, request: dict):
-    """Execute a workflow template with customizations"""
+async def execute_workflow_template(
+    template_id: str, request: dict, admin_check: bool = Depends(check_admin_permission)
+):
+    """Execute a workflow template with customizations
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         orchestrator = AdvancedWorkflowOrchestrator()
 
@@ -1298,11 +1320,13 @@ if __name__ == "__main__":
             test_request, "demo_session", {}
         )
 
-        intelligence = orchestrator.workflow_intelligence[workflow_id]
+        orchestrator.workflow_intelligence[workflow_id]
 
         logger.info("Generated intelligent workflow: {workflow_id}")
         logger.info("Confidence: {intelligence.confidence_score:.2f}")
-        logger.info("Estimated time: {intelligence.estimated_completion_time:.1f} seconds")
+        logger.info(
+            "Estimated time: {intelligence.estimated_completion_time:.1f} seconds"
+        )
         logger.info("Optimizations: {len(intelligence.optimization_suggestions)}")
 
     #     import asyncio

@@ -13,9 +13,10 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.api.analytics_models import CodeAnalysisRequest
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import shared analytics controller from analytics module
@@ -49,8 +50,15 @@ def set_analytics_dependencies(controller, state):
     error_code_prefix="ANALYTICS",
 )
 @router.post("/code/index")
-async def index_codebase(request: CodeAnalysisRequest):
-    """Trigger codebase indexing and analysis"""
+async def index_codebase(
+    request: CodeAnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Trigger codebase indexing and analysis
+
+    Issue #744: Requires admin authentication.
+    """
     # Validate request
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(Path(request.target_path).exists):
@@ -76,8 +84,14 @@ async def index_codebase(request: CodeAnalysisRequest):
     error_code_prefix="ANALYTICS",
 )
 @router.get("/code/status")
-async def get_code_analysis_status():
-    """Get current code analysis status and capabilities"""
+async def get_code_analysis_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get current code analysis status and capabilities
+
+    Issue #744: Requires admin authentication.
+    """
     # Issue #619: Parallelize independent file existence checks
     code_analysis_exists, code_index_exists = await asyncio.gather(
         asyncio.to_thread(analytics_controller.code_analysis_path.exists),
@@ -126,8 +140,14 @@ async def get_code_analysis_status():
     error_code_prefix="ANALYTICS",
 )
 @router.get("/quality/assessment")
-async def get_code_quality_assessment():
-    """Get comprehensive code quality assessment for frontend dashboard"""
+async def get_code_quality_assessment(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get comprehensive code quality assessment for frontend dashboard
+
+    Issue #744: Requires admin authentication.
+    """
     # Get cached analysis or trigger new one
     cached_analysis = analytics_state.get("code_analysis_cache")
 
@@ -189,8 +209,14 @@ async def get_code_quality_assessment():
     error_code_prefix="ANALYTICS",
 )
 @router.get("/code/quality-metrics")
-async def get_code_quality_metrics():
-    """Get code quality metrics from cached analysis"""
+async def get_code_quality_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get code quality metrics from cached analysis
+
+    Issue #744: Requires admin authentication.
+    """
     cached_analysis = analytics_state.get("code_analysis_cache")
 
     if not cached_analysis:
@@ -249,8 +275,14 @@ async def get_code_quality_metrics():
     error_code_prefix="ANALYTICS",
 )
 @router.get("/code/communication-chains")
-async def get_communication_chains():
-    """Get communication chain analysis from code analysis"""
+async def get_communication_chains(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get communication chain analysis from code analysis
+
+    Issue #744: Requires admin authentication.
+    """
     cached_analysis = analytics_state.get("code_analysis_cache")
 
     if not cached_analysis or "communication_chains" not in cached_analysis:
@@ -323,8 +355,14 @@ async def get_communication_chains():
     error_code_prefix="ANALYTICS",
 )
 @router.post("/code/analyze/communication-chains")
-async def analyze_communication_chains_detailed():
-    """Perform detailed communication chain analysis"""
+async def analyze_communication_chains_detailed(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Perform detailed communication chain analysis
+
+    Issue #744: Requires admin authentication.
+    """
     # Run communication chain analysis
     analysis_request = CodeAnalysisRequest(
         analysis_type="communication_chains", include_metrics=True
@@ -421,9 +459,7 @@ def _calculate_security_score(cached_analysis: dict) -> float:
         security_results = code_collection.get(
             where={
                 "type": "problem",
-                "problem_type": {
-                    "$in": ["security", "hardcode", "vulnerability"]
-                },
+                "problem_type": {"$in": ["security", "hardcode", "vulnerability"]},
             },
             include=["metadatas"],
         )
@@ -485,9 +521,7 @@ def _calculate_quality_factors(cached_analysis: dict) -> dict:
         "fair": 65,
         "poor": 40,
     }
-    quality_factors["maintainability"] = maintainability_scores.get(
-        maintainability, 40
-    )
+    quality_factors["maintainability"] = maintainability_scores.get(maintainability, 40)
 
     # Security score
     quality_factors["security"] = _calculate_security_score(cached_analysis)
@@ -514,11 +548,14 @@ def _score_to_grade(score: float) -> str:
     error_code_prefix="ANALYTICS",
 )
 @router.get("/code/metrics/quality-score")
-async def get_code_quality_score():
+async def get_code_quality_score(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get comprehensive code quality score.
 
     Issue #665: Refactored with extracted helper functions.
+    Issue #744: Requires admin authentication.
     """
     cached_analysis = analytics_state.get("code_analysis_cache")
 
