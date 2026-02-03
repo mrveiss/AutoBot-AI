@@ -467,11 +467,15 @@ async def _init_slm_client():
     Initialize SLM client for agent configuration (NON-CRITICAL).
 
     Issue #760: Connects to SLM server for agent LLM config caching.
+    Issue #768: Use SSOT config instead of hardcoded URL.
     Falls back gracefully if SLM is unavailable.
     """
     logger.info("✅ [ 89%] SLM Client: Initializing SLM client for agent configs...")
     try:
-        slm_url = os.getenv("SLM_URL", "http://172.16.168.19:8000")
+        # Issue #768: Get SLM URL from SSOT config, fallback to env var
+        from src.config.ssot_config import get_config
+
+        slm_url = os.getenv("SLM_URL") or get_config().slm_url
         slm_token = os.getenv("SLM_AUTH_TOKEN")
 
         await init_slm_client(slm_url, slm_token)

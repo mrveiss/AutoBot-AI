@@ -22,7 +22,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.constants.model_constants import model_config
-from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
 from src.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
@@ -146,9 +145,11 @@ class AdvancedRAGOptimizer:
     async def initialize(self):
         """Initialize knowledge base and components."""
         try:
-            # Initialize knowledge base
-            self.kb = KnowledgeBase()
-            await self.kb.ainit()
+            # Use singleton factory to get properly initialized knowledge base
+            # This ensures consistent KB state across the application
+            from src.knowledge import get_knowledge_base
+
+            self.kb = await get_knowledge_base()
 
             # Initialize semantic chunker for query processing
             self.semantic_chunker = get_gpu_semantic_chunker()
@@ -417,12 +418,17 @@ class AdvancedRAGOptimizer:
 
         try:
             from sentence_transformers import CrossEncoder
-            model_name = getattr(self, "reranking_model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+            model_name = getattr(
+                self, "reranking_model", "cross-encoder/ms-marco-MiniLM-L-6-v2"
+            )
             logger.info("Loading cross-encoder model: %s", model_name)
             self._cross_encoder = CrossEncoder(model_name)
             logger.info("Cross-encoder model loaded successfully")
         except ImportError:
-            logger.warning("sentence-transformers not available, using fallback reranking")
+            logger.warning(
+                "sentence-transformers not available, using fallback reranking"
+            )
             self._cross_encoder = None
         except Exception as e:
             logger.error("Failed to load cross-encoder model: %s", e)
@@ -433,14 +439,18 @@ class AdvancedRAGOptimizer:
     ) -> None:
         """Apply cross-encoder scores to results (Issue #398: extracted)."""
         pairs = [(query, result.content) for result in results]
-        cross_encoder_scores = await asyncio.to_thread(self._cross_encoder.predict, pairs)
+        cross_encoder_scores = await asyncio.to_thread(
+            self._cross_encoder.predict, pairs
+        )
 
         for result, ce_score in zip(results, cross_encoder_scores):
             result.rerank_score = float(ce_score) * 0.8 + result.hybrid_score * 0.2
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
-    def _apply_fallback_reranking(self, query: str, results: List[SearchResult]) -> None:
+    def _apply_fallback_reranking(
+        self, query: str, results: List[SearchResult]
+    ) -> None:
         """Apply term-based fallback reranking (Issue #398: extracted)."""
         logger.debug("Using fallback term-based reranking")
         query_lower = query.lower()
@@ -456,7 +466,9 @@ class AdvancedRAGOptimizer:
                 + exact_match_bonus * 0.1
             )
 
-    def _finalize_rerank_results(self, results: List[SearchResult]) -> List[SearchResult]:
+    def _finalize_rerank_results(
+        self, results: List[SearchResult]
+    ) -> List[SearchResult]:
         """Sort and rank results after reranking (Issue #398: extracted)."""
         results.sort(key=lambda x: x.rerank_score or 0, reverse=True)
         for i, result in enumerate(results):
