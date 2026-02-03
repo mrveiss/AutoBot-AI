@@ -323,29 +323,21 @@ class GPUVectorIndex:
 
             return len(embeddings)
 
-    async def search(
-        self,
-        query_embedding: np.ndarray,
-        top_k: int = 10,
-        normalize: bool = True,
-    ) -> Tuple[List[SearchResult], SearchMetrics]:
+    def _prepare_query_vector(
+        self, query_embedding: np.ndarray, normalize: bool
+    ) -> np.ndarray:
         """
-        Search for similar vectors.
+        Prepare query vector for FAISS search.
+
+        Issue #620: Extracted from search to reduce function length.
 
         Args:
-            query_embedding: Query vector of shape (dim,) or (1, dim)
-            top_k: Number of results to return
-            normalize: Whether to normalize query vector
+            query_embedding: Raw query vector
+            normalize: Whether to L2 normalize
 
         Returns:
-            Tuple of (search results, performance metrics)
+            Prepared query array of shape (1, dim)
         """
-        if self.index is None:
-            raise RuntimeError("Index not initialized. Call initialize() first.")
-
-        start_time = time.perf_counter()
-
-        # Prepare query
         query = np.ascontiguousarray(query_embedding.astype(np.float32))
         if query.ndim == 1:
             query = query.reshape(1, -1)
@@ -355,16 +347,25 @@ class GPUVectorIndex:
             if norm > 0:
                 query = query / norm
 
-        # Set search parameters for IVF indices
-        if hasattr(self.index, "nprobe"):
-            self.index.nprobe = self.config.nprobe
+        return query
 
-        # Execute search
-        distances, indices = await asyncio.to_thread(self.index.search, query, top_k)
+    def _convert_search_results(
+        self, distances: np.ndarray, indices: np.ndarray
+    ) -> List["SearchResult"]:
+        """
+        Convert FAISS search output to SearchResult objects.
 
-        # Convert results
+        Issue #620: Extracted from search to reduce function length.
+
+        Args:
+            distances: Distance array from FAISS
+            indices: Index array from FAISS
+
+        Returns:
+            List of SearchResult objects
+        """
         results = []
-        for i, (dist, idx) in enumerate(zip(distances[0], indices[0])):
+        for dist, idx in zip(distances[0], indices[0]):
             if idx == -1:  # FAISS returns -1 for missing results
                 continue
 
@@ -385,6 +386,45 @@ class GPUVectorIndex:
                     distance=float(dist),
                 )
             )
+
+        return results
+
+    async def search(
+        self,
+        query_embedding: np.ndarray,
+        top_k: int = 10,
+        normalize: bool = True,
+    ) -> Tuple[List[SearchResult], SearchMetrics]:
+        """
+        Search for similar vectors.
+
+        Issue #620: Refactored to use extracted helper methods.
+
+        Args:
+            query_embedding: Query vector of shape (dim,) or (1, dim)
+            top_k: Number of results to return
+            normalize: Whether to normalize query vector
+
+        Returns:
+            Tuple of (search results, performance metrics)
+        """
+        if self.index is None:
+            raise RuntimeError("Index not initialized. Call initialize() first.")
+
+        start_time = time.perf_counter()
+
+        # Issue #620: Use helper for query preparation
+        query = self._prepare_query_vector(query_embedding, normalize)
+
+        # Set search parameters for IVF indices
+        if hasattr(self.index, "nprobe"):
+            self.index.nprobe = self.config.nprobe
+
+        # Execute search
+        distances, indices = await asyncio.to_thread(self.index.search, query, top_k)
+
+        # Issue #620: Use helper for result conversion
+        results = self._convert_search_results(distances, indices)
 
         query_time = (time.perf_counter() - start_time) * 1000
 
@@ -555,7 +595,9 @@ class GPUVectorIndex:
             load_dir = Path(load_path)
 
             # Issue #358 - avoid blocking
-            index_file_exists = await asyncio.to_thread((load_dir / "index.faiss").exists)
+            index_file_exists = await asyncio.to_thread(
+                (load_dir / "index.faiss").exists
+            )
             if not index_file_exists:
                 logger.warning("No index file found at %s", load_path)
                 return False

@@ -169,9 +169,97 @@ class RBACMiddleware:
 rbac_middleware = RBACMiddleware()
 
 
+def _extract_request(args: tuple, request: Optional[Request]) -> Request:
+    """
+    Extract Request object from function arguments.
+
+    Issue #620: Extracted from permission decorators to reduce duplication.
+
+    Args:
+        args: Positional arguments
+        request: Request from kwargs (may be None)
+
+    Returns:
+        Request object
+
+    Raises:
+        HTTPException: 500 if Request not found
+    """
+    if request is None:
+        for arg in args:
+            if isinstance(arg, Request):
+                return arg
+
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Request object not found",
+        )
+    return request
+
+
+def _extract_user_context(
+    request: Request,
+) -> tuple[Optional[uuid.UUID], Optional[uuid.UUID]]:
+    """
+    Extract user_id and org_id from request state.
+
+    Issue #620: Extracted from permission decorators to reduce duplication.
+
+    Args:
+        request: FastAPI Request object
+
+    Returns:
+        Tuple of (user_id, org_id), either may be None
+    """
+    user_id = None
+    org_id = None
+
+    if hasattr(request.state, "user"):
+        user_data = request.state.user
+        if "user_id" in user_data:
+            try:
+                user_id = uuid.UUID(user_data["user_id"])
+            except (ValueError, TypeError):
+                pass
+        if "org_id" in user_data:
+            try:
+                org_id = uuid.UUID(user_data["org_id"])
+            except (ValueError, TypeError):
+                pass
+
+    return user_id, org_id
+
+
+def _require_authentication(
+    user_id: Optional[uuid.UUID], permissions_desc: str
+) -> None:
+    """
+    Check that user is authenticated, raise 401 if not.
+
+    Issue #620: Extracted from permission decorators to reduce duplication.
+    Issue #744: Return 401 for unauthenticated users.
+
+    Args:
+        user_id: User UUID (None if not authenticated)
+        permissions_desc: Description of required permissions for logging
+
+    Raises:
+        HTTPException: 401 if user_id is None
+    """
+    if user_id is None:
+        logger.warning("Authentication required for permission: %s", permissions_desc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
+
 def require_permission(permission: str):
     """
     Decorator to require a specific permission for an endpoint.
+
+    Issue #620: Refactored to use extracted helper functions.
 
     Usage:
         @router.get("/admin/users")
@@ -186,43 +274,10 @@ def require_permission(permission: str):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, request: Request = None, **kwargs):
-            # Extract request from args if not in kwargs
-            if request is None:
-                for arg in args:
-                    if isinstance(arg, Request):
-                        request = arg
-                        break
-
-            if request is None:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Request object not found",
-                )
-
-            # Get user context from request state
-            user_id = None
-            org_id = None
-
-            if hasattr(request.state, "user"):
-                user_data = request.state.user
-                if "user_id" in user_data:
-                    try:
-                        user_id = uuid.UUID(user_data["user_id"])
-                    except (ValueError, TypeError):
-                        pass
-                if "org_id" in user_data:
-                    try:
-                        org_id = uuid.UUID(user_data["org_id"])
-                    except (ValueError, TypeError):
-                        pass
-
-            # Issue #744: Return 401 for unauthenticated, 403 for unauthorized
-            if user_id is None:
-                logger.warning("Authentication required for permission: %s", permission)
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                )
+            # Issue #620: Use extracted helpers
+            request = _extract_request(args, request)
+            user_id, org_id = _extract_user_context(request)
+            _require_authentication(user_id, permission)
 
             # Check permission
             has_permission = await rbac_middleware.check_permission(
@@ -249,6 +304,8 @@ def require_any_permission(permissions: List[str]):
     """
     Decorator to require any of the specified permissions.
 
+    Issue #620: Refactored to use extracted helper functions.
+
     Usage:
         @router.get("/content")
         @require_any_permission(["content.read", "content.admin"])
@@ -262,43 +319,10 @@ def require_any_permission(permissions: List[str]):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, request: Request = None, **kwargs):
-            if request is None:
-                for arg in args:
-                    if isinstance(arg, Request):
-                        request = arg
-                        break
-
-            if request is None:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Request object not found",
-                )
-
-            user_id = None
-            org_id = None
-
-            if hasattr(request.state, "user"):
-                user_data = request.state.user
-                if "user_id" in user_data:
-                    try:
-                        user_id = uuid.UUID(user_data["user_id"])
-                    except (ValueError, TypeError):
-                        pass
-                if "org_id" in user_data:
-                    try:
-                        org_id = uuid.UUID(user_data["org_id"])
-                    except (ValueError, TypeError):
-                        pass
-
-            # Issue #744: Return 401 for unauthenticated, 403 for unauthorized
-            if user_id is None:
-                logger.warning(
-                    "Authentication required for permissions: %s", permissions
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                )
+            # Issue #620: Use extracted helpers
+            request = _extract_request(args, request)
+            user_id, org_id = _extract_user_context(request)
+            _require_authentication(user_id, str(permissions))
 
             has_permission = await rbac_middleware.check_any_permission(
                 user_id, permissions, org_id
@@ -326,6 +350,8 @@ def require_all_permissions(permissions: List[str]):
     """
     Decorator to require all of the specified permissions.
 
+    Issue #620: Refactored to use extracted helper functions.
+
     Usage:
         @router.delete("/admin/users/{user_id}")
         @require_all_permissions(["users.read", "users.delete"])
@@ -339,43 +365,10 @@ def require_all_permissions(permissions: List[str]):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, request: Request = None, **kwargs):
-            if request is None:
-                for arg in args:
-                    if isinstance(arg, Request):
-                        request = arg
-                        break
-
-            if request is None:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Request object not found",
-                )
-
-            user_id = None
-            org_id = None
-
-            if hasattr(request.state, "user"):
-                user_data = request.state.user
-                if "user_id" in user_data:
-                    try:
-                        user_id = uuid.UUID(user_data["user_id"])
-                    except (ValueError, TypeError):
-                        pass
-                if "org_id" in user_data:
-                    try:
-                        org_id = uuid.UUID(user_data["org_id"])
-                    except (ValueError, TypeError):
-                        pass
-
-            # Issue #744: Return 401 for unauthenticated, 403 for unauthorized
-            if user_id is None:
-                logger.warning(
-                    "Authentication required for permissions: %s", permissions
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                )
+            # Issue #620: Use extracted helpers
+            request = _extract_request(args, request)
+            user_id, org_id = _extract_user_context(request)
+            _require_authentication(user_id, str(permissions))
 
             has_permission = await rbac_middleware.check_all_permissions(
                 user_id, permissions, org_id
