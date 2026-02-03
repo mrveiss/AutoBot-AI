@@ -15,9 +15,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.config import UnifiedConfigManager
+from src.llm_interface import LLMInterface
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.model_optimizer import TaskRequest, get_model_optimizer
-from src.llm_interface import LLMInterface
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -521,6 +521,72 @@ async def get_optimization_config():
 # ============================================================================
 
 
+def _get_prompt_compression_settings(opt_config: dict) -> dict:
+    """
+    Extract prompt compression settings from config.
+
+    Issue #620: Extracted from get_inference_optimization_settings.
+    """
+    pc = opt_config.get("prompt_compression", {})
+    return {
+        "prompt_compression_enabled": pc.get("enabled", True),
+        "prompt_compression_ratio": pc.get("target_ratio", 0.7),
+        "prompt_compression_min_length": pc.get("min_length", 100),
+        "prompt_compression_preserve_code": pc.get("preserve_code_blocks", True),
+        "prompt_compression_aggressive": pc.get("aggressive_mode", False),
+    }
+
+
+def _get_cache_settings(opt_config: dict) -> dict:
+    """
+    Extract cache settings from config.
+
+    Issue #620: Extracted from get_inference_optimization_settings.
+    """
+    cache = opt_config.get("cache", {})
+    return {
+        "cache_enabled": cache.get("enabled", True),
+        "cache_l1_size": cache.get("l1_size", 100),
+        "cache_l2_ttl": cache.get("l2_ttl", 300),
+    }
+
+
+def _get_cloud_settings(opt_config: dict) -> dict:
+    """
+    Extract cloud optimization settings from config.
+
+    Issue #620: Extracted from get_inference_optimization_settings.
+    """
+    cloud = opt_config.get("cloud", {})
+    return {
+        "cloud_connection_pool_size": cloud.get("connection_pool_size", 100),
+        "cloud_batch_window_ms": cloud.get("batch_window_ms", 50),
+        "cloud_max_batch_size": cloud.get("max_batch_size", 10),
+        "cloud_retry_max_attempts": cloud.get("retry_max_attempts", 3),
+        "cloud_retry_base_delay": cloud.get("retry_base_delay", 1.0),
+        "cloud_retry_max_delay": cloud.get("retry_max_delay", 60.0),
+    }
+
+
+def _get_local_settings(opt_config: dict) -> dict:
+    """
+    Extract local optimization settings from config.
+
+    Issue #620: Extracted from get_inference_optimization_settings.
+    """
+    local = opt_config.get("local", {})
+    return {
+        "local_speculation_enabled": local.get("speculation_enabled", False),
+        "local_speculation_draft_model": local.get("speculation_draft_model", ""),
+        "local_speculation_num_tokens": local.get("speculation_num_tokens", 5),
+        "local_speculation_use_ngram": local.get("speculation_use_ngram", False),
+        "local_quantization_type": local.get("quantization_type", "none"),
+        "local_vllm_multi_step": local.get("vllm_multi_step", 8),
+        "local_vllm_prefix_caching": local.get("vllm_prefix_caching", True),
+        "local_vllm_async_output": local.get("vllm_async_output", True),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_inference_optimization_settings",
@@ -536,71 +602,18 @@ async def get_inference_optimization_settings():
     - Response caching
     - Cloud optimizations (connection pooling, batching, rate limiting)
     - Local optimizations (speculative decoding, quantization, vLLM)
+
+    Issue #620: Refactored to use helper functions.
     """
     try:
         opt_config = config.get("optimization", {})
 
+        # Build settings using helper functions (Issue #620)
         settings = InferenceOptimizationSettings(
-            # Prompt compression
-            prompt_compression_enabled=opt_config.get("prompt_compression", {}).get(
-                "enabled", True
-            ),
-            prompt_compression_ratio=opt_config.get("prompt_compression", {}).get(
-                "target_ratio", 0.7
-            ),
-            prompt_compression_min_length=opt_config.get("prompt_compression", {}).get(
-                "min_length", 100
-            ),
-            prompt_compression_preserve_code=opt_config.get("prompt_compression", {}).get(
-                "preserve_code_blocks", True
-            ),
-            prompt_compression_aggressive=opt_config.get("prompt_compression", {}).get(
-                "aggressive_mode", False
-            ),
-            # Response caching
-            cache_enabled=opt_config.get("cache", {}).get("enabled", True),
-            cache_l1_size=opt_config.get("cache", {}).get("l1_size", 100),
-            cache_l2_ttl=opt_config.get("cache", {}).get("l2_ttl", 300),
-            # Cloud optimizations
-            cloud_connection_pool_size=opt_config.get("cloud", {}).get(
-                "connection_pool_size", 100
-            ),
-            cloud_batch_window_ms=opt_config.get("cloud", {}).get(
-                "batch_window_ms", 50
-            ),
-            cloud_max_batch_size=opt_config.get("cloud", {}).get("max_batch_size", 10),
-            cloud_retry_max_attempts=opt_config.get("cloud", {}).get(
-                "retry_max_attempts", 3
-            ),
-            cloud_retry_base_delay=opt_config.get("cloud", {}).get(
-                "retry_base_delay", 1.0
-            ),
-            cloud_retry_max_delay=opt_config.get("cloud", {}).get(
-                "retry_max_delay", 60.0
-            ),
-            # Local optimizations
-            local_speculation_enabled=opt_config.get("local", {}).get(
-                "speculation_enabled", False
-            ),
-            local_speculation_draft_model=opt_config.get("local", {}).get(
-                "speculation_draft_model", ""
-            ),
-            local_speculation_num_tokens=opt_config.get("local", {}).get(
-                "speculation_num_tokens", 5
-            ),
-            local_speculation_use_ngram=opt_config.get("local", {}).get(
-                "speculation_use_ngram", False
-            ),
-            local_quantization_type=opt_config.get("local", {}).get(
-                "quantization_type", "none"
-            ),
-            local_vllm_multi_step=opt_config.get("local", {}).get("vllm_multi_step", 8),
-            local_vllm_prefix_caching=opt_config.get("local", {}).get(
-                "vllm_prefix_caching", True
-            ),
-            local_vllm_async_output=opt_config.get("local", {}).get(
-                "vllm_async_output", True
-            ),
+            **_get_prompt_compression_settings(opt_config),
+            **_get_cache_settings(opt_config),
+            **_get_cloud_settings(opt_config),
+            **_get_local_settings(opt_config),
         )
 
         return {
@@ -622,7 +635,9 @@ async def get_inference_optimization_settings():
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.post("/inference/settings")
-async def update_inference_optimization_settings(settings: InferenceOptimizationSettings):
+async def update_inference_optimization_settings(
+    settings: InferenceOptimizationSettings,
+):
     """
     Update inference optimization settings (Issue #717).
 
@@ -734,8 +749,8 @@ async def get_provider_optimization_summary(provider_type: str):
     Returns applicable optimizations for the provider.
     """
     try:
-        from src.llm_interface_pkg.types import ProviderType
         from src.llm_interface_pkg.optimization import get_optimization_router
+        from src.llm_interface_pkg.types import ProviderType
 
         # Map provider string to enum
         provider_map = {

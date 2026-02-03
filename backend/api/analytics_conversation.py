@@ -377,6 +377,66 @@ class ConversationAnalyzer:
         bottlenecks.sort(key=lambda b: b.impact_score, reverse=True)
         return bottlenecks[:10]
 
+    def _update_intent_tracking(
+        self,
+        conv_data: Dict[str, Any],
+        intent_counts: Counter,
+        intent_success: Dict[str, List[float]],
+        flow_counts: Counter,
+    ) -> None:
+        """
+        Update intent tracking counters for a conversation.
+
+        Issue #620: Extracted from _process_conversation_data.
+
+        Args:
+            conv_data: Processed conversation data
+            intent_counts: Counter for intent occurrences
+            intent_success: Dict mapping intent to success rates
+            flow_counts: Counter for flow paths
+        """
+        # Count intents
+        for intent in conv_data["intents"]:
+            intent_counts[intent] += 1
+
+        # Track intent success
+        if conv_data["intents"]:
+            success_rate = conv_data["success_indicators"] / max(
+                1, len(conv_data["intents"])
+            )
+            for intent in set(conv_data["intents"]):
+                intent_success[intent].append(success_rate)
+
+        # Track flow paths
+        if len(conv_data["intents"]) >= 2:
+            flow_path = tuple(conv_data["intents"][:5])  # First 5 intents
+            flow_counts[flow_path] += 1
+
+    def _update_hourly_distribution(
+        self,
+        messages: List[Dict[str, Any]],
+        hourly_dist: Counter,
+    ) -> None:
+        """
+        Update hourly distribution counter from message timestamps.
+
+        Issue #620: Extracted from _process_conversation_data.
+
+        Args:
+            messages: List of conversation messages
+            hourly_dist: Counter for hourly distribution
+        """
+        if not messages or not messages[0].get("timestamp"):
+            return
+
+        try:
+            ts_str = messages[0]["timestamp"]
+            if isinstance(ts_str, str):
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                hourly_dist[ts.strftime("%H:00")] += 1
+        except (ValueError, TypeError, KeyError) as e:
+            logger.debug("Failed to parse conversation timestamp: %s", e)
+
     def _process_conversation_data(
         self,
         conversations: List[Dict[str, Any]],
@@ -395,6 +455,7 @@ class ConversationAnalyzer:
         Process all conversations and extract aggregated data.
 
         Issue #281: Extracted helper for conversation processing.
+        Issue #620: Further refactored with helper methods.
 
         Args:
             conversations: List of conversation dictionaries
@@ -423,32 +484,11 @@ class ConversationAnalyzer:
             total_success += conv_data["success_indicators"]
             total_frustration += conv_data["frustration_indicators"]
 
-            # Count intents
-            for intent in conv_data["intents"]:
-                intent_counts[intent] += 1
-
-            # Track intent success
-            if conv_data["intents"]:
-                success_rate = conv_data["success_indicators"] / max(
-                    1, len(conv_data["intents"])
-                )
-                for intent in set(conv_data["intents"]):
-                    intent_success[intent].append(success_rate)
-
-            # Track flow paths
-            if len(conv_data["intents"]) >= 2:
-                flow_path = tuple(conv_data["intents"][:5])  # First 5 intents
-                flow_counts[flow_path] += 1
-
-            # Hourly distribution
-            if messages and messages[0].get("timestamp"):
-                try:
-                    ts_str = messages[0]["timestamp"]
-                    if isinstance(ts_str, str):
-                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                        hourly_dist[ts.strftime("%H:00")] += 1
-                except (ValueError, TypeError, KeyError) as e:
-                    logger.debug("Failed to parse conversation timestamp: %s", e)
+            # Issue #620: Use helper methods
+            self._update_intent_tracking(
+                conv_data, intent_counts, intent_success, flow_counts
+            )
+            self._update_hourly_distribution(messages, hourly_dist)
 
         return (
             processed_convs,
