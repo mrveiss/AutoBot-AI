@@ -537,6 +537,37 @@ class CFGBuilder(ast.NodeVisitor):
 
         return [exit_id]
 
+    def _create_loop_exit_node(
+        self, stmt: ast.stmt, exit_id: str, ast_type: str
+    ) -> CFGNode:
+        """
+        Create an exit node for a loop construct.
+
+        Issue #620.
+        """
+        exit_node = CFGNode(
+            id=exit_id,
+            node_type=NodeType.STATEMENT,
+            line_start=stmt.lineno,
+            line_end=getattr(stmt, "end_lineno", stmt.lineno),
+            code_snippet="# loop exit",
+            ast_type=ast_type,
+        )
+        if self._current_graph:
+            self._current_graph.nodes.append(exit_node)
+        return exit_node
+
+    def _process_loop_else_clause(self, stmt: ast.stmt, exit_id: str) -> List[str]:
+        """
+        Process the else clause of a loop if present.
+
+        Issue #620.
+        """
+        if hasattr(stmt, "orelse") and stmt.orelse:
+            self._current_node_id = exit_id
+            return self._process_block(stmt.orelse)
+        return [exit_id]
+
     def _process_while(self, stmt: ast.While) -> List[str]:
         """Process a while loop."""
         # Create loop header (condition)
@@ -554,10 +585,8 @@ class CFGBuilder(ast.NodeVisitor):
         # Check for infinite loop patterns
         self._check_infinite_loop(stmt, header)
 
-        # Create exit placeholder
+        # Create exit placeholder and push loop context
         exit_id = self._generate_node_id()
-
-        # Push loop context
         self._loop_stack.append((header.id, exit_id))
 
         # Process loop body
@@ -567,34 +596,67 @@ class CFGBuilder(ast.NodeVisitor):
         self._current_node_id = body_dummy.id
         body_exits = self._process_block(stmt.body)
 
-        # Add back edges
+        # Add back edges and pop loop context
         for exit_node in body_exits:
             self._add_edge(exit_node, header.id, EdgeType.LOOP_BACK)
-
-        # Pop loop context
         self._loop_stack.pop()
 
-        # Create actual exit node
-        exit_node = CFGNode(
-            id=exit_id,
-            node_type=NodeType.STATEMENT,
-            line_start=stmt.lineno,
-            line_end=getattr(stmt, "end_lineno", stmt.lineno),
-            code_snippet="# loop exit",
-            ast_type="WhileExit",
-        )
-        if self._current_graph:
-            self._current_graph.nodes.append(exit_node)
-
+        # Create exit node and connect
+        self._create_loop_exit_node(stmt, exit_id, "WhileExit")
         self._add_edge(header.id, exit_id, EdgeType.FALSE_BRANCH, "condition false")
 
-        # Process else clause
-        if stmt.orelse:
-            self._current_node_id = exit_id
-            else_exits = self._process_block(stmt.orelse)
-            return else_exits
+        return self._process_loop_else_clause(stmt, exit_id)
 
-        return [exit_id]
+    def _create_loop_issue(
+        self,
+        stmt: ast.While,
+        issue_type: IssueType,
+        severity: IssueSeverity,
+        message: str,
+        suggestion: str,
+    ) -> CFGIssue:
+        """
+        Create a CFGIssue for a loop-related problem.
+
+        Issue #620.
+        """
+        return CFGIssue(
+            issue_type=issue_type,
+            severity=severity,
+            line_start=stmt.lineno,
+            line_end=getattr(stmt, "end_lineno", stmt.lineno),
+            message=message,
+            suggestion=suggestion,
+            code_snippet=self._get_source_segment(stmt),
+        )
+
+    def _check_while_true_loop(self, stmt: ast.While) -> None:
+        """
+        Check for while True patterns and report appropriate issues.
+
+        Issue #620.
+        """
+        has_break = any(
+            isinstance(node, ast.Break)
+            for node in ast.walk(ast.Module(body=stmt.body, type_ignores=[]))
+        )
+        if not has_break:
+            issue = self._create_loop_issue(
+                stmt,
+                IssueType.INFINITE_LOOP,
+                IssueSeverity.CRITICAL,
+                "Infinite loop: 'while True' without break statement",
+                "Add a break condition or restructure the loop",
+            )
+        else:
+            issue = self._create_loop_issue(
+                stmt,
+                IssueType.POTENTIAL_INFINITE_LOOP,
+                IssueSeverity.LOW,
+                "Potential infinite loop: 'while True' with break",
+                "Verify break condition is always reachable",
+            )
+        self._current_graph.issues.append(issue)
 
     def _check_infinite_loop(self, stmt: ast.While, header: CFGNode) -> None:
         """Check for potential infinite loop patterns."""
@@ -603,51 +665,20 @@ class CFGBuilder(ast.NodeVisitor):
 
         # Check for while True without break
         if isinstance(stmt.test, ast.Constant) and stmt.test.value is True:
-            # Check if body contains break
-            has_break = any(
-                isinstance(node, ast.Break)
-                for node in ast.walk(ast.Module(body=stmt.body, type_ignores=[]))
-            )
-            if not has_break:
-                issue = CFGIssue(
-                    issue_type=IssueType.INFINITE_LOOP,
-                    severity=IssueSeverity.CRITICAL,
-                    line_start=stmt.lineno,
-                    line_end=getattr(stmt, "end_lineno", stmt.lineno),
-                    message="Infinite loop: 'while True' without break statement",
-                    suggestion="Add a break condition or restructure the loop",
-                    code_snippet=self._get_source_segment(stmt),
-                )
-                self._current_graph.issues.append(issue)
-            else:
-                # Has break but still potentially infinite
-                issue = CFGIssue(
-                    issue_type=IssueType.POTENTIAL_INFINITE_LOOP,
-                    severity=IssueSeverity.LOW,
-                    line_start=stmt.lineno,
-                    line_end=getattr(stmt, "end_lineno", stmt.lineno),
-                    message="Potential infinite loop: 'while True' with break",
-                    suggestion="Verify break condition is always reachable",
-                    code_snippet=self._get_source_segment(stmt),
-                )
-                self._current_graph.issues.append(issue)
+            self._check_while_true_loop(stmt)
 
         # Check for while loop without variable modification
         elif isinstance(stmt.test, _CONDITION_TYPES):  # Issue #380
-            # Get variables in condition
             condition_vars = self._get_names_in_expr(stmt.test)
-            # Check if any are modified in body
             modified_vars = self._get_modified_names(stmt.body)
 
             if condition_vars and not condition_vars.intersection(modified_vars):
-                issue = CFGIssue(
-                    issue_type=IssueType.POTENTIAL_INFINITE_LOOP,
-                    severity=IssueSeverity.HIGH,
-                    line_start=stmt.lineno,
-                    line_end=getattr(stmt, "end_lineno", stmt.lineno),
-                    message="Potential infinite loop: condition variables not modified in body",
-                    suggestion=f"Variables {condition_vars} are not modified in loop body",
-                    code_snippet=self._get_source_segment(stmt),
+                issue = self._create_loop_issue(
+                    stmt,
+                    IssueType.POTENTIAL_INFINITE_LOOP,
+                    IssueSeverity.HIGH,
+                    "Potential infinite loop: condition variables not modified in body",
+                    f"Variables {condition_vars} are not modified in loop body",
                 )
                 self._current_graph.issues.append(issue)
 
@@ -1065,6 +1096,48 @@ class CFGResponse(BaseModel):
 # ============================================================================
 
 
+def _aggregate_cfg_issues(graphs: List[ControlFlowGraph]) -> List[Dict[str, Any]]:
+    """
+    Aggregate issues from all CFGs with function context.
+
+    Issue #620.
+    """
+    all_issues = []
+    for graph in graphs:
+        for issue in graph.issues:
+            issue_dict = issue.to_dict()
+            issue_dict["function"] = graph.function_name
+            all_issues.append(issue_dict)
+    return all_issues
+
+
+def _calculate_cfg_summary(
+    graphs: List[ControlFlowGraph], all_issues: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    Calculate summary statistics for CFG analysis.
+
+    Issue #620.
+    """
+    return {
+        "functions_analyzed": len(graphs),
+        "total_nodes": sum(len(g.nodes) for g in graphs),
+        "total_edges": sum(len(g.edges) for g in graphs),
+        "total_issues": len(all_issues),
+        "issues_by_severity": {
+            "critical": sum(1 for i in all_issues if i["severity"] == "critical"),
+            "high": sum(1 for i in all_issues if i["severity"] == "high"),
+            "medium": sum(1 for i in all_issues if i["severity"] == "medium"),
+            "low": sum(1 for i in all_issues if i["severity"] == "low"),
+        },
+        "avg_cyclomatic_complexity": (
+            sum(g.metrics.get("cyclomatic_complexity", 0) for g in graphs) / len(graphs)
+            if graphs
+            else 0
+        ),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_cfg",
@@ -1091,35 +1164,8 @@ async def analyze_control_flow(
     try:
         builder = CFGBuilder(request.source_code, request.file_path)
         graphs = builder.build()
-
-        # Aggregate issues
-        all_issues = []
-        for graph in graphs:
-            for issue in graph.issues:
-                issue_dict = issue.to_dict()
-                issue_dict["function"] = graph.function_name
-                all_issues.append(issue_dict)
-
-        # Calculate summary
-        summary = {
-            "functions_analyzed": len(graphs),
-            "total_nodes": sum(len(g.nodes) for g in graphs),
-            "total_edges": sum(len(g.edges) for g in graphs),
-            "total_issues": len(all_issues),
-            "issues_by_severity": {
-                "critical": sum(1 for i in all_issues if i["severity"] == "critical"),
-                "high": sum(1 for i in all_issues if i["severity"] == "high"),
-                "medium": sum(1 for i in all_issues if i["severity"] == "medium"),
-                "low": sum(1 for i in all_issues if i["severity"] == "low"),
-            },
-            "avg_cyclomatic_complexity": (
-                sum(g.metrics.get("cyclomatic_complexity", 0) for g in graphs)
-                / len(graphs)
-                if graphs
-                else 0
-            ),
-        }
-
+        all_issues = _aggregate_cfg_issues(graphs)
+        summary = _calculate_cfg_summary(graphs, all_issues)
         analysis_time = (time.time() - start_time) * 1000
 
         return JSONResponse(
@@ -1183,6 +1229,52 @@ async def analyze_file_control_flow(
     return await analyze_control_flow(analyze_request)
 
 
+# DOT export color mappings
+_DOT_NODE_COLORS = {
+    NodeType.ENTRY: "#90EE90",  # Light green
+    NodeType.EXIT: "#FFB6C1",  # Light pink
+    NodeType.CONDITION: "#87CEEB",  # Sky blue
+    NodeType.LOOP_HEADER: "#DDA0DD",  # Plum
+    NodeType.RETURN: "#FFDAB9",  # Peach
+    NodeType.RAISE: "#FF6347",  # Tomato
+}
+
+_DOT_EDGE_STYLES = {
+    EdgeType.TRUE_BRANCH: "color=green",
+    EdgeType.FALSE_BRANCH: "color=red",
+    EdgeType.LOOP_BACK: "style=dashed, color=blue",
+    EdgeType.EXCEPTION: "style=dotted, color=orange",
+}
+
+
+def _convert_cfg_to_dot(graph: ControlFlowGraph) -> Dict[str, str]:
+    """
+    Convert a single CFG to DOT format string.
+
+    Issue #620.
+    """
+    dot_lines = [f'digraph "{graph.function_name}" {{']
+    dot_lines.append("  rankdir=TB;")
+    dot_lines.append("  node [shape=box, style=filled];")
+
+    # Add nodes with colors based on type
+    for node in graph.nodes:
+        color = _DOT_NODE_COLORS.get(node.node_type, "#FFFFFF")
+        label = node.code_snippet.replace('"', '\\"')[:50]
+        dot_lines.append(f'  "{node.id}" [label="{label}", fillcolor="{color}"];')
+
+    # Add edges with labels
+    for edge in graph.edges:
+        style = _DOT_EDGE_STYLES.get(edge.edge_type, "")
+        label = edge.condition if edge.condition else ""
+        dot_lines.append(
+            f'  "{edge.source_id}" -> "{edge.target_id}" [{style}, label="{label}"];'
+        )
+
+    dot_lines.append("}")
+    return {"function_name": graph.function_name, "dot": "\n".join(dot_lines)}
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_cfg_dot",
@@ -1200,48 +1292,7 @@ async def export_cfg_dot(
     """
     builder = CFGBuilder(request.source_code, request.file_path)
     graphs = builder.build()
-
-    dot_outputs = []
-
-    for graph in graphs:
-        dot_lines = [f'digraph "{graph.function_name}" {{']
-        dot_lines.append("  rankdir=TB;")
-        dot_lines.append("  node [shape=box, style=filled];")
-
-        # Add nodes with colors based on type
-        node_colors = {
-            NodeType.ENTRY: "#90EE90",  # Light green
-            NodeType.EXIT: "#FFB6C1",  # Light pink
-            NodeType.CONDITION: "#87CEEB",  # Sky blue
-            NodeType.LOOP_HEADER: "#DDA0DD",  # Plum
-            NodeType.RETURN: "#FFDAB9",  # Peach
-            NodeType.RAISE: "#FF6347",  # Tomato
-        }
-
-        for node in graph.nodes:
-            color = node_colors.get(node.node_type, "#FFFFFF")
-            label = node.code_snippet.replace('"', '\\"')[:50]
-            dot_lines.append(f'  "{node.id}" [label="{label}", fillcolor="{color}"];')
-
-        # Add edges with labels
-        edge_styles = {
-            EdgeType.TRUE_BRANCH: "color=green",
-            EdgeType.FALSE_BRANCH: "color=red",
-            EdgeType.LOOP_BACK: "style=dashed, color=blue",
-            EdgeType.EXCEPTION: "style=dotted, color=orange",
-        }
-
-        for edge in graph.edges:
-            style = edge_styles.get(edge.edge_type, "")
-            label = edge.condition if edge.condition else ""
-            dot_lines.append(
-                f'  "{edge.source_id}" -> "{edge.target_id}" [{style}, label="{label}"];'
-            )
-
-        dot_lines.append("}")
-        dot_outputs.append(
-            {"function_name": graph.function_name, "dot": "\n".join(dot_lines)}
-        )
+    dot_outputs = [_convert_cfg_to_dot(graph) for graph in graphs]
 
     return JSONResponse(
         status_code=200,

@@ -198,6 +198,62 @@ class SecurityMemoryIntegration:
         logger.info("Created assessment entity: %s", assessment_id)
         return entity
 
+    def _build_host_observations(
+        self,
+        ip: str,
+        status: str,
+        hostname: Optional[str],
+        os_guess: Optional[str],
+        metadata: Optional[dict[str, Any]],
+    ) -> list[str]:
+        """
+        Build observations list for a host entity.
+
+        Issue #620.
+        """
+        observations = [f"Target host: {ip}", f"Status: {status}"]
+        if hostname:
+            observations.append(f"Hostname: {hostname}")
+        if os_guess:
+            observations.append(f"OS: {os_guess}")
+        if metadata:
+            if metadata.get("mac_address"):
+                observations.append(f"MAC: {metadata['mac_address']}")
+            if metadata.get("vendor"):
+                observations.append(f"Vendor: {metadata['vendor']}")
+        return observations
+
+    async def _store_host_in_memory(
+        self,
+        ip: str,
+        observations: list[str],
+        assessment_id: str,
+        hostname: Optional[str],
+        status: str,
+        os_guess: Optional[str],
+        metadata: Optional[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Store host entity in memory graph.
+
+        Issue #620.
+        """
+        return await self._memory_graph.create_entity(
+            entity_type="context",
+            name=f"Host: {ip}",
+            observations=observations,
+            metadata={
+                "assessment_id": assessment_id,
+                "type": "target_host",
+                "ip": ip,
+                "hostname": hostname,
+                "status": status,
+                "os_guess": os_guess,
+                **(metadata or {}),
+            },
+            tags=["security", "host", "target"],
+        )
+
     async def create_host_entity(
         self,
         assessment_id: str,
@@ -222,47 +278,79 @@ class SecurityMemoryIntegration:
             Created entity data
         """
         await self.ensure_initialized()
-
-        observations = [
-            f"Target host: {ip}",
-            f"Status: {status}",
-        ]
-
-        if hostname:
-            observations.append(f"Hostname: {hostname}")
-        if os_guess:
-            observations.append(f"OS: {os_guess}")
-        if metadata:
-            if metadata.get("mac_address"):
-                observations.append(f"MAC: {metadata['mac_address']}")
-            if metadata.get("vendor"):
-                observations.append(f"Vendor: {metadata['vendor']}")
-
-        entity = await self._memory_graph.create_entity(
-            entity_type="context",
-            name=f"Host: {ip}",
-            observations=observations,
-            metadata={
-                "assessment_id": assessment_id,
-                "type": "target_host",
-                "ip": ip,
-                "hostname": hostname,
-                "status": status,
-                "os_guess": os_guess,
-                **(metadata or {}),
-            },
-            tags=["security", "host", "target"],
+        observations = self._build_host_observations(
+            ip, status, hostname, os_guess, metadata
         )
-
-        # Create relationship to assessment
+        entity = await self._store_host_in_memory(
+            ip, observations, assessment_id, hostname, status, os_guess, metadata
+        )
         await self._create_security_relation(
             from_entity=f"Security Assessment: {assessment_id}",
             to_entity=f"Host: {ip}",
             relation_type="contains",
         )
-
         logger.info("Created host entity: %s for assessment %s", ip, assessment_id)
         return entity
+
+    def _build_service_observations(
+        self,
+        host_ip: str,
+        port: int,
+        protocol: str,
+        service_name: Optional[str],
+        version: Optional[str],
+        product: Optional[str],
+    ) -> list[str]:
+        """
+        Build observations list for a service entity.
+
+        Issue #620.
+        """
+        observations = [
+            f"Service on {host_ip}:{port}/{protocol}",
+            f"Service: {service_name or 'unknown'}",
+        ]
+        if version:
+            observations.append(f"Version: {version}")
+        if product:
+            observations.append(f"Product: {product}")
+        return observations
+
+    async def _store_service_in_memory(
+        self,
+        entity_name: str,
+        observations: list[str],
+        assessment_id: str,
+        host_ip: str,
+        port: int,
+        protocol: str,
+        service_name: Optional[str],
+        version: Optional[str],
+        product: Optional[str],
+        metadata: Optional[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Store service entity in memory graph.
+
+        Issue #620.
+        """
+        return await self._memory_graph.create_entity(
+            entity_type="context",
+            name=entity_name,
+            observations=observations,
+            metadata={
+                "assessment_id": assessment_id,
+                "type": "service",
+                "host_ip": host_ip,
+                "port": port,
+                "protocol": protocol,
+                "service_name": service_name,
+                "version": version,
+                "product": product,
+                **(metadata or {}),
+            },
+            tags=["security", "service", service_name or "unknown"],
+        )
 
     async def create_service_entity(
         self,
@@ -292,45 +380,28 @@ class SecurityMemoryIntegration:
             Created entity data
         """
         await self.ensure_initialized()
-
         service_desc = service_name or "unknown"
         entity_name = f"Service: {host_ip}:{port}/{protocol} ({service_desc})"
-
-        observations = [
-            f"Service on {host_ip}:{port}/{protocol}",
-            f"Service: {service_name or 'unknown'}",
-        ]
-
-        if version:
-            observations.append(f"Version: {version}")
-        if product:
-            observations.append(f"Product: {product}")
-
-        entity = await self._memory_graph.create_entity(
-            entity_type="context",
-            name=entity_name,
-            observations=observations,
-            metadata={
-                "assessment_id": assessment_id,
-                "type": "service",
-                "host_ip": host_ip,
-                "port": port,
-                "protocol": protocol,
-                "service_name": service_name,
-                "version": version,
-                "product": product,
-                **(metadata or {}),
-            },
-            tags=["security", "service", service_name or "unknown"],
+        observations = self._build_service_observations(
+            host_ip, port, protocol, service_name, version, product
         )
-
-        # Create relationship to host
+        entity = await self._store_service_in_memory(
+            entity_name,
+            observations,
+            assessment_id,
+            host_ip,
+            port,
+            protocol,
+            service_name,
+            version,
+            product,
+            metadata,
+        )
         await self._create_security_relation(
             from_entity=f"Host: {host_ip}",
             to_entity=entity_name,
             relation_type="runs",
         )
-
         logger.info("Created service entity: %s", entity_name)
         return entity
 
@@ -435,6 +506,80 @@ class SecurityMemoryIntegration:
             tags=["security", "vulnerability", severity, cve_id or "no-cve"],
         )
 
+    def _extract_params_from_request(
+        self, request: VulnerabilityRequest
+    ) -> tuple[
+        str,
+        str,
+        Optional[str],
+        str,
+        str,
+        str,
+        Optional[int],
+        Optional[str],
+        Optional[list[str]],
+        Optional[dict[str, Any]],
+    ]:
+        """
+        Extract vulnerability parameters from a VulnerabilityRequest object.
+
+        Issue #620.
+        """
+        return (
+            request.assessment_id,
+            request.host_ip,
+            request.cve_id,
+            request.title,
+            request.severity,
+            request.description,
+            request.affected_port,
+            request.affected_service,
+            request.references,
+            request.metadata,
+        )
+
+    def _extract_params_from_kwargs(
+        self,
+        assessment_id: str,
+        host_ip: str,
+        cve_id: Optional[str],
+        title: str,
+        severity: str,
+        description: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+        references: Optional[list[str]],
+        metadata: Optional[dict[str, Any]],
+    ) -> tuple[
+        str,
+        str,
+        Optional[str],
+        str,
+        str,
+        str,
+        Optional[int],
+        Optional[str],
+        Optional[list[str]],
+        Optional[dict[str, Any]],
+    ]:
+        """
+        Extract vulnerability parameters from keyword arguments.
+
+        Issue #620.
+        """
+        return (
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        )
+
     def _extract_vulnerability_params(
         self,
         request: Optional[VulnerabilityRequest],
@@ -463,48 +608,15 @@ class SecurityMemoryIntegration:
         """
         Extract and validate vulnerability parameters from request or kwargs.
 
-        Issue #665: Extracted from create_vulnerability_entity to reduce function length.
-        Handles both request object pattern and legacy keyword arguments.
-
-        Args:
-            request: VulnerabilityRequest object if provided.
-            assessment_id: Parent assessment ID (legacy pattern).
-            host_ip: Affected host IP (legacy pattern).
-            cve_id: CVE identifier.
-            title: Vulnerability title.
-            severity: Severity level.
-            description: Vulnerability description.
-            affected_port: Affected port number.
-            affected_service: Affected service name.
-            references: Reference URLs.
-            metadata: Additional metadata.
-
-        Returns:
-            tuple: Extracted parameters in order (assessment_id, host_ip, cve_id,
-                title, severity, description, affected_port, affected_service,
-                references, metadata).
-
-        Raises:
-            ValueError: If neither request nor required kwargs provided.
+        Issue #620.
         """
         if request is not None:
-            return (
-                request.assessment_id,
-                request.host_ip,
-                request.cve_id,
-                request.title,
-                request.severity,
-                request.description,
-                request.affected_port,
-                request.affected_service,
-                request.references,
-                request.metadata,
-            )
+            return self._extract_params_from_request(request)
         if assessment_id is None or host_ip is None:
             raise ValueError(
                 "Either 'request' object or 'assessment_id' and 'host_ip' required"
             )
-        return (
+        return self._extract_params_from_kwargs(
             assessment_id,
             host_ip,
             cve_id,
@@ -535,11 +647,8 @@ class SecurityMemoryIntegration:
         """
         Create a memory entity for a discovered vulnerability.
 
-        Issue #665: Refactored using helpers (_extract_vulnerability_params,
-        _store_vulnerability_in_memory, _build_vuln_observations, _create_vuln_relations).
-
         Args:
-            request: VulnerabilityRequest object (preferred over individual params).
+            request: VulnerabilityRequest object (preferred).
             assessment_id: Parent assessment ID. host_ip: Affected host IP.
             cve_id: CVE ID. title: Title. severity: Level. description: Details.
             affected_port: Port. affected_service: Service. references: URLs.
@@ -548,18 +657,7 @@ class SecurityMemoryIntegration:
         Returns:
             dict[str, Any]: Created entity data.
         """
-        (
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
-        ) = self._extract_vulnerability_params(
+        params = self._extract_vulnerability_params(
             request,
             assessment_id,
             host_ip,
@@ -572,6 +670,18 @@ class SecurityMemoryIntegration:
             references,
             metadata,
         )
+        (
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        ) = params
         await self.ensure_initialized()
         vuln_name = cve_id or title or "Unknown Vulnerability"
         entity_name = f"Vuln: {vuln_name} on {host_ip}"
@@ -725,10 +835,42 @@ class SecurityMemoryIntegration:
             "related": related,
         }
 
-    async def get_assessment_summary(
-        self,
-        assessment_id: str,
-    ) -> dict[str, Any]:
+    def _categorize_assessment_entities(
+        self, entities: list[dict[str, Any]]
+    ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+        """
+        Categorize assessment entities by type.
+
+        Issue #620.
+        """
+        hosts, services, vulnerabilities, other = [], [], [], []
+        for entity in entities:
+            entity_type = entity.get("metadata", {}).get("type", "")
+            if entity_type == "target_host":
+                hosts.append(entity)
+            elif entity_type == "service":
+                services.append(entity)
+            elif entity_type == "vulnerability":
+                vulnerabilities.append(entity)
+            else:
+                other.append(entity)
+        return hosts, services, vulnerabilities, other
+
+    def _compute_severity_distribution(
+        self, vulnerabilities: list[dict[str, Any]]
+    ) -> dict[str, int]:
+        """
+        Compute severity distribution from vulnerability entities.
+
+        Issue #620.
+        """
+        severity_counts: dict[str, int] = {}
+        for vuln in vulnerabilities:
+            sev = vuln.get("metadata", {}).get("severity", "unknown")
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        return severity_counts
+
+    async def get_assessment_summary(self, assessment_id: str) -> dict[str, Any]:
         """
         Get a summary of all entities for an assessment.
 
@@ -739,36 +881,18 @@ class SecurityMemoryIntegration:
             Summary with counts and key findings
         """
         await self.ensure_initialized()
-
-        # Search for all entities with this assessment ID
         all_results = await self._memory_graph.search_entities(
-            query=f"assessment_id:{assessment_id}",
-            limit=500,
+            query=f"assessment_id:{assessment_id}", limit=500
         )
-
-        # Categorize results
-        hosts = []
-        services = []
-        vulnerabilities = []
-        other = []
-
-        for entity in all_results:
-            entity_type = entity.get("metadata", {}).get("type", "")
-            if entity_type == "target_host":
-                hosts.append(entity)
-            elif entity_type == "service":
-                services.append(entity)
-            elif entity_type == "vulnerability":
-                vulnerabilities.append(entity)
-            else:
-                other.append(entity)
-
-        # Count severity distribution
-        severity_counts = {}
-        for vuln in vulnerabilities:
-            sev = vuln.get("metadata", {}).get("severity", "unknown")
-            severity_counts[sev] = severity_counts.get(sev, 0) + 1
-
+        hosts, services, vulnerabilities, _ = self._categorize_assessment_entities(
+            all_results
+        )
+        severity_counts = self._compute_severity_distribution(vulnerabilities)
+        critical_vulns = [
+            v
+            for v in vulnerabilities
+            if v.get("metadata", {}).get("severity") == "critical"
+        ][:5]
         return {
             "assessment_id": assessment_id,
             "total_entities": len(all_results),
@@ -776,13 +900,7 @@ class SecurityMemoryIntegration:
             "services": len(services),
             "vulnerabilities": len(vulnerabilities),
             "severity_distribution": severity_counts,
-            "critical_vulns": [
-                v
-                for v in vulnerabilities
-                if v.get("metadata", {}).get("severity") == "critical"
-            ][
-                :5
-            ],  # Top 5 critical
+            "critical_vulns": critical_vulns,
         }
 
 

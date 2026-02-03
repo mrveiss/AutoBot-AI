@@ -293,15 +293,17 @@ class Phase9PerformanceMonitor:
             gpu_clock_mhz=_parse_optional_int(parts[6]) or 0,
             memory_clock_mhz=_parse_optional_int(parts[7]) or 0,
             fan_speed_percent=_parse_optional_int(parts[8]) if len(parts) > 8 else None,
-            encoder_utilization=_parse_optional_int(parts[9])
-            if len(parts) > 9
-            else None,
-            decoder_utilization=_parse_optional_int(parts[10])
-            if len(parts) > 10
-            else None,
-            performance_state=parts[11]
-            if len(parts) > 11 and parts[11] != "[Not Supported]"
-            else None,
+            encoder_utilization=(
+                _parse_optional_int(parts[9]) if len(parts) > 9 else None
+            ),
+            decoder_utilization=(
+                _parse_optional_int(parts[10]) if len(parts) > 10 else None
+            ),
+            performance_state=(
+                parts[11]
+                if len(parts) > 11 and parts[11] != "[Not Supported]"
+                else None
+            ),
             thermal_throttling=thermal_throttling,
             power_throttling=power_throttling,
         )
@@ -477,69 +479,83 @@ class Phase9PerformanceMonitor:
             autobot_cpu_usage_percent=0,
         )
 
-    async def collect_system_performance_metrics(self) -> SystemPerformanceMetrics:
-        """Collect comprehensive system performance metrics.
+    def _collect_cpu_metrics(self) -> Dict[str, Any]:
+        """
+        Collect CPU performance metrics.
 
-        Issue #620: Refactored to extract _create_empty_system_metrics.
+        Issue #620.
+        """
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        cpu_per_core = psutil.cpu_percent(interval=0.1, percpu=True)
+        cpu_freq = psutil.cpu_freq()
+        load_avg = os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0]
+        return {
+            "percent": cpu_percent,
+            "per_core": cpu_per_core,
+            "frequency": cpu_freq.current if cpu_freq else 0,
+            "load_avg": load_avg,
+            "cores_physical": psutil.cpu_count(logical=False),
+            "cores_logical": psutil.cpu_count(logical=True),
+        }
+
+    def _collect_io_metrics(self) -> Dict[str, float]:
+        """
+        Collect disk and network I/O metrics.
+
+        Issue #620.
+        """
+        disk_io = psutil.disk_io_counters()
+        disk_usage = psutil.disk_usage("/")
+        network_io = psutil.net_io_counters()
+
+        return {
+            "disk_read_mb_s": getattr(disk_io, "read_bytes", 0) / (1024 * 1024),
+            "disk_write_mb_s": getattr(disk_io, "write_bytes", 0) / (1024 * 1024),
+            "disk_usage_percent": round((disk_usage.used / disk_usage.total) * 100, 1),
+            "network_upload_mb_s": getattr(network_io, "bytes_sent", 0) / (1024 * 1024),
+            "network_download_mb_s": getattr(network_io, "bytes_recv", 0)
+            / (1024 * 1024),
+        }
+
+    async def collect_system_performance_metrics(self) -> SystemPerformanceMetrics:
+        """
+        Collect comprehensive system performance metrics.
+
+        Issue #620.
         """
         try:
-            # CPU metrics
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            cpu_per_core = psutil.cpu_percent(interval=0.1, percpu=True)
-            cpu_freq = psutil.cpu_freq()
-            load_avg = os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0]
-
-            # Memory metrics
+            cpu = self._collect_cpu_metrics()
             memory = psutil.virtual_memory()
             swap = psutil.swap_memory()
+            io = self._collect_io_metrics()
 
-            # Disk I/O metrics
-            disk_io = psutil.disk_io_counters()
-            disk_usage = psutil.disk_usage("/")
-
-            # Network metrics
-            network_io = psutil.net_io_counters()
-
-            # Get AutoBot process metrics
             autobot_processes = self._get_autobot_processes()
             autobot_memory = sum(p.get("memory_mb", 0) for p in autobot_processes)
             autobot_cpu = sum(p.get("cpu_percent", 0) for p in autobot_processes)
 
-            # Calculate derived metrics
-            disk_read_speed = getattr(disk_io, "read_bytes", 0) / (1024 * 1024)  # MB/s
-            disk_write_speed = getattr(disk_io, "write_bytes", 0) / (
-                1024 * 1024
-            )  # MB/s
-            network_upload_speed = getattr(network_io, "bytes_sent", 0) / (
-                1024 * 1024
-            )  # MB/s
-            network_download_speed = getattr(network_io, "bytes_recv", 0) / (
-                1024 * 1024
-            )  # MB/s
-
             return SystemPerformanceMetrics(
                 timestamp=time.time(),
-                cpu_usage_percent=cpu_percent,
-                cpu_cores_physical=psutil.cpu_count(logical=False),
-                cpu_cores_logical=psutil.cpu_count(logical=True),
-                cpu_frequency_mhz=cpu_freq.current if cpu_freq else 0,
-                cpu_load_1m=load_avg[0],
-                cpu_load_5m=load_avg[1],
-                cpu_load_15m=load_avg[2],
-                per_core_usage=cpu_per_core,
+                cpu_usage_percent=cpu["percent"],
+                cpu_cores_physical=cpu["cores_physical"],
+                cpu_cores_logical=cpu["cores_logical"],
+                cpu_frequency_mhz=cpu["frequency"],
+                cpu_load_1m=cpu["load_avg"][0],
+                cpu_load_5m=cpu["load_avg"][1],
+                cpu_load_15m=cpu["load_avg"][2],
+                per_core_usage=cpu["per_core"],
                 memory_total_gb=round(memory.total / (1024**3), 2),
                 memory_used_gb=round(memory.used / (1024**3), 2),
                 memory_available_gb=round(memory.available / (1024**3), 2),
                 memory_usage_percent=memory.percent,
                 swap_usage_percent=swap.percent,
-                disk_read_mb_s=disk_read_speed,
-                disk_write_mb_s=disk_write_speed,
-                disk_usage_percent=round((disk_usage.used / disk_usage.total) * 100, 1),
-                disk_queue_depth=0,  # Would need specialized tools to get this
-                network_upload_mb_s=network_upload_speed,
-                network_download_mb_s=network_download_speed,
+                disk_read_mb_s=io["disk_read_mb_s"],
+                disk_write_mb_s=io["disk_write_mb_s"],
+                disk_usage_percent=io["disk_usage_percent"],
+                disk_queue_depth=0,
+                network_upload_mb_s=io["network_upload_mb_s"],
+                network_download_mb_s=io["network_download_mb_s"],
                 network_latency_ms=await self._measure_network_latency(),
-                network_packet_loss_percent=0,  # Would need specialized monitoring
+                network_packet_loss_percent=0,
                 autobot_processes=autobot_processes,
                 autobot_memory_usage_mb=autobot_memory,
                 autobot_cpu_usage_percent=autobot_cpu,
@@ -549,8 +565,50 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error collecting system performance metrics: {e}")
             return self._create_empty_system_metrics()
 
+    def _is_autobot_process(self, cmdline: str) -> bool:
+        """
+        Check if a command line belongs to an AutoBot-related process.
+
+        Issue #620.
+        """
+        keywords = [
+            "autobot",
+            "fast_app_factory",
+            "run_autobot",
+            "npu-worker",
+            "ai-stack",
+            "browser-service",
+            "redis-stack",
+        ]
+        return any(keyword in cmdline.lower() for keyword in keywords)
+
+    def _build_process_info(
+        self, proc_info: Dict[str, Any], cmdline: str
+    ) -> Dict[str, Any]:
+        """
+        Build process info dictionary from psutil process data.
+
+        Issue #620.
+        """
+        memory_mb = (
+            proc_info["memory_info"].rss / (1024 * 1024)
+            if proc_info["memory_info"]
+            else 0
+        )
+        return {
+            "pid": proc_info["pid"],
+            "name": proc_info["name"],
+            "cmdline": cmdline[:100] + "..." if len(cmdline) > 100 else cmdline,
+            "cpu_percent": proc_info["cpu_percent"] or 0,
+            "memory_mb": round(memory_mb, 2),
+            "create_time": datetime.fromtimestamp(proc_info["create_time"]).isoformat(),
+            "running_time_minutes": round(
+                (time.time() - proc_info["create_time"]) / 60, 1
+            ),
+        }
+
     def _get_autobot_processes(self) -> List[Dict[str, Any]]:
-        """Get AutoBot-specific process information"""
+        """Get AutoBot-specific process information. Issue #620."""
         autobot_processes = []
 
         try:
@@ -563,41 +621,9 @@ class Phase9PerformanceMonitor:
                         " ".join(proc_info["cmdline"]) if proc_info["cmdline"] else ""
                     )
 
-                    # Look for AutoBot-related processes
-                    if any(
-                        keyword in cmdline.lower()
-                        for keyword in [
-                            "autobot",
-                            "fast_app_factory",
-                            "run_autobot",
-                            "npu-worker",
-                            "ai-stack",
-                            "browser-service",
-                            "redis-stack",
-                        ]
-                    ):
-                        memory_mb = (
-                            proc_info["memory_info"].rss / (1024 * 1024)
-                            if proc_info["memory_info"]
-                            else 0
-                        )
-
+                    if self._is_autobot_process(cmdline):
                         autobot_processes.append(
-                            {
-                                "pid": proc_info["pid"],
-                                "name": proc_info["name"],
-                                "cmdline": cmdline[:100] + "..."
-                                if len(cmdline) > 100
-                                else cmdline,
-                                "cpu_percent": proc_info["cpu_percent"] or 0,
-                                "memory_mb": round(memory_mb, 2),
-                                "create_time": datetime.fromtimestamp(
-                                    proc_info["create_time"]
-                                ).isoformat(),
-                                "running_time_minutes": round(
-                                    (time.time() - proc_info["create_time"]) / 60, 1
-                                ),
-                            }
+                            self._build_process_info(proc_info, cmdline)
                         )
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -931,9 +957,9 @@ class Phase9PerformanceMonitor:
                 "timestamp": time.time(),
                 "gpu": asdict(gpu_metrics) if gpu_metrics else None,
                 "npu": asdict(npu_metrics) if npu_metrics else None,
-                "multimodal": asdict(multimodal_metrics)
-                if multimodal_metrics
-                else None,
+                "multimodal": (
+                    asdict(multimodal_metrics) if multimodal_metrics else None
+                ),
                 "system": asdict(system_metrics) if system_metrics else None,
                 "services": [asdict(s) for s in (service_metrics or [])],
                 "collection_successful": True,
@@ -962,9 +988,11 @@ class Phase9PerformanceMonitor:
                 if metric_data:
                     key = f"performance_metrics:{category}"
                     value = json.dumps(
-                        asdict(metric_data)
-                        if hasattr(metric_data, "__dict__")
-                        else metric_data,
+                        (
+                            asdict(metric_data)
+                            if hasattr(metric_data, "__dict__")
+                            else metric_data
+                        ),
                         default=str,
                     )
                     pipe.zadd(key, {value: timestamp})
@@ -1267,11 +1295,15 @@ class Phase9PerformanceMonitor:
                 utilizations = [g.utilization_percent for g in recent_gpu]
                 trends["gpu_utilization"] = {
                     "average": round(sum(utilizations) / len(utilizations), 1),
-                    "trend": "increasing"
-                    if utilizations[-1] > utilizations[0]
-                    else "decreasing"
-                    if utilizations[-1] < utilizations[0]
-                    else "stable",
+                    "trend": (
+                        "increasing"
+                        if utilizations[-1] > utilizations[0]
+                        else (
+                            "decreasing"
+                            if utilizations[-1] < utilizations[0]
+                            else "stable"
+                        )
+                    ),
                 }
 
             # System load trend
@@ -1280,22 +1312,28 @@ class Phase9PerformanceMonitor:
                 loads = [s.cpu_load_1m for s in recent_system]
                 trends["cpu_load"] = {
                     "average": round(sum(loads) / len(loads), 2),
-                    "trend": "increasing"
-                    if loads[-1] > loads[0]
-                    else "decreasing"
-                    if loads[-1] < loads[0]
-                    else "stable",
+                    "trend": (
+                        "increasing"
+                        if loads[-1] > loads[0]
+                        else "decreasing"
+                        if loads[-1] < loads[0]
+                        else "stable"
+                    ),
                 }
 
                 # Memory usage trend
                 memory_usage = [s.memory_usage_percent for s in recent_system]
                 trends["memory_usage"] = {
                     "average": round(sum(memory_usage) / len(memory_usage), 1),
-                    "trend": "increasing"
-                    if memory_usage[-1] > memory_usage[0]
-                    else "decreasing"
-                    if memory_usage[-1] < memory_usage[0]
-                    else "stable",
+                    "trend": (
+                        "increasing"
+                        if memory_usage[-1] > memory_usage[0]
+                        else (
+                            "decreasing"
+                            if memory_usage[-1] < memory_usage[0]
+                            else "stable"
+                        )
+                    ),
                 }
 
             return trends
@@ -1446,9 +1484,66 @@ def add_phase9_alert_callback(callback):
     phase9_monitor.add_alert_callback(callback)
 
 
+def _log_performance_metric(
+    category: str,
+    func_name: str,
+    execution_time: float,
+    success: bool,
+    error: Optional[Exception] = None,
+) -> None:
+    """
+    Log performance metric for a function execution.
+
+    Issue #620.
+    """
+    if success:
+        logger.info(
+            f"PERFORMANCE [{category}]: {func_name} executed in {execution_time:.3f}s"
+        )
+    else:
+        logger.error(
+            f"PERFORMANCE [{category}]: {func_name} failed after {execution_time:.3f}s: {error}"
+        )
+
+
+def _store_performance_in_redis(
+    category: str,
+    func_name: str,
+    execution_time: float,
+    args_count: int,
+    kwargs_count: int,
+) -> None:
+    """
+    Store function performance metrics in Redis.
+
+    Issue #620.
+    """
+    if not phase9_monitor.redis_client:
+        return
+
+    try:
+        key = f"function_performance:{category}:{func_name}"
+        phase9_monitor.redis_client.zadd(
+            key,
+            {
+                json.dumps(
+                    {
+                        "execution_time_ms": execution_time * 1000,
+                        "timestamp": time.time(),
+                        "args_count": args_count,
+                        "kwargs_count": kwargs_count,
+                    }
+                ): time.time()
+            },
+        )
+        phase9_monitor.redis_client.expire(key, 3600)  # 1 hour retention
+    except Exception:
+        pass  # nosec B110 - Non-critical metric logging
+
+
 # Performance monitoring decorator for functions
 def monitor_performance(category: str = "general"):
-    """Decorator to monitor function performance"""
+    """Decorator to monitor function performance. Issue #620."""
 
     def decorator(func):
         @wraps(func)
@@ -1457,40 +1552,15 @@ def monitor_performance(category: str = "general"):
             try:
                 result = await func(*args, **kwargs)
                 execution_time = time.time() - start_time
-
-                # Log performance
-                logger.info(
-                    f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
+                _log_performance_metric(category, func.__name__, execution_time, True)
+                _store_performance_in_redis(
+                    category, func.__name__, execution_time, len(args), len(kwargs)
                 )
-
-                # Store in Redis if available
-                if phase9_monitor.redis_client:
-                    try:
-                        key = f"function_performance:{category}:{func.__name__}"
-                        phase9_monitor.redis_client.zadd(
-                            key,
-                            {
-                                json.dumps(
-                                    {
-                                        "execution_time_ms": execution_time * 1000,
-                                        "timestamp": time.time(),
-                                        "args_count": len(args),
-                                        "kwargs_count": len(kwargs),
-                                    }
-                                ): time.time()
-                            },
-                        )
-                        phase9_monitor.redis_client.expire(
-                            key, 3600
-                        )  # 1 hour retention
-                    except Exception:
-                        pass  # nosec B110 - Non-critical metric logging
-
                 return result
             except Exception as e:
                 execution_time = time.time() - start_time
-                logger.error(
-                    f"PERFORMANCE [{category}]: {func.__name__} failed after {execution_time:.3f}s: {e}"
+                _log_performance_metric(
+                    category, func.__name__, execution_time, False, e
                 )
                 raise
 
@@ -1500,17 +1570,12 @@ def monitor_performance(category: str = "general"):
             try:
                 result = func(*args, **kwargs)
                 execution_time = time.time() - start_time
-
-                # Log performance
-                logger.info(
-                    f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
-                )
-
+                _log_performance_metric(category, func.__name__, execution_time, True)
                 return result
             except Exception as e:
                 execution_time = time.time() - start_time
-                logger.error(
-                    f"PERFORMANCE [{category}]: {func.__name__} failed after {execution_time:.3f}s: {e}"
+                _log_performance_metric(
+                    category, func.__name__, execution_time, False, e
                 )
                 raise
 
