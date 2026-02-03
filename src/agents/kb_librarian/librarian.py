@@ -25,21 +25,20 @@ from .text_extraction import TextExtractor
 logger = logging.getLogger(__name__)
 
 
-def _build_tool_document_content(tool_info: Dict[str, Any], tool_name: str) -> str:
+def _build_basic_info_section(tool_info: Dict[str, Any], tool_name: str) -> str:
     """
-    Build document content string for tool storage.
+    Build the basic information section of tool documentation.
 
-    Issue #665: Extracted from store_tool_knowledge to reduce function length.
+    Extracts tool name, type, category, platform, and purpose. Issue #620.
 
     Args:
         tool_info: Tool information dictionary
         tool_name: Name of the tool
 
     Returns:
-        Formatted document content string
+        Formatted basic information section string
     """
-    return f"""
-TOOL DOCUMENTATION: {tool_name}
+    return f"""TOOL DOCUMENTATION: {tool_name}
 ==================================================
 
 BASIC INFORMATION:
@@ -47,15 +46,41 @@ BASIC INFORMATION:
 - Type: {tool_info.get('type', 'command-line tool')}
 - Category: {tool_info.get('category', 'general')}
 - Platform: {tool_info.get('platform', 'linux')}
-- Purpose: {tool_info.get('purpose', 'N/A')}
+- Purpose: {tool_info.get('purpose', 'N/A')}"""
 
-INSTALLATION:
+
+def _build_installation_section(tool_info: Dict[str, Any]) -> str:
+    """
+    Build the installation and requirements section of tool documentation.
+
+    Covers installation instructions and system requirements. Issue #620.
+
+    Args:
+        tool_info: Tool information dictionary
+
+    Returns:
+        Formatted installation section string
+    """
+    return f"""INSTALLATION:
 {tool_info.get('installation', 'No installation information available')}
 
 SYSTEM REQUIREMENTS:
-{tool_info.get('requirements', 'Standard Linux system')}
+{tool_info.get('requirements', 'Standard Linux system')}"""
 
-BASIC USAGE:
+
+def _build_usage_section(tool_info: Dict[str, Any]) -> str:
+    """
+    Build the usage and commands section of tool documentation.
+
+    Covers basic usage, syntax, examples, and advanced usage. Issue #620.
+
+    Args:
+        tool_info: Tool information dictionary
+
+    Returns:
+        Formatted usage section string
+    """
+    return f"""BASIC USAGE:
 {tool_info.get('usage', 'No usage information available')}
 
 COMMAND SYNTAX:
@@ -65,9 +90,23 @@ COMMON COMMANDS & EXAMPLES:
 {ToolInfoFormatter.format_command_examples(tool_info.get('command_examples', []))}
 
 ADVANCED USAGE:
-{tool_info.get('advanced_usage', 'See documentation for advanced features')}
+{tool_info.get('advanced_usage', 'See documentation for advanced features')}"""
 
-TROUBLESHOOTING:
+
+def _build_troubleshooting_section(tool_info: Dict[str, Any]) -> str:
+    """
+    Build the troubleshooting and operational section of tool documentation.
+
+    Covers troubleshooting, output formats, integrations, security, errors,
+    performance, limitations, and related tools. Issue #620.
+
+    Args:
+        tool_info: Tool information dictionary
+
+    Returns:
+        Formatted troubleshooting section string
+    """
+    return f"""TROUBLESHOOTING:
 {tool_info.get('troubleshooting', 'Check man page and documentation for issues')}
 
 OUTPUT FORMATS:
@@ -89,21 +128,72 @@ KNOWN LIMITATIONS:
 {tool_info.get('limitations', 'See documentation for limitations')}
 
 RELATED TOOLS:
-{tool_info.get('related_tools', [])}
+{tool_info.get('related_tools', [])}"""
 
-EXTERNAL RESOURCES:
+
+def _build_resources_section(tool_info: Dict[str, Any]) -> str:
+    """
+    Build the external resources section of tool documentation.
+
+    Covers documentation URLs, source code, tutorials, and forums. Issue #620.
+
+    Args:
+        tool_info: Tool information dictionary
+
+    Returns:
+        Formatted resources section string
+    """
+    return f"""EXTERNAL RESOURCES:
 - Official Documentation: {tool_info.get('documentation_url', 'N/A')}
 - Source Code: {tool_info.get('source_url', 'N/A')}
 - Tutorial Links: {tool_info.get('tutorials', [])}
-- Community Forums: {tool_info.get('forums', [])}
+- Community Forums: {tool_info.get('forums', [])}"""
 
-METADATA:
+
+def _build_metadata_section(tool_info: Dict[str, Any]) -> str:
+    """
+    Build the metadata section of tool documentation.
+
+    Covers timestamps, verification status, and usage stats. Issue #620.
+
+    Args:
+        tool_info: Tool information dictionary
+
+    Returns:
+        Formatted metadata section string
+    """
+    return f"""METADATA:
 - Added: {datetime.now().isoformat()}
 - Last Updated: {datetime.now().isoformat()}
 - Verification Status: {tool_info.get('verified', 'unverified')}
 - Usage Count: 0
 - Success Rate: N/A
 """
+
+
+def _build_tool_document_content(tool_info: Dict[str, Any], tool_name: str) -> str:
+    """
+    Build document content string for tool storage.
+
+    Issue #665: Extracted from store_tool_knowledge to reduce function length.
+    Issue #620: Further refactored using Extract Method pattern.
+
+    Args:
+        tool_info: Tool information dictionary
+        tool_name: Name of the tool
+
+    Returns:
+        Formatted document content string
+    """
+    sections = [
+        _build_basic_info_section(tool_info, tool_name),
+        _build_installation_section(tool_info),
+        _build_usage_section(tool_info),
+        _build_troubleshooting_section(tool_info),
+        _build_resources_section(tool_info),
+        _build_metadata_section(tool_info),
+    ]
+    return "\n\n".join(sections)
 
 
 class EnhancedKBLibrarian:
@@ -216,7 +306,9 @@ class EnhancedKBLibrarian:
             logger.error("Web research failed for %s", tool_type)
             return []
 
-        detailed_tools = await self._process_web_research_results(tool_type, web_results)
+        detailed_tools = await self._process_web_research_results(
+            tool_type, web_results
+        )
 
         async with self._cache_lock:
             self.tool_cache[tool_type] = detailed_tools
@@ -270,7 +362,9 @@ class EnhancedKBLibrarian:
         tool_info = await self._research_specific_tool(tool_name)
 
         if tool_info:
-            tool_dict = tool_info.to_dict() if hasattr(tool_info, "to_dict") else tool_info
+            tool_dict = (
+                tool_info.to_dict() if hasattr(tool_info, "to_dict") else tool_info
+            )
             await self.store_tool_knowledge(tool_dict)
             return tool_dict
 

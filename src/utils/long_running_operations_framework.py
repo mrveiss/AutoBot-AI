@@ -39,20 +39,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Re-export all public API from the package
-from src.utils.long_running_operations import (
-    # Types and dataclasses
+from src.utils.long_running_operations import (  # Types and dataclasses; Managers
     LongRunningOperation,
+    LongRunningOperationManager,
     LongRunningTimeoutConfig,
     OperationCheckpoint,
-    OperationPriority,
-    OperationProgress,
-    OperationStatus,
-    OperationType,
-    # Managers
-    LongRunningOperationManager,
     OperationCheckpointManager,
     OperationExecutionContext,
+    OperationPriority,
+    OperationProgress,
     OperationProgressTracker,
+    OperationStatus,
+    OperationType,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,9 +95,7 @@ async def _discover_indexing_files(path: Path, patterns: List[str]) -> List[Path
     """
     all_files: List[Path] = []
     for pattern in patterns:
-        pattern_files = await asyncio.to_thread(
-            lambda p=pattern: list(path.rglob(p))
-        )
+        pattern_files = await asyncio.to_thread(lambda p=pattern: list(path.rglob(p)))
         all_files.extend(pattern_files)
     return all_files
 
@@ -144,9 +140,7 @@ async def _discover_test_files(path: Path, patterns: List[str]) -> List[Path]:
     """
     test_files: List[Path] = []
     for pattern in patterns:
-        pattern_files = await asyncio.to_thread(
-            lambda p=pattern: list(path.rglob(p))
-        )
+        pattern_files = await asyncio.to_thread(lambda p=pattern: list(path.rglob(p)))
         test_files.extend(pattern_files)
     return test_files
 
@@ -202,6 +196,73 @@ def _calculate_test_summary(
         "results": results,
         "success_rate": (passed / total_tests) * 100 if total_tests > 0 else 0,
     }
+
+
+async def _execute_single_test(
+    test_file: Path,
+    index: int,
+    total_tests: int,
+    passed: int,
+    failed: int,
+    context: "OperationExecutionContext",
+) -> tuple[Dict[str, Any], bool]:
+    """Execute a single test file and return the result.
+
+    Issue #620: Extracted from execute_comprehensive_test_suite to reduce function length.
+
+    Args:
+        test_file: Path to the test file to execute
+        index: Current test index (0-based)
+        total_tests: Total number of tests
+        passed: Current count of passed tests
+        failed: Current count of failed tests
+        context: Operation execution context for progress updates
+
+    Returns:
+        Tuple of (test_result_dict, test_passed_bool)
+    """
+    import random
+
+    await context.update_progress(
+        f"Running {test_file.name}",
+        index,
+        total_tests,
+        {"passed": passed, "failed": failed},
+        f"Test {index + 1} of {total_tests}: {test_file.name}",
+    )
+
+    await asyncio.sleep(0.5)  # Simulate test execution
+    test_passed = random.random() > 0.1  # 90% pass rate
+
+    test_result = _create_test_result(test_file, test_passed, 0.5)
+    return test_result, test_passed
+
+
+async def _save_test_checkpoint_if_needed(
+    index: int,
+    results: List[Dict[str, Any]],
+    passed: int,
+    failed: int,
+    context: "OperationExecutionContext",
+    checkpoint_interval: int = 10,
+) -> None:
+    """Save a checkpoint if the current index is at a checkpoint interval.
+
+    Issue #620: Extracted from execute_comprehensive_test_suite to reduce function length.
+
+    Args:
+        index: Current test index (0-based)
+        results: List of test results so far
+        passed: Current count of passed tests
+        failed: Current count of failed tests
+        context: Operation execution context for checkpoint saving
+        checkpoint_interval: Number of tests between checkpoints (default: 10)
+    """
+    if (index + 1) % checkpoint_interval == 0:
+        await context.save_checkpoint(
+            {"test_results": results, "passed": passed, "failed": failed},
+            f"test_{index + 1}",
+        )
 
 
 # =============================================================================
@@ -292,6 +353,8 @@ async def execute_comprehensive_test_suite(
 ) -> str:
     """Execute comprehensive test suite operation.
 
+    Issue #620: Refactored using Extract Method pattern to reduce function length.
+
     Args:
         test_suite_path: Path to the test suite directory
         manager: LongRunningOperationManager instance
@@ -300,12 +363,13 @@ async def execute_comprehensive_test_suite(
     Returns:
         Operation ID for tracking
     """
-    import random
 
-    async def test_suite_operation(context: OperationExecutionContext) -> Dict[str, Any]:
+    async def test_suite_operation(
+        context: OperationExecutionContext,
+    ) -> Dict[str, Any]:
         """Run test suite with progress tracking and checkpoint support.
 
-        Issue #665: Refactored to use extracted helper functions.
+        Issue #620: Refactored to use extracted helper functions for reduced complexity.
         """
         path = Path(test_suite_path)
         patterns = test_patterns or ["test_*.py", "*_test.py"]
@@ -321,32 +385,19 @@ async def execute_comprehensive_test_suite(
 
         for i, test_file in enumerate(test_files):
             try:
-                await context.update_progress(
-                    f"Running {test_file.name}",
-                    i,
-                    total_tests,
-                    {"passed": passed, "failed": failed},
-                    f"Test {i + 1} of {total_tests}: {test_file.name}",
+                # Execute test using helper (Issue #620)
+                test_result, test_passed = await _execute_single_test(
+                    test_file, i, total_tests, passed, failed, context
+                )
+                results.append(test_result)
+                passed, failed = (
+                    (passed + 1, failed) if test_passed else (passed, failed + 1)
                 )
 
-                await asyncio.sleep(0.5)  # Simulate test execution
-                test_passed = random.random() > 0.1  # 90% pass rate
-
-                # Create result using helper (Issue #665)
-                test_result = _create_test_result(test_file, test_passed, 0.5)
-                results.append(test_result)
-
-                if test_passed:
-                    passed += 1
-                else:
-                    failed += 1
-
-                # Save checkpoint every 10 tests
-                if (i + 1) % 10 == 0:
-                    await context.save_checkpoint(
-                        {"test_results": results, "passed": passed, "failed": failed},
-                        f"test_{i + 1}",
-                    )
+                # Save checkpoint using helper (Issue #620)
+                await _save_test_checkpoint_if_needed(
+                    i, results, passed, failed, context
+                )
 
             except Exception as e:
                 context.logger.error("Failed to run test %s: %s", test_file, e)
