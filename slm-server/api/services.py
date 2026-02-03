@@ -11,7 +11,7 @@ Related to Issue #728.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from api.websocket import ws_manager
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -833,7 +833,7 @@ async def get_fleet_services(
 
     # Aggregate by service name
     # Store both node_statuses and category (take first one found)
-    service_map: dict[str, dict] = {}
+    service_map: Dict[str, dict] = {}
     for svc in all_services:
         if svc.service_name not in service_map:
             service_map[svc.service_name] = {

@@ -9,6 +9,7 @@ Certificates are stored encrypted and served to Ansible for deployment.
 """
 
 import logging
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
@@ -636,7 +637,7 @@ async def bulk_renew_expiring_certificates(
 async def enable_tls_on_services(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    services: list[str] = Query(
+    services: List[str] = Query(
         ["frontend", "backend", "redis"],
         description="Services to enable TLS for",
     ),
