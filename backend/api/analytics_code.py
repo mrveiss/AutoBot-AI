@@ -349,6 +349,93 @@ async def get_communication_chains(
     return enhanced_chains
 
 
+def _build_endpoint_correlation_data(
+    static_patterns: dict,
+    runtime_patterns: dict,
+) -> dict:
+    """
+    Build correlation data for each endpoint from static and runtime patterns.
+
+    Issue #620: Extracted from analyze_communication_chains_detailed.
+
+    Args:
+        static_patterns: Static analysis patterns
+        runtime_patterns: Runtime API frequency patterns
+
+    Returns:
+        Dict mapping endpoints to correlation data
+    """
+    correlation_data = {}
+    for endpoint in static_patterns.get("api_endpoints", []):
+        response_times = analytics_controller.response_times.get(endpoint, [])
+        runtime_calls = runtime_patterns.get(endpoint, 0)
+
+        correlation_data[endpoint] = {
+            "static_detected": True,
+            "runtime_calls": runtime_calls,
+            "avg_response_time": sum(response_times) / max(len(response_times), 1),
+            "error_rate": (
+                analytics_controller.error_counts.get(endpoint, 0)
+                / max(runtime_calls, 1)
+                * 100
+            ),
+        }
+    return correlation_data
+
+
+def _generate_communication_chain_insights(
+    static_patterns: dict,
+    runtime_patterns: dict,
+    correlation_data: dict,
+) -> list:
+    """
+    Generate insights from communication chain analysis.
+
+    Issue #620: Extracted from analyze_communication_chains_detailed.
+
+    Args:
+        static_patterns: Static analysis patterns
+        runtime_patterns: Runtime API frequency patterns
+        correlation_data: Endpoint correlation data
+
+    Returns:
+        List of insight dictionaries
+    """
+    insights = []
+
+    # Find unused endpoints
+    unused_endpoints = [
+        ep
+        for ep in static_patterns.get("api_endpoints", [])
+        if ep not in runtime_patterns
+    ]
+    if unused_endpoints:
+        insights.append(
+            {
+                "type": "unused_endpoints",
+                "count": len(unused_endpoints),
+                "endpoints": unused_endpoints[:10],
+                "recommendation": "Consider removing unused endpoints or adding tests",
+            }
+        )
+
+    # Find high error rate endpoints
+    high_error_endpoints = [
+        ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0
+    ]
+    if high_error_endpoints:
+        insights.append(
+            {
+                "type": "high_error_endpoints",
+                "count": len(high_error_endpoints),
+                "endpoints": high_error_endpoints,
+                "recommendation": "Investigate and fix endpoints with high error rates",
+            }
+        )
+
+    return insights
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_communication_chains_detailed",
@@ -359,15 +446,14 @@ async def analyze_communication_chains_detailed(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
-    Perform detailed communication chain analysis
+    Perform detailed communication chain analysis.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use extracted helper methods.
     """
-    # Run communication chain analysis
     analysis_request = CodeAnalysisRequest(
         analysis_type="communication_chains", include_metrics=True
     )
-
     results = await analytics_controller.perform_code_analysis(analysis_request)
 
     # Enhance with runtime correlation
@@ -375,64 +461,16 @@ async def analyze_communication_chains_detailed(
         runtime_patterns = analytics_controller.api_frequencies
         static_patterns = results.get("communication_chains", {})
 
-        # Create correlation matrix
-        correlation_data = {}
-
-        for endpoint in static_patterns.get("api_endpoints", []):
-            correlation_data[endpoint] = {
-                "static_detected": True,
-                "runtime_calls": runtime_patterns.get(endpoint, 0),
-                "avg_response_time": (
-                    sum(analytics_controller.response_times.get(endpoint, []))
-                    / max(
-                        len(analytics_controller.response_times.get(endpoint, [])),
-                        1,
-                    )
-                ),
-                "error_rate": (
-                    analytics_controller.error_counts.get(endpoint, 0)
-                    / max(runtime_patterns.get(endpoint, 1), 1)
-                    * 100
-                ),
-            }
-
+        # Build correlation data (Issue #620: uses helper)
+        correlation_data = _build_endpoint_correlation_data(
+            static_patterns, runtime_patterns
+        )
         results["runtime_correlation"] = correlation_data
-        results["insights"] = []
 
-        # Generate insights
-        unused_endpoints = [
-            ep
-            for ep in static_patterns.get("api_endpoints", [])
-            if ep not in runtime_patterns
-        ]
-
-        if unused_endpoints:
-            results["insights"].append(
-                {
-                    "type": "unused_endpoints",
-                    "count": len(unused_endpoints),
-                    "endpoints": unused_endpoints[:10],
-                    "recommendation": (
-                        "Consider removing unused endpoints or adding tests"
-                    ),
-                }
-            )
-
-        high_error_endpoints = [
-            ep for ep, data in correlation_data.items() if data["error_rate"] > 5.0
-        ]
-
-        if high_error_endpoints:
-            results["insights"].append(
-                {
-                    "type": "high_error_endpoints",
-                    "count": len(high_error_endpoints),
-                    "endpoints": high_error_endpoints,
-                    "recommendation": (
-                        "Investigate and fix endpoints with high error rates"
-                    ),
-                }
-            )
+        # Generate insights (Issue #620: uses helper)
+        results["insights"] = _generate_communication_chain_insights(
+            static_patterns, runtime_patterns, correlation_data
+        )
 
     return results
 

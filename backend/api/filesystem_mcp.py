@@ -1023,6 +1023,78 @@ async def list_directory_mcp(
         )
 
 
+async def _validate_directory_path(path: str) -> None:
+    """
+    Validate that path is an allowed, existing directory.
+
+    Issue #620: Extracted from list_directory_with_sizes_mcp.
+
+    Args:
+        path: Directory path to validate
+
+    Raises:
+        HTTPException: If path is not allowed, doesn't exist, or isn't a directory
+    """
+    if not is_path_allowed(path):
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
+
+    path_exists = await run_in_file_executor(os.path.exists, path)
+    if not path_exists:
+        raise HTTPException(status_code=404, detail=f"Directory not found: {path}")
+
+    is_dir = await run_in_file_executor(os.path.isdir, path)
+    if not is_dir:
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
+
+
+async def _build_directory_entries_with_sizes(path: str) -> list:
+    """
+    Build directory entries with size information.
+
+    Issue #620: Extracted from list_directory_with_sizes_mcp.
+    Issue #718: Uses dedicated file I/O executor for parallel operations.
+
+    Args:
+        path: Directory path to list
+
+    Returns:
+        List of entry dictionaries with name, type, size_bytes, path
+    """
+    dir_contents = await run_in_file_executor(os.listdir, path)
+    full_paths = [os.path.join(path, name) for name in dir_contents]
+
+    # Batch check all entries in parallel - eliminates N+1 sequential I/O
+    is_dir_checks = await asyncio.gather(
+        *[run_in_file_executor(os.path.isdir, fp) for fp in full_paths]
+    )
+
+    # Get sizes for files only (directories are 0)
+    async def get_size_if_file(file_path: str, is_directory: bool) -> int:
+        if is_directory:
+            return 0
+        return await run_in_file_executor(os.path.getsize, file_path)
+
+    sizes = await asyncio.gather(
+        *[get_size_if_file(fp, is_d) for fp, is_d in zip(full_paths, is_dir_checks)]
+    )
+
+    entries = []
+    for name, full_path, entry_is_dir, size in zip(
+        dir_contents, full_paths, is_dir_checks, sizes
+    ):
+        entries.append(
+            {
+                "name": name,
+                "type": "directory" if entry_is_dir else "file",
+                "size_bytes": size,
+                "path": full_path,
+            }
+        )
+    return entries
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_directory_with_sizes_mcp",
@@ -1034,60 +1106,17 @@ async def list_directory_with_sizes_mcp(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Metadata:
     """
-    List directory with detailed size information
+    List directory with detailed size information.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use extracted helper methods.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
-
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=404, detail=f"Directory not found: {request.path}"
-        )
-
-    is_dir = await run_in_file_executor(os.path.isdir, request.path)
-    if not is_dir:
-        raise HTTPException(
-            status_code=400, detail=f"Path is not a directory: {request.path}"
-        )
+    # Validate path (Issue #620: uses helper)
+    await _validate_directory_path(request.path)
 
     try:
-        dir_contents = await run_in_file_executor(os.listdir, request.path)
-        full_paths = [os.path.join(request.path, name) for name in dir_contents]
-
-        # Batch check all entries in parallel - eliminates N+1 sequential I/O
-        # Issue #718: Use dedicated file I/O executor
-        is_dir_checks = await asyncio.gather(
-            *[run_in_file_executor(os.path.isdir, fp) for fp in full_paths]
-        )
-
-        # Get sizes for files only (directories are 0)
-        async def get_size_if_file(path: str, is_dir: bool) -> int:
-            """Get file size or return 0 for directories."""
-            if is_dir:
-                return 0
-            return await run_in_file_executor(os.path.getsize, path)
-
-        sizes = await asyncio.gather(
-            *[get_size_if_file(fp, is_d) for fp, is_d in zip(full_paths, is_dir_checks)]
-        )
-
-        entries = []
-        for name, full_path, entry_is_dir, size in zip(
-            dir_contents, full_paths, is_dir_checks, sizes
-        ):
-            entries.append(
-                {
-                    "name": name,
-                    "type": "directory" if entry_is_dir else "file",
-                    "size_bytes": size,
-                    "path": full_path,
-                }
-            )
+        # Build entries with sizes (Issue #620: uses helper)
+        entries = await _build_directory_entries_with_sizes(request.path)
 
         # Sort by requested field
         if request.sort_by == "size":
@@ -1102,6 +1131,8 @@ async def list_directory_with_sizes_mcp(
             "sorted_by": request.sort_by,
             "entries": entries,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error listing directory: {str(e)}"
