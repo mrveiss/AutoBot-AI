@@ -32,12 +32,13 @@ const props = withDefaults(defineProps<Props>(), {
   fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace'
 })
 
-// Emits
+// Emits - Issue #749: Added tabCompletion emit
 const emit = defineEmits<{
   ready: [terminal: Terminal]
   data: [data: string]
   resize: [cols: number, rows: number]
   disposed: []
+  tabCompletion: [payload: { text: string; cursor: number }]
 }>()
 
 // Refs
@@ -52,6 +53,10 @@ const fitAddon = shallowRef<FitAddon>()
 const webLinksAddon = shallowRef<WebLinksAddon>()
 // Track whether addons have been successfully loaded to prevent dispose errors
 const addonsLoaded = ref(false)
+
+// Issue #749: State for tracking current line buffer for tab completion
+const currentLineBuffer = ref('')
+const cursorPosition = ref(0)
 
 // Theme configurations
 const themes = {
@@ -103,6 +108,191 @@ const themes = {
   }
 }
 
+// Issue #749: Handle data input and track line buffer for tab completion
+const handleTerminalData = (data: string) => {
+  logger.debug('onData fired:', {
+    data: data.replace(/\r/g, '\\r').replace(/\n/g, '\\n'),
+    readOnly: props.readOnly,
+    disableStdin: terminal.value?.options.disableStdin
+  })
+
+  if (props.readOnly) {
+    return
+  }
+
+  // Issue #749: Check for Tab key (character code 9)
+  if (data === '\t') {
+    logger.debug('[TAB] Tab key pressed, requesting completion')
+    emit('tabCompletion', {
+      text: currentLineBuffer.value,
+      cursor: cursorPosition.value
+    })
+    return
+  }
+
+  // Issue #749: Track line buffer for tab completion
+  updateLineBuffer(data)
+
+  // Emit data for normal processing
+  emit('data', data)
+}
+
+// Issue #749: Update line buffer based on input character
+const updateLineBuffer = (data: string) => {
+  // Handle Enter key - reset line buffer
+  if (data === '\r' || data === '\n') {
+    currentLineBuffer.value = ''
+    cursorPosition.value = 0
+    return
+  }
+
+  // Handle Backspace (character code 127 or \x7f)
+  if (data === '\x7f' || data === '\b') {
+    if (cursorPosition.value > 0) {
+      const before = currentLineBuffer.value.slice(0, cursorPosition.value - 1)
+      const after = currentLineBuffer.value.slice(cursorPosition.value)
+      currentLineBuffer.value = before + after
+      cursorPosition.value--
+    }
+    return
+  }
+
+  // Handle Delete key (escape sequence)
+  if (data === '\x1b[3~') {
+    if (cursorPosition.value < currentLineBuffer.value.length) {
+      const before = currentLineBuffer.value.slice(0, cursorPosition.value)
+      const after = currentLineBuffer.value.slice(cursorPosition.value + 1)
+      currentLineBuffer.value = before + after
+    }
+    return
+  }
+
+  // Handle arrow keys for cursor movement
+  if (data.startsWith('\x1b[')) {
+    const sequence = data.slice(2)
+    switch (sequence) {
+      case 'D': // Left arrow
+        if (cursorPosition.value > 0) {
+          cursorPosition.value--
+        }
+        break
+      case 'C': // Right arrow
+        if (cursorPosition.value < currentLineBuffer.value.length) {
+          cursorPosition.value++
+        }
+        break
+      case 'H': // Home
+        cursorPosition.value = 0
+        break
+      case 'F': // End
+        cursorPosition.value = currentLineBuffer.value.length
+        break
+    }
+    return
+  }
+
+  // Handle Ctrl+C, Ctrl+D - reset line buffer
+  if (data === '\x03' || data === '\x04') {
+    currentLineBuffer.value = ''
+    cursorPosition.value = 0
+    return
+  }
+
+  // Handle Ctrl+U - clear line
+  if (data === '\x15') {
+    currentLineBuffer.value = ''
+    cursorPosition.value = 0
+    return
+  }
+
+  // Handle Ctrl+W - delete word backward
+  if (data === '\x17') {
+    const before = currentLineBuffer.value.slice(0, cursorPosition.value)
+    const after = currentLineBuffer.value.slice(cursorPosition.value)
+    // Find last word boundary
+    const match = before.match(/\S*\s*$/)
+    if (match) {
+      const deleteLen = match[0].length
+      currentLineBuffer.value = before.slice(0, before.length - deleteLen) + after
+      cursorPosition.value -= deleteLen
+    }
+    return
+  }
+
+  // Normal printable character - insert at cursor position
+  if (data.length === 1 && data.charCodeAt(0) >= 32) {
+    const before = currentLineBuffer.value.slice(0, cursorPosition.value)
+    const after = currentLineBuffer.value.slice(cursorPosition.value)
+    currentLineBuffer.value = before + data + after
+    cursorPosition.value++
+  }
+}
+
+// Issue #749: Apply completion to the terminal
+const applyCompletion = (prefix: string, completion: string) => {
+  if (!terminal.value) {
+    return
+  }
+
+  // Calculate how much of the prefix is already typed
+  // The completion should replace the partial word being typed
+  const prefixLen = prefix.length
+
+  // Calculate characters to remove (the prefix that was already typed)
+  // We need to backspace over the existing prefix
+  const backspaces = '\x7f'.repeat(prefixLen)
+
+  // Write backspaces to remove the prefix, then write the completion
+  terminal.value.write(backspaces + completion)
+
+  // Update line buffer with the completion
+  const lastSpaceIdx = currentLineBuffer.value.lastIndexOf(' ')
+  const beforePrefix = lastSpaceIdx >= 0 ? currentLineBuffer.value.slice(0, lastSpaceIdx + 1) : ''
+  currentLineBuffer.value = beforePrefix + completion
+  cursorPosition.value = currentLineBuffer.value.length
+
+  logger.debug('[TAB] Applied completion:', { prefix, completion, newBuffer: currentLineBuffer.value })
+}
+
+// Issue #749: Show multiple completions as terminal output
+const showCompletions = (completions: string[]) => {
+  if (!terminal.value || completions.length === 0) {
+    return
+  }
+
+  // Write newline, then completions, then restore prompt and current input
+  const completionText = '\r\n' + completions.join('  ') + '\r\n'
+  terminal.value.write(completionText)
+
+  logger.debug('[TAB] Displayed completions:', completions)
+}
+
+// Issue #749: Handle completion response from backend
+const handleCompletionResponse = (data: { completions: string[]; prefix: string; common_prefix?: string }) => {
+  const completions = data.completions || []
+  const prefix = data.prefix || ''
+  const commonPrefix = data.common_prefix || ''
+
+  if (completions.length === 0) {
+    // No completions - do nothing (could optionally beep)
+    logger.debug('[TAB] No completions found')
+    return
+  }
+
+  if (completions.length === 1) {
+    // Single completion - apply it directly
+    applyCompletion(prefix, completions[0])
+  } else if (commonPrefix && commonPrefix.length > prefix.length) {
+    // Multiple completions with common prefix longer than current input
+    // Apply the common prefix
+    applyCompletion(prefix, commonPrefix)
+  } else {
+    // Multiple completions with no additional common prefix
+    // Show all options
+    showCompletions(completions)
+  }
+}
+
 // Initialize terminal
 const initTerminal = async () => {
   if (!terminalRef.value) {
@@ -140,19 +330,8 @@ const initTerminal = async () => {
     await nextTick()
     fitAddon.value.fit()
 
-    // Handle terminal data input
-    terminal.value.onData((data) => {
-      logger.debug('onData fired:', {
-        data: data.replace(/\r/g, '\\r').replace(/\n/g, '\\n'),
-        readOnly: props.readOnly,
-        disableStdin: terminal.value?.options.disableStdin
-      })
-
-      if (!props.readOnly) {
-        emit('data', data)
-      } else {
-      }
-    })
+    // Issue #749: Handle terminal data input with tab completion support
+    terminal.value.onData(handleTerminalData)
 
     // Handle terminal resize
     terminal.value.onResize(({ cols, rows }) => {
@@ -232,6 +411,9 @@ const reset = () => {
   if (terminal.value) {
     terminal.value.reset()
   }
+  // Issue #749: Also reset line buffer state
+  currentLineBuffer.value = ''
+  cursorPosition.value = 0
 }
 
 const fit = () => {
@@ -254,6 +436,18 @@ const blur = () => {
 
 const getTerminal = () => terminal.value
 
+// Issue #749: Get current line buffer (useful for debugging)
+const getLineBuffer = () => ({
+  text: currentLineBuffer.value,
+  cursor: cursorPosition.value
+})
+
+// Issue #749: Reset line buffer (e.g., after command execution)
+const resetLineBuffer = () => {
+  currentLineBuffer.value = ''
+  cursorPosition.value = 0
+}
+
 // Expose methods for parent components
 defineExpose({
   write,
@@ -263,7 +457,13 @@ defineExpose({
   fit,
   focus,
   blur,
-  getTerminal
+  getTerminal,
+  // Issue #749: Tab completion methods
+  getLineBuffer,
+  resetLineBuffer,
+  applyCompletion,
+  showCompletions,
+  handleCompletionResponse
 })
 
 // Watch for theme changes
