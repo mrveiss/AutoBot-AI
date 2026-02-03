@@ -21,21 +21,26 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router_registry
+router = APIRouter(
+    tags=["technical-debt", "analytics"]
+)  # Prefix set in router_registry
 
 # Redis key prefix
 DEBT_PREFIX = "debt:"
 
 
-def _no_data_response(message: str = "No technical debt analysis data. Run codebase indexing first.") -> dict:
+def _no_data_response(
+    message: str = "No technical debt analysis data. Run codebase indexing first.",
+) -> dict:
     """
     Standardized no-data response for debt analytics (Issue #543).
 
@@ -336,7 +341,9 @@ def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
             severity = (
                 DebtSeverity.CRITICAL
                 if complexity > 20
-                else DebtSeverity.HIGH if complexity > 15 else DebtSeverity.MEDIUM
+                else DebtSeverity.HIGH
+                if complexity > 15
+                else DebtSeverity.MEDIUM
             )
             debt_items.append(
                 DebtItem(
@@ -378,10 +385,15 @@ def _calculate_debt_aggregations(
     # Find top files by debt
     file_debt: Dict[str, float] = {}
     for item in debt_items:
-        file_debt[item.file_path] = file_debt.get(item.file_path, 0) + item.estimated_hours
+        file_debt[item.file_path] = (
+            file_debt.get(item.file_path, 0) + item.estimated_hours
+        )
 
     top_files = sorted(
-        [{"file": f, "hours": h, "cost_usd": h * hourly_rate} for f, h in file_debt.items()],
+        [
+            {"file": f, "hours": h, "cost_usd": h * hourly_rate}
+            for f, h in file_debt.items()
+        ],
         key=lambda x: x["hours"],
         reverse=True,
     )[:10]
@@ -426,7 +438,9 @@ def _extract_problem_from_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
         "type": meta.get("problem_type", "unknown"),
         "severity": meta.get("severity", "medium"),
         "file_path": meta.get("file_path", "unknown"),
-        "line_number": int(meta.get("line_number", 0)) if meta.get("line_number") else None,
+        "line_number": int(meta.get("line_number", 0))
+        if meta.get("line_number")
+        else None,
         "description": meta.get("description", ""),
         "suggestion": meta.get("suggestion", ""),
     }
@@ -437,10 +451,14 @@ def _get_problems_from_chromadb(code_collection) -> List[Dict[str, Any]]:
     if not code_collection:
         return []
     try:
-        problems_result = code_collection.get(where={"type": "problem"}, include=["metadatas"])
+        problems_result = code_collection.get(
+            where={"type": "problem"}, include=["metadatas"]
+        )
         if not problems_result.get("metadatas"):
             return []
-        return [_extract_problem_from_meta(meta) for meta in problems_result["metadatas"]]
+        return [
+            _extract_problem_from_meta(meta) for meta in problems_result["metadatas"]
+        ]
     except Exception as e:
         logger.warning("ChromaDB query failed: %s", e)
         return []
@@ -452,7 +470,9 @@ async def _get_antipatterns_from_redis(redis_client) -> List[Dict[str, Any]]:
         return []
     try:
         # Issue #361 - avoid blocking
-        ap_data = await asyncio.to_thread(redis_client.get, "antipattern:latest_results")
+        ap_data = await asyncio.to_thread(
+            redis_client.get, "antipattern:latest_results"
+        )
         if not ap_data:
             return []
         if isinstance(ap_data, bytes):
@@ -508,14 +528,20 @@ def _get_latest_debt_data() -> Optional[Dict[str, Any]]:
     error_code_prefix="DEBT",
 )
 @router.post("/calculate")
-async def calculate_technical_debt(request: DebtCalculationRequest):
+async def calculate_technical_debt(
+    request: DebtCalculationRequest, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Calculate technical debt for the codebase (Issue #315 - refactored).
+    Issue #744: Requires admin authentication.
 
     Analyzes code quality issues and estimates remediation cost.
     """
     try:
-        from backend.api.codebase_analytics import get_code_collection, get_redis_connection
+        from backend.api.codebase_analytics import (
+            get_code_collection,
+            get_redis_connection,
+        )
 
         code_collection = get_code_collection()
         redis_client = await get_redis_connection()
@@ -527,11 +553,17 @@ async def calculate_technical_debt(request: DebtCalculationRequest):
             "complexity": {},
         }
 
-        debt_result = await calculate_debt_from_analysis(analysis_data, request.hourly_rate)
+        debt_result = await calculate_debt_from_analysis(
+            analysis_data, request.hourly_rate
+        )
         _store_debt_result(debt_result)
 
         return JSONResponse(
-            {"status": "success", "data": debt_result, "target_path": request.target_path}
+            {
+                "status": "success",
+                "data": debt_result,
+                "target_path": request.target_path,
+            }
         )
 
     except Exception as e:
@@ -547,25 +579,30 @@ async def calculate_technical_debt(request: DebtCalculationRequest):
     error_code_prefix="DEBT",
 )
 @router.get("/summary")
-async def get_debt_summary():
+async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
     """
     Get summary of current technical debt (Issue #543 - refactored).
+    Issue #744: Requires admin authentication.
 
     Returns high-level metrics for dashboard display.
     """
     data = _get_latest_debt_data()
 
     if data:
-        return JSONResponse({
-            "status": "success",
-            "summary": data.get("summary", {}),
-            "top_files": data.get("top_files", [])[:5],
-            "roi_ranking": data.get("roi_ranking", [])[:5],
-            "timestamp": data.get("timestamp"),
-        })
+        return JSONResponse(
+            {
+                "status": "success",
+                "summary": data.get("summary", {}),
+                "top_files": data.get("top_files", [])[:5],
+                "roi_ranking": data.get("roi_ranking", [])[:5],
+                "timestamp": data.get("timestamp"),
+            }
+        )
 
     # Return no_data response if no analysis exists (Issue #543)
-    return JSONResponse(_no_data_response("No debt analysis found. Run POST /calculate first."))
+    return JSONResponse(
+        _no_data_response("No debt analysis found. Run POST /calculate first.")
+    )
 
 
 @with_error_handling(
@@ -574,9 +611,12 @@ async def get_debt_summary():
     error_code_prefix="DEBT",
 )
 @router.get("/by-category/{category}")
-async def get_debt_by_category(category: str):
+async def get_debt_by_category(
+    category: str, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Get technical debt items filtered by category (Issue #315 - refactored).
+    Issue #744: Requires admin authentication.
 
     Args:
         category: Debt category to filter by
@@ -584,13 +624,17 @@ async def get_debt_by_category(category: str):
     data = _get_latest_debt_data()
 
     if data:
-        items = [item for item in data.get("items", []) if item.get("category") == category]
-        return JSONResponse({
-            "status": "success",
-            "category": category,
-            "items": items,
-            "count": len(items),
-        })
+        items = [
+            item for item in data.get("items", []) if item.get("category") == category
+        ]
+        return JSONResponse(
+            {
+                "status": "success",
+                "category": category,
+                "items": items,
+                "count": len(items),
+            }
+        )
 
     return JSONResponse(
         {"status": "no_data", "message": "No debt analysis found", "items": []}
@@ -629,12 +673,14 @@ def _get_debt_trend_data() -> List[Dict[str, Any]]:
             data_str = _decode_redis_value(data)
             calc = json.loads(data_str)
             summary = calc.get("summary", {})
-            trend_data.append({
-                "timestamp": calc.get("timestamp"),
-                "total_items": summary.get("total_items", 0),
-                "total_hours": summary.get("total_hours", 0),
-                "total_cost_usd": summary.get("total_cost_usd", 0),
-            })
+            trend_data.append(
+                {
+                    "timestamp": calc.get("timestamp"),
+                    "total_items": summary.get("total_items", 0),
+                    "total_hours": summary.get("total_hours", 0),
+                    "total_cost_usd": summary.get("total_cost_usd", 0),
+                }
+            )
     except Exception as e:
         logger.warning("Redis trend fetch failed: %s", e)
     return trend_data
@@ -651,7 +697,13 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
         "hours": round(last["total_hours"] - first["total_hours"], 1),
         "cost": round(last["total_cost_usd"] - first["total_cost_usd"], 2),
     }
-    direction = "improving" if change["items"] < 0 else "worsening" if change["items"] > 0 else "stable"
+    direction = (
+        "improving"
+        if change["items"] < 0
+        else "worsening"
+        if change["items"] > 0
+        else "stable"
+    )
     return change, direction
 
 
@@ -661,9 +713,13 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     error_code_prefix="DEBT",
 )
 @router.get("/trends")
-async def get_debt_trends(days: int = Query(default=30, ge=1, le=365)):
+async def get_debt_trends(
+    days: int = Query(default=30, ge=1, le=365),
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get technical debt trends over time (Issue #315 - refactored).
+    Issue #744: Requires admin authentication.
 
     Shows how debt has changed over the specified period.
     """
@@ -672,13 +728,15 @@ async def get_debt_trends(days: int = Query(default=30, ge=1, le=365)):
 
     change, direction = _calculate_trend_change(trend_data)
 
-    return JSONResponse({
-        "status": "success",
-        "trends": trend_data,
-        "data_points": len(trend_data),
-        "change": change,
-        "direction": direction,
-    })
+    return JSONResponse(
+        {
+            "status": "success",
+            "trends": trend_data,
+            "data_points": len(trend_data),
+            "change": change,
+            "direction": direction,
+        }
+    )
 
 
 @with_error_handling(
@@ -687,9 +745,13 @@ async def get_debt_trends(days: int = Query(default=30, ge=1, le=365)):
     error_code_prefix="DEBT",
 )
 @router.get("/roi-priorities")
-async def get_roi_priorities(limit: int = Query(default=20, ge=1, le=100)):
+async def get_roi_priorities(
+    limit: int = Query(default=20, ge=1, le=100),
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get debt items prioritized by ROI (Issue #315 - refactored).
+    Issue #744: Requires admin authentication.
 
     Quick wins (high impact, low effort) are ranked first.
     """
@@ -697,11 +759,13 @@ async def get_roi_priorities(limit: int = Query(default=20, ge=1, le=100)):
 
     if data:
         roi_ranking = data.get("roi_ranking", [])
-        return JSONResponse({
-            "status": "success",
-            "priorities": roi_ranking[:limit],
-            "total_available": len(roi_ranking),
-        })
+        return JSONResponse(
+            {
+                "status": "success",
+                "priorities": roi_ranking[:limit],
+                "total_available": len(roi_ranking),
+            }
+        )
 
     return JSONResponse(
         {"status": "no_data", "message": "No debt analysis found", "priorities": []}
@@ -731,20 +795,51 @@ def _build_debt_tables(debt_data: dict) -> str:
     summary = debt_data.get("summary", {})
 
     # Severity section
-    severity_rows = [f"| {sev.capitalize()} | {count} |" for sev, count in summary.get("by_severity", {}).items()]
-    result = "\n## Debt by Severity\n\n| Severity | Count |\n|----------|-------|\n" + "\n".join(severity_rows) + "\n"
+    severity_rows = [
+        f"| {sev.capitalize()} | {count} |"
+        for sev, count in summary.get("by_severity", {}).items()
+    ]
+    result = (
+        "\n## Debt by Severity\n\n| Severity | Count |\n|----------|-------|\n"
+        + "\n".join(severity_rows)
+        + "\n"
+    )
 
     # Category section
-    category_rows = [f"| {cat.replace('_', ' ').title()} | {count} |" for cat, count in summary.get("by_category", {}).items()]
-    result += "\n## Debt by Category\n\n| Category | Count |\n|----------|-------|\n" + "\n".join(category_rows) + "\n"
+    category_rows = [
+        f"| {cat.replace('_', ' ').title()} | {count} |"
+        for cat, count in summary.get("by_category", {}).items()
+    ]
+    result += (
+        "\n## Debt by Category\n\n| Category | Count |\n|----------|-------|\n"
+        + "\n".join(category_rows)
+        + "\n"
+    )
 
     # Top files section
-    file_rows = [f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |" for f in debt_data.get("top_files", [])[:10]]
-    result += "\n## Top Files by Debt\n\n| File | Hours | Cost |\n|------|-------|------|\n" + "\n".join(file_rows) + "\n"
+    file_rows = [
+        f"| {f.get('file', 'unknown')[-50:]} | {f.get('hours', 0):.1f} | ${f.get('cost_usd', 0):.2f} |"
+        for f in debt_data.get("top_files", [])[:10]
+    ]
+    result += (
+        "\n## Top Files by Debt\n\n| File | Hours | Cost |\n|------|-------|------|\n"
+        + "\n".join(file_rows)
+        + "\n"
+    )
 
     # ROI priorities section
-    roi_rows = [f"| {item.get('description', '')[:40]}... | {item.get('roi_score', 0)} | {item.get('estimated_hours', 0):.1f} | {item.get('fix_complexity', 'unknown')} |" for item in debt_data.get("roi_ranking", [])[:10]]
-    result += "\n## Top ROI Priorities (Quick Wins)\n\n| Description | ROI | Hours | Complexity |\n|-------------|-----|-------|------------|\n" + "\n".join(roi_rows) + "\n"
+    roi_rows = []
+    for item in debt_data.get("roi_ranking", [])[:10]:
+        desc = item.get("description", "")[:40]
+        roi = item.get("roi_score", 0)
+        hours = item.get("estimated_hours", 0)
+        complexity = item.get("fix_complexity", "unknown")
+        roi_rows.append(f"| {desc}... | {roi} | {hours:.1f} | {complexity} |")
+    result += (
+        "\n## Top ROI Priorities (Quick Wins)\n\n"
+        "| Description | ROI | Hours | Complexity |\n"
+        "|-------------|-----|-------|------------|\n" + "\n".join(roi_rows) + "\n"
+    )
 
     return result
 
@@ -763,7 +858,11 @@ def _build_debt_recommendations() -> str:
 
 def _generate_markdown_report(debt_data: dict) -> str:
     """Generate complete markdown debt report (Issue #398: extracted)."""
-    return _build_debt_executive_summary(debt_data) + _build_debt_tables(debt_data) + _build_debt_recommendations()
+    return (
+        _build_debt_executive_summary(debt_data)
+        + _build_debt_tables(debt_data)
+        + _build_debt_recommendations()
+    )
 
 
 @with_error_handling(
@@ -772,14 +871,31 @@ def _generate_markdown_report(debt_data: dict) -> str:
     error_code_prefix="DEBT",
 )
 @router.get("/report")
-async def get_debt_report(format: str = Query(default="json", description="json or markdown")):
-    """Generate a comprehensive debt report (Issue #398: refactored)."""
+async def get_debt_report(
+    format: str = Query(default="json", description="json or markdown"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Generate a comprehensive debt report (Issue #398: refactored).
+    Issue #744: Requires admin authentication.
+    """
     debt_data = _get_latest_debt_data()
 
     if not debt_data:
-        return JSONResponse({"status": "no_data", "message": "No debt analysis found. Run POST /calculate first."})
+        return JSONResponse(
+            {
+                "status": "no_data",
+                "message": "No debt analysis found. Run POST /calculate first.",
+            }
+        )
 
     if format == "markdown":
-        return JSONResponse({"status": "success", "format": "markdown", "report": _generate_markdown_report(debt_data)})
+        return JSONResponse(
+            {
+                "status": "success",
+                "format": "markdown",
+                "report": _generate_markdown_report(debt_data),
+            }
+        )
 
     return JSONResponse({"status": "success", "format": "json", "data": debt_data})

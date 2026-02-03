@@ -16,14 +16,11 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from backend.services.agent_analytics import (
-    AgentType,
-    TaskStatus,
-    get_agent_analytics,
-)
+from backend.services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -82,7 +79,9 @@ class CompleteTaskRequest(BaseModel):
     """Request to complete a task"""
 
     task_id: str = Field(..., description="Task identifier")
-    status: str = Field(..., description="Final status (completed, failed, cancelled, timeout)")
+    status: str = Field(
+        ..., description="Final status (completed, failed, cancelled, timeout)"
+    )
     output_size: Optional[int] = Field(None, description="Size of output data")
     tokens_used: Optional[int] = Field(None, description="Tokens consumed")
     error_message: Optional[str] = Field(None, description="Error message if failed")
@@ -99,11 +98,15 @@ class CompleteTaskRequest(BaseModel):
     error_code_prefix="AGENT",
 )
 @router.get("/performance")
-async def get_all_agents_performance():
+async def get_all_agents_performance(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get performance metrics for all agents.
 
     Returns aggregated metrics including success rates, durations, and task counts.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     metrics_list = await analytics.get_all_agents_metrics()
@@ -130,7 +133,10 @@ async def get_all_agents_performance():
     error_code_prefix="AGENT",
 )
 @router.get("/performance/{agent_id}", response_model=AgentMetricsResponse)
-async def get_agent_performance(agent_id: str):
+async def get_agent_performance(
+    agent_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get performance metrics for a specific agent.
 
@@ -173,11 +179,14 @@ async def get_agent_performance(agent_id: str):
 async def get_agent_history(
     agent_id: str,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get task history for a specific agent.
 
     Returns recent tasks executed by this agent.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     history = await analytics.get_agent_history(agent_id, limit)
@@ -197,11 +206,14 @@ async def get_agent_history(
 @router.get("/tasks/recent")
 async def get_recent_tasks(
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get recent tasks across all agents.
 
     Returns the most recent task executions.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     tasks = await analytics.get_recent_tasks(limit)
@@ -227,11 +239,14 @@ async def compare_agents(
     agent_ids: Optional[str] = Query(
         None, description="Comma-separated agent IDs to compare (all if not specified)"
     ),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Compare performance across agents.
 
     Returns rankings by success rate, speed, and volume.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
 
@@ -253,42 +268,51 @@ def _check_agent_metrics(metrics) -> list:
     recommendations = []
 
     if metrics.error_rate > 10:
-        recommendations.append({
-            "type": "high_error_rate",
-            "severity": "high" if metrics.error_rate > 25 else "medium",
-            "message": f"Error rate of {metrics.error_rate:.1f}% exceeds threshold",
-            "suggestion": "Review error logs and improve error handling",
-        })
+        recommendations.append(
+            {
+                "type": "high_error_rate",
+                "severity": "high" if metrics.error_rate > 25 else "medium",
+                "message": f"Error rate of {metrics.error_rate:.1f}% exceeds threshold",
+                "suggestion": "Review error logs and improve error handling",
+            }
+        )
 
     if metrics.avg_duration_ms > 30000:
-        recommendations.append({
-            "type": "slow_performance",
-            "severity": "medium",
-            "message": f"Average duration of {metrics.avg_duration_ms/1000:.1f}s is high",
-            "suggestion": "Consider optimizing task processing or increasing resources",
-        })
+        recommendations.append(
+            {
+                "type": "slow_performance",
+                "severity": "medium",
+                "message": f"Average duration of {metrics.avg_duration_ms/1000:.1f}s is high",
+                "suggestion": "Consider optimizing task processing or increasing resources",
+            }
+        )
 
     if metrics.total_tasks > 10:
         timeout_rate = (metrics.timeout_tasks / metrics.total_tasks) * 100
         if timeout_rate > 5:
-            recommendations.append({
-                "type": "timeout_issues",
-                "severity": "high" if timeout_rate > 15 else "medium",
-                "message": f"Timeout rate of {timeout_rate:.1f}% indicates issues",
-                "suggestion": "Increase timeout limits or optimize long-running operations",
-            })
+            recommendations.append(
+                {
+                    "type": "timeout_issues",
+                    "severity": "high" if timeout_rate > 15 else "medium",
+                    "message": f"Timeout rate of {timeout_rate:.1f}% indicates issues",
+                    "suggestion": "Increase timeout limits or optimize long-running operations",
+                }
+            )
 
     if metrics.total_tasks > 0 and metrics.last_activity:
         from datetime import datetime, timedelta
+
         try:
             last = datetime.fromisoformat(metrics.last_activity)
             if datetime.utcnow() - last > timedelta(days=7):
-                recommendations.append({
-                    "type": "low_activity",
-                    "severity": "low",
-                    "message": "No activity in the last 7 days",
-                    "suggestion": "Check if agent is properly configured and active",
-                })
+                recommendations.append(
+                    {
+                        "type": "low_activity",
+                        "severity": "low",
+                        "message": "No activity in the last 7 days",
+                        "suggestion": "Check if agent is properly configured and active",
+                    }
+                )
         except Exception as e:
             logger.debug("Invalid date format in activity check: %s", e)
 
@@ -301,13 +325,17 @@ def _check_agent_metrics(metrics) -> list:
     error_code_prefix="AGENT",
 )
 @router.get("/recommendations")
-async def get_agent_recommendations():
+async def get_agent_recommendations(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get optimization recommendations for agents.
 
     Analyzes performance patterns and suggests improvements.
 
     (Issue #398: refactored to use extracted helpers)
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     metrics_list = await analytics.get_all_agents_metrics()
@@ -317,11 +345,13 @@ async def get_agent_recommendations():
     for metrics in metrics_list:
         agent_recs = _check_agent_metrics(metrics)
         if agent_recs:
-            recommendations.append({
-                "agent_id": metrics.agent_id,
-                "agent_type": metrics.agent_type,
-                "recommendations": agent_recs,
-            })
+            recommendations.append(
+                {
+                    "agent_id": metrics.agent_id,
+                    "agent_type": metrics.agent_type,
+                    "recommendations": agent_recs,
+                }
+            )
 
     severity_order = {"high": 0, "medium": 1, "low": 2}
     recommendations.sort(
@@ -349,13 +379,18 @@ async def get_agent_recommendations():
 )
 @router.get("/trends")
 async def get_performance_trends(
-    agent_id: Optional[str] = Query(None, description="Specific agent ID (all if not specified)"),
+    agent_id: Optional[str] = Query(
+        None, description="Specific agent ID (all if not specified)"
+    ),
     days: int = Query(default=7, ge=1, le=90, description="Number of days to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get performance trends over time.
 
     Returns daily metrics showing performance changes.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     trends = await analytics.get_performance_trends(agent_id, days)
@@ -369,11 +404,15 @@ async def get_performance_trends(
     error_code_prefix="AGENT",
 )
 @router.get("/types")
-async def get_agent_types():
+async def get_agent_types(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get list of available agent types.
 
     Returns all defined agent type categories.
+
+    Issue #744: Requires admin authentication.
     """
     return {
         "types": [t.value for t in AgentType],
@@ -392,11 +431,16 @@ async def get_agent_types():
     error_code_prefix="AGENT",
 )
 @router.post("/tasks/start")
-async def track_task_start(request: TrackTaskRequest):
+async def track_task_start(
+    request: TrackTaskRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Track the start of an agent task.
 
     Call this when an agent begins executing a task.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
     record = await analytics.track_task_start(
@@ -420,11 +464,16 @@ async def track_task_start(request: TrackTaskRequest):
     error_code_prefix="AGENT",
 )
 @router.post("/tasks/complete")
-async def track_task_complete(request: CompleteTaskRequest):
+async def track_task_complete(
+    request: CompleteTaskRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Track task completion.
 
     Call this when an agent finishes executing a task.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_agent_analytics()
 
@@ -432,7 +481,9 @@ async def track_task_complete(request: CompleteTaskRequest):
     try:
         status = TaskStatus(request.status)
     except ValueError:
-        status = TaskStatus.COMPLETED if request.status == "success" else TaskStatus.FAILED
+        status = (
+            TaskStatus.COMPLETED if request.status == "success" else TaskStatus.FAILED
+        )
 
     record = await analytics.track_task_complete(
         task_id=request.task_id,

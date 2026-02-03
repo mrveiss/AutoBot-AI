@@ -15,9 +15,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Optional
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from src.auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +59,9 @@ class QualityMetric(BaseModel):
     category: MetricCategory
     value: float = Field(..., ge=0, le=100)
     grade: QualityGrade
-    trend: float = Field(default=0, description="Percentage change from previous period")
+    trend: float = Field(
+        default=0, description="Percentage change from previous period"
+    )
     details: Optional[dict[str, Any]] = None
 
 
@@ -237,12 +241,14 @@ async def _get_problems_from_chromadb() -> tuple[list[dict], dict[str, Any]]:
         )
         if results and results.get("metadatas"):
             for metadata in results["metadatas"]:
-                problems.append({
-                    "type": metadata.get("problem_type", "unknown"),
-                    "severity": metadata.get("severity", "low"),
-                    "file_path": metadata.get("file_path", ""),
-                    "description": metadata.get("description", ""),
-                })
+                problems.append(
+                    {
+                        "type": metadata.get("problem_type", "unknown"),
+                        "severity": metadata.get("severity", "low"),
+                        "file_path": metadata.get("file_path", ""),
+                        "description": metadata.get("description", ""),
+                    }
+                )
 
         # Fetch codebase stats
         stats_results = await collection.get(
@@ -276,9 +282,14 @@ def _calculate_maintainability_score(
 
     # Filter for maintainability-related problems
     maintainability_types = {
-        "long_function", "code_smell", "technical_debt", "complexity",
-        "code_smell_god_class", "code_smell_long_method",
-        "code_smell_duplicate_code", "code_smell_feature_envy",
+        "long_function",
+        "code_smell",
+        "technical_debt",
+        "complexity",
+        "code_smell_god_class",
+        "code_smell_long_method",
+        "code_smell_duplicate_code",
+        "code_smell_feature_envy",
     }
 
     weighted_problems = 0.0
@@ -307,8 +318,12 @@ def _calculate_reliability_score(problems: list[dict]) -> float:
 
     # Filter for reliability-related problems
     reliability_types = {
-        "race_condition", "bug_prediction", "parse_error",
-        "error_handling", "null_check", "exception",
+        "race_condition",
+        "bug_prediction",
+        "parse_error",
+        "error_handling",
+        "null_check",
+        "exception",
     }
 
     weighted_problems = 0.0
@@ -334,8 +349,16 @@ def _calculate_security_score(problems: list[dict]) -> float:
 
     # Filter for security-related problems
     security_types = {
-        "hardcode", "ip", "port", "url", "api_key", "secret",
-        "race_condition", "security", "vulnerability", "injection",
+        "hardcode",
+        "ip",
+        "port",
+        "url",
+        "api_key",
+        "secret",
+        "race_condition",
+        "security",
+        "vulnerability",
+        "injection",
     }
 
     weighted_problems = 0.0
@@ -359,8 +382,13 @@ def _calculate_performance_score(problems: list[dict]) -> float:
 
     # Filter for performance-related problems
     performance_types = {
-        "performance", "optimization", "complexity", "loop",
-        "n_plus_one", "blocking", "async",
+        "performance",
+        "optimization",
+        "complexity",
+        "loop",
+        "n_plus_one",
+        "blocking",
+        "async",
     }
 
     weighted_problems = 0.0
@@ -423,7 +451,11 @@ def _calculate_documentation_score(stats: dict[str, Any]) -> float:
         except (ValueError, AttributeError):
             score = 0.0
     else:
-        score = float(docstring_ratio) * 100.0 if docstring_ratio < 1 else float(docstring_ratio)
+        score = (
+            float(docstring_ratio) * 100.0
+            if docstring_ratio < 1
+            else float(docstring_ratio)
+        )
 
     # Scale the score (target: 30% docstrings = 100% score)
     # This means 15% docstrings = 50% score
@@ -464,7 +496,11 @@ def _categorize_problems_for_patterns(
                 categories["anti_pattern"]["count"] += 1
             else:
                 categories["code_smell"]["count"] += 1
-        elif "technical_debt" in problem_type or "todo" in problem_type or "fixme" in problem_type:
+        elif (
+            "technical_debt" in problem_type
+            or "todo" in problem_type
+            or "fixme" in problem_type
+        ):
             categories["technical_debt"]["count"] += 1
         elif "bug" in problem_type or "race" in problem_type:
             categories["bug_risk"]["count"] += 1
@@ -508,11 +544,13 @@ def _calculate_complexity_metrics(
             continue
 
         if "complexity" in problem_type or "long_function" in problem_type:
-            hotspots.append({
-                "file": file_path,
-                "complexity": max_cyclomatic,  # Estimate
-                "lines": 0,  # Would need file analysis
-            })
+            hotspots.append(
+                {
+                    "file": file_path,
+                    "complexity": max_cyclomatic,  # Estimate
+                    "lines": 0,  # Would need file analysis
+                }
+            )
             seen_files.add(file_path)
 
     # Limit hotspots
@@ -559,7 +597,12 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     logger.info(
         "Calculated quality metrics: maintainability=%.1f, reliability=%.1f, "
         "security=%.1f, performance=%.1f, testability=%.1f, documentation=%.1f",
-        maintainability, reliability, security, performance, testability, documentation,
+        maintainability,
+        reliability,
+        security,
+        performance,
+        testability,
+        documentation,
     )
 
     # Build patterns from problems
@@ -572,8 +615,14 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     trends = [
         {
             "date": (datetime.now() - timedelta(days=i)).isoformat(),
-            "score": (maintainability * 0.25 + reliability * 0.20 + security * 0.20 +
-                     performance * 0.15 + testability * 0.10 + documentation * 0.10),
+            "score": (
+                maintainability * 0.25
+                + reliability * 0.20
+                + security * 0.20
+                + performance * 0.15
+                + testability * 0.10
+                + documentation * 0.10
+            ),
         }
         for i in range(30, -1, -1)
     ]
@@ -600,7 +649,9 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
     }
 
 
-def _no_data_response(message: str = "No analysis data. Run codebase indexing first.") -> dict:
+def _no_data_response(
+    message: str = "No analysis data. Run codebase indexing first.",
+) -> dict:
     """
     Standardized no-data response for quality endpoints.
 
@@ -646,12 +697,13 @@ def _filter_problems_by_category(
     """
     target_types = _CATEGORY_TYPE_MAP.get(category.lower(), set())
     category_problems = [
-        p for p in problems
-        if any(t in p.get("type", "").lower() for t in target_types)
+        p for p in problems if any(t in p.get("type", "").lower() for t in target_types)
     ]
 
     if severity:
-        category_problems = [p for p in category_problems if p.get("severity") == severity]
+        category_problems = [
+            p for p in category_problems if p.get("severity") == severity
+        ]
 
     return category_problems
 
@@ -702,12 +754,14 @@ def _build_drill_down_file_results(file_issues: dict[str, list[dict]]) -> list[d
 
         top_issue = issues[0].get("description", "Quality issue") if issues else ""
 
-        result_files.append({
-            "path": file_path,
-            "issues": issue_count,
-            "score": score,
-            "top_issue": top_issue[:100],
-        })
+        result_files.append(
+            {
+                "path": file_path,
+                "issues": issue_count,
+                "score": score,
+                "top_issue": top_issue[:100],
+            }
+        )
 
     result_files.sort(key=lambda x: x["issues"], reverse=True)
     return result_files
@@ -772,7 +826,12 @@ def _export_quality_as_csv(health: Any, metrics: dict) -> str:
 
     for cat, val in metrics.items():
         writer.writerow(
-            ["Metrics", cat.replace("_", " ").title(), f"{val:.1f}", get_grade(val).value]
+            [
+                "Metrics",
+                cat.replace("_", " ").title(),
+                f"{val:.1f}",
+                get_grade(val).value,
+            ]
         )
 
     return output.getvalue()
@@ -828,12 +887,15 @@ manager = ConnectionManager()
 
 
 @router.get("/health-score")
-async def get_health_score() -> dict[str, Any]:
+async def get_health_score(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
     """
     Get current codebase health score with breakdown.
 
     Returns overall health score, grade, and recommendations.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -861,12 +923,14 @@ async def get_health_score() -> dict[str, Any]:
 @router.get("/metrics")
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
     """
     Get all quality metrics or filter by category.
 
     Returns detailed metrics with grades and trends.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -905,19 +969,24 @@ async def get_quality_metrics(
         except ValueError:
             continue
 
-    return {"status": "success", "metrics": sorted(metrics, key=lambda x: x["value"], reverse=True)}
+    return {
+        "status": "success",
+        "metrics": sorted(metrics, key=lambda x: x["value"], reverse=True),
+    }
 
 
 @router.get("/patterns")
 async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
     """
     Get distribution of code patterns detected in the codebase.
 
     Returns pattern types with counts, percentages, and severity.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -958,12 +1027,14 @@ async def get_pattern_distribution(
 @router.get("/complexity")
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
     """
     Get code complexity analysis with hotspots.
 
     Returns cyclomatic and cognitive complexity metrics.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -1019,12 +1090,14 @@ async def get_complexity_metrics(
 async def get_quality_trends(
     period: str = Query("30d", regex="^(7d|14d|30d|90d)$"),
     metric: Optional[str] = Query(None, description="Specific metric to trend"),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
     """
     Get quality score trends over time.
 
     Returns historical data for trend analysis.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -1085,12 +1158,15 @@ async def get_quality_trends(
 
 
 @router.get("/snapshot")
-async def get_quality_snapshot() -> dict[str, Any]:
+async def get_quality_snapshot(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
     """
     Get complete quality snapshot for the current state.
 
     Returns all metrics, patterns, and statistics in one response.
     Issue #543: Returns no_data status when no analysis data available.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -1126,9 +1202,7 @@ async def get_quality_snapshot() -> dict[str, Any]:
         "patterns_summary": {
             "total": sum(p.get("count", 0) for p in patterns),
             "critical": sum(
-                p.get("count", 0)
-                for p in patterns
-                if p.get("severity") == "critical"
+                p.get("count", 0) for p in patterns if p.get("severity") == "critical"
             ),
             "high": sum(
                 p.get("count", 0) for p in patterns if p.get("severity") == "high"
@@ -1153,6 +1227,7 @@ async def drill_down_category(
     file_filter: Optional[str] = Query(None, description="Filter by file path"),
     severity: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
     """
     Drill down into a specific quality category.
@@ -1160,6 +1235,7 @@ async def drill_down_category(
     Returns detailed issues and files for the category.
     Issue #543: Now queries real ChromaDB data instead of demo data.
     Issue #665: Refactored using helper functions for clarity.
+    Issue #744: Requires admin authentication.
     """
     problems, stats = await _get_problems_from_chromadb()
 
@@ -1191,6 +1267,7 @@ async def drill_down_category(
 @router.get("/export")
 async def export_quality_report(
     format: str = Query("json", regex="^(json|csv|pdf)$"),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """
     Export quality report in specified format.
@@ -1198,6 +1275,7 @@ async def export_quality_report(
     Supports JSON, CSV, and PDF formats.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #665: Refactored using helper functions for clarity.
+    Issue #744: Requires admin authentication.
     """
     data = await get_quality_data_from_storage()
 
@@ -1234,7 +1312,9 @@ async def export_quality_report(
 
 async def _handle_ws_subscribe(websocket: WebSocket, data: dict) -> None:
     """Handle WebSocket subscribe message (Issue #315: extracted)."""
-    await websocket.send_json({"type": "subscribed", "metrics": data.get("metrics", [])})
+    await websocket.send_json(
+        {"type": "subscribed", "metrics": data.get("metrics", [])}
+    )
 
 
 async def _handle_ws_refresh(websocket: WebSocket, data: dict) -> None:

@@ -8,11 +8,12 @@ Ensures VNC server is always available when noVNC tab is accessed
 
 import asyncio
 import logging
-import subprocess
+import subprocess  # nosec B404
 from typing import Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from src.auth_middleware import check_admin_permission
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import with_error_handling
@@ -26,7 +27,7 @@ def is_vnc_running() -> bool:
     """Check if VNC server is running on display :1"""
     try:
         # Check for Xtigervnc process on display :1
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B607
             ["pgrep", "-f", "Xtigervnc :1"],
             capture_output=True,
             timeout=5,
@@ -42,7 +43,7 @@ def start_vnc_server() -> Dict[str, str]:
     """Start VNC server on display :1 with full XFCE desktop"""
     try:
         # Start VNC server
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B607
             [
                 "/usr/bin/vncserver",
                 ":1",
@@ -75,7 +76,7 @@ def start_vnc_server() -> Dict[str, str]:
             f"{NetworkConstants.BIND_ALL_INTERFACES}:{NetworkConstants.VNC_PORT}"
         )
         vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
-        subprocess.Popen(
+        subprocess.Popen(  # nosec B607
             [
                 "/usr/bin/websockify",
                 "--web",
@@ -98,9 +99,12 @@ def start_vnc_server() -> Dict[str, str]:
 
 @router.get("/status")
 @with_error_handling(error_code_prefix="VNC_STATUS")
-async def get_vnc_status() -> Dict[str, bool]:
+async def get_vnc_status(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, bool]:
     """
     Check if VNC server is running
+    Issue #744: Requires admin authentication.
 
     Returns:
         {"running": true/false}
@@ -111,9 +115,12 @@ async def get_vnc_status() -> Dict[str, bool]:
 
 @router.post("/ensure-running")
 @with_error_handling(error_code_prefix="VNC_ENSURE")
-async def ensure_vnc_running() -> Dict[str, str]:
+async def ensure_vnc_running(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
     """
     Ensure VNC server is running, start it if not
+    Issue #744: Requires admin authentication.
 
     Returns:
         {"status": "running|started|error", "message": "..."}
@@ -127,9 +134,12 @@ async def ensure_vnc_running() -> Dict[str, str]:
 
 @router.post("/restart")
 @with_error_handling(error_code_prefix="VNC_RESTART")
-async def restart_vnc_server() -> Dict[str, str]:
+async def restart_vnc_server(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
     """
     Restart VNC server (kill existing and start new)
+    Issue #744: Requires admin authentication.
 
     Returns:
         {"status": "started|error", "message": "..."}
@@ -139,9 +149,11 @@ async def restart_vnc_server() -> Dict[str, str]:
         async def kill_vnc():
             """Kill VNC server with timeout handling."""
             proc = await asyncio.create_subprocess_exec(
-                "vncserver", "-kill", ":1",
+                "vncserver",
+                "-kill",
+                ":1",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
@@ -152,9 +164,11 @@ async def restart_vnc_server() -> Dict[str, str]:
         async def kill_websockify():
             """Kill websockify with timeout handling."""
             proc = await asyncio.create_subprocess_exec(
-                "pkill", "-9", "websockify",
+                "pkill",
+                "-9",
+                "websockify",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)

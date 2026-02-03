@@ -14,5 +14,6 @@ exclude_dirs:
 
 skips:
   - B101  # assert_used - common in tests
+  - B311  # random - used for demo data variance, not cryptographic purposes
   - B601  # paramiko_calls - intentional usage
   - B603  # subprocess_without_shell_equals_true - we use shell=False

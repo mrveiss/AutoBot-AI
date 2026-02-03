@@ -19,10 +19,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from backend.services.llm_cost_tracker import get_cost_tracker, MODEL_PRICING
+from backend.services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,9 @@ class BudgetAlertRequest(BaseModel):
 
     name: str = Field(..., description="Alert name")
     threshold_usd: float = Field(..., gt=0, description="Budget threshold in USD")
-    period: str = Field(..., pattern="^(daily|weekly|monthly)$", description="Alert period")
+    period: str = Field(
+        ..., pattern="^(daily|weekly|monthly)$", description="Alert period"
+    )
     notify_at_percent: List[int] = Field(
         default=[50, 75, 90, 100], description="Percentages to notify at"
     )
@@ -112,12 +115,17 @@ class UsageRecordResponse(BaseModel):
 )
 @router.get("/summary", response_model=CostSummaryResponse)
 async def get_cost_summary(
-    days: int = Query(default=30, ge=1, le=365, description="Number of days to analyze"),
+    days: int = Query(
+        default=30, ge=1, le=365, description="Number of days to analyze"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get cost summary for the specified time period.
 
     Returns total costs, daily breakdown, and per-model costs.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     end_date = datetime.utcnow()
@@ -140,11 +148,15 @@ async def get_cost_summary(
     error_code_prefix="COST",
 )
 @router.get("/by-model")
-async def get_cost_by_model():
+async def get_cost_by_model(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get cost breakdown by LLM model.
 
     Returns aggregated costs, token counts, and call counts per model.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     summary = await tracker.get_cost_summary()
@@ -166,7 +178,9 @@ async def get_cost_by_model():
                 "output_tokens": data.get("output_tokens", 0),
                 "call_count": data.get("call_count", 0),
                 "avg_cost_per_call": (
-                    round(data.get("cost_usd", 0) / max(data.get("call_count", 1), 1), 6)
+                    round(
+                        data.get("cost_usd", 0) / max(data.get("call_count", 1), 1), 6
+                    )
                 ),
             }
             for model, data in sorted_models
@@ -181,11 +195,16 @@ async def get_cost_by_model():
     error_code_prefix="COST",
 )
 @router.get("/by-session/{session_id}", response_model=SessionCostResponse)
-async def get_cost_by_session(session_id: str):
+async def get_cost_by_session(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get cost breakdown for a specific session.
 
     Returns total cost and token usage for the given session.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     result = await tracker.get_cost_by_session(session_id)
@@ -212,13 +231,18 @@ async def get_cost_by_session(session_id: str):
 )
 @router.get("/trends", response_model=CostTrendResponse)
 async def get_cost_trends(
-    days: int = Query(default=30, ge=7, le=365, description="Number of days to analyze"),
+    days: int = Query(
+        default=30, ge=7, le=365, description="Number of days to analyze"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get cost trend analysis.
 
     Returns daily costs, trend direction (increasing/decreasing/stable),
     and growth rate percentage.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     trends = await tracker.get_cost_trends(days)
@@ -240,12 +264,17 @@ async def get_cost_trends(
 )
 @router.get("/forecast")
 async def get_cost_forecast(
-    days_to_forecast: int = Query(default=30, ge=1, le=90, description="Days to forecast"),
+    days_to_forecast: int = Query(
+        default=30, ge=1, le=90, description="Days to forecast"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get cost forecast based on recent trends.
 
     Uses recent usage patterns to estimate future costs.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
 
@@ -298,12 +327,17 @@ async def get_cost_forecast(
 )
 @router.get("/usage/recent")
 async def get_recent_usage(
-    limit: int = Query(default=100, ge=1, le=1000, description="Number of records to return"),
+    limit: int = Query(
+        default=100, ge=1, le=1000, description="Number of records to return"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get recent LLM usage records.
 
     Returns the most recent API calls with cost information.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     records = await tracker.get_recent_usage(limit)
@@ -325,11 +359,15 @@ async def get_recent_usage(
     error_code_prefix="COST",
 )
 @router.get("/pricing")
-async def get_model_pricing():
+async def get_model_pricing(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get current model pricing information.
 
     Returns pricing per 1M tokens for all supported models.
+
+    Issue #744: Requires admin authentication.
     """
     pricing_list = []
 
@@ -377,11 +415,14 @@ async def calculate_cost_estimate(
     model: str = Query(..., description="Model name"),
     input_tokens: int = Query(..., ge=0, description="Number of input tokens"),
     output_tokens: int = Query(..., ge=0, description="Number of output tokens"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Calculate estimated cost for a given model and token counts.
 
     Useful for cost estimation before making API calls.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     cost = tracker.calculate_cost(model, input_tokens, output_tokens)
@@ -406,11 +447,16 @@ async def calculate_cost_estimate(
     error_code_prefix="COST",
 )
 @router.post("/budget-alert")
-async def set_budget_alert(alert: BudgetAlertRequest):
+async def set_budget_alert(
+    alert: BudgetAlertRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Configure a budget alert.
 
     Set thresholds to receive notifications when spending approaches limits.
+
+    Issue #744: Requires admin authentication.
     """
     # Store in Redis for persistence
     tracker = get_cost_tracker()
@@ -427,9 +473,7 @@ async def set_budget_alert(alert: BudgetAlertRequest):
 
     import json
 
-    await redis.hset(
-        tracker.BUDGET_ALERTS_KEY, alert.name, json.dumps(alert_data)
-    )
+    await redis.hset(tracker.BUDGET_ALERTS_KEY, alert.name, json.dumps(alert_data))
 
     return {
         "status": "created",
@@ -443,9 +487,13 @@ async def set_budget_alert(alert: BudgetAlertRequest):
     error_code_prefix="COST",
 )
 @router.get("/budget-alerts")
-async def get_budget_alerts():
+async def get_budget_alerts(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get all configured budget alerts.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     redis = await tracker.get_redis()
@@ -474,11 +522,15 @@ async def get_budget_alerts():
     error_code_prefix="COST",
 )
 @router.get("/budget-status")
-async def get_budget_status():
+async def get_budget_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get current budget status against all configured alerts.
 
     Shows how close spending is to each budget threshold.
+
+    Issue #744: Requires admin authentication.
     """
     tracker = get_cost_tracker()
     redis = await tracker.get_redis()
@@ -532,7 +584,9 @@ async def get_budget_status():
                 "status": (
                     "exceeded"
                     if percent_used >= 100
-                    else "warning" if percent_used >= 75 else "ok"
+                    else "warning"
+                    if percent_used >= 75
+                    else "ok"
                 ),
                 "remaining_usd": max(threshold - current, 0),
             }

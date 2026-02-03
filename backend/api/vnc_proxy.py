@@ -15,12 +15,12 @@ enabling the agent to see what users are viewing in real-time.
 import asyncio
 import logging
 
-from backend.type_defs.common import Metadata
-
 import aiohttp
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
+from backend.type_defs.common import Metadata
+from src.auth_middleware import get_current_user
 from src.constants.network_constants import NetworkConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 from src.utils.http_client import get_http_client
@@ -29,9 +29,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-async def _send_client_data_to_vnc(
-    data: dict, vnc_ws, vnc_type: str
-) -> bool:
+async def _send_client_data_to_vnc(data: dict, vnc_ws, vnc_type: str) -> bool:
     """Send client WebSocket data to VNC server (Issue #315: extracted).
 
     Returns:
@@ -39,11 +37,11 @@ async def _send_client_data_to_vnc(
     """
     if "bytes" in data:
         await vnc_ws.send_bytes(data["bytes"])
-        logger.debug("[%s] Frontend → VNC: %s bytes", vnc_type, len(data['bytes']))
+        logger.debug("[%s] Frontend → VNC: %s bytes", vnc_type, len(data["bytes"]))
         return True
     if "text" in data:
         await vnc_ws.send_str(data["text"])
-        logger.debug("[%s] Frontend → VNC: %s", vnc_type, data['text'])
+        logger.debug("[%s] Frontend → VNC: %s", vnc_type, data["text"])
         return True
     if data.get("type") == "websocket.disconnect":
         return False
@@ -106,6 +104,7 @@ async def _forward_vnc_to_client(websocket: WebSocket, vnc_ws, vnc_type: str) ->
     except Exception as e:
         logger.error("[%s] Error forwarding from VNC: %s", vnc_type, e)
 
+
 # VNC endpoints
 VNC_ENDPOINTS = {
     "desktop": f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}",
@@ -113,9 +112,7 @@ VNC_ENDPOINTS = {
 }
 
 
-async def record_observation(
-    vnc_type: str, observation_type: str, data: Metadata
-):
+async def record_observation(vnc_type: str, observation_type: str, data: Metadata):
     """
     Record VNC observation to MCP bridge for agent access
 
@@ -128,7 +125,9 @@ async def record_observation(
         }
 
         # Post to VNC MCP bridge (non-blocking) using singleton HTTP client
-        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = (
+            f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        )
         http_client = get_http_client()
         async with await http_client.post(
             f"{backend_url}/api/vnc/observations/{vnc_type}",
@@ -147,9 +146,11 @@ async def record_observation(
     error_code_prefix="VNC_PROXY",
 )
 @router.get("/{vnc_type}/vnc.html")
-async def get_vnc_client(vnc_type: str):
+async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current_user)):
     """
     Serve noVNC client HTML for specified VNC type
+
+    Issue #744: Requires authenticated user.
 
     Args:
         vnc_type: 'desktop' or 'browser'
@@ -189,9 +190,13 @@ async def get_vnc_client(vnc_type: str):
     error_code_prefix="VNC_PROXY",
 )
 @router.get("/{vnc_type}/{path:path}")
-async def proxy_vnc_assets(vnc_type: str, path: str):
+async def proxy_vnc_assets(
+    vnc_type: str, path: str, current_user: dict = Depends(get_current_user)
+):
     """
     Proxy noVNC static assets (JS, CSS, images, etc.)
+
+    Issue #744: Requires authenticated user.
 
     Args:
         vnc_type: 'desktop' or 'browser'
@@ -285,9 +290,11 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
     error_code_prefix="VNC_PROXY",
 )
 @router.get("/{vnc_type}/status")
-async def get_vnc_status(vnc_type: str):
+async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
     """
     Check if VNC server is accessible
+
+    Issue #744: Requires authenticated user.
 
     Args:
         vnc_type: 'desktop' or 'browser'

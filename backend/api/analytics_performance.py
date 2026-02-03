@@ -17,9 +17,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from src.auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +442,7 @@ def analyze_with_regex(
             regex = re.compile(pattern.regex_pattern, re.MULTILINE)
             for match in regex.finditer(content):
                 # Find line number
-                line_start = content[:match.start()].count("\n") + 1
+                line_start = content[: match.start()].count("\n") + 1
 
                 # Get snippet
                 snippet_start = max(0, line_start - 2)
@@ -509,7 +511,9 @@ def _deduplicate_issues(issues: list[PerformanceIssue]) -> list[PerformanceIssue
     return unique
 
 
-def _calculate_analysis_score(issues: list[PerformanceIssue]) -> tuple[int, int, int, int, int]:
+def _calculate_analysis_score(
+    issues: list[PerformanceIssue],
+) -> tuple[int, int, int, int, int]:
     """Calculate issue counts and performance score (Issue #398: extracted).
 
     Returns:
@@ -530,8 +534,12 @@ def _calculate_analysis_score(issues: list[PerformanceIssue]) -> tuple[int, int,
 async def analyze_path(
     path: str = Query(..., description="Path to analyze"),
     include_ast: bool = Query(True, description="Include AST analysis"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Analyze code for performance anti-patterns (Issue #398: refactored)."""
+    """Analyze code for performance anti-patterns (Issue #398: refactored).
+
+    Issue #744: Requires admin authentication.
+    """
     start_time = datetime.now()
 
     # Issue #398: Use extracted helper
@@ -540,15 +548,19 @@ async def analyze_path(
     # Return no_data response if no files to analyze
     if not files_to_analyze:
         return JSONResponse(
-            content=_no_data_response("No files found to analyze. Please provide a valid path."),
-            status_code=200
+            content=_no_data_response(
+                "No files found to analyze. Please provide a valid path."
+            ),
+            status_code=200,
         )
 
     all_issues: list[PerformanceIssue] = []
     for filepath in files_to_analyze:
         try:
             content = await asyncio.to_thread(filepath.read_text, encoding="utf-8")
-            all_issues.extend(analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS))
+            all_issues.extend(
+                analyze_with_regex(str(filepath), content, PERFORMANCE_PATTERNS)
+            )
             if include_ast:
                 all_issues.extend(analyze_with_ast(str(filepath), content))
         except Exception as e:
@@ -583,8 +595,12 @@ async def analyze_path(
 async def analyze_content(
     content: str,
     filename: str = Query("code.py", description="Filename for context"),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> list[PerformanceIssue]:
-    """Analyze arbitrary code content for performance issues."""
+    """Analyze arbitrary code content for performance issues.
+
+    Issue #744: Requires admin authentication.
+    """
     issues: list[PerformanceIssue] = []
 
     # Regex analysis
@@ -600,22 +616,40 @@ async def analyze_content(
 
 
 @router.get("/patterns")
-async def list_patterns() -> list[PatternDefinition]:
-    """List all performance patterns being detected."""
+async def list_patterns(
+    admin_check: bool = Depends(check_admin_permission),
+) -> list[PatternDefinition]:
+    """List all performance patterns being detected.
+
+    Issue #744: Requires admin authentication.
+    """
     return list(PERFORMANCE_PATTERNS.values())
 
 
 @router.get("/patterns/{pattern_id}")
-async def get_pattern(pattern_id: str) -> PatternDefinition:
-    """Get details for a specific pattern."""
+async def get_pattern(
+    pattern_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> PatternDefinition:
+    """Get details for a specific pattern.
+
+    Issue #744: Requires admin authentication.
+    """
     if pattern_id not in PERFORMANCE_PATTERNS:
         raise HTTPException(status_code=404, detail=f"Pattern {pattern_id} not found")
     return PERFORMANCE_PATTERNS[pattern_id]
 
 
 @router.post("/patterns/{pattern_id}/toggle")
-async def toggle_pattern(pattern_id: str, enabled: bool) -> dict:
-    """Enable or disable a specific pattern."""
+async def toggle_pattern(
+    pattern_id: str,
+    enabled: bool,
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """Enable or disable a specific pattern.
+
+    Issue #744: Requires admin authentication.
+    """
     if pattern_id not in PERFORMANCE_PATTERNS:
         raise HTTPException(status_code=404, detail=f"Pattern {pattern_id} not found")
 
@@ -629,37 +663,54 @@ async def toggle_pattern(pattern_id: str, enabled: bool) -> dict:
 
 @router.get("/history")
 async def get_history(
-    limit: int = Query(20, ge=1, le=100)
+    limit: int = Query(20, ge=1, le=100),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> list[PerformanceAnalysisResult]:
-    """Get analysis history."""
+    """Get analysis history.
+
+    Issue #744: Requires admin authentication.
+    """
     async with _analysis_history_lock:
         return list(_analysis_history[:limit])
 
 
 @router.get("/summary")
-async def get_summary() -> dict:
-    """Get summary statistics across all analyses."""
+async def get_summary(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """Get summary statistics across all analyses.
+
+    Issue #744: Requires admin authentication.
+    """
     async with _analysis_history_lock:
         if not _analysis_history:
             return {
                 "total_analyses": 0,
                 "average_score": 0,
                 "common_issues": [],
-                "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
+                "patterns_enabled": sum(
+                    1 for p in PERFORMANCE_PATTERNS.values() if p.enabled
+                ),
             }
 
         # Count issue frequency
         issue_counts: dict[str, int] = {}
         for analysis in _analysis_history:
             for issue in analysis.issues:
-                issue_counts[issue.pattern_id] = issue_counts.get(issue.pattern_id, 0) + 1
+                issue_counts[issue.pattern_id] = (
+                    issue_counts.get(issue.pattern_id, 0) + 1
+                )
 
         common_issues = [
             {
                 "pattern_id": k,
                 "count": v,
-                "name": PERFORMANCE_PATTERNS[k].name if k in PERFORMANCE_PATTERNS else k,
-                "impact": PERFORMANCE_PATTERNS[k].impact.value if k in PERFORMANCE_PATTERNS else "medium",
+                "name": PERFORMANCE_PATTERNS[k].name
+                if k in PERFORMANCE_PATTERNS
+                else k,
+                "impact": PERFORMANCE_PATTERNS[k].impact.value
+                if k in PERFORMANCE_PATTERNS
+                else "medium",
             }
             for k, v in sorted(issue_counts.items(), key=lambda x: -x[1])[:10]
         ]
@@ -670,23 +721,36 @@ async def get_summary() -> dict:
             "total_analyses": len(_analysis_history),
             "average_score": round(avg_score, 1),
             "average_issues": round(
-                sum(a.total_issues for a in _analysis_history) / len(_analysis_history), 1
+                sum(a.total_issues for a in _analysis_history) / len(_analysis_history),
+                1,
             ),
             "common_issues": common_issues,
-            "patterns_enabled": sum(1 for p in PERFORMANCE_PATTERNS.values() if p.enabled),
+            "patterns_enabled": sum(
+                1 for p in PERFORMANCE_PATTERNS.values() if p.enabled
+            ),
             "total_patterns": len(PERFORMANCE_PATTERNS),
         }
 
 
 @router.get("/categories")
-async def get_categories() -> list[dict]:
-    """Get pattern categories with counts."""
+async def get_categories(
+    admin_check: bool = Depends(check_admin_permission),
+) -> list[dict]:
+    """Get pattern categories with counts.
+
+    Issue #744: Requires admin authentication.
+    """
     category_counts: dict[str, dict] = {}
 
     for pattern in PERFORMANCE_PATTERNS.values():
         cat = pattern.category.value
         if cat not in category_counts:
-            category_counts[cat] = {"enabled": 0, "disabled": 0, "critical": 0, "high": 0}
+            category_counts[cat] = {
+                "enabled": 0,
+                "disabled": 0,
+                "critical": 0,
+                "high": 0,
+            }
 
         if pattern.enabled:
             category_counts[cat]["enabled"] += 1
@@ -711,9 +775,13 @@ async def get_categories() -> list[dict]:
 
 @router.get("/hotspots")
 async def get_hotspots(
-    limit: int = Query(10, ge=1, le=50)
+    limit: int = Query(10, ge=1, le=50),
+    admin_check: bool = Depends(check_admin_permission),
 ) -> list[dict]:
-    """Get files with most performance issues (hotspots)."""
+    """Get files with most performance issues (hotspots).
+
+    Issue #744: Requires admin authentication.
+    """
     file_issues: dict[str, list[PerformanceIssue]] = {}
 
     for analysis in _analysis_history[:10]:
@@ -726,16 +794,17 @@ async def get_hotspots(
         {
             "file": filepath,
             "issue_count": len(issues),
-            "critical_count": sum(1 for i in issues if i.impact == ImpactLevel.CRITICAL),
+            "critical_count": sum(
+                1 for i in issues if i.impact == ImpactLevel.CRITICAL
+            ),
             "high_count": sum(1 for i in issues if i.impact == ImpactLevel.HIGH),
             "top_issues": [
-                {"pattern_id": i.pattern_id, "name": i.name}
-                for i in issues[:3]
+                {"pattern_id": i.pattern_id, "name": i.name} for i in issues[:3]
             ],
         }
-        for filepath, issues in sorted(
-            file_issues.items(), key=lambda x: -len(x[1])
-        )[:limit]
+        for filepath, issues in sorted(file_issues.items(), key=lambda x: -len(x[1]))[
+            :limit
+        ]
     ]
 
     return hotspots
@@ -746,7 +815,9 @@ async def get_hotspots(
 # ============================================================================
 
 
-def _no_data_response(message: str = "No performance analysis data. Run codebase indexing first.") -> dict:
+def _no_data_response(
+    message: str = "No performance analysis data. Run codebase indexing first.",
+) -> dict:
     """Standardized no-data response for analytics endpoints."""
     return {
         "status": "no_data",
