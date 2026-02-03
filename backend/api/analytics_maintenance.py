@@ -26,7 +26,8 @@ from backend.services.analytics_service import (
     ResourceType,
     get_analytics_service,
 )
-from src.auth_middleware import check_admin_permission
+from src.auth_middleware import check_admin_permission, get_current_user
+from src.auth_rbac import Permission, require_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
