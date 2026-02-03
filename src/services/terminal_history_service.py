@@ -36,14 +36,21 @@ class TerminalHistoryService:
         if not command.strip():
             return
 
+        if not user_id or not user_id.strip():
+            logger.warning("Invalid user_id provided to add_command")
+            return
+
         key = f"terminal:history:{user_id}"
         timestamp = time.time()
 
-        await self.redis.zadd(key, {command: timestamp})
+        try:
+            await self.redis.zadd(key, {command: timestamp})
 
-        count = await self.redis.zcard(key)
-        if count > self.max_entries:
-            await self.redis.zremrangebyrank(key, 0, count - self.max_entries - 1)
+            count = await self.redis.zcard(key)
+            if count > self.max_entries:
+                await self.redis.zremrangebyrank(key, 0, count - self.max_entries - 1)
+        except Exception as e:
+            logger.error("Failed to add command to history: %s", e)
 
     async def get_history(
         self, user_id: str, limit: int = 100, offset: int = 0
@@ -58,8 +65,16 @@ class TerminalHistoryService:
         Returns:
             List of command strings
         """
+        if not user_id or not user_id.strip():
+            logger.warning("Invalid user_id provided to get_history")
+            return []
+
         key = f"terminal:history:{user_id}"
-        return await self.redis.zrevrange(key, offset, offset + limit - 1)
+        try:
+            return await self.redis.zrevrange(key, offset, offset + limit - 1)
+        except Exception as e:
+            logger.error("Failed to get history: %s", e)
+            return []
 
     async def search_history(
         self, user_id: str, query: str, limit: int = 50
@@ -74,9 +89,17 @@ class TerminalHistoryService:
         Returns:
             Matching commands
         """
-        all_commands = await self.get_history(user_id, limit=self.max_entries)
-        matches = [cmd for cmd in all_commands if query in cmd]
-        return matches[:limit]
+        if not user_id or not user_id.strip():
+            logger.warning("Invalid user_id provided to search_history")
+            return []
+
+        try:
+            all_commands = await self.get_history(user_id, limit=self.max_entries)
+            matches = [cmd for cmd in all_commands if query in cmd]
+            return matches[:limit]
+        except Exception as e:
+            logger.error("Failed to search history: %s", e)
+            return []
 
     async def clear_history(self, user_id: str) -> None:
         """Clear all history for user.
@@ -84,5 +107,12 @@ class TerminalHistoryService:
         Args:
             user_id: User identifier
         """
+        if not user_id or not user_id.strip():
+            logger.warning("Invalid user_id provided to clear_history")
+            return
+
         key = f"terminal:history:{user_id}"
-        await self.redis.delete(key)
+        try:
+            await self.redis.delete(key)
+        except Exception as e:
+            logger.error("Failed to clear history: %s", e)
