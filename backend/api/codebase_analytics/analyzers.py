@@ -76,8 +76,8 @@ _JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
 # nosec B108 - These are string patterns for detection, not actual temp directory usage
 _TEMP_INDICATORS = frozenset(
-    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
-)  # nosec B108
+    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}  # nosec B108
+)
 _SAFE_FILE_TYPES = frozenset(
     {
         ".pid",
@@ -415,45 +415,9 @@ def _check_lazy_init_pattern(
     return None
 
 
-def _is_safe_file_write_context(
-    target_file: str,
-    mode_str: str,
-    file_path: str,
-    func_name: str,
-) -> bool:
-    """
-    Check if a file write operation is in a safe context that doesn't need locking.
-
-    Issue #281: Extracted helper to reduce complexity in _check_file_write_without_lock.
-    Issue #378: Consolidated safe pattern checks.
-
-    Args:
-        target_file: The file being written to (lowercased)
-        mode_str: File open mode string
-        file_path: Source file path containing the code
-        func_name: Name of the function containing the write
-
-    Returns:
-        True if the write is in a safe context, False otherwise
-    """
-    # Safe pattern 1: Log files (typically single-writer or properly managed)
-    if any(ind in target_file for ind in _LOG_INDICATORS):
-        return True
-
-    # Safe pattern 2: Temp files (typically unique names)
-    if any(ind in target_file for ind in _TEMP_INDICATORS):
-        return True
-
-    # Safe pattern 3: Common non-concurrent file types
-    if any(target_file.endswith(ext) for ext in _SAFE_FILE_TYPES):
-        return True
-
-    # Safe pattern 4: Append mode is generally safer
-    if "a" in mode_str:
-        return True
-
-    # Safe pattern 5: Context indicators in file path
-    safe_contexts = {
+# Issue #620: Module-level sets for safe file write context detection
+_SAFE_FILE_WRITE_CONTEXTS = frozenset(
+    {
         "scripts/",
         "test",
         "setup",
@@ -466,12 +430,10 @@ def _is_safe_file_write_context(
         "fixture",
         "mock",
     }
-    file_path_lower = file_path.lower()
-    if any(ctx in file_path_lower for ctx in safe_contexts):
-        return True
+)
 
-    # Safe pattern 6: Function name indicates non-concurrent context
-    safe_func_names = {
+_SAFE_FUNC_NAME_INDICATORS = frozenset(
+    {
         "init",
         "setup",
         "configure",
@@ -484,10 +446,84 @@ def _is_safe_file_write_context(
         "dump",
         "serialize",
     }
-    func_name_lower = func_name.lower()
-    if any(safe in func_name_lower for safe in safe_func_names):
-        return True
+)
 
+
+def _is_safe_target_file(target_file: str) -> bool:
+    """
+    Check if target file name indicates a safe write context.
+
+    Checks for log files, temp files, and common non-concurrent file types.
+    Issue #620.
+    """
+    # Safe pattern 1: Log files (typically single-writer or properly managed)
+    if any(ind in target_file for ind in _LOG_INDICATORS):
+        return True
+    # Safe pattern 2: Temp files (typically unique names)
+    if any(ind in target_file for ind in _TEMP_INDICATORS):
+        return True
+    # Safe pattern 3: Common non-concurrent file types
+    if any(target_file.endswith(ext) for ext in _SAFE_FILE_TYPES):
+        return True
+    return False
+
+
+def _is_safe_file_path_context(file_path: str) -> bool:
+    """
+    Check if source file path indicates a safe write context.
+
+    Checks for scripts, tests, setup, and other non-concurrent contexts.
+    Issue #620.
+    """
+    file_path_lower = file_path.lower()
+    return any(ctx in file_path_lower for ctx in _SAFE_FILE_WRITE_CONTEXTS)
+
+
+def _is_safe_function_name(func_name: str) -> bool:
+    """
+    Check if function name indicates a safe write context.
+
+    Checks for init, setup, configure, and other non-concurrent function names.
+    Issue #620.
+    """
+    func_name_lower = func_name.lower()
+    return any(safe in func_name_lower for safe in _SAFE_FUNC_NAME_INDICATORS)
+
+
+def _is_safe_file_write_context(
+    target_file: str,
+    mode_str: str,
+    file_path: str,
+    func_name: str,
+) -> bool:
+    """
+    Check if a file write operation is in a safe context that doesn't need locking.
+
+    Issue #281: Extracted helper to reduce complexity in _check_file_write_without_lock.
+    Issue #378: Consolidated safe pattern checks.
+    Issue #620: Refactored to use extracted helper functions.
+
+    Args:
+        target_file: The file being written to (lowercased)
+        mode_str: File open mode string
+        file_path: Source file path containing the code
+        func_name: Name of the function containing the write
+
+    Returns:
+        True if the write is in a safe context, False otherwise
+    """
+    # Check target file name patterns
+    if _is_safe_target_file(target_file):
+        return True
+    # Append mode is generally safer
+    if "a" in mode_str:
+        return True
+    # Check source file path context
+    if _is_safe_file_path_context(file_path):
+        return True
+    # Check function name context
+    if _is_safe_function_name(func_name):
+        return True
     return False
 
 
@@ -548,6 +584,53 @@ def _check_file_write_without_lock(
     return None
 
 
+def _find_global_declarations(func_node: ast.AST) -> Set[str]:
+    """
+    Find all global keyword declarations within a function.
+
+    Issue #620.
+    """
+    declarations: Set[str] = set()
+    for stmt in ast.walk(func_node):
+        if isinstance(stmt, ast.Global):
+            declarations.update(stmt.names)
+    return declarations
+
+
+def _check_statement_for_global_modification(
+    stmt: ast.AST,
+    global_mutables: Set[str],
+    global_declarations: Set[str],
+    lock_protected_vars: Set[str],
+    is_async: bool,
+    func_name: str,
+) -> Optional[Dict]:
+    """
+    Check a single statement for unprotected global modifications.
+
+    Issue #620.
+    """
+    if isinstance(stmt, ast.Assign):
+        return _check_subscript_modification(
+            stmt,
+            global_mutables,
+            global_declarations,
+            lock_protected_vars,
+            is_async,
+            func_name,
+        )
+    if isinstance(stmt, ast.Expr):
+        return _check_mutating_method_call(
+            stmt,
+            global_mutables,
+            global_declarations,
+            lock_protected_vars,
+            is_async,
+            func_name,
+        )
+    return None
+
+
 def _detect_global_state_modifications(
     func_node: ast.AST,
     global_vars: Dict[str, int],
@@ -557,52 +640,24 @@ def _detect_global_state_modifications(
     """
     Detect modifications to global state within a function.
 
-    Args:
-        func_node: Function AST node (FunctionDef or AsyncFunctionDef)
-        global_vars: Dict of global variable names to line numbers
-        global_mutables: Set of global mutable variable names
-        lock_protected_vars: Set of variables protected by locks
-
-    Returns:
-        List of race condition problems found
+    Issue #620: Refactored with extracted helper functions.
     """
     problems = []
     is_async = isinstance(func_node, ast.AsyncFunctionDef)
     func_name = func_node.name
+    global_declarations = _find_global_declarations(func_node)
 
-    # Find 'global' keyword declarations
-    global_declarations: Set[str] = set()
     for stmt in ast.walk(func_node):
-        if isinstance(stmt, ast.Global):
-            global_declarations.update(stmt.names)
-
-    # Check each statement in function
-    for stmt in ast.walk(func_node):
-        # Check for subscript assignment (dict[key] = value, list[i] = value)
-        if isinstance(stmt, ast.Assign):
-            problem = _check_subscript_modification(
-                stmt,
-                global_mutables,
-                global_declarations,
-                lock_protected_vars,
-                is_async,
-                func_name,
-            )
-            if problem:
-                problems.append(problem)
-
-        # Check for method calls on global mutables (.append, .update, etc.)
-        if isinstance(stmt, ast.Expr):
-            problem = _check_mutating_method_call(
-                stmt,
-                global_mutables,
-                global_declarations,
-                lock_protected_vars,
-                is_async,
-                func_name,
-            )
-            if problem:
-                problems.append(problem)
+        problem = _check_statement_for_global_modification(
+            stmt,
+            global_mutables,
+            global_declarations,
+            lock_protected_vars,
+            is_async,
+            func_name,
+        )
+        if problem:
+            problems.append(problem)
 
     return problems
 
@@ -1057,17 +1112,44 @@ def _count_python_line_types(content: str, tree: ast.AST) -> Dict[str, int]:
     }
 
 
+def _classify_js_line(stripped: str, in_multiline_comment: bool) -> Tuple[str, bool]:
+    """
+    Classify a single JS/Vue line and track multiline comment state.
+
+    Returns:
+        Tuple of (line_type, new_multiline_state) where line_type is
+        'blank', 'comment', or 'code'.
+    Issue #620.
+    """
+    # Check for blank lines
+    if not stripped:
+        return "blank", in_multiline_comment
+
+    # Handle multi-line comments /* */
+    if in_multiline_comment:
+        new_state = "*/" not in stripped
+        return "comment", new_state
+
+    # Check for start of multi-line comment
+    if stripped.startswith("/*"):
+        new_state = "*/" not in stripped
+        return "comment", new_state
+
+    # Check for single-line comments
+    if stripped.startswith("//"):
+        return "comment", False
+
+    # Check for HTML comments in Vue files
+    if stripped.startswith("<!--"):
+        return "comment", False
+
+    return "code", False
+
+
 def _count_js_vue_line_types(content: str) -> Dict[str, int]:
     """
     Count different line types in JavaScript/Vue code (Issue #368).
-
-    Distinguishes between:
-    - code_lines: Lines containing executable code
-    - comment_lines: Lines that are pure comments (// or /* */)
-    - blank_lines: Empty or whitespace-only lines
-
-    Note: JavaScript doesn't have docstrings in the Python sense,
-    so JSDoc comments are counted as comments.
+    Issue #620: Refactored with extracted helper function.
 
     Args:
         content: Full file content as string
@@ -1084,40 +1166,14 @@ def _count_js_vue_line_types(content: str) -> Dict[str, int]:
 
     for line in lines:
         stripped = line.strip()
-
-        # Check for blank lines
-        if not stripped:
+        line_type, in_multiline_comment = _classify_js_line(
+            stripped, in_multiline_comment
+        )
+        if line_type == "blank":
             blank_lines += 1
-            continue
-
-        # Handle multi-line comments /* */
-        if in_multiline_comment:
+        elif line_type == "comment":
             comment_lines += 1
-            if "*/" in stripped:
-                in_multiline_comment = False
-            continue
 
-        # Check for start of multi-line comment
-        if stripped.startswith("/*"):
-            comment_lines += 1
-            if "*/" not in stripped:
-                in_multiline_comment = True
-            continue
-
-        # Check for single-line comments
-        if stripped.startswith("//"):
-            comment_lines += 1
-            continue
-
-        # Check for HTML comments in Vue files
-        if stripped.startswith("<!--"):
-            comment_lines += 1
-            if "-->" not in stripped:
-                # Simple heuristic: Vue HTML comments typically single line
-                pass
-            continue
-
-    # Code lines = total - comments - blanks (no docstrings in JS)
     code_lines = total_lines - comment_lines - blank_lines
 
     return {
@@ -1259,18 +1315,75 @@ async def detect_hardcodes_and_debt_with_llm(
         return empty_result
 
 
+def _check_async_global_state_issue(
+    node: ast.AsyncFunctionDef, has_async_lock_import: bool
+) -> Optional[Dict]:
+    """
+    Check if async function uses global state without lock import.
+
+    Issue #620.
+    """
+    uses_global = any(isinstance(stmt, ast.Global) for stmt in ast.walk(node))
+    if uses_global and not has_async_lock_import:
+        return _create_race_condition_problem(
+            lineno=node.lineno,
+            description=(
+                f"Async function '{node.name}' uses global state "
+                f"but no asyncio.Lock imported"
+            ),
+            suggestion=(
+                "Consider using asyncio.Lock() to protect shared state in async context"
+            ),
+            severity="medium",
+        )
+    return None
+
+
+def _analyze_function_for_race_conditions(
+    node: ast.AST,
+    global_vars: Dict[str, int],
+    global_mutables: Set[str],
+    lock_protected_vars: Set[str],
+    has_async_lock_import: bool,
+    file_path: str,
+) -> List[Dict]:
+    """
+    Analyze a single function for race condition issues.
+
+    Issue #620.
+    """
+    problems = []
+
+    # Check for global state modifications
+    problems.extend(
+        _detect_global_state_modifications(
+            node, global_vars, global_mutables, lock_protected_vars
+        )
+    )
+
+    # Check for thread-unsafe singleton patterns
+    problems.extend(_detect_singleton_patterns(node, global_vars))
+
+    # Check for async functions modifying shared state
+    if isinstance(node, ast.AsyncFunctionDef):
+        async_problem = _check_async_global_state_issue(node, has_async_lock_import)
+        if async_problem:
+            problems.append(async_problem)
+
+    # Check for read-modify-write patterns
+    problems.extend(_detect_augmented_assignment_issues(node, global_vars))
+
+    # Check for shared file handles
+    problems.extend(_detect_file_handle_issues(node, file_path))
+
+    return problems
+
+
 def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[Dict]:
     """
     Detect potential race conditions in Python code.
 
-    Checks for:
-    1. Global mutable state without locks
-    2. Async shared state modifications
-    3. Thread-unsafe singleton patterns
-    4. Unprotected shared dictionary/list access
-    5. Missing async locks for shared resources
-
-    Refactored for Issue #298 - reduced nesting from 15 to 4 levels max.
+    Refactored for Issue #298 and Issue #620.
     """
     problems: List[Dict] = []
     lock_protected_vars: Set[str] = set()
@@ -1284,44 +1397,19 @@ def detect_race_conditions(tree: ast.AST, content: str, file_path: str) -> List[
     # Pass 2: Extract global state
     global_vars, global_mutables = _extract_global_state(tree)
 
-    # Pass 3-7: Analyze functions for race conditions
+    # Pass 3: Analyze functions for race conditions
     for node in ast.walk(tree):
-        if not isinstance(node, _FUNCTION_DEF_TYPES):  # Issue #380
-            continue
-
-        # Check for global state modifications (Pass 3)
-        problems.extend(
-            _detect_global_state_modifications(
-                node, global_vars, global_mutables, lock_protected_vars
-            )
-        )
-
-        # Check for thread-unsafe singleton patterns (Pass 4)
-        problems.extend(_detect_singleton_patterns(node, global_vars))
-
-        # Check for async functions modifying shared state (Pass 5)
-        if isinstance(node, ast.AsyncFunctionDef):
-            uses_global = any(isinstance(stmt, ast.Global) for stmt in ast.walk(node))
-            if uses_global and not has_async_lock_import:
-                problems.append(
-                    _create_race_condition_problem(
-                        lineno=node.lineno,
-                        description=(
-                            f"Async function '{node.name}' uses global state "
-                            f"but no asyncio.Lock imported"
-                        ),
-                        suggestion=(
-                            "Consider using asyncio.Lock() to protect shared state in async context"
-                        ),
-                        severity="medium",
-                    )
+        if isinstance(node, _FUNCTION_DEF_TYPES):
+            problems.extend(
+                _analyze_function_for_race_conditions(
+                    node,
+                    global_vars,
+                    global_mutables,
+                    lock_protected_vars,
+                    has_async_lock_import,
+                    file_path,
                 )
-
-        # Check for read-modify-write patterns (Pass 6)
-        problems.extend(_detect_augmented_assignment_issues(node, global_vars))
-
-        # Check for shared file handles (Pass 7) - Issue #378: pass file_path for context
-        problems.extend(_detect_file_handle_issues(node, file_path))
+            )
 
     return problems
 
@@ -1331,55 +1419,14 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
     Analyze a Python file for functions, classes, and potential issues.
 
     Refactored for Issue #298 - reduced nesting from 9 to 3 levels max.
-    Uses helper functions for each analysis phase.
+    Issue #620 - further refactored with extracted helper functions.
     """
     try:
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
             content = await f.read()
 
         tree = ast.parse(content)
-
-        # Phase 1: AST analysis (functions, classes, imports, long function problems)
-        functions, classes, imports, problems = _analyze_ast_nodes(tree)
-
-        # Phase 2: Line-by-line content analysis (hardcodes, technical debt)
-        hardcodes, technical_debt, line_problems = _analyze_content_lines(
-            content, file_path
-        )
-        problems.extend(line_problems)
-
-        # Phase 3: LLM semantic analysis (optional)
-        if use_llm:
-            await _merge_llm_results(hardcodes, technical_debt, content, file_path)
-
-        # Phase 4: Race condition detection
-        try:
-            race_problems = detect_race_conditions(tree, content, file_path)
-            problems.extend(race_problems)
-        except Exception as e:
-            logger.debug("Race condition detection skipped for %s: %s", file_path, e)
-
-        # Phase 5: Code intelligence analyzers
-        # Issue #711: Run in thread pool to prevent event loop blocking.
-        # These analyzers contain blocking subprocess calls (git log with 30-60s timeouts)
-        # that would otherwise starve the event loop during parallel indexing.
-        code_intel_problems = await asyncio.to_thread(
-            _run_code_intelligence_analyzers, file_path
-        )
-        problems.extend(code_intel_problems)
-
-        # Phase 6: Count line types (Issue #368)
-        line_counts = _count_python_line_types(content, tree)
-
-        return {
-            "functions": functions,
-            "classes": classes,
-            "imports": imports,
-            "hardcodes": hardcodes,
-            "problems": problems,
-            "technical_debt": technical_debt,
-            **line_counts,
-        }
+        return await _run_analysis_phases(file_path, content, tree, use_llm)
 
     except OSError as e:
         logger.error("Failed to read Python file %s: %s", file_path, e)
@@ -1387,17 +1434,7 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
 
     except Exception as e:
         logger.error("Error analyzing Python file %s: %s", file_path, e)
-        result = _create_empty_analysis_result()
-        result["problems"] = [
-            {
-                "type": "parse_error",
-                "severity": "high",
-                "line": 1,
-                "description": f"Failed to parse file: {str(e)}",
-                "suggestion": "Check syntax errors",
-            }
-        ]
-        return result
+        return _create_parse_error_result(str(e))
 
 
 def _extract_js_functions(line: str, line_num: int) -> List[Dict]:
@@ -1466,6 +1503,74 @@ def _create_empty_js_analysis_result() -> Metadata:
         "comment_lines": 0,
         "docstring_lines": 0,
         "blank_lines": 0,
+    }
+
+
+def _create_parse_error_result(error_msg: str) -> Metadata:
+    """
+    Create analysis result with parse error problem.
+
+    Issue #620.
+    """
+    result = _create_empty_analysis_result()
+    result["problems"] = [
+        {
+            "type": "parse_error",
+            "severity": "high",
+            "line": 1,
+            "description": f"Failed to parse file: {error_msg}",
+            "suggestion": "Check syntax errors",
+        }
+    ]
+    return result
+
+
+async def _run_analysis_phases(
+    file_path: str, content: str, tree: ast.AST, use_llm: bool
+) -> Metadata:
+    """
+    Execute all analysis phases on parsed Python content.
+
+    Issue #620.
+    """
+    # Phase 1: AST analysis (functions, classes, imports, long function problems)
+    functions, classes, imports, problems = _analyze_ast_nodes(tree)
+
+    # Phase 2: Line-by-line content analysis (hardcodes, technical debt)
+    hardcodes, technical_debt, line_problems = _analyze_content_lines(
+        content, file_path
+    )
+    problems.extend(line_problems)
+
+    # Phase 3: LLM semantic analysis (optional)
+    if use_llm:
+        await _merge_llm_results(hardcodes, technical_debt, content, file_path)
+
+    # Phase 4: Race condition detection
+    try:
+        race_problems = detect_race_conditions(tree, content, file_path)
+        problems.extend(race_problems)
+    except Exception as e:
+        logger.debug("Race condition detection skipped for %s: %s", file_path, e)
+
+    # Phase 5: Code intelligence analyzers
+    # Issue #711: Run in thread pool to prevent event loop blocking.
+    code_intel_problems = await asyncio.to_thread(
+        _run_code_intelligence_analyzers, file_path
+    )
+    problems.extend(code_intel_problems)
+
+    # Phase 6: Count line types (Issue #368)
+    line_counts = _count_python_line_types(content, tree)
+
+    return {
+        "functions": functions,
+        "classes": classes,
+        "imports": imports,
+        "hardcodes": hardcodes,
+        "problems": problems,
+        "technical_debt": technical_debt,
+        **line_counts,
     }
 
 

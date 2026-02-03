@@ -395,6 +395,141 @@ def _build_error_response(
     )
 
 
+def _check_approval_permission(
+    security_layer, user_role: str, task_id: str, approved: bool
+) -> Optional[JSONResponse]:
+    """
+    Check if user has permission to approve/deny commands.
+
+    Issue #620.
+
+    Args:
+        security_layer: Security layer for permission checks
+        user_role: User's role
+        task_id: Task ID for audit logging
+        approved: Approval status for audit logging
+
+    Returns:
+        JSONResponse with error if permission denied, None if permitted
+    """
+    if not security_layer.check_permission(user_role, "allow_command_approval"):
+        security_layer.audit_log(
+            "command_approval",
+            user_role,
+            "denied",
+            {"task_id": task_id, "approved": approved, "reason": "permission_denied"},
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"message": "Permission denied to approve/deny commands."},
+        )
+    return None
+
+
+async def _publish_approval_to_redis(
+    main_redis_client, security_layer, user_role: str, task_id: str, approved: bool
+) -> dict:
+    """
+    Publish command approval to Redis and return success response.
+
+    Issue #620.
+
+    Args:
+        main_redis_client: Redis client instance
+        security_layer: Security layer for audit logging
+        user_role: User's role
+        task_id: Task ID
+        approved: Approval status
+
+    Returns:
+        Success response dict
+
+    Raises:
+        InternalError: If Redis publish fails
+    """
+    approval_message = {"task_id": task_id, "approved": approved}
+    try:
+        await asyncio.to_thread(
+            main_redis_client.publish,
+            f"command_approval_{task_id}",
+            json.dumps(approval_message),
+        )
+    except Exception as e:
+        logger.error("Failed to publish command approval to Redis: %s", e)
+        security_layer.audit_log(
+            "command_approval",
+            user_role,
+            "failure",
+            {"task_id": task_id, "approved": approved, "error": str(e)},
+        )
+        raise InternalError(
+            message="Failed to forward command approval. Please try again.",
+            details={"task_id": task_id, "error_type": "redis_publish_failed"},
+        ) from e
+
+    logging.info(f"Published command approval for task {task_id}: Approved={approved}")
+    return {
+        "message": "Approval status received and forwarded.",
+        "task_id": task_id,
+        "approved": approved,
+    }
+
+
+async def _handle_command_result(
+    event_manager,
+    security_layer,
+    user_role: str,
+    command: str,
+    stdout: bytes,
+    stderr: bytes,
+    returncode: int,
+):
+    """
+    Process command execution result and publish completion events.
+
+    Issue #620.
+
+    Args:
+        event_manager: Event manager instance
+        security_layer: Security layer for audit logging
+        user_role: User's role
+        command: Executed command
+        stdout: Command stdout bytes
+        stderr: Command stderr bytes
+        returncode: Process return code
+
+    Returns:
+        Success dict or JSONResponse with error
+    """
+    output = stdout.decode(errors="replace").strip()
+    error = stderr.decode(errors="replace").strip()
+
+    if returncode == 0:
+        response = _build_success_response(command, output, security_layer, user_role)
+        await _publish_event_safe(
+            event_manager,
+            "command_execution_end",
+            {"command": command, "status": "success", "output": output},
+        )
+        return response
+
+    response = _build_error_response(
+        command, output, error, returncode, security_layer, user_role
+    )
+    await _publish_event_safe(
+        event_manager,
+        "command_execution_end",
+        {
+            "command": command,
+            "status": "error",
+            "error": error,
+            "output": output,
+            "returncode": returncode,
+        },
+    )
+    return response
+
+
 def _process_tool_result(result_dict: dict) -> tuple:
     """Process orchestrator result and extract message/output (Issue #315: extracted).
 
@@ -472,6 +607,99 @@ def _record_goal_metrics(task_start_time: float, status: str) -> None:
     )
 
 
+def _check_goal_permission(
+    security_layer, user_role: str, goal: str
+) -> Optional[JSONResponse]:
+    """
+    Check if user has permission to submit a goal.
+
+    Issue #620.
+
+    Args:
+        security_layer: Security layer for permission checks
+        user_role: User's role
+        goal: Goal string for audit logging
+
+    Returns:
+        JSONResponse with error if permission denied, None if permitted
+    """
+    if not security_layer.check_permission(user_role, "allow_goal_submission"):
+        security_layer.audit_log(
+            "submit_goal",
+            user_role,
+            "denied",
+            {"goal": goal, "reason": "permission_denied"},
+        )
+        return JSONResponse(
+            status_code=403, content={"message": "Permission denied to submit goal"}
+        )
+    return None
+
+
+async def _publish_goal_events(event_manager, goal: str, use_phi2: bool) -> None:
+    """
+    Publish goal-related events (user_message and goal_received).
+
+    Issue #620.
+
+    Args:
+        event_manager: Event manager instance
+        goal: Goal string
+        use_phi2: Whether to use Phi-2 model
+    """
+    await _publish_event_safe(event_manager, "user_message", {"message": goal})
+    await _publish_event_safe(
+        event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2}
+    )
+
+
+async def _handle_goal_result(
+    event_manager,
+    security_layer,
+    user_role: str,
+    goal: str,
+    result_dict: dict,
+    task_start_time: float,
+) -> dict:
+    """
+    Process goal execution result and publish completion events.
+
+    Issue #620.
+
+    Args:
+        event_manager: Event manager instance
+        security_layer: Security layer for audit logging
+        user_role: User's role
+        goal: Original goal string
+        result_dict: Result from orchestrator
+        task_start_time: Start timestamp for metrics
+
+    Returns:
+        Response dict with message
+    """
+    response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
+
+    if tool_output_content and tool_name != "respond_conversationally":
+        await _publish_event_safe(
+            event_manager, "tool_output", {"output": tool_output_content}
+        )
+
+    security_layer.audit_log(
+        "submit_goal",
+        user_role,
+        "success",
+        {"goal": goal, "result": response_message},
+    )
+
+    await _publish_event_safe(
+        event_manager, "goal_completed", {"goal": goal, "result": response_message}
+    )
+
+    _record_goal_metrics(task_start_time, "success")
+
+    return {"message": response_message}
+
+
 async def _execute_goal_with_error_handling(
     orchestrator, goal: str, task_start_time: float
 ) -> dict:
@@ -535,8 +763,10 @@ async def receive_goal(
 ):
     """
     Receives a goal from the user to be executed by the orchestrator.
+
     Issue #744: Requires authenticated user.
     Issue #281: Refactored from 130 lines to use extracted helper methods.
+    Issue #620: Further refactored to reduce function length below 50 lines.
 
     Args:
         payload (GoalPayload): The payload containing the goal, whether to
@@ -558,24 +788,15 @@ async def receive_goal(
     use_phi2 = payload.use_phi2
     user_role = payload.user_role
 
-    if not security_layer.check_permission(user_role, "allow_goal_submission"):
-        security_layer.audit_log(
-            "submit_goal",
-            user_role,
-            "denied",
-            {"goal": goal, "reason": "permission_denied"},
-        )
-        return JSONResponse(
-            status_code=403, content={"message": "Permission denied to submit goal"}
-        )
+    # Check permission (Issue #620: uses helper)
+    permission_error = _check_goal_permission(security_layer, user_role, goal)
+    if permission_error:
+        return permission_error
 
     logging.info(f"Received goal via API: {goal}")
 
-    # Publish events (Issue #281: uses helper)
-    await _publish_event_safe(event_manager, "user_message", {"message": goal})
-    await _publish_event_safe(
-        event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2}
-    )
+    # Publish events (Issue #620: uses helper)
+    await _publish_goal_events(event_manager, goal, use_phi2)
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
@@ -585,29 +806,10 @@ async def receive_goal(
         orchestrator, goal, task_start_time
     )
 
-    # Process tool result using helper (Issue #315: reduced nesting)
-    response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
-
-    if tool_output_content and tool_name != "respond_conversationally":
-        await _publish_event_safe(
-            event_manager, "tool_output", {"output": tool_output_content}
-        )
-
-    security_layer.audit_log(
-        "submit_goal",
-        user_role,
-        "success",
-        {"goal": goal, "result": response_message},
+    # Process and return result (Issue #620: uses helper)
+    return await _handle_goal_result(
+        event_manager, security_layer, user_role, goal, result_dict, task_start_time
     )
-
-    await _publish_event_safe(
-        event_manager, "goal_completed", {"goal": goal, "result": response_message}
-    )
-
-    # Record Prometheus task execution metric (success)
-    _record_goal_metrics(task_start_time, "success")
-
-    return {"message": response_message}
 
 
 @with_error_handling(
@@ -725,7 +927,9 @@ async def command_approval(
 ):
     """
     Receives user approval/denial for a command execution.
+
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to reduce function length below 50 lines.
     """
     security_layer = request.app.state.security_layer
     main_redis_client = request.app.state.main_redis_client
@@ -734,51 +938,22 @@ async def command_approval(
     approved = payload.approved
     user_role = payload.user_role
 
-    if not security_layer.check_permission(user_role, "allow_command_approval"):
-        security_layer.audit_log(
-            "command_approval",
-            user_role,
-            "denied",
-            {"task_id": task_id, "approved": approved, "reason": "permission_denied"},
-        )
-        return JSONResponse(
-            status_code=403,
-            content={"message": "Permission denied to approve/deny commands."},
+    # Check permission (Issue #620: uses helper)
+    permission_error = _check_approval_permission(
+        security_layer, user_role, task_id, approved
+    )
+    if permission_error:
+        return permission_error
+
+    # Process approval via Redis (Issue #620: uses helper)
+    if main_redis_client:
+        return await _publish_approval_to_redis(
+            main_redis_client, security_layer, user_role, task_id, approved
         )
 
-    if main_redis_client:
-        approval_message = {"task_id": task_id, "approved": approved}
-        try:
-            # Issue #361 - avoid blocking
-            await asyncio.to_thread(
-                main_redis_client.publish,
-                f"command_approval_{task_id}",
-                json.dumps(approval_message),
-            )
-        except Exception as e:
-            logger.error("Failed to publish command approval to Redis: %s", e)
-            security_layer.audit_log(
-                "command_approval",
-                user_role,
-                "failure",
-                {"task_id": task_id, "approved": approved, "error": str(e)},
-            )
-            raise InternalError(
-                message="Failed to forward command approval. Please try again.",
-                details={"task_id": task_id, "error_type": "redis_publish_failed"},
-            ) from e
-        logging.info(
-            f"Published command approval for task {task_id}: Approved={approved}"
-        )
-        return {
-            "message": "Approval status received and forwarded.",
-            "task_id": task_id,
-            "approved": approved,
-        }
-    else:
-        error_message = "Redis client not initialized. Cannot process command approval."
-        logging.error(error_message)
-        return JSONResponse(status_code=500, content={"message": error_message})
+    error_message = "Redis client not initialized. Cannot process command approval."
+    logging.error(error_message)
+    return JSONResponse(status_code=500, content={"message": error_message})
 
 
 @with_error_handling(
@@ -795,8 +970,10 @@ async def execute_command(
 ):
     """
     Executes a shell command and returns its output.
+
     Issue #744: Requires admin authentication (CRITICAL: command execution).
     Issue #281: Refactored from 151 lines to use extracted helper methods.
+    Issue #620: Further refactored to reduce function length below 50 lines.
 
     Args:
         command_data (dict): A dictionary containing the command to execute.
@@ -837,34 +1014,10 @@ async def execute_command(
         command, security_layer, user_role
     )
 
-    output = stdout.decode(errors="replace").strip()
-    error = stderr.decode(errors="replace").strip()
-
-    # Build and return response based on result (Issue #281: uses helpers)
-    if returncode == 0:
-        response = _build_success_response(command, output, security_layer, user_role)
-        await _publish_event_safe(
-            event_manager,
-            "command_execution_end",
-            {"command": command, "status": "success", "output": output},
-        )
-        return response
-    else:
-        response = _build_error_response(
-            command, output, error, returncode, security_layer, user_role
-        )
-        await _publish_event_safe(
-            event_manager,
-            "command_execution_end",
-            {
-                "command": command,
-                "status": "error",
-                "error": error,
-                "output": output,
-                "returncode": returncode,
-            },
-        )
-        return response
+    # Handle result and publish completion event (Issue #620: uses helper)
+    return await _handle_command_result(
+        event_manager, security_layer, user_role, command, stdout, stderr, returncode
+    )
 
 
 # ====================================================================

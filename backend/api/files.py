@@ -211,6 +211,52 @@ def get_security_layer(request: Request) -> SecurityLayer:
     return request.app.state.security_layer
 
 
+def _check_file_permission(request: Request, permission: str) -> dict:
+    """
+    Check file permissions and return user data.
+
+    Args:
+        request: FastAPI request object
+        permission: Permission type to check (view, upload, download, delete)
+
+    Returns:
+        dict: User data if authenticated
+
+    Raises:
+        HTTPException: If permission check fails
+
+    Issue #620.
+    """
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, permission
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Insufficient permissions for file {permission} operations",
+        )
+    request.state.user = user_data
+    return user_data
+
+
+def _calculate_parent_path(path: str) -> Optional[str]:
+    """
+    Calculate parent path from current path.
+
+    Args:
+        path: Current path string
+
+    Returns:
+        Parent path string or None if at root
+
+    Issue #620.
+    """
+    if not path:
+        return None
+    parent = Path(path).parent
+    return str(parent) if str(parent) != "." else ""
+
+
 # Path validation imported from src.utils.path_validation (Issue #328 - shared utility)
 
 
@@ -315,6 +361,44 @@ def is_safe_file(filename: str) -> bool:
     return True
 
 
+def _list_directory_contents(target_path: Path) -> tuple:
+    """
+    List directory contents with file information.
+
+    Args:
+        target_path: Path to directory to list
+
+    Returns:
+        Tuple of (files list, total_size, total_files, total_directories)
+
+    Issue #620.
+    """
+    files = []
+    total_size = 0
+    total_files = 0
+    total_directories = 0
+
+    for item in sorted(
+        target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
+    ):
+        try:
+            relative_item_path = str(item.relative_to(SANDBOXED_ROOT))
+            file_info = get_file_info(item, relative_item_path)
+            files.append(file_info)
+
+            if item.is_file():
+                total_files += 1
+                total_size += file_info.size or 0
+            else:
+                total_directories += 1
+
+        except (OSError, PermissionError) as e:
+            logger.warning("Skipping inaccessible file %s: %s", item, e)
+            continue
+
+    return files, total_size, total_files, total_directories
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_files",
@@ -325,19 +409,12 @@ async def list_files(request: Request, path: str = ""):
     """
     List files in the specified directory within the sandbox.
 
+    Issue #620: Refactored using Extract Method pattern.
+
     Args:
         path: Relative path within the sandbox (optional, defaults to root)
     """
-    # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file operations"
-        )
-
-    # Store user data in request state for audit logging
-    request.state.user = user_data
-
+    _check_file_permission(request, "view")
     target_path = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -347,47 +424,14 @@ async def list_files(request: Request, path: str = ""):
     if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
-    # Issue #358: Wrap blocking directory listing in thread
-    def _list_directory_sync():
-        """Sync helper for directory listing to avoid blocking event loop."""
-        files = []
-        total_size = 0
-        total_files = 0
-        total_directories = 0
-
-        for item in sorted(
-            target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())
-        ):
-            try:
-                relative_item_path = str(item.relative_to(SANDBOXED_ROOT))
-                file_info = get_file_info(item, relative_item_path)
-                files.append(file_info)
-
-                if item.is_file():
-                    total_files += 1
-                    total_size += file_info.size or 0
-                else:
-                    total_directories += 1
-
-            except (OSError, PermissionError) as e:
-                logger.warning("Skipping inaccessible file %s: %s", item, e)
-                continue
-
-        return files, total_size, total_files, total_directories
-
+    # Issue #358/#620: Wrap blocking directory listing in thread
     files, total_size, total_files, total_directories = await run_in_file_executor(
-        _list_directory_sync
+        _list_directory_contents, target_path
     )
-
-    # Calculate parent path
-    parent_path = None
-    if path:
-        parent = Path(path).parent
-        parent_path = str(parent) if str(parent) != "." else ""
 
     return DirectoryListing(
         current_path=path,
-        parent_path=parent_path,
+        parent_path=_calculate_parent_path(path),
         files=files,
         total_files=total_files,
         total_directories=total_directories,
@@ -804,6 +848,73 @@ async def view_file(request: Request, path: str):
     }
 
 
+def _log_rename_audit(
+    request: Request,
+    user_data: dict,
+    old_path: str,
+    new_name: str,
+    new_path: str,
+    is_directory: bool,
+) -> None:
+    """
+    Log rename operation audit information.
+
+    Args:
+        request: FastAPI request object
+        user_data: Authenticated user data
+        old_path: Original path before rename
+        new_name: New name for the item
+        new_path: New relative path after rename
+        is_directory: Whether the renamed item is a directory
+
+    Issue #620.
+    """
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "file_rename",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "old_path": old_path,
+            "new_name": new_name,
+            "new_path": new_path,
+            "type": "directory" if is_directory else "file",
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+
+
+async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
+    """
+    Validate source exists and target doesn't exist for rename.
+
+    Args:
+        source_path: Path to source file/directory
+        new_name: New name for the item
+
+    Returns:
+        Path: Target path for the rename
+
+    Raises:
+        HTTPException: If validation fails
+
+    Issue #620.
+    """
+    if not await run_in_file_executor(source_path.exists):
+        raise HTTPException(status_code=404, detail="File or directory not found")
+
+    target_path = source_path.parent / new_name
+
+    if await run_in_file_executor(target_path.exists):
+        raise HTTPException(
+            status_code=409,
+            detail=f"A file or directory named '{new_name}' already exists",
+        )
+
+    return target_path
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_file_or_directory",
@@ -816,69 +927,82 @@ async def rename_file_or_directory(
     """
     Rename a file or directory within the sandbox.
 
+    Issue #620: Refactored using Extract Method pattern.
+
     Args:
         path: Current path of the file/directory
         new_name: New name for the file/directory (not full path, just name)
     """
-    # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(
-        request, "upload"  # Using upload permission for rename
-    )
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for rename operation"
-        )
+    user_data = _check_file_permission(request, "upload")
 
-    # Store user data in request state for audit logging
-    request.state.user = user_data
-
-    # Validate new name
     if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
 
     source_path = validate_and_resolve_path(path)
-
-    # Issue #358/#718: Use dedicated executor for non-blocking file I/O
-    if not await run_in_file_executor(source_path.exists):
-        raise HTTPException(status_code=404, detail="File or directory not found")
-
-    # Create new path with same parent directory
-    target_path = source_path.parent / new_name
-
-    if await run_in_file_executor(target_path.exists):
-        raise HTTPException(
-            status_code=409,
-            detail=f"A file or directory named '{new_name}' already exists",
-        )
+    target_path = await _validate_rename_paths(source_path, new_name)
 
     # Issue #358: Perform rename in thread to avoid blocking
     await run_in_file_executor(source_path.rename, target_path)
 
-    # Issue #358: Get info for the renamed item in thread
+    # Issue #358/#620: Get info for the renamed item in thread
     relative_path = str(target_path.relative_to(SANDBOXED_ROOT))
     item_info = await run_in_file_executor(get_file_info, target_path, relative_path)
     is_directory = await run_in_file_executor(target_path.is_dir)
 
-    # Enhanced audit logging
-    security_layer = get_security_layer(request)
-    security_layer.audit_log(
-        "file_rename",
-        user_data.get("username", "unknown"),
-        "success",
-        {
-            "old_path": path,
-            "new_name": new_name,
-            "new_path": relative_path,
-            "type": "directory" if is_directory else "file",
-            "user_role": user_data.get("role", "unknown"),
-            "ip": request.client.host if request.client else "unknown",
-        },
-    )
+    _log_rename_audit(request, user_data, path, new_name, relative_path, is_directory)
 
     return {
         "message": f"Successfully renamed to '{new_name}'",
         "item_info": item_info,
     }
+
+
+def _determine_file_type(mime_type: Optional[str]) -> str:
+    """
+    Determine the preview file type from MIME type.
+
+    Args:
+        mime_type: MIME type string or None
+
+    Returns:
+        str: File type category (text, image, pdf, or binary)
+
+    Issue #620.
+    """
+    if not mime_type:
+        return "binary"
+
+    if mime_type.startswith("text/"):
+        return "text"
+    if mime_type.startswith("image/"):
+        return "image"
+    if mime_type == "application/pdf":
+        return "pdf"
+
+    return "binary"
+
+
+async def _read_text_content(target_file: Path) -> tuple:
+    """
+    Read text content from file for preview.
+
+    Args:
+        target_file: Path to file to read
+
+    Returns:
+        Tuple of (content, file_type) where file_type may change to binary on decode error
+
+    Issue #620.
+    """
+    try:
+        async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+            content = await f.read()
+        return content, "text"
+    except OSError as e:
+        logger.error("Failed to read file %s: %s", target_file, e)
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
+    except UnicodeDecodeError:
+        return None, "binary"
 
 
 @with_error_handling(
@@ -891,20 +1015,15 @@ async def preview_file(request: Request, path: str):
     """
     Get file preview with content and download URL.
 
+    Issue #620: Refactored using Extract Method pattern.
+
     Args:
         path: File path within the sandbox (query parameter)
 
     Returns:
         Dict with type, url, and content for preview
     """
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file preview"
-        )
-
-    request.state.user = user_data
-
+    _check_file_permission(request, "view")
     target_file = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -914,36 +1033,19 @@ async def preview_file(request: Request, path: str):
     if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
 
-    # Issue #358: Get file info in thread to avoid blocking
+    # Issue #358/#620: Get file info in thread to avoid blocking
     relative_path = str(target_file.relative_to(SANDBOXED_ROOT))
     file_info = await run_in_file_executor(get_file_info, target_file, relative_path)
 
-    # Determine file type
-    file_type = "binary"
+    file_type = _determine_file_type(file_info.mime_type)
     content = None
 
-    if file_info.mime_type:
-        if file_info.mime_type.startswith("text/"):
-            file_type = "text"
-            try:
-                async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
-                    content = await f.read()
-            except OSError as e:
-                logger.error("Failed to read file %s: %s", target_file, e)
-                raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
-            except UnicodeDecodeError:
-                file_type = "binary"
-        elif file_info.mime_type.startswith("image/"):
-            file_type = "image"
-        elif file_info.mime_type == "application/pdf":
-            file_type = "pdf"
-
-    # Generate download URL
-    download_url = f"/api/files/download/{path}"
+    if file_type == "text":
+        content, file_type = await _read_text_content(target_file)
 
     return {
         "type": file_type,
-        "url": download_url,
+        "url": f"/api/files/download/{path}",
         "content": content,
         "mime_type": file_info.mime_type,
         "size": file_info.size,
@@ -992,6 +1094,40 @@ async def delete_file(request: Request, path: str):
     )
 
 
+def _log_directory_create_audit(
+    request: Request,
+    user_data: dict,
+    relative_path: str,
+    name: str,
+    parent_path: str,
+) -> None:
+    """
+    Log directory creation audit information.
+
+    Args:
+        request: FastAPI request object
+        user_data: Authenticated user data
+        relative_path: Relative path of the new directory
+        name: Name of the new directory
+        parent_path: Parent directory path
+
+    Issue #620.
+    """
+    security_layer = get_security_layer(request)
+    security_layer.audit_log(
+        "directory_create",
+        user_data.get("username", "unknown"),
+        "success",
+        {
+            "path": relative_path,
+            "name": name,
+            "parent_path": parent_path,
+            "user_role": user_data.get("role", "unknown"),
+            "ip": request.client.host if request.client else "unknown",
+        },
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_directory",
@@ -1004,23 +1140,14 @@ async def create_directory(
     """
     Create a new directory within the sandbox.
 
+    Issue #620: Refactored using Extract Method pattern.
+
     Args:
         path: Parent directory path
         name: New directory name
     """
-    # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = auth_middleware.check_file_permissions(
-        request, "upload"
-    )
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for directory creation"
-        )
+    user_data = _check_file_permission(request, "upload")
 
-    # Store user data in request state for audit logging
-    request.state.user = user_data
-
-    # Validate directory name
     if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
 
@@ -1031,27 +1158,13 @@ async def create_directory(
     if await run_in_file_executor(new_dir.exists):
         raise HTTPException(status_code=409, detail="Directory already exists")
 
-    # Issue #358: mkdir in thread to avoid blocking
+    # Issue #358/#620: mkdir in thread to avoid blocking
     await run_in_file_executor(lambda: new_dir.mkdir(parents=True, exist_ok=False))
 
-    # Issue #358: Get directory info in thread to avoid blocking
     relative_path = str(new_dir.relative_to(SANDBOXED_ROOT))
     dir_info = await run_in_file_executor(get_file_info, new_dir, relative_path)
 
-    # Enhanced audit logging with authenticated user
-    security_layer = get_security_layer(request)
-    security_layer.audit_log(
-        "directory_create",
-        user_data.get("username", "unknown"),
-        "success",
-        {
-            "path": relative_path,
-            "name": name,
-            "parent_path": path,
-            "user_role": user_data.get("role", "unknown"),
-            "ip": request.client.host if request.client else "unknown",
-        },
-    )
+    _log_directory_create_audit(request, user_data, relative_path, name, path)
 
     return {
         "message": f"Directory '{name}' created successfully",

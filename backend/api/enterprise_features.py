@@ -140,6 +140,143 @@ def _build_deployment_phases() -> list:
     ]
 
 
+def _build_enterprise_capabilities(enabled_features: list) -> dict:
+    """
+    Build enterprise capabilities dictionary from enabled features list.
+
+    Issue #620.
+    """
+    return {
+        "web_research_orchestration": (
+            "web_research_orchestration" in enabled_features
+        ),
+        "cross_vm_load_balancing": ("cross_vm_load_balancing" in enabled_features),
+        "intelligent_task_routing": ("intelligent_task_routing" in enabled_features),
+        "comprehensive_health_monitoring": (
+            "comprehensive_health_monitoring" in enabled_features
+        ),
+        "graceful_degradation": ("graceful_degradation" in enabled_features),
+        "enterprise_configuration": (
+            "enterprise_configuration_management" in enabled_features
+        ),
+        "zero_downtime_deployment": ("zero_downtime_deployment" in enabled_features),
+    }
+
+
+def _build_enable_all_response(result: dict, success_rate: float) -> dict:
+    """
+    Build the response data for enable_all_enterprise_features endpoint.
+
+    Issue #620.
+    """
+    response_data = {
+        "status": "success" if success_rate > 0.8 else "partial",
+        "phase": "Phase 4 Final",
+        "result": result,
+        "success_rate": f"{success_rate * 100:.1f}%",
+        "enterprise_capabilities": _build_enterprise_capabilities(
+            result["enabled_features"]
+        ),
+        "message": (
+            f"Phase 4 enterprise features enablement completed: "
+            f"{len(result['enabled_features'])}/{result['total_features']} features enabled"
+        ),
+    }
+
+    if result["failed_features"]:
+        response_data["warnings"] = [
+            f"Failed to enable: {f['feature']} - {f['error']}"
+            for f in result["failed_features"]
+        ]
+
+    return response_data
+
+
+def _get_enabled_features_for_health_check(manager) -> list:
+    """
+    Get list of enabled features for health checking.
+
+    Issue #620.
+    """
+    return [
+        (name, feature)
+        for name, feature in manager.features.items()
+        if feature.status == FeatureStatus.ENABLED
+    ]
+
+
+def _check_features_in_error_state(
+    manager, health_status: dict, counters: dict
+) -> None:
+    """
+    Check for features in error state and update health status.
+
+    Issue #620.
+    """
+    for name, feature in manager.features.items():
+        if feature.status == FeatureStatus.ERROR:
+            counters["critical"] += 1
+            health_status["critical_issues"].append(f"{name}: Feature in error state")
+
+
+def _determine_overall_health(counters: dict) -> str:
+    """
+    Determine overall health status based on counters.
+
+    Issue #620.
+    """
+    if counters["critical"] > 0:
+        return "critical"
+    elif counters["warnings"] > 0:
+        return "warning"
+    return "healthy"
+
+
+def _build_optimization_results(request) -> dict:
+    """
+    Build optimization results dictionary.
+
+    Issue #620.
+    """
+    return {
+        "optimization_level": request.optimization_level,
+        "target_metrics": request.target_metrics,
+        "applied_optimizations": [
+            "Cross-VM load balancing tuned",
+            "Task routing algorithms optimized",
+            "Resource allocation improved",
+            "Cache strategies enhanced",
+        ],
+        "performance_improvements": {
+            "response_time_improvement": "15-25%",
+            "throughput_improvement": "20-30%",
+            "resource_efficiency": "18-22%",
+            "failover_time_reduction": "40-50%",
+        },
+        "recommendations": [
+            "Monitor performance metrics for 24 hours",
+            "Consider enabling zero-downtime deployment",
+            "Review resource allocation after peak usage",
+            "Enable predictive scaling if not already active",
+        ],
+    }
+
+
+def _build_service_distribution(vm_topology: dict) -> dict:
+    """
+    Build service distribution mapping from VM topology.
+
+    Issue #620.
+    """
+    service_distribution = {}
+    for vm_name, vm_data in vm_topology.items():
+        for service in vm_data["services"]:
+            if service not in service_distribution:
+                service_distribution[service] = []
+            service_distribution[service].append(vm_name)
+    return service_distribution
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_enterprise_status",
@@ -254,59 +391,15 @@ async def enable_all_enterprise_features():
     """
     try:
         manager = get_enterprise_manager()
-
-        logger.info("🚀 Enabling all enterprise features for Phase 4 completion...")
+        logger.info("Enabling all enterprise features for Phase 4 completion...")
 
         result = await manager.enable_all_enterprise_features()
-
         success_rate = len(result["enabled_features"]) / result["total_features"]
+        response_data = _build_enable_all_response(result, success_rate)
 
-        response_data = {
-            "status": "success" if success_rate > 0.8 else "partial",
-            "phase": "Phase 4 Final",
-            "result": result,
-            "success_rate": f"{success_rate * 100:.1f}%",
-            "enterprise_capabilities": {
-                "web_research_orchestration": (
-                    "web_research_orchestration" in result["enabled_features"]
-                ),
-                "cross_vm_load_balancing": (
-                    "cross_vm_load_balancing" in result["enabled_features"]
-                ),
-                "intelligent_task_routing": (
-                    "intelligent_task_routing" in result["enabled_features"]
-                ),
-                "comprehensive_health_monitoring": (
-                    "comprehensive_health_monitoring" in result["enabled_features"]
-                ),
-                "graceful_degradation": (
-                    "graceful_degradation" in result["enabled_features"]
-                ),
-                "enterprise_configuration": (
-                    "enterprise_configuration_management" in result["enabled_features"]
-                ),
-                "zero_downtime_deployment": (
-                    "zero_downtime_deployment" in result["enabled_features"]
-                ),
-            },
-            "message": (
-                f"Phase 4 enterprise features enablement completed: "
-                f"{len(result['enabled_features'])}/{result['total_features']} features enabled"
-            ),
-        }
-
-        if result["failed_features"]:
-            response_data["warnings"] = [
-                f"Failed to enable: {f['feature']} - {f['error']}"
-                for f in result["failed_features"]
-            ]
-
-        return JSONResponse(
-            status_code=(
-                200 if success_rate > 0.8 else 207
-            ),  # 207 = Multi-Status for partial success
-            content=response_data,
-        )
+        # 207 = Multi-Status for partial success
+        status_code = 200 if success_rate > 0.8 else 207
+        return JSONResponse(status_code=status_code, content=response_data)
 
     except Exception as e:
         logger.error("Error enabling all enterprise features: %s", e)
@@ -454,41 +547,23 @@ async def get_enterprise_health():
             "critical_issues": [],
             "warnings": [],
         }
-
         counters = {"critical": 0, "warnings": 0}
 
-        # Get enabled features for health check
-        enabled_features = [
-            (name, feature)
-            for name, feature in manager.features.items()
-            if feature.status == FeatureStatus.ENABLED
-        ]
+        enabled_features = _get_enabled_features_for_health_check(manager)
 
-        # Check health of all enabled features in parallel - eliminates N+1 sequential calls
+        # Check health of all enabled features in parallel
         if enabled_features:
             health_results = await asyncio.gather(
                 *[manager._check_feature_health(name) for name, _ in enabled_features],
                 return_exceptions=True,
             )
-
-            # Process results using helper (Issue #315 - reduces nesting)
             for (name, _), feature_health in zip(enabled_features, health_results):
                 _process_feature_health_result(
                     name, feature_health, health_status, counters
                 )
 
-        # Check for features in error state
-        for name, feature in manager.features.items():
-            if feature.status == FeatureStatus.ERROR:
-                counters["critical"] += 1
-                health_status["critical_issues"].append(
-                    f"{name}: Feature in error state"
-                )
-
-        if counters["critical"] > 0:
-            health_status["overall_health"] = "critical"
-        elif counters["warnings"] > 0:
-            health_status["overall_health"] = "warning"
+        _check_features_in_error_state(manager, health_status, counters)
+        health_status["overall_health"] = _determine_overall_health(counters)
 
         return JSONResponse(
             status_code=200,
@@ -528,36 +603,13 @@ async def optimize_system_performance(request: PerformanceOptimizationRequest):
     try:
         manager = get_enterprise_manager()
 
-        # Check if performance optimization features are enabled
         if not manager._check_resource_capabilities():
             raise HTTPException(
                 status_code=400,
                 detail="Resource optimization features must be enabled first",
             )
 
-        # Simulate performance optimization
-        optimization_results = {
-            "optimization_level": request.optimization_level,
-            "target_metrics": request.target_metrics,
-            "applied_optimizations": [
-                "Cross-VM load balancing tuned",
-                "Task routing algorithms optimized",
-                "Resource allocation improved",
-                "Cache strategies enhanced",
-            ],
-            "performance_improvements": {
-                "response_time_improvement": "15-25%",
-                "throughput_improvement": "20-30%",
-                "resource_efficiency": "18-22%",
-                "failover_time_reduction": "40-50%",
-            },
-            "recommendations": [
-                "Monitor performance metrics for 24 hours",
-                "Consider enabling zero-downtime deployment",
-                "Review resource allocation after peak usage",
-                "Enable predictive scaling if not already active",
-            ],
-        }
+        optimization_results = _build_optimization_results(request)
 
         return JSONResponse(
             status_code=200,
@@ -593,7 +645,9 @@ async def get_infrastructure_status():
             "resource_pools": manager.resource_pools,
             "distributed_services": {
                 "total_vms": len(manager.vm_topology),
-                "service_distribution": {},
+                "service_distribution": _build_service_distribution(
+                    manager.vm_topology
+                ),
                 "load_balancing": manager._check_load_balancing_capabilities(),
                 "health_monitoring": manager._check_health_capabilities(),
                 "failover_enabled": manager._check_failover_capabilities(),
@@ -605,22 +659,6 @@ async def get_infrastructure_status():
                 "scaling_capability": "Auto-scaling enabled",
             },
         }
-
-        # Calculate service distribution
-        for vm_name, vm_data in manager.vm_topology.items():
-            for service in vm_data["services"]:
-                if (
-                    service
-                    not in infrastructure_status["distributed_services"][
-                        "service_distribution"
-                    ]
-                ):
-                    infrastructure_status["distributed_services"][
-                        "service_distribution"
-                    ][service] = []
-                infrastructure_status["distributed_services"]["service_distribution"][
-                    service
-                ].append(vm_name)
 
         return JSONResponse(
             status_code=200,
