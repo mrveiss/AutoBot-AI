@@ -230,6 +230,58 @@ class TaskQueue:
 
         return decorator
 
+    def _calculate_task_timing(
+        self, delay: Optional[float], expires_in: Optional[float]
+    ) -> tuple:
+        """
+        Calculate scheduled_at and expires_at timestamps for a task.
+
+        Args:
+            delay: Delay before execution (seconds)
+            expires_in: Task expiration time (seconds)
+
+        Returns:
+            Tuple of (scheduled_at, expires_at) datetime objects or None
+
+        Issue #620.
+        """
+        scheduled_at = None
+        if delay:
+            scheduled_at = datetime.utcnow() + timedelta(seconds=delay)
+
+        expires_at = None
+        if expires_in:
+            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+        return scheduled_at, expires_at
+
+    async def _add_task_to_queue(
+        self, task_id: str, scheduled_at: Optional[datetime], priority: TaskPriority
+    ) -> None:
+        """
+        Add task to appropriate queue (scheduled or pending).
+
+        Args:
+            task_id: The task identifier
+            scheduled_at: When to execute (None for immediate)
+            priority: Task priority level
+
+        Raises:
+            RuntimeError: If Redis operation fails
+
+        Issue #620.
+        """
+        try:
+            if scheduled_at and scheduled_at > datetime.utcnow():
+                score = scheduled_at.timestamp()
+                await self.redis.zadd(self.scheduled_key, {task_id: score})
+            else:
+                priority_score = priority.value * 1000000 + int(time.time())
+                await self.redis.zadd(self.pending_key, {task_id: priority_score})
+        except RedisError as e:
+            self.logger.error("Failed to enqueue task %s: %s", task_id, e)
+            raise RuntimeError(f"Failed to enqueue task: {e}")
+
     async def enqueue(
         self,
         function_name: str,
@@ -263,17 +315,8 @@ class TaskQueue:
             raise RuntimeError("Redis client not available")
 
         task_id = str(uuid.uuid4())
+        scheduled_at, expires_at = self._calculate_task_timing(delay, expires_in)
 
-        # Calculate timing
-        scheduled_at = None
-        if delay:
-            scheduled_at = datetime.utcnow() + timedelta(seconds=delay)
-
-        expires_at = None
-        if expires_in:
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-
-        # Create task
         task = Task(
             id=task_id,
             function_name=function_name,
@@ -287,22 +330,8 @@ class TaskQueue:
             metadata=metadata or {},
         )
 
-        # Store task data
         await self._store_task(task)
-
-        # Add to appropriate queue
-        try:
-            if scheduled_at and scheduled_at > datetime.utcnow():
-                # Scheduled task
-                score = scheduled_at.timestamp()
-                await self.redis.zadd(self.scheduled_key, {task_id: score})
-            else:
-                # Immediate task
-                priority_score = priority.value * 1000000 + int(time.time())
-                await self.redis.zadd(self.pending_key, {task_id: priority_score})
-        except RedisError as e:
-            self.logger.error("Failed to enqueue task %s: %s", task_id, e)
-            raise RuntimeError(f"Failed to enqueue task: {e}")
+        await self._add_task_to_queue(task_id, scheduled_at, priority)
 
         self.logger.info("Enqueued task %s: %s", task_id, function_name)
         return task_id

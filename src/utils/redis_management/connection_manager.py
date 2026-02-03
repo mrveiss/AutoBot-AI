@@ -97,11 +97,33 @@ class RedisConnectionManager:
         - TCP keepalive
         - Idle cleanup
         - Comprehensive statistics
+
+        Refactored for Issue #620.
         """
         if hasattr(self, "_initialized"):
             return
 
-        # Existing attributes (backward compatibility)
+        # Initialize all subsystems using helper methods. Issue #620.
+        self._init_pool_and_client_storage()
+        self._init_circuit_breaker_state()
+        self._init_tcp_keepalive_options()
+        self._init_connection_tracking()
+        self._init_configurations()
+        self._init_statistics_tracking()
+        self._init_cleanup_configuration()
+
+        self._initialized = True
+        logger.info(
+            "Enhanced Redis Connection Manager initialized with consolidated features"
+        )
+
+    def _init_pool_and_client_storage(self):
+        """
+        Initialize pool and client storage dictionaries.
+
+        Sets up storage for sync/async pools, clients, metrics, and states.
+        Issue #620.
+        """
         self._sync_pools: Dict[str, ConnectionPool] = {}
         self._async_pools: Dict[str, async_redis.ConnectionPool] = {}
         self._clients: Dict[str, Union[redis.Redis, async_redis.Redis]] = {}
@@ -110,11 +132,37 @@ class RedisConnectionManager:
         self._init_lock = Lock()
         self._async_lock = asyncio.Lock()
 
-        # Circuit breaker state
+    def _init_circuit_breaker_state(self):
+        """
+        Initialize circuit breaker state tracking.
+
+        Sets up failure counts, timing, and circuit state dictionaries.
+        Issue #620.
+        """
         self._failure_counts: Dict[str, int] = {}
         self._last_failure_times: Dict[str, float] = {}
         self._circuit_open: Dict[str, bool] = {}
 
+    def _init_tcp_keepalive_options(self):
+        """
+        Initialize TCP keepalive configuration.
+
+        Configures keepalive probes to detect dead connections.
+        Must be called before _init_configurations. Issue #620.
+        """
+        self._tcp_keepalive_options = {
+            socket.TCP_KEEPIDLE: 600,  # Seconds before sending keepalive probes
+            socket.TCP_KEEPINTVL: 60,  # Interval between keepalive probes
+            socket.TCP_KEEPCNT: 5,  # Number of keepalive probes
+        }
+
+    def _init_connection_tracking(self):
+        """
+        Initialize connection tracking structures.
+
+        Sets up response time tracking, active connections, and WeakSet tracking.
+        Issue #620.
+        """
         # Response time tracking
         self._request_times: Dict[str, List[float]] = {}
         self._max_response_times = 100  # Keep last 100 response times
@@ -122,6 +170,17 @@ class RedisConnectionManager:
         # Active connections tracking
         self._active_connections: Dict[str, weakref.WeakSet] = {}
 
+        # WeakSet connection tracking (doesn't prevent GC)
+        self._active_sync_connections: weakref.WeakSet = weakref.WeakSet()
+        self._active_async_connections: weakref.WeakSet = weakref.WeakSet()
+
+    def _init_configurations(self):
+        """
+        Initialize and load all configurations.
+
+        Loads from multiple sources with priority ordering.
+        Issue #620.
+        """
         # Load configurations from multiple sources
         self._configs: Dict[str, RedisConfig] = {}
         self._load_configurations()
@@ -130,7 +189,13 @@ class RedisConnectionManager:
         self._config = self._load_redis_config()
         self._pool_config = self._load_pool_config()
 
-        # Enhanced statistics tracking
+    def _init_statistics_tracking(self):
+        """
+        Initialize enhanced statistics tracking.
+
+        Sets up database stats, manager stats, and start time.
+        Issue #620.
+        """
         self._database_stats: Dict[str, RedisStats] = {}
         self._manager_stats = ManagerStats(
             total_databases=0,
@@ -140,17 +205,13 @@ class RedisConnectionManager:
         )
         self._start_time = datetime.now()
 
-        # WeakSet connection tracking (doesn't prevent GC)
-        self._active_sync_connections: weakref.WeakSet = weakref.WeakSet()
-        self._active_async_connections: weakref.WeakSet = weakref.WeakSet()
+    def _init_cleanup_configuration(self):
+        """
+        Initialize idle connection cleanup and background tasks.
 
-        # TCP keepalive configuration
-        self._tcp_keepalive_options = {
-            socket.TCP_KEEPIDLE: 600,  # Seconds before sending keepalive probes
-            socket.TCP_KEEPINTVL: 60,  # Interval between keepalive probes
-            socket.TCP_KEEPCNT: 5,  # Number of keepalive probes
-        }
-
+        Configures cleanup intervals and task storage.
+        Issue #620.
+        """
         # Idle connection cleanup configuration
         self._max_idle_time_seconds = 300  # 5 minutes
         self._cleanup_interval_seconds = 60  # Check every minute
@@ -158,11 +219,6 @@ class RedisConnectionManager:
         # Background tasks
         self._health_check_tasks: Dict[str, asyncio.Task] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
-
-        self._initialized = True
-        logger.info(
-            "Enhanced Redis Connection Manager initialized with consolidated features"
-        )
 
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config."""
