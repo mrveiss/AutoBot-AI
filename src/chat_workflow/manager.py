@@ -557,6 +557,113 @@ class ChatWorkflowManager(
             return (streaming_msg, new_segment, new_type, True, new_segment)
         return (None, None, new_type, False, None)
 
+    def _check_tool_call_completion(
+        self, llm_response: str, tool_call_completed: bool
+    ) -> bool:
+        """
+        Check if tool call has completed in accumulated response.
+
+        Issue #620: Extracted from _stream_llm_response to reduce function length.
+        Issue #727: Detects </tool_call> to stop streaming hallucinations.
+
+        Args:
+            llm_response: Accumulated LLM response text
+            tool_call_completed: Current completion state
+
+        Returns:
+            True if tool call is now complete, False otherwise. Issue #620.
+        """
+        if not tool_call_completed and _TOOL_CALL_COMPLETE_RE.search(llm_response):
+            logger.info(
+                "[Issue #727] Tool call completion detected - stopping frontend streaming "
+                "to prevent hallucination display. Response length: %d",
+                len(llm_response),
+            )
+            return True
+        return tool_call_completed
+
+    def _process_chunk_type_transition(
+        self,
+        chunk_text: str,
+        new_type: str,
+        current_message_type: str,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+        llm_response: str,
+        current_segment: str,
+    ) -> tuple:
+        """
+        Process type transitions and update streaming message state.
+
+        Issue #620: Extracted from _stream_llm_response. Issue #620.
+        """
+        complete_msg, _, new_segment, new_type = self._handle_type_transition(
+            new_type,
+            current_message_type,
+            streaming_msg.id,
+            selected_model,
+            llm_response,
+            chunk_text,
+        )
+
+        (
+            new_msg,
+            new_segment_val,
+            new_type,
+            just_transitioned,
+            transition_content,
+        ) = self._apply_type_transition(
+            complete_msg,
+            new_segment,
+            new_type,
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+        )
+
+        if new_msg:
+            streaming_msg, current_segment, current_message_type = (
+                new_msg,
+                new_segment_val,
+                new_type,
+            )
+
+        return (
+            complete_msg,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+            just_transitioned,
+            transition_content,
+        )
+
+    def _stream_chunk_content(
+        self,
+        streaming_msg,
+        chunk_text: str,
+        just_transitioned: bool,
+        transition_content: Optional[str],
+        current_message_type: str,
+    ) -> None:
+        """
+        Stream chunk content to the streaming message.
+
+        Issue #620: Extracted from _stream_llm_response to reduce function length.
+        Issue #656: Uses stream() to append chunk and increment version.
+        Issue #680: After type transition, stream content AFTER the tag. Issue #620.
+        """
+        if just_transitioned and transition_content is not None:
+            if transition_content:
+                streaming_msg.stream(transition_content)
+        else:
+            streaming_msg.stream(chunk_text)
+        streaming_msg.set_metadata("display_type", current_message_type)
+        streaming_msg.set_metadata("message_type", "llm_response_chunk")
+
     async def _stream_llm_response(
         self,
         response,
@@ -568,18 +675,15 @@ class ChatWorkflowManager(
         """
         Stream LLM response chunks and yield WorkflowMessages.
 
+        Issue #620: Refactored using Extract Method to reduce function length.
         Issue #656: Uses StreamingMessage for stable identity and version tracking.
-        Issue #665: Refactored to extract helper functions and reduce complexity.
         Issue #727: Stops streaming after </tool_call> to prevent hallucination display.
         """
         llm_response = ""
         current_segment = ""
         current_message_type = "response"
-
-        # Issue #727: Track tool call completion to stop streaming hallucinations
         tool_call_completed = False
 
-        # Issue #656: Use StreamingMessage for stable identity
         streaming_msg = self._init_streaming_message(
             "response",
             selected_model,
@@ -602,19 +706,10 @@ class ChatWorkflowManager(
                 chunk_data, llm_response, current_segment, current_message_type
             )
 
-            # Issue #727: Check if tool call just completed in accumulated response
-            # Once detected, we stop yielding to frontend but continue accumulating
-            # for proper tool call parsing. Content after </tool_call> is discarded.
-            if not tool_call_completed and _TOOL_CALL_COMPLETE_RE.search(llm_response):
-                tool_call_completed = True
-                logger.info(
-                    "[Issue #727] Tool call completion detected - stopping frontend streaming "
-                    "to prevent hallucination display. Response length: %d",
-                    len(llm_response),
-                )
+            tool_call_completed = self._check_tool_call_completion(
+                llm_response, tool_call_completed
+            )
 
-            # Issue #727: Skip yielding to frontend after tool call is complete
-            # This prevents hallucinated fake results from being displayed
             if tool_call_completed:
                 if chunk_data.get("done", False):
                     self._log_stream_completion(llm_response)
@@ -623,56 +718,36 @@ class ChatWorkflowManager(
                 continue
 
             if chunk_text:
-                # Handle type transitions
                 (
                     complete_msg,
-                    new_id,
-                    new_segment,
-                    new_type,
-                ) = self._handle_type_transition(
-                    new_type,
+                    streaming_msg,
+                    current_segment,
                     current_message_type,
-                    streaming_msg.id,
-                    selected_model,
-                    llm_response,
-                    chunk_text,
-                )
-
-                # Apply transition if needed
-                (
-                    new_msg,
-                    new_segment_val,
-                    new_type,
                     just_transitioned,
                     transition_content,
-                ) = self._apply_type_transition(
-                    complete_msg,
-                    new_segment,
+                ) = self._process_chunk_type_transition(
+                    chunk_text,
                     new_type,
+                    current_message_type,
+                    streaming_msg,
                     selected_model,
                     terminal_session_id,
                     used_knowledge,
                     rag_citations,
+                    llm_response,
+                    current_segment,
                 )
 
                 if complete_msg:
                     yield (complete_msg, llm_response, False, True)
 
-                if new_msg:
-                    streaming_msg = new_msg
-                    current_segment = new_segment_val
-                    current_message_type = new_type
-
-                # Issue #656: Use stream() to append chunk and increment version
-                # Issue #680: After type transition, stream the content AFTER the tag, not raw chunk
-                if just_transitioned and transition_content is not None:
-                    if transition_content:
-                        streaming_msg.stream(transition_content)
-                else:
-                    streaming_msg.stream(chunk_text)
-                streaming_msg.set_metadata("display_type", current_message_type)
-                streaming_msg.set_metadata("message_type", "llm_response_chunk")
-
+                self._stream_chunk_content(
+                    streaming_msg,
+                    chunk_text,
+                    just_transitioned,
+                    transition_content,
+                    current_message_type,
+                )
                 yield (streaming_msg.to_workflow_message(), llm_response, False, False)
 
             if chunk_data.get("done", False):
@@ -807,6 +882,51 @@ before summarizing.
         )
         return tool_calls
 
+    def _create_llm_service_error(self, status_code: int) -> WorkflowMessage:
+        """
+        Create an error WorkflowMessage for LLM service failures.
+
+        Issue #620: Extracted from _process_single_llm_iteration to reduce function length.
+
+        Args:
+            status_code: HTTP status code from the failed request
+
+        Returns:
+            WorkflowMessage with error details. Issue #620.
+        """
+        logger.error("[ChatWorkflowManager] Ollama request failed: %s", status_code)
+        return WorkflowMessage(
+            type="error",
+            content=f"LLM service error: {status_code}",
+            metadata={"error": True},
+        )
+
+    async def _stream_and_collect_llm_chunks(
+        self,
+        response,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ):
+        """
+        Stream LLM response and collect chunks.
+
+        Issue #620: Extracted from _process_single_llm_iteration to reduce function length.
+
+        Yields:
+            WorkflowMessage chunks, then the final llm_response string. Issue #620.
+        """
+        llm_response = ""
+        async for chunk_msg, llm_response, is_done, _ in self._stream_llm_response(
+            response, selected_model, terminal_session_id, used_knowledge, rag_citations
+        ):
+            if chunk_msg:
+                yield chunk_msg
+            if is_done:
+                break
+        yield llm_response
+
     async def _process_single_llm_iteration(
         self,
         http_client,
@@ -821,8 +941,8 @@ before summarizing.
         """
         Process a single LLM iteration.
 
+        Issue #620: Refactored using Extract Method to reduce function length.
         Yields WorkflowMessage chunks, then (llm_response, tool_calls).
-        Issue #620: Refactored to use extracted helper method.
         """
         import aiohttp
 
@@ -838,34 +958,21 @@ before summarizing.
                 )
 
                 if response.status != 200:
-                    logger.error(
-                        "[ChatWorkflowManager] Ollama request failed: %s",
-                        response.status,
-                    )
-                    yield WorkflowMessage(
-                        type="error",
-                        content=f"LLM service error: {response.status}",
-                        metadata={"error": True},
-                    )
+                    yield self._create_llm_service_error(response.status)
                     yield (None, None)
                     return
 
-                async for (
-                    chunk_msg,
-                    llm_response,
-                    is_done,
-                    _,
-                ) in self._stream_llm_response(
+                async for item in self._stream_and_collect_llm_chunks(
                     response,
                     selected_model,
                     terminal_session_id,
                     used_knowledge,
                     rag_citations,
                 ):
-                    if chunk_msg:
-                        yield chunk_msg
-                    if is_done:
-                        break
+                    if isinstance(item, str):
+                        llm_response = item
+                    else:
+                        yield item
 
                 logger.info(
                     "[ChatWorkflowManager] Full LLM response length: %d chars (iter %d)",
@@ -1207,7 +1314,7 @@ before summarizing.
         )
         return True
 
-    async def _run_continuation_iteration(
+    async def _yield_llm_response_and_check_stop(
         self,
         http_client,
         current_prompt: str,
@@ -1215,19 +1322,13 @@ before summarizing.
         ctx: LLMIterationContext,
     ):
         """
-        Run a single continuation iteration. Yields WorkflowMessages, then (llm_response, tool_calls, should_continue).
+        Yield LLM response items and check if iteration should stop early.
 
-        Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
-        Issue #651: Fixed premature loop termination by allowing continuation even with empty results.
-        Issue #654: Added support for 'respond' tool with break_loop pattern.
-        Issue #665: Refactored to extract helper functions and reduce complexity.
+        Issue #620: Extracted from _run_continuation_iteration to reduce function length.
+
+        Yields:
+            WorkflowMessages, then (llm_response, tool_calls, should_stop). Issue #620.
         """
-        logger.info(
-            "[Issue #651] Starting iteration %d - execution history has %d entries",
-            iteration,
-            len(ctx.execution_history),
-        )
-
         llm_response = None
         tool_calls = None
         should_stop = False
@@ -1240,10 +1341,19 @@ before summarizing.
             else:
                 yield item
 
-        if should_stop:
-            yield (llm_response, tool_calls, False)
-            return
+        yield (llm_response, tool_calls, should_stop)
 
+    async def _yield_tool_results_and_decide(
+        self, tool_calls: List[Dict[str, Any]], iteration: int, ctx: LLMIterationContext
+    ):
+        """
+        Yield tool execution results and determine if loop should continue.
+
+        Issue #620: Extracted from _run_continuation_iteration to reduce function length.
+
+        Yields:
+            WorkflowMessages, then should_continue boolean. Issue #620.
+        """
         new_results = []
         has_pending_approval = False
         should_break = False
@@ -1269,6 +1379,52 @@ before summarizing.
             new_results,
             has_pending_approval,
         )
+        yield should_continue
+
+    async def _run_continuation_iteration(
+        self,
+        http_client,
+        current_prompt: str,
+        iteration: int,
+        ctx: LLMIterationContext,
+    ):
+        """
+        Run a single continuation iteration.
+
+        Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        Issue #620: Refactored using Extract Method to reduce function length.
+        Yields WorkflowMessages, then (llm_response, tool_calls, should_continue).
+        """
+        logger.info(
+            "[Issue #651] Starting iteration %d - execution history has %d entries",
+            iteration,
+            len(ctx.execution_history),
+        )
+
+        llm_response = None
+        tool_calls = None
+        should_stop = False
+
+        async for item in self._yield_llm_response_and_check_stop(
+            http_client, current_prompt, iteration, ctx
+        ):
+            if isinstance(item, tuple) and len(item) == 3:
+                llm_response, tool_calls, should_stop = item
+            else:
+                yield item
+
+        if should_stop:
+            yield (llm_response, tool_calls, False)
+            return
+
+        should_continue = False
+        async for item in self._yield_tool_results_and_decide(
+            tool_calls, iteration, ctx
+        ):
+            if isinstance(item, bool):
+                should_continue = item
+            else:
+                yield item
 
         yield (llm_response, tool_calls, should_continue)
 
@@ -1534,9 +1690,7 @@ before summarizing.
                 message_type="default",
                 session_id=session_id,
             )
-            logger.debug(
-                "✅ Persisted user message immediately: session=%s", session_id
-            )
+            logger.debug("✅ Persisted user message immediately: session=%s", session_id)
         except Exception as persist_error:
             logger.error(
                 "Failed to persist user message immediately: %s", persist_error
@@ -1605,6 +1759,61 @@ before summarizing.
         except Exception as persist_error:
             logger.error("Failed to persist slash command response: %s", persist_error)
 
+    async def _prepare_llm_workflow_params(
+        self, session, message: str, context: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Prepare LLM request parameters from session and message.
+
+        Issue #620: Extracted from _execute_llm_workflow to reduce function length.
+        Issue #715: Registers user message in history before building context.
+
+        Returns:
+            Dictionary with LLM parameters. Issue #620.
+        """
+        self._register_user_message_in_history(session, message)
+
+        use_knowledge = context.get("use_knowledge", True) if context else True
+        llm_params = await self._prepare_llm_request_params(
+            session, message, use_knowledge=use_knowledge
+        )
+
+        logger.info(
+            "[ChatWorkflowManager] Initial prompt length: %d characters",
+            len(llm_params["prompt"]),
+        )
+        return llm_params
+
+    def _create_llm_iteration_context(
+        self,
+        llm_params: Dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        message: str,
+        workflow_messages: List[WorkflowMessage],
+    ) -> LLMIterationContext:
+        """
+        Create LLMIterationContext from prepared parameters.
+
+        Issue #620: Extracted from _execute_llm_workflow to reduce function length.
+        Issue #375: Uses context object to reduce parameter count.
+
+        Returns:
+            Configured LLMIterationContext. Issue #620.
+        """
+        return LLMIterationContext(
+            ollama_endpoint=llm_params["endpoint"],
+            selected_model=llm_params["model"],
+            session_id=session_id,
+            terminal_session_id=terminal_session_id,
+            used_knowledge=llm_params.get("used_knowledge", False),
+            rag_citations=llm_params.get("citations", []),
+            workflow_messages=workflow_messages,
+            system_prompt=llm_params.get("system_prompt", ""),
+            initial_prompt=llm_params["prompt"],
+            message=message,
+        )
+
     async def _execute_llm_workflow(
         self,
         session_id: str,
@@ -1614,57 +1823,31 @@ before summarizing.
         terminal_session_id: str,
         workflow_messages: List[WorkflowMessage],
     ):
-        """Execute the main LLM workflow. Yields WorkflowMessages."""
-        # Issue #715: Register user message in history BEFORE building LLM context
-        # This fixes race condition where concurrent messages don't see each other
-        self._register_user_message_in_history(session, message)
+        """
+        Execute the main LLM workflow.
 
-        # Stage 2: Prepare LLM request parameters (includes RAG knowledge retrieval)
-        use_knowledge = context.get("use_knowledge", True) if context else True
-        llm_params = await self._prepare_llm_request_params(
-            session, message, use_knowledge=use_knowledge
-        )
-        ollama_endpoint = llm_params["endpoint"]
-        selected_model = llm_params["model"]
-        current_prompt = llm_params["prompt"]
-        system_prompt = llm_params.get("system_prompt", "")
-        rag_citations = llm_params.get("citations", [])
-        used_knowledge = llm_params.get("used_knowledge", False)
+        Issue #620: Refactored using Extract Method to reduce function length.
+        Yields WorkflowMessages.
+        """
+        llm_params = await self._prepare_llm_workflow_params(session, message, context)
 
-        logger.info(
-            "[ChatWorkflowManager] Initial prompt length: %d characters",
-            len(current_prompt),
+        ctx = self._create_llm_iteration_context(
+            llm_params, session_id, terminal_session_id, message, workflow_messages
         )
 
-        # Stage 3: Continuation loop for multi-step tasks (Issue #375: use context object)
-        ctx = LLMIterationContext(
-            ollama_endpoint=ollama_endpoint,
-            selected_model=selected_model,
-            session_id=session_id,
-            terminal_session_id=terminal_session_id,
-            used_knowledge=used_knowledge,
-            rag_citations=rag_citations,
-            workflow_messages=workflow_messages,
-            system_prompt=system_prompt,
-            initial_prompt=current_prompt,
-            message=message,
-        )
         all_llm_responses = []
         async for item in self._execute_llm_continuation_loop(ctx):
             if isinstance(item, tuple) and len(item) == 3:
                 all_llm_responses, _, error = item
                 if error:
-                    return  # Error was already yielded by helper
+                    return
             else:
                 yield item
 
-        # Stage 5: Persist conversation
         combined_response = "\n\n".join(all_llm_responses)
         await self._persist_conversation(
             session_id, session, message, combined_response
         )
-
-        # Stage 6: Persist WorkflowMessages
         await self._persist_workflow_messages(
             session_id, workflow_messages, combined_response
         )

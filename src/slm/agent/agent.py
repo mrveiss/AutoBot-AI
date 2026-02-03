@@ -36,7 +36,24 @@ DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
 # Issue #694: Use environment variable with fallback
-DEFAULT_ADMIN_URL = os.getenv("SLM_ADMIN_URL", "http://172.16.168.19:8000")
+# Issue #768: Use SSOT config when available, fall back to env var
+
+
+def _get_default_admin_url() -> str:
+    """Get default admin URL from env or SSOT config."""
+    env_url = os.getenv("SLM_ADMIN_URL")
+    if env_url:
+        return env_url
+    try:
+        from src.config.ssot_config import get_config
+
+        return get_config().slm_url
+    except Exception:
+        # Fallback for standalone deployments without full AutoBot
+        return "http://172.16.168.19:8000"
+
+
+DEFAULT_ADMIN_URL = _get_default_admin_url()
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 # Buffer database path - use /var/lib/slm-agent for systemd compatibility
 # (systemd service has ProtectHome=read-only and ReadWritePaths=/var/lib/slm-agent)

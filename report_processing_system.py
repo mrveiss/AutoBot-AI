@@ -683,7 +683,7 @@ class ReportProcessingCoordinator:
         for category in summary["archive_summary"]["categories_created"]:
             content += f"- {category}\n"
 
-        content += f"""
+        content += """
 
 ## Recommendations
 
@@ -692,7 +692,7 @@ class ReportProcessingCoordinator:
         for rec in summary["recommendations"]:
             content += f"- {rec}\n"
 
-        content += f"""
+        content += """
 
 ## Processing Statistics
 

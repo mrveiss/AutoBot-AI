@@ -37,7 +37,16 @@ exclude =
     .tox,
     build,
     dist,
-    *.egg-info
+    *.egg-info,
+    # Auxiliary directories (not production code)
+    debug,
+    docker,
+    code-analysis-suite,
+    resources,
+    analysis,
+    # Separate deployable components with own standards
+    slm-server,
+    slm-admin
 
 # Per-file ignores for intentional patterns
 per-file-ignores =
