@@ -17,7 +17,7 @@ from src.constants.threshold_constants import TimingConstants
 logger = logging.getLogger(__name__)
 
 # Constants for unit conversions and hardware detection
-BYTES_PER_GB = 1024 ** 3  # Bytes to gigabytes conversion
+BYTES_PER_GB = 1024**3  # Bytes to gigabytes conversion
 NVIDIA_SMI_EXPECTED_FIELDS = 6  # Expected field count from nvidia-smi CSV output
 
 # Conditional torch import for environments without CUDA
@@ -30,15 +30,14 @@ except ImportError:
     TORCH_AVAILABLE = False
     torch = None
 
+# Import the centralized ConfigManager and Redis client utility
+from src.config import config as global_config_manager
 from src.event_manager import event_manager
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 from src.security_layer import SecurityLayer
 from src.system_integration import SystemIntegration
 from src.task_handlers import TaskExecutor
-
-# Import the centralized ConfigManager and Redis client utility
-from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS
@@ -73,7 +72,9 @@ class WorkerNode:
             if self.redis_client:
                 logger.info("Worker connected to Redis via centralized utility")
             else:
-                logger.error("Worker failed to get Redis client from centralized utility")
+                logger.error(
+                    "Worker failed to get Redis client from centralized utility"
+                )
         else:
             logger.info(
                 "Worker node configured for local task transport. "
@@ -118,7 +119,9 @@ class WorkerNode:
             },
             "ram": {
                 "total_gb": round(psutil.virtual_memory().total / BYTES_PER_GB, 2),
-                "available_gb": round(psutil.virtual_memory().available / BYTES_PER_GB, 2),
+                "available_gb": round(
+                    psutil.virtual_memory().available / BYTES_PER_GB, 2
+                ),
                 "usage_percent": psutil.virtual_memory().percent,
             },
             "kb_supported": True,
@@ -150,7 +153,8 @@ class WorkerNode:
                 {
                     "name": torch.cuda.get_device_name(i),
                     "memory_gb": round(
-                        torch.cuda.get_device_properties(i).total_memory / BYTES_PER_GB, 2
+                        torch.cuda.get_device_properties(i).total_memory / BYTES_PER_GB,
+                        2,
                     ),
                 }
             )
@@ -278,7 +282,19 @@ class WorkerNode:
         """
         task_type = task_payload.get("type")
         task_id = task_payload.get("task_id", "N/A")
-        user_role = task_payload.get("user_role", "guest")
+        # Issue #744: Require explicit role - no guest fallback for security
+        user_role = task_payload.get("user_role")
+        if not user_role:
+            self.security_layer.audit_log(
+                f"execute_task_{task_type}",
+                "unknown",
+                "denied",
+                {"task_id": task_id, "reason": "no_user_role_provided"},
+            )
+            return {
+                "status": "error",
+                "message": "Task rejected: user_role is required but not provided.",
+            }
 
         # Permission check - common logic for all tasks
         permission_check = self.security_layer.check_permission(

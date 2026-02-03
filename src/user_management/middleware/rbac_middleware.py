@@ -13,9 +13,9 @@ import uuid
 from functools import wraps
 from typing import Callable, List, Optional, Set
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 
-from src.user_management.config import DeploymentMode, get_deployment_config
+from src.user_management.config import get_deployment_config
 from src.user_management.database import db_session_context
 from src.user_management.services import TenantContext, UserService
 
@@ -216,6 +216,14 @@ def require_permission(permission: str):
                     except (ValueError, TypeError):
                         pass
 
+            # Issue #744: Return 401 for unauthenticated, 403 for unauthorized
+            if user_id is None:
+                logger.warning("Authentication required for permission: %s", permission)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required",
+                )
+
             # Check permission
             has_permission = await rbac_middleware.check_permission(
                 user_id, permission, org_id
@@ -281,6 +289,16 @@ def require_any_permission(permissions: List[str]):
                         org_id = uuid.UUID(user_data["org_id"])
                     except (ValueError, TypeError):
                         pass
+
+            # Issue #744: Return 401 for unauthenticated, 403 for unauthorized
+            if user_id is None:
+                logger.warning(
+                    "Authentication required for permissions: %s", permissions
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required",
+                )
 
             has_permission = await rbac_middleware.check_any_permission(
                 user_id, permissions, org_id
@@ -348,6 +366,16 @@ def require_all_permissions(permissions: List[str]):
                         org_id = uuid.UUID(user_data["org_id"])
                     except (ValueError, TypeError):
                         pass
+
+            # Issue #744: Return 401 for unauthenticated, 403 for unauthorized
+            if user_id is None:
+                logger.warning(
+                    "Authentication required for permissions: %s", permissions
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required",
+                )
 
             has_permission = await rbac_middleware.check_all_permissions(
                 user_id, permissions, org_id

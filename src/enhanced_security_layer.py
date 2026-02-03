@@ -9,19 +9,17 @@ Integrates secure command execution with role-based permissions
 import asyncio
 import datetime
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
-import logging
-
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
 from src.secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
     SecurityPolicy,
 )
-
-# Import the centralized ConfigManager
-from src.config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +29,9 @@ HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
 COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
 
 
-def _parse_audit_log_entry(line: str, user: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _parse_audit_log_entry(
+    line: str, user: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """Parse a single audit log line and filter by user (Issue #315: extracted).
 
     Args:
@@ -315,17 +315,13 @@ class EnhancedSecurityLayer:
         )
         return {
             "stdout": "",
-            "stderr": (
-                "Permission denied: You do not have shell execution privileges"
-            ),
+            "stderr": ("Permission denied: You do not have shell execution privileges"),
             "return_code": 1,
             "status": "error",
             "security": {"blocked": True, "reason": "no_permission"},
         }
 
-    def _should_force_approval(
-        self, command: str, user_role: str
-    ) -> bool:
+    def _should_force_approval(self, command: str, user_role: str) -> bool:
         """
         Determine if command requires forced approval based on role and risk.
 
@@ -349,13 +345,13 @@ class EnhancedSecurityLayer:
 
         # Check if user has limited shell execution permissions
         risk, _ = self.command_executor.assess_command_risk(command)
-        if (
-            "allow_shell_execute_safe" in role_permissions
-            and risk != CommandRisk.SAFE
-        ):
+        if "allow_shell_execute_safe" in role_permissions and risk != CommandRisk.SAFE:
             # User can only execute safe commands without approval
             return True
-        elif "allow_shell_execute" in role_permissions and risk in HIGH_RISK_COMMAND_RISKS:
+        elif (
+            "allow_shell_execute" in role_permissions
+            and risk in HIGH_RISK_COMMAND_RISKS
+        ):
             # User has shell execute permission but high-risk commands need approval
             return True
 
@@ -400,7 +396,8 @@ class EnhancedSecurityLayer:
                 "allow_kb_read",
             ],
             "readonly": ["files.view", "files.download", "allow_kb_read"],
-            "guest": ["files.view"],
+            # Issue #744: Guest role REMOVED - security vulnerability
+            # Unauthenticated requests must be rejected, not assigned permissions
         }
 
         return default_role_permissions.get(user_role, [])

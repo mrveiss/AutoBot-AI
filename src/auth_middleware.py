@@ -601,7 +601,10 @@ def check_admin_permission(request: Request) -> bool:
     if not user_data:
         raise_auth_error("AUTH_0002", "Authentication required")
 
-    user_role = user_data.get("role", "guest")
+    # Issue #744: Require explicit role - no guest fallback for security
+    user_role = user_data.get("role")
+    if not user_role:
+        raise_auth_error("AUTH_0002", "User role not assigned - access denied")
     if user_role != "admin":
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 

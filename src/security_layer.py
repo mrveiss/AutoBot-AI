@@ -11,10 +11,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-from src.constants.network_constants import NetworkConstants
-
 # Import the centralized ConfigManager
 from src.config import config as global_config_manager
+from src.constants.network_constants import NetworkConstants
 
 # Performance optimization: O(1) lookup for boolean string values (Issue #326)
 BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
@@ -31,8 +30,7 @@ class SecurityLayer:
 
         # Check for single-user mode (development/personal use)
         self.single_user_mode = (
-            os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower()
-            in BOOLEAN_TRUE_VALUES
+            os.getenv("AUTOBOT_SINGLE_USER_MODE", "true").lower() in BOOLEAN_TRUE_VALUES
         )
 
         # If single-user mode is enabled, disable all authentication
@@ -163,15 +161,8 @@ class SecurityLayer:
                 "allow_kb_read",
                 "allow_kb_write",
             ],
-            "guest": [
-                "files.view",
-                "files.download",
-                "files.upload",
-                "files.create",
-                "files.delete",
-                "allow_goal_submission",
-                "allow_kb_read",
-            ],  # Development mode - permissive guest access
+            # Issue #744: Guest role REMOVED - security vulnerability
+            # Unauthenticated requests must be rejected, not assigned permissions
         }
 
         return default_role_permissions.get(user_role, [])

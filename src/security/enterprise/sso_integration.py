@@ -274,7 +274,9 @@ class SSOIntegrationFramework:
                     json.dump(provider_dict, f, indent=2, ensure_ascii=False)
 
             except Exception as e:
-                logger.error("Failed to save SSO provider %s: %s", provider.provider_id, e)
+                logger.error(
+                    "Failed to save SSO provider %s: %s", provider.provider_id, e
+                )
 
     def _initialize_crypto_keys(self):
         """Initialize cryptographic keys for SAML and JWT signing (thread-safe, Issue #378)"""
@@ -654,12 +656,13 @@ class SSOIntegrationFramework:
                 data=token_data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             ) as response:
-
                 if response.status == 200:
                     return await response.json()
                 else:
                     error_text = await response.text()
-                    logger.error("Token exchange failed: %s - %s", response.status, error_text)
+                    logger.error(
+                        "Token exchange failed: %s - %s", response.status, error_text
+                    )
                     return {"error": "Token exchange failed"}
 
         except Exception as e:
@@ -677,7 +680,6 @@ class SSOIntegrationFramework:
             async with await http_client.get(
                 provider.config["userinfo_endpoint"], headers=headers
             ) as response:
-
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -815,8 +817,9 @@ class SSOIntegrationFramework:
         if any(group in user_groups for group in user_groups_config):
             return "user"
 
-        # Default role
-        return role_mapping.get("default_role", "guest")
+        # Issue #744: Default to "user" role instead of "guest" for security
+        # Guest role removed - all authenticated SSO users get at least "user" role
+        return role_mapping.get("default_role", "user")
 
     def get_sso_session(self, session_id: str) -> Optional[SSOSession]:
         """Get SSO session by ID"""

@@ -161,9 +161,13 @@ async def _authorize_file_operation(
     request: Request, session_id: str, operation: str
 ) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted)."""
-    has_permission, user_data = auth_middleware.check_file_permissions(request, operation)
+    has_permission, user_data = auth_middleware.check_file_permissions(
+        request, operation
+    )
     if not has_permission:
-        raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
+        raise HTTPException(
+            status_code=403, detail=f"Insufficient permissions for file {operation}"
+        )
     request.state.user = user_data
     await validate_session_ownership(request, session_id, user_data)
     return user_data
@@ -174,7 +178,9 @@ def _get_required_file_manager(request: Request):
     file_manager = get_conversation_file_manager(request)
     if not file_manager:
         logger.error("ConversationFileManager not available")
-        raise HTTPException(status_code=503, detail="File management service temporarily unavailable")
+        raise HTTPException(
+            status_code=503, detail="File management service temporarily unavailable"
+        )
     return file_manager
 
 
@@ -188,7 +194,12 @@ def _audit_file_operation(
         "ip": request.client.host if request.client else "unknown",
         **details,
     }
-    security_layer.audit_log(action=action, user=user_data.get("username", "unknown"), outcome="success", details=full_details)
+    security_layer.audit_log(
+        action=action,
+        user=user_data.get("username", "unknown"),
+        outcome="success",
+        details=full_details,
+    )
 
 
 def get_conversation_file_manager(request: Request):
@@ -224,7 +235,12 @@ async def validate_session_ownership(
         chat_history_manager = get_chat_history_manager(request)
 
         # Admin users can access all sessions
-        user_role = user_data.get("role", "guest")
+        # Issue #744: Require explicit role - no guest fallback for security
+        user_role = user_data.get("role")
+        if not user_role:
+            raise HTTPException(
+                status_code=403, detail="User role not assigned - access denied"
+            )
         if user_role == "admin":
             logger.debug(
                 f"Admin user {user_data.get('username')} accessing session {session_id}"
@@ -252,7 +268,9 @@ async def validate_session_ownership(
                 status_code=403, detail="Access denied: You do not own this session"
             )
 
-        logger.debug("User %s validated as owner of session %s", current_user, session_id)
+        logger.debug(
+            "User %s validated as owner of session %s", current_user, session_id
+        )
         return True
 
     except HTTPException:
@@ -355,7 +373,10 @@ async def _validate_and_read_upload_file(
 )
 @router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 async def upload_conversation_file(
-    request: Request, session_id: str, file: UploadFile = File(...), description: Optional[str] = Form(None),
+    request: Request,
+    session_id: str,
+    file: UploadFile = File(...),
+    description: Optional[str] = Form(None),
 ):
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
@@ -364,14 +385,25 @@ async def upload_conversation_file(
         file_manager = _get_required_file_manager(request)
 
         file_info_dict = await file_manager.upload_file(
-            session_id=session_id, filename=file.filename, content=content,
-            user_id=user_data.get("username"), description=description,
+            session_id=session_id,
+            filename=file.filename,
+            content=content,
+            user_id=user_data.get("username"),
+            description=description,
         )
         file_info = ConversationFileInfo(**file_info_dict)
 
-        _audit_file_operation(request, "conversation_file_upload", user_data, session_id, {
-            "filename": file.filename, "file_id": file_info.file_id, "size": len(content),
-        })
+        _audit_file_operation(
+            request,
+            "conversation_file_upload",
+            user_data,
+            session_id,
+            {
+                "filename": file.filename,
+                "file_id": file_info.file_id,
+                "size": len(content),
+            },
+        )
 
         upload_id = (
             f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
@@ -759,25 +791,42 @@ async def transfer_conversation_files(
         file_manager = _get_required_file_manager(request)
 
         result = await file_manager.transfer_files(
-            session_id=session_id, file_ids=transfer_request.file_ids,
-            destination=transfer_request.destination.value, target_path=transfer_request.target_path,
-            copy=transfer_request.copy, tags=transfer_request.tags, user_id=user_data.get("username"),
+            session_id=session_id,
+            file_ids=transfer_request.file_ids,
+            destination=transfer_request.destination.value,
+            target_path=transfer_request.target_path,
+            copy=transfer_request.copy,
+            tags=transfer_request.tags,
+            user_id=user_data.get("username"),
         )
 
-        _audit_file_operation(request, "conversation_files_transfer", user_data, session_id, {
-            "destination": transfer_request.destination.value, "file_count": len(transfer_request.file_ids),
-            "transferred": result["total_transferred"], "failed": result["total_failed"], "copy": transfer_request.copy,
-        })
+        _audit_file_operation(
+            request,
+            "conversation_files_transfer",
+            user_data,
+            session_id,
+            {
+                "destination": transfer_request.destination.value,
+                "file_count": len(transfer_request.file_ids),
+                "transferred": result["total_transferred"],
+                "failed": result["total_failed"],
+                "copy": transfer_request.copy,
+            },
+        )
 
         return FileTransferResponse(
             success=result["total_failed"] == 0,
             message=f"Transferred {result['total_transferred']} files, {result['total_failed']} failed",
-            transferred_files=result["transferred_files"], failed_files=result["failed_files"],
-            total_transferred=result["total_transferred"], total_failed=result["total_failed"],
+            transferred_files=result["transferred_files"],
+            failed_files=result["failed_files"],
+            total_transferred=result["total_transferred"],
+            total_failed=result["total_failed"],
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Error transferring conversation files: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error transferring files: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error transferring files: {str(e)}"
+        )

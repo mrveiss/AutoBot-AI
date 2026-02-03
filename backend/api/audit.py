@@ -87,7 +87,10 @@ def check_admin_permission(request: Request) -> bool:
             )
 
         # Check for admin role
-        user_role = user_data.get("role", "guest")
+        # Issue #744: Require explicit role - no guest fallback for security
+        user_role = user_data.get("role")
+        if not user_role:
+            raise_auth_error("AUTH_0002", "User role not assigned - access denied")
         if user_role != "admin":
             raise_auth_error(
                 "AUTH_0003", "Admin permission required for audit log access"
@@ -103,18 +106,30 @@ def check_admin_permission(request: Request) -> bool:
 
 
 def _build_query_dict(
-    start_time: Optional[str], end_time: Optional[str], operation: Optional[str],
-    user_id: Optional[str], session_id: Optional[str], vm_name: Optional[str],
-    result: Optional[AuditResult], limit: int, offset: int,
+    start_time: Optional[str],
+    end_time: Optional[str],
+    operation: Optional[str],
+    user_id: Optional[str],
+    session_id: Optional[str],
+    vm_name: Optional[str],
+    result: Optional[AuditResult],
+    limit: int,
+    offset: int,
 ) -> dict:
     """Build query parameters dictionary for response.
 
     Issue #665: Extracted from query_audit_logs to reduce function length.
     """
     return {
-        "start_time": start_time, "end_time": end_time, "operation": operation,
-        "user_id": user_id, "session_id": session_id, "vm_name": vm_name,
-        "result": result, "limit": limit, "offset": offset,
+        "start_time": start_time,
+        "end_time": end_time,
+        "operation": operation,
+        "user_id": user_id,
+        "session_id": session_id,
+        "vm_name": vm_name,
+        "result": result,
+        "limit": limit,
+        "offset": offset,
     }
 
 
@@ -148,9 +163,15 @@ async def query_audit_logs(
         end_dt = datetime.fromisoformat(end_time) if end_time else None
 
         entries = await audit_logger.query(
-            start_time=start_dt, end_time=end_dt, operation=operation,
-            user_id=user_id, session_id=session_id, vm_name=vm_name,
-            result=result, limit=limit + 1, offset=offset,
+            start_time=start_dt,
+            end_time=end_dt,
+            operation=operation,
+            user_id=user_id,
+            session_id=session_id,
+            vm_name=vm_name,
+            result=result,
+            limit=limit + 1,
+            offset=offset,
         )
 
         has_more = len(entries) > limit
@@ -163,8 +184,15 @@ async def query_audit_logs(
             has_more=has_more,
             entries=[e.to_response_dict() for e in entries],
             query=_build_query_dict(
-                start_time, end_time, operation, user_id,
-                session_id, vm_name, result, limit, offset
+                start_time,
+                end_time,
+                operation,
+                user_id,
+                session_id,
+                vm_name,
+                result,
+                limit,
+                offset,
             ),
         )
     except HTTPException:

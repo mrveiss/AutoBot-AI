@@ -8,10 +8,9 @@ Implements database-driven RBAC (Role-Based Access Control).
 """
 
 import uuid
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -292,14 +291,30 @@ SYSTEM_ROLES = {
         "description": "Full administrative access",
         "priority": 100,
         "permissions": [
-            "users:read", "users:create", "users:update", "users:delete",
-            "teams:read", "teams:create", "teams:manage", "teams:delete",
-            "knowledge:read", "knowledge:write", "knowledge:delete",
-            "chat:use", "chat:history",
-            "files:view", "files:upload", "files:download", "files:delete",
-            "settings:read", "settings:write",
-            "admin:access", "admin:users", "admin:organization",
-            "audit:read", "audit:write",
+            "users:read",
+            "users:create",
+            "users:update",
+            "users:delete",
+            "teams:read",
+            "teams:create",
+            "teams:manage",
+            "teams:delete",
+            "knowledge:read",
+            "knowledge:write",
+            "knowledge:delete",
+            "chat:use",
+            "chat:history",
+            "files:view",
+            "files:upload",
+            "files:download",
+            "files:delete",
+            "settings:read",
+            "settings:write",
+            "admin:access",
+            "admin:users",
+            "admin:organization",
+            "audit:read",
+            "audit:write",
         ],
     },
     "user": {
@@ -308,9 +323,13 @@ SYSTEM_ROLES = {
         "permissions": [
             "users:read",
             "teams:read",
-            "knowledge:read", "knowledge:write",
-            "chat:use", "chat:history",
-            "files:view", "files:upload", "files:download",
+            "knowledge:read",
+            "knowledge:write",
+            "chat:use",
+            "chat:history",
+            "files:view",
+            "files:upload",
+            "files:download",
             "settings:read",
         ],
     },
@@ -322,17 +341,11 @@ SYSTEM_ROLES = {
             "teams:read",
             "knowledge:read",
             "chat:history",
-            "files:view", "files:download",
+            "files:view",
+            "files:download",
             "settings:read",
         ],
     },
-    "guest": {
-        "description": "Limited guest access",
-        "priority": 1,
-        "permissions": [
-            "chat:use",
-            "knowledge:read",
-            "files:view",
-        ],
-    },
+    # Issue #744: Guest role REMOVED - security vulnerability
+    # Unauthenticated requests must be rejected, not assigned guest permissions
 }
