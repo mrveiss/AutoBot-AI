@@ -39,11 +39,26 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 # Default directories to skip
-_SKIP_DIRS: frozenset = frozenset({
-    "node_modules", "__pycache__", ".git", ".venv", "venv",
-    "dist", "build", ".next", ".nuxt", "coverage", ".pytest_cache",
-    "archive", "archives", "backup", "backups", ".mypy_cache",
-})
+_SKIP_DIRS: frozenset = frozenset(
+    {
+        "node_modules",
+        "__pycache__",
+        ".git",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        ".next",
+        ".nuxt",
+        "coverage",
+        ".pytest_cache",
+        "archive",
+        "archives",
+        "backup",
+        "backups",
+        ".mypy_cache",
+    }
+)
 
 # Similarity thresholds
 SIMILARITY_HIGH = 0.85
@@ -125,15 +140,17 @@ class CrossLanguagePatternDetector:
                 self._chromadb_client = await get_async_chromadb_client(
                     db_path=str(chromadb_path)
                 )
-                self._chromadb_collection = await self._chromadb_client.get_or_create_collection(
-                    name=PATTERNS_COLLECTION,
-                    metadata={
-                        "description": "Cross-language code pattern semantics",
-                        "hnsw:space": "cosine",
-                        "hnsw:construction_ef": 200,
-                        "hnsw:search_ef": 100,
-                        "hnsw:M": 24,
-                    }
+                self._chromadb_collection = (
+                    await self._chromadb_client.get_or_create_collection(
+                        name=PATTERNS_COLLECTION,
+                        metadata={
+                            "description": "Cross-language code pattern semantics",
+                            "hnsw:space": "cosine",
+                            "hnsw:construction_ef": 200,
+                            "hnsw:search_ef": 100,
+                            "hnsw:M": 24,
+                        },
+                    )
                 )
                 logger.info("ChromaDB collection '%s' initialized", PATTERNS_COLLECTION)
             except Exception as e:
@@ -148,8 +165,7 @@ class CrossLanguagePatternDetector:
                 from src.utils.redis_client import get_redis_client
 
                 self._redis_client = await get_redis_client(
-                    async_client=True,
-                    database="analytics"
+                    async_client=True, database="analytics"
                 )
                 logger.info("Redis client initialized for analytics")
             except Exception as e:
@@ -280,7 +296,10 @@ class CrossLanguagePatternDetector:
             ]
             return f"DATA_TYPE {name} FIELDS({', '.join(field_strs)})"
 
-        elif pattern_type == PatternType.API_ENDPOINT or pattern_type == PatternType.API_CALL:
+        elif (
+            pattern_type == PatternType.API_ENDPOINT
+            or pattern_type == PatternType.API_CALL
+        ):
             method = pattern.get("method", "GET")
             path = pattern.get("path", "")
             return f"API {method} {path}"
@@ -291,10 +310,13 @@ class CrossLanguagePatternDetector:
 
         elif pattern_type == PatternType.UTILITY_FUNCTION:
             params = pattern.get("parameters", [])
-            param_str = ", ".join(
-                f"{p.get('name', 'arg')}:{p.get('type', 'any')}"
-                for p in params
-            ) if params else ""
+            param_str = (
+                ", ".join(
+                    f"{p.get('name', 'arg')}:{p.get('type', 'any')}" for p in params
+                )
+                if params
+                else ""
+            )
             is_async = "ASYNC " if pattern.get("is_async") else ""
             return f"{is_async}FUNCTION {name}({param_str})"
 
@@ -383,11 +405,13 @@ class CrossLanguagePatternDetector:
 
         # Get all DTOs
         python_dtos = {
-            p["name"]: p for p in python_patterns
+            p["name"]: p
+            for p in python_patterns
             if p.get("type") == PatternType.DTO_DEFINITION
         }
         ts_dtos = {
-            p["name"]: p for p in typescript_patterns
+            p["name"]: p
+            for p in typescript_patterns
             if p.get("type") == PatternType.DTO_DEFINITION
         }
 
@@ -415,26 +439,32 @@ class CrossLanguagePatternDetector:
         ts_only = set(ts_fields.keys()) - set(py_fields.keys())
 
         for field_name in py_only:
-            mismatches.append(self._create_dto_mismatch(
-                name, py_dto, ts_dto, field_name, "missing_in_frontend",
-                backend_definition=str(py_fields[field_name]),
-                severity=PatternSeverity.HIGH,
-                recommendation=f"Add field '{field_name}' to frontend interface '{name}'",
-            ))
+            mismatches.append(
+                self._create_dto_mismatch(
+                    name,
+                    py_dto,
+                    ts_dto,
+                    field_name,
+                    "missing_in_frontend",
+                    backend_definition=str(py_fields[field_name]),
+                    severity=PatternSeverity.HIGH,
+                    recommendation=f"Add field '{field_name}' to frontend interface '{name}'",
+                )
+            )
 
         for field_name in ts_only:
             mismatches.append(
-    self._create_dto_mismatch(
-        name,
-        py_dto,
-        ts_dto,
-        field_name,
-        "missing_in_backend",
-        frontend_definition=str(
-            ts_fields[field_name]),
-            severity=PatternSeverity.MEDIUM,
-            recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
-             ))
+                self._create_dto_mismatch(
+                    name,
+                    py_dto,
+                    ts_dto,
+                    field_name,
+                    "missing_in_backend",
+                    frontend_definition=str(ts_fields[field_name]),
+                    severity=PatternSeverity.MEDIUM,
+                    recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
+                )
+            )
 
         # Check for type mismatches in common fields
         common_fields = set(py_fields.keys()) & set(ts_fields.keys())
@@ -443,13 +473,19 @@ class CrossLanguagePatternDetector:
             ts_field = ts_fields[field_name]
 
             if py_field.get("optional") != ts_field.get("optional"):
-                mismatches.append(self._create_dto_mismatch(
-                    name, py_dto, ts_dto, field_name, "optional_mismatch",
-                    backend_definition=f"optional={py_field.get('optional')}",
-                    frontend_definition=f"optional={ts_field.get('optional')}",
-                    severity=PatternSeverity.MEDIUM,
-                    recommendation=f"Align optional status of field '{field_name}' between backend and frontend",
-                ))
+                mismatches.append(
+                    self._create_dto_mismatch(
+                        name,
+                        py_dto,
+                        ts_dto,
+                        field_name,
+                        "optional_mismatch",
+                        backend_definition=f"optional={py_field.get('optional')}",
+                        frontend_definition=f"optional={ts_field.get('optional')}",
+                        severity=PatternSeverity.MEDIUM,
+                        recommendation=f"Align optional status of field '{field_name}' between backend and frontend",
+                    )
+                )
 
         return mismatches
 
@@ -490,11 +526,11 @@ class CrossLanguagePatternDetector:
 
         # Get all validation patterns
         py_validations = [
-            p for p in python_patterns
-            if p.get("type") == PatternType.VALIDATION_RULE
+            p for p in python_patterns if p.get("type") == PatternType.VALIDATION_RULE
         ]
         ts_validations = [
-            p for p in typescript_patterns
+            p
+            for p in typescript_patterns
             if p.get("type") == PatternType.VALIDATION_RULE
         ]
 
@@ -522,17 +558,19 @@ class CrossLanguagePatternDetector:
             # (3 py × 3 ts) to prevent combinatorial explosion while still finding matches
             for py_v in py_validators[:3]:
                 for ts_v in ts_validators[:3]:
-                    duplications.append(ValidationDuplication(
-                        duplication_id=f"val_{vtype}_{uuid.uuid4().hex[:8]}",
-                        validation_type=vtype,
-                        python_location=py_v.get("location"),
-                        typescript_location=ts_v.get("location"),
-                        python_code=py_v.get("code", "")[:200],
-                        typescript_code=ts_v.get("code", "")[:200],
-                        similarity_score=0.8,  # Assume high similarity for same type
-                        severity=PatternSeverity.MEDIUM,
-                        recommendation=f"Consider consolidating '{vtype}' validation logic into a shared schema or specification",
-                    ))
+                    duplications.append(
+                        ValidationDuplication(
+                            duplication_id=f"val_{vtype}_{uuid.uuid4().hex[:8]}",
+                            validation_type=vtype,
+                            python_location=py_v.get("location"),
+                            typescript_location=ts_v.get("location"),
+                            python_code=py_v.get("code", "")[:200],
+                            typescript_code=ts_v.get("code", "")[:200],
+                            similarity_score=0.8,  # Assume high similarity for same type
+                            severity=PatternSeverity.MEDIUM,
+                            recommendation=f"Consider consolidating '{vtype}' validation logic into a shared schema or specification",
+                        )
+                    )
 
         return duplications
 
@@ -561,17 +599,19 @@ class CrossLanguagePatternDetector:
         backend_only = set(backend_endpoints.keys()) - set(frontend_calls.keys())
         for method, path in backend_only:
             ep = backend_endpoints[(method, path)]
-            mismatches.append(APIContractMismatch(
-                mismatch_id=f"api_orphan_{uuid.uuid4().hex[:8]}",
-                endpoint_path=path,
-                http_method=method,
-                mismatch_type="orphaned_endpoint",
-                backend_location=ep.get("location"),
-                backend_definition=ep.get("code", "")[:200],
-                severity=PatternSeverity.LOW,
-                details="Backend endpoint has no matching frontend call",
-                recommendation="Consider removing unused endpoint or add frontend integration",
-            ))
+            mismatches.append(
+                APIContractMismatch(
+                    mismatch_id=f"api_orphan_{uuid.uuid4().hex[:8]}",
+                    endpoint_path=path,
+                    http_method=method,
+                    mismatch_type="orphaned_endpoint",
+                    backend_location=ep.get("location"),
+                    backend_definition=ep.get("code", "")[:200],
+                    severity=PatternSeverity.LOW,
+                    details="Backend endpoint has no matching frontend call",
+                    recommendation="Consider removing unused endpoint or add frontend integration",
+                )
+            )
 
         # Find missing endpoints (frontend calls, backend doesn't have)
         frontend_only = set(frontend_calls.keys()) - set(backend_endpoints.keys())
@@ -581,17 +621,19 @@ class CrossLanguagePatternDetector:
             if call.get("is_dynamic"):
                 continue
 
-            mismatches.append(APIContractMismatch(
-                mismatch_id=f"api_missing_{uuid.uuid4().hex[:8]}",
-                endpoint_path=path,
-                http_method=method,
-                mismatch_type="missing_endpoint",
-                frontend_location=call.get("location"),
-                frontend_call=call.get("code", "")[:200],
-                severity=PatternSeverity.CRITICAL,
-                details="Frontend calls endpoint that doesn't exist in backend",
-                recommendation="Create backend endpoint or fix frontend API call",
-            ))
+            mismatches.append(
+                APIContractMismatch(
+                    mismatch_id=f"api_missing_{uuid.uuid4().hex[:8]}",
+                    endpoint_path=path,
+                    http_method=method,
+                    mismatch_type="missing_endpoint",
+                    frontend_location=call.get("location"),
+                    frontend_call=call.get("code", "")[:200],
+                    severity=PatternSeverity.CRITICAL,
+                    details="Frontend calls endpoint that doesn't exist in backend",
+                    recommendation="Create backend endpoint or fix frontend API call",
+                )
+            )
 
         return mismatches
 
@@ -632,7 +674,9 @@ class CrossLanguagePatternDetector:
         if len(patterns_to_process) < len(patterns):
             logger.info(
                 "Sampling %d of %d %s patterns for embedding",
-                len(patterns_to_process), len(patterns), language
+                len(patterns_to_process),
+                len(patterns),
+                language,
             )
 
         # Issue #659: Normalize all patterns first, then batch embed
@@ -649,14 +693,18 @@ class CrossLanguagePatternDetector:
             zip(patterns_to_process, normalized_texts, embeddings)
         ):
             if embedding:
-                pattern_id = f"{prefix}{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
-                result.append({
-                    "id": pattern_id,
-                    "pattern": p,
-                    "normalized": normalized,
-                    "embedding": embedding,
-                    "language": language,
-                })
+                pattern_id = (
+                    f"{prefix}{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
+                )
+                result.append(
+                    {
+                        "id": pattern_id,
+                        "pattern": p,
+                        "normalized": normalized,
+                        "embedding": embedding,
+                        "language": language,
+                    }
+                )
 
         return result
 
@@ -718,17 +766,20 @@ class CrossLanguagePatternDetector:
                 ids=[p["id"] for p in patterns],
                 embeddings=[p["embedding"] for p in patterns],
                 documents=[p["normalized"] for p in patterns],
-                metadatas=[{
-                    "language": p["language"],
-                    "type": str(p["pattern"].get("type", "unknown")),
-                    "name": p["pattern"].get("name", ""),
-                } for p in patterns],
+                metadatas=[
+                    {
+                        "language": p["language"],
+                        "type": str(p["pattern"].get("type", "unknown")),
+                        "name": p["pattern"].get("name", ""),
+                    }
+                    for p in patterns
+                ],
             )
             return patterns
         except Exception as batch_error:
             logger.warning(
                 "Batch insertion failed (%s), falling back to individual insertion",
-                batch_error
+                batch_error,
             )
 
         # Fall back to individual insertion for error recovery
@@ -739,25 +790,25 @@ class CrossLanguagePatternDetector:
                     ids=[pattern["id"]],
                     embeddings=[pattern["embedding"]],
                     documents=[pattern["normalized"]],
-                    metadatas=[{
-                        "language": pattern["language"],
-                        "type": str(pattern["pattern"].get("type", "unknown")),
-                        "name": pattern["pattern"].get("name", ""),
-                    }],
+                    metadatas=[
+                        {
+                            "language": pattern["language"],
+                            "type": str(pattern["pattern"].get("type", "unknown")),
+                            "name": pattern["pattern"].get("name", ""),
+                        }
+                    ],
                 )
                 stored_patterns.append(pattern)
             except Exception as individual_error:
                 logger.debug(
-                    "Failed to store pattern %s: %s",
-                    pattern["id"],
-                    individual_error
+                    "Failed to store pattern %s: %s", pattern["id"], individual_error
                 )
 
         if stored_patterns:
             logger.info(
                 "Recovered %d/%d patterns via individual insertion",
                 len(stored_patterns),
-                len(patterns)
+                len(patterns),
             )
         else:
             logger.error("All pattern insertions failed")
@@ -795,10 +846,7 @@ class CrossLanguagePatternDetector:
                 if not results or not results.get("distances"):
                     continue
 
-                for distance, doc_id in zip(
-                    results["distances"][0],
-                    results["ids"][0]
-                ):
+                for distance, doc_id in zip(results["distances"][0], results["ids"][0]):
                     similarity = 1 - distance  # Convert distance to similarity
 
                     if similarity < SIMILARITY_MEDIUM:
@@ -806,21 +854,25 @@ class CrossLanguagePatternDetector:
 
                     ts_pattern = ts_pattern_lookup.get(doc_id)
                     if ts_pattern:
-                        matches.append(PatternMatch(
-                            pattern_id=f"match_{uuid.uuid4().hex[:8]}",
-                            similarity_score=similarity,
-                            source_location=py_p["pattern"].get("location"),
-                            target_location=ts_pattern["pattern"].get("location"),
-                            source_code=py_p["pattern"].get("code", "")[:300],
-                            target_code=ts_pattern["pattern"].get("code", "")[:300],
-                            match_type="semantic",
-                            confidence=similarity,
-                            metadata={
-                                "python_name": py_p["pattern"].get("name"),
-                                "typescript_name": ts_pattern["pattern"].get("name"),
-                                "pattern_type": str(py_p["pattern"].get("type")),
-                            },
-                        ))
+                        matches.append(
+                            PatternMatch(
+                                pattern_id=f"match_{uuid.uuid4().hex[:8]}",
+                                similarity_score=similarity,
+                                source_location=py_p["pattern"].get("location"),
+                                target_location=ts_pattern["pattern"].get("location"),
+                                source_code=py_p["pattern"].get("code", "")[:300],
+                                target_code=ts_pattern["pattern"].get("code", "")[:300],
+                                match_type="semantic",
+                                confidence=similarity,
+                                metadata={
+                                    "python_name": py_p["pattern"].get("name"),
+                                    "typescript_name": ts_pattern["pattern"].get(
+                                        "name"
+                                    ),
+                                    "pattern_type": str(py_p["pattern"].get("type")),
+                                },
+                            )
+                        )
             except Exception as e:
                 logger.warning("Query failed for pattern %s: %s", py_p["id"], e)
 
@@ -853,7 +905,9 @@ class CrossLanguagePatternDetector:
             return []
 
         # Store in ChromaDB
-        stored_patterns = await self._store_patterns_in_chromadb(collection, all_patterns)
+        stored_patterns = await self._store_patterns_in_chromadb(
+            collection, all_patterns
+        )
         if not stored_patterns:
             return []
 
@@ -866,10 +920,7 @@ class CrossLanguagePatternDetector:
             collection, stored_python, stored_ts
         )
 
-    async def _cache_results(
-        self,
-        analysis: CrossLanguageAnalysis
-    ) -> None:
+    async def _cache_results(self, analysis: CrossLanguageAnalysis) -> None:
         """Cache analysis results in Redis."""
         redis = await self._get_redis_client()
         if not redis:
@@ -901,27 +952,40 @@ class CrossLanguagePatternDetector:
 
         logger.info(
             "Found %d Python, %d TypeScript, %d Vue files",
-            len(python_files), len(typescript_files), len(vue_files)
+            len(python_files),
+            len(typescript_files),
+            len(vue_files),
         )
 
         # Extract patterns
-        python_patterns, typescript_patterns, vue_patterns = await self._extract_all_patterns(
-            python_files, typescript_files, vue_files
-        )
+        (
+            python_patterns,
+            typescript_patterns,
+            vue_patterns,
+        ) = await self._extract_all_patterns(python_files, typescript_files, vue_files)
         all_ts_patterns = typescript_patterns + vue_patterns
 
         logger.info(
             "Extracted %d Python, %d TypeScript/Vue patterns",
-            len(python_patterns), len(all_ts_patterns)
+            len(python_patterns),
+            len(all_ts_patterns),
         )
 
         # Find mismatches
-        analysis.dto_mismatches = await self._find_dto_mismatches(python_patterns, all_ts_patterns)
-        analysis.validation_duplications = await self._find_validation_duplications(python_patterns, all_ts_patterns)
-        analysis.api_contract_mismatches = await self._find_api_contract_mismatches(python_patterns, all_ts_patterns)
+        analysis.dto_mismatches = await self._find_dto_mismatches(
+            python_patterns, all_ts_patterns
+        )
+        analysis.validation_duplications = await self._find_validation_duplications(
+            python_patterns, all_ts_patterns
+        )
+        analysis.api_contract_mismatches = await self._find_api_contract_mismatches(
+            python_patterns, all_ts_patterns
+        )
 
         if self.use_llm:
-            analysis.pattern_matches = await self._find_semantic_matches(python_patterns, all_ts_patterns)
+            analysis.pattern_matches = await self._find_semantic_matches(
+                python_patterns, all_ts_patterns
+            )
 
         return python_patterns, all_ts_patterns
 
@@ -977,10 +1041,14 @@ class CrossLanguagePatternDetector:
 
         try:
             # Run pattern detection and mismatch finding
-            python_patterns, all_ts_patterns = await self._run_pattern_detection(analysis)
+            python_patterns, all_ts_patterns = await self._run_pattern_detection(
+                analysis
+            )
 
             # Convert to CrossLanguagePattern objects
-            self._convert_to_cross_language_patterns(python_patterns + all_ts_patterns, analysis)
+            self._convert_to_cross_language_patterns(
+                python_patterns + all_ts_patterns, analysis
+            )
 
             # Calculate statistics and update metrics
             analysis.calculate_stats()

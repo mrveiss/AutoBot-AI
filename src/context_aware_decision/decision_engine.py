@@ -20,11 +20,11 @@ from src.task_execution_tracker import task_tracker
 from .models import Decision, DecisionContext
 from .time_provider import TimeProvider
 from .types import (
-    ConfidenceLevel,
-    DecisionType,
     HIGH_RESOURCE_CONSTRAINT_TYPES,
     HIGH_RISK_ACTIONS,
     MITIGATION_REQUIRED_RISK_LEVELS,
+    ConfidenceLevel,
+    DecisionType,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,10 @@ class DecisionEngine:
             List of (score, action) tuples sorted by score descending.
         """
         scores = await asyncio.gather(
-            *[self._score_automation_action(action, context) for action in automation_actions],
+            *[
+                self._score_automation_action(action, context)
+                for action in automation_actions
+            ],
             return_exceptions=True,
         )
         scored_actions = [
@@ -139,7 +142,9 @@ class DecisionEngine:
         """
         confidence = min(best_score, 1.0)
         confidence_level = self._determine_confidence_level(confidence)
-        requires_approval = await self._requires_approval(best_action, context, confidence)
+        requires_approval = await self._requires_approval(
+            best_action, context, confidence
+        )
 
         reasoning = f"Selected {best_action['action']} based on confidence score {best_score:.2f}"
         if requires_approval:
@@ -155,12 +160,19 @@ class DecisionEngine:
             reasoning=reasoning,
             supporting_evidence=[{"type": "context_analysis", "score": best_score}],
             risk_assessment=await self._assess_action_risk(best_action, context),
-            expected_outcomes=[{"outcome": "action_completed", "probability": confidence}],
+            expected_outcomes=[
+                {"outcome": "action_completed", "probability": confidence}
+            ],
             monitoring_criteria=["action_execution_status", "target_element_response"],
-            fallback_plan={"action": "request_human_takeover"} if confidence < 0.6 else None,
+            fallback_plan={"action": "request_human_takeover"}
+            if confidence < 0.6
+            else None,
             requires_approval=requires_approval,
             timestamp=self.time_provider.current_timestamp(),
-            metadata={"algorithm": "automation_scoring", "total_actions_considered": action_count},
+            metadata={
+                "algorithm": "automation_scoring",
+                "total_actions_considered": action_count,
+            },
         )
 
     async def _decide_automation_action(self, context: DecisionContext) -> Decision:
@@ -450,7 +462,9 @@ class DecisionEngine:
         urgency_factors = []
 
         # Check for active takeovers
-        if any("takeover" in ce.metadata.get("type", "") for ce in context.context_elements):
+        if any(
+            "takeover" in ce.metadata.get("type", "") for ce in context.context_elements
+        ):
             urgency_factors.append("existing_takeover")
 
         # Check for high risk factors
@@ -458,13 +472,20 @@ class DecisionEngine:
             urgency_factors.append("high_risk_detected")
 
         # Check for low confidence context (>40% of elements have low confidence)
-        low_confidence_count = sum(1 for ce in context.context_elements if ce.confidence < 0.5)
-        if context.context_elements and low_confidence_count > len(context.context_elements) * 0.4:
+        low_confidence_count = sum(
+            1 for ce in context.context_elements if ce.confidence < 0.5
+        )
+        if (
+            context.context_elements
+            and low_confidence_count > len(context.context_elements) * 0.4
+        ):
             urgency_factors.append("low_confidence_context")
 
         return urgency_factors
 
-    def _create_escalation_decision(self, context: DecisionContext, urgency_factors: List[str]) -> Decision:
+    def _create_escalation_decision(
+        self, context: DecisionContext, urgency_factors: List[str]
+    ) -> Decision:
         """Create decision for immediate escalation (Issue #398: extracted)."""
         escalation_action = {
             "action_type": "escalation",
@@ -482,18 +503,26 @@ class DecisionEngine:
             confidence=0.95,
             confidence_level=ConfidenceLevel.VERY_HIGH,
             reasoning=f"Immediate escalation required due to: {', '.join(urgency_factors)}",
-            supporting_evidence=[{"type": "urgency_analysis", "factors": urgency_factors}],
+            supporting_evidence=[
+                {"type": "urgency_analysis", "factors": urgency_factors}
+            ],
             risk_assessment={"risk_level": "high", "immediate_action_required": True},
-            expected_outcomes=[{"outcome": "human_takeover_initiated", "probability": 0.95}],
-            monitoring_criteria=["takeover_response_time", "human_operator_availability"],
+            expected_outcomes=[
+                {"outcome": "human_takeover_initiated", "probability": 0.95}
+            ],
+            monitoring_criteria=[
+                "takeover_response_time",
+                "human_operator_availability",
+            ],
             fallback_plan={"action": "pause_all_operations"},
             requires_approval=False,
             timestamp=self.time_provider.current_timestamp(),
             metadata={"algorithm": "escalation_urgency_analysis"},
         )
 
-    def _create_continue_autonomous_decision(self, context: DecisionContext,
-                                             escalation_actions: List[Dict]) -> Decision:
+    def _create_continue_autonomous_decision(
+        self, context: DecisionContext, escalation_actions: List[Dict]
+    ) -> Decision:
         """Create decision to continue autonomous operation (Issue #398: extracted)."""
         continue_action = {
             "action_type": "monitoring",
@@ -509,9 +538,13 @@ class DecisionEngine:
             confidence=0.8,
             confidence_level=ConfidenceLevel.HIGH,
             reasoning="No immediate escalation factors detected",
-            supporting_evidence=[{"type": "escalation_analysis", "urgency_factors": []}],
+            supporting_evidence=[
+                {"type": "escalation_analysis", "urgency_factors": []}
+            ],
             risk_assessment={"risk_level": "low", "escalation_needed": False},
-            expected_outcomes=[{"outcome": "continued_autonomous_operation", "probability": 0.8}],
+            expected_outcomes=[
+                {"outcome": "continued_autonomous_operation", "probability": 0.8}
+            ],
             monitoring_criteria=["context_changes", "risk_factor_evolution"],
             fallback_plan={"action": "request_human_review"},
             requires_approval=False,
@@ -522,7 +555,8 @@ class DecisionEngine:
     async def _decide_human_escalation(self, context: DecisionContext) -> Decision:
         """Decide whether to escalate to human (Issue #398: refactored to use helpers)."""
         escalation_actions = [
-            action for action in context.available_actions
+            action
+            for action in context.available_actions
             if action.get("action_type") == "escalation"
         ]
 
@@ -531,7 +565,9 @@ class DecisionEngine:
         if urgency_factors:
             return self._create_escalation_decision(context, urgency_factors)
         else:
-            return self._create_continue_autonomous_decision(context, escalation_actions)
+            return self._create_continue_autonomous_decision(
+                context, escalation_actions
+            )
 
     def _score_optimization_action(self, opt: Dict[str, Any]) -> float:
         """Issue #665: Extracted from _decide_workflow_optimization to reduce function length.
@@ -598,14 +634,20 @@ class DecisionEngine:
             supporting_evidence=[
                 {"type": "workflow_analysis", "optimizations_found": optimization_count}
             ],
-            risk_assessment={"risk_level": best_optimization.get("risk_level", "low"), "factors": []},
+            risk_assessment={
+                "risk_level": best_optimization.get("risk_level", "low"),
+                "factors": [],
+            },
             expected_outcomes=[
                 {"outcome": "workflow_optimized", "probability": confidence},
                 {"outcome": "efficiency_improved", "probability": confidence * 0.8},
             ],
             monitoring_criteria=["workflow_performance", "efficiency_metrics"],
-            fallback_plan={"action": "revert_optimization"} if best_score < 0.6 else None,
-            requires_approval=best_score < 0.7,  # Low confidence optimizations need approval
+            fallback_plan={"action": "revert_optimization"}
+            if best_score < 0.6
+            else None,
+            requires_approval=best_score
+            < 0.7,  # Low confidence optimizations need approval
             timestamp=self.time_provider.current_timestamp(),
             metadata={
                 "algorithm": "workflow_optimization",
@@ -641,7 +683,11 @@ class DecisionEngine:
         best_score, best_optimization = scored_optimizations[0]
 
         return self._build_workflow_optimization_decision(
-            context, best_score, best_optimization, scored_optimizations, len(optimization_actions)
+            context,
+            best_score,
+            best_optimization,
+            scored_optimizations,
+            len(optimization_actions),
         )
 
     def _analyze_workflow_for_optimization(
@@ -656,27 +702,31 @@ class DecisionEngine:
             if element.element_type.value == "performance":
                 data = element.data
                 if data.get("bottleneck_detected"):
-                    opportunities.append({
-                        "action_type": "optimization",
-                        "action": "resolve_bottleneck",
-                        "target": data.get("bottleneck_location"),
-                        "efficiency_gain": 20,
-                        "risk_level": "medium",
-                        "complexity": "medium",
-                    })
+                    opportunities.append(
+                        {
+                            "action_type": "optimization",
+                            "action": "resolve_bottleneck",
+                            "target": data.get("bottleneck_location"),
+                            "efficiency_gain": 20,
+                            "risk_level": "medium",
+                            "complexity": "medium",
+                        }
+                    )
 
         # Check for parallel execution opportunities
         for element in context_elements:
             if element.element_type.value == "workflow":
                 data = element.data
                 if data.get("sequential_steps", 0) > 3:
-                    opportunities.append({
-                        "action_type": "optimization",
-                        "action": "parallelize_steps",
-                        "efficiency_gain": 30,
-                        "risk_level": "low",
-                        "complexity": "medium",
-                    })
+                    opportunities.append(
+                        {
+                            "action_type": "optimization",
+                            "action": "parallelize_steps",
+                            "efficiency_gain": 30,
+                            "risk_level": "low",
+                            "complexity": "medium",
+                        }
+                    )
 
         return opportunities
 

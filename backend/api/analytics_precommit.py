@@ -651,29 +651,19 @@ async def get_status(
     )
 
 
-@router.post("/install")
-async def install_hooks(
-    admin_check: bool = Depends(check_admin_permission),
-) -> dict:
+def _generate_precommit_hook_script(backend_port: int) -> str:
     """
-    Install pre-commit hooks.
+    Generate the pre-commit hook bash script content.
 
-    Issue #744: Requires admin authentication.
+    Issue #620: Extracted from install_hooks to reduce function length.
+
+    Args:
+        backend_port: Backend API port for curl requests
+
+    Returns:
+        Bash script content for pre-commit hook
     """
-    hook_path = Path(".git/hooks/pre-commit")
-
-    # Check if .git exists
-    # Issue #358 - avoid blocking
-    if not await asyncio.to_thread(Path(".git").exists):
-        raise HTTPException(status_code=400, detail="Not a git repository")
-
-    # Create hooks directory if needed
-    # Issue #358 - avoid blocking
-    await asyncio.to_thread(hook_path.parent.mkdir, parents=True, exist_ok=True)
-
-    # Create pre-commit hook script with dynamic port from NetworkConstants
-    backend_port = NetworkConstants.BACKEND_PORT
-    hook_content = f"""#!/bin/bash  # noqa: E501
+    return f"""#!/bin/bash  # noqa: E501
 # AutoBot Pre-commit Hook v1.0.0
 # Copyright (c) 2025 mrveiss
 
@@ -721,9 +711,25 @@ fi
 exit 0
 """
 
+
+async def _write_hook_file(hook_path: Path, content: str) -> dict:
+    """
+    Write hook file with proper permissions.
+
+    Issue #620: Extracted from install_hooks to reduce function length.
+
+    Args:
+        hook_path: Path to hook file
+        content: Hook script content
+
+    Returns:
+        Success response dict
+
+    Raises:
+        HTTPException: If writing fails
+    """
     try:
-        # Issue #358 - avoid blocking
-        await asyncio.to_thread(hook_path.write_text, hook_content)
+        await asyncio.to_thread(hook_path.write_text, content)
         await asyncio.to_thread(hook_path.chmod, 0o755)
 
         return {
@@ -735,6 +741,30 @@ exit 0
         raise HTTPException(
             status_code=500, detail=f"Failed to install hooks: {str(e)}"
         )
+
+
+@router.post("/install")
+async def install_hooks(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """
+    Install pre-commit hooks.
+
+    Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use helper functions.
+    """
+    hook_path = Path(".git/hooks/pre-commit")
+
+    # Check if .git exists - Issue #358: avoid blocking
+    if not await asyncio.to_thread(Path(".git").exists):
+        raise HTTPException(status_code=400, detail="Not a git repository")
+
+    # Create hooks directory if needed - Issue #358: avoid blocking
+    await asyncio.to_thread(hook_path.parent.mkdir, parents=True, exist_ok=True)
+
+    # Generate and write hook script - Issue #620: Use helpers
+    hook_content = _generate_precommit_hook_script(NetworkConstants.BACKEND_PORT)
+    return await _write_hook_file(hook_path, hook_content)
 
 
 @router.post("/uninstall")

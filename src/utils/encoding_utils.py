@@ -281,7 +281,9 @@ def _has_command_output(lines: list) -> bool:
         if not _is_prompt_line(line_stripped) and len(line_stripped) > 10:
             non_prompt_lines.append(line_stripped)
 
-    return len(non_prompt_lines) > 0 and sum(len(line) for line in non_prompt_lines) > 20
+    return (
+        len(non_prompt_lines) > 0 and sum(len(line) for line in non_prompt_lines) > 20
+    )
 
 
 def is_terminal_prompt(text: str) -> bool:
@@ -467,16 +469,16 @@ def test_utf8_support() -> dict:
 
 if __name__ == "__main__":
     # Run UTF-8 support tests
-    logger.info("Testing UTF-8 support...")
+    print("Testing UTF-8 support...")
     results = test_utf8_support()
 
     for name, result in results.items():
         status = "✅" if result is True else "❌"
-        logger.info("{status} {name}: {result}")
+        print(f"{status} {name}: {result}")
 
     # Test ANSI stripping
-    logger.info("\nTesting ANSI code stripping...")
+    print("\nTesting ANSI code stripping...")
     test_ansi = "\x1b[31mRed\x1b[0m [?2004h]0;Title\x07Text"
     cleaned = strip_ansi_codes(test_ansi)
-    logger.info("Input:  {repr(test_ansi)}")
-    logger.info("Output: {repr(cleaned)}")
+    print(f"Input:  {repr(test_ansi)}")
+    print(f"Output: {repr(cleaned)}")

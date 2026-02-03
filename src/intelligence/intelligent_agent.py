@@ -17,7 +17,11 @@ from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
 from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Issue #380: Module-level frozenset for package managers requiring sudo
-_SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset({"apt", "yum", "dn", "pacman", "zypper"})
+_SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
+    {"apt", "yum", "dn", "pacman", "zypper"}
+)
+
+from src.constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
 from src.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
@@ -27,7 +31,6 @@ from src.intelligence.streaming_executor import (
     StreamingCommandExecutor,
 )
 from src.intelligence.tool_selector import OSAwareToolSelector
-from src.constants.threshold_constants import TimingConstants
 from src.knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
@@ -80,7 +83,9 @@ class AgentState:
             "is_wsl": self.os_info.is_wsl,
             "package_manager": self.os_info.package_manager,
             "shell": self.os_info.shell,
-            "capabilities": list(self.os_info.capabilities) if self.os_info.capabilities else [],
+            "capabilities": list(self.os_info.capabilities)
+            if self.os_info.capabilities
+            else [],
         }
 
     def add_to_context(self, entry_type: str, content: Any, **extra) -> None:
@@ -144,7 +149,10 @@ class IntelligentAgent:
         Validate installation capabilities and get capability summary.
         Returns (can_install, install_reason, capabilities_info) tuple.
         """
-        can_install, install_reason = await self.os_detector.validate_installation_capability()
+        (
+            can_install,
+            install_reason,
+        ) = await self.os_detector.validate_installation_capability()
         capabilities_info = await self.os_detector.get_capabilities_info()
         return can_install, install_reason, capabilities_info
 
@@ -169,7 +177,9 @@ class IntelligentAgent:
             "supported_categories": self.goal_processor.get_supported_categories(),
         }
 
-    def _log_init_success(self, initialization_time: float, capabilities_info: Dict[str, Any]) -> None:
+    def _log_init_success(
+        self, initialization_time: float, capabilities_info: Dict[str, Any]
+    ) -> None:
         """Issue #665: Extracted from initialize to reduce function length.
 
         Log successful initialization details.
@@ -197,7 +207,11 @@ class IntelligentAgent:
         try:
             await self._init_core_components()
             await self._update_system_context()
-            can_install, install_reason, capabilities_info = await self._get_init_capabilities()
+            (
+                can_install,
+                install_reason,
+                capabilities_info,
+            ) = await self._get_init_capabilities()
 
             initialization_time = time.time() - start_time
             self.state.initialized = True
@@ -251,7 +265,9 @@ class IntelligentAgent:
         # Issue #321: Use helper method to reduce message chains
         self.state.add_to_context("tool_selection", tool_selection)
 
-        async for chunk in self._execute_tool_selection(tool_selection, processed_goal, user_input):
+        async for chunk in self._execute_tool_selection(
+            tool_selection, processed_goal, user_input
+        ):
             yield chunk
             if chunk.chunk_type in (ChunkType.ERROR, ChunkType.COMPLETE):
                 break
@@ -264,10 +280,15 @@ class IntelligentAgent:
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.COMMENTARY,
             content="🤔 I'm not entirely sure what you want. Let me suggest some possibilities...",
-            metadata={"partial_understanding": True, "confidence": processed_goal.confidence},
+            metadata={
+                "partial_understanding": True,
+                "confidence": processed_goal.confidence,
+            },
         )
 
-        similar_intents = await self.goal_processor.get_similar_intents(user_input, limit=3)
+        similar_intents = await self.goal_processor.get_similar_intents(
+            user_input, limit=3
+        )
         if similar_intents:
             yield StreamChunk(
                 timestamp=self._get_timestamp(),
@@ -286,7 +307,9 @@ class IntelligentAgent:
         async for chunk in self._handle_complex_goal(user_input):
             yield chunk
 
-    async def _handle_low_confidence_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _handle_low_confidence_goal(
+        self, user_input: str
+    ) -> AsyncGenerator[StreamChunk, None]:
         """Handle goals with low confidence (<0.2)."""
         yield StreamChunk(
             timestamp=self._get_timestamp(),
@@ -327,10 +350,14 @@ class IntelligentAgent:
             self.state.add_to_context("processed_goal", processed_goal)
 
             if processed_goal.confidence > 0.5:
-                async for chunk in self._handle_high_confidence_goal(processed_goal, user_input):
+                async for chunk in self._handle_high_confidence_goal(
+                    processed_goal, user_input
+                ):
                     yield chunk
             elif processed_goal.confidence > 0.2:
-                async for chunk in self._handle_partial_confidence_goal(processed_goal, user_input):
+                async for chunk in self._handle_partial_confidence_goal(
+                    processed_goal, user_input
+                ):
                     yield chunk
             else:
                 async for chunk in self._handle_low_confidence_goal(user_input):
@@ -686,7 +713,7 @@ OS-specific commands.
                 content=context,
                 metadata={
                     "type": "system_context",
-                    "os_type": os_info.get('os_type', 'Unknown'),
+                    "os_type": os_info.get("os_type", "Unknown"),
                     "timestamp": time.time(),
                     "agent_version": "1.0",
                 },
@@ -794,7 +821,9 @@ async def get_intelligent_agent(
         async with _agent_lock:
             # Double-check after acquiring lock
             if _agent_instance is None:
-                if not all([llm_interface, knowledge_base, worker_node, command_validator]):
+                if not all(
+                    [llm_interface, knowledge_base, worker_node, command_validator]
+                ):
                     raise ValueError("All components required for first initialization")
 
                 _agent_instance = IntelligentAgent(
@@ -835,9 +864,9 @@ if __name__ == "__main__":
         init_result = await agent.initialize()
 
         logger.info("=== Initialization Result ===")
-        logger.info("Status: {init_result['status']}")
-        logger.info("OS: {init_result['os_info']['os_type']}")
-        logger.info("Capabilities: {init_result['capabilities']['total_count']}")
+        logger.info("Status: %s", init_result["status"])
+        logger.info("OS: %s", init_result["os_info"]["os_type"])
+        logger.info("Capabilities: %s", init_result["capabilities"]["total_count"])
         print()
 
         # Test natural language processing
@@ -848,14 +877,14 @@ if __name__ == "__main__":
         ]
 
         for goal in test_goals:
-            logger.info("=== Testing Goal: {goal} ===")
+            logger.info("=== Testing Goal: %s ===", goal)
 
             async for chunk in agent.process_natural_language_goal(goal):
                 timestamp = chunk.timestamp.split("T")[1][:8]
                 chunk_type = chunk.chunk_type.value.upper()
                 content = chunk.content
 
-                logger.info("[{timestamp}] {chunk_type}: {content}")
+                logger.info("[%s] %s: %s", timestamp, chunk_type, content)
 
                 if chunk.chunk_type == ChunkType.COMPLETE:
                     break

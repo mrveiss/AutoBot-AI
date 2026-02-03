@@ -2259,6 +2259,71 @@ async def _iterate_and_process_files(
     return files_processed, files_skipped
 
 
+async def _gather_scannable_files(
+    root_path_obj: Path,
+    progress_callback: Optional[callable],
+) -> tuple:
+    """
+    Gather scannable files and initialize progress tracking.
+
+    Issue #620: Extracted from scan_codebase to reduce function length.
+
+    Args:
+        root_path_obj: Root path as Path object
+        progress_callback: Optional progress callback function
+
+    Returns:
+        Tuple of (total_files, all_files list)
+    """
+    total_files = 0
+    all_files = []
+
+    logger.info("DEBUG: scan_codebase starting for %s", root_path_obj)
+
+    if progress_callback:
+        logger.info("DEBUG: about to call _count_scannable_files")
+        total_files, all_files = await _count_scannable_files(root_path_obj)
+        logger.info(
+            "DEBUG: Got %d scannable files from %d total files",
+            total_files,
+            len(all_files),
+        )
+        logger.info("DEBUG: About to call progress_callback for scan init")
+        await progress_callback(
+            operation="Scanning files",
+            current=0,
+            total=total_files,
+            current_file="Initializing...",
+        )
+        logger.info("DEBUG: progress_callback returned, about to iterate")
+    else:
+        logger.info("DEBUG: No progress callback, doing direct rglob")
+        all_files = await _run_in_indexing_thread(
+            lambda: list(root_path_obj.rglob("*"))
+        )
+        logger.info("DEBUG: Direct rglob returned %d files", len(all_files))
+
+    return total_files, all_files
+
+
+def _log_incremental_stats(files_processed: int, files_skipped: int) -> None:
+    """
+    Log incremental indexing statistics.
+
+    Issue #620: Extracted from scan_codebase to reduce function length.
+
+    Args:
+        files_processed: Number of files processed
+        files_skipped: Number of files skipped (unchanged)
+    """
+    if INCREMENTAL_INDEXING_ENABLED:
+        logger.info(
+            "Incremental indexing: %d files processed, %d files skipped (unchanged)",
+            files_processed,
+            files_skipped,
+        )
+
+
 async def scan_codebase(
     root_path: Optional[str] = None,
     progress_callback: Optional[callable] = None,
@@ -2270,6 +2335,7 @@ async def scan_codebase(
 
     Issue #315, #281, #398: Uses extracted helpers for modular processing.
     Issue #539: Added redis_client param for incremental indexing support.
+    Issue #620: Refactored to use helper functions.
     """
     if root_path is None:
         root_path = str(PATH.PROJECT_ROOT)
@@ -2282,35 +2348,13 @@ async def scan_codebase(
 
     try:
         root_path_obj = Path(root_path)
-        total_files = 0
-        all_files = []
-        logger.info("DEBUG: scan_codebase starting for %s", root_path)
-        if progress_callback:
-            logger.info("DEBUG: about to call _count_scannable_files")
-            # Get both count and file list to avoid duplicate rglob
-            total_files, all_files = await _count_scannable_files(root_path_obj)
-            logger.info(
-                "DEBUG: Got %d scannable files from %d total files",
-                total_files,
-                len(all_files),
-            )
-            logger.info("DEBUG: About to call progress_callback for scan init")
-            await progress_callback(
-                operation="Scanning files",
-                current=0,
-                total=total_files,
-                current_file="Initializing...",
-            )
-            logger.info("DEBUG: progress_callback returned, about to iterate")
-        else:
-            # No progress callback - still need file list but skip counting
-            logger.info("DEBUG: No progress callback, doing direct rglob")
-            all_files = await _run_in_indexing_thread(
-                lambda: list(root_path_obj.rglob("*"))
-            )
-            logger.info("DEBUG: Direct rglob returned %d files", len(all_files))
 
-        # all_files is now already populated - no second rglob needed
+        # Issue #620: Use helper to gather files
+        total_files, all_files = await _gather_scannable_files(
+            root_path_obj, progress_callback
+        )
+
+        # Process all files
         logger.info(
             "DEBUG: Starting _iterate_and_process_files with %d files", len(all_files)
         )
@@ -2324,16 +2368,10 @@ async def scan_codebase(
             redis_client,
         )
 
-        # Issue #539: Log incremental indexing stats
-        if INCREMENTAL_INDEXING_ENABLED:
-            logger.info(
-                "Incremental indexing: %d files processed, %d files skipped (unchanged)",
-                files_processed,
-                files_skipped,
-            )
+        # Issue #620: Use helper for stats logging
+        _log_incremental_stats(files_processed, files_skipped)
 
         # Issue #711: Statistics already calculated in parallel mode
-        # Only calculate for sequential mode (parallel mode does it in _aggregate_all_results)
         if not PARALLEL_MODE_ENABLED:
             _calculate_analysis_statistics(analysis_results)
         return analysis_results

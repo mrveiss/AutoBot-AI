@@ -18,7 +18,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -72,7 +71,9 @@ class LLMFailsafeAgent:
 
         self.logger.info(
             "LLM Failsafe Agent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
         # Track system health
@@ -170,7 +171,10 @@ class LLMFailsafeAgent:
 
     def _init_basic_responses(self):
         """Initialize rule-based response system (Issue #398: refactored)."""
-        self.basic_patterns = {**self._get_greeting_patterns(), **self._get_task_patterns()}
+        self.basic_patterns = {
+            **self._get_greeting_patterns(),
+            **self._get_task_patterns(),
+        }
 
     def _init_emergency_responses(self):
         """Initialize emergency static responses"""
@@ -393,8 +397,15 @@ class LLMFailsafeAgent:
         return LLMTier.EMERGENCY
 
     def _build_llm_response(
-        self, response: str, tier: LLMTier, model: str, context: Any, start_time: float,
-        confidence: float = 0.9, warnings: list = None, extra_metadata: dict = None
+        self,
+        response: str,
+        tier: LLMTier,
+        model: str,
+        context: Any,
+        start_time: float,
+        confidence: float = 0.9,
+        warnings: list = None,
+        extra_metadata: dict = None,
     ) -> LLMResponse:
         """Build LLMResponse object (Issue #398: extracted)."""
         response_time = time.time() - start_time
@@ -403,8 +414,14 @@ class LLMFailsafeAgent:
         if extra_metadata:
             metadata.update(extra_metadata)
         return LLMResponse(
-            content=response, tier_used=tier, model_used=model, confidence=confidence,
-            response_time=response_time, success=True, warnings=warnings or [], metadata=metadata
+            content=response,
+            tier_used=tier,
+            model_used=model,
+            confidence=confidence,
+            response_time=response_time,
+            success=True,
+            warnings=warnings or [],
+            metadata=metadata,
         )
 
     async def _try_primary_llm(
@@ -414,17 +431,20 @@ class LLMFailsafeAgent:
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
         try:
             from src.llm_interface import LLMInterface
+
             llm = LLMInterface()
             for model in self.primary_models:
                 try:
                     messages = self._create_structured_messages(prompt, context)
                     response_data = await asyncio.wait_for(
                         llm.chat_completion(messages, llm_type="task"),
-                        timeout=self.timeouts[LLMTier.PRIMARY]
+                        timeout=self.timeouts[LLMTier.PRIMARY],
                     )
                     response = response_data.get("response", "")
                     if response and response.strip():
-                        return self._build_llm_response(response, LLMTier.PRIMARY, model, context, start_time)
+                        return self._build_llm_response(
+                            response, LLMTier.PRIMARY, model, context, start_time
+                        )
                 except asyncio.TimeoutError:
                     self.logger.warning("Primary model %s timed out", model)
                 except Exception as e:
@@ -432,7 +452,9 @@ class LLMFailsafeAgent:
             raise Exception("All primary models failed")
         except Exception as e:
             self.logger.error("Primary LLM tier failed: %s", e)
-            self._update_tier_stats(LLMTier.PRIMARY, time.time() - start_time, success=False)
+            self._update_tier_stats(
+                LLMTier.PRIMARY, time.time() - start_time, success=False
+            )
             self._mark_tier_unhealthy(LLMTier.PRIMARY)
             return await self._try_secondary_llm(prompt, context, start_time)
 
@@ -443,6 +465,7 @@ class LLMFailsafeAgent:
         self.tier_stats[LLMTier.SECONDARY]["requests"] += 1
         try:
             from src.llm_interface import LLMInterface
+
             llm = LLMInterface()
             simplified_prompt = self._simplify_prompt(prompt)
             for model in self.secondary_models:
@@ -450,14 +473,19 @@ class LLMFailsafeAgent:
                     messages = [{"role": "user", "content": simplified_prompt}]
                     response_data = await asyncio.wait_for(
                         llm.chat_completion(messages, llm_type="task"),
-                        timeout=self.timeouts[LLMTier.SECONDARY]
+                        timeout=self.timeouts[LLMTier.SECONDARY],
                     )
                     response = response_data.get("response", "")
                     if response and response.strip():
                         return self._build_llm_response(
-                            response, LLMTier.SECONDARY, model, context, start_time,
-                            confidence=0.7, warnings=["Using secondary LLM tier"],
-                            extra_metadata={"simplified": True}
+                            response,
+                            LLMTier.SECONDARY,
+                            model,
+                            context,
+                            start_time,
+                            confidence=0.7,
+                            warnings=["Using secondary LLM tier"],
+                            extra_metadata={"simplified": True},
                         )
                 except asyncio.TimeoutError:
                     self.logger.warning("Secondary model %s timed out", model)
@@ -475,17 +503,25 @@ class LLMFailsafeAgent:
             # Fall back to basic
             return await self._try_basic_response(prompt, context, start_time)
 
-    def _match_pattern_response(self, prompt: str, context: Any, start_time: float) -> Optional[LLMResponse]:
+    def _match_pattern_response(
+        self, prompt: str, context: Any, start_time: float
+    ) -> Optional[LLMResponse]:
         """Match pattern and return response (Issue #398: extracted)."""
         import re
+
         prompt_lower = prompt.lower().strip()
         for pattern, responses in self.basic_patterns.items():
             if re.search(pattern, prompt_lower):
                 selected = responses[hash(prompt) % len(responses)]
                 return self._build_llm_response(
-                    selected, LLMTier.BASIC, "rule_based_system", context, start_time,
-                    confidence=0.5, warnings=["Using basic rule-based responses"],
-                    extra_metadata={"pattern_matched": pattern}
+                    selected,
+                    LLMTier.BASIC,
+                    "rule_based_system",
+                    context,
+                    start_time,
+                    confidence=0.5,
+                    warnings=["Using basic rule-based responses"],
+                    extra_metadata={"pattern_matched": pattern},
                 )
         return None
 
@@ -501,13 +537,23 @@ class LLMFailsafeAgent:
             default_responses = self.basic_patterns[r".*"]
             selected = default_responses[hash(prompt) % len(default_responses)]
             return self._build_llm_response(
-                selected, LLMTier.BASIC, "rule_based_system", context, start_time,
-                confidence=0.3, warnings=["Using basic rule-based responses", "No specific pattern matched"],
-                extra_metadata={"pattern_matched": "default"}
+                selected,
+                LLMTier.BASIC,
+                "rule_based_system",
+                context,
+                start_time,
+                confidence=0.3,
+                warnings=[
+                    "Using basic rule-based responses",
+                    "No specific pattern matched",
+                ],
+                extra_metadata={"pattern_matched": "default"},
             )
         except Exception as e:
             self.logger.error("Basic response tier failed: %s", e)
-            self._update_tier_stats(LLMTier.BASIC, time.time() - start_time, success=False)
+            self._update_tier_stats(
+                LLMTier.BASIC, time.time() - start_time, success=False
+            )
             self._mark_tier_unhealthy(LLMTier.BASIC)
             return await self._try_emergency_response(prompt, context, start_time)
 

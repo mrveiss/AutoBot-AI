@@ -20,11 +20,9 @@ Key Features:
 - Integrates with ChromaDB knowledge base
 """
 
-import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Dict, List, Optional, Set
 
 # TODO (#729): SSH proxied through SLM API
@@ -53,42 +51,157 @@ class ExtractedCommand:
 # Common command categories for classification
 COMMAND_CATEGORIES = {
     "network": [
-        "ping", "curl", "wget", "ssh", "scp", "sftp", "netstat", "ss", "ip",
-        "ifconfig", "route", "traceroute", "nslookup", "dig", "host", "nc",
-        "nmap", "tcpdump", "iptables", "firewall-cmd",
+        "ping",
+        "curl",
+        "wget",
+        "ssh",
+        "scp",
+        "sftp",
+        "netstat",
+        "ss",
+        "ip",
+        "ifconfig",
+        "route",
+        "traceroute",
+        "nslookup",
+        "dig",
+        "host",
+        "nc",
+        "nmap",
+        "tcpdump",
+        "iptables",
+        "firewall-cmd",
     ],
     "file_management": [
-        "ls", "cd", "pwd", "cp", "mv", "rm", "mkdir", "rmdir", "touch",
-        "cat", "head", "tail", "less", "more", "find", "locate", "which",
-        "file", "stat", "du", "df", "ln", "chmod", "chown", "chgrp",
+        "ls",
+        "cd",
+        "pwd",
+        "cp",
+        "mv",
+        "rm",
+        "mkdir",
+        "rmdir",
+        "touch",
+        "cat",
+        "head",
+        "tail",
+        "less",
+        "more",
+        "find",
+        "locate",
+        "which",
+        "file",
+        "stat",
+        "du",
+        "df",
+        "ln",
+        "chmod",
+        "chown",
+        "chgrp",
     ],
     "text_processing": [
-        "grep", "egrep", "fgrep", "sed", "awk", "cut", "sort", "uniq",
-        "wc", "tr", "diff", "patch", "tee", "xargs",
+        "grep",
+        "egrep",
+        "fgrep",
+        "sed",
+        "awk",
+        "cut",
+        "sort",
+        "uniq",
+        "wc",
+        "tr",
+        "diff",
+        "patch",
+        "tee",
+        "xargs",
     ],
     "process_management": [
-        "ps", "top", "htop", "kill", "killall", "pkill", "pgrep", "nice",
-        "renice", "nohup", "bg", "fg", "jobs",
+        "ps",
+        "top",
+        "htop",
+        "kill",
+        "killall",
+        "pkill",
+        "pgrep",
+        "nice",
+        "renice",
+        "nohup",
+        "bg",
+        "fg",
+        "jobs",
     ],
     "system_admin": [
-        "systemctl", "service", "journalctl", "dmesg", "uname", "hostname",
-        "uptime", "free", "vmstat", "iostat", "lsof", "strace", "ltrace",
+        "systemctl",
+        "service",
+        "journalctl",
+        "dmesg",
+        "uname",
+        "hostname",
+        "uptime",
+        "free",
+        "vmstat",
+        "iostat",
+        "lsof",
+        "strace",
+        "ltrace",
     ],
     "package_management": [
-        "apt", "apt-get", "dpkg", "yum", "dnf", "rpm", "pacman", "snap",
-        "flatpak", "pip", "npm", "gem", "cargo",
+        "apt",
+        "apt-get",
+        "dpkg",
+        "yum",
+        "dnf",
+        "rpm",
+        "pacman",
+        "snap",
+        "flatpak",
+        "pip",
+        "npm",
+        "gem",
+        "cargo",
     ],
     "archive": [
-        "tar", "gzip", "gunzip", "bzip2", "bunzip2", "xz", "zip", "unzip",
-        "7z", "rar", "unrar",
+        "tar",
+        "gzip",
+        "gunzip",
+        "bzip2",
+        "bunzip2",
+        "xz",
+        "zip",
+        "unzip",
+        "7z",
+        "rar",
+        "unrar",
     ],
     "development": [
-        "git", "make", "cmake", "gcc", "g++", "python", "python3", "node",
-        "npm", "java", "javac", "go", "rust", "cargo",
+        "git",
+        "make",
+        "cmake",
+        "gcc",
+        "g++",
+        "python",
+        "python3",
+        "node",
+        "npm",
+        "java",
+        "javac",
+        "go",
+        "rust",
+        "cargo",
     ],
     "security": [
-        "sudo", "su", "passwd", "useradd", "userdel", "usermod", "groupadd",
-        "openssl", "gpg", "ssh-keygen", "ssh-agent", "ssh-add",
+        "sudo",
+        "su",
+        "passwd",
+        "useradd",
+        "userdel",
+        "usermod",
+        "groupadd",
+        "openssl",
+        "gpg",
+        "ssh-keygen",
+        "ssh-agent",
+        "ssh-add",
     ],
 }
 
@@ -160,7 +273,7 @@ async def _extract_command_descriptions(
     # Process in batches to avoid command line length limits
     command_list = list(commands)
     for i in range(0, len(command_list), batch_size):
-        batch = command_list[i:i + batch_size]
+        batch = command_list[i : i + batch_size]
 
         try:
             # Use whatis for batch description lookup
@@ -182,7 +295,8 @@ async def _extract_command_descriptions(
 
     logger.info(
         "Extracted descriptions for %d commands from host %s",
-        len(descriptions), host_id
+        len(descriptions),
+        host_id,
     )
     return descriptions
 
@@ -196,44 +310,14 @@ async def extract_host_commands(host_id: str) -> Dict[str, ExtractedCommand]:
 
     Returns:
         Dict mapping command names to ExtractedCommand objects
+
+    Raises:
+        NotImplementedError: SSH now proxied through SLM API (#729)
     """
     # TODO (#729): SSH proxied through SLM API - Update in Task 5.2
-    raise NotImplementedError("Command extraction temporarily disabled - SSH proxied through SLM API (#729)")
-
-    # OLD CODE - will be updated to use SLM proxy:
-    # Infrastructure services removed - now managed by SLM server (#729)
-    # ssh_service = get_ssh_connection_service()
-    # host_service = get_infrastructure_host_service()
-    # host = host_service.get_host(host_id)
-
-    # Extract command list
-    commands = await _extract_command_list(ssh_service, host_id)
-    if not commands:
-        logger.warning("No commands extracted from host: %s", host_id)
-        return {}
-
-    # Extract descriptions
-    descriptions = await _extract_command_descriptions(ssh_service, host_id, commands)
-
-    # Build ExtractedCommand objects
-    result = {}
-    for cmd in commands:
-        result[cmd] = ExtractedCommand(
-            name=cmd,
-            description=descriptions.get(cmd),
-            category=_categorize_command(cmd),
-            source_hosts=[host_id],
-        )
-
-    # Mark host as commands extracted
-    host_service.mark_commands_extracted(host_id)
-
-    logger.info(
-        "Command extraction complete for host %s: %d commands",
-        host.name, len(result)
+    raise NotImplementedError(
+        "Command extraction temporarily disabled - SSH proxied through SLM API (#729)"
     )
-
-    return result
 
 
 async def store_commands_in_knowledge_base(
@@ -246,79 +330,30 @@ async def store_commands_in_knowledge_base(
     Uses ChromaDB to store commands as documents. If a command already exists,
     adds a relation to the new host rather than duplicating.
 
+    NOTE: Infrastructure services removed - now managed by SLM server (#729).
+    TODO (#729): Update to use SLM API for host info.
+
     Args:
         commands: Dict of extracted commands
         host_id: Host ID for relation creation
 
     Returns:
-        Number of new commands added
+        Number of new commands added (currently always 0)
     """
     try:
         from backend.services.knowledge_base import get_knowledge_base_service
-        kb_service = get_knowledge_base_service()
+
+        get_knowledge_base_service()  # noqa: F841 - Verify import works
     except ImportError:
         logger.warning("Knowledge base service not available")
         return 0
 
     # Infrastructure services removed - now managed by SLM server (#729)
-    # TODO (#729): Get host info from SLM API
-    logger.warning("store_commands_in_knowledge_base temporarily disabled - infrastructure services removed (#729)")
-    return 0
-
-    new_count = 0
-
-    for cmd_name, cmd in commands.items():
-        try:
-            # Check if command already exists in knowledge base
-            existing = await kb_service.search(
-                query=f"command:{cmd_name}",
-                category="infrastructure_command",
-                limit=1,
-            )
-
-            if existing:
-                # Add relation to existing command
-                await kb_service.add_relation(
-                    existing[0]["id"],
-                    "AVAILABLE_ON",
-                    host.name,
-                    metadata={"host_id": host_id, "host_address": host.host},
-                )
-            else:
-                # Create new command entry
-                metadata = {
-                    "type": "infrastructure_command",
-                    "command_name": cmd_name,
-                    "category": cmd.category or "unknown",
-                    "source_host": host.name,
-                    "source_host_id": host_id,
-                    "extracted_at": datetime.now().isoformat(),
-                }
-
-                content = f"Command: {cmd_name}"
-                if cmd.description:
-                    content += f"\nDescription: {cmd.description}"
-                if cmd.category:
-                    content += f"\nCategory: {cmd.category}"
-                content += f"\nAvailable on: {host.name} ({host.host})"
-
-                await kb_service.add_document(
-                    content=content,
-                    metadata=metadata,
-                    category="infrastructure_command",
-                )
-                new_count += 1
-
-        except Exception as e:
-            logger.warning("Failed to store command %s: %s", cmd_name, e)
-            continue
-
-    logger.info(
-        "Stored %d new commands in knowledge base for host %s",
-        new_count, host.name
+    logger.warning(
+        "store_commands_in_knowledge_base temporarily disabled - "
+        "infrastructure services removed (#729)"
     )
-
-    return new_count
+    return 0
 
 
 async def get_commands_for_host(host_id: str) -> List[str]:
@@ -328,33 +363,21 @@ async def get_commands_for_host(host_id: str) -> List[str]:
     Retrieves from knowledge base if already extracted, otherwise
     triggers extraction.
 
+    NOTE: Infrastructure services removed - now managed by SLM server (#729).
+    TODO (#729): Update to use SLM API for host info.
+
     Args:
         host_id: Infrastructure host ID
 
     Returns:
-        List of command names available on the host
+        List of command names available on the host (currently always empty)
     """
     # Infrastructure services removed - now managed by SLM server (#729)
-    # TODO (#729): Get host info from SLM API
-    logger.warning("get_available_commands temporarily disabled - infrastructure services removed (#729)")
+    logger.warning(
+        "get_commands_for_host temporarily disabled - "
+        "infrastructure services removed (#729)"
+    )
     return []
-
-    # Query knowledge base for commands on this host
-    try:
-        from backend.services.knowledge_base import get_knowledge_base_service
-        kb_service = get_knowledge_base_service()
-
-        results = await kb_service.search(
-            query=f"host:{host.name}",
-            category="infrastructure_command",
-            limit=1000,
-        )
-
-        return [r["metadata"].get("command_name") for r in results if r["metadata"].get("command_name")]
-
-    except ImportError:
-        logger.warning("Knowledge base service not available")
-        return []
 
 
 async def search_commands(
@@ -377,6 +400,7 @@ async def search_commands(
     """
     try:
         from backend.services.knowledge_base import get_knowledge_base_service
+
         kb_service = get_knowledge_base_service()
 
         results = await kb_service.search(
@@ -389,14 +413,13 @@ async def search_commands(
         if host_id:
             # Infrastructure services removed - now managed by SLM server (#729)
             # TODO (#729): Get host info from SLM API for filtering
-            logger.warning("Host filtering temporarily disabled - infrastructure services removed (#729)")
+            logger.warning(
+                "Host filtering temporarily disabled - infrastructure services removed (#729)"
+            )
 
         # Filter by category if specified
         if category:
-            results = [
-                r for r in results
-                if r["metadata"].get("category") == category
-            ]
+            results = [r for r in results if r["metadata"].get("category") == category]
 
         return results
 

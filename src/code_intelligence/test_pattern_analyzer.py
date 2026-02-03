@@ -347,7 +347,9 @@ class TestPatternAnalyzer:
 
         # Compile patterns
         self._flaky_patterns = [re.compile(p) for p in self.FLAKY_PATTERNS]
-        self._external_patterns = [re.compile(p) for p in self.EXTERNAL_DEPENDENCY_PATTERNS]
+        self._external_patterns = [
+            re.compile(p) for p in self.EXTERNAL_DEPENDENCY_PATTERNS
+        ]
         self._database_patterns = [re.compile(p) for p in self.DATABASE_PATTERNS]
         self._exclude_patterns = [re.compile(p) for p in self.exclude_patterns]
         self._test_patterns = [re.compile(p) for p in self.test_file_patterns]
@@ -446,10 +448,7 @@ class TestPatternAnalyzer:
     ) -> Optional[TestAntiPatternResult]:
         """Detect tests with no assertions or only pass statements."""
         assertions = self._count_assertions(func)
-        body_is_pass = (
-            len(func.body) == 1
-            and isinstance(func.body[0], ast.Pass)
-        )
+        body_is_pass = len(func.body) == 1 and isinstance(func.body[0], ast.Pass)
         body_is_docstring_only = (
             len(func.body) == 1
             and isinstance(func.body[0], ast.Expr)
@@ -481,7 +480,10 @@ class TestPatternAnalyzer:
             # Issue #380: Use module-level constant
             has_code = any(
                 not isinstance(stmt, _EMPTY_STMT_TYPES)
-                or (isinstance(stmt, ast.Expr) and not isinstance(stmt.value, ast.Constant))
+                or (
+                    isinstance(stmt, ast.Expr)
+                    and not isinstance(stmt.value, ast.Constant)
+                )
                 for stmt in func.body
             )
             if has_code:
@@ -504,7 +506,10 @@ class TestPatternAnalyzer:
         lines = self._get_function_lines(func)
         branches = self._count_branches(func)
 
-        if lines > self.COMPLEX_TEST_LINE_THRESHOLD or branches > self.COMPLEX_TEST_BRANCH_THRESHOLD:
+        if (
+            lines > self.COMPLEX_TEST_LINE_THRESHOLD
+            or branches > self.COMPLEX_TEST_BRANCH_THRESHOLD
+        ):
             return TestAntiPatternResult(
                 pattern_type=TestAntiPatternType.OVERLY_COMPLEX_TEST,
                 severity=TestPatternSeverity.MEDIUM,
@@ -525,16 +530,15 @@ class TestPatternAnalyzer:
 
         if assertions > self.MAX_ASSERTIONS_PER_TEST:
             return TestAntiPatternResult(
-    pattern_type=TestAntiPatternType.MULTIPLE_ASSERTIONS,
-    severity=TestPatternSeverity.LOW,
-    file_path=file_path,
-    line_number=func.lineno,
-    test_name=func.name,
-    description=f"Test '{func.name}' has {assertions} assertions (max recommended: {self.MAX_ASSERTIONS_PER_TEST})",
-    suggestion="Consider splitting into multiple focused tests",
-    metrics={
-        "assertion_count": assertions},
-         )
+                pattern_type=TestAntiPatternType.MULTIPLE_ASSERTIONS,
+                severity=TestPatternSeverity.LOW,
+                file_path=file_path,
+                line_number=func.lineno,
+                test_name=func.name,
+                description=f"Test '{func.name}' has {assertions} assertions (max recommended: {self.MAX_ASSERTIONS_PER_TEST})",
+                suggestion="Consider splitting into multiple focused tests",
+                metrics={"assertion_count": assertions},
+            )
         return None
 
     def _detect_flaky_patterns(
@@ -788,7 +792,9 @@ class TestPatternAnalyzer:
 
         # Assertion density (assertions per test)
         if total_tests > 0:
-            metrics[TestQualityMetric.ASSERTION_DENSITY] = total_assertions / total_tests
+            metrics[TestQualityMetric.ASSERTION_DENSITY] = (
+                total_assertions / total_tests
+            )
         else:
             metrics[TestQualityMetric.ASSERTION_DENSITY] = 0.0
 
@@ -796,7 +802,9 @@ class TestPatternAnalyzer:
         if total_tests > 0:
             avg_lines = total_lines / total_tests
             # Scale: <20 lines = 100, >50 lines = 0
-            metrics[TestQualityMetric.COMPLEXITY_SCORE] = max(0, 100 - (avg_lines - 20) * 2.5)
+            metrics[TestQualityMetric.COMPLEXITY_SCORE] = max(
+                0, 100 - (avg_lines - 20) * 2.5
+            )
         else:
             metrics[TestQualityMetric.COMPLEXITY_SCORE] = 0.0
 
@@ -960,7 +968,9 @@ class TestPatternAnalyzer:
         # Generate suggestions
         suggestions = []
         if len(coverage_gaps) > 0:
-            suggestions.append(f"Add tests for {len(coverage_gaps)} untested modules/functions")
+            suggestions.append(
+                f"Add tests for {len(coverage_gaps)} untested modules/functions"
+            )
         if severity_dist.get("high", 0) > 0:
             suggestions.append(f"Fix {severity_dist['high']} high-severity test issues")
         if quality_metrics.get(TestQualityMetric.OVERALL_SCORE, 0) < 70:

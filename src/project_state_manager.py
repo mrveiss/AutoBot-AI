@@ -977,13 +977,17 @@ class ProjectStateManager:
         report.append("## Phase Details")
         for phase, info in self.phases.items():
             report.append(f"### {info.name}")
-            report.append(
-                f"- **Status**: {'✅ Completed' if info.is_completed else ('🔄 Active' if info.is_active else '⏸️ Inactive')}"
-            )
+            if info.is_completed:
+                status = "✅ Completed"
+            elif info.is_active:
+                status = "🔄 Active"
+            else:
+                status = "⏸️ Inactive"
+            report.append(f"- **Status**: {status}")
             report.append(f"- **Completion**: {info.completion_percentage:.1%}")
-            report.append(
-                f"- **Capabilities**: {sum(1 for c in info.capabilities if c.implemented)}/{len(info.capabilities)} implemented"
-            )
+            implemented = sum(1 for c in info.capabilities if c.implemented)
+            total_caps = len(info.capabilities)
+            report.append(f"- **Capabilities**: {implemented}/{total_caps} implemented")
 
             if info.validation_results:
                 report.append("- **Recent Validation Results**:")

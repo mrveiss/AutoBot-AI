@@ -100,8 +100,11 @@ VALID_ANALYSIS_TYPES = ", ".join(ANALYSIS_TYPE_HANDLERS.keys())
 
 
 class AnalysisRequest(BaseModel):
+    """Request model for code analysis."""
+
     root_path: str
-    analysis_type: str = "comprehensive"  # comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
+    # Options: comprehensive, duplicates, patterns, imports, dead_code, refactoring, quality
+    analysis_type: str = "comprehensive"
 
 
 @with_error_handling(

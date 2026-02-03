@@ -25,7 +25,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -50,10 +49,11 @@ SIMILARITY_LOW = 0.50
 
 # Issue #554: Security - Allowed collection name pattern (alphanumeric, underscore, hyphen)
 import re
-COLLECTION_NAME_PATTERN = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]{0,63}$')
+
+COLLECTION_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
 
 # Issue #554: Security - Allowed Redis key characters
-REDIS_KEY_PATTERN = re.compile(r'^[a-zA-Z0-9_:.-]+$')
+REDIS_KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_:.-]+$")
 
 
 @dataclass
@@ -192,17 +192,15 @@ class AnalyticsInfrastructureMixin:
                         )
 
                         self._chromadb_client = await get_async_chromadb_client()
-                        self._chromadb_collection = (
-                            await self._chromadb_client.get_or_create_collection(
-                                name=self._collection_name,
-                                metadata={
-                                    "description": f"Vectors for {self._collection_name}",
-                                    "hnsw:space": "cosine",
-                                    "hnsw:construction_ef": 200,
-                                    "hnsw:search_ef": 100,
-                                    "hnsw:M": 24,
-                                },
-                            )
+                        self._chromadb_collection = await self._chromadb_client.get_or_create_collection(
+                            name=self._collection_name,
+                            metadata={
+                                "description": f"Vectors for {self._collection_name}",
+                                "hnsw:space": "cosine",
+                                "hnsw:construction_ef": 200,
+                                "hnsw:search_ef": 100,
+                                "hnsw:M": 24,
+                            },
                         )
                         logger.info(
                             "ChromaDB collection '%s' initialized",
@@ -424,10 +422,7 @@ class AnalyticsInfrastructureMixin:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Convert exceptions to None
-        return [
-            r if isinstance(r, list) else None
-            for r in results
-        ]
+        return [r if isinstance(r, list) else None for r in results]
 
     async def _get_embeddings_batch_via_npu(
         self, texts: List[str]
@@ -467,7 +462,7 @@ class AnalyticsInfrastructureMixin:
                 logger.info(
                     "Batch embeddings (%d) generated via NPU worker in %.1fms",
                     len(texts),
-                    result.processing_time_ms
+                    result.processing_time_ms,
                 )
                 return result.embeddings
 
@@ -502,7 +497,7 @@ class AnalyticsInfrastructureMixin:
         # Issue #554: Validate key format to prevent injection
         if not REDIS_KEY_PATTERN.match(full_key):
             # Sanitize by removing invalid characters
-            sanitized = re.sub(r'[^a-zA-Z0-9_:.-]', '_', full_key)
+            sanitized = re.sub(r"[^a-zA-Z0-9_:.-]", "_", full_key)
             if not sanitized or len(sanitized) > 256:
                 logger.warning("Redis key rejected after sanitization: %s", key[:50])
                 return None
@@ -779,6 +774,7 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
         """
         try:
             import numpy as np
+
             v1 = np.array(emb1, dtype=np.float32)
             v2 = np.array(emb2, dtype=np.float32)
             norm1 = np.linalg.norm(v1)

@@ -14,7 +14,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -83,6 +82,7 @@ class EnterpriseFeatureManager:
     def _get_vm_env_config(self) -> Dict[str, Optional[str]]:
         """Get VM environment configuration variables."""
         import os
+
         return {
             "backend_host": os.getenv("AUTOBOT_BACKEND_HOST"),
             "backend_port": os.getenv("AUTOBOT_BACKEND_PORT"),
@@ -103,41 +103,65 @@ class EnterpriseFeatureManager:
         """Validate that all required VM environment variables are set."""
         if not all(cfg.values()):
             raise ValueError(
-                "VM topology configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set"
+                "VM topology configuration missing: All AUTOBOT_*_HOST and "
+                "AUTOBOT_*_PORT environment variables must be set"
             )
 
-    def _build_vm_topology(self, cfg: Dict[str, Optional[str]]) -> Dict[str, Dict[str, Any]]:
+    def _build_vm_topology(
+        self, cfg: Dict[str, Optional[str]]
+    ) -> Dict[str, Dict[str, Any]]:
         """Build VM topology dictionary from environment configuration."""
         return {
             "main_machine": {
-                "ip": cfg["backend_host"], "services": ["backend_api", "desktop_vnc", "terminal_vnc"],
+                "ip": cfg["backend_host"],
+                "services": ["backend_api", "desktop_vnc", "terminal_vnc"],
                 "ports": [int(cfg["backend_port"]), int(cfg["vnc_port"])],
                 "capabilities": ["coordination", "management", "user_interface"],
                 "resources": {"cpu_cores": 22, "memory_gb": 32, "gpu": "RTX_4070"},
             },
             "frontend_vm": {
-                "ip": cfg["frontend_host"], "services": ["web_interface"], "ports": [int(cfg["frontend_port"])],
-                "capabilities": ["web_ui", "user_interaction"], "resources": {"cpu_cores": 4, "memory_gb": 8},
+                "ip": cfg["frontend_host"],
+                "services": ["web_interface"],
+                "ports": [int(cfg["frontend_port"])],
+                "capabilities": ["web_ui", "user_interaction"],
+                "resources": {"cpu_cores": 4, "memory_gb": 8},
             },
             "npu_worker_vm": {
-                "ip": cfg["npu_worker_host"], "services": ["ai_acceleration", "npu_worker"],
+                "ip": cfg["npu_worker_host"],
+                "services": ["ai_acceleration", "npu_worker"],
                 "ports": [int(cfg["npu_worker_port"])],
-                "capabilities": ["ai_acceleration", "npu_processing", "hardware_optimization"],
+                "capabilities": [
+                    "ai_acceleration",
+                    "npu_processing",
+                    "hardware_optimization",
+                ],
                 "resources": {"cpu_cores": 4, "memory_gb": 8, "npu": "Intel_NPU"},
             },
             "redis_vm": {
-                "ip": cfg["redis_host"], "services": ["redis_server", "data_storage"], "ports": [int(cfg["redis_port"])],
+                "ip": cfg["redis_host"],
+                "services": ["redis_server", "data_storage"],
+                "ports": [int(cfg["redis_port"])],
                 "capabilities": ["data_persistence", "caching", "session_storage"],
                 "resources": {"cpu_cores": 2, "memory_gb": 16, "storage_gb": 100},
             },
             "ai_stack_vm": {
-                "ip": cfg["ai_stack_host"], "services": ["ai_processing", "llm_inference"],
+                "ip": cfg["ai_stack_host"],
+                "services": ["ai_processing", "llm_inference"],
                 "ports": [int(cfg["ai_stack_port"])],
-                "capabilities": ["ai_processing", "llm_inference", "knowledge_processing"],
-                "resources": {"cpu_cores": 8, "memory_gb": 16, "gpu_acceleration": True},
+                "capabilities": [
+                    "ai_processing",
+                    "llm_inference",
+                    "knowledge_processing",
+                ],
+                "resources": {
+                    "cpu_cores": 8,
+                    "memory_gb": 16,
+                    "gpu_acceleration": True,
+                },
             },
             "browser_vm": {
-                "ip": cfg["browser_host"], "services": ["web_automation", "playwright_server"],
+                "ip": cfg["browser_host"],
+                "services": ["web_automation", "playwright_server"],
                 "ports": [int(cfg["browser_port"])],
                 "capabilities": ["web_automation", "browser_control", "scraping"],
                 "resources": {"cpu_cores": 4, "memory_gb": 8, "display": True},
@@ -197,8 +221,10 @@ class EnterpriseFeatureManager:
                 category=FeatureCategory.RESEARCH_ORCHESTRATION,
                 description="Enable advanced web research capabilities with librarian agents",
                 configuration={
-                    "enable_librarian_agents": True, "enable_mcp_integration": True,
-                    "research_timeout_seconds": 30, "max_concurrent_research": 3,
+                    "enable_librarian_agents": True,
+                    "enable_mcp_integration": True,
+                    "research_timeout_seconds": 30,
+                    "max_concurrent_research": 3,
                     "research_sources": ["web", "manuals", "knowledge_base"],
                     "quality_threshold": 0.7,
                 },
@@ -210,8 +236,11 @@ class EnterpriseFeatureManager:
                 description="Enhanced knowledge base search with semantic understanding",
                 dependencies=["web_research_orchestration"],
                 configuration={
-                    "enable_semantic_search": True, "enable_cross_reference": True,
-                    "search_timeout_seconds": 10, "relevance_threshold": 0.1, "max_results": 10,
+                    "enable_semantic_search": True,
+                    "enable_cross_reference": True,
+                    "search_timeout_seconds": 10,
+                    "relevance_threshold": 0.1,
+                    "max_results": 10,
                 },
             ),
         }
@@ -224,9 +253,12 @@ class EnterpriseFeatureManager:
                 category=FeatureCategory.LOAD_BALANCING,
                 description="Intelligent load distribution across 6-VM infrastructure",
                 configuration={
-                    "enable_adaptive_routing": True, "load_balance_algorithm": "weighted_round_robin",
-                    "health_check_interval": 30, "failover_threshold": 0.8,
-                    "resource_monitoring": True, "auto_scaling": True,
+                    "enable_adaptive_routing": True,
+                    "load_balance_algorithm": "weighted_round_robin",
+                    "health_check_interval": 30,
+                    "failover_threshold": 0.8,
+                    "resource_monitoring": True,
+                    "auto_scaling": True,
                 },
                 health_check_endpoint="/api/load_balancer/health",
             ),
@@ -236,10 +268,16 @@ class EnterpriseFeatureManager:
                 description="Route tasks to optimal hardware (NPU/GPU/CPU) based on requirements",
                 dependencies=["cross_vm_load_balancing"],
                 configuration={
-                    "enable_hardware_detection": True, "enable_performance_prediction": True,
-                    "routing_strategies": {"ai_tasks": "npu_preferred", "gpu_tasks": "gpu_required",
-                                           "cpu_tasks": "cpu_optimized", "memory_tasks": "memory_optimized"},
-                    "performance_history_days": 7, "auto_optimization": True,
+                    "enable_hardware_detection": True,
+                    "enable_performance_prediction": True,
+                    "routing_strategies": {
+                        "ai_tasks": "npu_preferred",
+                        "gpu_tasks": "gpu_required",
+                        "cpu_tasks": "cpu_optimized",
+                        "memory_tasks": "memory_optimized",
+                    },
+                    "performance_history_days": 7,
+                    "auto_optimization": True,
                 },
             ),
             "dynamic_resource_allocation": EnterpriseFeature(
@@ -247,9 +285,15 @@ class EnterpriseFeatureManager:
                 category=FeatureCategory.RESOURCE_OPTIMIZATION,
                 description="Automatic resource scaling based on demand",
                 configuration={
-                    "enable_auto_scaling": True, "scale_up_threshold": 0.8, "scale_down_threshold": 0.3,
+                    "enable_auto_scaling": True,
+                    "scale_up_threshold": 0.8,
+                    "scale_down_threshold": 0.3,
                     "scaling_cooldown_minutes": 5,
-                    "resource_limits": {"max_cpu_percent": 90, "max_memory_percent": 85, "max_concurrent_tasks": 50},
+                    "resource_limits": {
+                        "max_cpu_percent": 90,
+                        "max_memory_percent": 85,
+                        "max_concurrent_tasks": 50,
+                    },
                 },
             ),
         }
@@ -262,10 +306,12 @@ class EnterpriseFeatureManager:
                 category=FeatureCategory.HEALTH_MONITORING,
                 description="End-to-end health checks across all systems",
                 configuration={
-                    "health_check_interval": 30, "critical_service_timeout": 5,
+                    "health_check_interval": 30,
+                    "critical_service_timeout": 5,
                     "degraded_performance_threshold": 0.7,
                     "alert_channels": ["logs", "metrics", "notifications"],
-                    "enable_predictive_health": True, "health_history_days": 30,
+                    "enable_predictive_health": True,
+                    "health_history_days": 30,
                 },
                 health_check_endpoint="/api/health/comprehensive",
             ),
@@ -275,7 +321,8 @@ class EnterpriseFeatureManager:
                 description="Graceful service degradation and automatic recovery",
                 dependencies=["comprehensive_health_monitoring"],
                 configuration={
-                    "enable_circuit_breakers": True, "enable_fallback_services": True,
+                    "enable_circuit_breakers": True,
+                    "enable_fallback_services": True,
                     "degradation_levels": ["full", "limited", "basic", "emergency"],
                     "recovery_strategies": ["restart", "failover", "scale_out"],
                     "max_degradation_time_minutes": 30,
@@ -286,9 +333,14 @@ class EnterpriseFeatureManager:
                 category=FeatureCategory.FAILOVER_RECOVERY,
                 description="Automated backup and disaster recovery procedures",
                 configuration={
-                    "backup_interval_hours": 6, "backup_retention_days": 30,
+                    "backup_interval_hours": 6,
+                    "backup_retention_days": 30,
                     "enable_incremental_backup": True,
-                    "backup_targets": ["configurations", "knowledge_base", "chat_history"],
+                    "backup_targets": [
+                        "configurations",
+                        "knowledge_base",
+                        "chat_history",
+                    ],
                     "recovery_testing_enabled": True,
                 },
             ),
@@ -302,19 +354,28 @@ class EnterpriseFeatureManager:
                 category=FeatureCategory.CONFIGURATION_MANAGEMENT,
                 description="Centralized configuration management with validation",
                 configuration={
-                    "enable_config_validation": True, "enable_config_versioning": True,
-                    "enable_config_rollback": True, "config_sync_interval_minutes": 15,
-                    "enable_environment_isolation": True, "config_audit_logging": True,
+                    "enable_config_validation": True,
+                    "enable_config_versioning": True,
+                    "enable_config_rollback": True,
+                    "config_sync_interval_minutes": 15,
+                    "enable_environment_isolation": True,
+                    "config_audit_logging": True,
                 },
             ),
             "zero_downtime_deployment": EnterpriseFeature(
                 name="Zero-Downtime Deployment",
                 category=FeatureCategory.PERFORMANCE_TUNING,
                 description="Blue-green deployment with zero downtime",
-                dependencies=["cross_vm_load_balancing", "comprehensive_health_monitoring"],
+                dependencies=[
+                    "cross_vm_load_balancing",
+                    "comprehensive_health_monitoring",
+                ],
                 configuration={
-                    "deployment_strategy": "blue_green", "health_check_timeout": 60,
-                    "rollback_on_failure": True, "canary_deployment_percent": 10, "enable_a_b_testing": True,
+                    "deployment_strategy": "blue_green",
+                    "health_check_timeout": 60,
+                    "rollback_on_failure": True,
+                    "canary_deployment_percent": 10,
+                    "enable_a_b_testing": True,
                 },
             ),
         }
@@ -783,7 +844,8 @@ class EnterpriseFeatureManager:
             ]
         ):
             raise ValueError(
-                "Fallback endpoint configuration missing: All AUTOBOT_*_HOST and AUTOBOT_*_PORT environment variables must be set"
+                "Fallback endpoint configuration missing: All AUTOBOT_*_HOST and "
+                "AUTOBOT_*_PORT environment variables must be set"
             )
 
         return {

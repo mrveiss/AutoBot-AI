@@ -28,8 +28,9 @@ def _decode_command_ids(command_ids: set) -> List[str]:
     return [cid.decode("utf-8") for cid in command_ids]
 
 
-def _parse_command_data_safe(command_data: bytes,
-                             state_filter: Optional[CommandState] = None) -> Optional[CommandExecution]:
+def _parse_command_data_safe(
+    command_data: bytes, state_filter: Optional[CommandState] = None
+) -> Optional[CommandExecution]:
     """Parse command JSON data safely. (Issue #315 - extracted)"""
     if not command_data:
         return None
@@ -237,7 +238,8 @@ class CommandExecutionQueue:
 
             # Process results using helper (Issue #315)
             commands = [
-                cmd for cmd_data in results
+                cmd
+                for cmd_data in results
                 if (cmd := _parse_command_data_safe(cmd_data, state_filter))
             ]
 
@@ -288,7 +290,8 @@ class CommandExecutionQueue:
 
             # Process results using helper (Issue #315)
             commands = [
-                cmd for cmd_data in results
+                cmd
+                for cmd_data in results
                 if (cmd := _parse_command_data_safe(cmd_data, state_filter))
             ]
 
@@ -331,7 +334,8 @@ class CommandExecutionQueue:
 
             # Process results, filter pending only (Issue #315)
             commands = [
-                cmd for cmd_data in results
+                cmd
+                for cmd_data in results
                 if (cmd := _parse_command_data_safe(cmd_data)) and cmd.is_pending()
             ]
 

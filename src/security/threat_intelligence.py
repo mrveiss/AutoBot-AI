@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 class ThreatLevel(Enum):
     """Threat level classification"""
+
     SAFE = "safe"
     LOW = "low"
     MEDIUM = "medium"
@@ -45,6 +46,7 @@ class ThreatLevel(Enum):
 @dataclass
 class ThreatScore:
     """Aggregated threat score from multiple sources"""
+
     virustotal_score: Optional[float] = None
     urlvoid_score: Optional[float] = None
     overall_score: float = 0.5
@@ -57,6 +59,7 @@ class ThreatScore:
 @dataclass
 class RateLimitState:
     """Rate limiter state for API calls"""
+
     requests_made: int = 0
     window_start: float = field(default_factory=time.time)
     requests_per_minute: int = 4  # Default VirusTotal free tier
@@ -105,8 +108,7 @@ class ThreatIntelligenceCache:
         async with self._lock:
             current_time = time.time()
             self._cache = {
-                k: v for k, v in self._cache.items()
-                if v["expires_at"] > current_time
+                k: v for k, v in self._cache.items() if v["expires_at"] > current_time
             }
 
 
@@ -184,6 +186,7 @@ class VirusTotalClient:
     def _get_url_id(self, url: str) -> str:
         """Generate VirusTotal URL identifier (base64 without padding)."""
         import base64
+
         return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
 
     async def check_url(self, url: str) -> Dict[str, Any]:
@@ -420,8 +423,16 @@ class URLVoidClient:
             detections = root.find(".//detections")
             engines_count = root.find(".//engines_count")
 
-            detection_count = int(detections.text) if detections is not None and detections.text else 0
-            total_engines = int(engines_count.text) if engines_count is not None and engines_count.text else 0
+            detection_count = (
+                int(detections.text)
+                if detections is not None and detections.text
+                else 0
+            )
+            total_engines = (
+                int(engines_count.text)
+                if engines_count is not None and engines_count.text
+                else 0
+            )
 
             if total_engines == 0:
                 score = 0.5  # Neutral if no engines checked
@@ -570,7 +581,10 @@ class ThreatIntelligenceService:
 
         logger.info(
             "Threat check for %s: score=%.2f, level=%s, sources=%d",
-            url, overall_score, threat_level.value, sources_checked
+            url,
+            overall_score,
+            threat_level.value,
+            sources_checked,
         )
 
         return threat_score
@@ -642,12 +656,14 @@ if __name__ == "__main__":
         status = await service.get_service_status()
         logger.info("Service Status:")
         for name, info in status.items():
-            configured = "✅" if info["configured"] else "❌"
-            logger.info("  {name}: {configured} configured")
+            configured_icon = "✅" if info["configured"] else "❌"
+            logger.info("  %s: %s configured", name, configured_icon)
 
         if not service.is_any_service_configured:
             logger.info("\n⚠️ No threat intelligence services configured.")
-            logger.info("Set VIRUSTOTAL_API_KEY and/or URLVOID_API_KEY environment variables.")
+            logger.info(
+                "Set VIRUSTOTAL_API_KEY and/or URLVOID_API_KEY environment variables."
+            )
             return
 
         # Test URLs

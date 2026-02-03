@@ -11,22 +11,14 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict
-
-import requests
 
 import aiohttp
 
 from backend.type_defs.common import Metadata
-
+from src.config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
+from src.config import config as global_config_manager
 from src.constants.model_constants import ModelConstants
 from src.constants.network_constants import NetworkConstants
-from src.config import (
-    HTTP_PROTOCOL,
-    OLLAMA_HOST_IP,
-    OLLAMA_PORT,
-)
-from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -125,9 +117,7 @@ class ConnectionTester:
             modules = redis_client.module_list()
             if not modules or not isinstance(modules, list):
                 return False
-            return any(
-                ConnectionTester._is_search_module(module) for module in modules
-            )
+            return any(ConnectionTester._is_search_module(module) for module in modules)
         except Exception:
             # If we can't check modules, assume it's not loaded
             return False
@@ -170,6 +160,7 @@ class ConnectionTester:
         # Final fallbacks
         if not endpoint:
             from src.config import OLLAMA_URL
+
             endpoint = f"{OLLAMA_URL}/api/generate"
         if not model:
             model = os.getenv(
@@ -219,7 +210,9 @@ class ConnectionTester:
         """Test Ollama LLM connection with current configuration"""
         try:
             endpoint, model = ConnectionTester._get_ollama_config_from_new_structure()
-            endpoint, model = ConnectionTester._get_ollama_config_fallback(endpoint, model)
+            endpoint, model = ConnectionTester._get_ollama_config_fallback(
+                endpoint, model
+            )
 
             check_url = endpoint.replace("/api/generate", "/api/tags")
             timeout = aiohttp.ClientTimeout(total=10)
@@ -271,10 +264,14 @@ class ConnectionTester:
         redis_config = memory_config.get("redis", {})
 
         if not redis_config.get("enabled", False):
-            return None, None, {
-                "status": "not_configured",
-                "message": "Redis is not enabled in memory configuration",
-            }
+            return (
+                None,
+                None,
+                {
+                    "status": "not_configured",
+                    "message": "Redis is not enabled in memory configuration",
+                },
+            )
 
         host = redis_config.get("host", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
         port = redis_config.get(
@@ -352,10 +349,10 @@ class ConnectionTester:
                         "message": f"Cannot connect to Ollama at {ollama_host}",
                     }
                 data = await response.json()
-                available_models = [
-                    model["name"] for model in data.get("models", [])
-                ]
-                model_available = current_model in available_models if current_model else False
+                available_models = [model["name"] for model in data.get("models", [])]
+                model_available = (
+                    current_model in available_models if current_model else False
+                )
                 return {
                     "connected": True,
                     "current_model": current_model,
@@ -540,8 +537,7 @@ class ModelManager:
                     ollama_data = await response.json()
                     raw_models = ollama_data.get("models", [])
                     return [
-                        ModelManager._parse_ollama_model(model)
-                        for model in raw_models
+                        ModelManager._parse_ollama_model(model) for model in raw_models
                     ]
         except Exception as e:
             ModelManager._log_ollama_warning_if_needed(e)

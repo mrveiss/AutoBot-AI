@@ -192,7 +192,9 @@ class CachedResponseStrategy(FallbackStrategy):
 
         try:
             # Issue #358 - use lambda for proper glob() execution in thread
-            cache_files = await asyncio.to_thread(lambda: list(self.cache_dir.glob("*.json")))
+            cache_files = await asyncio.to_thread(
+                lambda: list(self.cache_dir.glob("*.json"))
+            )
             for cache_file in cache_files:
                 try:
                     async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
@@ -484,7 +486,9 @@ class GracefulDegradationManager:
                 if await strategy.can_handle(request, context):
                     response = await strategy.generate_response(request, context)
                     async with self._lock:
-                        self.metrics["fallback_usage"][strategy.get_strategy_name()] += 1
+                        self.metrics["fallback_usage"][
+                            strategy.get_strategy_name()
+                        ] += 1
                     logger.info(
                         f"Used fallback strategy: {strategy.get_strategy_name()}"
                     )
@@ -554,18 +558,24 @@ class GracefulDegradationManager:
         async with self._lock:
             consecutive_failures = self.service_status.consecutive_failures
             current_time = time.time()
-            recent_failures = [f for f in self.failure_history if current_time - f <= 300]
+            recent_failures = [
+                f for f in self.failure_history if current_time - f <= 300
+            ]
             total_requests = self.metrics["total_requests"]
             error_rate = len(recent_failures) / max(1, total_requests) * 100
 
-            health, level = self._determine_health_status(consecutive_failures, error_rate)
+            health, level = self._determine_health_status(
+                consecutive_failures, error_rate
+            )
             self.service_status.health = health
             self.service_status.degradation_level = level
             self.service_status.error_rate = error_rate
             health_val = health.value
             level_name = level.name
 
-        logger.info("Service health updated: %s (degradation: %s)", health_val, level_name)
+        logger.info(
+            "Service health updated: %s (degradation: %s)", health_val, level_name
+        )
 
     async def _update_response_time_metric(self, response_time: float):
         """Update average response time metric (thread-safe)"""
@@ -707,9 +717,11 @@ async def main():
 
         for i, request in enumerate(requests):
             response = await manager.handle_request(request)
-            logger.debug("\nRequest %s: %s", i+1, request)
+            logger.debug("\nRequest %s: %s", i + 1, request)
             logger.debug("Response: %s...", response.content[:100])
-            logger.debug("Source: %s, Confidence: %.2f", response.source, response.confidence)
+            logger.debug(
+                "Source: %s, Confidence: %.2f", response.source, response.confidence
+            )
             logger.debug("Degradation Level: %s", response.degradation_level.name)
 
             # Simulate some delay between requests

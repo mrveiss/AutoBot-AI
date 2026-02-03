@@ -21,7 +21,9 @@ from backend.initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
-from src.constants.network_constants import NetworkConstants  # noqa: F401 - used in docstring example
+from src.constants.network_constants import (  # noqa: F401 - used in docstring example
+    NetworkConstants,
+)
 
 # Store logger for app usage
 logger = logging.getLogger(__name__)
@@ -86,7 +88,7 @@ class AppFactory:
     @staticmethod
     def create_fastapi_app(
         title: str = "AutoBot - Distributed Autonomous Agent",
-        description: str = "Advanced AI-powered autonomous Linux administration platform with distributed VM architecture",
+        description: str = "AI-powered autonomous Linux administration with distributed VMs",
         version: str = "1.5.0",
         allow_origins: Optional[List[str]] = None,
     ) -> FastAPI:

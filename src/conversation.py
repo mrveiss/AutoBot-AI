@@ -17,6 +17,7 @@ from src.agents import get_kb_librarian
 from src.agents.classification_agent import ClassificationAgent, ClassificationResult
 from src.agents.llm_failsafe_agent import get_robust_llm_response
 from src.autobot_types import TaskComplexity
+from src.config import config as global_config_manager
 from src.constants.network_constants import NetworkConstants
 from src.constants.threshold_constants import TimingConstants
 from src.research_browser_manager import research_browser_manager
@@ -27,7 +28,6 @@ from src.source_attribution import (
     source_manager,
     track_source,
 )
-from src.config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,9 @@ class Conversation:
         # Conversation settings
         self.max_kb_results = 5
         # KB timeout should be longer than KB circuit breaker (Issue #376 - use named constant)
-        self.kb_timeout = float(TimingConstants.LONG_DELAY)  # 10s - allows for circuit breaker recovery
+        self.kb_timeout = float(
+            TimingConstants.LONG_DELAY
+        )  # 10s - allows for circuit breaker recovery
         self.include_sources = True
 
         logger.info("Created conversation %s", self.conversation_id)
@@ -242,9 +244,7 @@ class Conversation:
             "response": response,
             "sources": sources_block,
             "classification": (
-                asdict(self.state.classification)
-                if self.state.classification
-                else None
+                asdict(self.state.classification) if self.state.classification else None
             ),
             "kb_results_count": len(kb_results),
             "processing_time": self.state.processing_time,
@@ -391,13 +391,15 @@ class Conversation:
             logger.warning("KB search timed out after %ss", self.kb_timeout)
             self._add_kb_error_message(
                 "timeout",
-                "Knowledge base search timed out, proceeding without KB context"
+                "Knowledge base search timed out, proceeding without KB context",
             )
             return []
 
         except Exception as e:
             logger.error("KB search failed: %s", e)
-            self._add_kb_error_message("error", f"Knowledge base search failed: {str(e)}")
+            self._add_kb_error_message(
+                "error", f"Knowledge base search failed: {str(e)}"
+            )
             return []
 
     def _build_kb_context(self, kb_results: List[Dict[str, Any]]) -> str:
@@ -422,46 +424,57 @@ class Conversation:
             return ""
 
         research_lines = ["", "", "EXTERNAL RESEARCH RESULTS:"]
-        for i, result in enumerate(research_results["results"][:2], 1):  # Limit to top 2
+        for i, result in enumerate(
+            research_results["results"][:2], 1
+        ):  # Limit to top 2
             content_data = result.get("content", {})
             if content_data.get("success"):
                 text_content = content_data.get("text_content", "")[:400]
-                research_lines.extend([
-                    "",
-                    f"{i}. Research Query: {result.get('query', 'Unknown')}",
-                    f"   Content: {text_content}...",
-                ])
+                research_lines.extend(
+                    [
+                        "",
+                        f"{i}. Research Query: {result.get('query', 'Unknown')}",
+                        f"   Content: {text_content}...",
+                    ]
+                )
 
                 if result.get("interaction_required"):
-                    research_lines.extend([
-                        "   ⚠️ Browser session available for manual verification",
-                        f"   🌐 Browser URL: {result.get('browser_url', '')}",
-                    ])
+                    research_lines.extend(
+                        [
+                            "   ⚠️ Browser session available for manual verification",
+                            f"   🌐 Browser URL: {result.get('browser_url', '')}",
+                        ]
+                    )
         return "\n".join(research_lines)
 
     def _get_system_prompt(self) -> str:
         """Get the system prompt for response generation."""
-        return """You are AutoBot, an intelligent AI assistant. You have access to a knowledge base and can conduct external research.
-
-IMPORTANT INSTRUCTIONS:
-1. Always prioritize information from the Knowledge Base when available
-2. Use external research results to supplement KB information, especially for current/recent topics
-3. If research requires user interaction (CAPTCHA, verification), inform the user about browser session availability
-4. Cite sources when referencing specific information
-5. Be conversational but accurate
-6. If you don't know something and it's not in KB or research, say so clearly"""
+        return (
+            "You are AutoBot, an intelligent AI assistant. You have access to a "
+            "knowledge base and can conduct external research.\n\n"
+            "IMPORTANT INSTRUCTIONS:\n"
+            "1. Always prioritize information from the Knowledge Base when available\n"
+            "2. Use external research results to supplement KB information, "
+            "especially for current/recent topics\n"
+            "3. If research requires user interaction (CAPTCHA, verification), "
+            "inform the user about browser session availability\n"
+            "4. Cite sources when referencing specific information\n"
+            "5. Be conversational but accurate\n"
+            "6. If you don't know something and it's not in KB or research, say so clearly"
+        )
 
     def _build_user_prompt(
         self, user_message: str, kb_context: str, research_context: str
     ) -> str:
         """Build user prompt with contexts. Issue #382: Uses f-string for substitution."""
-        return f"""User Message: {user_message}
-
-{kb_context}
-
-{research_context}
-
-Please provide a helpful, accurate response based on the available information. If you reference information from the knowledge base, mention AutoBot's documentation. If you reference research results, mention external sources. If research requires user interaction, explain how they can access the browser session."""
+        instructions = (
+            "Please provide a helpful, accurate response based on the available "
+            "information. If you reference information from the knowledge base, "
+            "mention AutoBot's documentation. If you reference research results, "
+            "mention external sources. If research requires user interaction, "
+            "explain how they can access the browser session."
+        )
+        return f"User Message: {user_message}\n\n{kb_context}\n\n{research_context}\n\n{instructions}"
 
     def _add_planning_message(self) -> None:
         """Add planning message to conversation."""
@@ -507,7 +520,9 @@ Please provide a helpful, accurate response based on the available information. 
 
             # Build prompts
             system_prompt = self._get_system_prompt()
-            user_prompt = self._build_user_prompt(user_message, kb_context, research_context)
+            user_prompt = self._build_user_prompt(
+                user_message, kb_context, research_context
+            )
 
             # Add planning message and get LLM response
             self._add_planning_message()
@@ -517,7 +532,8 @@ Please provide a helpful, accurate response based on the available information. 
                     "conversation_id": self.conversation_id,
                     "classification": (
                         self.state.classification.complexity.value
-                        if self.state.classification else "simple"
+                        if self.state.classification
+                        else "simple"
                     ),
                     "kb_results_count": len(kb_results),
                 },
@@ -537,12 +553,16 @@ Please provide a helpful, accurate response based on the available information. 
 
             # Add utility message and return response
             self._add_utility_message(llm_response)
-            logger.info("Response generated using %s tier", llm_response.tier_used.value)
+            logger.info(
+                "Response generated using %s tier", llm_response.tier_used.value
+            )
             return llm_response.content
 
         except Exception as e:
             logger.error("Response generation failed: %s", e)
-            return "I'm having trouble generating a response right now. Please try again."
+            return (
+                "I'm having trouble generating a response right now. Please try again."
+            )
 
     def _needs_external_research(
         self, user_message: str, kb_results: List[Dict[str, Any]]
@@ -585,7 +605,10 @@ Please provide a helpful, accurate response based on the available information. 
         return False
 
     def _add_system_message(
-        self, content: str, message_type: str = "system", metadata: Optional[Dict] = None
+        self,
+        content: str,
+        message_type: str = "system",
+        metadata: Optional[Dict] = None,
     ) -> None:
         """Add a system message to conversation (Issue #398: extracted)."""
         msg = ConversationMessage(
@@ -600,7 +623,9 @@ Please provide a helpful, accurate response based on the available information. 
 
     async def _research_single_query(self, query: str) -> Optional[Dict[str, Any]]:
         """Research a single query and return result (Issue #398: extracted)."""
-        search_url = f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
+        search_url = (
+            f"{NetworkConstants.GOOGLE_SEARCH_BASE_URL}?q={query.replace(' ', '+')}"
+        )
         try:
             research_result = await research_browser_manager.research_url(
                 self.conversation_id, search_url, extract_content=True
@@ -614,7 +639,8 @@ Please provide a helpful, accurate response based on the available information. 
                         "query": query,
                         "url": search_url,
                         "research_session": research_result.get("session_id"),
-                        "interaction_required": research_result.get("status") == "interaction_required",
+                        "interaction_required": research_result.get("status")
+                        == "interaction_required",
                     },
                 )
                 return {
@@ -624,7 +650,8 @@ Please provide a helpful, accurate response based on the available information. 
                     "content": research_result.get("content", {}),
                     "session_id": research_result.get("session_id"),
                     "browser_url": research_result.get("browser_url"),
-                    "interaction_required": research_result.get("status") == "interaction_required",
+                    "interaction_required": research_result.get("status")
+                    == "interaction_required",
                 }
         except Exception as e:
             logger.warning("Research query '%s' failed: %s", query, e)
@@ -645,7 +672,9 @@ Please provide a helpful, accurate response based on the available information. 
                 return_exceptions=True,
             )
 
-            research_results = [r for r in results if r and not isinstance(r, Exception)]
+            research_results = [
+                r for r in results if r and not isinstance(r, Exception)
+            ]
 
             if research_results:
                 self._add_system_message(
@@ -663,7 +692,9 @@ Please provide a helpful, accurate response based on the available information. 
 
         except Exception as e:
             logger.error("Research failed: %s", e)
-            self._add_system_message(f"External research failed: {str(e)}", "debug", {"error": True})
+            self._add_system_message(
+                f"External research failed: {str(e)}", "debug", {"error": True}
+            )
             return {"success": False, "error": str(e)}
 
     def _generate_search_queries(self, user_message: str) -> List[str]:

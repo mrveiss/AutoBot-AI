@@ -7,10 +7,12 @@ Main router combining all codebase analytics endpoints
 
 from fastapi import APIRouter
 
+# Issue #244: Cross-Language Pattern Detector
+# Issue #208: Code Pattern Detection & Optimization
 from .endpoints import api_endpoints  # Issue #527: API Endpoint Checker
 from .endpoints import environment  # Issue #538: Environment analysis
 from .endpoints import ownership  # Issue #248: Code Ownership and Expertise Map
-from .endpoints import (  # Issue #244: Cross-Language Pattern Detector; Issue #208: Code Pattern Detection & Optimization
+from .endpoints import (
     cache,
     call_graph,
     charts,

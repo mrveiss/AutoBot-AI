@@ -14,20 +14,19 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict
 
 from ..models import LLMRequest, LLMResponse
 from ..types import ProviderType
+from .cloud_batcher import CloudRequestBatcher
+from .connection_pool import ConnectionPoolManager, PoolConfig
+from .prompt_compressor import CompressionConfig, PromptCompressor
+from .rate_limiter import RateLimitConfig, RateLimitHandler
 from .router import (
-    OptimizationRouter,
     OptimizationCategory,
     OptimizationConfig,
     get_optimization_router,
 )
-from .cloud_batcher import CloudRequestBatcher
-from .connection_pool import ConnectionPoolManager, PoolConfig
-from .rate_limiter import RateLimitHandler, RateLimitConfig
-from .prompt_compressor import PromptCompressor, CompressionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -186,10 +185,12 @@ class OptimizedLLMMiddleware:
             original_tokens += result.original_tokens
             compressed_tokens += result.compressed_tokens
 
-            compressed_messages.append({
-                **msg,
-                "content": result.compressed_text,
-            })
+            compressed_messages.append(
+                {
+                    **msg,
+                    "content": result.compressed_text,
+                }
+            )
 
         # Update metrics
         tokens_saved = original_tokens - compressed_tokens
@@ -242,7 +243,7 @@ class OptimizedLLMMiddleware:
                     provider=provider_name,
                 )
                 return response
-            except Exception as e:
+            except Exception:
                 async with self._lock:
                     self._metrics.rate_limits_handled += 1
                 raise

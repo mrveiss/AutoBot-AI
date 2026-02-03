@@ -17,10 +17,8 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
-from src.constants.threshold_constants import (
-    RetryConfig as ThresholdRetryConfig,
-    TimingConstants,
-)
+from src.constants.threshold_constants import RetryConfig as ThresholdRetryConfig
+from src.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -500,9 +498,9 @@ if __name__ == "__main__":
 
         try:
             result = await flaky_network_call()
-            logger.info("Network call result: {result}")
+            logger.info("Network call result: %s", result)
         except RetryExhaustedError as e:
-            logger.info("Network call failed: {e}")
+            logger.info("Network call failed: %s", e)
 
         # Example 2: Using retry mechanism directly
         retry_mechanism = RetryMechanism(
@@ -521,12 +519,12 @@ if __name__ == "__main__":
             result = await retry_mechanism.execute_async(
                 another_flaky_operation, operation_name="flaky_operation"
             )
-            logger.info("Operation result: {result}")
+            logger.info("Operation result: %s", result)
         except RetryExhaustedError as e:
-            logger.info("Operation failed: {e}")
+            logger.info("Operation failed: %s", e)
 
         # Print statistics
-        logger.info("Retry statistics:", retry_mechanism.get_stats())
+        logger.info("Retry statistics: %s", retry_mechanism.get_stats())
 
     # Run example
     asyncio.run(example_usage())

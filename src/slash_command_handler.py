@@ -104,7 +104,6 @@ class Command(ABC):
     @abstractmethod
     async def execute(self) -> SlashCommandResult:
         """Execute the command and return result."""
-        pass
 
 
 class DocsCommand(Command):
@@ -158,15 +157,17 @@ class DocsCommand(Command):
             if (self.docs_base_path / self.doc_categories[cat]).exists():
                 lines.append(f"  • `{cat}` - {desc}")
 
-        lines.extend([
-            "",
-            "**Quick Access:**",
-            "  • `/docs api` - API documentation",
-            "  • `/docs developer` - Developer guide",
-            "  • `/docs <search term>` - Search all docs",
-            "",
-            "📄 **Main Index:** `docs/INDEX.md`",
-        ])
+        lines.extend(
+            [
+                "",
+                "**Quick Access:**",
+                "  • `/docs api` - API documentation",
+                "  • `/docs developer` - Developer guide",
+                "  • `/docs <search term>` - Search all docs",
+                "",
+                "📄 **Main Index:** `docs/INDEX.md`",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -200,10 +201,12 @@ class DocsCommand(Command):
             lines.extend(files[:20])  # Limit to 20 files
             if len(files) > 20:
                 lines.append(f"  ... and {len(files) - 20} more")
-            lines.extend([
-                "",
-                f"📍 Path: `docs/{self.doc_categories[category]}`",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"📍 Path: `docs/{self.doc_categories[category]}`",
+                ]
+            )
             content = "\n".join(lines)
 
         # Issue #358 - avoid blocking
@@ -265,10 +268,12 @@ class DocsCommand(Command):
         if len(matches) > 15:
             lines.append(f"  ... and {len(matches) - 15} more")
 
-        lines.extend([
-            "",
-            "💡 Use file browser or read directly for full content.",
-        ])
+        lines.extend(
+            [
+                "",
+                "💡 Use file browser or read directly for full content.",
+            ]
+        )
 
         return SlashCommandResult(
             success=True,
@@ -343,7 +348,9 @@ class StatusCommand(Command):
         """Execute /status command - show system status."""
         # Import here to avoid circular dependencies
         try:
-            from backend.services.consolidated_health_service import ConsolidatedHealthService
+            from backend.services.consolidated_health_service import (
+                ConsolidatedHealthService,
+            )
 
             health_service = ConsolidatedHealthService()
             status = await health_service.get_health_status()
@@ -395,7 +402,9 @@ class ScanCommand(Command):
         scan_params = self._parse_scan_params(self.args)
 
         try:
-            from src.services.security_workflow_manager import get_security_workflow_manager
+            from src.services.security_workflow_manager import (
+                get_security_workflow_manager,
+            )
 
             manager = get_security_workflow_manager()
             assessment = await manager.create_assessment(
@@ -453,7 +462,7 @@ class ScanCommand(Command):
         assessment_name = f"Assessment: {target}"
         if "--name" in args.lower():
             name_idx = args.lower().find("--name")
-            name_part = args[name_idx + 6:].strip()
+            name_part = args[name_idx + 6 :].strip()
             if name_part:
                 # Get first quoted string or word
                 if name_part.startswith('"'):
@@ -469,10 +478,16 @@ class ScanCommand(Command):
             "name": assessment_name,
         }
 
-    def _format_scan_result(self, assessment, training_mode: bool) -> SlashCommandResult:
+    def _format_scan_result(
+        self, assessment, training_mode: bool
+    ) -> SlashCommandResult:
         """Format scan initiation result."""
         mode_emoji = "🎯" if training_mode else "🛡️"
-        mode_text = "Training Mode (exploitation enabled)" if training_mode else "Safe Mode (no exploitation)"
+        mode_text = (
+            "Training Mode (exploitation enabled)"
+            if training_mode
+            else "Safe Mode (no exploitation)"
+        )
 
         content = f"""## {mode_emoji} Security Assessment Started
 
@@ -533,7 +548,9 @@ class SecurityCommand(Command):
                 "list": lambda: SecurityListSubcommand(manager).execute(),
                 "status": lambda: SecurityStatusSubcommand(manager, sub_args).execute(),
                 "resume": lambda: SecurityResumeSubcommand(manager, sub_args).execute(),
-                "phases": lambda: SecurityPhasesSubcommand(PHASE_DESCRIPTIONS).execute(),
+                "phases": lambda: SecurityPhasesSubcommand(
+                    PHASE_DESCRIPTIONS
+                ).execute(),
             }
 
             handler = subcommand_handlers.get(subcommand)
@@ -650,12 +667,14 @@ No active assessments found.
         if len(assessments) > 10:
             lines.append(f"  ... and {len(assessments) - 10} more")
 
-        lines.extend([
-            "",
-            "**Commands:**",
-            "  • `/security status <id>` - View details",
-            "  • `/security resume <id>` - Continue assessment",
-        ])
+        lines.extend(
+            [
+                "",
+                "**Commands:**",
+                "  • `/security status <id>` - View details",
+                "  • `/security resume <id>` - Continue assessment",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -709,11 +728,17 @@ class SecurityStatusSubcommand(Command):
         """Format assessment status display."""
         # Build severity display
         severity_lines = []
-        for sev, count in summary.get("stats", {}).get("severity_distribution", {}).items():
+        for sev, count in (
+            summary.get("stats", {}).get("severity_distribution", {}).items()
+        ):
             sev_emoji = _SEVERITY_EMOJIS.get(sev.lower(), "⚪")
             severity_lines.append(f"    {sev_emoji} {sev.upper()}: {count}")
 
-        severity_text = "\n".join(severity_lines) if severity_lines else "    No vulnerabilities found yet"
+        severity_text = (
+            "\n".join(severity_lines)
+            if severity_lines
+            else "    No vulnerabilities found yet"
+        )
 
         return f"""## 🔒 Assessment Status
 
@@ -856,14 +881,16 @@ class SecurityPhasesSubcommand(Command):
                 lines.append(f"  Actions: {', '.join(actions[:4])}")
             lines.append("")
 
-        lines.extend([
-            "**Workflow:**",
-            "```",
-            "INIT → RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS → REPORTING",
-            "                                    ↓",
-            "                          EXPLOITATION (training mode)",
-            "```",
-        ])
+        lines.extend(
+            [
+                "**Workflow:**",
+                "```",
+                "INIT → RECON → PORT_SCAN → ENUMERATION → VULN_ANALYSIS → REPORTING",
+                "                                    ↓",
+                "                          EXPLOITATION (training mode)",
+                "```",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -892,15 +919,25 @@ class SecretsCommand(Command):
         sub_args = parts[1] if len(parts) > 1 else None
 
         try:
-            from backend.api.secrets import secrets_manager, SecretScope, SecretType
+            from backend.api.secrets import secrets_manager
 
             # Dispatch to appropriate subcommand
             subcommand_handlers = {
-                "list": lambda: SecretsListSubcommand(secrets_manager, self.chat_id).execute(),
-                "add": lambda: SecretsAddSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
-                "show": lambda: SecretsShowSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
-                "delete": lambda: SecretsDeleteSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
-                "transfer": lambda: SecretsTransferSubcommand(secrets_manager, sub_args, self.chat_id).execute(),
+                "list": lambda: SecretsListSubcommand(
+                    secrets_manager, self.chat_id
+                ).execute(),
+                "add": lambda: SecretsAddSubcommand(
+                    secrets_manager, sub_args, self.chat_id
+                ).execute(),
+                "show": lambda: SecretsShowSubcommand(
+                    secrets_manager, sub_args, self.chat_id
+                ).execute(),
+                "delete": lambda: SecretsDeleteSubcommand(
+                    secrets_manager, sub_args, self.chat_id
+                ).execute(),
+                "transfer": lambda: SecretsTransferSubcommand(
+                    secrets_manager, sub_args, self.chat_id
+                ).execute(),
                 "types": lambda: SecretsTypesSubcommand().execute(),
             }
 
@@ -1026,14 +1063,16 @@ No secrets found.
         if len(secrets) > 15:
             lines.append(f"  ... and {len(secrets) - 15} more")
 
-        lines.extend([
-            "",
-            "**Scope:** 💬 = Chat-scoped, 🌐 = General",
-            "",
-            "**Commands:**",
-            "  • `/secrets show <name>` - View value",
-            "  • `/secrets delete <name>` - Remove secret",
-        ])
+        lines.extend(
+            [
+                "",
+                "**Scope:** 💬 = Chat-scoped, 🌐 = General",
+                "",
+                "**Commands:**",
+                "  • `/secrets show <name>` - View value",
+                "  • `/secrets delete <name>` - Remove secret",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -1068,7 +1107,15 @@ class SecretsAddSubcommand(Command):
         name, secret_type, value = parts
 
         # Validate secret type
-        valid_types = ["ssh_key", "password", "api_key", "token", "certificate", "database_url", "other"]
+        valid_types = [
+            "ssh_key",
+            "password",
+            "api_key",
+            "token",
+            "certificate",
+            "database_url",
+            "other",
+        ]
         if secret_type not in valid_types:
             return SlashCommandResult(
                 success=False,
@@ -1087,10 +1134,10 @@ class SecretsAddSubcommand(Command):
                 scope=scope,
                 value=value,
                 chat_id=self.chat_id,
-                description=f"Created via /secrets add command",
+                description="Created via /secrets add command",
             )
 
-            secret = self.manager.create_secret(request)
+            self.manager.create_secret(request)  # Side effect: creates secret
 
             scope_text = "chat-scoped 💬" if scope == SecretScope.CHAT else "general 🌐"
             return SlashCommandResult(
@@ -1304,7 +1351,7 @@ class SecretsTransferSubcommand(Command):
             )
 
         try:
-            from backend.api.secrets import SecretTransferRequest, SecretScope
+            from backend.api.secrets import SecretScope, SecretTransferRequest
 
             if target_scope == "to-general":
                 new_scope = SecretScope.GENERAL
@@ -1433,7 +1480,9 @@ class SlashCommandHandler:
             "testing": "testing/",
         }
 
-        logger.info("SlashCommandHandler initialized with docs path: %s", docs_base_path)
+        logger.info(
+            "SlashCommandHandler initialized with docs path: %s", docs_base_path
+        )
 
     def set_chat_context(self, chat_id: Optional[str]) -> None:
         """Set the current chat context for chat-scoped commands (Issue #211).
@@ -1514,13 +1563,17 @@ class SlashCommandHandler:
     def _get_command_factories(self) -> Dict[CommandType, callable]:
         """Get command type to factory mapping (Issue #315 - dispatch table)."""
         return {
-            CommandType.DOCS: lambda args: DocsCommand(args, self.docs_base_path, self.doc_categories),
+            CommandType.DOCS: lambda args: DocsCommand(
+                args, self.docs_base_path, self.doc_categories
+            ),
             CommandType.HELP: lambda args: HelpCommand(),
             CommandType.STATUS: lambda args: StatusCommand(),
             CommandType.SCAN: lambda args: ScanCommand(args),
             CommandType.SECURITY: lambda args: SecurityCommand(args),
             # Issue #211 - Secrets management
-            CommandType.SECRETS: lambda args: SecretsCommand(args, self.current_chat_id),
+            CommandType.SECRETS: lambda args: SecretsCommand(
+                args, self.current_chat_id
+            ),
         }
 
     def _create_command(self, cmd_type: CommandType, args: Optional[str]) -> Command:

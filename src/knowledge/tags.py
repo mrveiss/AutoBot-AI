@@ -65,9 +65,7 @@ class TagsMixin:
             self.redis_client.hset, fact_key, "metadata", json.dumps(metadata)
         )
 
-    async def add_tags_to_fact(
-        self, fact_id: str, tags: List[str]
-    ) -> Dict[str, Any]:
+    async def add_tags_to_fact(self, fact_id: str, tags: List[str]) -> Dict[str, Any]:
         """Add tags to a fact (Issue #398: refactored)."""
         try:
             normalized_tags = self._normalize_tags(tags)
@@ -83,10 +81,12 @@ class TagsMixin:
             metadata["tags"] = list(current_tags)
             await self._save_fact_metadata(fact_id, metadata)
 
-            await asyncio.gather(*[
-                asyncio.to_thread(self.redis_client.sadd, f"tag:{tag}", fact_id)
-                for tag in normalized_tags
-            ])
+            await asyncio.gather(
+                *[
+                    asyncio.to_thread(self.redis_client.sadd, f"tag:{tag}", fact_id)
+                    for tag in normalized_tags
+                ]
+            )
 
             logger.info("Added tags %s to fact %s", normalized_tags, fact_id)
             return {"status": "success", "tags_added": normalized_tags}
@@ -113,10 +113,12 @@ class TagsMixin:
             metadata["tags"] = list(current_tags)
             await self._save_fact_metadata(fact_id, metadata)
 
-            await asyncio.gather(*[
-                asyncio.to_thread(self.redis_client.srem, f"tag:{tag}", fact_id)
-                for tag in normalized_tags
-            ])
+            await asyncio.gather(
+                *[
+                    asyncio.to_thread(self.redis_client.srem, f"tag:{tag}", fact_id)
+                    for tag in normalized_tags
+                ]
+            )
 
             logger.info("Removed tags %s from fact %s", normalized_tags, fact_id)
             return {"status": "success", "tags_removed": normalized_tags}
@@ -175,7 +177,10 @@ class TagsMixin:
                     "count": len(result["fact_ids"]),
                 }
             else:
-                return {"status": "error", "message": result.get("message", "Unknown error")}
+                return {
+                    "status": "error",
+                    "message": result.get("message", "Unknown error"),
+                }
 
         except Exception as e:
             logger.error("Failed to search facts by tags: %s", e)
@@ -231,11 +236,13 @@ class TagsMixin:
         if result.get("status") == "success":
             tags_key = "tags_added" if operation == "add" else "tags_removed"
             return True, {
-                "fact_id": fact_id, "success": True,
+                "fact_id": fact_id,
+                "success": True,
                 "tags_affected": result.get(tags_key, []),
             }
         return False, {
-            "fact_id": fact_id, "success": False,
+            "fact_id": fact_id,
+            "success": False,
             "error": result.get("message", "Unknown error"),
         }
 
@@ -256,7 +263,8 @@ class TagsMixin:
                     "message": f"Invalid operation: {operation}. Must be 'add' or 'remove'",
                 }
             tag_method = (
-                self.add_tags_to_fact if operation == "add"
+                self.add_tags_to_fact
+                if operation == "add"
                 else self.remove_tags_from_fact
             )
             results = await asyncio.gather(
@@ -268,7 +276,9 @@ class TagsMixin:
             failed_count = 0
             per_fact_results = []
             for fact_id, result in zip(fact_ids, results):
-                success, detail = self._build_bulk_tag_result(fact_id, result, operation)
+                success, detail = self._build_bulk_tag_result(
+                    fact_id, result, operation
+                )
                 per_fact_results.append(detail)
                 if success:
                     processed_count += 1
@@ -276,7 +286,10 @@ class TagsMixin:
                     failed_count += 1
 
             logger.info(
-                "Bulk %s tags: %d/%d succeeded", operation, processed_count, len(fact_ids)
+                "Bulk %s tags: %d/%d succeeded",
+                operation,
+                processed_count,
+                len(fact_ids),
             )
             return {
                 "status": self._determine_bulk_status(processed_count, failed_count),
@@ -298,8 +311,7 @@ class TagsMixin:
         """Get fact IDs from a tag key (Issue #398: extracted)."""
         fact_ids = await asyncio.to_thread(self.redis_client.smembers, tag_key)
         return [
-            fid.decode("utf-8") if isinstance(fid, bytes) else fid
-            for fid in fact_ids
+            fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids
         ]
 
     async def _update_fact_tag_rename(
@@ -331,7 +343,10 @@ class TagsMixin:
             if not old_tag or not new_tag:
                 return {"success": False, "message": "Tags cannot be empty"}
             if old_tag == new_tag:
-                return {"success": False, "message": "Old and new tag names are identical"}
+                return {
+                    "success": False,
+                    "message": "Old and new tag names are identical",
+                }
 
             old_tag_key = f"tag:{old_tag}"
             exists = await asyncio.to_thread(self.redis_client.exists, old_tag_key)
@@ -342,7 +357,11 @@ class TagsMixin:
 
             if not fact_ids:
                 await asyncio.to_thread(self.redis_client.delete, old_tag_key)
-                return {"success": True, "message": "Tag had no facts", "affected_count": 0}
+                return {
+                    "success": True,
+                    "message": "Tag had no facts",
+                    "affected_count": 0,
+                }
 
             updated_count = 0
             for fact_id in fact_ids:
@@ -354,7 +373,12 @@ class TagsMixin:
                 await asyncio.to_thread(self.redis_client.sadd, new_tag_key, *fact_ids)
             await asyncio.to_thread(self.redis_client.delete, old_tag_key)
 
-            logger.info("Renamed tag '%s' to '%s', updated %d facts", old_tag, new_tag, updated_count)
+            logger.info(
+                "Renamed tag '%s' to '%s', updated %d facts",
+                old_tag,
+                new_tag,
+                updated_count,
+            )
 
             return {
                 "success": True,
@@ -410,7 +434,9 @@ class TagsMixin:
 
             await asyncio.to_thread(self.redis_client.delete, tag_key)
 
-            logger.info("Deleted tag '%s' globally, removed from %d facts", tag, removed_count)
+            logger.info(
+                "Deleted tag '%s' globally, removed from %d facts", tag, removed_count
+            )
 
             return {
                 "success": True,
@@ -423,9 +449,7 @@ class TagsMixin:
             logger.error("Failed to delete tag '%s' globally: %s", tag, e)
             return {"success": False, "message": str(e)}
 
-    async def _collect_fact_ids_from_tags(
-        self, tags: List[str]
-    ) -> tuple:
+    async def _collect_fact_ids_from_tags(self, tags: List[str]) -> tuple:
         """Collect fact IDs from multiple tags (Issue #398: extracted)."""
         all_fact_ids = set()
         existing_tags = []
@@ -491,10 +515,15 @@ class TagsMixin:
 
         source_tags = [t for t in source_tags if t != target_tag]
         if not source_tags:
-            return {
-                "success": True, "message": "No tags to merge (source equals target)",
-                "affected_count": 0,
-            }, [], ""
+            return (
+                {
+                    "success": True,
+                    "message": "No tags to merge (source equals target)",
+                    "affected_count": 0,
+                },
+                [],
+                "",
+            )
 
         return None, source_tags, target_tag
 
@@ -503,29 +532,44 @@ class TagsMixin:
     ) -> Dict[str, Any]:
         """Merge multiple source tags into a single target tag (Issue #398: refactored)."""
         try:
-            error, source_tags, target_tag = self._validate_merge_inputs(source_tags, target_tag)
+            error, source_tags, target_tag = self._validate_merge_inputs(
+                source_tags, target_tag
+            )
             if error:
                 return error
 
-            all_fact_ids, existing_source_tags = await self._collect_fact_ids_from_tags(source_tags)
+            all_fact_ids, existing_source_tags = await self._collect_fact_ids_from_tags(
+                source_tags
+            )
 
             if not all_fact_ids:
-                return {"success": True, "message": "No facts found with source tags", "affected_count": 0}
+                return {
+                    "success": True,
+                    "message": "No facts found with source tags",
+                    "affected_count": 0,
+                }
 
             updated_count = await self._update_fact_tags_for_merge(
                 all_fact_ids, existing_source_tags, target_tag
             )
-            await self._update_tag_indices_for_merge(all_fact_ids, existing_source_tags, target_tag)
+            await self._update_tag_indices_for_merge(
+                all_fact_ids, existing_source_tags, target_tag
+            )
 
-            logger.info("Merged tags %s into '%s', updated %d facts", existing_source_tags, target_tag, updated_count)
+            logger.info(
+                "Merged tags %s into '%s', updated %d facts",
+                existing_source_tags,
+                target_tag,
+                updated_count,
+            )
 
             return {
-    "success": True,
-    "source_tags": existing_source_tags,
-    "target_tag": target_tag,
-    "affected_count": updated_count,
-    "message": f"Merged {len(existing_source_tags)} tags into '{target_tag}', {updated_count} facts updated",
-     }
+                "success": True,
+                "source_tags": existing_source_tags,
+                "target_tag": target_tag,
+                "affected_count": updated_count,
+                "message": f"Merged {len(existing_source_tags)} tags into '{target_tag}', {updated_count} facts updated",
+            }
 
         except Exception as e:
             logger.error("Failed to merge tags into '%s': %s", target_tag, e)
@@ -542,7 +586,7 @@ class TagsMixin:
             for fid in all_fact_ids
         ]
         fact_ids.sort()
-        return fact_ids[offset:offset + limit], total_count
+        return fact_ids[offset : offset + limit], total_count
 
     async def _fetch_fact_details(
         self, fact_ids: List[str], include_content: bool
@@ -585,8 +629,12 @@ class TagsMixin:
             exists = await asyncio.to_thread(self.redis_client.exists, tag_key)
             if not exists:
                 return {
-                    "success": True, "tag": tag, "facts": [], "total_count": 0,
-                    "limit": limit, "offset": offset,
+                    "success": True,
+                    "tag": tag,
+                    "facts": [],
+                    "total_count": 0,
+                    "limit": limit,
+                    "offset": offset,
                 }
 
             paginated_ids, total_count = await self._get_paginated_fact_ids_for_tag(
@@ -674,8 +722,11 @@ class TagsMixin:
         return style_data
 
     async def update_tag_style(
-        self, tag: str, color: Optional[str] = None,
-        icon: Optional[str] = None, description: Optional[str] = None,
+        self,
+        tag: str,
+        color: Optional[str] = None,
+        icon: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update tag styling (Issue #398: refactored)."""
         try:
@@ -693,13 +744,16 @@ class TagsMixin:
                 return {"success": False, "message": "No style updates provided"}
 
             style_key = f"tag_style:{tag}"
-            await asyncio.to_thread(self.redis_client.hset, style_key, mapping=style_data)
+            await asyncio.to_thread(
+                self.redis_client.hset, style_key, mapping=style_data
+            )
 
             updated_style = await self.get_tag_style(tag)
             logger.info("Updated tag '%s' style: %s", tag, style_data)
 
             return {
-                "success": True, "tag": tag,
+                "success": True,
+                "tag": tag,
                 "style": updated_style.get("style", {}),
                 "message": "Tag style updated successfully",
             }
@@ -808,7 +862,9 @@ class TagsMixin:
                 "success": True,
                 "tag": tag,
                 "deleted": deleted > 0,
-                "message": "Tag style reset to defaults" if deleted else "No custom style existed",
+                "message": "Tag style reset to defaults"
+                if deleted
+                else "No custom style existed",
             }
 
         except Exception as e:

@@ -475,7 +475,9 @@ def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
             }
             for v in with_ssot
             if v["ssot_mapping"]["severity"] == "high"
-        ][:20],  # Top 20
+        ][
+            :20
+        ],  # Top 20
     }
 
 
@@ -506,4 +508,4 @@ SSOT_VALUES_FOR_SHELL = {
 
 if __name__ == "__main__":
     # Print JSON export for shell script consumption
-    logger.info(export_mappings_as_json())
+    print(export_mappings_as_json())

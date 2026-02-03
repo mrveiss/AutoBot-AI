@@ -192,15 +192,21 @@ class StreamingMessage:
         # Patterns for internal prompts that should not be shown to users
         patterns = [
             re.compile(
-    r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
-     re.DOTALL | re.IGNORECASE),
-            re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
+                r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
+                re.DOTALL | re.IGNORECASE,
+            ),
+            re.compile(
+                r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."
+            ),
             re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
             re.compile(
-    r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
-     re.DOTALL | re.IGNORECASE),
+                r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
+                re.DOTALL | re.IGNORECASE,
+            ),
             re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
-            re.compile(r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE),
+            re.compile(
+                r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE
+            ),
         ]
 
         filtered = text
@@ -283,9 +289,7 @@ class AgentContext:
             ValueError: If max delegation depth would be exceeded
         """
         if not self.can_delegate():
-            raise ValueError(
-                f"Cannot delegate: already at max depth {self.max_depth}"
-            )
+            raise ValueError(f"Cannot delegate: already at max depth {self.max_depth}")
 
         return AgentContext(
             agent_id=subordinate_id,

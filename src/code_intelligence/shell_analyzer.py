@@ -28,7 +28,9 @@ from src.code_intelligence.base_analyzer import (
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous shell commands
-_DANGEROUS_COMMANDS = frozenset({"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"})
+_DANGEROUS_COMMANDS = frozenset(
+    {"rm", "mv", "cp", "chmod", "chown", "mkdir", "rmdir", "cd"}
+)
 
 # Issue #380: Pre-compiled regex patterns for set options checking
 _SET_E_RE = re.compile(r"set\s+-[a-z]*e")
@@ -65,13 +67,13 @@ SECURITY_PATTERNS_CRITICAL: Dict[str, Tuple[str, float, str, IssueSeverity]] = {
     # Variable expansion inside command substitution is normal in shell scripts
     # Unquoted variables in dangerous contexts
     r"\brm\s+-rf?\s+\$[^{\"]": (
-        "Unquoted variable in rm command - use \"$var\" to prevent word splitting",
+        'Unquoted variable in rm command - use "$var" to prevent word splitting',
         0.95,
         "SHELL-SEC005",
         IssueSeverity.CRITICAL,
     ),
     r"\brm\s+-rf?\s+\$\{[^}]+\}(?!\")": (
-        "Unquoted parameter expansion in rm - use \"${var}\" for safety",
+        'Unquoted parameter expansion in rm - use "${var}" for safety',
         0.95,
         "SHELL-SEC006",
         IssueSeverity.CRITICAL,
@@ -176,7 +178,7 @@ BEST_PRACTICE_PATTERNS: Dict[str, Tuple[str, float, str, IssueSeverity]] = {
     # NOTE: SHELL-BP001 (set options) is handled in _check_set_options() as a file-level check
     # Unquoted variables
     r"\[\s+\$\w+\s+": (
-        "Unquoted variable in test - use \"$var\" to handle empty values",
+        'Unquoted variable in test - use "$var" to handle empty values',
         0.85,
         "SHELL-BP002",
         IssueSeverity.MEDIUM,
@@ -358,7 +360,9 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         self._check_set_options()
         self._check_unquoted_variables()
 
-        logger.debug("Shell Analyzer found %d issues in %s", len(self.issues), file_path)
+        logger.debug(
+            "Shell Analyzer found %d issues in %s", len(self.issues), file_path
+        )
         return self.issues
 
     def _should_skip_line(self, line: str) -> bool:
@@ -387,7 +391,13 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
         return IssueCategory.CODE_QUALITY
 
     def _create_pattern_issue(
-        self, line_num: int, line: str, match, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+        self,
+        line_num: int,
+        line: str,
+        match,
+        pattern_data: Tuple,
+        prefix: str,
+        category: "IssueCategory",
     ) -> "AnalysisIssue":
         """Create an AnalysisIssue from pattern match (Issue #315 - extracted helper)."""
         recommendation, confidence, rule_id, severity = pattern_data
@@ -407,19 +417,29 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.80,
-            false_positive_reason="" if confidence >= 0.80 else "Context may justify this pattern",
+            false_positive_reason=""
+            if confidence >= 0.80
+            else "Context may justify this pattern",
             rule_id=rule_id,
             tags=["shell", category.value],
         )
 
     def _check_pattern_on_line(
-        self, line_num: int, line: str, pattern: str, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+        self,
+        line_num: int,
+        line: str,
+        pattern: str,
+        pattern_data: Tuple,
+        prefix: str,
+        category: "IssueCategory",
     ) -> None:
         """Check single pattern on a line (Issue #315 - extracted helper)."""
         try:
             match = re.search(pattern, line, re.IGNORECASE)
             if match:
-                issue = self._create_pattern_issue(line_num, line, match, pattern_data, prefix, category)
+                issue = self._create_pattern_issue(
+                    line_num, line, match, pattern_data, prefix, category
+                )
                 self.issues.append(issue)
         except re.error:
             pass  # Skip invalid regex patterns
@@ -437,7 +457,9 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
                 continue
 
             for pattern, pattern_data in patterns.items():
-                self._check_pattern_on_line(line_num, line, pattern, pattern_data, prefix, category)
+                self._check_pattern_on_line(
+                    line_num, line, pattern, pattern_data, prefix, category
+                )
 
     def _check_security_critical(self) -> None:
         """Check for critical security issues."""
@@ -540,7 +562,9 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
 
     def _check_unquoted_variables(self) -> None:
         """Advanced check for unquoted variables in dangerous contexts."""
-        for line_num, line in enumerate(self.lines, start=1):  # Issue #380: use _DANGEROUS_COMMANDS
+        for line_num, line in enumerate(
+            self.lines, start=1
+        ):  # Issue #380: use _DANGEROUS_COMMANDS
             if self._should_skip_line(line):
                 continue
 
@@ -557,27 +581,25 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
                         continue
 
                     self.issues.append(
-    AnalysisIssue(
-        issue_id=self._generate_issue_id("unquoted-var"),
-        category=IssueCategory.SECURITY,
-        severity=IssueSeverity.MEDIUM,
-        language=Language.SHELL,
-        file_path=self.file_path,
-        line_start=line_num,
-        line_end=line_num,
-        title=f"Unquoted variable ${var_name} in {cmd}",
-        description="Unquoted variable expansion can cause issues with spaces or special characters",
-        recommendation=f'Quote the variable: "${var_name}" or "${{var_name}}"',
-        current_code=line.strip(),
-        confidence=0.85,
-        potential_false_positive=True,
-        false_positive_reason="Variable may be known to never contain spaces",
-        rule_id="SHELL-SEC030",
-        tags=[
-            "shell",
-            "security",
-            "quoting"],
-             ) )
+                        AnalysisIssue(
+                            issue_id=self._generate_issue_id("unquoted-var"),
+                            category=IssueCategory.SECURITY,
+                            severity=IssueSeverity.MEDIUM,
+                            language=Language.SHELL,
+                            file_path=self.file_path,
+                            line_start=line_num,
+                            line_end=line_num,
+                            title=f"Unquoted variable ${var_name} in {cmd}",
+                            description="Unquoted variable expansion can cause issues with spaces or special characters",
+                            recommendation=f'Quote the variable: "${var_name}" or "${{var_name}}"',
+                            current_code=line.strip(),
+                            confidence=0.85,
+                            potential_false_positive=True,
+                            false_positive_reason="Variable may be known to never contain spaces",
+                            rule_id="SHELL-SEC030",
+                            tags=["shell", "security", "quoting"],
+                        )
+                    )
 
 
 # Create singleton instance

@@ -55,7 +55,8 @@ async def ensure_knowledge_base(req: Request, operation: str = "operation"):
             detail={
                 "error": "Knowledge base unavailable",
                 "message": (
-                    "The knowledge base service failed to initialize. Please check server logs or contact administrator."
+                    "The knowledge base service failed to initialize. "
+                    "Please check server logs or contact administrator."
                 ),
                 "operation": operation,
                 "code": "KB_INIT_FAILED",
@@ -90,6 +91,7 @@ def require_knowledge_base(operation: str = "operation"):
 
     def decorator(func: Callable):
         """Create async wrapper that injects validated knowledge base."""
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
             """Inject validated knowledge base into endpoint function."""

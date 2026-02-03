@@ -20,12 +20,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 import redis.asyncio as redis
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from src.constants.network_constants import ServiceURLs
@@ -50,7 +45,11 @@ logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for operation status checks (Issue #326)
 FAILED_OPERATION_STATUSES = {OperationStatus.FAILED, OperationStatus.TIMEOUT}
-TERMINAL_OPERATION_STATUSES = {OperationStatus.COMPLETED, OperationStatus.FAILED, OperationStatus.CANCELLED}
+TERMINAL_OPERATION_STATUSES = {
+    OperationStatus.COMPLETED,
+    OperationStatus.FAILED,
+    OperationStatus.CANCELLED,
+}
 
 
 # Pydantic models for API
@@ -153,16 +152,24 @@ class OperationIntegrationManager:
         if self.redis_client:
             await self.redis_client.close()
 
-    async def _handle_create_operation(self, request: CreateOperationRequest) -> Dict[str, str]:
+    async def _handle_create_operation(
+        self, request: CreateOperationRequest
+    ) -> Dict[str, str]:
         """Handle create operation request."""
         try:
             operation_type = OperationType(request.operation_type.lower())
             priority = OperationPriority[request.priority.upper()]
-            operation_function = self._get_operation_function(operation_type, request.context)
+            operation_function = self._get_operation_function(
+                operation_type, request.context
+            )
             operation_id = await self.operation_manager.create_operation(
-                operation_type=operation_type, name=request.name, description=request.description,
-                operation_function=operation_function, priority=priority,
-                estimated_items=request.estimated_items, context=request.context,
+                operation_type=operation_type,
+                name=request.name,
+                description=request.description,
+                operation_function=operation_function,
+                priority=priority,
+                estimated_items=request.estimated_items,
+                context=request.context,
                 execute_immediately=request.execute_immediately,
             )
             return {"operation_id": operation_id, "status": "created"}
@@ -178,8 +185,12 @@ class OperationIntegrationManager:
         return (
             len(all_operations),
             len([op for op in all_operations if op.status == OperationStatus.RUNNING]),
-            len([op for op in all_operations if op.status == OperationStatus.COMPLETED]),
-            len([op for op in all_operations if op.status in FAILED_OPERATION_STATUSES]),
+            len(
+                [op for op in all_operations if op.status == OperationStatus.COMPLETED]
+            ),
+            len(
+                [op for op in all_operations if op.status in FAILED_OPERATION_STATUSES]
+            ),
         )
 
     # Issue #321: Helper methods to reduce message chains (Law of Demeter)
@@ -192,22 +203,34 @@ class OperationIntegrationManager:
     async def list_operation_checkpoints(self, operation_id: str) -> List:
         """List checkpoints for operation, reducing checkpoint_manager.list_checkpoints chain."""
         if self.operation_manager and self.operation_manager.checkpoint_manager:
-            return await self.operation_manager.checkpoint_manager.list_checkpoints(operation_id)
+            return await self.operation_manager.checkpoint_manager.list_checkpoints(
+                operation_id
+            )
         return []
 
     async def update_operation_progress(
-        self, operation: LongRunningOperation, current_step: str,
-        processed_items: int, total_items: Optional[int] = None,
-        performance_metrics: Optional[Dict[str, Any]] = None, status_message: str = ""
+        self,
+        operation: LongRunningOperation,
+        current_step: str,
+        processed_items: int,
+        total_items: Optional[int] = None,
+        performance_metrics: Optional[Dict[str, Any]] = None,
+        status_message: str = "",
     ) -> None:
         """Update operation progress, reducing progress_tracker.update_progress chain."""
         if self.operation_manager:
             await self.operation_manager.progress_tracker.update_progress(
-                operation, current_step, processed_items, total_items,
-                performance_metrics, status_message
+                operation,
+                current_step,
+                processed_items,
+                total_items,
+                performance_metrics,
+                status_message,
             )
 
-    async def _handle_websocket_connection(self, websocket: WebSocket, operation_id: str):
+    async def _handle_websocket_connection(
+        self, websocket: WebSocket, operation_id: str
+    ):
         """Handle WebSocket connection for progress updates."""
         await websocket.accept()
         async with self._ws_lock:
@@ -218,17 +241,26 @@ class OperationIntegrationManager:
             operation = self.operation_manager.get_operation(operation_id)
             if operation:
                 response_data = self._convert_operation_to_response(operation).dict()
-                await websocket.send_json({"type": "current_progress", "data": response_data})
+                await websocket.send_json(
+                    {"type": "current_progress", "data": response_data}
+                )
             while True:
                 try:
-                    await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
+                    await asyncio.wait_for(
+                        websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT
+                    )
                 except asyncio.TimeoutError:
                     await websocket.send_json({"type": "ping"})
         except WebSocketDisconnect:
-            logger.debug("WebSocket client disconnected from operation %s", operation_id)
+            logger.debug(
+                "WebSocket client disconnected from operation %s", operation_id
+            )
         finally:
             async with self._ws_lock:
-                if operation_id in self.websocket_connections and websocket in self.websocket_connections[operation_id]:
+                if (
+                    operation_id in self.websocket_connections
+                    and websocket in self.websocket_connections[operation_id]
+                ):
                     self.websocket_connections[operation_id].remove(websocket)
 
     async def _handle_resume_operation(self, operation_id: str) -> Dict[str, str]:
@@ -251,15 +283,22 @@ class OperationIntegrationManager:
             logger.error("Failed to resume operation: %s", e)
             raise_server_error("API_0003", str(e))
 
-    async def _handle_update_progress(self, operation_id: str, request: ProgressUpdateRequest) -> Dict[str, str]:
+    async def _handle_update_progress(
+        self, operation_id: str, request: ProgressUpdateRequest
+    ) -> Dict[str, str]:
         """Handle update progress request."""
         operation = self.operation_manager.get_operation(operation_id)
         if not operation:
             raise_not_found_error("API_0002", "Operation not found")
         # Issue #321: Use helper method to reduce message chains
         await self.update_operation_progress(
-            operation, request.current_step, request.processed_items,
-            request.total_items, request.performance_metrics, request.status_message)
+            operation,
+            request.current_step,
+            request.processed_items,
+            request.total_items,
+            request.performance_metrics,
+            request.status_message,
+        )
         return {"status": "updated"}
 
     async def _handle_start_indexing(
@@ -267,7 +306,9 @@ class OperationIntegrationManager:
     ) -> Dict[str, str]:
         """Handle start codebase indexing request."""
         try:
-            operation_id = await execute_codebase_indexing(codebase_path, self.operation_manager, file_patterns)
+            operation_id = await execute_codebase_indexing(
+                codebase_path, self.operation_manager, file_patterns
+            )
             return {"operation_id": operation_id, "status": "started"}
         except Exception as e:
             logger.error("Failed to start codebase indexing: %s", e)
@@ -303,12 +344,20 @@ class OperationIntegrationManager:
             return self._convert_operation_to_response(operation)
 
         @self.router.get("/", response_model=OperationListResponse)
-        async def list_operations(status: Optional[str] = None, operation_type: Optional[str] = None, limit: int = 50):
+        async def list_operations(
+            status: Optional[str] = None,
+            operation_type: Optional[str] = None,
+            limit: int = 50,
+        ):
             """List operations with optional status and type filters."""
             status_filter = OperationStatus(status) if status else None
             type_filter = OperationType(operation_type) if operation_type else None
-            operations = self.operation_manager.list_operations(status_filter, type_filter)[:limit]
-            operation_responses = [self._convert_operation_to_response(op) for op in operations]
+            operations = self.operation_manager.list_operations(
+                status_filter, type_filter
+            )[:limit]
+            operation_responses = [
+                self._convert_operation_to_response(op) for op in operations
+            ]
             total, active, completed, failed = self._calculate_operation_stats()
             return OperationListResponse(
                 operations=operation_responses,
@@ -331,7 +380,9 @@ class OperationIntegrationManager:
             return await self._handle_resume_operation(operation_id)
 
         @self.router.post("/{operation_id}/progress")
-        async def update_operation_progress(operation_id: str, request: ProgressUpdateRequest):
+        async def update_operation_progress(
+            operation_id: str, request: ProgressUpdateRequest
+        ):
             """Update progress for a running operation."""
             return await self._handle_update_progress(operation_id, request)
 
@@ -411,9 +462,12 @@ class OperationIntegrationManager:
 
         return operation_func
 
-    async def _collect_test_files(self, test_path: str, test_patterns: List[str]) -> List:
+    async def _collect_test_files(
+        self, test_path: str, test_patterns: List[str]
+    ) -> List:
         """Collect test files matching the given patterns."""
         from pathlib import Path
+
         test_files = []
         for pattern in test_patterns:
             # Issue #358 - avoid blocking
@@ -427,14 +481,15 @@ class OperationIntegrationManager:
         """Run a single test file and return the result."""
         try:
             process = await asyncio.create_subprocess_exec(
-                "python", "-m", "pytest", str(test_file), "-v",
+                "python",
+                "-m",
+                "pytest",
+                str(test_file),
+                "-v",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=300
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
             return {
                 "file": str(test_file),
                 "exit_code": process.returncode,
@@ -690,7 +745,10 @@ if __name__ == "__main__":
                 )
                 # Check if operation reached terminal state (Issue #326)
                 # Note: Using subset of TERMINAL_OPERATION_STATUSES (excluding CANCELLED for this polling loop)
-                if operation.status in {OperationStatus.COMPLETED, OperationStatus.FAILED}:
+                if operation.status in {
+                    OperationStatus.COMPLETED,
+                    OperationStatus.FAILED,
+                }:
                     break
 
                 print(f"Progress: {operation.progress.progress_percentage:.1f}%")
