@@ -211,6 +211,66 @@ class EnhancedSecurityLayer:
             self.approval_results[command_id] = approved
             self.pending_approvals[command_id].set()
 
+    def _handle_deprecated_role(
+        self, user_role: str, action_type: str, resource: Optional[str]
+    ) -> str:
+        """Handle deprecated privileged roles by logging and downgrading. Issue #620.
+
+        Args:
+            user_role: Original user role
+            action_type: Action being attempted
+            resource: Resource being accessed
+
+        Returns:
+            Downgraded role name (admin) for deprecated roles
+        """
+        self.audit_log(
+            action="deprecated_role_usage",
+            user=user_role,
+            outcome="warning",
+            details={
+                "deprecated_role": user_role,
+                "action_attempted": action_type,
+                "resource": resource,
+                "message": "God/superuser/root roles deprecated. Update to admin role.",
+            },
+        )
+        return "admin"
+
+    def _check_shell_execute_permission(self, role_permissions: List[str]) -> bool:
+        """Check if role has shell execution permission. Issue #620.
+
+        Args:
+            role_permissions: List of permissions for the role
+
+        Returns:
+            True if shell execution is allowed
+        """
+        if "allow_shell_execute" in role_permissions:
+            return True
+        if "allow_shell_execute_safe" in role_permissions:
+            return True
+        return False
+
+    def _check_wildcard_permissions(
+        self, action_type: str, role_permissions: List[str]
+    ) -> bool:
+        """Check if action matches any wildcard permissions. Issue #620.
+
+        Args:
+            action_type: The action to check
+            role_permissions: List of permissions for the role
+
+        Returns:
+            True if action matches a wildcard permission
+        """
+        for permission in role_permissions:
+            if permission.endswith(".*"):
+                permission_prefix = permission[:-1]
+                if action_type.startswith(permission_prefix):
+                    return True
+        return False
+
     def check_permission(
         self, user_role: str, action_type: str, resource: Optional[str] = None
     ) -> bool:
@@ -221,59 +281,23 @@ class EnhancedSecurityLayer:
         if not self.enable_auth:
             return True
 
-        # SECURITY FIX: Deprecated god/superuser/root roles - use admin with proper permissions
-        # ALL roles must go through RBAC, audit logging, and validation (O(1) lookup - Issue #326)
+        # Handle deprecated roles (O(1) lookup - Issue #326)
         if user_role.lower() in DEPRECATED_PRIVILEGED_ROLES:
-            self.audit_log(
-                action="deprecated_role_usage",
-                user=user_role,
-                outcome="warning",
-                details={
-                    "deprecated_role": user_role,
-                    "action_attempted": action_type,
-                    "resource": resource,
-                    "message": (
-                        "God/superuser/root roles deprecated. Update to admin role."
-                    ),
-                },
-            )
-            # Downgrade to admin role with proper permissions and audit logging
-            user_role = "admin"
+            user_role = self._handle_deprecated_role(user_role, action_type, resource)
+
+        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
         # Special handling for command execution
         if action_type == "allow_shell_execute":
-            # Check if role has shell execution permission
-            role_permissions = self.roles.get(user_role, {}).get("permissions", [])
+            return self._check_shell_execute_permission(role_permissions)
 
-            # SECURITY FIX: Removed "allow_all" bypass - granular permissions only
-            # All command execution must go through proper risk assessment
-
-            if "allow_shell_execute" in role_permissions:
-                # Even with permission, command security still applies
-                return True
-
-            # Check for restricted shell execution
-            if "allow_shell_execute_safe" in role_permissions:
-                # User can only execute safe commands
-                return True
-
-            return False
-
-        # Regular permission checking
-        role_permissions = self.roles.get(user_role, {}).get("permissions", [])
-
-        # SECURITY FIX: Removed "allow_all" bypass - use granular permissions only
-        # This ensures all actions go through proper permission validation
-
+        # Direct permission check
         if action_type in role_permissions:
             return True
 
         # Check for wildcard permissions
-        for permission in role_permissions:
-            if permission.endswith(".*"):
-                permission_prefix = permission[:-1]
-                if action_type.startswith(permission_prefix):
-                    return True
+        if self._check_wildcard_permissions(action_type, role_permissions):
+            return True
 
         # Check default role permissions
         default_permissions = self._get_default_role_permissions(user_role)

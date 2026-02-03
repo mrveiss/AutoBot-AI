@@ -191,6 +191,63 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             severity_distribution=self._calculate_severity_distribution(patterns),
         )
 
+    def _parse_file_source(
+        self, file_path: str
+    ) -> tuple[Optional[ast.AST], List[str], Optional[str]]:
+        """Parse file and return AST tree and lines. Issue #620.
+
+        Args:
+            file_path: Path to the file to parse
+
+        Returns:
+            Tuple of (ast_tree, lines_list, error_message or None)
+        """
+        if self.use_shared_cache:
+            tree, source = get_ast_with_content(file_path)
+            lines = source.split("\n") if source else []
+            if tree is None:
+                return None, lines, "Failed to parse AST"
+            return tree, lines, None
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            source = f.read()
+            lines = source.split("\n")
+        tree = ast.parse(source, filename=file_path)
+        return tree, lines, None
+
+    def _analyze_file_nodes(
+        self, tree: ast.AST, file_path: str, lines: List[str]
+    ) -> tuple[int, int, List[AntiPatternResult]]:
+        """Analyze AST nodes and count classes/functions. Issue #620.
+
+        Args:
+            tree: Parsed AST tree
+            file_path: Path to the file
+            lines: File content as list of lines
+
+        Returns:
+            Tuple of (class_count, function_count, patterns_list)
+        """
+        classes = 0
+        functions = 0
+        patterns: List[AntiPatternResult] = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                classes += 1
+                patterns.extend(self._analyze_class(node, file_path, lines))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                parent_is_class = any(
+                    isinstance(p, ast.ClassDef)
+                    for p in ast.walk(tree)
+                    if node in getattr(p, "body", [])
+                )
+                if not parent_is_class:
+                    functions += 1
+                    patterns.extend(self._analyze_function(node, file_path, lines))
+
+        return classes, functions, patterns
+
     def analyze_file(self, file_path: str) -> Dict[str, Any]:
         """
         Analyze a single file for anti-patterns.
@@ -206,51 +263,29 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         patterns: List[AntiPatternResult] = []
         classes = 0
         functions = 0
+        lines: List[str] = []
 
         try:
-            # Issue #607: Use shared AST cache if available
-            if self.use_shared_cache:
-                tree, source = get_ast_with_content(file_path)
-                lines = source.split("\n") if source else []
-                if tree is None:
-                    # Parse failed, but we may still have content for line count
-                    return {
-                        "file_path": file_path,
-                        "lines": len(lines),
-                        "classes": 0,
-                        "functions": 0,
-                        "anti_patterns": [],
-                        "summary": {},
-                        "error": "Failed to parse AST",
-                    }
-            else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    source = f.read()
-                    lines = source.split("\n")
-                tree = ast.parse(source, filename=file_path)
+            tree, lines, error = self._parse_file_source(file_path)
+            if error:
+                return {
+                    "file_path": file_path,
+                    "lines": len(lines),
+                    "classes": 0,
+                    "functions": 0,
+                    "anti_patterns": [],
+                    "summary": {},
+                    "error": error,
+                }
 
-            # Check for large file
             result = self._bloater.check_large_file(file_path, len(lines))
             if result:
                 patterns.append(result)
 
-            # Count and analyze classes/functions
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ClassDef):
-                    classes += 1
-                    patterns.extend(self._analyze_class(node, file_path, lines))
-                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    # Only count module-level functions
-                    parent_is_class = any(
-                        isinstance(p, ast.ClassDef)
-                        for p in ast.walk(tree)
-                        if node in getattr(p, "body", [])
-                    )
-                    if not parent_is_class:
-                        functions += 1
-                        patterns.extend(self._analyze_function(node, file_path, lines))
-
-            # File-level detections
+            classes, functions, node_patterns = self._analyze_file_nodes(
+                tree, file_path, lines
+            )
+            patterns.extend(node_patterns)
             patterns.extend(self._run_file_level_detections(tree, file_path))
 
         except SyntaxError as e:
@@ -260,7 +295,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
         return {
             "file_path": file_path,
-            "lines": len(lines) if "lines" in dir() else 0,
+            "lines": len(lines),
             "classes": classes,
             "functions": functions,
             "anti_patterns": [p.to_dict() for p in patterns],

@@ -645,8 +645,70 @@ class LocalModelProvider(BaseAIProvider):
             metadata={"error": error_key},
         )
 
+    def _build_ollama_chat_request(self, request: AIRequest) -> Dict[str, Any]:
+        """Build request payload for Ollama chat API.
+
+        Args:
+            request: The AI request containing prompt and parameters
+
+        Returns:
+            Dict formatted for Ollama chat API. Issue #620.
+        """
+        messages = []
+        if request.system_message:
+            messages.append({"role": "system", "content": request.system_message})
+        messages.append({"role": "user", "content": request.prompt})
+
+        return {
+            "model": self.config.model_name or "llama3.2",
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": request.temperature or self.config.temperature,
+            },
+        }
+
+    def _build_ollama_success_response(
+        self, request: AIRequest, result: Dict[str, Any], processing_time: float
+    ) -> AIResponse:
+        """Build success response from Ollama API result.
+
+        Args:
+            request: Original AI request
+            result: Response from Ollama API
+            processing_time: Time taken for the request
+
+        Returns:
+            AIResponse with content and metadata. Issue #620.
+        """
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name=result.get("model", self.config.model_name),
+            content=result.get("message", {}).get("content", ""),
+            usage={
+                "prompt_tokens": result.get("prompt_eval_count", 0),
+                "completion_tokens": result.get("eval_count", 0),
+            },
+            finish_reason="stop" if result.get("done") else "incomplete",
+            tool_calls=None,
+            confidence=0.8,
+            processing_time=processing_time,
+            metadata={
+                "total_duration": result.get("total_duration"),
+                "load_duration": result.get("load_duration"),
+            },
+        )
+
     async def generate_text(self, request: AIRequest) -> AIResponse:
-        """Generate text using local Ollama model (Issue #665: uses extracted helper)."""
+        """Generate text using local Ollama model.
+
+        Args:
+            request: AI request with prompt and parameters
+
+        Returns:
+            AIResponse with generated text or error. Issue #620.
+        """
         import aiohttp
 
         start_time = time.time()
@@ -660,56 +722,22 @@ class LocalModelProvider(BaseAIProvider):
             )
 
         try:
-            # Build messages for Ollama chat API
-            messages = []
-            if request.system_message:
-                messages.append({"role": "system", "content": request.system_message})
-            messages.append({"role": "user", "content": request.prompt})
-
-            data = {
-                "model": self.config.model_name or "llama3.2",
-                "messages": messages,
-                "stream": False,
-                "options": {
-                    "temperature": request.temperature or self.config.temperature,
-                },
-            }
+            data = self._build_ollama_chat_request(request)
 
             async with aiohttp.ClientSession() as session:
                 timeout = aiohttp.ClientTimeout(total=120.0)
                 async with session.post(
-                    f"{self._ollama_url}/api/chat",
-                    json=data,
-                    timeout=timeout,
+                    f"{self._ollama_url}/api/chat", json=data, timeout=timeout
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         raise aiohttp.ClientError(
                             f"HTTP {response.status}: {error_text}"
                         )
-
                     result = await response.json()
 
-            processing_time = time.time() - start_time
-            content = result.get("message", {}).get("content", "")
-
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=result.get("model", self.config.model_name),
-                content=content,
-                usage={
-                    "prompt_tokens": result.get("prompt_eval_count", 0),
-                    "completion_tokens": result.get("eval_count", 0),
-                },
-                finish_reason="stop" if result.get("done") else "incomplete",
-                tool_calls=None,
-                confidence=0.8,
-                processing_time=processing_time,
-                metadata={
-                    "total_duration": result.get("total_duration"),
-                    "load_duration": result.get("load_duration"),
-                },
+            return self._build_ollama_success_response(
+                request, result, time.time() - start_time
             )
 
         except Exception as e:

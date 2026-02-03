@@ -940,6 +940,78 @@ class TestPatternAnalyzer:
 
         return suggestions
 
+    def _run_basic_detectors(
+        self, func: ast.FunctionDef, file_path: str
+    ) -> List[TestAntiPatternResult]:
+        """Run basic detectors that don't need file content. Issue #620.
+
+        Args:
+            func: Test function AST node
+            file_path: Path to the test file
+
+        Returns:
+            List of detected anti-patterns
+        """
+        patterns: List[TestAntiPatternResult] = []
+        detectors = [
+            self._detect_empty_test,
+            self._detect_no_assertion,
+            self._detect_overly_complex_test,
+            self._detect_multiple_assertions,
+            self._detect_sleep_calls,
+            self._detect_missing_docstring,
+            self._detect_test_naming_issues,
+        ]
+        for detector in detectors:
+            result = detector(func, file_path)
+            if result:
+                patterns.append(result)
+        return patterns
+
+    def _run_content_detectors(
+        self, func: ast.FunctionDef, file_path: str, content: str
+    ) -> List[TestAntiPatternResult]:
+        """Run detectors that require file content. Issue #620.
+
+        Args:
+            func: Test function AST node
+            file_path: Path to the test file
+            content: File content as string
+
+        Returns:
+            List of detected anti-patterns
+        """
+        patterns: List[TestAntiPatternResult] = []
+        content_detectors = [
+            self._detect_flaky_patterns,
+            self._detect_external_dependencies,
+            self._detect_database_dependencies,
+        ]
+        for detector in content_detectors:
+            result = detector(func, file_path, content)
+            if result:
+                patterns.append(result)
+        return patterns
+
+    def _generate_file_suggestions(
+        self, test_count: int, assertion_count: int
+    ) -> List[str]:
+        """Generate suggestions based on test file analysis. Issue #620.
+
+        Args:
+            test_count: Number of test functions found
+            assertion_count: Total number of assertions
+
+        Returns:
+            List of suggestion strings
+        """
+        suggestions: List[str] = []
+        if test_count == 0:
+            suggestions.append("Add test functions to this test file")
+        if assertion_count < test_count:
+            suggestions.append("Ensure each test has at least one assertion")
+        return suggestions
+
     def analyze_test_file(self, file_path: str) -> TestQualityReport:
         """
         Analyze a single test file for anti-patterns and quality issues.
@@ -950,8 +1022,8 @@ class TestPatternAnalyzer:
         Returns:
             TestQualityReport with findings
         """
-        anti_patterns = []
-        suggestions = []
+        anti_patterns: List[TestAntiPatternResult] = []
+        suggestions: List[str] = []
         test_count = 0
         assertion_count = 0
 
@@ -965,40 +1037,12 @@ class TestPatternAnalyzer:
 
             for func in tests:
                 assertion_count += self._count_assertions(func)
+                anti_patterns.extend(self._run_basic_detectors(func, file_path))
+                anti_patterns.extend(
+                    self._run_content_detectors(func, file_path, content)
+                )
 
-                # Run all detection methods
-                detectors = [
-                    self._detect_empty_test,
-                    self._detect_no_assertion,
-                    self._detect_overly_complex_test,
-                    self._detect_multiple_assertions,
-                    self._detect_sleep_calls,
-                    self._detect_missing_docstring,
-                    self._detect_test_naming_issues,
-                ]
-
-                for detector in detectors:
-                    result = detector(func, file_path)
-                    if result:
-                        anti_patterns.append(result)
-
-                # Detectors that need content
-                content_detectors = [
-                    self._detect_flaky_patterns,
-                    self._detect_external_dependencies,
-                    self._detect_database_dependencies,
-                ]
-
-                for detector in content_detectors:
-                    result = detector(func, file_path, content)
-                    if result:
-                        anti_patterns.append(result)
-
-            # Generate suggestions
-            if test_count == 0:
-                suggestions.append("Add test functions to this test file")
-            if assertion_count < test_count:
-                suggestions.append("Ensure each test has at least one assertion")
+            suggestions = self._generate_file_suggestions(test_count, assertion_count)
 
         except Exception as e:
             logger.error("Error analyzing test file %s: %s", file_path, e)

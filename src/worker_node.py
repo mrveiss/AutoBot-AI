@@ -6,9 +6,9 @@ import json
 import logging
 import os
 import platform
-import subprocess
+import subprocess  # nosec B404 - required for GPU detection
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import psutil
 
@@ -164,7 +164,7 @@ class WorkerNode:
         """Get detailed GPU information using nvidia-smi."""
         try:
             nvidia_smi_output = (
-                subprocess.check_output(
+                subprocess.check_output(  # nosec B607 - nvidia-smi is safe
                     [
                         "nvidia-smi",
                         "--query-gpu=name,memory.total,memory.used,memory.free,"
@@ -267,12 +267,75 @@ class WorkerNode:
             logger.debug("Worker capabilities detected (local mode): %s", capabilities)
             await event_manager.publish("worker_capability_report", capabilities)
 
-    async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Execute a task using the Strategy Pattern for clean delegation.
+    def _validate_user_role(
+        self, task_type: str, task_id: str, user_role: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Validate that user_role is provided for task execution.
 
-        This method has been refactored to eliminate deep nesting (was 21 levels)
-        by delegating to specialized task handlers via TaskExecutor.
+        Args:
+            task_type: Type of task being executed
+            task_id: Unique identifier for the task
+            user_role: Role of user requesting task execution
+
+        Returns:
+            Error dict if validation fails, None if valid. Issue #620.
+        """
+        if user_role:
+            return None
+        self.security_layer.audit_log(
+            f"execute_task_{task_type}",
+            "unknown",
+            "denied",
+            {"task_id": task_id, "reason": "no_user_role_provided"},
+        )
+        return {
+            "status": "error",
+            "message": "Task rejected: user_role is required but not provided.",
+        }
+
+    def _check_task_permission(
+        self,
+        task_type: str,
+        task_id: str,
+        task_payload: Dict[str, Any],
+        user_role: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Check if user has permission to execute the task type.
+
+        Args:
+            task_type: Type of task being executed
+            task_id: Unique identifier for the task
+            task_payload: Full task payload for audit logging
+            user_role: Role of user requesting task execution
+
+        Returns:
+            Error dict if permission denied, None if allowed. Issue #620.
+        """
+        if self.security_layer.check_permission(user_role, f"allow_{task_type}"):
+            return None
+        self.security_layer.audit_log(
+            f"execute_task_{task_type}",
+            user_role,
+            "denied",
+            {
+                "task_id": task_id,
+                "payload": task_payload,
+                "reason": "permission_denied",
+            },
+        )
+        return {
+            "status": "error",
+            "message": (
+                f"Permission denied for role '{user_role}' to execute "
+                f"task type '{task_type}'."
+            ),
+        }
+
+    async def execute_task(self, task_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a task using the Strategy Pattern for clean delegation.
+
+        This method delegates to specialized task handlers via TaskExecutor
+        after validating user role and permissions.
 
         Args:
             task_payload: Task data including type and parameters
@@ -282,42 +345,19 @@ class WorkerNode:
         """
         task_type = task_payload.get("type")
         task_id = task_payload.get("task_id", "N/A")
-        # Issue #744: Require explicit role - no guest fallback for security
         user_role = task_payload.get("user_role")
-        if not user_role:
-            self.security_layer.audit_log(
-                f"execute_task_{task_type}",
-                "unknown",
-                "denied",
-                {"task_id": task_id, "reason": "no_user_role_provided"},
-            )
-            return {
-                "status": "error",
-                "message": "Task rejected: user_role is required but not provided.",
-            }
 
-        # Permission check - common logic for all tasks
-        permission_check = self.security_layer.check_permission(
-            user_role, f"allow_{task_type}"
+        # Validate user role (Issue #744: no guest fallback for security)
+        role_error = self._validate_user_role(task_type, task_id, user_role)
+        if role_error:
+            return role_error
+
+        # Check task permission
+        perm_error = self._check_task_permission(
+            task_type, task_id, task_payload, user_role
         )
-        if not permission_check:
-            self.security_layer.audit_log(
-                f"execute_task_{task_type}",
-                user_role,
-                "denied",
-                {
-                    "task_id": task_id,
-                    "payload": task_payload,
-                    "reason": "permission_denied",
-                },
-            )
-            return {
-                "status": "error",
-                "message": (
-                    f"Permission denied for role '{user_role}' to execute "
-                    f"task type '{task_type}'."
-                ),
-            }
+        if perm_error:
+            return perm_error
 
         # Publish task start event
         await event_manager.publish(
@@ -325,8 +365,11 @@ class WorkerNode:
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
         )
         logger.info(
-            f"Worker {self.worker_id} executing task {task_id} of type "
-            f"'{task_type}' for role '{user_role}'"
+            "Worker %s executing task %s of type '%s' for role '%s'",
+            self.worker_id,
+            task_id,
+            task_type,
+            user_role,
         )
 
         # Delegate to TaskExecutor - Strategy Pattern dispatch
@@ -338,8 +381,10 @@ class WorkerNode:
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
         )
         logger.info(
-            f"Worker {self.worker_id} finished task {task_id} with status: "
-            f"{result['status']}"
+            "Worker %s finished task %s with status: %s",
+            self.worker_id,
+            task_id,
+            result["status"],
         )
         return result
 

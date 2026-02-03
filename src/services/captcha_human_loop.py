@@ -139,7 +139,9 @@ class CaptchaHumanLoop:
         Returns:
             True if auto-solving is enabled and type is supported
         """
-        return self.enable_auto_solve and captcha_type not in _UNSUPPORTED_CAPTCHA_TYPES  # Issue #380
+        return (
+            self.enable_auto_solve and captcha_type not in _UNSUPPORTED_CAPTCHA_TYPES
+        )  # Issue #380
 
     async def _try_auto_fill(
         self,
@@ -248,6 +250,59 @@ class CaptchaHumanLoop:
             await self._notify_captcha_timeout(captcha_id, url)
             return CaptchaResolutionStatus.TIMEOUT, False
 
+    def _build_error_result(
+        self,
+        captcha_id: str,
+        url: str,
+        start_time: datetime,
+        error_message: str,
+    ) -> CaptchaResolutionResult:
+        """Build error result for CAPTCHA intervention failures.
+
+        Args:
+            captcha_id: Unique identifier for the CAPTCHA
+            url: URL where CAPTCHA was encountered
+            start_time: When the intervention started
+            error_message: Description of the error
+
+        Returns:
+            CaptchaResolutionResult with error status. Issue #620.
+        """
+        return CaptchaResolutionResult(
+            success=False,
+            status=CaptchaResolutionStatus.ERROR,
+            captcha_id=captcha_id,
+            url=url,
+            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
+            error_message=error_message,
+        )
+
+    async def _setup_human_intervention(
+        self, captcha_id: str, url: str, captcha_type: str, screenshot_b64: str
+    ) -> asyncio.Event:
+        """Set up tracking and notify frontend for human intervention.
+
+        Args:
+            captcha_id: Unique identifier for the CAPTCHA
+            url: URL where CAPTCHA was encountered
+            captcha_type: Type of CAPTCHA detected
+            screenshot_b64: Base64 encoded screenshot
+
+        Returns:
+            Event to wait on for resolution. Issue #620.
+        """
+        resolution_event = asyncio.Event()
+        self._pending_resolutions[captcha_id] = resolution_event
+        self._resolution_results[captcha_id] = CaptchaResolutionStatus.PENDING
+
+        await self._notify_captcha_detected(
+            captcha_id=captcha_id,
+            url=url,
+            captcha_type=captcha_type,
+            screenshot_b64=screenshot_b64,
+        )
+        return resolution_event
+
     async def request_human_intervention(
         self,
         page: Page,
@@ -264,11 +319,10 @@ class CaptchaHumanLoop:
             captcha_input_selector: CSS selector for CAPTCHA input field (if known)
 
         Returns:
-            CaptchaResolutionResult with success status and details
+            CaptchaResolutionResult with success status and details. Issue #620.
         """
         captcha_id = str(uuid.uuid4())
         start_time = datetime.utcnow()
-
         logger.info("Handling CAPTCHA at %s (type: %s)", url, captcha_type)
 
         try:
@@ -277,40 +331,29 @@ class CaptchaHumanLoop:
 
             # Step 1: Attempt automatic solving
             auto_result = await self._handle_auto_solve(
-                page, screenshot, captcha_type, captcha_input_selector,
-                captcha_id, url, start_time
+                page,
+                screenshot,
+                captcha_type,
+                captcha_input_selector,
+                captcha_id,
+                url,
+                start_time,
             )
             if auto_result:
                 return auto_result
 
             # Step 2: Fall back to human intervention
             logger.info("Requesting human intervention for CAPTCHA at %s", url)
-
-            resolution_event = asyncio.Event()
-            self._pending_resolutions[captcha_id] = resolution_event
-            self._resolution_results[captcha_id] = CaptchaResolutionStatus.PENDING
-
-            await self._notify_captcha_detected(
-                captcha_id=captcha_id,
-                url=url,
-                captcha_type=captcha_type,
-                screenshot_b64=screenshot_b64,
+            resolution_event = await self._setup_human_intervention(
+                captcha_id, url, captcha_type, screenshot_b64
             )
-
             status, success = await self._wait_for_human_resolution(
                 captcha_id, url, resolution_event
             )
 
         except Exception as e:
             logger.error("Error requesting CAPTCHA intervention: %s", e)
-            return CaptchaResolutionResult(
-                success=False,
-                status=CaptchaResolutionStatus.ERROR,
-                captcha_id=captcha_id,
-                url=url,
-                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
-                error_message=str(e),
-            )
+            return self._build_error_result(captcha_id, url, start_time, str(e))
 
         finally:
             self._pending_resolutions.pop(captcha_id, None)
