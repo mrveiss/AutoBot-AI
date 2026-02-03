@@ -232,12 +232,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_redis_client
-from backend.services.agent_terminal import (
-    AgentSessionState,
-    AgentTerminalService,
-)
+from backend.services.agent_terminal import AgentSessionState, AgentTerminalService
 from backend.services.command_approval_manager import AgentRole
 from backend.services.command_execution_queue import get_command_queue
+from src.auth_middleware import get_current_user
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -308,10 +306,14 @@ class InterruptRequest(BaseModel):
 class HostSelectionRequest(BaseModel):
     """Request for agent to select an infrastructure host"""
 
-    agent_session_id: Optional[str] = Field(None, description="Agent terminal session ID")
+    agent_session_id: Optional[str] = Field(
+        None, description="Agent terminal session ID"
+    )
     command: Optional[str] = Field(None, description="Command to execute on host")
     purpose: Optional[str] = Field(None, description="Purpose of the SSH action")
-    preferred_host_id: Optional[str] = Field(None, description="Preferred host ID if any")
+    preferred_host_id: Optional[str] = Field(
+        None, description="Preferred host ID if any"
+    )
     allow_auto_select: bool = Field(
         True, description="Allow auto-selection if default host is set"
     )
@@ -374,11 +376,14 @@ def get_agent_terminal_service(
 )
 @router.post("/sessions")
 async def create_agent_terminal_session(
-    request: CreateSessionRequest,
+    current_user: dict = Depends(get_current_user),
+    request: CreateSessionRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Create a new agent terminal session.
+
+    Issue #744: Requires authenticated user.
 
     Security:
     - Agent role determines permission level
@@ -426,12 +431,15 @@ async def create_agent_terminal_session(
 )
 @router.get("/sessions")
 async def list_agent_terminal_sessions(
+    current_user: dict = Depends(get_current_user),
     agent_id: Optional[str] = None,
     conversation_id: Optional[str] = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     List agent terminal sessions.
+
+    Issue #744: Requires authenticated user.
 
     Query parameters:
     - agent_id: Filter by agent ID
@@ -473,10 +481,13 @@ async def list_agent_terminal_sessions(
 @router.get("/sessions/{session_id}")
 async def get_agent_terminal_session(
     session_id: str,
+    current_user: dict = Depends(get_current_user),
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Get detailed information about an agent terminal session.
+
+    Issue #744: Requires authenticated user.
     """
     session_info = await service.get_session_info(session_id)
 
@@ -497,10 +508,13 @@ async def get_agent_terminal_session(
 @router.delete("/sessions/{session_id}")
 async def delete_agent_terminal_session(
     session_id: str,
+    current_user: dict = Depends(get_current_user),
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Delete (close) an agent terminal session.
+
+    Issue #744: Requires authenticated user.
     """
     success = await service.close_session(session_id)
 
@@ -520,12 +534,15 @@ async def delete_agent_terminal_session(
 )
 @router.post("/execute")
 async def execute_agent_command(
-    session_id: str,
-    request: ExecuteCommandRequest,
+    current_user: dict = Depends(get_current_user),
+    session_id: str = None,
+    request: ExecuteCommandRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Execute a command in an agent terminal session.
+
+    Issue #744: Requires authenticated user.
 
     Security workflow:
     1. Validate session and agent permissions
@@ -556,11 +573,14 @@ async def execute_agent_command(
 @router.post("/sessions/{session_id}/approve")
 async def approve_agent_command(
     session_id: str,
-    request: ApproveCommandRequest,
+    current_user: dict = Depends(get_current_user),
+    request: ApproveCommandRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Approve or deny a pending agent command.
+
+    Issue #744: Requires authenticated user.
 
     User approves HIGH/DANGEROUS commands that agents want to execute.
     """
@@ -594,11 +614,14 @@ async def approve_agent_command(
 @router.post("/sessions/{session_id}/interrupt")
 async def interrupt_agent_session(
     session_id: str,
-    request: InterruptRequest,
+    current_user: dict = Depends(get_current_user),
+    request: InterruptRequest = None,
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     User interrupt - Take control from agent.
+
+    Issue #744: Requires authenticated user.
 
     Allows user to:
     - Stop agent command execution
@@ -622,10 +645,13 @@ async def interrupt_agent_session(
 @router.post("/sessions/{session_id}/resume")
 async def resume_agent_session(
     session_id: str,
+    current_user: dict = Depends(get_current_user),
     service: AgentTerminalService = Depends(get_agent_terminal_service),
 ):
     """
     Resume agent control after user interrupt.
+
+    Issue #744: Requires authenticated user.
 
     Allows agent to continue executing commands after user returns control.
     """
@@ -639,9 +665,14 @@ async def resume_agent_session(
     error_code_prefix="AGENT_TERMINAL",
 )
 @router.get("/commands/{command_id}")
-async def get_command_state(command_id: str):
+async def get_command_state(
+    command_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get command state and output from the command execution queue.
+
+    Issue #744: Requires authenticated user.
 
     This endpoint enables event-driven polling for command state changes.
     Frontend polls this endpoint to check if a command has completed and
@@ -707,9 +738,13 @@ async def get_command_state(command_id: str):
     error_code_prefix="AGENT_TERMINAL",
 )
 @router.get("/")
-async def agent_terminal_info():
+async def agent_terminal_info(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get information about the Agent Terminal API.
+
+    Issue #744: Requires authenticated user.
     """
     return {
         "name": "Agent Terminal API",
@@ -772,9 +807,14 @@ _pending_host_selections: Dict[str, Dict] = {}
     error_code_prefix="AGENT_TERMINAL",
 )
 @router.post("/host-selection/request")
-async def request_host_selection(request: HostSelectionRequest):
+async def request_host_selection(
+    current_user: dict = Depends(get_current_user),
+    request: HostSelectionRequest = None,
+):
     """
     Agent requests host selection for SSH action.
+
+    Issue #744: Requires authenticated user.
 
     This endpoint creates a pending host selection request that the frontend
     will display to the user. The user selects from available infrastructure
@@ -821,9 +861,14 @@ async def request_host_selection(request: HostSelectionRequest):
     error_code_prefix="AGENT_TERMINAL",
 )
 @router.get("/host-selection/{request_id}")
-async def get_host_selection(request_id: str):
+async def get_host_selection(
+    request_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get the status/result of a host selection request.
+
+    Issue #744: Requires authenticated user.
 
     Agent polls this endpoint to check if user has made a selection.
 
@@ -857,15 +902,18 @@ async def get_host_selection(request_id: str):
 @router.post("/host-selection/{request_id}/select")
 async def submit_host_selection(
     request_id: str,
-    host_id: str,
-    host_name: str,
-    host: str,
+    current_user: dict = Depends(get_current_user),
+    host_id: str = None,
+    host_name: str = None,
+    host: str = None,
     ssh_port: int = 22,
     username: str = "root",
     remember_choice: bool = False,
 ):
     """
     User submits their host selection.
+
+    Issue #744: Requires authenticated user.
 
     Called by frontend when user selects a host from the dialog.
 
@@ -922,9 +970,14 @@ async def submit_host_selection(
     error_code_prefix="AGENT_TERMINAL",
 )
 @router.post("/host-selection/{request_id}/cancel")
-async def cancel_host_selection(request_id: str):
+async def cancel_host_selection(
+    request_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     User cancels host selection.
+
+    Issue #744: Requires authenticated user.
 
     Called by frontend when user closes the dialog without selecting.
     """
@@ -959,9 +1012,13 @@ async def cancel_host_selection(request_id: str):
     error_code_prefix="AGENT_TERMINAL",
 )
 @router.get("/host-selection")
-async def list_pending_host_selections():
+async def list_pending_host_selections(
+    current_user: dict = Depends(get_current_user),
+):
     """
     List all pending host selection requests.
+
+    Issue #744: Requires authenticated user.
 
     Frontend uses this to show any pending selection dialogs on page load.
     """

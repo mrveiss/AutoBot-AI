@@ -14,11 +14,10 @@ import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-
-from backend.type_defs.common import Metadata
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Depends,
     Query,
     Response,
     WebSocket,
@@ -26,6 +25,20 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+
+# Import monitoring utility functions
+from backend.api.monitoring_utils import (
+    _analyze_resource_utilization,
+    _calculate_overall_health,
+    _calculate_performance_score,
+    _convert_metrics_to_csv,
+    _identify_bottlenecks,
+)
+from backend.type_defs.common import Metadata
+from src.auth_middleware import check_admin_permission
+
+# Issue #474: Import ServiceURLs for AlertManager integration
+from src.constants.network_constants import ServiceURLs
 
 # Import AutoBot monitoring system
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -39,18 +52,6 @@ from src.utils.performance_monitor import (
     start_monitoring,
     stop_monitoring,
 )
-
-# Import monitoring utility functions
-from backend.api.monitoring_utils import (
-    _analyze_resource_utilization,
-    _calculate_overall_health,
-    _calculate_performance_score,
-    _convert_metrics_to_csv,
-    _identify_bottlenecks,
-)
-
-# Issue #474: Import ServiceURLs for AlertManager integration
-from src.constants.network_constants import ServiceURLs
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 
@@ -87,9 +88,7 @@ async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
                     _alertmanager_cache["timestamp"] = current_time
                     return formatted_alerts
                 else:
-                    logger.warning(
-                        "AlertManager returned status %d", response.status
-                    )
+                    logger.warning("AlertManager returned status %d", response.status)
                     return _alertmanager_cache["alerts"]  # Return stale cache
     except asyncio.TimeoutError:
         logger.warning("AlertManager request timed out")
@@ -121,21 +120,25 @@ def _format_alertmanager_alerts(raw_alerts: List[Dict]) -> List[Dict[str, Any]]:
         elif severity in ("info", "low"):
             severity = "info"
 
-        formatted.append({
-            "timestamp": time.time(),  # Current time for sorting
-            "starts_at": alert.get("startsAt", ""),
-            "ends_at": alert.get("endsAt"),
-            "severity": severity,
-            "category": labels.get("component", labels.get("alertname", "system")),
-            "message": annotations.get("summary", labels.get("alertname", "Alert")),
-            "description": annotations.get("description", ""),
-            "recommendation": annotations.get("recommendation", "Check system logs"),
-            "alertname": labels.get("alertname", ""),
-            "fingerprint": alert.get("fingerprint", ""),
-            "status": alert.get("status", {}).get("state", "active"),
-            "labels": labels,
-            "source": "alertmanager",
-        })
+        formatted.append(
+            {
+                "timestamp": time.time(),  # Current time for sorting
+                "starts_at": alert.get("startsAt", ""),
+                "ends_at": alert.get("endsAt"),
+                "severity": severity,
+                "category": labels.get("component", labels.get("alertname", "system")),
+                "message": annotations.get("summary", labels.get("alertname", "Alert")),
+                "description": annotations.get("description", ""),
+                "recommendation": annotations.get(
+                    "recommendation", "Check system logs"
+                ),
+                "alertname": labels.get("alertname", ""),
+                "fingerprint": alert.get("fingerprint", ""),
+                "status": alert.get("status", {}).get("state", "active"),
+                "labels": labels,
+                "source": "alertmanager",
+            }
+        )
 
     return formatted
 
@@ -285,8 +288,10 @@ ws_manager = MonitoringWebSocketManager()
     error_code_prefix="MONITORING",
 )
 @router.get("/status", response_model=MonitoringStatus)
-async def get_monitoring_status():
-    """Get current monitoring system status"""
+async def get_monitoring_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get current monitoring system status. Issue #744: Requires admin authentication."""
     dashboard = await get_performance_dashboard()  # Issue #430: properly await
 
     # Calculate uptime
@@ -320,8 +325,11 @@ async def get_monitoring_status():
     error_code_prefix="MONITORING",
 )
 @router.post("/start")
-async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
-    """Start AutoBot performance monitoring"""
+async def start_monitoring_endpoint(
+    admin_check: bool = Depends(check_admin_permission),
+    background_tasks: BackgroundTasks = None,
+):
+    """Start AutoBot performance monitoring. Issue #744: Requires admin authentication."""
     if performance_monitor.monitoring_active:
         return {
             "status": "already_running",
@@ -357,8 +365,10 @@ async def start_monitoring_endpoint(background_tasks: BackgroundTasks):
     error_code_prefix="MONITORING",
 )
 @router.post("/stop")
-async def stop_monitoring_endpoint():
-    """Stop AutoBot performance monitoring"""
+async def stop_monitoring_endpoint(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Stop AutoBot performance monitoring. Issue #744: Requires admin authentication."""
     if not performance_monitor.monitoring_active:
         return {
             "status": "not_running",
@@ -379,8 +389,10 @@ async def stop_monitoring_endpoint():
     error_code_prefix="MONITORING",
 )
 @router.get("/dashboard")
-async def get_dashboard_endpoint():
-    """Get comprehensive performance dashboard"""
+async def get_dashboard_endpoint(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get comprehensive performance dashboard. Issue #744: Requires admin authentication."""
     dashboard = await get_performance_dashboard()  # Issue #430: properly await
 
     # Add additional analysis
@@ -400,8 +412,10 @@ async def get_dashboard_endpoint():
     error_code_prefix="MONITORING",
 )
 @router.get("/dashboard/overview")
-async def get_dashboard_overview():
-    """Get dashboard overview data for frontend"""
+async def get_dashboard_overview(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get dashboard overview data for frontend. Issue #744: Requires admin authentication."""
     dashboard = await get_performance_dashboard()  # Issue #430: properly await
 
     # Add additional analysis
@@ -421,8 +435,10 @@ async def get_dashboard_overview():
     error_code_prefix="MONITORING",
 )
 @router.get("/metrics/current")
-async def get_current_metrics():
-    """Get current performance metrics snapshot"""
+async def get_current_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get current performance metrics snapshot. Issue #744: Requires admin authentication."""
     metrics = await collect_metrics()
     return {
         "timestamp": time.time(),
@@ -437,8 +453,11 @@ async def get_current_metrics():
     error_code_prefix="MONITORING",
 )
 @router.post("/metrics/query")
-async def query_metrics(query: MetricsQuery):
-    """Query historical performance metrics with filters"""
+async def query_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+    query: MetricsQuery = None,
+):
+    """Query historical performance metrics with filters. Issue #744: Requires admin authentication."""
     result = {
         "query": query.dict(),
         "timestamp": time.time(),
@@ -468,9 +487,7 @@ async def query_metrics(query: MetricsQuery):
                 for m in performance_monitor.gpu_metrics_buffer
                 if start_time <= m.timestamp <= end_time
             ]
-            result["metrics"]["gpu"] = [
-                m.to_query_dict() for m in filtered_metrics
-            ]
+            result["metrics"]["gpu"] = [m.to_query_dict() for m in filtered_metrics]
 
         elif category == "npu" and performance_monitor.npu_metrics_buffer:
             filtered_metrics = [
@@ -478,9 +495,7 @@ async def query_metrics(query: MetricsQuery):
                 for m in performance_monitor.npu_metrics_buffer
                 if start_time <= m.timestamp <= end_time
             ]
-            result["metrics"]["npu"] = [
-                m.to_query_dict() for m in filtered_metrics
-            ]
+            result["metrics"]["npu"] = [m.to_query_dict() for m in filtered_metrics]
 
         elif category == "system" and performance_monitor.system_metrics_buffer:
             filtered_metrics = [
@@ -488,9 +503,7 @@ async def query_metrics(query: MetricsQuery):
                 for m in performance_monitor.system_metrics_buffer
                 if start_time <= m.timestamp <= end_time
             ]
-            result["metrics"]["system"] = [
-                m.to_query_dict() for m in filtered_metrics
-            ]
+            result["metrics"]["system"] = [m.to_query_dict() for m in filtered_metrics]
 
     # Include trends if requested
     if query.include_trends:
@@ -515,8 +528,10 @@ async def query_metrics(query: MetricsQuery):
 @router.get(
     "/optimization/recommendations", response_model=List[OptimizationRecommendation]
 )
-async def get_optimization_recommendations_endpoint():
-    """Get performance optimization recommendations"""
+async def get_optimization_recommendations_endpoint(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get performance optimization recommendations. Issue #744: Requires admin authentication."""
     recommendations = await get_optimization_recommendations()  # Issue #430: await
 
     return [
@@ -538,11 +553,12 @@ async def get_optimization_recommendations_endpoint():
 )
 @router.get("/alerts", response_model=List[PerformanceAlert])
 async def get_performance_alerts(
+    admin_check: bool = Depends(check_admin_permission),
     severity: Optional[str] = Query(None, description="Filter by severity"),
     category: Optional[str] = Query(None, description="Filter by category"),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of alerts"),
 ):
-    """Get performance alerts with optional filtering"""
+    """Get performance alerts with optional filtering. Issue #744: Requires admin authentication."""
     alerts = list(performance_monitor.performance_alerts)
 
     # Apply filters
@@ -574,8 +590,10 @@ async def get_performance_alerts(
     error_code_prefix="MONITORING",
 )
 @router.get("/alerts/check")
-async def check_alerts():
-    """Check for performance alerts.
+async def check_alerts(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Check for performance alerts. Issue #744: Requires admin authentication.
 
     Issue #474: Now includes alerts from both performance_monitor (legacy) and
     Prometheus AlertManager (preferred). AlertManager alerts take precedence
@@ -612,8 +630,10 @@ async def check_alerts():
     error_code_prefix="MONITORING",
 )
 @router.get("/alerts/alertmanager")
-async def get_alertmanager_alerts():
-    """Get alerts directly from Prometheus AlertManager.
+async def get_alertmanager_alerts(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get alerts directly from Prometheus AlertManager. Issue #744: Requires admin authentication.
 
     Issue #474: Direct access to AlertManager alerts with full metadata.
     This is the preferred endpoint for alert queries as it uses the
@@ -652,8 +672,11 @@ async def get_alertmanager_alerts():
     error_code_prefix="MONITORING",
 )
 @router.post("/thresholds/update")
-async def update_performance_threshold(threshold: ThresholdUpdate):
-    """Update performance monitoring thresholds"""
+async def update_performance_threshold(
+    admin_check: bool = Depends(check_admin_permission),
+    threshold: ThresholdUpdate = None,
+):
+    """Update performance monitoring thresholds. Issue #744: Requires admin authentication."""
     # Update threshold in monitoring system
     threshold_key = f"{threshold.category}_{threshold.metric}"
 
@@ -684,10 +707,11 @@ async def update_performance_threshold(threshold: ThresholdUpdate):
 )
 @router.get("/export/metrics")
 async def export_metrics(
+    admin_check: bool = Depends(check_admin_permission),
     format: str = Query("json", pattern="^(json|csv)$"),
     time_range_hours: int = Query(1, ge=1, le=168),  # Max 1 week
 ):
-    """Export performance metrics in JSON or CSV format (Issue #665: refactored)."""
+    """Export performance metrics in JSON or CSV format. Issue #744: Requires admin authentication."""
     end_time = time.time()
     start_time = end_time - (time_range_hours * 3600)
 
@@ -737,7 +761,10 @@ def _filter_all_metrics(export_data: dict, start_time: float, end_time: float) -
             export_data["system_metrics"].append(metric.__dict__)
 
     # Filter service metrics
-    for service_name, metrics_buffer in performance_monitor.service_metrics_buffer.items():
+    for (
+        service_name,
+        metrics_buffer,
+    ) in performance_monitor.service_metrics_buffer.items():
         filtered_metrics = [
             m.__dict__ for m in metrics_buffer if start_time <= m.timestamp <= end_time
         ]
@@ -841,8 +868,10 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 )
 @router.post("/test/performance")
 @monitor_performance("api_test")
-async def test_performance_monitoring():
-    """Test endpoint to demonstrate performance monitoring"""
+async def test_performance_monitoring(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Test endpoint to demonstrate performance monitoring. Issue #744: Requires admin authentication."""
     # Simulate some work
     await asyncio.sleep(0.1)
 
@@ -871,9 +900,11 @@ from src.monitoring.prometheus_metrics import get_metrics_manager
     summary="Prometheus Metrics Endpoint",
     description="Exposes metrics in Prometheus format for scraping",
 )
-async def get_prometheus_metrics():
+async def get_prometheus_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
-    Prometheus metrics endpoint.
+    Prometheus metrics endpoint. Issue #744: Requires admin authentication.
 
     Returns metrics in Prometheus text format for scraping by Prometheus server.
     Includes timeout tracking, latency metrics, connection pool stats,
@@ -897,8 +928,10 @@ async def get_prometheus_metrics():
     summary="Metrics Health Check",
     description="Verify metrics collection is working",
 )
-async def metrics_health_check():
-    """Health check for Prometheus metrics system"""
+async def metrics_health_check(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Health check for Prometheus metrics system. Issue #744: Requires admin authentication."""
     metrics_manager = get_metrics_manager()
     metrics_data = metrics_manager.get_metrics()
 

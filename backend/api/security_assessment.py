@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.services.security_tool_parsers import parse_tool_output
 from src.services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
@@ -127,13 +128,17 @@ async def get_workflow_manager() -> SecurityWorkflowManager:
     error_code_prefix="SEC",
 )
 async def create_assessment(
-    request: CreateAssessmentRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: CreateAssessmentRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Create a new security assessment.
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         request: Assessment creation request
         manager: Workflow manager instance
 
@@ -172,13 +177,17 @@ async def create_assessment(
     error_code_prefix="SEC",
 )
 async def list_assessments(
+    admin_check: bool = Depends(check_admin_permission),
     active_only: bool = Query(True, description="Only return active assessments"),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     List security assessments.
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         active_only: Filter to active assessments only
         manager: Workflow manager instance
 
@@ -214,13 +223,17 @@ async def list_assessments(
 )
 async def get_assessment(
     assessment_id: str,
+    admin_check: bool = Depends(check_admin_permission),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Get a specific assessment by ID.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         manager: Workflow manager instance
 
     Returns:
@@ -250,13 +263,17 @@ async def get_assessment(
 )
 async def get_assessment_summary(
     assessment_id: str,
+    admin_check: bool = Depends(check_admin_permission),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Get assessment summary for LLM context.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         manager: Workflow manager instance
 
     Returns:
@@ -286,13 +303,17 @@ async def get_assessment_summary(
 )
 async def delete_assessment(
     assessment_id: str,
+    admin_check: bool = Depends(check_admin_permission),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Delete an assessment.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         manager: Workflow manager instance
 
     Returns:
@@ -322,13 +343,17 @@ async def delete_assessment(
 )
 async def get_current_phase(
     assessment_id: str,
+    admin_check: bool = Depends(check_admin_permission),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Get current phase and available transitions.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         manager: Workflow manager instance
 
     Returns:
@@ -368,14 +393,18 @@ async def get_current_phase(
 )
 async def advance_phase(
     assessment_id: str,
-    request: AdvancePhaseRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: AdvancePhaseRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Advance to the next workflow phase.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Phase advance request
         manager: Workflow manager instance
 
@@ -414,14 +443,18 @@ async def advance_phase(
 )
 async def add_host(
     assessment_id: str,
-    request: AddHostRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: AddHostRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Add a discovered host to the assessment.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Host data
         manager: Workflow manager instance
 
@@ -459,14 +492,18 @@ async def add_host(
 )
 async def add_port(
     assessment_id: str,
-    request: AddPortRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: AddPortRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Add a discovered port to a host.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Port data
         manager: Workflow manager instance
 
@@ -506,14 +543,18 @@ async def add_port(
 )
 async def add_vulnerability(
     assessment_id: str,
-    request: AddVulnerabilityRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: AddVulnerabilityRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Add a discovered vulnerability.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Vulnerability data
         manager: Workflow manager instance
 
@@ -555,14 +596,18 @@ async def add_vulnerability(
 )
 async def add_finding(
     assessment_id: str,
-    request: AddFindingRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: AddFindingRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Add a general finding.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Finding data
         manager: Workflow manager instance
 
@@ -603,6 +648,7 @@ async def add_finding(
 )
 async def get_findings(
     assessment_id: str,
+    admin_check: bool = Depends(check_admin_permission),
     finding_type: Optional[str] = Query(None, description="Filter by type"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
@@ -610,8 +656,11 @@ async def get_findings(
     """
     Get assessment findings with optional filtering.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         finding_type: Filter by finding type
         severity: Filter by severity
         manager: Workflow manager instance
@@ -742,14 +791,18 @@ async def _store_parsed_vulnerabilities(manager, assessment_id: str, parsed) -> 
 )
 async def parse_and_store_tool_output(
     assessment_id: str,
-    request: ParseToolOutputRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: ParseToolOutputRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Parse tool output and store results in the assessment.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Tool output to parse
         manager: Workflow manager instance
 
@@ -806,14 +859,18 @@ async def parse_and_store_tool_output(
 )
 async def set_error_state(
     assessment_id: str,
+    admin_check: bool = Depends(check_admin_permission),
     error_message: str = Query(..., description="Error message"),
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Set assessment to error state.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         error_message: Error description
         manager: Workflow manager instance
 
@@ -844,14 +901,18 @@ async def set_error_state(
 )
 async def recover_from_error(
     assessment_id: str,
-    request: RecoverErrorRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    request: RecoverErrorRequest = None,
     manager: SecurityWorkflowManager = Depends(get_workflow_manager),
 ) -> JSONResponse:
     """
     Recover from error state.
 
+    Issue #744: Requires admin authentication.
+
     Args:
         assessment_id: Assessment UUID
+        admin_check: Admin permission verification
         request: Recovery parameters
         manager: Workflow manager instance
 
@@ -883,9 +944,16 @@ async def recover_from_error(
 
 
 @router.get("/phases")
-async def get_phase_definitions() -> JSONResponse:
+async def get_phase_definitions(
+    admin_check: bool = Depends(check_admin_permission),
+) -> JSONResponse:
     """
     Get all phase definitions and valid transitions.
+
+    Issue #744: Requires admin authentication.
+
+    Args:
+        admin_check: Admin permission verification
 
     Returns:
         Phase definitions and transition map

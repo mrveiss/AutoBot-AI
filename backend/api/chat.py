@@ -18,23 +18,20 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from backend.type_defs.common import Metadata, STREAMING_MESSAGE_TYPES
-from fastapi import (
-    APIRouter,
-    Body,
-    Depends,
-    HTTPException,
-    Request,
-)
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # Import dependencies and utilities - Using available dependencies
 from backend.dependencies import get_config, get_knowledge_base
-from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
+from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
+from backend.type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
+
+# Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from backend.utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from backend.utils.chat_utils import (
@@ -47,21 +44,13 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-# Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from backend.utils.chat_exceptions import get_exceptions_lazy
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from src.auth_middleware import get_current_user
 from src.constants.threshold_constants import CategoryDefaults, TimingConstants
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
 # from src.models.conversation import ConversationModel
 # from src.models.message import MessageModel
-
-
-# Create placeholder dependency functions for missing imports
-def get_current_user() -> Dict[str, str]:
-    """Placeholder for auth dependency"""
-    return {"user_id": "default"}
 
 
 # Wrapper dependency to validate chat ownership using chat_id
@@ -92,16 +81,16 @@ def get_memory_interface(request: Request) -> Optional[Any]:
 
 def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
-    from src.utils.lazy_singleton import lazy_init_singleton
     from src.llm_service import LLMService
+    from src.utils.lazy_singleton import lazy_init_singleton
 
     return lazy_init_singleton(request.app.state, "llm_service", LLMService)
 
 
 async def get_chat_workflow_manager(request: Request) -> Any:
     """Get ChatWorkflowManager from app state, with async lazy initialization"""
-    from src.utils.lazy_singleton import lazy_init_singleton_async
     from src.chat_workflow import ChatWorkflowManager
+    from src.utils.lazy_singleton import lazy_init_singleton_async
 
     async def create_workflow_manager() -> Any:
         """
@@ -128,7 +117,9 @@ def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str,
 
 def log_request_context(request: Request, endpoint: str, request_id: str) -> None:
     """Log request context for debugging"""
-    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
+    logger.info(
+        "[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path
+    )
 
 
 # ====================================================================
@@ -159,7 +150,11 @@ def _should_start_new_streaming_group(
 
 
 def _has_longer_streaming_response(
-    msg: Dict, msg_sender: str, msg_content_len: int, messages: List[Dict], is_streaming_fn
+    msg: Dict,
+    msg_sender: str,
+    msg_content_len: int,
+    messages: List[Dict],
+    is_streaming_fn,
 ) -> bool:
     """Check if any message has longer streaming content (Issue #315)."""
     return any(
@@ -265,7 +260,9 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
             msg_ts_str = msg.get("timestamp", "")
             current_ts = _parse_message_timestamp(msg_ts_str)
 
-            if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
+            if current_ts and _should_start_new_streaming_group(
+                current_ts, last_streaming_ts
+            ):
                 if current_group:
                     streaming_groups.append(current_group)
                 current_group = []
@@ -290,8 +287,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
     for group in streaming_groups:
         if group:
             longest = max(
-                group,
-                key=lambda m: len(m.get("text", "") or m.get("content", ""))
+                group, key=lambda m: len(m.get("text", "") or m.get("content", ""))
             )
             final_merged.append(longest)
 
@@ -307,6 +303,7 @@ logger = logging.getLogger(__name__)
 
 # Include session management router
 from backend.api.chat_sessions import router as sessions_router
+
 router.include_router(sessions_router)
 
 # ====================================================================
@@ -321,7 +318,9 @@ class ChatMessage(BaseModel):
         ..., min_length=1, max_length=50000, description="Message content"
     )
     role: str = Field(
-        default=CategoryDefaults.ROLE_USER, pattern="^(user|assistant|system)$", description="Message role"
+        default=CategoryDefaults.ROLE_USER,
+        pattern="^(user|assistant|system)$",
+        description="Message role",
     )
     session_id: Optional[str] = Field(None, description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
@@ -358,7 +357,9 @@ class EnhancedChatMessage(BaseModel):
         ..., min_length=1, max_length=50000, description="Message content"
     )
     role: str = Field(
-        default=CategoryDefaults.ROLE_USER, pattern="^(user|assistant|system)$", description="Message role"
+        default=CategoryDefaults.ROLE_USER,
+        pattern="^(user|assistant|system)$",
+        description="Message role",
     )
     session_id: Optional[str] = Field(None, description="Chat session ID")
     message_type: Optional[str] = Field("text", description="Message type")
@@ -651,9 +652,7 @@ async def process_chat_message(
 
     # Get chat context (Issue #281: uses helper)
     model_name = message.metadata.get("model") if message.metadata else None
-    chat_context = await _get_chat_context(
-        chat_history_manager, session_id, model_name
-    )
+    chat_context = await _get_chat_context(chat_history_manager, session_id, model_name)
 
     # Build LLM context (Issue #281: uses helper)
     llm_context = _build_llm_context(
@@ -751,8 +750,15 @@ async def stream_chat_response(
 )
 @router.get("/chats")
 @router.get("/chat/chats")  # Frontend compatibility alias
-async def list_chats(request: Request):
-    """List all available chat sessions with improved error handling (consolidated)"""
+async def list_chats(
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """
+    List all available chat sessions with improved error handling (consolidated).
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
 
     chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
@@ -787,12 +793,17 @@ async def list_chats(request: Request):
 @router.post("/chat")
 @router.post("/chat/message")  # Alternative endpoint
 async def send_message(
-    message: ChatMessage,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    message: ChatMessage = None,
+    request: Request = None,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
 ):
-    """Send a chat message and get AI response"""
+    """
+    Send a chat message and get AI response.
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "send_message", request_id)
 
@@ -840,8 +851,16 @@ async def send_message(
     error_code_prefix="CHAT",
 )
 @router.post("/chat/stream")
-async def stream_message(message: ChatMessage, request: Request):
-    """Stream chat response for real-time communication"""
+async def stream_message(
+    current_user: dict = Depends(get_current_user),
+    message: ChatMessage = None,
+    request: Request = None,
+):
+    """
+    Stream chat response for real-time communication.
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "stream_message", request_id)
 
@@ -876,12 +895,18 @@ async def stream_message(message: ChatMessage, request: Request):
     error_code_prefix="CHAT",
 )
 @router.get("/chat/health")
-async def chat_health_check(request: Request):
-    """Health check for chat service.
+async def chat_health_check(
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """
+    Health check for chat service.
 
     Note: llm_service is lazily initialized on first chat request, so we report
     it as 'available' (can be initialized) rather than requiring it to exist.
     Only chat_history_manager is critical for the health check.
+
+    Issue #744: Requires authenticated user.
     """
     chat_history_manager = getattr(request.app.state, "chat_history_manager", None)
     llm_service = getattr(request.app.state, "llm_service", None)
@@ -915,8 +940,15 @@ async def chat_health_check(request: Request):
     error_code_prefix="CHAT",
 )
 @router.get("/chat/stats")
-async def chat_statistics(request: Request):
-    """Get chat service statistics"""
+async def chat_statistics(
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
+):
+    """
+    Get chat service statistics.
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "chat_statistics", request_id)
 
@@ -955,9 +987,7 @@ def _validate_chat_message(request_data: dict) -> str:
     return message
 
 
-def _validate_chat_services(
-    chat_history_manager, chat_workflow_manager
-) -> None:
+def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None:
     """Validate that chat services are available (Issue #398: extracted)."""
     if not chat_history_manager or not chat_workflow_manager:
         (
@@ -1024,7 +1054,7 @@ async def _stream_direct_response(
 ):
     """Stream direct response for approvals/denials (Issue #398: extracted)."""
     try:
-        start_evt = {'type': 'start', 'session_id': chat_id, 'request_id': request_id}
+        start_evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
         yield f"data: {json.dumps(start_evt)}\n\n"
 
         async for msg in chat_workflow_manager.process_message_stream(
@@ -1038,7 +1068,9 @@ async def _stream_direct_response(
         yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
     except Exception as e:
-        logger.error("[%s] Direct response streaming error: %s", request_id, e, exc_info=True)
+        logger.error(
+            "[%s] Direct response streaming error: %s", request_id, e, exc_info=True
+        )
         error_data = {
             "type": "error",
             "content": f"Error processing command approval: {str(e)}",
@@ -1071,11 +1103,16 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
 @router.post("/chats/{chat_id}/message")
 async def send_chat_message_by_id(
     chat_id: str,
-    request_data: dict,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    request_data: dict = None,
+    request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
-    """Send message to specific chat by ID (Issue #398: refactored)."""
+    """
+    Send message to specific chat by ID (Issue #398: refactored).
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "send_chat_message_by_id", request_id)
 
@@ -1172,11 +1209,16 @@ async def _merge_chat_messages(
 @router.post("/chats/{chat_id}/save")
 async def save_chat_by_id(
     chat_id: str,
-    request_data: dict,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    request_data: dict = None,
+    request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
-    """Save chat session by ID (Issue #398: refactored)."""
+    """
+    Save chat session by ID (Issue #398: refactored).
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "save_chat_by_id", request_id)
 
@@ -1217,10 +1259,15 @@ async def save_chat_by_id(
 @router.delete("/chats/{chat_id}")
 async def delete_chat_by_id(
     chat_id: str,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
-    """Delete chat session by ID (frontend compatibility endpoint)"""
+    """
+    Delete chat session by ID (frontend compatibility endpoint).
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "delete_chat_by_id", request_id)
 
@@ -1256,12 +1303,17 @@ async def delete_chat_by_id(
 )
 @router.post("/chat/direct")
 async def send_direct_chat_response(
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    request: Request = None,
     message: str = Body(...),
     chat_id: str = Body(...),
     remember_choice: bool = Body(default=False),
 ):
-    """Send direct user response to chat (Issue #398: refactored)."""
+    """
+    Send direct user response to chat (Issue #398: refactored).
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
     log_request_context(request, "send_direct_response", request_id)
 
@@ -1292,7 +1344,10 @@ async def _store_enhanced_user_message(
         "content": message.content,
         "role": message.role,
         "timestamp": datetime.utcnow().isoformat(),
-        "metadata": {**(message.metadata or {}), "ai_stack_enabled": message.use_ai_stack},
+        "metadata": {
+            **(message.metadata or {}),
+            "ai_stack_enabled": message.use_ai_stack,
+        },
         "session_id": session_id,
     }
 
@@ -1329,7 +1384,8 @@ async def _get_enhanced_chat_context(
             chat_context = recent_messages or []
             logger.info(
                 "Retrieved %s messages for model %s",
-                len(chat_context), model_name or "default"
+                len(chat_context),
+                model_name or "default",
             )
         except Exception as e:
             logger.warning("Could not retrieve chat context: %s", e)
@@ -1351,10 +1407,7 @@ async def _enhance_with_knowledge_base(
             if kb_results:
                 knowledge_sources = kb_results
                 kb_summary = "\n".join(
-                    [
-                        f"- {item.get('content', '')[:300]}..."
-                        for item in kb_results[:3]
-                    ]
+                    [f"- {item.get('content', '')[:300]}..." for item in kb_results[:3]]
                 )
                 enhanced_context = f"Relevant knowledge context:\n{kb_summary}"
                 logger.info("Enhanced context with %s KB results", len(kb_results))
@@ -1382,7 +1435,8 @@ async def _generate_ai_stack_chat_response(
             message_limit = context_manager.get_message_limit(model_name)
             logger.info(
                 "Using %s messages for LLM context (model: %s)",
-                message_limit, model_name or "default"
+                message_limit,
+                model_name or "default",
             )
         else:
             message_limit = 20
@@ -1523,7 +1577,9 @@ async def process_enhanced_chat_message(
         await _store_enhanced_user_message(message, session_id, chat_history_manager)
 
         # Get chat context
-        chat_context = await _get_enhanced_chat_context(message, session_id, chat_history_manager)
+        chat_context = await _get_enhanced_chat_context(
+            message, session_id, chat_history_manager
+        )
 
         # Enhance with knowledge base
         enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(
@@ -1533,7 +1589,11 @@ async def process_enhanced_chat_message(
         # Generate AI response
         if message.use_ai_stack:
             ai_response = await _generate_ai_stack_chat_response(
-                message, chat_context, enhanced_context, chat_history_manager, preferences
+                message,
+                chat_context,
+                enhanced_context,
+                chat_history_manager,
+                preferences,
             )
             if ai_response.get("metadata", {}).get("source") == "ai_stack":
                 logger.info("AI Stack response generated successfully")
@@ -1541,7 +1601,9 @@ async def process_enhanced_chat_message(
             ai_response = _create_basic_chat_response()
 
         # Enhance response with sources
-        _enhance_response_with_sources(ai_response, knowledge_sources, message.include_sources)
+        _enhance_response_with_sources(
+            ai_response, knowledge_sources, message.include_sources
+        )
 
         # Store AI response
         ai_message_id = await _store_enhanced_ai_response(
@@ -1593,28 +1655,34 @@ async def _stream_ai_stack_response(
 
         for i in range(0, len(content), chunk_size):
             chunk = content[i : i + chunk_size]
-            yield _format_sse_event({
-                "type": "chunk",
-                "content": chunk,
-                "session_id": session_id,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            yield _format_sse_event(
+                {
+                    "type": "chunk",
+                    "content": chunk,
+                    "session_id": session_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
             await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
 
-        yield _format_sse_event({
-            "type": "metadata",
-            "metadata": response_data.get("metadata", {}),
-            "sources": response_data.get("knowledge_sources"),
-            "session_id": session_id,
-        })
+        yield _format_sse_event(
+            {
+                "type": "metadata",
+                "metadata": response_data.get("metadata", {}),
+                "sources": response_data.get("knowledge_sources"),
+                "session_id": session_id,
+            }
+        )
 
     except Exception as e:
         logger.error("Enhanced streaming error: %s", e)
-        yield _format_sse_event({
-            "type": "error",
-            "message": "Error generating enhanced response",
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        yield _format_sse_event(
+            {
+                "type": "error",
+                "message": "Error generating enhanced response",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
 
 def _stream_enhanced_fallback_response(session_id: str):
@@ -1623,12 +1691,14 @@ def _stream_enhanced_fallback_response(session_id: str):
         "Thank you for your message. Enhanced streaming requires AI Stack "
         "integration."
     )
-    return _format_sse_event({
-        "type": "chunk",
-        "content": fallback_msg,
-        "session_id": session_id,
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    return _format_sse_event(
+        {
+            "type": "chunk",
+            "content": fallback_msg,
+            "session_id": session_id,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
 
 
 async def _generate_enhanced_stream(
@@ -1640,9 +1710,9 @@ async def _generate_enhanced_stream(
     """Generate streaming response with AI Stack integration."""
     try:
         session_id = message.session_id or generate_chat_session_id()
-        yield _format_sse_event({
-            "type": "start", "session_id": session_id, "enhanced": True
-        })
+        yield _format_sse_event(
+            {"type": "start", "session_id": session_id, "enhanced": True}
+        )
 
         chat_history_manager = get_chat_history_manager(request)
 
@@ -1658,11 +1728,13 @@ async def _generate_enhanced_stream(
 
     except Exception as e:
         logger.error("Streaming error: %s", e)
-        yield _format_sse_event({
-            "type": "error",
-            "message": "Error in enhanced streaming",
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        yield _format_sse_event(
+            {
+                "type": "error",
+                "message": "Error in enhanced streaming",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
 
 # ====================================================================
@@ -1677,8 +1749,9 @@ async def _generate_enhanced_stream(
 )
 @router.post("/enhanced")
 async def enhanced_chat(
-    message: EnhancedChatMessage,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    message: EnhancedChatMessage = None,
+    request: Request = None,
     preferences: Optional[ChatPreferences] = None,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
@@ -1691,6 +1764,8 @@ async def enhanced_chat(
     - Knowledge base integration
     - Source citations
     - Customizable response preferences
+
+    Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
 
@@ -1745,8 +1820,9 @@ async def enhanced_chat(
 )
 @router.post("/stream-enhanced")
 async def stream_enhanced_chat(
-    message: EnhancedChatMessage,
-    request: Request,
+    current_user: dict = Depends(get_current_user),
+    message: EnhancedChatMessage = None,
+    request: Request = None,
     preferences: Optional[ChatPreferences] = None,
 ):
     """
@@ -1754,6 +1830,8 @@ async def stream_enhanced_chat(
 
     Provides real-time streaming of AI Stack enhanced responses
     with knowledge base integration.
+
+    Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
 
@@ -1775,8 +1853,14 @@ async def stream_enhanced_chat(
     error_code_prefix="CHAT",
 )
 @router.get("/health-enhanced")
-async def enhanced_chat_health_check():
-    """Health check for enhanced chat service including AI Stack connectivity."""
+async def enhanced_chat_health_check(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Health check for enhanced chat service including AI Stack connectivity.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         health_status = {
             "status": "healthy",
@@ -1820,8 +1904,14 @@ async def enhanced_chat_health_check():
     error_code_prefix="CHAT",
 )
 @router.get("/capabilities")
-async def get_enhanced_chat_capabilities():
-    """Get enhanced chat capabilities and available features."""
+async def get_enhanced_chat_capabilities(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get enhanced chat capabilities and available features.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         ai_client = await get_ai_stack_client()
         agents_info = await ai_client.list_available_agents()

@@ -36,6 +36,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
 from backend.type_defs.common import Metadata
+from src.auth_middleware import check_admin_permission
 from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -254,15 +255,20 @@ def _parse_tag_list(tags: Optional[str]) -> Optional[List[str]]:
 )
 @router.post("/entities", status_code=201)
 async def create_entity(
-    entity_data: EntityCreateRequest,
-    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    entity_data: EntityCreateRequest = Body(...),
+    request: Request = None,
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Create a new entity in the memory graph
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         entity_data: Entity creation request data
+        request: FastAPI request object
         memory_graph: Memory graph instance
 
     Returns:
@@ -315,6 +321,7 @@ async def create_entity(
 )
 @router.get("/entities/all")
 async def list_all_entities(
+    admin_check: bool = Depends(check_admin_permission),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
@@ -322,10 +329,13 @@ async def list_all_entities(
     """
     List all entities in the memory graph.
 
+    Issue #744: Requires admin authentication.
+
     This endpoint must be defined BEFORE /entities/{entity_id} to ensure
     proper route matching (static paths before dynamic paths).
 
     Args:
+        admin_check: Admin permission verification
         entity_type: Filter by entity type (optional)
         limit: Maximum results to return (default 100, max 500)
         memory_graph: Memory graph instance
@@ -385,7 +395,8 @@ async def list_all_entities(
 )
 @router.get("/entities/orphans")
 async def find_orphaned_conversation_entities(
-    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    request: Request = None,
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
@@ -394,6 +405,7 @@ async def find_orphaned_conversation_entities(
     Issue #547: Detects memory entities of type 'conversation' that have
     session_id metadata pointing to sessions that no longer exist.
     Issue #665: Refactored to use extracted helpers.
+    Issue #744: Requires admin authentication.
     """
     request_id = generate_request_id()
 
@@ -634,7 +646,8 @@ def _build_orphan_cleanup_response(
 )
 @router.delete("/entities/orphans")
 async def cleanup_orphaned_conversation_entities(
-    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    request: Request = None,
     dry_run: bool = Query(True, description="If True, only report without deleting"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
@@ -642,9 +655,13 @@ async def cleanup_orphaned_conversation_entities(
     Delete conversation entities that reference deleted sessions.
 
     Issue #547: Cleans up orphaned memory entities from deleted conversations.
+    Issue #744: Requires admin authentication.
 
     Args:
+        admin_check: Admin permission verification
+        request: FastAPI request object
         dry_run: If True, only report orphans without deleting (default: True)
+        memory_graph: Memory graph instance
 
     Returns:
         Report of orphans found and removed
@@ -716,14 +733,18 @@ async def cleanup_orphaned_conversation_entities(
 @router.get("/entities/{entity_id}")
 async def get_entity_by_id(
     entity_id: str = Path(..., description="Entity UUID"),
+    admin_check: bool = Depends(check_admin_permission),
     include_relations: bool = Query(False, description="Include related entities"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Get entity by ID
 
+    Issue #744: Requires admin authentication.
+
     Args:
         entity_id: Entity UUID
+        admin_check: Admin permission verification
         include_relations: Include related entities in response
         memory_graph: Memory graph instance
 
@@ -771,6 +792,7 @@ async def get_entity_by_id(
 )
 @router.get("/entities")
 async def get_entity_by_name(
+    admin_check: bool = Depends(check_admin_permission),
     name: str = Query(..., description="Entity name to search for"),
     include_relations: bool = Query(False, description="Include related entities"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
@@ -778,7 +800,10 @@ async def get_entity_by_name(
     """
     Get entity by name
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         name: Entity name
         include_relations: Include related entities in response
         memory_graph: Memory graph instance
@@ -826,14 +851,18 @@ async def get_entity_by_name(
 @router.patch("/entities/{entity_id}/observations")
 async def add_observations(
     entity_id: str = Path(..., description="Entity UUID"),
+    admin_check: bool = Depends(check_admin_permission),
     observation_data: ObservationAddRequest = Body(...),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Add observations to an existing entity
 
+    Issue #744: Requires admin authentication.
+
     Args:
         entity_id: Entity UUID (used to find entity by name from ID)
+        admin_check: Admin permission verification
         observation_data: Observations to add
         memory_graph: Memory graph instance
 
@@ -887,6 +916,7 @@ async def add_observations(
 @router.delete("/entities/{entity_id}")
 async def delete_entity(
     entity_id: str = Path(..., description="Entity UUID"),
+    admin_check: bool = Depends(check_admin_permission),
     cascade_relations: bool = Query(
         True, description="Delete all relations to/from this entity"
     ),
@@ -895,8 +925,11 @@ async def delete_entity(
     """
     Delete entity and optionally its relations
 
+    Issue #744: Requires admin authentication.
+
     Args:
         entity_id: Entity UUID
+        admin_check: Admin permission verification
         cascade_relations: Delete all relations
         memory_graph: Memory graph instance
 
@@ -958,15 +991,20 @@ async def delete_entity(
 )
 @router.post("/relations", status_code=201)
 async def create_relation(
-    relation_data: RelationCreateRequest,
-    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    relation_data: RelationCreateRequest = Body(...),
+    request: Request = None,
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Create relationship between two entities
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         relation_data: Relation creation request data
+        request: FastAPI request object
         memory_graph: Memory graph instance
 
     Returns:
@@ -1025,6 +1063,7 @@ async def create_relation(
 @router.get("/entities/{entity_id}/relations")
 async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
+    admin_check: bool = Depends(check_admin_permission),
     relation_type: Optional[str] = Query(None, description="Filter by relation type"),
     direction: str = Query(
         "both", regex="^(outgoing|incoming|both)$", description="Relation direction"
@@ -1037,8 +1076,11 @@ async def get_related_entities(
     """
     Get entities related to specified entity
 
+    Issue #744: Requires admin authentication.
+
     Args:
         entity_id: Entity UUID
+        admin_check: Admin permission verification
         relation_type: Filter by relation type (optional)
         direction: Relation direction (outgoing, incoming, both)
         max_depth: Traversal depth
@@ -1099,6 +1141,7 @@ async def get_related_entities(
 )
 @router.delete("/relations")
 async def delete_relation(
+    admin_check: bool = Depends(check_admin_permission),
     from_entity: str = Query(..., description="Source entity name"),
     to_entity: str = Query(..., description="Target entity name"),
     relation_type: str = Query(..., description="Relation type to delete"),
@@ -1107,7 +1150,10 @@ async def delete_relation(
     """
     Delete specific relation between entities
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         from_entity: Source entity name
         to_entity: Target entity name
         relation_type: Relation type
@@ -1174,6 +1220,7 @@ async def delete_relation(
 )
 @router.get("/search")
 async def search_entities(
+    admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., min_length=1, description="Search query"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     tags: Optional[str] = Query(None, description="Filter by tags (comma-separated)"),
@@ -1184,7 +1231,10 @@ async def search_entities(
     """
     Semantic search across all entities
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         query: Search query (full-text search)
         entity_type: Filter by entity type (optional)
         tags: Filter by tags (comma-separated, optional)
@@ -1243,6 +1293,7 @@ async def search_entities(
 )
 @router.get("/graph")
 async def get_entity_graph(
+    admin_check: bool = Depends(check_admin_permission),
     entity_id: Optional[str] = Query(None, description="Root entity ID (optional)"),
     max_depth: int = Query(2, ge=1, le=3, description="Graph traversal depth"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
@@ -1250,7 +1301,10 @@ async def get_entity_graph(
     """
     Get entity graph with relations
 
+    Issue #744: Requires admin authentication.
+
     Args:
+        admin_check: Admin permission verification
         entity_id: Root entity ID (if None, returns full graph sample)
         max_depth: Traversal depth
         memory_graph: Memory graph instance
@@ -1315,10 +1369,17 @@ async def get_entity_graph(
 )
 @router.get("/health")
 async def memory_health_check(
+    admin_check: bool = Depends(check_admin_permission),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
     Health check for Memory Graph service
+
+    Issue #744: Requires admin authentication.
+
+    Args:
+        admin_check: Admin permission verification
+        memory_graph: Memory graph instance
 
     Returns:
         Health status and component information
