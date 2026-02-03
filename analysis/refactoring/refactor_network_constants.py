@@ -20,49 +20,60 @@ def get_replacement_map() -> Dict[str, str]:
     redis_config = unified_config_manager.get_redis_config()
     backend_config = unified_config_manager.get_backend_config()
     services_config = unified_config_manager.get_distributed_services_config()
-    system_defaults = unified_config_manager.get_config_section("service_discovery_defaults") or {}
+    system_defaults = (
+        unified_config_manager.get_config_section("service_discovery_defaults") or {}
+    )
 
     # Get values from configuration without hardcoded fallbacks
-    redis_host = redis_config.get("host") or system_defaults.get("redis_host", "localhost")
+    redis_host = redis_config.get("host") or system_defaults.get(
+        "redis_host", "localhost"
+    )
     redis_port = redis_config.get("port") or system_defaults.get("redis_port", 6379)
-    backend_host = backend_config.get("host") or system_defaults.get("backend_host", "localhost")
-    backend_port = backend_config.get("port") or system_defaults.get("backend_port", 8001)
+    backend_host = backend_config.get("host") or system_defaults.get(
+        "backend_host", "localhost"
+    )
+    backend_port = backend_config.get("port") or system_defaults.get(
+        "backend_port", 8001
+    )
     backend_api_endpoint = f"http://{backend_host}:{backend_port}"
 
     # Get service-specific hosts from configuration
-    frontend_host = services_config.get("frontend", {}).get("host") or system_defaults.get("frontend_host", "localhost")
-    frontend_port = services_config.get("frontend", {}).get("port") or system_defaults.get("frontend_port", 5173)
-    npu_worker_host = services_config.get(
-    "npu_worker", {}).get("host") or system_defaults.get(
-        "npu_worker_host", "localhost")
-    ai_stack_host = services_config.get("ai_stack", {}).get("host") or system_defaults.get("ai_stack_host", "localhost")
-    browser_host = services_config.get(
-    "browser_service",
-    {}).get("host") or system_defaults.get(
-        "browser_service_host",
-         "localhost")
+    frontend_host = services_config.get("frontend", {}).get(
+        "host"
+    ) or system_defaults.get("frontend_host", "localhost")
+    frontend_port = services_config.get("frontend", {}).get(
+        "port"
+    ) or system_defaults.get("frontend_port", 5173)
+    npu_worker_host = services_config.get("npu_worker", {}).get(
+        "host"
+    ) or system_defaults.get("npu_worker_host", "localhost")
+    ai_stack_host = services_config.get("ai_stack", {}).get(
+        "host"
+    ) or system_defaults.get("ai_stack_host", "localhost")
+    browser_host = services_config.get("browser_service", {}).get(
+        "host"
+    ) or system_defaults.get("browser_service_host", "localhost")
     ollama_config = services_config.get("ollama", {})
     ollama_port = ollama_config.get("port") or system_defaults.get("ollama_port", 11434)
 
     # Mapping of hardcoded values to constants (from configuration)
     replacement_map = {
         # IP addresses (from config)
-        redis_host: 'NetworkConstants.REDIS_VM_IP',
-        backend_host: 'NetworkConstants.MAIN_MACHINE_IP',
-        frontend_host: 'NetworkConstants.FRONTEND_VM_IP',
-        npu_worker_host: 'NetworkConstants.NPU_WORKER_VM_IP',
-        ai_stack_host: 'NetworkConstants.AI_STACK_VM_IP',
-        browser_host: 'NetworkConstants.BROWSER_VM_IP',
-        'localhost': 'NetworkConstants.LOCALHOST_IP',
-
+        redis_host: "NetworkConstants.REDIS_VM_IP",
+        backend_host: "NetworkConstants.MAIN_MACHINE_IP",
+        frontend_host: "NetworkConstants.FRONTEND_VM_IP",
+        npu_worker_host: "NetworkConstants.NPU_WORKER_VM_IP",
+        ai_stack_host: "NetworkConstants.AI_STACK_VM_IP",
+        browser_host: "NetworkConstants.BROWSER_VM_IP",
+        "localhost": "NetworkConstants.LOCALHOST_IP",
         # URLs (from config)
-        f'http://localhost:{backend_port}': 'ServiceURLs.BACKEND_LOCAL',
-        backend_api_endpoint: 'ServiceURLs.BACKEND_API',
-        f'http://localhost:{frontend_port}': 'ServiceURLs.FRONTEND_LOCAL',
-        f'http://{frontend_host}:{frontend_port}': 'ServiceURLs.FRONTEND_VM',
-        f'http://localhost:{ollama_port}': 'ServiceURLs.OLLAMA_LOCAL',
-        f'redis://{redis_host}:{redis_port}': 'ServiceURLs.REDIS_VM',
-        f'redis://localhost:{redis_port}': 'ServiceURLs.REDIS_LOCAL',
+        f"http://localhost:{backend_port}": "ServiceURLs.BACKEND_LOCAL",
+        backend_api_endpoint: "ServiceURLs.BACKEND_API",
+        f"http://localhost:{frontend_port}": "ServiceURLs.FRONTEND_LOCAL",
+        f"http://{frontend_host}:{frontend_port}": "ServiceURLs.FRONTEND_VM",
+        f"http://localhost:{ollama_port}": "ServiceURLs.OLLAMA_LOCAL",
+        f"redis://{redis_host}:{redis_port}": "ServiceURLs.REDIS_VM",
+        f"redis://localhost:{redis_port}": "ServiceURLs.REDIS_LOCAL",
     }
 
     return replacement_map
@@ -76,9 +87,15 @@ def should_refactor_file(file_path: Path) -> bool:
     """Check if file should be refactored"""
     # Skip certain directories and files
     skip_patterns = [
-        'node_modules', '.venv', '__pycache__', '.git',
-        'reports', 'logs', 'temp', 'archives',
-        'analysis/refactoring'  # Don't refactor our own analysis tools
+        "node_modules",
+        ".venv",
+        "__pycache__",
+        ".git",
+        "reports",
+        "logs",
+        "temp",
+        "archives",
+        "analysis/refactoring",  # Don't refactor our own analysis tools
     ]
 
     path_str = str(file_path)
@@ -87,30 +104,36 @@ def should_refactor_file(file_path: Path) -> bool:
             return False
 
     # Only refactor code files
-    return file_path.suffix in {'.py', '.js', '.ts', '.vue', '.jsx', '.tsx'}
+    return file_path.suffix in {".py", ".js", ".ts", ".vue", ".jsx", ".tsx"}
 
 
 def add_import_if_needed(content: str, file_path: Path) -> str:
     """Add NetworkConstants import if replacements were made and not already imported"""
 
     # Check if we already have the import
-    if 'from src.constants import NetworkConstants' in content or \
-       'from src.constants.network_constants import NetworkConstants' in content:
+    if (
+        "from src.constants import NetworkConstants" in content
+        or "from src.constants.network_constants import NetworkConstants" in content
+    ):
         return content
 
     # Check if any of our constants are used
-    uses_constants = any(const_name in content for const_name in REPLACEMENT_MAP.values())
+    uses_constants = any(
+        const_name in content for const_name in REPLACEMENT_MAP.values()
+    )
     if not uses_constants:
         return content
 
     # Find where to add the import
-    lines = content.split('\n')
-    import_line = 'from src.constants import NetworkConstants, ServiceURLs'
+    lines = content.split("\n")
+    import_line = "from src.constants import NetworkConstants, ServiceURLs"
 
     # Find the best place to add the import
     last_import_line = -1
     for i, line in enumerate(lines):
-        if line.strip().startswith(('import ', 'from ')) and not line.strip().startswith('from .'):
+        if line.strip().startswith(
+            ("import ", "from ")
+        ) and not line.strip().startswith("from ."):
             last_import_line = i
 
     if last_import_line >= 0:
@@ -119,7 +142,11 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
     else:
         # Add at the beginning after any docstring
         insert_pos = 0
-        if lines and lines[0].strip().startswith('"""') or lines[0].strip().startswith("'''"):
+        if (
+            lines
+            and lines[0].strip().startswith('"""')
+            or lines[0].strip().startswith("'''")
+        ):
             # Find end of docstring
             quote_char = '"""' if lines[0].strip().startswith('"""') else "'''"
             for i in range(1, len(lines)):
@@ -128,9 +155,9 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
                     break
 
         lines.insert(insert_pos, import_line)
-        lines.insert(insert_pos + 1, '')  # Add blank line
+        lines.insert(insert_pos + 1, "")  # Add blank line
 
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
@@ -139,7 +166,9 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
     replacements_made = 0
 
     # Sort replacements by length (longest first) to avoid partial replacements
-    sorted_replacements = sorted(REPLACEMENT_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+    sorted_replacements = sorted(
+        REPLACEMENT_MAP.items(), key=lambda x: len(x[0]), reverse=True
+    )
 
     for hardcoded_value, constant_name in sorted_replacements:
         # Create patterns for different contexts
@@ -148,7 +177,7 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
             f'"{re.escape(hardcoded_value)}"',
             f"'{re.escape(hardcoded_value)}'",
             # In f-strings and other contexts
-            re.escape(hardcoded_value)
+            re.escape(hardcoded_value),
         ]
 
         for pattern in patterns:
@@ -159,7 +188,7 @@ def refactor_file_content(content: str, file_path: Path) -> Tuple[str, int]:
                 else:
                     # For unquoted occurrences, be more careful
                     # Use word boundaries to avoid partial matches
-                    regex_pattern = r'\b' + re.escape(hardcoded_value) + r'\b'
+                    regex_pattern = r"\b" + re.escape(hardcoded_value) + r"\b"
                     if re.search(regex_pattern, content):
                         content = re.sub(regex_pattern, constant_name, content)
 
@@ -184,13 +213,13 @@ def refactor_file(file_path: Path, content: str = None) -> bool:
     try:
         # Issue #623: Avoid repeated file opens - use pre-read content if provided
         if content is None:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
         new_content, replacements = refactor_file_content(content, file_path)
 
         if replacements > 0:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
             print(f"   ✅ {file_path.name}: {replacements} replacements")
             return True
@@ -210,12 +239,12 @@ def find_core_files() -> List[Path]:
     core_files = []
 
     # Focus on core directories
-    core_dirs = ['src', 'backend', 'autobot-vue/src', 'scripts']
+    core_dirs = ["src", "backend", "autobot-vue/src", "scripts"]
 
     for core_dir in core_dirs:
         dir_path = root_path / core_dir
         if dir_path.exists():
-            for file_path in dir_path.rglob('*'):
+            for file_path in dir_path.rglob("*"):
                 if file_path.is_file() and should_refactor_file(file_path):
                     core_files.append(file_path)
 
@@ -238,11 +267,13 @@ def main():
     # Issue #623: Read each file once, pass content to refactor_file()
     for file_path in files:
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Check if file contains any hardcoded values
-            has_hardcoded = any(hardcoded in content for hardcoded in REPLACEMENT_MAP.keys())
+            has_hardcoded = any(
+                hardcoded in content for hardcoded in REPLACEMENT_MAP.keys()
+            )
             if not has_hardcoded:
                 continue
 

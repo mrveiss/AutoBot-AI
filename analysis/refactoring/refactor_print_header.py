@@ -12,56 +12,79 @@ def refactor_print_header_script(file_path: Path):
     print(f"🔧 Refactoring {file_path.name}...")
 
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             content = f.read()
 
         # Check if it already imports ScriptFormatter
-        if 'from src.utils.script_utils import ScriptFormatter' in content:
+        if "from src.utils.script_utils import ScriptFormatter" in content:
             print("   ✅ Already refactored")
             return
 
         # Check if it has the print_header function
-        if 'def print_header(self, title: str):' not in content:
+        if "def print_header(self, title: str):" not in content:
             print("   ⏭️  No print_header function found")
             return
 
         # Add import after existing imports
-        import_pattern = r'(from src\.utils\.service_registry import [^\n]+)'
+        import_pattern = r"(from src\.utils\.service_registry import [^\n]+)"
         if re.search(import_pattern, content):
             content = re.sub(
                 import_pattern,
-                r'\1\nfrom src.utils.script_utils import ScriptFormatter',
-                content
+                r"\1\nfrom src.utils.script_utils import ScriptFormatter",
+                content,
             )
         else:
             # Find last import line and add after it
             last_import_match = None
-            for match in re.finditer(r'^(from .+|import .+)$', content, re.MULTILINE):
+            for match in re.finditer(r"^(from .+|import .+)$", content, re.MULTILINE):
                 last_import_match = match
 
             if last_import_match:
                 end_pos = last_import_match.end()
-                content = content[:end_pos] + '\nfrom src.utils.script_utils import ScriptFormatter' + content[end_pos:]
+                content = (
+                    content[:end_pos]
+                    + "\nfrom src.utils.script_utils import ScriptFormatter"
+                    + content[end_pos:]
+                )
 
         # Replace the print_header method implementation
-        print_header_pattern = r'    def print_header\(self, title: str\):\s*"""[^"]*"""\s*print\(f"\\n\{\'=\' \* 60\}"\)\s*print\(f"  \{title\}"\)\s*print\("=" \* 60\)'
+        print_header_pattern = (
+            r'    def print_header\(self, title: str\):\s*"""[^"]*"""\s*'
+            r'print\(f"\\n\{\'=\' \* 60\}"\)\s*print\(f"  \{title\}"\)\s*'
+            r'print\("=" \* 60\)'
+        )
+        print_header_replacement = (
+            "    def print_header(self, title: str):\n"
+            '        """Print formatted header."""\n'
+            "        ScriptFormatter.print_header(title)"
+        )
         content = re.sub(
-    print_header_pattern,
-    '    def print_header(self, title: str):\n        """Print formatted header."""\n        ScriptFormatter.print_header(title)',
-    content,
-     flags=re.MULTILINE | re.DOTALL )
+            print_header_pattern,
+            print_header_replacement,
+            content,
+            flags=re.MULTILINE | re.DOTALL,
+        )
 
         # Replace print_step method implementation
-        print_step_pattern = r'    def print_step\(self, step: str, status: str = "info"\):\s*"""[^"]*"""\s*status_icons = \{[^}]+\}\s*icon = status_icons\.get\(status, "[^"]*"\)\s*print\(f"\{icon\} \{step\}"\)'
+        print_step_pattern = (
+            r'    def print_step\(self, step: str, status: str = "info"\):\s*'
+            r'"""[^"]*"""\s*status_icons = \{[^}]+\}\s*'
+            r'icon = status_icons\.get\(status, "[^"]*"\)\s*print\(f"\{icon\} \{step\}"\)'
+        )
+        print_step_replacement = (
+            '    def print_step(self, step: str, status: str = "info"):\n'
+            '        """Print step with status."""\n'
+            "        ScriptFormatter.print_step(step, status)"
+        )
         content = re.sub(
             print_step_pattern,
-            '    def print_step(self, step: str, status: str = "info"):\n        """Print step with status."""\n        ScriptFormatter.print_step(step, status)',
+            print_step_replacement,
             content,
-            flags=re.MULTILINE | re.DOTALL
+            flags=re.MULTILINE | re.DOTALL,
         )
 
         # Write back the modified content
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             f.write(content)
 
         print("   ✅ Successfully refactored")
@@ -73,11 +96,11 @@ def refactor_print_header_script(file_path: Path):
 def main():
     """Refactor all scripts with print_header duplicates"""
     scripts_to_refactor = [
-        '/home/kali/Desktop/AutoBot/scripts/zero_downtime_deploy.py',
-        '/home/kali/Desktop/AutoBot/scripts/secrets_manager.py',
-        '/home/kali/Desktop/AutoBot/scripts/deployment_rollback.py',
-        '/home/kali/Desktop/AutoBot/scripts/log_aggregator.py',
-        '/home/kali/Desktop/AutoBot/scripts/metrics_collector.py'
+        "/home/kali/Desktop/AutoBot/scripts/zero_downtime_deploy.py",
+        "/home/kali/Desktop/AutoBot/scripts/secrets_manager.py",
+        "/home/kali/Desktop/AutoBot/scripts/deployment_rollback.py",
+        "/home/kali/Desktop/AutoBot/scripts/log_aggregator.py",
+        "/home/kali/Desktop/AutoBot/scripts/metrics_collector.py",
     ]
 
     print("🚀 Starting print_header refactoring...")

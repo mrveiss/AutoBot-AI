@@ -20,8 +20,9 @@ standalone one-time migration script with sequential operations. Low priority.
 """
 
 import asyncio
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import logging
@@ -40,11 +41,10 @@ async def main():
         connections = {}
         db_names = ["main", "knowledge", "cache", "sessions"]  # Named databases 0-3
         for db_idx, db_name in enumerate(db_names):
-            connections[db_idx] = get_redis_client(
-                async_client=False,
-                database=db_name
+            connections[db_idx] = get_redis_client(async_client=False, database=db_name)
+            print(
+                f"✅ Connected to DB{db_idx} ({db_name}): {connections[db_idx].ping()}"
             )
-            print(f"✅ Connected to DB{db_idx} ({db_name}): {connections[db_idx].ping()}")
 
         # Analysis phase - see what's where
         print("\n📊 Current database analysis:")
@@ -52,8 +52,12 @@ async def main():
             keys = connections[db].keys("*")
             print(f"  DB{db}: {len(keys)} keys")
             if len(keys) <= 20:  # Show details for small databases
-                key_examples = [k.decode('utf-8', errors='ignore') if isinstance(k, bytes)
-                                         else str(k) for k in keys[:10]]
+                key_examples = [
+                    k.decode("utf-8", errors="ignore")
+                    if isinstance(k, bytes)
+                    else str(k)
+                    for k in keys[:10]
+                ]
                 print(f"    Examples: {key_examples}")
 
         # Step 1: Backup critical data from DB0
@@ -63,19 +67,23 @@ async def main():
 
         for key in db0_keys:
             try:
-                key_str = key.decode('utf-8', errors='ignore') if isinstance(key, bytes) else str(key)
-                data_type = connections[0].type(key).decode('utf-8')
+                key_str = (
+                    key.decode("utf-8", errors="ignore")
+                    if isinstance(key, bytes)
+                    else str(key)
+                )
+                data_type = connections[0].type(key).decode("utf-8")
 
-                if data_type == 'hash':
-                    backup_data[key] = ('hash', connections[0].hgetall(key))
-                elif data_type == 'string':
-                    backup_data[key] = ('string', connections[0].get(key))
-                elif data_type == 'list':
-                    backup_data[key] = ('list', connections[0].lrange(key, 0, -1))
-                elif data_type == 'set':
-                    backup_data[key] = ('set', connections[0].smembers(key))
-                elif data_type == 'stream':
-                    backup_data[key] = ('stream', connections[0].xrange(key))
+                if data_type == "hash":
+                    backup_data[key] = ("hash", connections[0].hgetall(key))
+                elif data_type == "string":
+                    backup_data[key] = ("string", connections[0].get(key))
+                elif data_type == "list":
+                    backup_data[key] = ("list", connections[0].lrange(key, 0, -1))
+                elif data_type == "set":
+                    backup_data[key] = ("set", connections[0].smembers(key))
+                elif data_type == "stream":
+                    backup_data[key] = ("stream", connections[0].xrange(key))
                 else:
                     print(f"⚠️ Unknown type {data_type} for key {key_str}")
 
@@ -97,7 +105,7 @@ async def main():
         moved_count = 0
 
         for i in range(0, len(vector_keys), batch_size):
-            batch = vector_keys[i:i + batch_size]
+            batch = vector_keys[i : i + batch_size]
 
             # Read batch from DB1
             pipe_db1 = connections[1].pipeline()
@@ -113,34 +121,40 @@ async def main():
                     moved_count += 1
             pipe_db0.execute()
 
-            print(f"✅ Moved batch {i//batch_size + 1}: {len(batch)} vectors (Total: {moved_count})")
+            print(
+                f"✅ Moved batch {i//batch_size + 1}: {len(batch)} vectors (Total: {moved_count})"
+            )
 
         # Step 3: Restore non-vector data to appropriate databases
         print("\n📥 Restoring non-vector data to appropriate databases...")
 
         for key, (data_type, data) in backup_data.items():
-            key_str = key.decode('utf-8', errors='ignore') if isinstance(key, bytes) else str(key)
+            key_str = (
+                key.decode("utf-8", errors="ignore")
+                if isinstance(key, bytes)
+                else str(key)
+            )
 
             # Determine target database based on key pattern
-            if key_str.startswith('fact:') or 'fact' in key_str:
+            if key_str.startswith("fact:") or "fact" in key_str:
                 target_db = 1  # Knowledge facts
-            elif 'workflow' in key_str or 'classification' in key_str:
+            elif "workflow" in key_str or "classification" in key_str:
                 target_db = 2  # Workflow rules
             else:
                 target_db = 3  # Other system data
 
             try:
-                if data_type == 'hash':
+                if data_type == "hash":
                     connections[target_db].hset(key, mapping=data)
-                elif data_type == 'string':
+                elif data_type == "string":
                     connections[target_db].set(key, data)
-                elif data_type == 'list':
+                elif data_type == "list":
                     if data:  # Only if list has items
                         connections[target_db].rpush(key, *data)
-                elif data_type == 'set':
+                elif data_type == "set":
                     if data:  # Only if set has items
                         connections[target_db].sadd(key, *data)
-                elif data_type == 'stream':
+                elif data_type == "stream":
                     for stream_data in data:
                         connections[target_db].xadd(key, stream_data[1])
 
@@ -156,17 +170,30 @@ async def main():
         # Step 5: Create Redis search index on DB0
         print("\n🔨 Creating Redis search index on DB0...")
         create_command = [
-            'FT.CREATE', 'llama_index',
-            'ON', 'HASH',
-            'PREFIX', '1', 'llama_index/vector_',
-            'SCHEMA',
-            'id', 'TEXT',
-            'doc_id', 'TEXT',
-            'text', 'TEXT',
-            'vector', 'VECTOR', 'HNSW', '6',
-            'TYPE', 'FLOAT32',
-            'DIM', '384',  # Match existing vector dimensions
-            'DISTANCE_METRIC', 'COSINE'
+            "FT.CREATE",
+            "llama_index",
+            "ON",
+            "HASH",
+            "PREFIX",
+            "1",
+            "llama_index/vector_",
+            "SCHEMA",
+            "id",
+            "TEXT",
+            "doc_id",
+            "TEXT",
+            "text",
+            "TEXT",
+            "vector",
+            "VECTOR",
+            "HNSW",
+            "6",
+            "TYPE",
+            "FLOAT32",
+            "DIM",
+            "384",  # Match existing vector dimensions
+            "DISTANCE_METRIC",
+            "COSINE",
         ]
 
         try:
@@ -190,9 +217,9 @@ async def main():
         await asyncio.sleep(3)  # Wait for indexing
 
         try:
-            index_info = connections[0].execute_command('FT.INFO', 'llama_index')
+            index_info = connections[0].execute_command("FT.INFO", "llama_index")
             for i in range(0, len(index_info), 2):
-                if index_info[i].decode('utf-8') in ['num_docs', 'percent_indexed']:
+                if index_info[i].decode("utf-8") in ["num_docs", "percent_indexed"]:
                     print(f"📊 {index_info[i].decode('utf-8')}: {index_info[i+1]}")
         except Exception as e:
             print(f"⚠️ Could not get index info: {e}")
@@ -207,7 +234,9 @@ async def main():
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
