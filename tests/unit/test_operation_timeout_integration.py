@@ -8,13 +8,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.utils.operation_timeout_integration import (
-    CreateOperationRequest, OperationResponse, OperationListResponse,
-    ProgressUpdateRequest, OperationIntegrationManager, OperationMigrator,
-    long_running_operation,
-)
 from src.utils.long_running_operations_framework import (
-    OperationType, OperationPriority, OperationStatus,
+    OperationPriority,
+    OperationStatus,
+    OperationType,
+)
+from src.utils.operation_timeout_integration import (
+    CreateOperationRequest,
+    OperationIntegrationManager,
+    OperationMigrator,
+    ProgressUpdateRequest,
+    long_running_operation,
 )
 
 
@@ -115,12 +119,18 @@ class TestOperationIntegrationManager:
         manager.operation_manager = MagicMock()
 
         mock_ops = []
-        for status in [OperationStatus.RUNNING, OperationStatus.COMPLETED, OperationStatus.FAILED]:
+        for status in [
+            OperationStatus.RUNNING,
+            OperationStatus.COMPLETED,
+            OperationStatus.FAILED,
+        ]:
             op = MagicMock()
             op.status = status
             mock_ops.append(op)
 
-        manager.operation_manager.operations = {f"op{i}": op for i, op in enumerate(mock_ops)}
+        manager.operation_manager.operations = {
+            f"op{i}": op for i, op in enumerate(mock_ops)
+        }
         total, active, completed, failed = manager._calculate_operation_stats()
         assert total == 3
         assert active == 1
@@ -134,42 +144,31 @@ class TestOperationWrappers:
     def test_get_operation_function_codebase_indexing(self):
         manager = OperationIntegrationManager()
         func = manager._get_operation_function(
-            OperationType.CODEBASE_INDEXING,
-            {"codebase_path": "/test"}
+            OperationType.CODEBASE_INDEXING, {"codebase_path": "/test"}
         )
         assert callable(func)
 
     def test_get_operation_function_test_suite(self):
         manager = OperationIntegrationManager()
         func = manager._get_operation_function(
-            OperationType.COMPREHENSIVE_TEST_SUITE,
-            {"test_path": "/tests"}
+            OperationType.COMPREHENSIVE_TEST_SUITE, {"test_path": "/tests"}
         )
         assert callable(func)
 
     def test_get_operation_function_code_analysis(self):
         manager = OperationIntegrationManager()
-        func = manager._get_operation_function(
-            OperationType.CODE_ANALYSIS,
-            {}
-        )
+        func = manager._get_operation_function(OperationType.CODE_ANALYSIS, {})
         assert callable(func)
 
     def test_get_operation_function_kb_population(self):
         manager = OperationIntegrationManager()
-        func = manager._get_operation_function(
-            OperationType.KB_POPULATION,
-            {}
-        )
+        func = manager._get_operation_function(OperationType.KB_POPULATION, {})
         assert callable(func)
 
     def test_get_operation_function_invalid_type(self):
         manager = OperationIntegrationManager()
         with pytest.raises(ValueError):
-            manager._get_operation_function(
-                MagicMock(value="invalid"),
-                {}
-            )
+            manager._get_operation_function(MagicMock(value="invalid"), {})
 
     @pytest.mark.asyncio
     async def test_collect_test_files(self):
@@ -209,10 +208,9 @@ class TestBroadcastProgress:
         mock_ws.send_json = AsyncMock()
         manager.websocket_connections["op-123"] = [mock_ws]
 
-        await manager._broadcast_progress_update({
-            "operation_id": "op-123",
-            "progress": 50
-        })
+        await manager._broadcast_progress_update(
+            {"operation_id": "op-123", "progress": 50}
+        )
         mock_ws.send_json.assert_called_once()
 
     @pytest.mark.asyncio
@@ -277,11 +275,13 @@ class TestTerminalStatuses:
 
     def test_failed_statuses(self):
         from src.utils.operation_timeout_integration import FAILED_OPERATION_STATUSES
+
         assert OperationStatus.FAILED in FAILED_OPERATION_STATUSES
         assert OperationStatus.TIMEOUT in FAILED_OPERATION_STATUSES
 
     def test_terminal_statuses(self):
         from src.utils.operation_timeout_integration import TERMINAL_OPERATION_STATUSES
+
         assert OperationStatus.COMPLETED in TERMINAL_OPERATION_STATUSES
         assert OperationStatus.FAILED in TERMINAL_OPERATION_STATUSES
         assert OperationStatus.CANCELLED in TERMINAL_OPERATION_STATUSES

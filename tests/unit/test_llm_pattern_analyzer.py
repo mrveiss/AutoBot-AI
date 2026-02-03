@@ -58,7 +58,6 @@ from src.code_intelligence.llm_pattern_analyzer import (
     get_usage_pattern_types,
 )
 
-
 # =============================================================================
 # Test Enums
 # =============================================================================
@@ -499,7 +498,8 @@ class TestCacheOpportunityDetector:
         opportunities = CacheOpportunityDetector.detect_opportunities(patterns)
 
         embedding_opps = [
-            o for o in opportunities
+            o
+            for o in opportunities
             if o.cache_type == CacheOpportunityType.EMBEDDING_CACHE
         ]
         assert len(embedding_opps) > 0
@@ -519,7 +519,8 @@ class TestCacheOpportunityDetector:
         opportunities = CacheOpportunityDetector.detect_opportunities(patterns)
 
         static_opps = [
-            o for o in opportunities
+            o
+            for o in opportunities
             if o.cache_type == CacheOpportunityType.STATIC_PROMPT
         ]
         assert len(static_opps) > 0
@@ -540,10 +541,9 @@ class TestCodePatternScanner:
 
     def test_scan_file_with_llm_calls(self):
         """Test scanning a file with LLM API calls."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
-            f.write("""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(
+                """
 import openai
 
 def generate():
@@ -552,28 +552,28 @@ def generate():
         messages=[{"role": "user", "content": "Hello"}]
     )
     return response
-""")
+"""
+            )
             f.flush()
 
             patterns, retries = CodePatternScanner.scan_file(Path(f.name))
             assert len(patterns) > 0
             assert any(
-                p.pattern_type == UsagePatternType.CHAT_COMPLETION
-                for p in patterns
+                p.pattern_type == UsagePatternType.CHAT_COMPLETION for p in patterns
             )
 
     def test_scan_file_with_retry_pattern(self):
         """Test scanning a file with retry patterns."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
-            f.write("""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(
+                """
 from tenacity import retry
 
 @retry(max_retries=3)
 def call_api():
     pass
-""")
+"""
+            )
             f.flush()
 
             patterns, retries = CodePatternScanner.scan_file(Path(f.name))
@@ -581,30 +581,27 @@ def call_api():
 
     def test_scan_nonexistent_file(self):
         """Test scanning a nonexistent file."""
-        patterns, retries = CodePatternScanner.scan_file(
-            Path("/nonexistent/file.py")
-        )
+        patterns, retries = CodePatternScanner.scan_file(Path("/nonexistent/file.py"))
         assert len(patterns) == 0
         assert len(retries) == 0
 
     def test_detect_streaming_pattern(self):
         """Test detecting streaming patterns."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
-            f.write("""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(
+                """
 response = client.chat.completions.create(
     model="gpt-4",
     messages=messages,
     stream=True
 )
-""")
+"""
+            )
             f.flush()
 
             patterns, _ = CodePatternScanner.scan_file(Path(f.name))
             streaming = [
-                p for p in patterns
-                if p.pattern_type == UsagePatternType.STREAMING
+                p for p in patterns if p.pattern_type == UsagePatternType.STREAMING
             ]
             assert len(streaming) > 0
 
@@ -780,10 +777,7 @@ class TestRecommendationEngine:
             cost_estimates=[],
         )
 
-        caching_recs = [
-            r for r in recs
-            if r.category == OptimizationCategory.CACHING
-        ]
+        caching_recs = [r for r in recs if r.category == OptimizationCategory.CACHING]
         assert len(caching_recs) > 0
 
     def test_generate_batching_recommendations(self):
@@ -806,10 +800,7 @@ class TestRecommendationEngine:
             cost_estimates=[],
         )
 
-        batching_recs = [
-            r for r in recs
-            if r.category == OptimizationCategory.BATCHING
-        ]
+        batching_recs = [r for r in recs if r.category == OptimizationCategory.BATCHING]
         assert len(batching_recs) > 0
 
     def test_recommendations_sorted_by_priority(self):
@@ -888,7 +879,8 @@ class TestLLMPatternAnalyzer:
 
         # Create a test file (not matching test* pattern)
         module_file = src_dir / "llm_module.py"
-        module_file.write_text("""
+        module_file.write_text(
+            """
 import openai
 
 def call_llm():
@@ -897,7 +889,8 @@ def call_llm():
         messages=[]
     )
     return response
-""")
+"""
+        )
 
         result = analyzer.analyze(directories=[src_dir])
         # File should be analyzed (not excluded by test* pattern)
@@ -1020,7 +1013,8 @@ class TestIntegration:
 
         # Create a file with LLM patterns
         api_file = src_dir / "api.py"
-        api_file.write_text("""
+        api_file.write_text(
+            """
 import openai
 from tenacity import retry
 
@@ -1037,7 +1031,8 @@ def get_embedding(text):
         model="text-embedding-ada-002",
         input=text
     )
-""")
+"""
+        )
 
         # Run analysis
         analyzer = LLMPatternAnalyzer(project_root=tmp_path)
@@ -1049,8 +1044,10 @@ def get_embedding(text):
 
         # Check that we found chat and embedding patterns
         pattern_types = {p.pattern_type for p in result.patterns_found}
-        assert UsagePatternType.CHAT_COMPLETION in pattern_types or \
-               UsagePatternType.EMBEDDING in pattern_types
+        assert (
+            UsagePatternType.CHAT_COMPLETION in pattern_types
+            or UsagePatternType.EMBEDDING in pattern_types
+        )
 
     def test_token_tracker_integration(self):
         """Test TokenTracker with realistic usage."""
@@ -1088,14 +1085,14 @@ class TestEdgeCases:
     def test_very_long_prompt(self):
         """Test analyzing very long prompt."""
         prompt = "word " * 10000
-        issues = PromptAnalyzer.analyze_prompt(prompt)
+        PromptAnalyzer.analyze_prompt(prompt)
         tokens = PromptAnalyzer.estimate_tokens(prompt)
         assert tokens > 10000
 
     def test_unicode_in_prompt(self):
         """Test handling unicode in prompts."""
         prompt = "Hello 世界 🌍 مرحبا"
-        issues = PromptAnalyzer.analyze_prompt(prompt)
+        PromptAnalyzer.analyze_prompt(prompt)
         tokens = PromptAnalyzer.estimate_tokens(prompt)
         assert tokens > 0
 
@@ -1128,36 +1125,9 @@ class TestModuleImports:
     def test_all_exports_importable(self):
         """Test that all exports are importable."""
         from src.code_intelligence import (
-            PatternAnalysisResult,
-            BatchingAnalyzer,
-            BatchingOpportunity,
-            CacheOpportunity,
-            CacheOpportunityDetector,
-            CacheOpportunityType,
-            CodePatternScanner,
-            CostCalculator,
-            CostEstimate,
             LLMPatternAnalyzer,
-            OptimizationCategory,
-            OptimizationPriority,
-            OptimizationRecommendation,
-            PromptAnalyzer,
-            PromptIssueType,
-            PatternPromptTemplate,
-            RecommendationEngine,
-            RetryPattern,
-            TokenTracker,
-            TokenUsage,
-            UsagePattern,
-            UsagePatternType,
+            PatternAnalysisResult,
             analyze_llm_patterns,
-            analyze_prompt,
-            estimate_prompt_tokens,
-            get_cache_opportunity_types,
-            get_optimization_categories,
-            get_optimization_priorities,
-            get_prompt_issue_types,
-            get_usage_pattern_types,
         )
 
         assert PatternAnalysisResult is not None

@@ -144,7 +144,7 @@ async def test_security_endpoints():
         print("\n🖥️  Testing secure terminal WebSocket availability...")
         try:
             # Just check if the endpoint is available (can't easily test WebSocket here)
-            import websocket
+            pass
 
             ws_url = "ws://localhost:8001/api/terminal/ws/secure/test_session"
             print(f"   WebSocket URL: {ws_url}")

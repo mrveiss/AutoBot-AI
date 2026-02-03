@@ -14,16 +14,17 @@ Tests the security assessment workflow functionality including:
 Issue: #260
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.security_workflow_manager import (
+    PHASE_DESCRIPTIONS,
+    VALID_TRANSITIONS,
     AssessmentPhase,
     SecurityAssessment,
     SecurityWorkflowManager,
     TargetHost,
-    VALID_TRANSITIONS,
-    PHASE_DESCRIPTIONS,
 )
 
 
@@ -33,9 +34,15 @@ class TestAssessmentPhase:
     def test_all_phases_defined(self):
         """Verify all expected phases are defined."""
         expected_phases = [
-            "INIT", "RECON", "PORT_SCAN", "ENUMERATION",
-            "VULN_ANALYSIS", "EXPLOITATION", "REPORTING",
-            "COMPLETE", "ERROR"
+            "INIT",
+            "RECON",
+            "PORT_SCAN",
+            "ENUMERATION",
+            "VULN_ANALYSIS",
+            "EXPLOITATION",
+            "REPORTING",
+            "COMPLETE",
+            "ERROR",
         ]
         actual_phases = [p.value for p in AssessmentPhase]
         assert set(expected_phases) == set(actual_phases)
@@ -94,7 +101,7 @@ class TestTargetHost:
             status="up",
             ports=[{"port": 22, "protocol": "tcp"}],
             services=[{"name": "ssh", "port": 22}],
-            metadata={"os": "Linux"}
+            metadata={"os": "Linux"},
         )
         assert host.hostname == "server.local"
         assert host.status == "up"
@@ -118,7 +125,7 @@ class TestTargetHost:
             "ports": [],
             "services": [],
             "vulnerabilities": [],
-            "metadata": {}
+            "metadata": {},
         }
         host = TargetHost.from_dict(data)
         assert host.ip == "192.168.1.1"
@@ -135,7 +142,7 @@ class TestSecurityAssessment:
             name="Test Assessment",
             target="192.168.1.0/24",
             scope=["192.168.1.0/24"],
-            phase=AssessmentPhase.INIT
+            phase=AssessmentPhase.INIT,
         )
         assert assessment.id == "test-123"
         assert assessment.name == "Test Assessment"
@@ -150,7 +157,7 @@ class TestSecurityAssessment:
             name="Test",
             target="192.168.1.1",
             scope=["192.168.1.1"],
-            phase=AssessmentPhase.INIT
+            phase=AssessmentPhase.INIT,
         )
         assert assessment.created_at != ""
         assert assessment.updated_at != ""
@@ -163,7 +170,7 @@ class TestSecurityAssessment:
             target="192.168.1.1",
             scope=["192.168.1.1"],
             phase=AssessmentPhase.RECON,
-            training_mode=True
+            training_mode=True,
         )
         data = assessment.to_dict()
         assert data["id"] == "test-123"
@@ -186,7 +193,7 @@ class TestSecurityAssessment:
             "findings": [],
             "actions_taken": [],
             "error_message": None,
-            "metadata": {}
+            "metadata": {},
         }
         assessment = SecurityAssessment.from_dict(data)
         assert assessment.phase == AssessmentPhase.PORT_SCAN
@@ -222,7 +229,7 @@ class TestSecurityWorkflowManager:
             name="Test Scan",
             target="192.168.1.0/24",
             scope=["192.168.1.0/24"],
-            training_mode=False
+            training_mode=False,
         )
 
         assert assessment is not None
@@ -235,9 +242,7 @@ class TestSecurityWorkflowManager:
     async def test_create_training_assessment(self, manager):
         """Test assessment with training mode enabled."""
         assessment = await manager.create_assessment(
-            name="Training Scan",
-            target="10.0.0.1",
-            training_mode=True
+            name="Training Scan", target="10.0.0.1", training_mode=True
         )
 
         assert assessment.training_mode is True
@@ -246,21 +251,16 @@ class TestSecurityWorkflowManager:
     async def test_advance_phase(self, manager, mock_redis):
         """Test advancing through phases."""
         # Create assessment
-        assessment = await manager.create_assessment(
-            name="Test",
-            target="192.168.1.1"
-        )
+        assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
         # Mock get_assessment to return our assessment
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         # Advance to RECON
         updated = await manager.advance_phase(
-            assessment.id,
-            reason="Starting reconnaissance"
+            assessment.id, reason="Starting reconnaissance"
         )
 
         assert updated is not None
@@ -270,20 +270,15 @@ class TestSecurityWorkflowManager:
     async def test_add_host(self, manager, mock_redis):
         """Test adding a host to assessment."""
         assessment = await manager.create_assessment(
-            name="Test",
-            target="192.168.1.0/24"
+            name="Test", target="192.168.1.0/24"
         )
 
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         updated = await manager.add_host(
-            assessment.id,
-            ip="192.168.1.10",
-            hostname="web-server",
-            status="up"
+            assessment.id, ip="192.168.1.10", hostname="web-server", status="up"
         )
 
         assert updated is not None
@@ -294,15 +289,11 @@ class TestSecurityWorkflowManager:
     @pytest.mark.asyncio
     async def test_add_port(self, manager, mock_redis):
         """Test adding a port to a host."""
-        assessment = await manager.create_assessment(
-            name="Test",
-            target="192.168.1.1"
-        )
+        assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         updated = await manager.add_port(
             assessment.id,
@@ -311,7 +302,7 @@ class TestSecurityWorkflowManager:
             protocol="tcp",
             state="open",
             service="ssh",
-            version="OpenSSH 8.0"
+            version="OpenSSH 8.0",
         )
 
         assert updated is not None
@@ -322,15 +313,11 @@ class TestSecurityWorkflowManager:
     @pytest.mark.asyncio
     async def test_add_vulnerability(self, manager, mock_redis):
         """Test adding a vulnerability."""
-        assessment = await manager.create_assessment(
-            name="Test",
-            target="192.168.1.1"
-        )
+        assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         updated = await manager.add_vulnerability(
             assessment.id,
@@ -338,7 +325,7 @@ class TestSecurityWorkflowManager:
             cve_id="CVE-2024-1234",
             title="Test Vulnerability",
             severity="high",
-            description="A test vulnerability"
+            description="A test vulnerability",
         )
 
         assert updated is not None
@@ -351,23 +338,19 @@ class TestSecurityWorkflowManager:
         """Test that exploitation phase requires training mode."""
         # Create non-training assessment
         assessment = await manager.create_assessment(
-            name="Safe Scan",
-            target="192.168.1.1",
-            training_mode=False
+            name="Safe Scan", target="192.168.1.1", training_mode=False
         )
 
         # Simulate being in VULN_ANALYSIS phase
         assessment.phase = AssessmentPhase.VULN_ANALYSIS
 
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         # Try to advance to EXPLOITATION - should skip to REPORTING
         updated = await manager.advance_phase(
-            assessment.id,
-            target_phase="EXPLOITATION"
+            assessment.id, target_phase="EXPLOITATION"
         )
 
         # Should skip exploitation and go to REPORTING
@@ -377,21 +360,17 @@ class TestSecurityWorkflowManager:
     async def test_training_mode_allows_exploitation(self, manager, mock_redis):
         """Test that training mode enables exploitation."""
         assessment = await manager.create_assessment(
-            name="Training Scan",
-            target="192.168.1.1",
-            training_mode=True
+            name="Training Scan", target="192.168.1.1", training_mode=True
         )
 
         assessment.phase = AssessmentPhase.VULN_ANALYSIS
 
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         updated = await manager.advance_phase(
-            assessment.id,
-            target_phase="EXPLOITATION"
+            assessment.id, target_phase="EXPLOITATION"
         )
 
         assert updated.phase == AssessmentPhase.EXPLOITATION
@@ -399,10 +378,7 @@ class TestSecurityWorkflowManager:
     @pytest.mark.asyncio
     async def test_get_assessment_summary(self, manager, mock_redis):
         """Test getting assessment summary."""
-        assessment = await manager.create_assessment(
-            name="Test",
-            target="192.168.1.1"
-        )
+        assessment = await manager.create_assessment(name="Test", target="192.168.1.1")
 
         # Add some data - note: vulnerabilities are counted from findings
         assessment.hosts = [
@@ -411,18 +387,15 @@ class TestSecurityWorkflowManager:
                 status="up",
                 ports=[{"port": 22, "protocol": "tcp"}],
                 services=[{"name": "ssh", "port": 22}],
-                vulnerabilities=[{"severity": "high", "cve_id": "CVE-2024-1234"}]
+                vulnerabilities=[{"severity": "high", "cve_id": "CVE-2024-1234"}],
             )
         ]
         # Add finding for the vulnerability (this is how they're counted)
-        assessment.findings = [
-            {"type": "vulnerability", "host": "192.168.1.1"}
-        ]
+        assessment.findings = [{"type": "vulnerability", "host": "192.168.1.1"}]
 
         import json
-        mock_redis.get = AsyncMock(
-            return_value=json.dumps(assessment.to_dict())
-        )
+
+        mock_redis.get = AsyncMock(return_value=json.dumps(assessment.to_dict()))
 
         summary = await manager.get_assessment_summary(assessment.id)
 

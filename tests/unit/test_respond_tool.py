@@ -12,8 +12,6 @@ Tests verify:
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict, Any, List
 
 # Test fixtures for tool call parsing
 
@@ -27,9 +25,9 @@ class TestRespondToolParsing:
 
         handler = ToolHandlerMixin()
 
-        text = '''Here is the summary.
+        text = """Here is the summary.
 <TOOL_CALL name="respond" params='{"text":"Task completed successfully"}'>Final response</TOOL_CALL>
-'''
+"""
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 1
@@ -42,7 +40,7 @@ class TestRespondToolParsing:
 
         handler = ToolHandlerMixin()
 
-        text = '''<TOOL_CALL name="respond" params='{"text":"Done!","break_loop":true}'>Complete</TOOL_CALL>'''
+        text = """<TOOL_CALL name="respond" params='{"text":"Done!","break_loop":true}'>Complete</TOOL_CALL>"""
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 1
@@ -56,7 +54,7 @@ class TestRespondToolParsing:
 
         handler = ToolHandlerMixin()
 
-        text = '''<TOOL_CALL name="respond" params='{"text":"Partial update","break_loop":false}'>Update</TOOL_CALL>'''
+        text = """<TOOL_CALL name="respond" params='{"text":"Partial update","break_loop":false}'>Update</TOOL_CALL>"""
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 1
@@ -69,12 +67,12 @@ class TestRespondToolParsing:
 
         handler = ToolHandlerMixin()
 
-        text = '''Let me run this command first.
+        text = """Let me run this command first.
 <TOOL_CALL name="execute_command" params='{"command":"ls -la"}'>List files</TOOL_CALL>
 
 Now the final summary:
 <TOOL_CALL name="respond" params='{"text":"Found 10 files in the directory"}'>Done</TOOL_CALL>
-'''
+"""
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 2
@@ -88,7 +86,7 @@ Now the final summary:
         handler = ToolHandlerMixin()
 
         # JSON with escaped newlines
-        text = r'''<TOOL_CALL name="respond" params='{"text":"Line 1\nLine 2\nLine 3"}'>Summary</TOOL_CALL>'''
+        text = r"""<TOOL_CALL name="respond" params='{"text":"Line 1\nLine 2\nLine 3"}'>Summary</TOOL_CALL>"""
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 1
@@ -102,8 +100,8 @@ class TestRespondToolProcessing:
     @pytest.mark.asyncio
     async def test_process_respond_tool_yields_response_message(self):
         """Test that respond tool yields a WorkflowMessage with type=response."""
-        from src.chat_workflow.tool_handler import ToolHandlerMixin
         from src.async_chat_workflow import WorkflowMessage
+        from src.chat_workflow.tool_handler import ToolHandlerMixin
 
         handler = ToolHandlerMixin()
         handler.terminal_tool = None  # Not needed for respond tool
@@ -112,7 +110,7 @@ class TestRespondToolProcessing:
             {
                 "name": "respond",
                 "params": {"text": "Task completed successfully", "break_loop": True},
-                "description": "Final response"
+                "description": "Final response",
             }
         ]
 
@@ -148,11 +146,7 @@ class TestRespondToolProcessing:
 
         # No break_loop specified - should default to True
         tool_calls = [
-            {
-                "name": "respond",
-                "params": {"text": "Done"},
-                "description": "Complete"
-            }
+            {"name": "respond", "params": {"text": "Done"}, "description": "Complete"}
         ]
 
         break_loop_result = None
@@ -177,7 +171,7 @@ class TestRespondToolProcessing:
             {
                 "name": "respond",
                 "params": {"text": "Partial update", "break_loop": False},
-                "description": "Update"
+                "description": "Update",
             }
         ]
 
@@ -200,11 +194,7 @@ class TestRespondToolProcessing:
         handler.terminal_tool = None
 
         tool_calls = [
-            {
-                "name": "unknown_tool",
-                "params": {"foo": "bar"},
-                "description": "Unknown"
-            }
+            {"name": "unknown_tool", "params": {"foo": "bar"}, "description": "Unknown"}
         ]
 
         messages = []
@@ -233,7 +223,11 @@ class TestBreakLoopIntegration:
         handler.terminal_tool = None
 
         tool_calls = [
-            {"name": "respond", "params": {"text": "Done", "break_loop": True}, "description": ""}
+            {
+                "name": "respond",
+                "params": {"text": "Done", "break_loop": True},
+                "description": "",
+            }
         ]
 
         final_tuple = None
@@ -259,7 +253,7 @@ class TestBackwardsCompatibility:
 
         handler = ToolHandlerMixin()
 
-        text = '''<TOOL_CALL name="execute_command" params='{"command":"ls -la","host":"main"}'>List files</TOOL_CALL>'''
+        text = """<TOOL_CALL name="execute_command" params='{"command":"ls -la","host":"main"}'>List files</TOOL_CALL>"""
         tool_calls = handler._parse_tool_calls(text)
 
         assert len(tool_calls) == 1

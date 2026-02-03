@@ -5,10 +5,10 @@ Shows the complete workflow orchestration system in action
 """
 
 import asyncio
-import aiohttp
-import json
 import time
-from typing import Dict, Any
+from typing import Any, Dict
+
+import aiohttp
 
 
 async def create_chat_session() -> str:

@@ -13,13 +13,13 @@ Tests the following functionality:
 - _aggregate_all_results() full aggregation
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+
+import pytest
 
 from backend.api.codebase_analytics.types import (
-    FileAnalysisResult,
     AnalysisBatchResult,
+    FileAnalysisResult,
     ParallelProcessingStats,
 )
 

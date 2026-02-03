@@ -12,8 +12,9 @@ Tests that the _get_all_stats() method correctly handles:
 The fix ensures timestamp strings don't cause int() parsing failures.
 """
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 
 class TestStatsCounterParsing:

@@ -8,12 +8,12 @@ Verifies that the refactored execute_task method maintains
 all original functionality while reducing nesting depth.
 """
 
-import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.worker_node import WorkerNode
+import pytest
+
 from src.task_handlers import TaskExecutor
+from src.worker_node import WorkerNode
 
 
 class TestWorkerNodeRefactored:

@@ -11,7 +11,6 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from src.orchestrator import Orchestrator
-from src.type_definitions import TaskComplexity
 
 
 async def test_workflow_execution():

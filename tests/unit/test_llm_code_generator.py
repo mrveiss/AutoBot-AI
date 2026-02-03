@@ -8,9 +8,7 @@ Tests the LLM-powered code generation and auto-refactoring engine
 implemented as part of Issue #228 under EPIC #217.
 """
 
-import asyncio
 import pytest
-from typing import List
 
 from src.code_intelligence.llm_code_generator import (
     CodeContext,
@@ -35,7 +33,6 @@ from src.code_intelligence.llm_code_generator import (
     validate_code,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -50,35 +47,35 @@ def llm_generator() -> LLMCodeGenerator:
 @pytest.fixture
 def valid_python_code() -> str:
     """Sample valid Python code."""
-    return '''
+    return """
 def add(a, b):
     return a + b
 
 def multiply(x, y):
     return x * y
-'''
+"""
 
 
 @pytest.fixture
 def invalid_python_code() -> str:
     """Sample invalid Python code (syntax error)."""
-    return '''
+    return """
 def broken_function(
     return "missing closing paren"
-'''
+"""
 
 
 @pytest.fixture
 def complex_python_code() -> str:
     """Sample complex Python code for refactoring."""
-    return '''
+    return """
 def process_data(data):
     result = []
     for item in data:
         if item > 0:
             result.append(item * 2)
     return result
-'''
+"""
 
 
 # =============================================================================
@@ -527,7 +524,10 @@ class TestPromptTemplateManager:
         """Test getting ADD_TYPE_HINTS template."""
         template = PromptTemplateManager.get_template(RefactoringType.ADD_TYPE_HINTS)
         assert template is not None
-        assert "type" in template.user_prompt_template.lower() or template.name == "add_type_hints"
+        assert (
+            "type" in template.user_prompt_template.lower()
+            or template.name == "add_type_hints"
+        )
 
     def test_format_prompt(self):
         """Test formatting a prompt template."""
@@ -545,7 +545,9 @@ class TestPromptTemplateManager:
 
     def test_template_for_add_error_handling(self):
         """Test getting ADD_ERROR_HANDLING template."""
-        template = PromptTemplateManager.get_template(RefactoringType.ADD_ERROR_HANDLING)
+        template = PromptTemplateManager.get_template(
+            RefactoringType.ADD_ERROR_HANDLING
+        )
         assert template is not None
 
     def test_template_for_custom(self):
@@ -869,40 +871,17 @@ class TestModuleImports:
     def test_import_from_code_intelligence(self):
         """Test importing from code_intelligence package."""
         from src.code_intelligence import (
+            CodeValidator,
             LLMCodeGenerator,
             RefactoringType,
-            CodeValidator,
-            validate_code,
-            refactor_code,
         )
+
         assert LLMCodeGenerator is not None
         assert RefactoringType is not None
         assert CodeValidator is not None
 
     def test_all_exports_accessible(self):
         """Test all __all__ exports are accessible."""
-        from src.code_intelligence import (
-            CodeContext,
-            CodeValidator,
-            DiffGenerator,
-            GeneratedCode,
-            GenerationStatus,
-            LLMCodeGenerator,
-            PromptTemplate,
-            PromptTemplateManager,
-            RefactoringRequest,
-            RefactoringResult,
-            RefactoringType,
-            ValidationResult,
-            ValidationStatus,
-            generate_diff,
-            get_generation_statuses,
-            get_refactoring_types,
-            get_validation_statuses,
-            list_prompt_templates,
-            refactor_code,
-            validate_code,
-        )
         # All imports should succeed
         assert True
 

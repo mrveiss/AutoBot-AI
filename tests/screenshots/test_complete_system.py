@@ -5,9 +5,9 @@ Tests the entire workflow orchestration pipeline with backend API
 """
 
 import asyncio
-import aiohttp
-import json
 import time
+
+import aiohttp
 
 
 async def test_workflow_api():
@@ -80,8 +80,8 @@ async def test_research_agent():
 
     try:
         # Import and test research agent directly
-        import sys
         import os
+        import sys
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -114,8 +114,8 @@ async def test_orchestrator_classification():
     print("-" * 40)
 
     try:
-        import sys
         import os
+        import sys
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -161,8 +161,8 @@ async def demonstrate_workflow_vs_generic():
     print("✅ NEW WORKFLOW ORCHESTRATED RESPONSE:")
 
     try:
-        import sys
         import os
+        import sys
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 

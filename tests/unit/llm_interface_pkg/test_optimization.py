@@ -8,30 +8,28 @@ Issue #717: Efficient Inference Design implementation tests.
 """
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
-from src.llm_interface_pkg.types import ProviderType
-from src.llm_interface_pkg.optimization.router import (
-    OptimizationRouter,
-    OptimizationCategory,
-    OptimizationConfig,
-)
+import pytest
+
+from src.llm_interface_pkg.optimization.cloud_batcher import CloudRequestBatcher
 from src.llm_interface_pkg.optimization.prompt_compressor import (
-    PromptCompressor,
     CompressionConfig,
     CompressionResult,
+    PromptCompressor,
 )
 from src.llm_interface_pkg.optimization.rate_limiter import (
-    RateLimitHandler,
     RateLimitConfig,
     RateLimitError,
+    RateLimitHandler,
     RetryStrategy,
 )
-from src.llm_interface_pkg.optimization.cloud_batcher import (
-    CloudRequestBatcher,
-    BatchResult,
+from src.llm_interface_pkg.optimization.router import (
+    OptimizationCategory,
+    OptimizationConfig,
+    OptimizationRouter,
 )
+from src.llm_interface_pkg.types import ProviderType
 
 
 class TestOptimizationRouter:
@@ -96,20 +94,29 @@ class TestOptimizationRouter:
         router = OptimizationRouter(config)
 
         # Speculation is disabled in config
-        assert router.should_apply(
-            OptimizationCategory.SPECULATIVE_DECODING, ProviderType.OLLAMA
-        ) is False
+        assert (
+            router.should_apply(
+                OptimizationCategory.SPECULATIVE_DECODING, ProviderType.OLLAMA
+            )
+            is False
+        )
 
     def test_cloud_optimizations_not_on_local(self):
         """Cloud-only optimizations should not apply to local providers."""
         router = OptimizationRouter()
 
-        assert router.should_apply(
-            OptimizationCategory.CONNECTION_POOLING, ProviderType.OLLAMA
-        ) is False
-        assert router.should_apply(
-            OptimizationCategory.RATE_LIMIT_HANDLING, ProviderType.VLLM
-        ) is False
+        assert (
+            router.should_apply(
+                OptimizationCategory.CONNECTION_POOLING, ProviderType.OLLAMA
+            )
+            is False
+        )
+        assert (
+            router.should_apply(
+                OptimizationCategory.RATE_LIMIT_HANDLING, ProviderType.VLLM
+            )
+            is False
+        )
 
 
 class TestPromptCompressor:
@@ -301,6 +308,7 @@ class TestCloudRequestBatcher:
     @pytest.mark.asyncio
     async def test_add_request_with_executor_succeeds(self):
         """Should execute requests with configured executor."""
+
         async def mock_executor(payloads):
             return [{"response": f"result_{i}"} for i, _ in enumerate(payloads)]
 
@@ -326,10 +334,7 @@ class TestCloudRequestBatcher:
         batcher.set_executor(counting_executor)
 
         # Add multiple requests concurrently
-        tasks = [
-            batcher.add_request({"prompt": f"test_{i}"})
-            for i in range(3)
-        ]
+        tasks = [batcher.add_request({"prompt": f"test_{i}"}) for i in range(3)]
         results = await asyncio.gather(*tasks)
 
         # Should have batched into single call

@@ -14,12 +14,9 @@ Tests cover:
 Target coverage: ≥90%
 """
 
-import pytest
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
+import pytest
 
 
 class TestAlertManagerWebhook:
@@ -30,24 +27,21 @@ class TestAlertManagerWebhook:
         """Sample circuit breaker OPEN alert payload"""
         return {
             "version": "4",
-            "groupKey": "{}:{alertname=\"CircuitBreakerOpen\"}",
+            "groupKey": '{}:{alertname="CircuitBreakerOpen"}',
             "truncatedAlerts": 0,
             "status": "firing",
             "receiver": "circuit-breaker-alerts",
-            "groupLabels": {
-                "alertname": "CircuitBreakerOpen",
-                "severity": "critical"
-            },
+            "groupLabels": {"alertname": "CircuitBreakerOpen", "severity": "critical"},
             "commonLabels": {
                 "alertname": "CircuitBreakerOpen",
                 "severity": "critical",
                 "component": "circuit_breaker",
-                "database": "redis_main"
+                "database": "redis_main",
             },
             "commonAnnotations": {
                 "summary": "Circuit Breaker OPEN: redis_main",
                 "description": "Circuit breaker for redis_main has opened with 5 failures",
-                "recommendation": "Check redis_main service health, logs, and connectivity"
+                "recommendation": "Check redis_main service health, logs, and connectivity",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -57,19 +51,19 @@ class TestAlertManagerWebhook:
                         "alertname": "CircuitBreakerOpen",
                         "severity": "critical",
                         "component": "circuit_breaker",
-                        "database": "redis_main"
+                        "database": "redis_main",
                     },
                     "annotations": {
                         "summary": "Circuit Breaker OPEN: redis_main",
                         "description": "Circuit breaker for redis_main has opened with 5 failures",
-                        "recommendation": "Check redis_main service health, logs, and connectivity"
+                        "recommendation": "Check redis_main service health, logs, and connectivity",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
                     "generatorURL": "http://localhost:9090/graph",
-                    "fingerprint": "abc123def456"
+                    "fingerprint": "abc123def456",
                 }
-            ]
+            ],
         }
 
     @pytest.fixture
@@ -77,25 +71,22 @@ class TestAlertManagerWebhook:
         """Sample Redis server down alert payload"""
         return {
             "version": "4",
-            "groupKey": "{}:{alertname=\"RedisServerDown\"}",
+            "groupKey": '{}:{alertname="RedisServerDown"}',
             "truncatedAlerts": 0,
             "status": "firing",
             "receiver": "redis-alerts",
-            "groupLabels": {
-                "alertname": "RedisServerDown",
-                "severity": "critical"
-            },
+            "groupLabels": {"alertname": "RedisServerDown", "severity": "critical"},
             "commonLabels": {
                 "alertname": "RedisServerDown",
                 "severity": "critical",
                 "component": "redis",
                 "service": "redis",
-                "database": "main"
+                "database": "main",
             },
             "commonAnnotations": {
                 "summary": "Redis Server Down: main",
                 "description": "Redis server main is unavailable",
-                "recommendation": "Check Redis service on VM3 (172.16.168.23:6379)"
+                "recommendation": "Check Redis service on VM3 (172.16.168.23:6379)",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -106,19 +97,19 @@ class TestAlertManagerWebhook:
                         "severity": "critical",
                         "component": "redis",
                         "service": "redis",
-                        "database": "main"
+                        "database": "main",
                     },
                     "annotations": {
                         "summary": "Redis Server Down: main",
                         "description": "Redis server main is unavailable",
-                        "recommendation": "Check Redis service on VM3 (172.16.168.23:6379)"
+                        "recommendation": "Check Redis service on VM3 (172.16.168.23:6379)",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
                     "generatorURL": "http://localhost:9090/graph",
-                    "fingerprint": "redis123"
+                    "fingerprint": "redis123",
                 }
-            ]
+            ],
         }
 
     @pytest.fixture
@@ -126,24 +117,24 @@ class TestAlertManagerWebhook:
         """Sample NPU circuit breaker alert payload"""
         return {
             "version": "4",
-            "groupKey": "{}:{alertname=\"NPUCircuitBreakerOpen\"}",
+            "groupKey": '{}:{alertname="NPUCircuitBreakerOpen"}',
             "truncatedAlerts": 0,
             "status": "firing",
             "receiver": "npu-alerts",
             "groupLabels": {
                 "alertname": "NPUCircuitBreakerOpen",
-                "severity": "critical"
+                "severity": "critical",
             },
             "commonLabels": {
                 "alertname": "NPUCircuitBreakerOpen",
                 "severity": "critical",
                 "component": "npu",
-                "service": "npu_worker"
+                "service": "npu_worker",
             },
             "commonAnnotations": {
                 "summary": "NPU Circuit Breaker OPEN",
                 "description": "NPU worker circuit breaker opened - hardware acceleration unavailable",
-                "recommendation": "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status"
+                "recommendation": "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -153,19 +144,19 @@ class TestAlertManagerWebhook:
                         "alertname": "NPUCircuitBreakerOpen",
                         "severity": "critical",
                         "component": "npu",
-                        "service": "npu_worker"
+                        "service": "npu_worker",
                     },
                     "annotations": {
                         "summary": "NPU Circuit Breaker OPEN",
                         "description": "NPU worker circuit breaker opened - hardware acceleration unavailable",
-                        "recommendation": "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status"
+                        "recommendation": "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
                     "generatorURL": "http://localhost:9090/graph",
-                    "fingerprint": "npu123"
+                    "fingerprint": "npu123",
                 }
-            ]
+            ],
         }
 
     @pytest.fixture
@@ -173,23 +164,20 @@ class TestAlertManagerWebhook:
         """Sample resolved alert payload"""
         return {
             "version": "4",
-            "groupKey": "{}:{alertname=\"CircuitBreakerOpen\"}",
+            "groupKey": '{}:{alertname="CircuitBreakerOpen"}',
             "truncatedAlerts": 0,
             "status": "resolved",
             "receiver": "circuit-breaker-alerts",
-            "groupLabels": {
-                "alertname": "CircuitBreakerOpen",
-                "severity": "critical"
-            },
+            "groupLabels": {"alertname": "CircuitBreakerOpen", "severity": "critical"},
             "commonLabels": {
                 "alertname": "CircuitBreakerOpen",
                 "severity": "critical",
                 "component": "circuit_breaker",
-                "database": "redis_main"
+                "database": "redis_main",
             },
             "commonAnnotations": {
                 "summary": "Circuit Breaker OPEN: redis_main",
-                "description": "Circuit breaker for redis_main has opened"
+                "description": "Circuit breaker for redis_main has opened",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -199,18 +187,18 @@ class TestAlertManagerWebhook:
                         "alertname": "CircuitBreakerOpen",
                         "severity": "critical",
                         "component": "circuit_breaker",
-                        "database": "redis_main"
+                        "database": "redis_main",
                     },
                     "annotations": {
                         "summary": "Circuit Breaker OPEN: redis_main",
-                        "description": "Circuit breaker for redis_main has opened"
+                        "description": "Circuit breaker for redis_main has opened",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": "2025-01-01T12:05:00.000Z",
                     "generatorURL": "http://localhost:9090/graph",
-                    "fingerprint": "abc123def456"
+                    "fingerprint": "abc123def456",
                 }
-            ]
+            ],
         }
 
     @pytest.fixture
@@ -218,23 +206,20 @@ class TestAlertManagerWebhook:
         """Sample security violation alert payload"""
         return {
             "version": "4",
-            "groupKey": "{}:{alertname=\"SecurityViolation\"}",
+            "groupKey": '{}:{alertname="SecurityViolation"}',
             "truncatedAlerts": 0,
             "status": "firing",
             "receiver": "security-alerts",
-            "groupLabels": {
-                "alertname": "SecurityViolation",
-                "severity": "critical"
-            },
+            "groupLabels": {"alertname": "SecurityViolation", "severity": "critical"},
             "commonLabels": {
                 "alertname": "SecurityViolation",
                 "severity": "critical",
-                "component": "security"
+                "component": "security",
             },
             "commonAnnotations": {
                 "summary": "Security Violation Detected",
                 "description": "Security errors detected in api: 5 events",
-                "recommendation": "Investigate security logs immediately"
+                "recommendation": "Investigate security logs immediately",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -243,19 +228,19 @@ class TestAlertManagerWebhook:
                     "labels": {
                         "alertname": "SecurityViolation",
                         "severity": "critical",
-                        "component": "security"
+                        "component": "security",
                     },
                     "annotations": {
                         "summary": "Security Violation Detected",
                         "description": "Security errors detected in api: 5 events",
-                        "recommendation": "Investigate security logs immediately"
+                        "recommendation": "Investigate security logs immediately",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
                     "generatorURL": "http://localhost:9090/graph",
-                    "fingerprint": "security123"
+                    "fingerprint": "security123",
                 }
-            ]
+            ],
         }
 
     # ===== Pydantic Model Tests =====
@@ -271,7 +256,7 @@ class TestAlertManagerWebhook:
             startsAt="2025-01-01T12:00:00.000Z",
             endsAt=None,
             generatorURL="http://localhost:9090",
-            fingerprint="test123"
+            fingerprint="test123",
         )
 
         assert alert.status == "firing"
@@ -280,7 +265,7 @@ class TestAlertManagerWebhook:
 
     def test_alertmanager_webhook_model_validation(self):
         """Test AlertManagerWebhook Pydantic model validation"""
-        from backend.api.alertmanager_webhook import AlertManagerWebhook, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, AlertManagerWebhook
 
         alert = AlertInstance(
             status="firing",
@@ -288,7 +273,7 @@ class TestAlertManagerWebhook:
             annotations={"summary": "Test"},
             startsAt="2025-01-01T12:00:00.000Z",
             generatorURL="http://localhost:9090",
-            fingerprint="test123"
+            fingerprint="test123",
         )
 
         webhook = AlertManagerWebhook(
@@ -300,7 +285,7 @@ class TestAlertManagerWebhook:
             commonLabels={"alertname": "TestAlert"},
             commonAnnotations={"summary": "Test"},
             externalURL="http://localhost:9093",
-            alerts=[alert]
+            alerts=[alert],
         )
 
         assert webhook.version == "4"
@@ -312,9 +297,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_circuit_breaker_alert(self, sample_circuit_breaker_alert):
         """Test processing circuit breaker OPEN alert"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert_data = sample_circuit_breaker_alert["alerts"][0]
@@ -336,9 +321,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_redis_alert(self, sample_redis_alert):
         """Test processing Redis server down alert"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert_data = sample_redis_alert["alerts"][0]
@@ -354,9 +339,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_npu_alert(self, sample_npu_alert):
         """Test processing NPU circuit breaker alert"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert_data = sample_npu_alert["alerts"][0]
@@ -372,9 +357,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_security_alert(self, sample_security_alert):
         """Test processing security violation alert"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert_data = sample_security_alert["alerts"][0]
@@ -390,9 +375,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_resolved_alert(self, sample_resolved_alert):
         """Test processing resolved alert"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert_data = sample_resolved_alert["alerts"][0]
@@ -408,9 +393,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_alert_with_missing_optional_fields(self):
         """Test processing alert with minimal fields"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert = AlertInstance(
@@ -419,7 +404,7 @@ class TestAlertManagerWebhook:
                 annotations={"summary": "Minimal"},
                 startsAt="2025-01-01T12:00:00.000Z",
                 generatorURL="http://localhost:9090",
-                fingerprint="minimal123"
+                fingerprint="minimal123",
             )
 
             await _process_alert(alert, "firing")
@@ -432,9 +417,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_alert_handles_broadcast_error(self):
         """Test that alert processing handles WebSocket errors gracefully"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock(side_effect=Exception("WS Error"))
 
             alert = AlertInstance(
@@ -443,7 +428,7 @@ class TestAlertManagerWebhook:
                 annotations={"summary": "Test"},
                 startsAt="2025-01-01T12:00:00.000Z",
                 generatorURL="http://localhost:9090",
-                fingerprint="test123"
+                fingerprint="test123",
             )
 
             # Should not raise - errors are logged but not propagated
@@ -452,18 +437,21 @@ class TestAlertManagerWebhook:
     # ===== Alert Severity Tests =====
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("severity,expected_type", [
-        ("critical", "system_alert"),
-        ("high", "system_alert"),
-        ("medium", "system_alert"),
-        ("warning", "system_alert"),
-        ("low", "system_alert"),
-    ])
+    @pytest.mark.parametrize(
+        "severity,expected_type",
+        [
+            ("critical", "system_alert"),
+            ("high", "system_alert"),
+            ("medium", "system_alert"),
+            ("warning", "system_alert"),
+            ("low", "system_alert"),
+        ],
+    )
     async def test_alert_severity_levels(self, severity, expected_type):
         """Test different severity levels are handled correctly"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert = AlertInstance(
@@ -472,7 +460,7 @@ class TestAlertManagerWebhook:
                 annotations={"summary": "Test"},
                 startsAt="2025-01-01T12:00:00.000Z",
                 generatorURL="http://localhost:9090",
-                fingerprint="test123"
+                fingerprint="test123",
             )
 
             await _process_alert(alert, "firing")
@@ -486,9 +474,9 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_alert_tags_generation(self):
         """Test that alert tags are correctly generated from labels"""
-        from backend.api.alertmanager_webhook import _process_alert, AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             alert = AlertInstance(
@@ -497,12 +485,12 @@ class TestAlertManagerWebhook:
                     "alertname": "TestAlert",
                     "severity": "high",
                     "component": "redis",
-                    "resource": "memory"
+                    "resource": "memory",
                 },
                 annotations={"summary": "Test"},
                 startsAt="2025-01-01T12:00:00.000Z",
                 generatorURL="http://localhost:9090",
-                fingerprint="test123"
+                fingerprint="test123",
             )
 
             await _process_alert(alert, "firing")
@@ -520,31 +508,34 @@ class TestAlertManagerWebhook:
         """Test processing multiple alerts in a single webhook call"""
         from backend.api.alertmanager_webhook import AlertManagerWebhook, _process_alert
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
 
             # Add second alert to payload
-            sample_circuit_breaker_alert["alerts"].append({
-                "status": "firing",
-                "labels": {
-                    "alertname": "CircuitBreakerHighFailures",
-                    "severity": "warning",
-                    "component": "circuit_breaker",
-                    "database": "redis_knowledge"
-                },
-                "annotations": {
-                    "summary": "Circuit Breaker High Failures: redis_knowledge",
-                    "description": "redis_knowledge has 3 failures"
-                },
-                "startsAt": "2025-01-01T12:01:00.000Z",
-                "endsAt": None,
-                "generatorURL": "http://localhost:9090/graph",
-                "fingerprint": "xyz789"
-            })
+            sample_circuit_breaker_alert["alerts"].append(
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "CircuitBreakerHighFailures",
+                        "severity": "warning",
+                        "component": "circuit_breaker",
+                        "database": "redis_knowledge",
+                    },
+                    "annotations": {
+                        "summary": "Circuit Breaker High Failures: redis_knowledge",
+                        "description": "redis_knowledge has 3 failures",
+                    },
+                    "startsAt": "2025-01-01T12:01:00.000Z",
+                    "endsAt": None,
+                    "generatorURL": "http://localhost:9090/graph",
+                    "fingerprint": "xyz789",
+                }
+            )
 
             webhook = AlertManagerWebhook(**sample_circuit_breaker_alert)
 
             from backend.api.alertmanager_webhook import AlertInstance
+
             for alert_data in sample_circuit_breaker_alert["alerts"]:
                 alert = AlertInstance(**alert_data)
                 await _process_alert(alert, webhook.status)
@@ -561,7 +552,7 @@ class TestAlertManagerHealth:
         """Test health check returns healthy status"""
         from backend.api.alertmanager_webhook import alertmanager_webhook_health
 
-        with patch('backend.api.alertmanager_webhook.ws_manager') as mock_ws:
+        with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.__bool__ = lambda self: True
 
             result = await alertmanager_webhook_health()
@@ -575,7 +566,7 @@ class TestAlertManagerHealth:
         """Test health check when WebSocket manager is unavailable"""
         from backend.api.alertmanager_webhook import alertmanager_webhook_health
 
-        with patch('backend.api.alertmanager_webhook.ws_manager', None):
+        with patch("backend.api.alertmanager_webhook.ws_manager", None):
             result = await alertmanager_webhook_health()
 
             assert result["status"] == "healthy"
@@ -589,7 +580,10 @@ class TestAlertRulesYaml:
     def alert_rules_content(self):
         """Load alert rules YAML content"""
         import yaml
-        with open("/home/kali/Desktop/AutoBot/config/prometheus/alertmanager_rules.yml", "r") as f:
+
+        with open(
+            "/home/kali/Desktop/AutoBot/config/prometheus/alertmanager_rules.yml", "r"
+        ) as f:
             return yaml.safe_load(f)
 
     def test_circuit_breaker_rules_exist(self, alert_rules_content):
@@ -632,7 +626,9 @@ class TestAlertRulesYaml:
         groups = {g["name"]: g for g in alert_rules_content["groups"]}
 
         assert "autobot_security_alerts" in groups
-        security_rules = {r["alert"]: r for r in groups["autobot_security_alerts"]["rules"]}
+        security_rules = {
+            r["alert"]: r for r in groups["autobot_security_alerts"]["rules"]
+        }
 
         assert "SecurityViolation" in security_rules
         assert "UnusualErrorPattern" in security_rules
@@ -660,12 +656,22 @@ class TestAlertRulesYaml:
         """Verify all rules have required fields"""
         for group in alert_rules_content["groups"]:
             for rule in group["rules"]:
-                assert "alert" in rule, f"Rule missing 'alert' field in group {group['name']}"
-                assert "expr" in rule, f"Rule {rule.get('alert', 'unknown')} missing 'expr' field"
+                assert (
+                    "alert" in rule
+                ), f"Rule missing 'alert' field in group {group['name']}"
+                assert (
+                    "expr" in rule
+                ), f"Rule {rule.get('alert', 'unknown')} missing 'expr' field"
                 assert "labels" in rule, f"Rule {rule['alert']} missing 'labels' field"
-                assert "annotations" in rule, f"Rule {rule['alert']} missing 'annotations' field"
-                assert "severity" in rule["labels"], f"Rule {rule['alert']} missing 'severity' label"
-                assert "summary" in rule["annotations"], f"Rule {rule['alert']} missing 'summary' annotation"
+                assert (
+                    "annotations" in rule
+                ), f"Rule {rule['alert']} missing 'annotations' field"
+                assert (
+                    "severity" in rule["labels"]
+                ), f"Rule {rule['alert']} missing 'severity' label"
+                assert (
+                    "summary" in rule["annotations"]
+                ), f"Rule {rule['alert']} missing 'summary' annotation"
 
 
 class TestAlertManagerConfig:
@@ -675,7 +681,10 @@ class TestAlertManagerConfig:
     def alertmanager_config(self):
         """Load AlertManager config YAML"""
         import yaml
-        with open("/home/kali/Desktop/AutoBot/config/prometheus/alertmanager.yml", "r") as f:
+
+        with open(
+            "/home/kali/Desktop/AutoBot/config/prometheus/alertmanager.yml", "r"
+        ) as f:
             return yaml.safe_load(f)
 
     def test_receivers_defined(self, alertmanager_config):
@@ -692,7 +701,7 @@ class TestAlertManagerConfig:
             "npu-alerts",
             "security-alerts",
             "service-alerts",
-            "error-alerts"
+            "error-alerts",
         ]
 
         for receiver_name in required_receivers:
@@ -722,7 +731,8 @@ class TestAlertManagerConfig:
 
         # Find circuit breaker inhibition rules
         cb_inhibitions = [
-            r for r in inhibit_rules
+            r
+            for r in inhibit_rules
             if r.get("source_match", {}).get("alertname") == "CircuitBreakerOpen"
         ]
 
@@ -734,7 +744,8 @@ class TestAlertManagerConfig:
 
         # Find Redis inhibition rules
         redis_inhibitions = [
-            r for r in inhibit_rules
+            r
+            for r in inhibit_rules
             if r.get("source_match", {}).get("alertname") == "RedisServerDown"
         ]
 

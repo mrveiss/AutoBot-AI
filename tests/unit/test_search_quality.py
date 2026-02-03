@@ -12,27 +12,24 @@ Tests for:
 - Search analytics tracking
 """
 
-import pytest
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
+import pytest
 
 # Import test subjects
 from src.knowledge.search_quality import (
+    AdvancedFilter,
     QueryExpander,
     RelevanceScorer,
-    RelevanceFactors,
-    AdvancedFilter,
-    SearchFilters,
     ResultClusterer,
-    ResultCluster,
     SearchAnalytics,
-    SearchEvent,
+    SearchFilters,
     get_query_expander,
     get_relevance_scorer,
     get_result_clusterer,
     get_search_analytics,
 )
-
 
 # =============================================================================
 # Test Fixtures
@@ -253,7 +250,7 @@ class TestRelevanceScorer:
         boost = relevance_scorer.calculate_exact_match_boost(
             query="jwt authentication",
             content="Some content about tokens",
-            title="JWT Authentication Guide"
+            title="JWT Authentication Guide",
         )
 
         assert boost == relevance_scorer.factors.title_match_boost
@@ -263,7 +260,7 @@ class TestRelevanceScorer:
         boost = relevance_scorer.calculate_exact_match_boost(
             query="jwt authentication",
             content="This is about jwt authentication setup",
-            title="Guide"
+            title="Guide",
         )
 
         assert boost == relevance_scorer.factors.exact_match_boost
@@ -271,9 +268,7 @@ class TestRelevanceScorer:
     def test_exact_match_boost_none(self, relevance_scorer):
         """Test no boost when no exact match."""
         boost = relevance_scorer.calculate_exact_match_boost(
-            query="jwt authentication",
-            content="Something unrelated",
-            title="Other"
+            query="jwt authentication", content="Something unrelated", title="Other"
         )
 
         assert boost == 1.0
@@ -283,9 +278,7 @@ class TestRelevanceScorer:
         result = sample_results[0]
 
         score = relevance_scorer.calculate_relevance_score(
-            base_score=0.8,
-            query="jwt authentication",
-            result=result
+            base_score=0.8, query="jwt authentication", result=result
         )
 
         # Score should be modified from base
@@ -309,9 +302,7 @@ class TestAdvancedFilter:
 
     def test_filter_by_date_after(self, sample_results):
         """Test filtering by created_after date."""
-        filters = SearchFilters(
-            created_after=datetime.now() - timedelta(days=7)
-        )
+        filters = SearchFilters(created_after=datetime.now() - timedelta(days=7))
         advanced_filter = AdvancedFilter(filters)
 
         filtered = advanced_filter.apply_filters(sample_results)
@@ -321,9 +312,7 @@ class TestAdvancedFilter:
 
     def test_filter_by_date_before(self, sample_results):
         """Test filtering by created_before date."""
-        filters = SearchFilters(
-            created_before=datetime.now() - timedelta(days=60)
-        )
+        filters = SearchFilters(created_before=datetime.now() - timedelta(days=60))
         advanced_filter = AdvancedFilter(filters)
 
         filtered = advanced_filter.apply_filters(sample_results)
@@ -344,10 +333,7 @@ class TestAdvancedFilter:
 
     def test_filter_by_tags_any(self, sample_results):
         """Test filtering by tags (match any)."""
-        filters = SearchFilters(
-            tags=["redis", "network"],
-            tags_match_all=False
-        )
+        filters = SearchFilters(tags=["redis", "network"], tags_match_all=False)
         advanced_filter = AdvancedFilter(filters)
 
         filtered = advanced_filter.apply_filters(sample_results)
@@ -486,9 +472,7 @@ class TestSearchAnalytics:
     def test_record_search(self, search_analytics):
         """Test recording a search event."""
         search_analytics.record_search(
-            query="test query",
-            result_count=10,
-            duration_ms=50
+            query="test query", result_count=10, duration_ms=50
         )
 
         assert len(search_analytics.events) == 1
@@ -496,24 +480,17 @@ class TestSearchAnalytics:
 
     def test_record_failed_search(self, search_analytics):
         """Test recording a failed search (0 results)."""
-        search_analytics.record_search(
-            query="no results query",
-            result_count=0
-        )
+        search_analytics.record_search(query="no results query", result_count=0)
 
         assert "no results query" in search_analytics.failed_queries
 
     def test_record_click(self, search_analytics):
         """Test recording a click."""
         search_analytics.record_search(
-            query="test",
-            result_count=5,
-            session_id="session_1"
+            query="test", result_count=5, session_id="session_1"
         )
         search_analytics.record_click(
-            query="test",
-            result_id="result_1",
-            session_id="session_1"
+            query="test", result_id="result_1", session_id="session_1"
         )
 
         assert search_analytics.click_counts["result_1"] == 1
@@ -548,17 +525,13 @@ class TestSearchAnalytics:
         # Record 10 searches
         for i in range(10):
             search_analytics.record_search(
-                query=f"query_{i}",
-                result_count=5,
-                session_id=f"session_{i}"
+                query=f"query_{i}", result_count=5, session_id=f"session_{i}"
             )
 
         # Record 3 clicks
         for i in range(3):
             search_analytics.record_click(
-                query=f"query_{i}",
-                result_id=f"result_{i}",
-                session_id=f"session_{i}"
+                query=f"query_{i}", result_id=f"result_{i}", session_id=f"session_{i}"
             )
 
         ctr = search_analytics.get_click_through_rate()
@@ -653,10 +626,7 @@ class TestSearchQualityIntegration:
         assert len(expanded_queries) >= 1
 
         # Step 2: Apply filters
-        filters = SearchFilters(
-            min_score=0.7,
-            categories=["security"]
-        )
+        filters = SearchFilters(min_score=0.7, categories=["security"])
         advanced_filter = AdvancedFilter(filters)
         filtered_results = advanced_filter.apply_filters(sample_results)
 

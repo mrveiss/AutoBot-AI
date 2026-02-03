@@ -5,8 +5,6 @@
 Tests for SLM Deployments API.
 """
 
-import os
-import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api.slm.deployments import router
+from backend.models.infrastructure import DeploymentStrategy as DeploymentStrategyType
 from backend.services.slm.deployment_orchestrator import (
     DeploymentContext,
     DeploymentOrchestrator,
@@ -21,7 +20,6 @@ from backend.services.slm.deployment_orchestrator import (
     DeploymentStep,
     DeploymentStepType,
 )
-from backend.models.infrastructure import DeploymentStrategy as DeploymentStrategyType
 
 
 @pytest.fixture
@@ -210,7 +208,9 @@ class TestGetDeployment:
 class TestExecuteDeployment:
     """Test execute deployment endpoint."""
 
-    def test_execute_deployment_success(self, client, mock_orchestrator, sample_context):
+    def test_execute_deployment_success(
+        self, client, mock_orchestrator, sample_context
+    ):
         """Test executing a queued deployment."""
         sample_context.status = DeploymentStatus.QUEUED
         mock_orchestrator.get_deployment.return_value = sample_context

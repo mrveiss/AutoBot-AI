@@ -12,17 +12,18 @@ Tests verify:
 5. Built-in extensions (logging, secret masking)
 """
 
-import pytest
 from typing import Optional
 
-from src.extensions.hooks import HookPoint, HOOK_METADATA, get_hook_metadata
+import pytest
+
 from src.extensions.base import Extension, HookContext
+from src.extensions.builtin import LoggingExtension, SecretMaskingExtension
+from src.extensions.hooks import HookPoint, get_hook_metadata
 from src.extensions.manager import (
     ExtensionManager,
     get_extension_manager,
     reset_extension_manager,
 )
-from src.extensions.builtin import LoggingExtension, SecretMaskingExtension
 
 
 class TestHookPoint:
@@ -394,9 +395,7 @@ class TestExtensionManager:
         manager.register(ext3)
 
         ctx = HookContext()
-        result = await manager.invoke_until_handled(
-            HookPoint.APPROVAL_REQUIRED, ctx
-        )
+        result = await manager.invoke_until_handled(HookPoint.APPROVAL_REQUIRED, ctx)
 
         # Should stop at ext2 (first handler)
         assert result is True
@@ -421,9 +420,7 @@ class TestExtensionManager:
         manager.register(ext)
 
         ctx = HookContext()
-        result = await manager.invoke_cancellable(
-            HookPoint.BEFORE_TOOL_EXECUTE, ctx
-        )
+        result = await manager.invoke_cancellable(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
 
         assert result is False
 
@@ -464,10 +461,12 @@ class TestExtensionManager:
         """load_extensions() should register from class list."""
         manager = ExtensionManager()
 
-        count = manager.load_extensions([
-            LoggingExtension,
-            SecretMaskingExtension,
-        ])
+        count = manager.load_extensions(
+            [
+                LoggingExtension,
+                SecretMaskingExtension,
+            ]
+        )
 
         assert count == 2
         assert "logging" in manager.list_extensions()
@@ -644,18 +643,18 @@ class TestExtensionIntegration:
     async def test_multiple_extensions_interact(self):
         """Multiple extensions should work together."""
         manager = ExtensionManager()
-        manager.load_extensions([
-            LoggingExtension,
-            SecretMaskingExtension,
-        ])
+        manager.load_extensions(
+            [
+                LoggingExtension,
+                SecretMaskingExtension,
+            ]
+        )
 
         ctx = HookContext(session_id="test", message="Hello")
         ctx.set("response", "api_key=sk-1234567890abcdefghijklmnop")
 
         # Invoke hook
-        results = await manager.invoke_hook(
-            HookPoint.BEFORE_RESPONSE_SEND, ctx
-        )
+        results = await manager.invoke_hook(HookPoint.BEFORE_RESPONSE_SEND, ctx)
 
         # SecretMaskingExtension should have masked the response
         assert any("****" in str(r) for r in results if r)

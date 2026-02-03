@@ -267,7 +267,7 @@ async def test_template_api_integration():
                             print(f"✅ {endpoint}: OK")
                         else:
                             print(f"⚠️  {endpoint}: {response.status}")
-                except Exception as e:
+                except Exception:
                     print(f"❌ {endpoint}: Connection failed")
 
         print("✅ API integration test completed")

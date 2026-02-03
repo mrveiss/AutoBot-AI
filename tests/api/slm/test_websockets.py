@@ -6,15 +6,12 @@ Tests for SLM WebSocket API.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from starlette.websockets import WebSocketState
 
-from backend.api.slm.websockets import (
-    SLMWebSocketManager,
-    create_reconciler_callbacks,
-)
+from backend.api.slm.websockets import SLMWebSocketManager, create_reconciler_callbacks
 
 
 class TestSLMWebSocketManager:
@@ -50,7 +47,10 @@ class TestSLMWebSocketManager:
         await manager.connect(mock_websocket, subscriptions=["state_change", "alert"])
 
         assert mock_websocket in manager._client_subscriptions
-        assert manager._client_subscriptions[mock_websocket] == {"state_change", "alert"}
+        assert manager._client_subscriptions[mock_websocket] == {
+            "state_change",
+            "alert",
+        }
 
     @pytest.mark.asyncio
     async def test_connect_default_all_events(self, manager, mock_websocket):

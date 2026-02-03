@@ -5,13 +5,13 @@ Demonstrates the enhanced multi-agent coordination capabilities
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from src.orchestrator import Orchestrator, TaskComplexity
+from src.orchestrator import Orchestrator
 
 
 async def test_workflow_classification():
@@ -153,9 +153,9 @@ async def main():
     """Main test function."""
 
     # Run all tests
-    orchestrator = await test_workflow_classification()
-    workflow_response = await test_workflow_planning()
-    integration_result = await test_orchestrator_integration()
+    await test_workflow_classification()
+    await test_workflow_planning()
+    await test_orchestrator_integration()
     await demonstrate_improved_capability()
 
     print("\n📈 Test Summary:")

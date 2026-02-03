@@ -14,9 +14,10 @@ Issue: #402 - [Code Quality] Reduce Deep Nesting - 524 functions exceed 4 levels
 """
 
 import json
+from typing import Any, Dict
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from typing import Dict, Any
 
 
 class TestReorganizeRedisHelpers:
@@ -26,6 +27,7 @@ class TestReorganizeRedisHelpers:
         """Test _decode_key with bytes input."""
         # Import locally to avoid module-level import issues
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import _decode_key
 
@@ -35,6 +37,7 @@ class TestReorganizeRedisHelpers:
     def test_decode_key_string(self):
         """Test _decode_key with string input."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import _decode_key
 
@@ -44,15 +47,17 @@ class TestReorganizeRedisHelpers:
     def test_decode_key_unicode(self):
         """Test _decode_key with unicode bytes."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import _decode_key
 
-        result = _decode_key("unicode_тест".encode('utf-8'))
+        result = _decode_key("unicode_тест".encode("utf-8"))
         assert result == "unicode_тест"
 
     def test_determine_target_db_fact(self):
         """Test _determine_target_db routes facts to DB1."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import _determine_target_db
 
@@ -62,6 +67,7 @@ class TestReorganizeRedisHelpers:
     def test_determine_target_db_workflow(self):
         """Test _determine_target_db routes workflows to DB2."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import _determine_target_db
 
@@ -71,6 +77,7 @@ class TestReorganizeRedisHelpers:
     def test_determine_target_db_other(self):
         """Test _determine_target_db routes other keys to DB3."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import _determine_target_db
 
@@ -80,6 +87,7 @@ class TestReorganizeRedisHelpers:
     def test_db_index_to_name_mapping(self):
         """Test explicit database index to name mapping."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from analysis.reorganize_redis_databases import DB_INDEX_TO_NAME
 
@@ -96,6 +104,7 @@ class TestMCPClientHelpers:
     def test_create_error_for_status_400(self):
         """Test error creation for 400 status."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -108,11 +117,14 @@ class TestMCPClientHelpers:
     def test_create_error_for_status_404(self):
         """Test error creation for 404 status."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
-        error = client._create_error_for_status("test", "missing_tool", 404, "not found")
+        error = client._create_error_for_status(
+            "test", "missing_tool", 404, "not found"
+        )
 
         assert error.status == 404
         assert "Tool not found" in error.message
@@ -121,6 +133,7 @@ class TestMCPClientHelpers:
     def test_create_error_for_status_500(self):
         """Test error creation for 500 status."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -133,6 +146,7 @@ class TestMCPClientHelpers:
     def test_non_retryable_status_codes(self):
         """Test NON_RETRYABLE_STATUS_CODES constant."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import NON_RETRYABLE_STATUS_CODES
 
@@ -145,6 +159,7 @@ class TestMCPClientHelpers:
     def test_retry_signal_exception_exists(self):
         """Test _RetrySignal exception class exists."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import _RetrySignal
 
@@ -156,12 +171,13 @@ class TestMCPClientHelpers:
     async def test_should_retry_first_attempt(self):
         """Test _should_retry returns True on first attempt."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(max_retries=3, log_requests=False)
 
-        with patch('asyncio.sleep', new_callable=AsyncMock):
+        with patch("asyncio.sleep", new_callable=AsyncMock):
             result = await client._should_retry(0, "Test error")
 
         assert result is True
@@ -170,6 +186,7 @@ class TestMCPClientHelpers:
     async def test_should_retry_max_attempts_exceeded(self):
         """Test _should_retry returns False when max attempts exceeded."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import MCPClient
 
@@ -190,22 +207,24 @@ class TestCodeVectorKnowledgeHelpers:
 
     def _parse_vector_metadata(self, data: Dict[bytes, bytes]) -> Dict[str, Any]:
         """Standalone implementation for testing."""
-        if b'metadata' not in data:
+        if b"metadata" not in data:
             return {}
         try:
-            metadata_str = data[b'metadata'].decode('utf-8', errors='ignore')
+            metadata_str = data[b"metadata"].decode("utf-8", errors="ignore")
             return json.loads(metadata_str)
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
 
-    def _decode_vector_data(self, key: bytes, data: Dict[bytes, bytes]) -> Dict[str, Any] | None:
+    def _decode_vector_data(
+        self, key: bytes, data: Dict[bytes, bytes]
+    ) -> Dict[str, Any] | None:
         """Standalone implementation for testing."""
         try:
             vector_info = {
-                "id": key.decode('utf-8'),
-                "text": data.get(b'text', b'').decode('utf-8', errors='ignore'),
-                "doc_id": data.get(b'doc_id', b'').decode('utf-8', errors='ignore'),
-                "metadata": self._parse_vector_metadata(data)
+                "id": key.decode("utf-8"),
+                "text": data.get(b"text", b"").decode("utf-8", errors="ignore"),
+                "doc_id": data.get(b"doc_id", b"").decode("utf-8", errors="ignore"),
+                "metadata": self._parse_vector_metadata(data),
             }
             vector_info["metadata"]["source"] = "code_analytics"
             vector_info["metadata"]["database"] = "analytics_db8"
@@ -219,19 +238,19 @@ class TestCodeVectorKnowledgeHelpers:
 
     def test_parse_vector_metadata_valid_json(self):
         """Test _parse_vector_metadata with valid JSON."""
-        data = {b'metadata': b'{"key": "value", "count": 42}'}
+        data = {b"metadata": b'{"key": "value", "count": 42}'}
         result = self._parse_vector_metadata(data)
         assert result == {"key": "value", "count": 42}
 
     def test_parse_vector_metadata_invalid_json(self):
         """Test _parse_vector_metadata with invalid JSON returns empty dict."""
-        data = {b'metadata': b'not valid json'}
+        data = {b"metadata": b"not valid json"}
         result = self._parse_vector_metadata(data)
         assert result == {}
 
     def test_parse_vector_metadata_missing_key(self):
         """Test _parse_vector_metadata with missing metadata key."""
-        data = {b'other_key': b'some_value'}
+        data = {b"other_key": b"some_value"}
         result = self._parse_vector_metadata(data)
         assert result == {}
 
@@ -239,27 +258,23 @@ class TestCodeVectorKnowledgeHelpers:
         """Test _decode_vector_data with valid data."""
         key = b"vector_123"
         data = {
-            b'text': b'This is sample code content for testing.',
-            b'doc_id': b'src/utils/test.py',
-            b'metadata': b'{}'
+            b"text": b"This is sample code content for testing.",
+            b"doc_id": b"src/utils/test.py",
+            b"metadata": b"{}",
         }
 
         result = self._decode_vector_data(key, data)
 
         assert result is not None
-        assert result['id'] == 'vector_123'
-        assert 'sample code content' in result['text']
-        assert result['doc_id'] == 'src/utils/test.py'
-        assert result['metadata']['source'] == 'code_analytics'
+        assert result["id"] == "vector_123"
+        assert "sample code content" in result["text"]
+        assert result["doc_id"] == "src/utils/test.py"
+        assert result["metadata"]["source"] == "code_analytics"
 
     def test_decode_vector_data_empty_text(self):
         """Test _decode_vector_data rejects empty text."""
         key = b"vector_123"
-        data = {
-            b'text': b'',
-            b'doc_id': b'src/utils/test.py',
-            b'metadata': b'{}'
-        }
+        data = {b"text": b"", b"doc_id": b"src/utils/test.py", b"metadata": b"{}"}
 
         result = self._decode_vector_data(key, data)
         assert result is None
@@ -267,11 +282,7 @@ class TestCodeVectorKnowledgeHelpers:
     def test_decode_vector_data_short_text(self):
         """Test _decode_vector_data rejects text under 10 chars."""
         key = b"vector_123"
-        data = {
-            b'text': b'short',
-            b'doc_id': b'src/utils/test.py',
-            b'metadata': b'{}'
-        }
+        data = {b"text": b"short", b"doc_id": b"src/utils/test.py", b"metadata": b"{}"}
 
         result = self._decode_vector_data(key, data)
         assert result is None
@@ -361,6 +372,7 @@ class TestWorkflowResult:
     def test_workflow_result_initialization(self):
         """Test WorkflowResult initialization."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
@@ -374,6 +386,7 @@ class TestWorkflowResult:
     def test_workflow_result_add_step_success(self):
         """Test adding successful step to WorkflowResult."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
@@ -389,6 +402,7 @@ class TestWorkflowResult:
     def test_workflow_result_add_step_error(self):
         """Test adding error step to WorkflowResult."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
@@ -402,6 +416,7 @@ class TestWorkflowResult:
     def test_workflow_result_to_dict(self):
         """Test WorkflowResult to_dict conversion."""
         import sys
+
         sys.path.insert(0, "/home/kali/Desktop/AutoBot")
         from examples.mcp_agent_workflows.base import WorkflowResult
 

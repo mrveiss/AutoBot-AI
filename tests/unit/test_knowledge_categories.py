@@ -15,15 +15,14 @@ Tests the category filtering feature:
 
 import asyncio
 import json
-from typing import Dict, Any, List
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ============================================================================
 # TEST FIXTURES
 # ============================================================================
+
 
 @pytest.fixture
 def mock_redis_client():
@@ -53,14 +52,18 @@ def sample_facts_by_category():
     return {
         "tools": [
             {"id": "f1", "content": "nmap is a network scanner", "category": "tools"},
-            {"id": "f2", "content": "wireshark is a packet analyzer", "category": "tools"},
+            {
+                "id": "f2",
+                "content": "wireshark is a packet analyzer",
+                "category": "tools",
+            },
         ],
         "security": [
             {"id": "f3", "content": "Use strong passwords", "category": "security"},
             {"id": "f4", "content": "Enable 2FA", "category": "security"},
             {"id": "f5", "content": "Regular security audits", "category": "security"},
         ],
-        "empty_category": []
+        "empty_category": [],
     }
 
 
@@ -68,14 +71,16 @@ def sample_facts_by_category():
 def mock_knowledge_base():
     """Mock KnowledgeBase for testing"""
     kb = MagicMock()
-    kb.get_knowledge_categories = AsyncMock(return_value={
-        "status": "success",
-        "categories": [
-            {"name": "tools", "count": 15},
-            {"name": "systems", "count": 8},
-            {"name": "security", "count": 23},
-        ]
-    })
+    kb.get_knowledge_categories = AsyncMock(
+        return_value={
+            "status": "success",
+            "categories": [
+                {"name": "tools", "count": 15},
+                {"name": "systems", "count": 8},
+                {"name": "security", "count": 23},
+            ],
+        }
+    )
     kb.get_facts_by_category = AsyncMock()
     kb.search = AsyncMock()
     return kb
@@ -85,6 +90,7 @@ def mock_knowledge_base():
 # CATEGORY LIST RETRIEVAL TESTS
 # ============================================================================
 
+
 class TestCategoryListRetrieval:
     """Test category list endpoint and retrieval logic"""
 
@@ -93,15 +99,17 @@ class TestCategoryListRetrieval:
         """Test successful category retrieval"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": sample_categories
+            "categories": sample_categories,
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
 
         assert result["status"] == "success"
         assert len(result["categories"]) == 4
-        assert all(cat["name"] in ["tools", "systems", "security", "automation"]
-                  for cat in result["categories"])
+        assert all(
+            cat["name"] in ["tools", "systems", "security", "automation"]
+            for cat in result["categories"]
+        )
 
     @pytest.mark.asyncio
     async def test_get_categories_with_counts(self, mock_knowledge_base):
@@ -118,7 +126,7 @@ class TestCategoryListRetrieval:
         """Test category retrieval when database is empty"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": []
+            "categories": [],
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -129,7 +137,9 @@ class TestCategoryListRetrieval:
     @pytest.mark.asyncio
     async def test_get_categories_error_handling(self, mock_knowledge_base):
         """Test error handling in category retrieval"""
-        mock_knowledge_base.get_knowledge_categories.side_effect = Exception("Database error")
+        mock_knowledge_base.get_knowledge_categories.side_effect = Exception(
+            "Database error"
+        )
 
         with pytest.raises(Exception) as exc_info:
             await mock_knowledge_base.get_knowledge_categories()
@@ -141,13 +151,18 @@ class TestCategoryListRetrieval:
 # CATEGORY FILTERING TESTS
 # ============================================================================
 
+
 class TestCategoryFiltering:
     """Test filtering facts by category"""
 
     @pytest.mark.asyncio
-    async def test_filter_by_single_category(self, mock_knowledge_base, sample_facts_by_category):
+    async def test_filter_by_single_category(
+        self, mock_knowledge_base, sample_facts_by_category
+    ):
         """Test filtering by a single category"""
-        mock_knowledge_base.get_facts_by_category.return_value = sample_facts_by_category["tools"]
+        mock_knowledge_base.get_facts_by_category.return_value = (
+            sample_facts_by_category["tools"]
+        )
 
         result = await mock_knowledge_base.get_facts_by_category("tools")
 
@@ -155,9 +170,13 @@ class TestCategoryFiltering:
         assert all(fact["category"] == "tools" for fact in result)
 
     @pytest.mark.asyncio
-    async def test_filter_empty_category(self, mock_knowledge_base, sample_facts_by_category):
+    async def test_filter_empty_category(
+        self, mock_knowledge_base, sample_facts_by_category
+    ):
         """Test filtering category with no facts"""
-        mock_knowledge_base.get_facts_by_category.return_value = sample_facts_by_category["empty_category"]
+        mock_knowledge_base.get_facts_by_category.return_value = (
+            sample_facts_by_category["empty_category"]
+        )
 
         result = await mock_knowledge_base.get_facts_by_category("empty_category")
 
@@ -173,10 +192,14 @@ class TestCategoryFiltering:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_filter_case_sensitivity(self, mock_knowledge_base, sample_facts_by_category):
+    async def test_filter_case_sensitivity(
+        self, mock_knowledge_base, sample_facts_by_category
+    ):
         """Test case handling in category filtering"""
         # Test lowercase
-        mock_knowledge_base.get_facts_by_category.return_value = sample_facts_by_category["tools"]
+        mock_knowledge_base.get_facts_by_category.return_value = (
+            sample_facts_by_category["tools"]
+        )
         result = await mock_knowledge_base.get_facts_by_category("tools")
         assert len(result) == 2
 
@@ -197,15 +220,18 @@ class TestCategoryFiltering:
 # CATEGORY STATISTICS TESTS
 # ============================================================================
 
+
 class TestCategoryStatistics:
     """Test category statistics and counting"""
 
     @pytest.mark.asyncio
-    async def test_category_count_accuracy(self, mock_knowledge_base, sample_categories):
+    async def test_category_count_accuracy(
+        self, mock_knowledge_base, sample_categories
+    ):
         """Test category count matches actual documents"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": sample_categories
+            "categories": sample_categories,
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -225,7 +251,7 @@ class TestCategoryStatistics:
             "status": "success",
             "categories": [
                 {"name": "empty_cat", "count": 0, "description": "Empty category"}
-            ]
+            ],
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -235,11 +261,13 @@ class TestCategoryStatistics:
         assert empty_cat["name"] == "empty_cat"
 
     @pytest.mark.asyncio
-    async def test_category_statistics_aggregation(self, mock_knowledge_base, sample_categories):
+    async def test_category_statistics_aggregation(
+        self, mock_knowledge_base, sample_categories
+    ):
         """Test statistics aggregation across categories"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": sample_categories
+            "categories": sample_categories,
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -253,6 +281,7 @@ class TestCategoryStatistics:
 # CACHE BEHAVIOR TESTS
 # ============================================================================
 
+
 class TestCacheBehavior:
     """Test caching mechanism for category data"""
 
@@ -261,24 +290,26 @@ class TestCacheBehavior:
         """Test cache hit returns cached data"""
         # Setup cache hit
         cached_data = json.dumps({"categories": sample_categories})
-        mock_redis_client.get.return_value = cached_data.encode('utf-8')
+        mock_redis_client.get.return_value = cached_data.encode("utf-8")
 
         # Simulate cache retrieval
         cache_key = "knowledge:categories:all"
         cached = await mock_redis_client.get(cache_key)
 
         assert cached is not None
-        data = json.loads(cached.decode('utf-8'))
+        data = json.loads(cached.decode("utf-8"))
         assert len(data["categories"]) == 4
 
     @pytest.mark.asyncio
-    async def test_cache_miss(self, mock_redis_client, mock_knowledge_base, sample_categories):
+    async def test_cache_miss(
+        self, mock_redis_client, mock_knowledge_base, sample_categories
+    ):
         """Test cache miss fetches from database"""
         # Setup cache miss
         mock_redis_client.get.return_value = None
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": sample_categories
+            "categories": sample_categories,
         }
 
         # Simulate cache miss and fetch
@@ -292,9 +323,7 @@ class TestCacheBehavior:
 
             # Cache the result
             await mock_redis_client.set(
-                cache_key,
-                json.dumps(result).encode('utf-8'),
-                ex=300  # 5 minutes
+                cache_key, json.dumps(result).encode("utf-8"), ex=300  # 5 minutes
             )
 
         mock_redis_client.set.assert_called_once()
@@ -318,20 +347,19 @@ class TestCacheBehavior:
 
         # Set with expiration
         await mock_redis_client.set(
-            cache_key,
-            json.dumps(data).encode('utf-8'),
-            ex=300  # 5 minutes
+            cache_key, json.dumps(data).encode("utf-8"), ex=300  # 5 minutes
         )
 
         # Verify set was called with expiration
         mock_redis_client.set.assert_called_once()
         call_args = mock_redis_client.set.call_args
-        assert call_args[1]['ex'] == 300
+        assert call_args[1]["ex"] == 300
 
 
 # ============================================================================
 # EMPTY CATEGORY HANDLING TESTS
 # ============================================================================
+
 
 class TestEmptyCategoryHandling:
     """Test handling of empty categories"""
@@ -344,7 +372,7 @@ class TestEmptyCategoryHandling:
             "categories": [
                 {"name": "tools", "count": 15},
                 {"name": "empty", "count": 0},
-            ]
+            ],
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -370,7 +398,7 @@ class TestEmptyCategoryHandling:
         mock_knowledge_base.search.return_value = {
             "status": "success",
             "results": [],
-            "count": 0
+            "count": 0,
         }
 
         result = await mock_knowledge_base.search(query="test", category="empty")
@@ -383,6 +411,7 @@ class TestEmptyCategoryHandling:
 # EDGE CASES AND ERROR HANDLING
 # ============================================================================
 
+
 class TestEdgeCases:
     """Test edge cases and error scenarios"""
 
@@ -394,7 +423,7 @@ class TestEdgeCases:
             "categories": [
                 {"name": "tools🔧", "count": 5},
                 {"name": "安全", "count": 3},  # Chinese for "security"
-            ]
+            ],
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
@@ -406,25 +435,24 @@ class TestEdgeCases:
         long_name = "a" * 500
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": [{"name": long_name, "count": 1}]
+            "categories": [{"name": long_name, "count": 1}],
         }
 
         result = await mock_knowledge_base.get_knowledge_categories()
         assert result["categories"][0]["name"] == long_name
 
     @pytest.mark.asyncio
-    async def test_concurrent_category_requests(self, mock_knowledge_base, sample_categories):
+    async def test_concurrent_category_requests(
+        self, mock_knowledge_base, sample_categories
+    ):
         """Test handling concurrent category retrieval requests"""
         mock_knowledge_base.get_knowledge_categories.return_value = {
             "status": "success",
-            "categories": sample_categories
+            "categories": sample_categories,
         }
 
         # Simulate concurrent requests
-        tasks = [
-            mock_knowledge_base.get_knowledge_categories()
-            for _ in range(10)
-        ]
+        tasks = [mock_knowledge_base.get_knowledge_categories() for _ in range(10)]
         results = await asyncio.gather(*tasks)
 
         assert len(results) == 10
@@ -433,7 +461,9 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_null_category_name_handling(self, mock_knowledge_base):
         """Test handling of null/None category names"""
-        mock_knowledge_base.get_facts_by_category.side_effect = ValueError("Category name cannot be None")
+        mock_knowledge_base.get_facts_by_category.side_effect = ValueError(
+            "Category name cannot be None"
+        )
 
         with pytest.raises(ValueError):
             await mock_knowledge_base.get_facts_by_category(None)
@@ -442,6 +472,7 @@ class TestEdgeCases:
 # ============================================================================
 # INTEGRATION WITH SEARCH TESTS
 # ============================================================================
+
 
 class TestCategorySearchIntegration:
     """Test category filtering integration with search"""
@@ -452,9 +483,14 @@ class TestCategorySearchIntegration:
         mock_knowledge_base.search.return_value = {
             "status": "success",
             "results": [
-                {"id": "f1", "content": "nmap scanning", "category": "tools", "score": 0.95}
+                {
+                    "id": "f1",
+                    "content": "nmap scanning",
+                    "category": "tools",
+                    "score": 0.95,
+                }
             ],
-            "count": 1
+            "count": 1,
         }
 
         result = await mock_knowledge_base.search(query="scanning", category="tools")
@@ -468,10 +504,20 @@ class TestCategorySearchIntegration:
         mock_knowledge_base.search.return_value = {
             "status": "success",
             "results": [
-                {"id": "f1", "content": "nmap scanning", "category": "tools", "score": 0.95},
-                {"id": "f2", "content": "security scanning", "category": "security", "score": 0.90}
+                {
+                    "id": "f1",
+                    "content": "nmap scanning",
+                    "category": "tools",
+                    "score": 0.95,
+                },
+                {
+                    "id": "f2",
+                    "content": "security scanning",
+                    "category": "security",
+                    "score": 0.90,
+                },
             ],
-            "count": 2
+            "count": 2,
         }
 
         result = await mock_knowledge_base.search(query="scanning")

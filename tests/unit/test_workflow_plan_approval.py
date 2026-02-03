@@ -10,8 +10,7 @@ timeout behavior, state transitions, and edge cases.
 """
 
 import asyncio
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -25,9 +24,7 @@ from backend.services.workflow_automation.models import (
     PlanApprovalStatus,
     PlanPresentationRequest,
     WorkflowStep,
-    WorkflowStepStatus,
 )
-
 
 # =========================================================================
 # Fixtures
@@ -286,9 +283,7 @@ class TestPlanPresentation:
         assert "timeout_seconds must be positive" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_present_plan_timeout_capped_at_max(
-        self, executor, sample_workflow
-    ):
+    async def test_present_plan_timeout_capped_at_max(self, executor, sample_workflow):
         """Test that timeout is capped at maximum value."""
         result = await executor.present_plan_for_approval(
             sample_workflow,
@@ -366,9 +361,7 @@ class TestApprovalResponseHandling:
     """Tests for approval response handling."""
 
     @pytest.mark.asyncio
-    async def test_handle_approval_response_approved(
-        self, executor, sample_workflow
-    ):
+    async def test_handle_approval_response_approved(self, executor, sample_workflow):
         """Test handling approved response."""
         # Present plan first
         await executor.present_plan_for_approval(sample_workflow)
@@ -385,9 +378,7 @@ class TestApprovalResponseHandling:
         assert approval.resolved_at is not None
 
     @pytest.mark.asyncio
-    async def test_handle_approval_response_rejected(
-        self, executor, sample_workflow
-    ):
+    async def test_handle_approval_response_rejected(self, executor, sample_workflow):
         """Test handling rejected response."""
         await executor.present_plan_for_approval(sample_workflow)
 
@@ -499,9 +490,7 @@ class TestApprovalWaiting:
         assert "No pending approval" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_wait_for_approval_cleans_up_event(
-        self, executor, sample_workflow
-    ):
+    async def test_wait_for_approval_cleans_up_event(self, executor, sample_workflow):
         """Test that waiting cleans up event on completion."""
         await executor.present_plan_for_approval(sample_workflow)
 

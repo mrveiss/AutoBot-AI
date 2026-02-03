@@ -3,15 +3,21 @@
 # Author: mrveiss
 """Tests for Circuit Breaker - Issue #712."""
 
-import asyncio
 import time
+
 import pytest
 
 from src.circuit_breaker import (
-    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerManager,
-    CircuitBreakerOpenError, CircuitState, CallRecord,
-    circuit_breaker_async, circuit_breaker_sync,
-    protected_llm_call, protected_database_call, protected_network_call,
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerManager,
+    CircuitBreakerOpenError,
+    CircuitState,
+    circuit_breaker_async,
+    circuit_breaker_sync,
+    protected_database_call,
+    protected_llm_call,
+    protected_network_call,
 )
 
 
@@ -87,14 +93,20 @@ class TestCircuitBreakerAsync:
     @pytest.mark.asyncio
     async def test_success(self):
         cb = CircuitBreaker("async_svc")
-        async def func(): return "ok"
+
+        async def func():
+            return "ok"
+
         result = await cb.call_async(func)
         assert result == "ok"
 
     @pytest.mark.asyncio
     async def test_failure(self):
         cb = CircuitBreaker("async_fail_svc")
-        async def func(): raise ConnectionError("fail")
+
+        async def func():
+            raise ConnectionError("fail")
+
         with pytest.raises(ConnectionError):
             await cb.call_async(func)
         assert cb.failure_count == 1
@@ -106,7 +118,10 @@ class TestCircuitBreakerAsync:
         cb.state = CircuitState.OPEN
         cb.last_failure_time = time.time()
         cb.failure_count = 5
-        async def func(): return "ok"
+
+        async def func():
+            return "ok"
+
         with pytest.raises(CircuitBreakerOpenError):
             await cb.call_async(func)
 
@@ -116,12 +131,18 @@ class TestCircuitBreakerSync:
 
     def test_success(self):
         cb = CircuitBreaker("sync_svc")
-        def func(): return "ok"
+
+        def func():
+            return "ok"
+
         assert cb.call_sync(func) == "ok"
 
     def test_failure(self):
         cb = CircuitBreaker("sync_fail_svc")
-        def func(): raise ConnectionError("fail")
+
+        def func():
+            raise ConnectionError("fail")
+
         with pytest.raises(ConnectionError):
             cb.call_sync(func)
 
@@ -149,13 +170,17 @@ class TestDecorators:
     @pytest.mark.asyncio
     async def test_async_decorator(self):
         @circuit_breaker_async("dec_async_svc")
-        async def func(): return "decorated"
+        async def func():
+            return "decorated"
+
         assert await func() == "decorated"
         assert hasattr(func, "circuit_breaker")
 
     def test_sync_decorator(self):
         @circuit_breaker_sync("dec_sync_svc")
-        def func(): return "decorated"
+        def func():
+            return "decorated"
+
         assert func() == "decorated"
 
 
@@ -164,15 +189,21 @@ class TestProtectedCalls:
 
     @pytest.mark.asyncio
     async def test_protected_llm(self):
-        async def llm(): return "response"
+        async def llm():
+            return "response"
+
         assert await protected_llm_call(llm) == "response"
 
     @pytest.mark.asyncio
     async def test_protected_db(self):
-        async def db(): return "data"
+        async def db():
+            return "data"
+
         assert await protected_database_call(db) == "data"
 
     @pytest.mark.asyncio
     async def test_protected_network(self):
-        async def net(): return "result"
+        async def net():
+            return "result"
+
         assert await protected_network_call(net) == "result"

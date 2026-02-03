@@ -6,7 +6,6 @@ Test suite for computer vision system refactoring (Issue #312)
 Verifies Tell Don't Ask pattern implementation and backward compatibility
 """
 
-import asyncio
 import numpy as np
 import pytest
 
@@ -44,7 +43,10 @@ class TestUIElementCollection:
                 confidence=0.85,
                 text_content="",
                 attributes={},
-                possible_interactions=[InteractionType.CLICK, InteractionType.TYPE_TEXT],
+                possible_interactions=[
+                    InteractionType.CLICK,
+                    InteractionType.TYPE_TEXT,
+                ],
             ),
             UIElement(
                 element_id="button_2",
@@ -65,9 +67,9 @@ class TestUIElementCollection:
 
         app_type = collection.detect_application_type(screenshot)
 
-        assert app_type == "form_application", (
-            "Should detect form application with inputs and buttons"
-        )
+        assert (
+            app_type == "form_application"
+        ), "Should detect form application with inputs and buttons"
 
     def test_detect_application_type_web(self):
         """Test application type detection for web browsers"""
@@ -122,9 +124,9 @@ class TestUIElementCollection:
 
         readiness = collection.assess_automation_readiness()
 
-        assert readiness["readiness_score"] == 0.0, (
-            "Low confidence should result in 0% readiness"
-        )
+        assert (
+            readiness["readiness_score"] == 0.0
+        ), "Low confidence should result in 0% readiness"
         assert readiness["recommendation"] == "needs_improvement"
 
     def test_count_by_type(self, sample_elements):
@@ -142,7 +144,9 @@ class TestUIElementCollection:
 
         high_confidence = collection.filter_by_confidence(0.8)
 
-        assert len(high_confidence) == 2, "Should have 2 elements with confidence >= 0.8"
+        assert (
+            len(high_confidence) == 2
+        ), "Should have 2 elements with confidence >= 0.8"
 
     def test_find_interactive_elements(self, sample_elements):
         """Test finding interactive elements"""
@@ -188,7 +192,10 @@ class TestContextAnalyzer:
                 confidence=0.85,
                 text_content="",
                 attributes={},
-                possible_interactions=[InteractionType.CLICK, InteractionType.TYPE_TEXT],
+                possible_interactions=[
+                    InteractionType.CLICK,
+                    InteractionType.TYPE_TEXT,
+                ],
             ),
         ]
 
@@ -246,14 +253,14 @@ class TestFeatureEnvyElimination:
         source = inspect.getsource(ContextAnalyzer.analyze_context)
 
         # Should create UIElementCollection and use its methods
-        assert "UIElementCollection" in source, (
-            "Should use UIElementCollection for analysis"
-        )
+        assert (
+            "UIElementCollection" in source
+        ), "Should use UIElementCollection for analysis"
 
         # Should NOT directly access element internals in loops
-        assert "for el in ui_elements" not in source, (
-            "Should NOT iterate elements directly - use collection methods"
-        )
+        assert (
+            "for el in ui_elements" not in source
+        ), "Should NOT iterate elements directly - use collection methods"
 
         # Should use collection methods
         assert "collection.detect_application_type" in source
@@ -263,12 +270,9 @@ class TestFeatureEnvyElimination:
 
     def test_ui_element_collection_encapsulates_behavior(self):
         """Verify UIElementCollection owns element analysis logic"""
-        import inspect
 
         collection_methods = [
-            method
-            for method in dir(UIElementCollection)
-            if not method.startswith("_")
+            method for method in dir(UIElementCollection) if not method.startswith("_")
         ]
 
         # Should have analysis methods, not just data accessors
@@ -281,27 +285,24 @@ class TestFeatureEnvyElimination:
 
     def test_no_thin_wrapper_methods(self):
         """Verify ContextAnalyzer has no thin wrapper methods"""
-        import inspect
 
         analyzer_methods = [
-            method
-            for method in dir(ContextAnalyzer)
-            if not method.startswith("__")
+            method for method in dir(ContextAnalyzer) if not method.startswith("__")
         ]
 
         # Should NOT have thin wrapper private methods
-        assert "_detect_application_type" not in analyzer_methods, (
-            "Thin wrapper removed - logic moved to UIElementCollection"
-        )
-        assert "_calculate_interaction_complexity" not in analyzer_methods, (
-            "Thin wrapper removed - logic moved to UIElementCollection"
-        )
-        assert "_assess_automation_readiness" not in analyzer_methods, (
-            "Thin wrapper removed - logic moved to UIElementCollection"
-        )
-        assert "_analyze_element_distribution" not in analyzer_methods, (
-            "Thin wrapper removed - logic moved to UIElementCollection"
-        )
+        assert (
+            "_detect_application_type" not in analyzer_methods
+        ), "Thin wrapper removed - logic moved to UIElementCollection"
+        assert (
+            "_calculate_interaction_complexity" not in analyzer_methods
+        ), "Thin wrapper removed - logic moved to UIElementCollection"
+        assert (
+            "_assess_automation_readiness" not in analyzer_methods
+        ), "Thin wrapper removed - logic moved to UIElementCollection"
+        assert (
+            "_analyze_element_distribution" not in analyzer_methods
+        ), "Thin wrapper removed - logic moved to UIElementCollection"
 
 
 if __name__ == "__main__":

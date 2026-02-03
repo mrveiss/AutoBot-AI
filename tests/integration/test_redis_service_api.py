@@ -16,9 +16,10 @@ Test Coverage Target: >80% for backend/api/service_management.py
 
 import asyncio
 import logging
-import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 try:
     from httpx import AsyncClient, HTTPStatusError
@@ -64,7 +65,7 @@ def viewer_token():
 @pytest.fixture
 def mock_redis_service_manager():
     """Mock RedisServiceManager for API testing."""
-    with patch('backend.api.service_management.redis_service_manager') as mock:
+    with patch("backend.api.service_management.redis_service_manager") as mock:
         manager = MagicMock()
 
         # Mock methods
@@ -80,14 +81,14 @@ def mock_redis_service_manager():
             "pid": 12345,
             "uptime_seconds": 86400,
             "memory_mb": 128.5,
-            "connections": 42
+            "connections": 42,
         }
 
         manager.check_health.return_value = {
             "overall_status": "healthy",
             "service_running": True,
             "connectivity": True,
-            "response_time_ms": 2.5
+            "response_time_ms": 2.5,
         }
 
         mock.return_value = manager
@@ -100,8 +101,9 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_success_admin(self, api_client, admin_token,
-                                               mock_redis_service_manager):
+    async def test_start_service_success_admin(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 1.1: Admin successfully starts stopped service
 
@@ -120,13 +122,13 @@ class TestStartServiceEndpoint:
             "message": "Redis service started successfully",
             "duration_seconds": 12.5,
             "new_status": "running",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Make API request
         response = await api_client.post(
             "/api/services/redis/start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Validate response
@@ -142,8 +144,9 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_success_operator(self, api_client, operator_token,
-                                                   mock_redis_service_manager):
+    async def test_start_service_success_operator(
+        self, api_client, operator_token, mock_redis_service_manager
+    ):
         """
         Test Case 1.2: Operator can start service
 
@@ -160,12 +163,12 @@ class TestStartServiceEndpoint:
             "message": "Redis service started successfully",
             "duration_seconds": 11.8,
             "new_status": "running",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         response = await api_client.post(
             "/api/services/redis/start",
-            headers={"Authorization": f"Bearer {operator_token}"}
+            headers={"Authorization": f"Bearer {operator_token}"},
         )
 
         assert response.status_code == 200
@@ -196,8 +199,9 @@ class TestStartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_start_service_already_running(self, api_client, admin_token,
-                                                  mock_redis_service_manager):
+    async def test_start_service_already_running(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 1.4: Start service when already running
 
@@ -214,12 +218,12 @@ class TestStartServiceEndpoint:
             "message": "Redis service already running",
             "duration_seconds": 0.5,
             "new_status": "running",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         response = await api_client.post(
             "/api/services/redis/start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -236,8 +240,9 @@ class TestStopServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_stop_service_success_admin(self, api_client, admin_token,
-                                               mock_redis_service_manager):
+    async def test_stop_service_success_admin(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 2.1: Admin successfully stops service with confirmation
 
@@ -254,13 +259,13 @@ class TestStopServiceEndpoint:
             "message": "Redis service stopped successfully",
             "duration_seconds": 8.3,
             "new_status": "stopped",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         response = await api_client.post(
             "/api/services/redis/stop",
             json={"confirmation": True},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -288,7 +293,7 @@ class TestStopServiceEndpoint:
         response = await api_client.post(
             "/api/services/redis/stop",
             json={"confirmation": True},
-            headers={"Authorization": f"Bearer {operator_token}"}
+            headers={"Authorization": f"Bearer {operator_token}"},
         )
 
         assert response.status_code == 403
@@ -314,7 +319,7 @@ class TestStopServiceEndpoint:
         response = await api_client.post(
             "/api/services/redis/stop",
             json={"confirmation": False},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 400
@@ -330,8 +335,9 @@ class TestRestartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_restart_service_success(self, api_client, admin_token,
-                                            mock_redis_service_manager):
+    async def test_restart_service_success(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 3.1: Full restart flow from API to Redis VM
 
@@ -344,11 +350,7 @@ class TestRestartServiceEndpoint:
         logger.info("=== Test 3.1: Restart service (full flow) ===")
 
         # Mock initial status
-        initial_status = {
-            "status": "running",
-            "pid": 12345,
-            "uptime_seconds": 86400
-        }
+        initial_status = {"status": "running", "pid": 12345, "uptime_seconds": 86400}
         mock_redis_service_manager.get_service_status.return_value = initial_status
 
         # Mock restart operation
@@ -360,13 +362,13 @@ class TestRestartServiceEndpoint:
             "new_status": "running",
             "previous_uptime_seconds": 86400,
             "connections_terminated": 42,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Execute restart
         response = await api_client.post(
             "/api/services/redis/restart",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -380,7 +382,7 @@ class TestRestartServiceEndpoint:
         new_status = {
             "status": "running",
             "pid": 54321,  # Different PID
-            "uptime_seconds": 10  # Fresh uptime
+            "uptime_seconds": 10,  # Fresh uptime
         }
         mock_redis_service_manager.get_service_status.return_value = new_status
 
@@ -394,8 +396,9 @@ class TestRestartServiceEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_restart_service_operator_allowed(self, api_client, operator_token,
-                                                     mock_redis_service_manager):
+    async def test_restart_service_operator_allowed(
+        self, api_client, operator_token, mock_redis_service_manager
+    ):
         """
         Test Case 3.2: Operator can restart service
 
@@ -412,12 +415,12 @@ class TestRestartServiceEndpoint:
             "message": "Redis service restarted successfully",
             "duration_seconds": 14.2,
             "new_status": "running",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         response = await api_client.post(
             "/api/services/redis/restart",
-            headers={"Authorization": f"Bearer {operator_token}"}
+            headers={"Authorization": f"Bearer {operator_token}"},
         )
 
         assert response.status_code == 200
@@ -450,7 +453,7 @@ class TestStatusEndpoint:
             "memory_mb": 128.5,
             "connections": 42,
             "commands_processed": 1000000,
-            "last_check": datetime.now().isoformat()
+            "last_check": datetime.now().isoformat(),
         }
 
         response = await api_client.get("/api/services/redis/status")
@@ -485,7 +488,7 @@ class TestStatusEndpoint:
             "uptime_seconds": None,
             "memory_mb": None,
             "connections": None,
-            "last_check": datetime.now().isoformat()
+            "last_check": datetime.now().isoformat(),
         }
 
         response = await api_client.get("/api/services/redis/status")
@@ -500,8 +503,9 @@ class TestStatusEndpoint:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_get_status_no_auth_required(self, api_client,
-                                                mock_redis_service_manager):
+    async def test_get_status_no_auth_required(
+        self, api_client, mock_redis_service_manager
+    ):
         """
         Test Case 4.3: Status endpoint accessible without authentication
 
@@ -514,7 +518,7 @@ class TestStatusEndpoint:
 
         mock_redis_service_manager.get_service_status.return_value = {
             "status": "running",
-            "last_check": datetime.now().isoformat()
+            "last_check": datetime.now().isoformat(),
         }
 
         # Request without Authorization header
@@ -554,20 +558,20 @@ class TestHealthEndpoint:
                 "connectivity": {
                     "status": "pass",
                     "duration_ms": 2.5,
-                    "message": "PING successful"
+                    "message": "PING successful",
                 },
                 "systemd": {
                     "status": "pass",
                     "duration_ms": 50.0,
-                    "message": "Service active and running"
+                    "message": "Service active and running",
                 },
                 "performance": {
                     "status": "pass",
                     "duration_ms": 15.0,
-                    "message": "All metrics within normal ranges"
-                }
+                    "message": "All metrics within normal ranges",
+                },
             },
-            "recommendations": []
+            "recommendations": [],
         }
 
         response = await api_client.get("/api/services/redis/health")
@@ -605,13 +609,13 @@ class TestHealthEndpoint:
             "health_checks": {
                 "performance": {
                     "status": "warning",
-                    "message": "High memory usage detected"
+                    "message": "High memory usage detected",
                 }
             },
             "recommendations": [
                 "Consider increasing memory limit",
-                "Monitor connection usage"
-            ]
+                "Monitor connection usage",
+            ],
         }
 
         response = await api_client.get("/api/services/redis/health")
@@ -645,21 +649,18 @@ class TestHealthEndpoint:
             "response_time_ms": None,
             "error_count_last_hour": 20,
             "health_checks": {
-                "connectivity": {
-                    "status": "fail",
-                    "message": "Connection timeout"
-                }
+                "connectivity": {"status": "fail", "message": "Connection timeout"}
             },
             "recommendations": [
                 "Check service logs for errors",
-                "Consider manual intervention"
+                "Consider manual intervention",
             ],
             "auto_recovery": {
                 "enabled": True,
                 "recent_recoveries": 3,
                 "recovery_status": "failed",
-                "requires_manual_intervention": True
-            }
+                "requires_manual_intervention": True,
+            },
         }
 
         response = await api_client.get("/api/services/redis/health")
@@ -679,8 +680,9 @@ class TestConcurrentRequests:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_concurrent_status_requests(self, api_client,
-                                               mock_redis_service_manager):
+    async def test_concurrent_status_requests(
+        self, api_client, mock_redis_service_manager
+    ):
         """
         Test Case 6.1: Multiple concurrent status requests
 
@@ -693,14 +695,11 @@ class TestConcurrentRequests:
 
         mock_redis_service_manager.get_service_status.return_value = {
             "status": "running",
-            "pid": 12345
+            "pid": 12345,
         }
 
         # Make 10 concurrent requests
-        tasks = [
-            api_client.get("/api/services/redis/status")
-            for _ in range(10)
-        ]
+        tasks = [api_client.get("/api/services/redis/status") for _ in range(10)]
 
         responses = await asyncio.gather(*tasks)
 
@@ -717,8 +716,9 @@ class TestConcurrentRequests:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_concurrent_mixed_operations(self, api_client, admin_token,
-                                                mock_redis_service_manager):
+    async def test_concurrent_mixed_operations(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 6.2: Mixed concurrent operations
 
@@ -736,7 +736,7 @@ class TestConcurrentRequests:
                 "success": True,
                 "operation": "restart",
                 "duration_seconds": 1.0,
-                "new_status": "running"
+                "new_status": "running",
             }
 
         mock_redis_service_manager.restart_service.side_effect = slow_restart
@@ -744,14 +744,11 @@ class TestConcurrentRequests:
         # Start restart in background
         restart_task = api_client.post(
             "/api/services/redis/restart",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Make status requests during restart
-        status_tasks = [
-            api_client.get("/api/services/redis/status")
-            for _ in range(5)
-        ]
+        status_tasks = [api_client.get("/api/services/redis/status") for _ in range(5)]
 
         # Wait for all to complete
         all_tasks = [restart_task] + status_tasks
@@ -769,8 +766,9 @@ class TestErrorScenarios:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_service_operation_failure(self, api_client, admin_token,
-                                              mock_redis_service_manager):
+    async def test_service_operation_failure(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 7.1: Service operation fails
 
@@ -787,12 +785,12 @@ class TestErrorScenarios:
             "message": "Failed to start Redis service",
             "error": "systemctl start command failed: exit code 1",
             "duration_seconds": 5.0,
-            "new_status": "failed"
+            "new_status": "failed",
         }
 
         response = await api_client.post(
             "/api/services/redis/start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 500
@@ -805,8 +803,9 @@ class TestErrorScenarios:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_vm_unreachable(self, api_client, admin_token,
-                                   mock_redis_service_manager):
+    async def test_vm_unreachable(
+        self, api_client, admin_token, mock_redis_service_manager
+    ):
         """
         Test Case 7.2: Redis VM unreachable
 
@@ -817,15 +816,18 @@ class TestErrorScenarios:
         """
         logger.info("=== Test 7.2: VM unreachable ===")
 
-        mock_redis_service_manager.get_service_status.side_effect = \
+        mock_redis_service_manager.get_service_status.side_effect = (
             ConnectionRefusedError("SSH connection refused")
+        )
 
         response = await api_client.get("/api/services/redis/status")
 
         assert response.status_code == 503
         data = response.json()
-        assert "unreachable" in data.get("error", "").lower() or \
-               "unavailable" in data.get("error", "").lower()
+        assert (
+            "unreachable" in data.get("error", "").lower()
+            or "unavailable" in data.get("error", "").lower()
+        )
         logger.info("✓ VM unreachable handled correctly")
 
         logger.info("=== Test 7.2: PASSED ===\n")
@@ -837,14 +839,17 @@ class TestErrorScenarios:
 
 if __name__ == "__main__":
     """Run all integration tests with pytest"""
-    pytest.main([
-        __file__,
-        '-v',  # Verbose output
-        '--tb=short',  # Short traceback format
-        '--asyncio-mode=auto',  # Enable async support
-        '--log-cli-level=INFO',  # Show INFO logs
-        '-m', 'integration',  # Run only integration tests
-        '--cov=backend.api.service_management',  # Coverage for API module
-        '--cov-report=term-missing',
-        '--cov-report=html:tests/results/coverage_redis_service_api'
-    ])
+    pytest.main(
+        [
+            __file__,
+            "-v",  # Verbose output
+            "--tb=short",  # Short traceback format
+            "--asyncio-mode=auto",  # Enable async support
+            "--log-cli-level=INFO",  # Show INFO logs
+            "-m",
+            "integration",  # Run only integration tests
+            "--cov=backend.api.service_management",  # Coverage for API module
+            "--cov-report=term-missing",
+            "--cov-report=html:tests/results/coverage_redis_service_api",
+        ]
+    )

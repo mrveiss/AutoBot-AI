@@ -4,14 +4,12 @@ Test the new metrics and monitoring system
 """
 
 import asyncio
-import json
 import sys
-import time
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.metrics.workflow_metrics import workflow_metrics
 from src.metrics.system_monitor import system_monitor
+from src.metrics.workflow_metrics import workflow_metrics
 
 
 async def test_workflow_metrics():
@@ -190,7 +188,7 @@ async def test_metrics_api_integration():
                             print(f"✅ {endpoint}: OK")
                         else:
                             print(f"⚠️  {endpoint}: {response.status}")
-                except Exception as e:
+                except Exception:
                     print(f"❌ {endpoint}: Connection failed")
 
         print("✅ API integration test completed")

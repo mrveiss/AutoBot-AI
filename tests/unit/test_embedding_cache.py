@@ -4,6 +4,7 @@ Tests the LRU cache with TTL for ChromaDB query embeddings.
 """
 
 import asyncio
+
 import pytest
 
 from src.knowledge_base import EmbeddingCache, get_embedding_cache
@@ -234,10 +235,7 @@ class TestEmbeddingCache:
             return await cache.get(query)
 
         # Run concurrent operations
-        tasks = [
-            put_then_get(f"query{i}", [float(i)])
-            for i in range(3)
-        ]
+        tasks = [put_then_get(f"query{i}", [float(i)]) for i in range(3)]
 
         results = await asyncio.gather(*tasks)
 
@@ -266,4 +264,3 @@ class TestEmbeddingCacheIntegration:
         assert "cache_size" in stats
         assert stats["hits"] == 1
         assert stats["misses"] == 1
-

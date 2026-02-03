@@ -14,17 +14,15 @@ Tests the vectorization status tracking feature:
 """
 
 import asyncio
-import json
-from typing import Dict, Any, List
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from datetime import datetime, timedelta
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ============================================================================
 # TEST FIXTURES
 # ============================================================================
+
 
 @pytest.fixture
 def mock_redis_client():
@@ -60,7 +58,7 @@ def sample_batch_status():
         "completed": 45,
         "failed": 3,
         "started_at": "2025-11-28T10:00:00",
-        "estimated_completion": "2025-11-28T10:15:00"
+        "estimated_completion": "2025-11-28T10:15:00",
     }
 
 
@@ -79,11 +77,14 @@ def mock_knowledge_base():
 # BATCH VECTORIZATION STATUS TESTS
 # ============================================================================
 
+
 class TestBatchVectorizationStatus:
     """Test batch vectorization status retrieval"""
 
     @pytest.mark.asyncio
-    async def test_get_batch_status_success(self, mock_knowledge_base, sample_batch_status):
+    async def test_get_batch_status_success(
+        self, mock_knowledge_base, sample_batch_status
+    ):
         """Test successful batch status retrieval"""
         mock_knowledge_base.get_vectorization_status.return_value = sample_batch_status
 
@@ -104,7 +105,7 @@ class TestBatchVectorizationStatus:
             "completed": 97,
             "failed": 3,
             "started_at": "2025-11-28T10:00:00",
-            "completed_at": "2025-11-28T10:12:00"
+            "completed_at": "2025-11-28T10:12:00",
         }
         mock_knowledge_base.get_vectorization_status.return_value = completed_status
 
@@ -122,7 +123,7 @@ class TestBatchVectorizationStatus:
             "total": 100,
             "completed": 20,
             "failed": 80,
-            "error": "Connection timeout"
+            "error": "Connection timeout",
         }
         mock_knowledge_base.get_vectorization_status.return_value = failed_status
 
@@ -132,7 +133,9 @@ class TestBatchVectorizationStatus:
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_get_multiple_facts_status(self, mock_knowledge_base, sample_vectorization_status):
+    async def test_get_multiple_facts_status(
+        self, mock_knowledge_base, sample_vectorization_status
+    ):
         """Test getting status for multiple facts"""
         fact_ids = ["fact_1", "fact_2", "fact_3", "fact_4"]
 
@@ -152,6 +155,7 @@ class TestBatchVectorizationStatus:
 # ============================================================================
 # CACHE KEY GENERATION TESTS
 # ============================================================================
+
 
 class TestCacheKeyGeneration:
     """Test cache key generation for vectorization status"""
@@ -193,6 +197,7 @@ class TestCacheKeyGeneration:
 # JOB STATUS POLLING TESTS
 # ============================================================================
 
+
 class TestJobStatusPolling:
     """Test vectorization job status polling"""
 
@@ -201,7 +206,7 @@ class TestJobStatusPolling:
         """Test polling job that is in progress"""
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "in_progress",
-            "progress": 0.45
+            "progress": 0.45,
         }
 
         result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
@@ -215,11 +220,7 @@ class TestJobStatusPolling:
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "completed",
             "progress": 1.0,
-            "results": {
-                "total": 100,
-                "succeeded": 97,
-                "failed": 3
-            }
+            "results": {"total": 100, "succeeded": 97, "failed": 3},
         }
 
         result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
@@ -234,7 +235,7 @@ class TestJobStatusPolling:
         # Simulate job never completing
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "in_progress",
-            "progress": 0.5
+            "progress": 0.5,
         }
 
         start_time = datetime.now()
@@ -245,7 +246,7 @@ class TestJobStatusPolling:
             if (datetime.now() - start_time).total_seconds() > timeout_seconds:
                 break
 
-            result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
+            await mock_knowledge_base.check_vectorization_job("vec_job_123")
             await asyncio.sleep(0.5)
 
         elapsed = (datetime.now() - start_time).total_seconds()
@@ -256,7 +257,7 @@ class TestJobStatusPolling:
         """Test polling job that doesn't exist"""
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "not_found",
-            "error": "Job not found"
+            "error": "Job not found",
         }
 
         result = await mock_knowledge_base.check_vectorization_job("nonexistent_job")
@@ -269,6 +270,7 @@ class TestJobStatusPolling:
 # FAILED JOB HANDLING TESTS
 # ============================================================================
 
+
 class TestFailedJobHandling:
     """Test handling of failed vectorization jobs"""
 
@@ -278,7 +280,7 @@ class TestFailedJobHandling:
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "failed",
             "error": "Database connection lost",
-            "failed_facts": ["fact_1", "fact_2", "fact_3"]
+            "failed_facts": ["fact_1", "fact_2", "fact_3"],
         }
 
         result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
@@ -299,9 +301,9 @@ class TestFailedJobHandling:
                 "failed_facts": [
                     {"id": "fact_1", "error": "Timeout"},
                     {"id": "fact_5", "error": "Invalid format"},
-                    {"id": "fact_9", "error": "Timeout"}
-                ]
-            }
+                    {"id": "fact_9", "error": "Timeout"},
+                ],
+            },
         }
 
         result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
@@ -315,11 +317,7 @@ class TestFailedJobHandling:
         """Test handling of partial job failure"""
         mock_knowledge_base.check_vectorization_job.return_value = {
             "status": "completed",
-            "results": {
-                "total": 100,
-                "succeeded": 85,
-                "failed": 15
-            }
+            "results": {"total": 100, "succeeded": 85, "failed": 15},
         }
 
         result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
@@ -339,7 +337,7 @@ class TestFailedJobHandling:
                     {"id": "f3", "error": "Invalid format"},
                     {"id": "f4", "error": "Connection error"},
                 ]
-            }
+            },
         }
 
         result = await mock_knowledge_base.check_vectorization_job("vec_job_123")
@@ -360,6 +358,7 @@ class TestFailedJobHandling:
 # RETRY FUNCTIONALITY TESTS
 # ============================================================================
 
+
 class TestRetryFunctionality:
     """Test retry mechanism for failed vectorizations"""
 
@@ -370,7 +369,7 @@ class TestRetryFunctionality:
         mock_knowledge_base.retry_failed_vectorization.return_value = {
             "job_id": "vec_job_retry_456",
             "status": "started",
-            "retry_count": 3
+            "retry_count": 3,
         }
 
         result = await mock_knowledge_base.retry_failed_vectorization(failed_fact_ids)
@@ -385,12 +384,12 @@ class TestRetryFunctionality:
         backoff_delays = []
 
         for attempt in range(max_retries):
-            delay = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+            delay = 2**attempt  # Exponential backoff: 1s, 2s, 4s
             backoff_delays.append(delay)
 
             mock_knowledge_base.retry_failed_vectorization.return_value = {
                 "attempt": attempt + 1,
-                "delay": delay
+                "delay": delay,
             }
 
             result = await mock_knowledge_base.retry_failed_vectorization(["fact_1"])
@@ -404,7 +403,7 @@ class TestRetryFunctionality:
         # First attempt fails
         mock_knowledge_base.vectorize_facts.return_value = {
             "status": "failed",
-            "error": "Temporary network error"
+            "error": "Temporary network error",
         }
 
         first_result = await mock_knowledge_base.vectorize_facts(["fact_1"])
@@ -414,7 +413,7 @@ class TestRetryFunctionality:
         mock_knowledge_base.retry_failed_vectorization.return_value = {
             "status": "completed",
             "succeeded": 1,
-            "failed": 0
+            "failed": 0,
         }
 
         retry_result = await mock_knowledge_base.retry_failed_vectorization(["fact_1"])
@@ -432,7 +431,7 @@ class TestRetryFunctionality:
                 mock_knowledge_base.retry_failed_vectorization.return_value = {
                     "status": "failed",
                     "attempt": attempt + 1,
-                    "can_retry": attempt + 1 < max_retries
+                    "can_retry": attempt + 1 < max_retries,
                 }
             else:
                 # Max retries reached
@@ -440,7 +439,7 @@ class TestRetryFunctionality:
                     "status": "failed",
                     "attempt": attempt + 1,
                     "can_retry": False,
-                    "error": "Max retries reached"
+                    "error": "Max retries reached",
                 }
 
             result = await mock_knowledge_base.retry_failed_vectorization([fact_id])
@@ -454,6 +453,7 @@ class TestRetryFunctionality:
 # CACHE INTEGRATION TESTS
 # ============================================================================
 
+
 class TestCacheIntegration:
     """Test Redis cache integration for vectorization status"""
 
@@ -465,11 +465,7 @@ class TestCacheIntegration:
 
         cache_key = f"vectorization:status:{fact_id}"
         await mock_redis_client.hset(
-            cache_key,
-            mapping={
-                "vectorized": "true",
-                "timestamp": status["timestamp"]
-            }
+            cache_key, mapping={"vectorized": "true", "timestamp": status["timestamp"]}
         )
 
         mock_redis_client.hset.assert_called_once()
@@ -513,7 +509,7 @@ class TestCacheIntegration:
         # Set new status
         await mock_redis_client.hset(
             cache_key,
-            mapping={"vectorized": "true", "timestamp": datetime.now().isoformat()}
+            mapping={"vectorized": "true", "timestamp": datetime.now().isoformat()},
         )
 
         mock_redis_client.delete.assert_called_once()
@@ -523,6 +519,7 @@ class TestCacheIntegration:
 # ============================================================================
 # EDGE CASES AND ERROR HANDLING
 # ============================================================================
+
 
 class TestEdgeCases:
     """Test edge cases and error scenarios"""
@@ -534,7 +531,7 @@ class TestEdgeCases:
             "status": "completed",
             "total": 0,
             "completed": 0,
-            "failed": 0
+            "failed": 0,
         }
 
         result = await mock_knowledge_base.vectorize_facts([])
@@ -549,7 +546,7 @@ class TestEdgeCases:
         mock_knowledge_base.vectorize_facts.return_value = {
             "status": "started",
             "job_id": "vec_job_large",
-            "total": len(large_batch)
+            "total": len(large_batch),
         }
 
         result = await mock_knowledge_base.vectorize_facts(large_batch)
@@ -570,7 +567,7 @@ class TestEdgeCases:
 
         mock_knowledge_base.vectorize_facts.return_value = {
             "status": "started",
-            "job_id": "vec_job_concurrent"
+            "job_id": "vec_job_concurrent",
         }
 
         results = await asyncio.gather(*[vectorize_batch(b) for b in fact_batches])
@@ -589,7 +586,7 @@ class TestEdgeCases:
         for _ in range(poll_count):
             mock_knowledge_base.check_vectorization_job.return_value = {
                 "status": "in_progress",
-                "progress": 0.5
+                "progress": 0.5,
             }
             result = await mock_knowledge_base.check_vectorization_job(job_id)
             results.append(result)

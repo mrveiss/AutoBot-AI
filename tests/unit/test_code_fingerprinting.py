@@ -22,7 +22,6 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -584,7 +583,8 @@ class TestCloneDetector:
             # Create some Python files with clones
             # File 1: Original function
             file1 = Path(tmpdir) / "module1.py"
-            file1.write_text("""
+            file1.write_text(
+                """
 def calculate_sum(items):
     total = 0
     for item in items:
@@ -593,11 +593,13 @@ def calculate_sum(items):
 
 def other_function():
     pass
-""")
+"""
+            )
 
             # File 2: Exact clone (Type 1)
             file2 = Path(tmpdir) / "module2.py"
-            file2.write_text("""
+            file2.write_text(
+                """
 def calculate_sum(items):
     total = 0
     for item in items:
@@ -606,11 +608,13 @@ def calculate_sum(items):
 
 def another_function():
     pass
-""")
+"""
+            )
 
             # File 3: Renamed clone (Type 2)
             file3 = Path(tmpdir) / "module3.py"
-            file3.write_text("""
+            file3.write_text(
+                """
 def compute_total(data):
     result = 0
     for element in data:
@@ -619,7 +623,8 @@ def compute_total(data):
 
 def helper():
     pass
-""")
+"""
+            )
 
             yield tmpdir
 
@@ -665,7 +670,9 @@ def test_function(x, y):
         report = detector.detect_clones(temp_codebase)
 
         # Should find at least one Type 1 clone group
-        type1_groups = [g for g in report.clone_groups if g.clone_type == CloneType.TYPE_1]
+        type1_groups = [
+            g for g in report.clone_groups if g.clone_type == CloneType.TYPE_1
+        ]
         assert len(type1_groups) >= 1
 
     def test_severity_calculation(self, detector):
@@ -813,13 +820,15 @@ class TestConvenienceFunctions:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a simple Python file
             file1 = Path(tmpdir) / "test.py"
-            file1.write_text("""
+            file1.write_text(
+                """
 def simple_function():
     x = 1
     y = 2
     z = x + y
     return z
-""")
+"""
+            )
 
             report = detect_clones(tmpdir, min_fragment_lines=3)
 
@@ -863,12 +872,14 @@ class TestEdgeCases:
             (venv_dir / "test.py").write_text("def foo(): pass")
 
             # Create file in regular directory
-            (Path(tmpdir) / "main.py").write_text("""
+            (Path(tmpdir) / "main.py").write_text(
+                """
 def main_function():
     x = 1
     y = 2
     return x + y
-""")
+"""
+            )
 
             report = detector.detect_clones(tmpdir)
 
@@ -881,10 +892,12 @@ def main_function():
 
         with tempfile.TemporaryDirectory() as tmpdir:
             file1 = Path(tmpdir) / "small.py"
-            file1.write_text("""
+            file1.write_text(
+                """
 def small():
     return 1
-""")
+"""
+            )
 
             report = detector.detect_clones(tmpdir)
 

@@ -3,8 +3,8 @@
 # Author: mrveiss
 """Tests for SLM node agent."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.slm.agent.health_collector import HealthCollector
 
 

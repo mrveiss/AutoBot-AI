@@ -25,6 +25,8 @@ repos:
     hooks:
       - id: flake8
         # No args - uses .flake8 config file in repo root
+        # Exclude tests to match .flake8 config (pre-commit needs explicit exclude)
+        exclude: ^tests/
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
@@ -64,7 +66,7 @@ repos:
       - id: debug-statements  # Check for debugger imports
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
-        exclude: ^tests/(conftest|mock_llm_interface|ci_cd_integration|integration_test_infrastructure|security_port_audit|frontend_comprehensive_corrected|phase9_comprehensive_test_suite)\.py$
+        exclude: ^tests/(results/.*|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py)$
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit

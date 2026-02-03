@@ -12,13 +12,13 @@ Tests verify:
 5. DelegateTool integration
 """
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from src.agents.hierarchical_agent import HierarchicalAgent
 from src.chat_workflow.models import AgentContext
-from src.agents.hierarchical_agent import HierarchicalAgent, DelegationResult
-from src.tools.delegate_tool import DelegateTool, DelegateToolResponse
+from src.tools.delegate_tool import DelegateTool
 from src.utils.errors import RepairableException
 
 
@@ -149,8 +149,7 @@ class TestHierarchicalAgent:
 
         assert len(agent.history) >= 1
         delegation_entry = next(
-            (h for h in agent.history if h["action"] == "delegate"),
-            None
+            (h for h in agent.history if h["action"] == "delegate"), None
         )
         assert delegation_entry is not None
         assert delegation_entry["task"] == "Record me"
@@ -313,7 +312,10 @@ class TestDelegateTool:
         )
 
         assert response.success is False
-        assert "Maximum delegation depth" in response.message or "depth" in response.message.lower()
+        assert (
+            "Maximum delegation depth" in response.message
+            or "depth" in response.message.lower()
+        )
 
 
 class TestDelegationChain:
@@ -327,15 +329,14 @@ class TestDelegationChain:
         async def callback_with_subdelegation(task, agent):
             if agent.context.level < 2 and "sub" not in task:
                 # Delegate further
-                result = await agent.delegate(
-                    task=f"Sub-{task}",
-                    reason="Chain test"
-                )
+                result = await agent.delegate(task=f"Sub-{task}", reason="Chain test")
                 return f"Delegated and got: {result.result}"
             else:
                 return f"Leaf executed: {task}"
 
-        root = HierarchicalAgent(context=root_ctx, task_callback=callback_with_subdelegation)
+        root = HierarchicalAgent(
+            context=root_ctx, task_callback=callback_with_subdelegation
+        )
         result = await root.delegate(task="Top task", reason="Chain test")
 
         assert result.success is True
@@ -352,8 +353,7 @@ class TestDelegationChain:
             depth_reached.append(agent.context.level)
             if agent.context.can_delegate():
                 result = await agent.delegate(
-                    task=f"Level {agent.context.level + 1}",
-                    reason="Depth test"
+                    task=f"Level {agent.context.level + 1}", reason="Depth test"
                 )
                 return result.result
             else:

@@ -4,18 +4,12 @@ Test the new workflow scheduler and queue management system
 """
 
 import asyncio
-import json
 import sys
 from datetime import datetime, timedelta
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.workflow_scheduler import (
-    workflow_scheduler,
-    WorkflowPriority,
-    WorkflowStatus,
-    ScheduledWorkflow,
-)
+from src.workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
 
 
 async def test_workflow_scheduling():
@@ -335,7 +329,7 @@ async def test_scheduler_api_integration():
                             print(f"✅ {endpoint}: OK")
                         else:
                             print(f"⚠️  {endpoint}: {response.status}")
-                except Exception as e:
+                except Exception:
                     print(f"❌ {endpoint}: Connection failed")
 
         print("✅ API integration test completed")

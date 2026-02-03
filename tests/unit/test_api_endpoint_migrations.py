@@ -380,14 +380,13 @@ class TestChatSessionsEndpoints:
         ) as mock_gen_id, patch(
             "backend.api.chat.log_chat_event"
         ) as mock_log:
-
             mock_manager = AsyncMock()
             mock_manager.create_session = AsyncMock(return_value={"id": "test123"})
             mock_get_manager.return_value = mock_manager
             mock_auth.get_user_from_request.return_value = {"username": "testuser"}
             mock_gen_id.return_value = "test123"
 
-            response = await create_session(session_data, mock_request)
+            await create_session(session_data, mock_request)
 
             # Verify session creation was called with owner metadata
             assert mock_manager.create_session.called
@@ -475,7 +474,6 @@ class TestSessionCRUDEndpoints:
         with patch("backend.api.chat.validate_chat_session_id") as mock_validate, patch(
             "backend.api.chat.get_chat_history_manager"
         ) as mock_get_manager:
-
             mock_validate.return_value = True
             mock_manager = AsyncMock()
             mock_manager.update_session = AsyncMock(return_value=None)
@@ -509,7 +507,6 @@ class TestSessionCRUDEndpoints:
         with patch("backend.api.chat.validate_chat_session_id") as mock_validate, patch(
             "backend.api.chat.get_chat_history_manager"
         ) as mock_get_manager:
-
             mock_validate.return_value = True
             mock_manager = Mock()
             mock_manager.delete_session = Mock(return_value=False)  # Session not found
@@ -6081,7 +6078,7 @@ class TestBatch34MigrationStats:
         import sys
 
         # Get this test class
-        current_module = sys.modules[__name__]
+        sys.modules[__name__]
 
         # Count batch 34 test methods
         batch_34_tests = [
@@ -6230,7 +6227,7 @@ class TestBatch35MigrationStats:
         """Verify batch 35 has adequate test coverage"""
         import sys
 
-        current_module = sys.modules[__name__]
+        sys.modules[__name__]
 
         # Count batch 35 test methods
         batch_35_tests = [
@@ -6730,10 +6727,7 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
         """Verify all Batch 41 endpoints have been migrated"""
         import inspect
 
-        from backend.api.analytics import (
-            get_realtime_metrics,
-            track_analytics_event,
-        )
+        from backend.api.analytics import get_realtime_metrics, track_analytics_event
 
         endpoints = [get_realtime_metrics, track_analytics_event]
 
@@ -6746,10 +6740,7 @@ class TestBatch41AnalyticsMigrations(unittest.TestCase):
         """Verify consistent error category across Batch 41"""
         import inspect
 
-        from backend.api.analytics import (
-            get_realtime_metrics,
-            track_analytics_event,
-        )
+        from backend.api.analytics import get_realtime_metrics, track_analytics_event
 
         endpoints = [get_realtime_metrics, track_analytics_event]
 
@@ -7016,10 +7007,7 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
         """Verify all Batch 43 endpoints have been migrated"""
         import inspect
 
-        from backend.api.analytics import (
-            get_dashboard_overview,
-            get_historical_trends,
-        )
+        from backend.api.analytics import get_dashboard_overview, get_historical_trends
 
         endpoints = [get_historical_trends, get_dashboard_overview]
 
@@ -7032,10 +7020,7 @@ class TestBatch43AnalyticsMigrations(unittest.TestCase):
         """Verify consistent error category across Batch 43"""
         import inspect
 
-        from backend.api.analytics import (
-            get_dashboard_overview,
-            get_historical_trends,
-        )
+        from backend.api.analytics import get_dashboard_overview, get_historical_trends
 
         endpoints = [get_historical_trends, get_dashboard_overview]
 
@@ -7448,10 +7433,7 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
         """Verify all Batch 46 endpoints have been migrated"""
         import inspect
 
-        from backend.api.analytics import (
-            get_code_analysis_status,
-            index_codebase,
-        )
+        from backend.api.analytics import get_code_analysis_status, index_codebase
 
         endpoints = [index_codebase, get_code_analysis_status]
 
@@ -7464,10 +7446,7 @@ class TestBatch46AnalyticsMigrations(unittest.TestCase):
         """Verify consistent error category across Batch 46"""
         import inspect
 
-        from backend.api.analytics import (
-            get_code_analysis_status,
-            index_codebase,
-        )
+        from backend.api.analytics import get_code_analysis_status, index_codebase
 
         endpoints = [index_codebase, get_code_analysis_status]
 
@@ -7729,10 +7708,7 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
         """Verify all Batch 48 endpoints have been migrated"""
         import inspect
 
-        from backend.api.knowledge import (
-            rag_enhanced_search,
-            test_main_categories,
-        )
+        from backend.api.knowledge import rag_enhanced_search, test_main_categories
 
         endpoints = [test_main_categories, rag_enhanced_search]
 
@@ -7745,10 +7721,7 @@ class TestBatch48KnowledgeMigrations(unittest.TestCase):
         """Verify consistent error category across Batch 48"""
         import inspect
 
-        from backend.api.knowledge import (
-            rag_enhanced_search,
-            test_main_categories,
-        )
+        from backend.api.knowledge import rag_enhanced_search, test_main_categories
 
         endpoints = [test_main_categories, rag_enhanced_search]
 
@@ -7873,10 +7846,7 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
         """Verify all Batch 49 endpoints have been migrated"""
         import inspect
 
-        from backend.api.knowledge import (
-            populate_system_commands,
-            similarity_search,
-        )
+        from backend.api.knowledge import populate_system_commands, similarity_search
 
         endpoints = [similarity_search, populate_system_commands]
 
@@ -7889,10 +7859,7 @@ class TestBatch49KnowledgeMigrations(unittest.TestCase):
         """Verify consistent error category across Batch 49"""
         import inspect
 
-        from backend.api.knowledge import (
-            populate_system_commands,
-            similarity_search,
-        )
+        from backend.api.knowledge import populate_system_commands, similarity_search
 
         endpoints = [similarity_search, populate_system_commands]
 
@@ -8015,10 +7982,7 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
         """Verify all Batch 50 endpoints have been migrated"""
         import inspect
 
-        from backend.api.knowledge import (
-            populate_man_pages,
-            refresh_system_knowledge,
-        )
+        from backend.api.knowledge import populate_man_pages, refresh_system_knowledge
 
         endpoints = [populate_man_pages, refresh_system_knowledge]
 
@@ -8031,10 +7995,7 @@ class TestBatch50KnowledgeMigrations(unittest.TestCase):
         """Verify consistent error category across Batch 50"""
         import inspect
 
-        from backend.api.knowledge import (
-            populate_man_pages,
-            refresh_system_knowledge,
-        )
+        from backend.api.knowledge import populate_man_pages, refresh_system_knowledge
 
         endpoints = [populate_man_pages, refresh_system_knowledge]
 
@@ -8806,7 +8767,9 @@ class TestBatch55TerminalMigrations(unittest.TestCase):
         source = inspect.getsource(get_terminal_command_history)
 
         # Core business logic should be preserved
-        self.assertIn("config = session_manager.session_configs.get(session_id)", source)
+        self.assertIn(
+            "config = session_manager.session_configs.get(session_id)", source
+        )
         self.assertIn("if not config:", source)
         self.assertIn(
             'raise HTTPException(status_code=404, detail="Session not found")', source
@@ -8896,7 +8859,9 @@ class TestBatch56TerminalMigrations(unittest.TestCase):
         source = inspect.getsource(get_session_audit_log)
 
         # Core business logic should be preserved
-        self.assertIn("config = session_manager.session_configs.get(session_id)", source)
+        self.assertIn(
+            "config = session_manager.session_configs.get(session_id)", source
+        )
         self.assertIn("if not config:", source)
         self.assertIn(
             'raise HTTPException(status_code=404, detail="Session not found")', source
@@ -8959,11 +8924,15 @@ class TestBatch56TerminalMigrations(unittest.TestCase):
         source = inspect.getsource(install_tool)
 
         # Core business logic should be preserved
-        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn(
+            "from src.agents.system_command_agent import SystemCommandAgent", source
+        )
         self.assertIn("system_command_agent = SystemCommandAgent()", source)
         self.assertIn("tool_info = {", source)
         self.assertIn('"name": request.tool_name', source)
-        self.assertIn('"package_name": request.package_name or request.tool_name', source)
+        self.assertIn(
+            '"package_name": request.package_name or request.tool_name', source
+        )
         self.assertIn('"install_method": request.install_method', source)
         self.assertIn('"custom_command": request.custom_command', source)
         self.assertIn('"update_first": request.update_first', source)
@@ -9043,7 +9012,9 @@ class TestBatch57TerminalMigrations(unittest.TestCase):
         source = inspect.getsource(check_tool_installed)
 
         # Core business logic should be preserved
-        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn(
+            "from src.agents.system_command_agent import SystemCommandAgent", source
+        )
         self.assertIn("system_command_agent = SystemCommandAgent()", source)
         self.assertIn(
             "result = await system_command_agent.check_tool_installed(tool_name)",
@@ -9102,7 +9073,9 @@ class TestBatch57TerminalMigrations(unittest.TestCase):
         source = inspect.getsource(validate_command)
 
         # Core business logic should be preserved
-        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn(
+            "from src.agents.system_command_agent import SystemCommandAgent", source
+        )
         self.assertIn("system_command_agent = SystemCommandAgent()", source)
         self.assertIn(
             "result = await system_command_agent.validate_command_safety(command)",
@@ -9161,15 +9134,21 @@ class TestBatch57TerminalMigrations(unittest.TestCase):
         source = inspect.getsource(get_package_managers)
 
         # Core business logic should be preserved
-        self.assertIn("from src.agents.system_command_agent import SystemCommandAgent", source)
+        self.assertIn(
+            "from src.agents.system_command_agent import SystemCommandAgent", source
+        )
         self.assertIn("system_command_agent = SystemCommandAgent()", source)
         self.assertIn(
             "detected = await system_command_agent.detect_package_manager()", source
         )
-        self.assertIn("all_managers = list(system_command_agent.PACKAGE_MANAGERS.keys())", source)
+        self.assertIn(
+            "all_managers = list(system_command_agent.PACKAGE_MANAGERS.keys())", source
+        )
         self.assertIn('"detected": detected', source)
         self.assertIn('"available": all_managers', source)
-        self.assertIn('"package_managers": system_command_agent.PACKAGE_MANAGERS', source)
+        self.assertIn(
+            '"package_managers": system_command_agent.PACKAGE_MANAGERS', source
+        )
 
     def test_get_package_managers_decorator_configuration(self):
         """Test get_package_managers decorator has correct configuration"""
@@ -9233,7 +9212,9 @@ class TestBatch58ChatMigrations(unittest.TestCase):
                 try_count += 1
 
         self.assertEqual(
-            try_count, 0, "Should have NO try-catch blocks (redundant ones removed, decorator handles errors)"
+            try_count,
+            0,
+            "Should have NO try-catch blocks (redundant ones removed, decorator handles errors)",
         )
 
     def test_list_chats_business_logic_preserved(self):
@@ -9295,11 +9276,13 @@ class TestBatch58ChatMigrations(unittest.TestCase):
         # Verify LLM generation fallback is still present
         self.assertIn("# Generate AI response", source)
         self.assertIn("try:", source)
-        self.assertIn("if hasattr(llm_service, \"generate_response\"):", source)
+        self.assertIn('if hasattr(llm_service, "generate_response"):', source)
         self.assertIn("except Exception as e:", source)
         self.assertIn('logger.error(f"LLM generation failed: {e}")', source)
         # Fallback response
-        self.assertIn('"content": "I encountered an error processing your message', source)
+        self.assertIn(
+            '"content": "I encountered an error processing your message', source
+        )
 
     def test_process_chat_message_business_logic_preserved(self):
         """Test process_chat_message business logic preserved after outer try-catch removal"""
@@ -9311,12 +9294,14 @@ class TestBatch58ChatMigrations(unittest.TestCase):
 
         # Core business logic should be preserved
         self.assertIn("if message.session_id and not validate_chat_session_id", source)
-        self.assertIn("session_id = message.session_id or generate_chat_session_id()", source)
+        self.assertIn(
+            "session_id = message.session_id or generate_chat_session_id()", source
+        )
         self.assertIn("user_message_id = generate_message_id()", source)
         self.assertIn("await chat_history_manager.add_message", source)
         self.assertIn("await log_chat_event", source)
         self.assertIn("ai_message_id = generate_message_id()", source)
-        self.assertIn('return {', source)
+        self.assertIn("return {", source)
 
     def test_process_chat_message_no_outer_except(self):
         """Verify outer except block that re-raised InternalError was removed"""
@@ -9332,14 +9317,14 @@ class TestBatch58ChatMigrations(unittest.TestCase):
 
         # Check that the specific outer exception pattern is gone
         has_outer_except_pattern = (
-            'raise InternalError(' in source
+            "raise InternalError(" in source
             and '"Failed to process chat message"' in source
             and '"request_id": request_id' in source
         )
 
         self.assertFalse(
             has_outer_except_pattern,
-            "Outer except block with 'Failed to process chat message' should be removed"
+            "Outer except block with 'Failed to process chat message' should be removed",
         )
 
     def test_batch58_consistent_error_category(self):
@@ -10114,13 +10099,28 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
             get_services_health,
         )
 
-        endpoints = [get_gpu_details, get_npu_details, get_services_health, export_metrics]
+        endpoints = [
+            get_gpu_details,
+            get_npu_details,
+            get_services_health,
+            export_metrics,
+        ]
 
         for endpoint in endpoints:
             source = inspect.getsource(endpoint)
-            self.assertIn("@with_error_handling", source, f"{endpoint.__name__} missing decorator")
-            self.assertIn("ErrorCategory.SERVER_ERROR", source, f"{endpoint.__name__} not using SERVER_ERROR")
-            self.assertIn('error_code_prefix="MONITORING"', source, f"{endpoint.__name__} not using MONITORING prefix")
+            self.assertIn(
+                "@with_error_handling", source, f"{endpoint.__name__} missing decorator"
+            )
+            self.assertIn(
+                "ErrorCategory.SERVER_ERROR",
+                source,
+                f"{endpoint.__name__} not using SERVER_ERROR",
+            )
+            self.assertIn(
+                'error_code_prefix="MONITORING"',
+                source,
+                f"{endpoint.__name__} not using MONITORING prefix",
+            )
 
     def test_batch62_consistent_error_category(self):
         """Verify consistent error category and prefix for Batch 62"""
@@ -10131,7 +10131,12 @@ class TestBatch62MonitoringMigrations(unittest.TestCase):
             get_services_health,
         )
 
-        endpoints = [get_gpu_details, get_npu_details, get_services_health, export_metrics]
+        endpoints = [
+            get_gpu_details,
+            get_npu_details,
+            get_services_health,
+            export_metrics,
+        ]
 
         for endpoint in endpoints:
             source = inspect.getsource(endpoint)
@@ -10190,7 +10195,9 @@ class TestBatch63MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(get_prometheus_metrics)
         try_count = source.count("    try:")
         self.assertEqual(
-            try_count, 0, f"Expected 0 try blocks in get_prometheus_metrics, found {try_count}"
+            try_count,
+            0,
+            f"Expected 0 try blocks in get_prometheus_metrics, found {try_count}",
         )
 
     def test_get_prometheus_metrics_business_logic_preserved(self):
@@ -10219,7 +10226,9 @@ class TestBatch63MonitoringMigrations(unittest.TestCase):
         source = inspect.getsource(metrics_health_check)
         try_count = source.count("    try:")
         self.assertEqual(
-            try_count, 0, f"Expected 0 try blocks in metrics_health_check, found {try_count}"
+            try_count,
+            0,
+            f"Expected 0 try blocks in metrics_health_check, found {try_count}",
         )
 
     def test_metrics_health_check_business_logic_preserved(self):
@@ -10331,7 +10340,9 @@ class TestBatch64ResearchBrowserMigrations(unittest.TestCase):
         # Should have NO try-catch blocks
         try_count = source.count("    try:")
         self.assertEqual(
-            try_count, 0, "research_url should have no try-catch blocks (Simple Pattern)"
+            try_count,
+            0,
+            "research_url should have no try-catch blocks (Simple Pattern)",
         )
 
     def test_research_url_business_logic_preserved(self):
@@ -10375,13 +10386,13 @@ class TestBatch64ResearchBrowserMigrations(unittest.TestCase):
         health_source = inspect.getsource(health_check)
         # Should NOT have redundant logger.error at function level
         self.assertNotIn(
-            "logger.error(f\"Research browser health check failed",
+            'logger.error(f"Research browser health check failed',
             health_source,
         )
 
         # research_url: Simple Pattern - no try-catch at all
         research_source = inspect.getsource(research_url)
-        self.assertNotIn("logger.error(f\"Research URL failed", research_source)
+        self.assertNotIn('logger.error(f"Research URL failed', research_source)
         self.assertNotIn("except Exception as e:", research_source)
 
     def test_batch64_imports_error_boundaries(self):
@@ -10659,7 +10670,9 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
         source = inspect.getsource(list_sessions)
         try_count = source.count("    try:")
         self.assertEqual(
-            try_count, 0, "list_sessions should have no try-catch blocks (Simple Pattern)"
+            try_count,
+            0,
+            "list_sessions should have no try-catch blocks (Simple Pattern)",
         )
 
     def test_list_sessions_business_logic(self):
@@ -10774,7 +10787,12 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
         )
 
         # All research_browser endpoints should use SERVER_ERROR category
-        for func in [cleanup_session, list_sessions, navigate_session, get_browser_info]:
+        for func in [
+            cleanup_session,
+            list_sessions,
+            navigate_session,
+            get_browser_info,
+        ]:
             source = inspect.getsource(func)
             self.assertIn("ErrorCategory.SERVER_ERROR", source)
 
@@ -10791,7 +10809,9 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
             source = inspect.getsource(func)
             try_count = source.count("    try:")
             self.assertEqual(
-                try_count, 0, f"{func.__name__} should have no try-catch (Simple Pattern)"
+                try_count,
+                0,
+                f"{func.__name__} should have no try-catch (Simple Pattern)",
             )
 
     def test_batch66_simple_pattern_compliance(self):
@@ -11983,10 +12003,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_decorator_placement(self):
         """Test batch 72 endpoints have decorators in correct order"""
-        from backend.api.agent import (
-            enhanced_agent_health,
-            receive_goal_compat,
-        )
+        from backend.api.agent import enhanced_agent_health, receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -12001,10 +12018,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_category_consistency(self):
         """Test batch 72 endpoints all use ErrorCategory.SERVER_ERROR"""
-        from backend.api.agent import (
-            enhanced_agent_health,
-            receive_goal_compat,
-        )
+        from backend.api.agent import enhanced_agent_health, receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -12016,10 +12030,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_error_prefix_consistency(self):
         """Test batch 72 endpoints all use AGENT_ENHANCED prefix"""
-        from backend.api.agent import (
-            enhanced_agent_health,
-            receive_goal_compat,
-        )
+        from backend.api.agent import enhanced_agent_health, receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -12031,10 +12042,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_mixed_pattern_consistency(self):
         """Test batch 72 endpoints all use Mixed Pattern (preserve outer try-catch)"""
-        from backend.api.agent import (
-            enhanced_agent_health,
-            receive_goal_compat,
-        )
+        from backend.api.agent import enhanced_agent_health, receive_goal_compat
 
         for endpoint in [receive_goal_compat, enhanced_agent_health]:
             source = inspect.getsource(endpoint)
@@ -12047,10 +12055,7 @@ class TestBatch72AgentEnhancedMigrations(unittest.TestCase):
 
     def test_batch72_business_logic_preservation(self):
         """Test batch 72 endpoints preserve business logic (fallback/degraded responses)"""
-        from backend.api.agent import (
-            enhanced_agent_health,
-            receive_goal_compat,
-        )
+        from backend.api.agent import enhanced_agent_health, receive_goal_compat
 
         # receive_goal_compat should have fallback logic
         compat_source = inspect.getsource(receive_goal_compat)
@@ -12358,9 +12363,7 @@ class TestBatch76AgentMigrations(unittest.TestCase):
         source = inspect.getsource(receive_goal)
         # Simple Pattern: no try-catch blocks
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_receive_goal_http_exception_preserved(self):
         """Test receive_goal preserves HTTPException for 403 permission denied"""
@@ -12403,9 +12406,7 @@ class TestBatch76AgentMigrations(unittest.TestCase):
         source = inspect.getsource(pause_agent_api)
         # Simple Pattern: no try-catch blocks
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_pause_agent_api_http_exception_preserved(self):
         """Test pause_agent_api preserves HTTPException for 403 permission denied"""
@@ -12433,9 +12434,7 @@ class TestBatch76AgentMigrations(unittest.TestCase):
         source = inspect.getsource(resume_agent_api)
         # Simple Pattern: no try-catch blocks
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_resume_agent_api_http_exception_preserved(self):
         """Test resume_agent_api preserves HTTPException for 403 permission denied"""
@@ -12496,9 +12495,7 @@ class TestBatch77AgentMigrations(unittest.TestCase):
         source = inspect.getsource(command_approval)
         # Simple Pattern: no try-catch blocks
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_command_approval_http_exception_preserved(self):
         """Test command_approval preserves HTTPException for 403 permission denied"""
@@ -12538,9 +12535,7 @@ class TestBatch77AgentMigrations(unittest.TestCase):
         source = inspect.getsource(execute_command)
         # Simple Pattern: no try-catch blocks
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_execute_command_http_exception_preserved(self):
         """Test execute_command preserves HTTPException for 400/403 errors"""
@@ -12644,9 +12639,7 @@ class TestBatch78IntelligentAgentMigrations(unittest.TestCase):
 
         source = inspect.getsource(process_natural_language_goal)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_process_natural_language_goal_prometheus_preserved(self):
         """Test process_natural_language_goal preserves Prometheus metrics"""
@@ -12682,9 +12675,7 @@ class TestBatch78IntelligentAgentMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_system_info)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_get_system_info_business_logic_preserved(self):
         """Test get_system_info preserves business logic (system status handling)"""
@@ -12826,9 +12817,7 @@ class TestBatch79IntelligentAgentMigrations(unittest.TestCase):
 
         source = inspect.getsource(reload_agent)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_reload_agent_business_logic_preserved(self):
         """Test reload_agent preserves business logic (agent instance reset)"""
@@ -12991,9 +12980,7 @@ class TestBatch80SystemMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_frontend_config)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_get_frontend_config_business_logic_preserved(self):
         """Test get_frontend_config preserves business logic (frontend config building)"""
@@ -13071,9 +13058,7 @@ class TestBatch80SystemMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_system_info)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_get_system_info_business_logic_preserved(self):
         """Test get_system_info preserves business logic (system info building)"""
@@ -13100,9 +13085,7 @@ class TestBatch80SystemMigrations(unittest.TestCase):
 
         source = inspect.getsource(reload_system_config)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_reload_system_config_business_logic_preserved(self):
         """Test reload_system_config preserves business logic (config reload and cache clearing)"""
@@ -13238,9 +13221,7 @@ class TestBatch81SystemMigrations(unittest.TestCase):
 
         source = inspect.getsource(admin_check)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_admin_check_business_logic_preserved(self):
         """Test admin_check preserves business logic (admin status checks)"""
@@ -13445,10 +13426,15 @@ class TestBatch82SystemMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_cache_stats)
         # Should return error dict on outer catch
-        self.assertIn('return {', source)
+        self.assertIn("return {", source)
         self.assertIn('"error":', source)
         # Should NOT raise HTTPException in outer catch
-        self.assertNotIn('raise HTTPException', source.split('except Exception as e:')[-1].split('return')[0] if 'except Exception as e:' in source else source)
+        self.assertNotIn(
+            "raise HTTPException",
+            source.split("except Exception as e:")[-1].split("return")[0]
+            if "except Exception as e:" in source
+            else source,
+        )
 
     def test_get_cache_activity_decorator_present(self):
         """Test get_cache_activity has @with_error_handling decorator"""
@@ -13480,10 +13466,15 @@ class TestBatch82SystemMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_cache_activity)
         # Should return error dict on outer catch
-        self.assertIn('return {', source)
+        self.assertIn("return {", source)
         self.assertIn('"error":', source)
         # Should NOT raise HTTPException in outer catch
-        self.assertNotIn('raise HTTPException', source.split('except Exception as e:')[-1] if 'except Exception as e:' in source else source)
+        self.assertNotIn(
+            "raise HTTPException",
+            source.split("except Exception as e:")[-1]
+            if "except Exception as e:" in source
+            else source,
+        )
 
     def test_get_system_metrics_decorator_present(self):
         """Test get_system_metrics has @with_error_handling decorator"""
@@ -13515,7 +13506,9 @@ class TestBatch82SystemMigrations(unittest.TestCase):
         lines_after_importerror = source.split("except ImportError:")[-1]
         # Check there's no "except Exception as e:" followed by "raise HTTPException"
         if "except Exception as e:" in lines_after_importerror:
-            exception_block = lines_after_importerror.split("except Exception as e:")[-1]
+            exception_block = lines_after_importerror.split("except Exception as e:")[
+                -1
+            ]
             self.assertNotIn(
                 "raise HTTPException",
                 exception_block,
@@ -13645,9 +13638,7 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
 
         source = inspect.getsource(index_codebase)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_index_codebase_business_logic_preserved(self):
         """Test index_codebase preserves business logic (task creation, cleanup)"""
@@ -13676,9 +13667,7 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_indexing_status)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_get_indexing_status_business_logic_preserved(self):
         """Test get_indexing_status preserves business logic (task status checks)"""
@@ -13807,10 +13796,7 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
 
     def test_batch_83_no_generic_exception_raises(self):
         """Test batch 83 endpoints removed generic exception handlers that raise HTTPException"""
-        from backend.api.codebase_analytics import (
-            get_codebase_stats,
-            index_codebase,
-        )
+        from backend.api.codebase_analytics import get_codebase_stats, index_codebase
 
         endpoints = [
             ("index_codebase", index_codebase),
@@ -13825,7 +13811,9 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
                 if "except Exception as chroma_error:" in source:
                     # get_codebase_stats has inner ChromaDB exception - this is OK
                     # Just verify no outer exception handler
-                    lines_after_chroma = source.split("except Exception as chroma_error:")
+                    lines_after_chroma = source.split(
+                        "except Exception as chroma_error:"
+                    )
                     if len(lines_after_chroma) > 1:
                         after_block = lines_after_chroma[-1]
                         # Should not have another "except Exception" after the chroma_error
@@ -13864,9 +13852,7 @@ class TestBatch84CodebaseAnalyticsMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_hardcoded_values)
         try_count = source.count("    try:")
-        self.assertEqual(
-            try_count, 0, "Simple Pattern should have no try-catch blocks"
-        )
+        self.assertEqual(try_count, 0, "Simple Pattern should have no try-catch blocks")
 
     def test_get_hardcoded_values_business_logic_preserved(self):
         """Test get_hardcoded_values preserves business logic (Redis/memory fallback)"""
@@ -14070,7 +14056,9 @@ class TestBatch84CodebaseAnalyticsMigrations(unittest.TestCase):
                 if "except Exception as chroma_error:" in source:
                     # Mixed pattern endpoints have inner ChromaDB exception - this is OK
                     # Just verify no outer exception handler
-                    lines_after_chroma = source.split("except Exception as chroma_error:")
+                    lines_after_chroma = source.split(
+                        "except Exception as chroma_error:"
+                    )
                     if len(lines_after_chroma) > 1:
                         after_block = lines_after_chroma[-1]
                         # Should not have another "except Exception" after the chroma_error
@@ -14182,9 +14170,9 @@ class TestBatch85CodebaseAnalyticsMigrations(unittest.TestCase):
         """Test codebase_analytics.py is 100% complete - all 8 endpoints migrated"""
         from backend.api.codebase_analytics import (
             clear_codebase_cache,
-            get_codebase_stats,
             get_code_declarations,
             get_codebase_problems,
+            get_codebase_stats,
             get_duplicate_code,
             get_hardcoded_values,
             get_indexing_status,
@@ -14462,10 +14450,7 @@ class TestBatch86AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_86_no_outer_exception_handlers(self):
         """Test batch 86 Simple Pattern endpoints have no try-catch blocks"""
-        from backend.api.ai_stack_integration import (
-            list_ai_agents,
-            reformulate_query,
-        )
+        from backend.api.ai_stack_integration import list_ai_agents, reformulate_query
 
         # Simple Pattern endpoints should not have any try-catch
         for endpoint in [list_ai_agents, reformulate_query]:
@@ -14524,10 +14509,7 @@ class TestBatch86AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_86_business_logic_preserved(self):
         """Test batch 86 Mixed Pattern endpoints preserve business logic"""
-        from backend.api.ai_stack_integration import (
-            ai_stack_health_check,
-            rag_query,
-        )
+        from backend.api.ai_stack_integration import ai_stack_health_check, rag_query
 
         # ai_stack_health_check: Should preserve exception handler that returns JSONResponse
         source_health = inspect.getsource(ai_stack_health_check)
@@ -14583,10 +14565,7 @@ class TestBatch86AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_86_no_handle_ai_stack_error_calls(self):
         """Test batch 86 Simple Pattern endpoints don't call handle_ai_stack_error"""
-        from backend.api.ai_stack_integration import (
-            list_ai_agents,
-            reformulate_query,
-        )
+        from backend.api.ai_stack_integration import list_ai_agents, reformulate_query
 
         # Simple Pattern endpoints should not call handle_ai_stack_error
         for endpoint in [list_ai_agents, reformulate_query]:
@@ -15127,10 +15106,7 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
 
     def test_batch_88_line_count_reductions(self):
         """Test batch 88 reduced line counts by removing error handling"""
-        from backend.api.ai_stack_integration import (
-            get_system_knowledge,
-            web_research,
-        )
+        from backend.api.ai_stack_integration import get_system_knowledge, web_research
 
         # Simple Pattern endpoints should be concise (no error handling code)
         simple_endpoints = [
@@ -15799,9 +15775,7 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
                 # 5. Pattern-specific checks
                 if pattern == "Simple":
                     # Simple pattern legacy wrappers should have no try-catch
-                    self.assertNotIn(
-                        "try:", source, f"{name} should have no try-catch"
-                    )
+                    self.assertNotIn("try:", source, f"{name} should have no try-catch")
                 elif pattern == "Mixed":
                     # Mixed pattern should preserve inner try-catch for agent fallbacks
                     self.assertIn(
@@ -15905,9 +15879,7 @@ class TestBatch91ServiceMonitorMigrations(unittest.TestCase):
         # Mixed Pattern: get_service_health (preserves error dict return)
         source = inspect.getsource(service_monitor.get_service_health)
         try_count = source.count("try:")
-        self.assertEqual(
-            try_count, 1, "get_service_health should preserve 1 try-catch"
-        )
+        self.assertEqual(try_count, 1, "get_service_health should preserve 1 try-catch")
 
         # Mixed Pattern: get_system_resources (preserves ImportError + network fallback)
         source = inspect.getsource(service_monitor.get_system_resources)
@@ -16254,7 +16226,6 @@ class TestBatch92ServiceMonitorMigrations(unittest.TestCase):
             )
 
         # Verify progress percentage
-        total_endpoints = 10
         self.assertEqual(
             len(migrated_endpoints), 7, "Should have migrated 7/10 endpoints (70%)"
         )
@@ -16571,7 +16542,9 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         self.assertIn("task_context.set_outputs", source)
         # Should NOT have outer try-catch wrapper (Simple Pattern)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_94_terminate_streaming_session_has_decorator(self):
         """Verify terminate_streaming_session has @with_error_handling decorator"""
@@ -16602,7 +16575,9 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         self.assertIn('operation="list_streaming_sessions"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_94_get_streaming_capabilities_has_decorator(self):
         """Verify get_streaming_capabilities has @with_error_handling decorator"""
@@ -16614,7 +16589,9 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         self.assertIn('operation="get_streaming_capabilities"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_94_request_takeover_has_decorator(self):
         """Verify request_takeover has @with_error_handling decorator"""
@@ -16778,7 +16755,6 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         # Target: 13th file to reach 100%
         # Patterns: 4 Simple, 3 Mixed
 
-
         batch_94_count = 7
         total_endpoints = 19  # Total in advanced_control.py
         progress_percentage = (batch_94_count / total_endpoints) * 100
@@ -16815,7 +16791,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn("Session not found or not pausable", source)
         # Should NOT have outer try-catch wrapper
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)"
+        )
 
     def test_batch_95_resume_takeover_session_has_decorator(self):
         """Verify resume_takeover_session has @with_error_handling decorator"""
@@ -16837,7 +16815,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn("Session not found or not resumable", source)
         # Should NOT have outer try-catch wrapper
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)"
+        )
 
     def test_batch_95_complete_takeover_session_has_decorator(self):
         """Verify complete_takeover_session has @with_error_handling decorator"""
@@ -16859,7 +16839,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn("Session not found", source)
         # Should NOT have outer try-catch wrapper
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)"
+        )
 
     def test_batch_95_get_pending_takeovers_has_decorator(self):
         """Verify get_pending_takeovers has @with_error_handling decorator"""
@@ -16871,7 +16853,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn('operation="get_pending_takeovers"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_95_get_active_takeovers_has_decorator(self):
         """Verify get_active_takeovers has @with_error_handling decorator"""
@@ -16883,7 +16867,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn('operation="get_active_takeovers"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_95_get_takeover_status_has_decorator(self):
         """Verify get_takeover_status has @with_error_handling decorator"""
@@ -16895,7 +16881,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn('operation="get_takeover_status"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_95_emergency_system_stop_has_decorator(self):
         """Verify emergency_system_stop has @with_error_handling decorator"""
@@ -16907,7 +16895,9 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         self.assertIn('operation="emergency_system_stop"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_95_all_have_error_code_prefix(self):
         """Verify all batch 95 endpoints use ADVANCED_CONTROL error_code_prefix"""
@@ -17056,7 +17046,9 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
         source = inspect.getsource(advanced_control.get_system_status)
         # Should NOT have try-catch blocks
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_96_get_system_health_has_decorator(self):
         """Verify get_system_health has @with_error_handling decorator"""
@@ -17098,7 +17090,9 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
         self.assertIn("Monitoring WebSocket client disconnected", source)
         # Should preserve nested try-catches
         try_count = source.count("try:")
-        self.assertGreaterEqual(try_count, 2, "Should preserve nested try-catches for WebSocket")
+        self.assertGreaterEqual(
+            try_count, 2, "Should preserve nested try-catches for WebSocket"
+        )
 
     def test_batch_96_desktop_streaming_websocket_has_decorator(self):
         """Verify desktop_streaming_websocket has @with_error_handling decorator"""
@@ -17131,7 +17125,9 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
         self.assertIn('operation="advanced_control_info"', source)
         # Simple Pattern - no try-catch
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
 
     def test_batch_96_all_have_error_code_prefix(self):
         """Verify all batch 96 endpoints use ADVANCED_CONTROL error_code_prefix"""
@@ -17192,7 +17188,9 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
             )
 
         # Verify 19/19 endpoints (100%)
-        self.assertEqual(len(all_migrated), 19, "Should have migrated 19/19 endpoints (100%)")
+        self.assertEqual(
+            len(all_migrated), 19, "Should have migrated 19/19 endpoints (100%)"
+        )
 
     def test_batch_96_13th_file_to_reach_100_percent(self):
         """Verify advanced_control.py is the 13th file to reach 100% completion"""
@@ -17210,7 +17208,6 @@ class TestBatch96AdvancedControlSystemAndWebSocketFINAL(unittest.TestCase):
         # 11. ai_stack_integration.py
         # 12. service_monitor.py
         # 13. advanced_control.py <- NEW (100% COMPLETE)
-
 
         # Verify all endpoints are migrated
         total_endpoints = 19
@@ -17314,7 +17311,9 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
         self.assertIn("Workflow not found", source)
         # Should have NO try-catch blocks (Mixed Pattern with direct checks)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)"
+        )
 
     def test_batch_97_reschedule_workflow_has_decorator(self):
         """Verify reschedule_workflow has @with_error_handling decorator"""
@@ -17362,7 +17361,9 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
         self.assertIn("Workflow not found or cannot be cancelled", source)
         # Should have NO try-catch blocks (Mixed Pattern with direct checks)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Mixed Pattern)"
+        )
 
     def test_batch_97_all_endpoints_have_error_category_server_error(self):
         """Verify all batch 97 endpoints use ErrorCategory.SERVER_ERROR"""
@@ -17408,17 +17409,23 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
             if "schedule_workflow" in endpoint.__name__:
                 # schedule_workflow has 1 inner exception handler for priority validation
                 self.assertEqual(
-                    source.count("except"), 1, "Should have 1 specific exception handler"
+                    source.count("except"),
+                    1,
+                    "Should have 1 specific exception handler",
                 )
             elif "list_scheduled_workflows" in endpoint.__name__:
                 # list_scheduled_workflows has 1 inner exception handler for status validation
                 self.assertEqual(
-                    source.count("except"), 1, "Should have 1 specific exception handler"
+                    source.count("except"),
+                    1,
+                    "Should have 1 specific exception handler",
                 )
             elif "reschedule_workflow" in endpoint.__name__:
                 # reschedule_workflow has 1 inner exception handler for priority validation
                 self.assertEqual(
-                    source.count("except"), 1, "Should have 1 specific exception handler"
+                    source.count("except"),
+                    1,
+                    "Should have 1 specific exception handler",
                 )
             else:
                 # get_workflow_details and cancel_workflow should have NO exception handlers
@@ -17476,7 +17483,9 @@ class TestBatch98SchedulerQueueAndStatus(unittest.TestCase):
         source = inspect.getsource(scheduler.get_scheduler_status)
         # Should have NO try-catch blocks (Simple Pattern)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
         # Should NOT have status_code=500
         self.assertNotIn("status_code=500", source)
 
@@ -17496,7 +17505,9 @@ class TestBatch98SchedulerQueueAndStatus(unittest.TestCase):
         source = inspect.getsource(scheduler.get_queue_status)
         # Should have NO try-catch blocks (Simple Pattern)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
         # Should NOT have status_code=500
         self.assertNotIn("status_code=500", source)
 
@@ -17543,7 +17554,9 @@ class TestBatch98SchedulerQueueAndStatus(unittest.TestCase):
         source = inspect.getsource(scheduler.start_scheduler)
         # Should have NO try-catch blocks (Simple Pattern)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
         # Should NOT have status_code=500
         self.assertNotIn("status_code=500", source)
 
@@ -17643,7 +17656,9 @@ class TestBatch99SchedulerFINAL(unittest.TestCase):
         source = inspect.getsource(scheduler.stop_scheduler)
         # Should have NO try-catch blocks (Simple Pattern)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
         # Should NOT have status_code=500
         self.assertNotIn("status_code=500", source)
 
@@ -17689,7 +17704,9 @@ class TestBatch99SchedulerFINAL(unittest.TestCase):
         source = inspect.getsource(scheduler.get_scheduler_statistics)
         # Should have NO try-catch blocks (Simple Pattern)
         try_count = source.count("try:")
-        self.assertEqual(try_count, 0, "Should have NO try-catch blocks (Simple Pattern)")
+        self.assertEqual(
+            try_count, 0, "Should have NO try-catch blocks (Simple Pattern)"
+        )
         # Should NOT have status_code=500
         self.assertNotIn("status_code=500", source)
 
@@ -17802,7 +17819,9 @@ class TestBatch99SchedulerFINAL(unittest.TestCase):
             )
 
         # Verify 13/13 endpoints (100%)
-        self.assertEqual(len(all_migrated), 13, "Should have migrated 13/13 endpoints (100%)")
+        self.assertEqual(
+            len(all_migrated), 13, "Should have migrated 13/13 endpoints (100%)"
+        )
 
     def test_batch_99_progress_tracking(self):
         """Track progress: 13/13 endpoints migrated in scheduler.py (100% COMPLETE)"""
@@ -17865,7 +17884,7 @@ class TestBatch100ValidationDashboardCore(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except (ImportError, AttributeError)", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_100_get_validation_report_has_decorator(self):
         """Verify get_validation_report has @with_error_handling decorator"""
@@ -18033,8 +18052,10 @@ class TestBatch101ValidationDashboardData(unittest.TestCase):
         self.assertIn("except (ImportError, AttributeError)", source)
         self.assertIn("except (OSError, IOError)", source)
         # Should NOT have outer generic 500 exception
-        outer_500_count = source.count('status_code=500')
-        self.assertEqual(outer_500_count, 0, "Should not have outer 500 exception handler")
+        outer_500_count = source.count("status_code=500")
+        self.assertEqual(
+            outer_500_count, 0, "Should not have outer 500 exception handler"
+        )
 
     def test_batch_101_get_dashboard_metrics_has_decorator(self):
         """Verify get_dashboard_metrics has @with_error_handling decorator"""
@@ -18057,7 +18078,7 @@ class TestBatch101ValidationDashboardData(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except (ImportError, AttributeError)", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_101_get_trend_data_has_decorator(self):
         """Verify get_trend_data has @with_error_handling decorator"""
@@ -18080,7 +18101,7 @@ class TestBatch101ValidationDashboardData(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except (ImportError, AttributeError)", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_101_get_system_alerts_has_decorator(self):
         """Verify get_system_alerts has @with_error_handling decorator"""
@@ -18103,7 +18124,7 @@ class TestBatch101ValidationDashboardData(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except (ImportError, AttributeError)", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_101_all_endpoints_have_error_category_server_error(self):
         """Verify all batch 101 endpoints use ErrorCategory.SERVER_ERROR"""
@@ -18192,7 +18213,7 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except (ImportError, AttributeError)", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_102_judge_workflow_step_preserves_503_and_400(self):
         """Verify judge_workflow_step preserves 503 + 400 validation errors (Mixed Pattern)"""
@@ -18212,7 +18233,7 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
         self.assertIn("except (ImportError, AttributeError)", source)
         self.assertIn("except ValueError", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_102_judge_agent_response_preserves_503_and_400(self):
         """Verify judge_agent_response preserves 503 + 400 validation errors (Mixed Pattern)"""
@@ -18236,7 +18257,7 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
         self.assertIn("except (ImportError, AttributeError)", source)
         self.assertIn("except ValueError", source)
         # Should NOT have generic 500 exception
-        self.assertNotIn('status_code=500', source)
+        self.assertNotIn("status_code=500", source)
 
     def test_batch_102_get_judge_status_preserves_503_and_inner_loop(self):
         """Verify get_judge_status preserves 503 JSONResponse + inner loop error handling (Mixed Pattern)"""
@@ -18255,7 +18276,7 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
         self.assertIn("except (ImportError, AttributeError)", source)
         self.assertIn("except Exception", source)
         # Should NOT have outer generic 500 exception
-        outer_500_count = source.count('status_code=500')
+        outer_500_count = source.count("status_code=500")
         self.assertEqual(
             outer_500_count, 0, "Should not have outer 500 exception handler"
         )
@@ -18378,7 +18399,9 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
 
         # Verify all endpoints have @with_error_handling
         migrated_endpoints = [
-            ep for ep in all_endpoints if "@with_error_handling" in inspect.getsource(ep)
+            ep
+            for ep in all_endpoints
+            if "@with_error_handling" in inspect.getsource(ep)
         ]
 
         self.assertEqual(
@@ -18411,7 +18434,7 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
             # Check that generic 500 exception handlers were removed
             # (except ValueError should exist for 400 validation errors)
             has_generic_500 = (
-                'except Exception as e:' in source and 'status_code=500' in source
+                "except Exception as e:" in source and "status_code=500" in source
             )
             self.assertFalse(
                 has_generic_500,
@@ -18459,7 +18482,9 @@ class TestBatch102ValidationDashboardJudgesFINAL(unittest.TestCase):
                 "Judges not available",
                 "Dashboard generator not available",
             ]
-            has_unavailable = any(indicator in source for indicator in unavailable_indicators)
+            has_unavailable = any(
+                indicator in source for indicator in unavailable_indicators
+            )
             self.assertTrue(
                 has_unavailable,
                 f"{endpoint.__name__} should preserve service unavailable messages",
@@ -18585,8 +18610,8 @@ class TestBatch106AgentTerminalCOMPLETE(unittest.TestCase):
             '"session_states"',
             '"endpoints"',
             '"security_features"',
-            'AgentRole',
-            'AgentSessionState',
+            "AgentRole",
+            "AgentSessionState",
         ]
 
         for field in essential_fields:
@@ -18736,8 +18761,9 @@ class TestBatch107KnowledgeCOMPLETE(unittest.TestCase):
 
     def test_batch_107_progress_tracking(self):
         """Verify knowledge.py progress: 46/46 endpoints migrated (100% COMPLETE)"""
-        from backend.api import knowledge
         import inspect
+
+        from backend.api import knowledge
 
         # Get all functions in knowledge module
         all_functions = [
@@ -19232,8 +19258,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source3 = inspect.getsource(terminal.secure_terminal_websocket_compat)
         self.assertIn("session_manager.session_configs", source3)
 
-
-
     # ==============================================
     # BATCH 111: auth.py - COMPLETE (100%)
     # ==============================================
@@ -19453,7 +19477,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Should have comment about not failing logout
         self.assertIn("Don't fail logout", source)
 
-
     # ==============================================
     # BATCH 112: conversation_files.py - COMPLETE (100%)
     # ==============================================
@@ -19627,7 +19650,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("file_manager", source_upload)
 
         # Check download preserves FileResponse
-        source_download = inspect.getsource(conversation_files.download_conversation_file)
+        source_download = inspect.getsource(
+            conversation_files.download_conversation_file
+        )
         self.assertIn("FileResponse", source_download)
         self.assertIn("file_path", source_download)
 
@@ -19687,7 +19712,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             source = inspect.getsource(endpoint)
             self.assertIn("get_conversation_file_manager", source)
             self.assertIn("file_manager", source)
-
 
     # ==============================================
     # BATCH 113: cache.py - COMPLETE (100%)
@@ -19888,7 +19912,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("knowledge", source)
         # Should preserve error for unknown types
         self.assertIn("Unknown cache type", source)
-
 
     # ==============================================
     # BATCH 114: chat_knowledge.py - COMPLETE (100%)
@@ -20296,7 +20319,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import knowledge_test
 
         # Both endpoints should create fresh KB instances (bypass cache)
-        for func in [knowledge_test.get_fresh_kb_stats, knowledge_test.test_rebuild_search_index]:
+        for func in [
+            knowledge_test.get_fresh_kb_stats,
+            knowledge_test.test_rebuild_search_index,
+        ]:
             source = inspect.getsource(func)
             self.assertIn("KnowledgeBase()", source)
             self.assertIn("asyncio.sleep", source)  # Wait for initialization
@@ -21223,8 +21249,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("available_endpoints", source)
         self.assertIn("clear_all_redis", source)
 
-
-
     # ==============================================
     # BATCH 123: sandbox.py - COMPLETE (100%)
     # ==============================================
@@ -21403,9 +21427,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("#!/bin/bash", source)
         self.assertIn("set -e", source)
         self.assertIn("stop_on_error", source)
-        self.assertIn('execution_mode=SandboxExecutionMode.BATCH', source)
-
-
+        self.assertIn("execution_mode=SandboxExecutionMode.BATCH", source)
 
     # ==============================================
     # BATCH 124: elevation.py - COMPLETE (100%)
@@ -21588,8 +21610,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("OSError", source_exec)
         self.assertIn("IOError", source_exec)
         self.assertIn("asyncio.TimeoutError", source_exec)
-
-
 
     # ==============================================
     # BATCH 125: batch.py - COMPLETE (100%)
@@ -23405,9 +23425,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("get_current_system_capabilities()", source_status)
 
         # Check check_progression_eligibility preserves manager usage
-        source_eligibility = inspect.getsource(phase_management.check_progression_eligibility)
+        source_eligibility = inspect.getsource(
+            phase_management.check_progression_eligibility
+        )
         self.assertIn("get_progression_manager()", source_eligibility)
-        self.assertIn("await progression_manager.check_progression_eligibility()", source_eligibility)
+        self.assertIn(
+            "await progression_manager.check_progression_eligibility()",
+            source_eligibility,
+        )
 
     def test_batch_134_migration_preserves_background_tasks_support(self):
         """Verify migration preserves BackgroundTasks support for async progression"""
@@ -23445,7 +23470,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import phase_management
 
         # Check get_current_capabilities preserves capability access
-        source_capabilities = inspect.getsource(phase_management.get_current_capabilities)
+        source_capabilities = inspect.getsource(
+            phase_management.get_current_capabilities
+        )
         self.assertIn("get_current_system_capabilities()", source_capabilities)
 
         # Check get_phase_management_status preserves capability fields
@@ -23490,7 +23517,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         source = inspect.getsource(phase_management.get_progression_summary_report)
         self.assertIn("await validator.validate_all_phases()", source)
-        self.assertIn("await progression_manager.check_progression_eligibility()", source)
+        self.assertIn(
+            "await progression_manager.check_progression_eligibility()", source
+        )
         self.assertIn("overall_assessment", source)
         self.assertIn("phase_completion", source)
         self.assertIn("eligible_for_progression", source)
@@ -24271,7 +24300,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         source = inspect.getsource(voice.voice_listen_api)
         self.assertIn("security_layer", source)
-        self.assertIn("check_permission(user_role, \"allow_voice_listen\")", source)
+        self.assertIn('check_permission(user_role, "allow_voice_listen")', source)
         self.assertIn("audit_log", source)
         self.assertIn("Permission denied to listen via voice", source)
 
@@ -24291,7 +24320,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         source = inspect.getsource(voice.voice_speak_api)
         self.assertIn("security_layer", source)
-        self.assertIn("check_permission(user_role, \"allow_voice_speak\")", source)
+        self.assertIn('check_permission(user_role, "allow_voice_speak")', source)
         self.assertIn("audit_log", source)
         self.assertIn("Permission denied to speak via voice", source)
 
@@ -24456,12 +24485,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check get_api_endpoints
         source_endpoints = inspect.getsource(developer.get_api_endpoints)
-        self.assertIn("unified_config_manager.get_nested(\"developer.enabled\"", source_endpoints)
+        self.assertIn(
+            'unified_config_manager.get_nested("developer.enabled"', source_endpoints
+        )
         self.assertIn("HTTPException(status_code=403", source_endpoints)
 
         # Check get_system_info
         source_info = inspect.getsource(developer.get_system_info)
-        self.assertIn("unified_config_manager.get_nested(\"developer.enabled\"", source_info)
+        self.assertIn(
+            'unified_config_manager.get_nested("developer.enabled"', source_info
+        )
         self.assertIn("HTTPException(status_code=403", source_info)
 
     # ==============================================
@@ -24737,7 +24770,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     # Infrastructure APIs moved to SLM server
     # ==============================================
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_health_check_simple_pattern(self):
         """Verify health_check endpoint uses Simple Pattern"""
         from backend.api import infrastructure_monitor
@@ -24748,7 +24783,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="health_check"', source)
         self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_get_infrastructure_status_simple_pattern(self):
         """Verify get_infrastructure_status endpoint uses Simple Pattern"""
         from backend.api import infrastructure_monitor
@@ -24759,7 +24796,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_infrastructure_status"', source)
         self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_get_machine_status_simple_pattern(self):
         """Verify get_machine_status endpoint uses Simple Pattern"""
         from backend.api import infrastructure_monitor
@@ -24770,7 +24809,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="get_machine_status"', source)
         self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_refresh_infrastructure_simple_pattern(self):
         """Verify refresh_infrastructure endpoint uses Simple Pattern"""
         from backend.api import infrastructure_monitor
@@ -24781,7 +24822,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="refresh_infrastructure"', source)
         self.assertIn('error_code_prefix="INFRASTRUCTURE_MONITOR"', source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_all_infrastructure_monitor_endpoints_have_decorator(self):
         """Verify all infrastructure_monitor endpoints have @with_error_handling decorator"""
         from backend.api import infrastructure_monitor
@@ -24801,7 +24844,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
                 f"Endpoint {func.__name__} missing @with_error_handling decorator",
             )
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_infrastructure_monitor_100_percent_milestone(self):
         """Verify infrastructure_monitor.py has reached 100% migration"""
         from backend.api import infrastructure_monitor
@@ -24828,7 +24873,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         progress_percentage = (migrated_count / total_endpoints) * 100
         self.assertEqual(progress_percentage, 100.0)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_migration_preserves_health_check_config(self):
         """Verify migration preserves health check configuration access"""
         from backend.api import infrastructure_monitor
@@ -24839,7 +24886,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("frontend_host", source)
         self.assertIn("redis_host", source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_migration_preserves_infrastructure_monitor_class(self):
         """Verify migration preserves InfrastructureMonitor class usage"""
         from backend.api import infrastructure_monitor
@@ -24847,7 +24896,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(infrastructure_monitor.get_infrastructure_status)
         self.assertIn("monitor.get_infrastructure_status()", source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_migration_preserves_machine_id_filtering(self):
         """Verify migration preserves machine ID filtering logic"""
         from backend.api import infrastructure_monitor
@@ -24856,7 +24907,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("machine_id", source)
         self.assertIn("vm0", source)
 
-    @unittest.skip("Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server")
+    @unittest.skip(
+        "Issue #729: infrastructure_monitor.py removed - APIs moved to SLM server"
+    )
     def test_batch_142_migration_preserves_refresh_functionality(self):
         """Verify migration preserves infrastructure refresh"""
         from backend.api import infrastructure_monitor
@@ -25986,8 +26039,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         router_config = registry.RouterConfig
         for field in config_fields:
             self.assertTrue(
-                any(f.name == field for f in router_config.__dataclass_fields__.values()),
-                f"RouterConfig missing field: {field}"
+                any(
+                    f.name == field for f in router_config.__dataclass_fields__.values()
+                ),
+                f"RouterConfig missing field: {field}",
             )
 
     def test_batch_149_migration_preserves_router_status_enum(self):
@@ -26002,7 +26057,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         for value in status_values:
             self.assertTrue(
                 hasattr(registry.RouterStatus, value),
-                f"RouterStatus missing value: {value}"
+                f"RouterStatus missing value: {value}",
             )
 
     def test_batch_149_migration_preserves_api_registry_class(self):
@@ -26017,12 +26072,17 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIsInstance(registry.registry, registry.APIRegistry)
 
         # Verify key methods exist
-        methods = ["get_enabled_routers", "get_router_by_name", "get_routers_by_tag",
-                   "get_endpoint_list", "validate_dependencies"]
+        methods = [
+            "get_enabled_routers",
+            "get_router_by_name",
+            "get_routers_by_tag",
+            "get_endpoint_list",
+            "validate_dependencies",
+        ]
         for method in methods:
             self.assertTrue(
                 hasattr(registry.registry, method),
-                f"registry instance missing method: {method}"
+                f"registry instance missing method: {method}",
             )
 
     def test_batch_149_migration_preserves_endpoint_list_functionality(self):
@@ -26231,7 +26291,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import enhanced_search
 
         # Verify helper functions exist
-        self.assertTrue(hasattr(enhanced_search, "_generate_performance_recommendations"))
+        self.assertTrue(
+            hasattr(enhanced_search, "_generate_performance_recommendations")
+        )
         self.assertTrue(hasattr(enhanced_search, "_generate_system_recommendations"))
 
         # Verify they're used in endpoints
@@ -27244,7 +27306,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(web_research_settings, "ResearchPreferences"))
 
         # Verify models are used in endpoints
-        update_source = inspect.getsource(web_research_settings.update_research_settings)
+        update_source = inspect.getsource(
+            web_research_settings.update_research_settings
+        )
         self.assertIn("WebResearchSettings", update_source)
 
     def test_batch_155_migration_preserves_web_research_integration(self):
@@ -27268,7 +27332,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("get_nested", settings_source)
 
         # Verify config updates
-        update_source = inspect.getsource(web_research_settings.update_research_settings)
+        update_source = inspect.getsource(
+            web_research_settings.update_research_settings
+        )
         self.assertIn("set_nested", update_source)
         self.assertIn("save_settings", update_source)
 
@@ -27290,7 +27356,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import web_research_settings
 
         # Verify cache clearing
-        clear_cache_source = inspect.getsource(web_research_settings.clear_research_cache)
+        clear_cache_source = inspect.getsource(
+            web_research_settings.clear_research_cache
+        )
         self.assertIn("cache.clear", clear_cache_source)
 
         # Verify circuit breaker reset
@@ -27477,13 +27545,19 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify get_ssh_manager dependency is used
         list_hosts_source = inspect.getsource(remote_terminal.list_hosts)
-        self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", list_hosts_source)
+        self.assertIn(
+            "ssh_manager: SSHManager = Depends(get_ssh_manager)", list_hosts_source
+        )
 
         execute_source = inspect.getsource(remote_terminal.execute_remote_command)
-        self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", execute_source)
+        self.assertIn(
+            "ssh_manager: SSHManager = Depends(get_ssh_manager)", execute_source
+        )
 
         batch_source = inspect.getsource(remote_terminal.execute_batch_command)
-        self.assertIn("ssh_manager: SSHManager = Depends(get_ssh_manager)", batch_source)
+        self.assertIn(
+            "ssh_manager: SSHManager = Depends(get_ssh_manager)", batch_source
+        )
 
     @unittest.skip("remote_terminal.py archived - future feature not yet in UI")
     def test_batch_156_migration_preserves_pydantic_models(self):
@@ -28096,8 +28170,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("_cache_timestamp", metrics_source)
         self.assertIn("_cache_ttl", metrics_source)
 
-
-
         """Verify migration preserves unified log merging by timestamp"""
         from backend.api import logs
 
@@ -28107,8 +28179,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("sort", unified_source)
         self.assertIn("timestamp", unified_source)
         self.assertIn("source_type", unified_source)
-
-
 
         """Verify migration preserves RemoteSessionType enum"""
         from backend.api import remote_terminal
@@ -28121,8 +28191,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(RemoteSessionType, "COMMAND"))
         self.assertTrue(hasattr(RemoteSessionType, "INTERACTIVE"))
         self.assertTrue(hasattr(RemoteSessionType, "BATCH"))
-
-
 
         """Verify migration preserves web research test functionality"""
         from backend.api import web_research_settings
@@ -28383,7 +28451,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("get_load_balancing_config()", get_config_source)
 
         # Verify update_load_balancing_config uses manager method
-        update_config_source = inspect.getsource(npu_workers.update_load_balancing_config)
+        update_config_source = inspect.getsource(
+            npu_workers.update_load_balancing_config
+        )
         self.assertIn("update_load_balancing_config", update_config_source)
         self.assertIn("config.strategy", update_config_source)
 
@@ -28924,7 +28994,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import llm_optimization
 
         # Verify get_model_performance_history calculates efficiency metrics
-        history_source = inspect.getsource(llm_optimization.get_model_performance_history)
+        history_source = inspect.getsource(
+            llm_optimization.get_model_performance_history
+        )
         self.assertIn("efficiency_metrics", history_source)
         self.assertIn("tokens_per_gb", history_source)
         self.assertIn("response_efficiency", history_source)
@@ -29240,10 +29312,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import knowledge_mcp
 
         # Verify mcp_summarize_knowledge_topic has LLM and fallback logic
-        summarize_source = inspect.getsource(knowledge_mcp.mcp_summarize_knowledge_topic)
-        self.assertIn("request.get(\"topic\")", summarize_source)
-        self.assertIn("request.get(\"max_length\"", summarize_source)
-        self.assertIn("if hasattr(kb, \"llm\")", summarize_source)
+        summarize_source = inspect.getsource(
+            knowledge_mcp.mcp_summarize_knowledge_topic
+        )
+        self.assertIn('request.get("topic")', summarize_source)
+        self.assertIn('request.get("max_length"', summarize_source)
+        self.assertIn('if hasattr(kb, "llm")', summarize_source)
 
     def test_batch_162_migration_preserves_vector_similarity_threshold(self):
         """Verify migration preserves vector similarity search threshold"""
@@ -29251,8 +29325,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify mcp_vector_similarity_search uses threshold
         vector_source = inspect.getsource(knowledge_mcp.mcp_vector_similarity_search)
-        self.assertIn("request.get(\"threshold\"", vector_source)
-        self.assertIn("if result.get(\"score\", 0) >= threshold", vector_source)
+        self.assertIn('request.get("threshold"', vector_source)
+        self.assertIn('if result.get("score", 0) >= threshold', vector_source)
 
     def test_batch_162_migration_preserves_redis_vector_operations(self):
         """Verify migration preserves Redis vector operations (info, flush, reindex, backup)"""
@@ -29260,10 +29334,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify mcp_redis_vector_operations handles multiple operations
         redis_ops_source = inspect.getsource(knowledge_mcp.mcp_redis_vector_operations)
-        self.assertIn("operation == \"info\"", redis_ops_source)
-        self.assertIn("operation == \"flush\"", redis_ops_source)
-        self.assertIn("operation == \"reindex\"", redis_ops_source)
-        self.assertIn("operation == \"backup\"", redis_ops_source)
+        self.assertIn('operation == "info"', redis_ops_source)
+        self.assertIn('operation == "flush"', redis_ops_source)
+        self.assertIn('operation == "reindex"', redis_ops_source)
+        self.assertIn('operation == "backup"', redis_ops_source)
 
     # ==============================================
     # BATCH 163: long_running_operations.py - COMPLETE (100%)
@@ -29293,7 +29367,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify start_knowledge_base_population endpoint uses Simple Pattern"""
         from backend.api import long_running_operations
 
-        source = inspect.getsource(long_running_operations.start_knowledge_base_population)
+        source = inspect.getsource(
+            long_running_operations.start_knowledge_base_population
+        )
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="start_knowledge_base_population"', source)
@@ -29437,10 +29513,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(long_running_operations, "SecurityScanRequest"))
 
         # Verify models are used in endpoints
-        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        indexing_source = inspect.getsource(
+            long_running_operations.start_codebase_indexing
+        )
         self.assertIn("CodebaseIndexingRequest", indexing_source)
 
-        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        testing_source = inspect.getsource(
+            long_running_operations.start_comprehensive_testing
+        )
         self.assertIn("TestSuiteRequest", testing_source)
 
     def test_batch_163_migration_preserves_operation_manager_dependency(self):
@@ -29451,7 +29531,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(long_running_operations, "get_operation_manager"))
 
         # Verify it's used in endpoints via Depends
-        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        indexing_source = inspect.getsource(
+            long_running_operations.start_codebase_indexing
+        )
         self.assertIn("Depends(get_operation_manager)", indexing_source)
 
         status_source = inspect.getsource(long_running_operations.get_operation_status)
@@ -29465,12 +29547,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(long_running_operations, "CreateOperationRequest"))
 
         # Verify it's used in endpoints
-        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        indexing_source = inspect.getsource(
+            long_running_operations.start_codebase_indexing
+        )
         self.assertIn("CreateOperationRequest(", indexing_source)
         self.assertIn("operation_type=", indexing_source)
         self.assertIn("estimated_items=", indexing_source)
 
-        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        testing_source = inspect.getsource(
+            long_running_operations.start_comprehensive_testing
+        )
         self.assertIn("CreateOperationRequest(", testing_source)
 
     def test_batch_163_migration_preserves_operation_migrator(self):
@@ -29481,7 +29567,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(long_running_operations, "OperationMigrator"))
 
         # Verify migrate_existing_operation uses OperationMigrator
-        migrate_source = inspect.getsource(long_running_operations.migrate_existing_operation)
+        migrate_source = inspect.getsource(
+            long_running_operations.migrate_existing_operation
+        )
         self.assertIn("OperationMigrator.migrate_existing_operation(", migrate_source)
         self.assertIn("operation_name=", migrate_source)
         self.assertIn("timeout_seconds=", migrate_source)
@@ -29526,10 +29614,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import long_running_operations
 
         # Verify endpoints use BackgroundTasks
-        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        indexing_source = inspect.getsource(
+            long_running_operations.start_codebase_indexing
+        )
         self.assertIn("BackgroundTasks", indexing_source)
 
-        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        testing_source = inspect.getsource(
+            long_running_operations.start_comprehensive_testing
+        )
         self.assertIn("BackgroundTasks", testing_source)
 
     def test_batch_163_migration_preserves_operation_context(self):
@@ -29537,14 +29629,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import long_running_operations
 
         # Verify codebase indexing creates proper context
-        indexing_source = inspect.getsource(long_running_operations.start_codebase_indexing)
+        indexing_source = inspect.getsource(
+            long_running_operations.start_codebase_indexing
+        )
         self.assertIn("context = {", indexing_source)
         self.assertIn("codebase_path", indexing_source)
         self.assertIn("file_patterns", indexing_source)
         self.assertIn("include_tests", indexing_source)
 
         # Verify testing creates proper context
-        testing_source = inspect.getsource(long_running_operations.start_comprehensive_testing)
+        testing_source = inspect.getsource(
+            long_running_operations.start_comprehensive_testing
+        )
         self.assertIn("test_patterns", testing_source)
         self.assertIn("parallel_execution", testing_source)
 
@@ -29612,7 +29708,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Verify real-time command execution
         self.assertIn("ssh_manager.execute_command(", source)
         self.assertIn("use_pty=True", source)
-
 
     # ==============================================
     # BATCH 165: enterprise_features.py - COMPLETE (100%)
@@ -29793,7 +29888,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("BulkFeatureRequest", bulk_source)
 
         # Verify PerformanceOptimizationRequest is used in endpoint
-        optimize_source = inspect.getsource(enterprise_features.optimize_system_performance)
+        optimize_source = inspect.getsource(
+            enterprise_features.optimize_system_performance
+        )
         self.assertIn("PerformanceOptimizationRequest", optimize_source)
 
     def test_batch_165_migration_preserves_enterprise_manager_dependency(self):
@@ -29836,7 +29933,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("status_code=200", status_source)
 
         # Verify multi-status code (207) for partial success
-        enable_all_source = inspect.getsource(enterprise_features.enable_all_enterprise_features)
+        enable_all_source = inspect.getsource(
+            enterprise_features.enable_all_enterprise_features
+        )
         self.assertIn("207", enable_all_source)  # Multi-Status for partial success
 
     def test_batch_165_migration_preserves_phase4_capabilities(self):
@@ -29844,7 +29943,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import enterprise_features
 
         # Verify enable_all_enterprise_features references Phase 4 capabilities
-        enable_all_source = inspect.getsource(enterprise_features.enable_all_enterprise_features)
+        enable_all_source = inspect.getsource(
+            enterprise_features.enable_all_enterprise_features
+        )
         self.assertIn("Phase 4", enable_all_source)
         self.assertIn("web_research_orchestration", enable_all_source)
         self.assertIn("cross_vm_load_balancing", enable_all_source)
@@ -29868,7 +29969,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import enterprise_features
 
         # Verify get_infrastructure_status uses vm_topology
-        infrastructure_source = inspect.getsource(enterprise_features.get_infrastructure_status)
+        infrastructure_source = inspect.getsource(
+            enterprise_features.get_infrastructure_status
+        )
         self.assertIn("vm_topology", infrastructure_source)
         self.assertIn("resource_pools", infrastructure_source)
         self.assertIn("distributed_services", infrastructure_source)
@@ -29890,14 +29993,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import enterprise_features
 
         # Verify validate_phase4_completion checks enterprise features
-        validation_source = inspect.getsource(enterprise_features.validate_phase4_completion)
+        validation_source = inspect.getsource(
+            enterprise_features.validate_phase4_completion
+        )
         self.assertIn("Phase 4", validation_source)
         self.assertIn("enterprise_features", validation_source)
         self.assertIn("production_readiness", validation_source)
         self.assertIn("transformation_summary", validation_source)
         self.assertIn("completion_percentage", validation_source)
-
-
 
     # ==============================================
     # BATCH 166: logs.py - COMPLETE (100%)
@@ -29965,7 +30068,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Verify WebSocket send operations
         self.assertIn("await websocket.send_text", source)
-
 
     # ==============================================
     # BATCH 167: code_search.py - COMPLETE (100%)
@@ -30458,9 +30560,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertTrue(hasattr(workflow_automation, "EnhancedOrchestrator"))
 
         # Verify create_workflow_from_chat uses orchestrator
-        chat_source = inspect.getsource(
-            workflow_automation.create_workflow_from_chat
-        )
+        chat_source = inspect.getsource(workflow_automation.create_workflow_from_chat)
         self.assertIn("user_request", chat_source)
         self.assertIn("session_id", chat_source)
 
@@ -31106,14 +31206,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("response_model=StatisticsResponse", module_source)
         self.assertIn("response_model=HostStatusResponse", module_source)
 
-
-
-
-
-
-
-
-
     # ==============================================
     # BATCH 171: multimodal.py - COMPLETE (100%)
     # ==============================================
@@ -31451,8 +31543,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("_process_combined", combine_source)
         self.assertIn("fusion_result", combine_source)
 
-
-
     # ==============================================
     # BATCH 172: memory.py - COMPLETE (100%)
     # ==============================================
@@ -31788,7 +31878,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"success": True', create_source)
         self.assertIn('"data":', create_source)
         self.assertIn('"message":', create_source)
-        self.assertIn('status_code=201', create_source)
+        self.assertIn("status_code=201", create_source)
 
     def test_batch_172_migration_preserves_health_check_structure(self):
         """Verify migration preserves health check component monitoring"""
@@ -31804,9 +31894,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("memory_graph.initialized", health_source)
         self.assertIn("memory_graph.redis_client", health_source)
         self.assertIn("memory_graph.knowledge_base", health_source)
-        self.assertIn('status_code=503', health_source)
-
-
+        self.assertIn("status_code=503", health_source)
 
     # ==============================================
     # BATCH 173: development_speedup.py - COMPLETE (100%)
@@ -31876,7 +31964,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify find_refactoring_opportunities_endpoint uses Simple Pattern"""
         from backend.api import development_speedup
 
-        source = inspect.getsource(development_speedup.find_refactoring_opportunities_endpoint)
+        source = inspect.getsource(
+            development_speedup.find_refactoring_opportunities_endpoint
+        )
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="find_refactoring_opportunities_endpoint"', source)
@@ -32033,7 +32123,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("identify_code_patterns(path)", source)
         self.assertIn("if pattern_type:", source)
         self.assertIn("filtered_patterns", source)
-        self.assertIn('pattern_type.lower() in p.get("pattern_type", "").lower()', source)
+        self.assertIn(
+            'pattern_type.lower() in p.get("pattern_type", "").lower()', source
+        )
 
     def test_batch_173_migration_preserves_import_analysis_options(self):
         """Verify migration preserves import analysis with show_unused option"""
@@ -32050,7 +32142,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from backend.api import development_speedup
 
         # Verify find_refactoring_opportunities_endpoint filters by complexity
-        source = inspect.getsource(development_speedup.find_refactoring_opportunities_endpoint)
+        source = inspect.getsource(
+            development_speedup.find_refactoring_opportunities_endpoint
+        )
         self.assertIn("find_refactoring_opportunities(path)", source)
         self.assertIn("if min_complexity > 1.0:", source)
         self.assertIn("filtered_opportunities", source)
@@ -32064,7 +32158,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(development_speedup.analyze_quality_endpoint)
         self.assertIn("analyze_code_quality_consistency(path)", source)
         self.assertIn("if severity:", source)
-        self.assertIn('valid_severities = ["low", "medium", "high", "critical"]', source)
+        self.assertIn(
+            'valid_severities = ["low", "medium", "high", "critical"]', source
+        )
         self.assertIn("filtered_issues", source)
         self.assertIn('issue.get("severity") == severity', source)
 
@@ -32082,7 +32178,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"quality_issues":', source)
         self.assertIn("health_score", source)
         self.assertIn("total_issues", source)
-        self.assertIn('recommendations[:3]', source)  # Top 3 recommendations
+        self.assertIn("recommendations[:3]", source)  # Top 3 recommendations
 
     def test_batch_173_migration_preserves_status_capabilities(self):
         """Verify migration preserves status endpoint with NPU and capabilities info"""
@@ -32114,9 +32210,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('"quick_recommendations":', source)
         self.assertIn('"typical_workflow":', source)
         self.assertIn('"performance_tips":', source)
-
-
-
 
 
 if __name__ == "__main__":

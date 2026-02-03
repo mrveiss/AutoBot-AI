@@ -20,20 +20,24 @@ Issue: #221
 """
 
 import ast
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import sys
 import os
+import sys
+from unittest.mock import MagicMock
+
+import pytest
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 # Import using sys.path manipulation since directory has dashes
 import importlib.util
+
 spec = importlib.util.spec_from_file_location(
     "anti_pattern_detector",
-    os.path.join(os.path.dirname(__file__), "../../tools/code-analysis-suite/src/anti_pattern_detector.py")
+    os.path.join(
+        os.path.dirname(__file__),
+        "../../tools/code-analysis-suite/src/anti_pattern_detector.py",
+    ),
 )
 anti_pattern_module = importlib.util.module_from_spec(spec)
 sys.modules["anti_pattern_detector"] = anti_pattern_module
@@ -78,10 +82,18 @@ class TestAntiPatternType:
     def test_all_types_defined(self):
         """Verify all expected anti-pattern types are defined."""
         expected_types = [
-            "god_class", "feature_envy", "circular_dependency",
-            "shotgun_surgery", "speculative_generality", "dead_code",
-            "data_clump", "long_method", "long_parameter_list",
-            "primitive_obsession", "lazy_class", "refused_bequest"
+            "god_class",
+            "feature_envy",
+            "circular_dependency",
+            "shotgun_surgery",
+            "speculative_generality",
+            "dead_code",
+            "data_clump",
+            "long_method",
+            "long_parameter_list",
+            "primitive_obsession",
+            "lazy_class",
+            "refused_bequest",
         ]
         actual_types = [t.value for t in AntiPatternType]
         for expected in expected_types:
@@ -102,7 +114,7 @@ class TestAntiPatternInstance:
             description="Class has too many methods",
             metrics={"method_count": 25},
             suggestion="Break down the class",
-            refactoring_effort="high"
+            refactoring_effort="high",
         )
 
         assert instance.pattern_type == AntiPatternType.GOD_CLASS
@@ -123,7 +135,7 @@ class TestAntiPatternInstance:
             metrics={"external_refs": 10, "self_refs": 2},
             suggestion="Move method to other class",
             refactoring_effort="medium",
-            related_entities=["OtherClass"]
+            related_entities=["OtherClass"],
         )
 
         data = instance.to_dict()
@@ -149,7 +161,7 @@ class TestAntiPatternReport:
             anti_patterns=[],
             summary_by_type={"god_class": 1, "feature_envy": 2},
             recommendations=["Fix god classes"],
-            analysis_time_seconds=1.5
+            analysis_time_seconds=1.5,
         )
 
         assert report.total_issues == 5
@@ -168,7 +180,7 @@ class TestAntiPatternReport:
             anti_patterns=[],
             summary_by_type={"long_method": 2, "lazy_class": 1},
             recommendations=["Shorten methods"],
-            analysis_time_seconds=0.75
+            analysis_time_seconds=0.75,
         )
 
         data = report.to_dict()
@@ -236,7 +248,7 @@ def with_loop(items):
             method_calls={},
             external_references={},
             lines_of_code=50,
-            complexity=10
+            complexity=10,
         )
 
         score = detector._calculate_god_class_score(small_class)
@@ -254,7 +266,7 @@ def with_loop(items):
             method_calls={},
             external_references={},
             lines_of_code=800,  # 800 lines
-            complexity=50
+            complexity=50,
         )
 
         score = detector._calculate_god_class_score(large_class)
@@ -289,21 +301,13 @@ def with_loop(items):
 
     def test_find_cycles_no_cycles(self, detector):
         """Test cycle detection with no cycles."""
-        graph = {
-            "A": {"B"},
-            "B": {"C"},
-            "C": set()
-        }
+        graph = {"A": {"B"}, "B": {"C"}, "C": set()}
         cycles = detector._find_all_cycles(graph)
         assert len(cycles) == 0
 
     def test_find_cycles_with_cycle(self, detector):
         """Test cycle detection with cycles present."""
-        graph = {
-            "A": {"B"},
-            "B": {"C"},
-            "C": {"A"}  # Creates cycle A -> B -> C -> A
-        }
+        graph = {"A": {"B"}, "B": {"C"}, "C": {"A"}}  # Creates cycle A -> B -> C -> A
         cycles = detector._find_all_cycles(graph)
         assert len(cycles) > 0
 
@@ -319,7 +323,7 @@ def with_loop(items):
                 description="Large class",
                 metrics={},
                 suggestion="Refactor",
-                refactoring_effort="high"
+                refactoring_effort="high",
             ),
             AntiPatternInstance(
                 pattern_type=AntiPatternType.LONG_METHOD,
@@ -330,8 +334,8 @@ def with_loop(items):
                 description="Long method",
                 metrics={},
                 suggestion="Extract method",
-                refactoring_effort="medium"
-            )
+                refactoring_effort="medium",
+            ),
         ]
 
         report = detector._generate_report(anti_patterns, 1.0)
@@ -360,7 +364,7 @@ def with_loop(items):
                 description="Test",
                 metrics={},
                 suggestion="Test",
-                refactoring_effort="high"
+                refactoring_effort="high",
             )
             for _ in range(3)
         ]
@@ -391,7 +395,7 @@ class TestAntiPatternDetectorAsync:
                 method_calls={},
                 external_references={},
                 lines_of_code=600,
-                complexity=40
+                complexity=40,
             )
         }
 
@@ -419,7 +423,7 @@ class TestAntiPatternDetectorAsync:
                 method_calls={},
                 external_references={},
                 lines_of_code=100,
-                complexity=10
+                complexity=10,
             )
         }
 
@@ -456,7 +460,7 @@ class TestAntiPatternDetectorAsync:
                 method_calls={},
                 external_references={},
                 lines_of_code=50,
-                complexity=5
+                complexity=5,
             )
         }
 
@@ -474,15 +478,15 @@ class TestAntiPatternDetectorAsync:
                 file_path="/module_a.py",
                 imports=["module_b"],
                 classes=[],
-                functions=[]
+                functions=[],
             ),
             "module_b": ModuleInfo(
                 name="module_b",
                 file_path="/module_b.py",
                 imports=["module_a"],  # Creates cycle
                 classes=[],
-                functions=[]
-            )
+                functions=[],
+            ),
         }
 
         issues = await detector._detect_circular_dependencies()
@@ -507,7 +511,7 @@ class TestAntiPatternDetectorAsync:
                 method_calls={},
                 external_references={},
                 lines_of_code=15,
-                complexity=2
+                complexity=2,
             )
         }
 

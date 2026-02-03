@@ -10,14 +10,12 @@ import asyncio
 import statistics
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List
+from typing import Dict
 from unittest.mock import MagicMock, patch
 
 import psutil
 import pytest
 
-from src.config import global_config_manager
 from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.knowledge_base import KnowledgeBase
 
@@ -384,7 +382,7 @@ class TestOrchestratorPerformance:
             assert len(results) == count
             assert all(isinstance(r, int) for r in results)
 
-            stats = self.benchmark.get_statistics()
+            self.benchmark.get_statistics()
 
             # Performance assertions
             assert (
@@ -568,7 +566,7 @@ class TestSystemIntegrationPerformance:
     async def test_resource_usage_under_load(self):
         """Test system resource usage under sustained load"""
         initial_memory = psutil.Process().memory_info().rss / 1024 / 1024  # MB
-        initial_cpu = psutil.Process().cpu_percent()
+        psutil.Process().cpu_percent()
 
         # Simulate sustained load
         async def simulate_load():
@@ -585,7 +583,7 @@ class TestSystemIntegrationPerformance:
         end_time = time.perf_counter()
 
         final_memory = psutil.Process().memory_info().rss / 1024 / 1024  # MB
-        final_cpu = psutil.Process().cpu_percent()
+        psutil.Process().cpu_percent()
 
         # Resource usage assertions
         memory_increase = final_memory - initial_memory

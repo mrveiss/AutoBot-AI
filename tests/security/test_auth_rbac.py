@@ -15,20 +15,20 @@ These tests verify:
 - SecurityLayer integration
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
+import pytest
 from fastapi import Request
 
 from src.auth_rbac import (
+    ROLE_PERMISSIONS,
     Permission,
     Role,
-    ROLE_PERMISSIONS,
+    _get_user_permissions,
     has_permission,
+    require_any_permission,
     require_permission,
     require_role,
-    require_any_permission,
-    _get_user_permissions,
 )
 
 
@@ -43,7 +43,16 @@ class TestPermissionEnum:
 
     def test_permission_categories_exist(self):
         """Key permission categories should exist."""
-        categories = ["api", "knowledge", "analytics", "agent", "workflow", "files", "security", "admin"]
+        categories = [
+            "api",
+            "knowledge",
+            "analytics",
+            "agent",
+            "workflow",
+            "files",
+            "security",
+            "admin",
+        ]
         for category in categories:
             matching = [p for p in Permission if p.value.startswith(category)]
             assert len(matching) > 0, f"No permissions found for category: {category}"
@@ -56,7 +65,9 @@ class TestPermissionEnum:
             if perm.value in legacy_permissions:
                 continue  # Skip legacy permissions
             parts = perm.value.split(".")
-            assert len(parts) >= 2, f"Permission {perm.value} doesn't follow naming convention"
+            assert (
+                len(parts) >= 2
+            ), f"Permission {perm.value} doesn't follow naming convention"
 
 
 class TestRoleEnum:
@@ -110,8 +121,9 @@ class TestRolePermissionMappings:
         for role, perms in ROLE_PERMISSIONS.items():
             perm_values = [p.value if hasattr(p, "value") else p for p in perms]
             if role != Role.ADMIN:
-                assert Permission.SHELL_EXECUTE.value not in perm_values, \
-                    f"Role {role} should not have shell execute permission"
+                assert (
+                    Permission.SHELL_EXECUTE.value not in perm_values
+                ), f"Role {role} should not have shell execute permission"
 
 
 class TestHasPermission:
@@ -249,8 +261,7 @@ class TestRequireAnyPermission:
 
         request = self._create_mock_request()
         dependency = require_any_permission(
-            Permission.ANALYTICS_VIEW,
-            Permission.ADMIN_SYSTEM
+            Permission.ANALYTICS_VIEW, Permission.ADMIN_SYSTEM
         )
 
         # In single user mode, should return True

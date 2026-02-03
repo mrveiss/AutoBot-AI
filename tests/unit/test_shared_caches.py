@@ -9,28 +9,23 @@ redundant file traversals and AST parsing across analyzers.
 """
 
 import ast
-import asyncio
-import tempfile
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
-from src.code_intelligence.shared.file_cache import (
-    FileListCache,
-    get_python_files,
-    get_frontend_files,
-    invalidate_file_cache,
-    get_file_cache_stats,
-    PYTHON_EXTENSIONS,
-    FRONTEND_EXTENSIONS,
-)
+import pytest
+
 from src.code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,
+    get_ast_cache_stats,
     get_ast_safe,
     get_ast_with_content,
     invalidate_ast_cache,
-    get_ast_cache_stats,
+)
+from src.code_intelligence.shared.file_cache import (
+    FileListCache,
+    get_file_cache_stats,
+    get_frontend_files,
+    get_python_files,
+    invalidate_file_cache,
 )
 
 
@@ -42,6 +37,7 @@ class TestFileListCache:
         """Reset singleton before and after each test."""
         # Reset module-level instance as well
         import src.code_intelligence.shared.file_cache as fc
+
         fc._cache_instance = None
         FileListCache.reset_instance()
         yield
@@ -97,8 +93,8 @@ class TestFileListCache:
         stats_before = get_file_cache_stats()
         initial_misses = stats_before["misses"]
 
-        python_files = await get_python_files()
-        frontend_files = await get_frontend_files()
+        await get_python_files()
+        await get_frontend_files()
 
         stats = get_file_cache_stats()
         # Should have 2 additional misses (one for each extension set)
@@ -131,6 +127,7 @@ class TestASTCache:
         """Reset singleton before and after each test."""
         # Reset module-level instance as well
         import src.code_intelligence.shared.ast_cache as ac
+
         ac._cache_instance = None
         ASTCache.reset_instance()
         yield
@@ -215,7 +212,9 @@ class TestASTCache:
 
         # Force module reload and reset to pick up new env var
         import importlib
+
         import src.code_intelligence.shared.ast_cache as ac
+
         ac._cache_instance = None
         ASTCache.reset_instance()
         importlib.reload(ac)
@@ -291,8 +290,9 @@ class TestIntegration:
     def reset_caches(self):
         """Reset all caches before and after each test."""
         # Reset both module-level instances
-        import src.code_intelligence.shared.file_cache as fc
         import src.code_intelligence.shared.ast_cache as ac
+        import src.code_intelligence.shared.file_cache as fc
+
         fc._cache_instance = None
         ac._cache_instance = None
         FileListCache.reset_instance()
@@ -328,10 +328,12 @@ class TestIntegration:
         for file_path in python_files:
             tree = get_ast_safe(str(file_path))
             if tree:
-                results.append({
-                    "file": str(file_path),
-                    "nodes": len(list(ast.walk(tree))),
-                })
+                results.append(
+                    {
+                        "file": str(file_path),
+                        "nodes": len(list(ast.walk(tree))),
+                    }
+                )
 
         assert len(results) == 3
 

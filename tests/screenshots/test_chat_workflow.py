@@ -5,9 +5,8 @@ Focus on chat interaction that triggers workflows
 """
 
 import asyncio
+
 import aiohttp
-import json
-import time
 
 
 async def test_chat_workflow():

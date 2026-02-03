@@ -4,16 +4,18 @@ AutoBot System Comprehensive Testing and Analysis
 Testing all aspects of the AutoBot application for integrity and performance assessment
 """
 
-import requests
 import json
-import time
+import os
 import subprocess
 import sys
-import os
-from datetime import datetime
-from typing import Dict, List, Any, Tuple
+import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from datetime import datetime
+from typing import Any, Dict, List, Tuple
+
+import requests
 
 
 @dataclass
@@ -34,18 +36,28 @@ class AutoBotSystemTester:
         self.session = requests.Session()
         self.session.timeout = 8  # Conservative timeout
 
-    def add_result(self, category: str, name: str, status: str, message: str,
-                   details: Dict = None, duration: float = 0.0, severity: str = "INFO"):
+    def add_result(
+        self,
+        category: str,
+        name: str,
+        status: str,
+        message: str,
+        details: Dict = None,
+        duration: float = 0.0,
+        severity: str = "INFO",
+    ):
         """Add a test result"""
-        self.results.append(TestResult(
-            category=category,
-            name=name,
-            status=status,
-            message=message,
-            details=details,
-            duration=duration,
-            severity=severity
-        ))
+        self.results.append(
+            TestResult(
+                category=category,
+                name=name,
+                status=status,
+                message=message,
+                details=details,
+                duration=duration,
+                severity=severity,
+            )
+        )
 
     def test_with_timeout(self, test_func, timeout: int = 5, *args, **kwargs):
         """Execute test function with timeout protection"""
@@ -64,8 +76,13 @@ class AutoBotSystemTester:
             duration = time.time() - start_time
             return False, str(e), duration
 
-    def test_api_endpoint(self, path: str, method: str = "GET",
-                         data: Dict = None, expected_status: List[int] = None) -> Tuple[bool, Dict]:
+    def test_api_endpoint(
+        self,
+        path: str,
+        method: str = "GET",
+        data: Dict = None,
+        expected_status: List[int] = None,
+    ) -> Tuple[bool, Dict]:
         """Test a single API endpoint with robust error handling"""
         if expected_status is None:
             expected_status = [200, 201, 202]
@@ -95,7 +112,7 @@ class AutoBotSystemTester:
                 "status_code": response.status_code,
                 "response_time": response.elapsed.total_seconds(),
                 "response_data": response_data,
-                "headers": dict(response.headers)
+                "headers": dict(response.headers),
             }
 
         except requests.exceptions.Timeout:
@@ -123,19 +140,35 @@ class AutoBotSystemTester:
             )
 
             if not success:
-                self.add_result("Core API", description, "TIMEOUT",
-                              f"Endpoint timed out or failed: {result}",
-                              duration=duration, severity="HIGH")
+                self.add_result(
+                    "Core API",
+                    description,
+                    "TIMEOUT",
+                    f"Endpoint timed out or failed: {result}",
+                    duration=duration,
+                    severity="HIGH",
+                )
             else:
                 endpoint_success, response_data = result
                 if endpoint_success:
-                    self.add_result("Core API", description, "PASS",
-                                  f"Status {response_data['status_code']} in {response_data['response_time']:.3f}s",
-                                  details=response_data, duration=duration)
+                    self.add_result(
+                        "Core API",
+                        description,
+                        "PASS",
+                        f"Status {response_data['status_code']} in {response_data['response_time']:.3f}s",
+                        details=response_data,
+                        duration=duration,
+                    )
                 else:
-                    self.add_result("Core API", description, "FAIL",
-                                  f"Failed: {response_data.get('error', 'Unknown error')}",
-                                  details=response_data, duration=duration, severity="MEDIUM")
+                    self.add_result(
+                        "Core API",
+                        description,
+                        "FAIL",
+                        f"Failed: {response_data.get('error', 'Unknown error')}",
+                        details=response_data,
+                        duration=duration,
+                        severity="MEDIUM",
+                    )
 
     def run_problematic_endpoint_tests(self):
         """Test endpoints that were previously problematic"""
@@ -143,7 +176,12 @@ class AutoBotSystemTester:
 
         # Endpoints that had issues
         problematic_endpoints = [
-            ("/api/knowledge_base/search", "POST", "Knowledge Base Search", {"query": "test", "top_k": 3}),
+            (
+                "/api/knowledge_base/search",
+                "POST",
+                "Knowledge Base Search",
+                {"query": "test", "top_k": 3},
+            ),
             ("/api/files/stats", "GET", "File Statistics", None),
             ("/api/knowledge_base/detailed_stats", "GET", "KB Detailed Stats", None),
             ("/api/settings/", "GET", "Settings API", None),
@@ -154,29 +192,56 @@ class AutoBotSystemTester:
 
         for path, method, description, data in problematic_endpoints:
             success, result, duration = self.test_with_timeout(
-                self.test_api_endpoint, 10, path, method, data, [200, 404, 500]  # Accept various status codes
+                self.test_api_endpoint,
+                10,
+                path,
+                method,
+                data,
+                [200, 404, 500],  # Accept various status codes
             )
 
             if not success:
-                self.add_result("Problematic Endpoints", description, "TIMEOUT",
-                              f"Endpoint timed out: {result}",
-                              duration=duration, severity="HIGH")
+                self.add_result(
+                    "Problematic Endpoints",
+                    description,
+                    "TIMEOUT",
+                    f"Endpoint timed out: {result}",
+                    duration=duration,
+                    severity="HIGH",
+                )
             else:
                 endpoint_success, response_data = result
-                status_code = response_data.get('status_code', 0)
+                status_code = response_data.get("status_code", 0)
 
                 if status_code == 200:
-                    self.add_result("Problematic Endpoints", description, "PASS",
-                                  f"Endpoint working: {status_code}",
-                                  details=response_data, duration=duration)
+                    self.add_result(
+                        "Problematic Endpoints",
+                        description,
+                        "PASS",
+                        f"Endpoint working: {status_code}",
+                        details=response_data,
+                        duration=duration,
+                    )
                 elif status_code == 404:
-                    self.add_result("Problematic Endpoints", description, "WARNING",
-                                  f"Endpoint not found: {status_code}",
-                                  details=response_data, duration=duration, severity="MEDIUM")
+                    self.add_result(
+                        "Problematic Endpoints",
+                        description,
+                        "WARNING",
+                        f"Endpoint not found: {status_code}",
+                        details=response_data,
+                        duration=duration,
+                        severity="MEDIUM",
+                    )
                 else:
-                    self.add_result("Problematic Endpoints", description, "FAIL",
-                                  f"Endpoint error: {status_code}",
-                                  details=response_data, duration=duration, severity="HIGH")
+                    self.add_result(
+                        "Problematic Endpoints",
+                        description,
+                        "FAIL",
+                        f"Endpoint error: {status_code}",
+                        details=response_data,
+                        duration=duration,
+                        severity="HIGH",
+                    )
 
     def run_service_integration_tests(self):
         """Test integration between services"""
@@ -188,12 +253,24 @@ class AutoBotSystemTester:
         )
 
         if success and result[0]:
-            self.add_result("Service Integration", "Redis Connection", "PASS",
-                          "Redis cache accessible", details=result[1], duration=duration)
+            self.add_result(
+                "Service Integration",
+                "Redis Connection",
+                "PASS",
+                "Redis cache accessible",
+                details=result[1],
+                duration=duration,
+            )
         else:
-            self.add_result("Service Integration", "Redis Connection", "FAIL",
-                          "Redis cache not accessible", details=result[1] if success else {"error": result},
-                          duration=duration, severity="HIGH")
+            self.add_result(
+                "Service Integration",
+                "Redis Connection",
+                "FAIL",
+                "Redis cache not accessible",
+                details=result[1] if success else {"error": result},
+                duration=duration,
+                severity="HIGH",
+            )
 
         # Test Ollama integration
         success, result, duration = self.test_with_timeout(
@@ -201,12 +278,24 @@ class AutoBotSystemTester:
         )
 
         if success and result[0]:
-            self.add_result("Service Integration", "Ollama LLM Connection", "PASS",
-                          "Ollama service accessible", details=result[1], duration=duration)
+            self.add_result(
+                "Service Integration",
+                "Ollama LLM Connection",
+                "PASS",
+                "Ollama service accessible",
+                details=result[1],
+                duration=duration,
+            )
         else:
-            self.add_result("Service Integration", "Ollama LLM Connection", "FAIL",
-                          "Ollama service not accessible", details=result[1] if success else {"error": result},
-                          duration=duration, severity="HIGH")
+            self.add_result(
+                "Service Integration",
+                "Ollama LLM Connection",
+                "FAIL",
+                "Ollama service not accessible",
+                details=result[1] if success else {"error": result},
+                duration=duration,
+                severity="HIGH",
+            )
 
         # Test Knowledge Base integration
         success, result, duration = self.test_with_timeout(
@@ -214,21 +303,42 @@ class AutoBotSystemTester:
         )
 
         if success and result[0]:
-            response_data = result[1].get('response_data', {})
-            total_docs = response_data.get('total_documents', 0) if isinstance(response_data, dict) else 0
+            response_data = result[1].get("response_data", {})
+            total_docs = (
+                response_data.get("total_documents", 0)
+                if isinstance(response_data, dict)
+                else 0
+            )
 
             if total_docs > 0:
-                self.add_result("Service Integration", "Knowledge Base", "PASS",
-                              f"Knowledge base loaded with {total_docs} documents",
-                              details=result[1], duration=duration)
+                self.add_result(
+                    "Service Integration",
+                    "Knowledge Base",
+                    "PASS",
+                    f"Knowledge base loaded with {total_docs} documents",
+                    details=result[1],
+                    duration=duration,
+                )
             else:
-                self.add_result("Service Integration", "Knowledge Base", "WARNING",
-                              "Knowledge base accessible but no documents found",
-                              details=result[1], duration=duration, severity="MEDIUM")
+                self.add_result(
+                    "Service Integration",
+                    "Knowledge Base",
+                    "WARNING",
+                    "Knowledge base accessible but no documents found",
+                    details=result[1],
+                    duration=duration,
+                    severity="MEDIUM",
+                )
         else:
-            self.add_result("Service Integration", "Knowledge Base", "FAIL",
-                          "Knowledge base not accessible", details=result[1] if success else {"error": result},
-                          duration=duration, severity="HIGH")
+            self.add_result(
+                "Service Integration",
+                "Knowledge Base",
+                "FAIL",
+                "Knowledge base not accessible",
+                details=result[1] if success else {"error": result},
+                duration=duration,
+                severity="HIGH",
+            )
 
     def run_performance_tests(self):
         """Test performance characteristics"""
@@ -251,7 +361,7 @@ class AutoBotSystemTester:
                 )
 
                 if success and result[0]:
-                    times.append(result[1]['response_time'])
+                    times.append(result[1]["response_time"])
                     success_count += 1
 
             if times:
@@ -259,20 +369,42 @@ class AutoBotSystemTester:
                 max_time = max(times)
 
                 if avg_time < 1.0:
-                    self.add_result("Performance", f"{description} Response Time", "PASS",
-                                  f"Average: {avg_time:.3f}s, Max: {max_time:.3f}s",
-                                  details={"times": times}, duration=sum(times))
+                    self.add_result(
+                        "Performance",
+                        f"{description} Response Time",
+                        "PASS",
+                        f"Average: {avg_time:.3f}s, Max: {max_time:.3f}s",
+                        details={"times": times},
+                        duration=sum(times),
+                    )
                 elif avg_time < 3.0:
-                    self.add_result("Performance", f"{description} Response Time", "WARNING",
-                                  f"Slow response - Average: {avg_time:.3f}s, Max: {max_time:.3f}s",
-                                  details={"times": times}, duration=sum(times), severity="MEDIUM")
+                    self.add_result(
+                        "Performance",
+                        f"{description} Response Time",
+                        "WARNING",
+                        f"Slow response - Average: {avg_time:.3f}s, Max: {max_time:.3f}s",
+                        details={"times": times},
+                        duration=sum(times),
+                        severity="MEDIUM",
+                    )
                 else:
-                    self.add_result("Performance", f"{description} Response Time", "FAIL",
-                                  f"Very slow response - Average: {avg_time:.3f}s, Max: {max_time:.3f}s",
-                                  details={"times": times}, duration=sum(times), severity="HIGH")
+                    self.add_result(
+                        "Performance",
+                        f"{description} Response Time",
+                        "FAIL",
+                        f"Very slow response - Average: {avg_time:.3f}s, Max: {max_time:.3f}s",
+                        details={"times": times},
+                        duration=sum(times),
+                        severity="HIGH",
+                    )
             else:
-                self.add_result("Performance", f"{description} Response Time", "FAIL",
-                              "All requests failed", severity="HIGH")
+                self.add_result(
+                    "Performance",
+                    f"{description} Response Time",
+                    "FAIL",
+                    "All requests failed",
+                    severity="HIGH",
+                )
 
     def check_system_processes(self):
         """Check system processes and services"""
@@ -280,33 +412,63 @@ class AutoBotSystemTester:
 
         # Check if uvicorn is running
         try:
-            result = subprocess.run(['pgrep', '-f', 'uvicorn'],
-                                  capture_output=True, text=True, timeout=5)
+            result = subprocess.run(
+                ["pgrep", "-f", "uvicorn"], capture_output=True, text=True, timeout=5
+            )
             if result.returncode == 0:
-                pids = result.stdout.strip().split('\n')
-                self.add_result("System Processes", "Backend Process", "PASS",
-                              f"Backend running with PIDs: {', '.join(pids)}")
+                pids = result.stdout.strip().split("\n")
+                self.add_result(
+                    "System Processes",
+                    "Backend Process",
+                    "PASS",
+                    f"Backend running with PIDs: {', '.join(pids)}",
+                )
             else:
-                self.add_result("System Processes", "Backend Process", "FAIL",
-                              "Backend process not found", severity="CRITICAL")
+                self.add_result(
+                    "System Processes",
+                    "Backend Process",
+                    "FAIL",
+                    "Backend process not found",
+                    severity="CRITICAL",
+                )
         except Exception as e:
-            self.add_result("System Processes", "Backend Process", "FAIL",
-                          f"Error checking backend process: {str(e)}", severity="HIGH")
+            self.add_result(
+                "System Processes",
+                "Backend Process",
+                "FAIL",
+                f"Error checking backend process: {str(e)}",
+                severity="HIGH",
+            )
 
         # Check if Ollama is running
         try:
-            result = subprocess.run(['pgrep', '-f', 'ollama'],
-                                  capture_output=True, text=True, timeout=5)
+            result = subprocess.run(
+                ["pgrep", "-f", "ollama"], capture_output=True, text=True, timeout=5
+            )
             if result.returncode == 0:
-                pids = result.stdout.strip().split('\n')
-                self.add_result("System Processes", "Ollama Process", "PASS",
-                              f"Ollama running with PIDs: {', '.join(pids)}")
+                pids = result.stdout.strip().split("\n")
+                self.add_result(
+                    "System Processes",
+                    "Ollama Process",
+                    "PASS",
+                    f"Ollama running with PIDs: {', '.join(pids)}",
+                )
             else:
-                self.add_result("System Processes", "Ollama Process", "WARNING",
-                              "Ollama process not found", severity="MEDIUM")
+                self.add_result(
+                    "System Processes",
+                    "Ollama Process",
+                    "WARNING",
+                    "Ollama process not found",
+                    severity="MEDIUM",
+                )
         except Exception as e:
-            self.add_result("System Processes", "Ollama Process", "WARNING",
-                          f"Error checking Ollama process: {str(e)}", severity="MEDIUM")
+            self.add_result(
+                "System Processes",
+                "Ollama Process",
+                "WARNING",
+                f"Error checking Ollama process: {str(e)}",
+                severity="MEDIUM",
+            )
 
     def analyze_frontend_build_warnings(self):
         """Analyze frontend build for Vite warnings"""
@@ -315,37 +477,58 @@ class AutoBotSystemTester:
         # Check if frontend directory exists
         frontend_dir = "/home/kali/Desktop/AutoBot/autobot-vue"
         if not os.path.exists(frontend_dir):
-            self.add_result("Frontend Build", "Directory Check", "FAIL",
-                          "Frontend directory not found", severity="HIGH")
+            self.add_result(
+                "Frontend Build",
+                "Directory Check",
+                "FAIL",
+                "Frontend directory not found",
+                severity="HIGH",
+            )
             return
 
         # Check package.json and dependencies
         package_json = os.path.join(frontend_dir, "package.json")
         if os.path.exists(package_json):
             try:
-                with open(package_json, 'r') as f:
+                with open(package_json, "r") as f:
                     package_data = json.load(f)
 
                 # Check for critical dependencies
-                deps = package_data.get('dependencies', {})
-                dev_deps = package_data.get('devDependencies', {})
+                deps = package_data.get("dependencies", {})
+                dev_deps = package_data.get("devDependencies", {})
 
-                vue_version = deps.get('@vue/compat') or deps.get('vue', 'not found')
-                vite_version = dev_deps.get('vite', 'not found')
+                vue_version = deps.get("@vue/compat") or deps.get("vue", "not found")
+                vite_version = dev_deps.get("vite", "not found")
 
-                self.add_result("Frontend Build", "Dependencies Check", "PASS",
-                              f"Vue: {vue_version}, Vite: {vite_version}",
-                              details={"dependencies": len(deps), "devDependencies": len(dev_deps)})
+                self.add_result(
+                    "Frontend Build",
+                    "Dependencies Check",
+                    "PASS",
+                    f"Vue: {vue_version}, Vite: {vite_version}",
+                    details={
+                        "dependencies": len(deps),
+                        "devDependencies": len(dev_deps),
+                    },
+                )
 
                 # Check for large dependency issues
                 if len(deps) > 50:
-                    self.add_result("Frontend Build", "Dependency Count", "WARNING",
-                                  f"Large number of dependencies: {len(deps)}",
-                                  severity="MEDIUM")
+                    self.add_result(
+                        "Frontend Build",
+                        "Dependency Count",
+                        "WARNING",
+                        f"Large number of dependencies: {len(deps)}",
+                        severity="MEDIUM",
+                    )
 
             except Exception as e:
-                self.add_result("Frontend Build", "Package.json Analysis", "FAIL",
-                              f"Error reading package.json: {str(e)}", severity="MEDIUM")
+                self.add_result(
+                    "Frontend Build",
+                    "Package.json Analysis",
+                    "FAIL",
+                    f"Error reading package.json: {str(e)}",
+                    severity="MEDIUM",
+                )
 
         # Check for dist directory (build output)
         dist_dir = os.path.join(frontend_dir, "dist")
@@ -363,23 +546,45 @@ class AutoBotSystemTester:
                 size_mb = total_size / (1024 * 1024)
 
                 if size_mb < 10:
-                    self.add_result("Frontend Build", "Build Size", "PASS",
-                                  f"Build size: {size_mb:.1f}MB ({file_count} files)")
+                    self.add_result(
+                        "Frontend Build",
+                        "Build Size",
+                        "PASS",
+                        f"Build size: {size_mb:.1f}MB ({file_count} files)",
+                    )
                 elif size_mb < 50:
-                    self.add_result("Frontend Build", "Build Size", "WARNING",
-                                  f"Large build size: {size_mb:.1f}MB ({file_count} files)",
-                                  severity="MEDIUM")
+                    self.add_result(
+                        "Frontend Build",
+                        "Build Size",
+                        "WARNING",
+                        f"Large build size: {size_mb:.1f}MB ({file_count} files)",
+                        severity="MEDIUM",
+                    )
                 else:
-                    self.add_result("Frontend Build", "Build Size", "FAIL",
-                                  f"Very large build size: {size_mb:.1f}MB ({file_count} files)",
-                                  severity="HIGH")
+                    self.add_result(
+                        "Frontend Build",
+                        "Build Size",
+                        "FAIL",
+                        f"Very large build size: {size_mb:.1f}MB ({file_count} files)",
+                        severity="HIGH",
+                    )
 
             except Exception as e:
-                self.add_result("Frontend Build", "Build Size Analysis", "WARNING",
-                              f"Error analyzing build size: {str(e)}", severity="LOW")
+                self.add_result(
+                    "Frontend Build",
+                    "Build Size Analysis",
+                    "WARNING",
+                    f"Error analyzing build size: {str(e)}",
+                    severity="LOW",
+                )
         else:
-            self.add_result("Frontend Build", "Build Output", "WARNING",
-                          "No dist directory found - frontend may not be built", severity="MEDIUM")
+            self.add_result(
+                "Frontend Build",
+                "Build Output",
+                "WARNING",
+                "No dist directory found - frontend may not be built",
+                severity="MEDIUM",
+            )
 
     def run_security_assessment(self):
         """Basic security assessment"""
@@ -398,17 +603,29 @@ class AutoBotSystemTester:
             )
 
             if success:
-                status_code = result[1].get('status_code', 0)
+                status_code = result[1].get("status_code", 0)
                 if status_code == 200:
-                    self.add_result("Security", f"Endpoint Access {endpoint}", "WARNING",
-                                  f"Sensitive endpoint accessible without authentication: {status_code}",
-                                  severity="MEDIUM")
+                    self.add_result(
+                        "Security",
+                        f"Endpoint Access {endpoint}",
+                        "WARNING",
+                        f"Sensitive endpoint accessible without authentication: {status_code}",
+                        severity="MEDIUM",
+                    )
                 elif status_code in [401, 403]:
-                    self.add_result("Security", f"Endpoint Access {endpoint}", "PASS",
-                                  f"Sensitive endpoint properly protected: {status_code}")
+                    self.add_result(
+                        "Security",
+                        f"Endpoint Access {endpoint}",
+                        "PASS",
+                        f"Sensitive endpoint properly protected: {status_code}",
+                    )
                 else:
-                    self.add_result("Security", f"Endpoint Access {endpoint}", "PASS",
-                                  f"Endpoint not accessible: {status_code}")
+                    self.add_result(
+                        "Security",
+                        f"Endpoint Access {endpoint}",
+                        "PASS",
+                        f"Endpoint not accessible: {status_code}",
+                    )
 
     def generate_comprehensive_report(self) -> Dict[str, Any]:
         """Generate comprehensive test report"""
@@ -423,7 +640,7 @@ class AutoBotSystemTester:
                     "failed": 0,
                     "warnings": 0,
                     "timeouts": 0,
-                    "results": []
+                    "results": [],
                 }
 
             cat = categories[result.category]
@@ -446,7 +663,9 @@ class AutoBotSystemTester:
         total_warnings = sum(1 for r in self.results if r.status == "WARNING")
         total_timeouts = sum(1 for r in self.results if r.status == "TIMEOUT")
 
-        overall_success_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
+        overall_success_rate = (
+            (total_passed / total_tests * 100) if total_tests > 0 else 0
+        )
 
         # Count by severity
         critical_issues = sum(1 for r in self.results if r.severity == "CRITICAL")
@@ -461,13 +680,13 @@ class AutoBotSystemTester:
                 "failed": total_failed,
                 "warnings": total_warnings,
                 "timeouts": total_timeouts,
-                "success_rate": overall_success_rate
+                "success_rate": overall_success_rate,
             },
             "severity_breakdown": {
                 "critical": critical_issues,
                 "high": high_issues,
                 "medium": medium_issues,
-                "low": total_tests - critical_issues - high_issues - medium_issues
+                "low": total_tests - critical_issues - high_issues - medium_issues,
             },
             "category_results": categories,
             "detailed_results": [
@@ -478,17 +697,17 @@ class AutoBotSystemTester:
                     "message": r.message,
                     "severity": r.severity,
                     "duration": r.duration,
-                    "details": r.details
+                    "details": r.details,
                 }
                 for r in self.results
-            ]
+            ],
         }
 
     def print_summary_report(self, report: Dict[str, Any]):
         """Print a formatted summary report"""
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("🎯 AUTOBOT COMPREHENSIVE SYSTEM ASSESSMENT REPORT")
-        print("="*80)
+        print("=" * 80)
 
         stats = report["overall_statistics"]
         severity = report["severity_breakdown"]
@@ -509,15 +728,30 @@ class AutoBotSystemTester:
 
         print(f"\n📋 Results by Category:")
         for category, cat_data in report["category_results"].items():
-            success_rate = (cat_data["passed"] / cat_data["total"] * 100) if cat_data["total"] > 0 else 0
-            status_icon = "✅" if success_rate == 100 else "⚠️" if success_rate >= 80 else "❌"
-            print(f"   {status_icon} {category}: {success_rate:.1f}% ({cat_data['passed']}/{cat_data['total']})")
+            success_rate = (
+                (cat_data["passed"] / cat_data["total"] * 100)
+                if cat_data["total"] > 0
+                else 0
+            )
+            status_icon = (
+                "✅" if success_rate == 100 else "⚠️" if success_rate >= 80 else "❌"
+            )
+            print(
+                f"   {status_icon} {category}: {success_rate:.1f}% ({cat_data['passed']}/{cat_data['total']})"
+            )
 
             # Show failures
-            failures = [r for r in cat_data["results"] if r.status in ["FAIL", "TIMEOUT"]]
+            failures = [
+                r for r in cat_data["results"] if r.status in ["FAIL", "TIMEOUT"]
+            ]
             if failures:
                 for failure in failures[:2]:  # Show first 2 failures
-                    severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(failure.severity, "")
+                    severity_icon = {
+                        "CRITICAL": "🔴",
+                        "HIGH": "🟠",
+                        "MEDIUM": "🟡",
+                        "LOW": "🟢",
+                    }.get(failure.severity, "")
                     print(f"      {severity_icon} {failure.name}: {failure.message}")
                 if len(failures) > 2:
                     print(f"      ... and {len(failures) - 2} more issues")
@@ -531,7 +765,9 @@ class AutoBotSystemTester:
         elif stats["success_rate"] >= 70:
             print("   🟠 FAIR - System is functional but needs attention")
         else:
-            print("   🔴 POOR - System has significant issues requiring immediate attention")
+            print(
+                "   🔴 POOR - System has significant issues requiring immediate attention"
+            )
 
         # Recommendations
         print(f"\n💡 Key Recommendations:")
@@ -548,7 +784,7 @@ class AutoBotSystemTester:
 def main():
     """Run comprehensive AutoBot system assessment"""
     print("🚀 Starting AutoBot Comprehensive System Assessment")
-    print("="*80)
+    print("=" * 80)
 
     tester = AutoBotSystemTester()
 
@@ -556,7 +792,10 @@ def main():
     test_categories = [
         ("check_system_processes", "Checking system processes..."),
         ("run_core_api_tests", "Testing core API endpoints..."),
-        ("run_problematic_endpoint_tests", "Testing previously problematic endpoints..."),
+        (
+            "run_problematic_endpoint_tests",
+            "Testing previously problematic endpoints...",
+        ),
         ("run_service_integration_tests", "Testing service integration..."),
         ("run_performance_tests", "Running performance tests..."),
         ("analyze_frontend_build_warnings", "Analyzing frontend build..."),
@@ -569,9 +808,13 @@ def main():
             method = getattr(tester, method_name)
             method()
         except Exception as e:
-            tester.add_result("System", method_name, "FAIL",
-                            f"Test category failed: {str(e)}",
-                            severity="HIGH")
+            tester.add_result(
+                "System",
+                method_name,
+                "FAIL",
+                f"Test category failed: {str(e)}",
+                severity="HIGH",
+            )
             print(f"   ❌ Failed: {str(e)}")
 
     # Generate comprehensive report
@@ -584,32 +827,36 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save to multiple formats
-    results_dir = "/home/kali/Desktop/AutoBot/tests/results/comprehensive_testing_20250909_150149"
+    results_dir = (
+        "/home/kali/Desktop/AutoBot/tests/results/comprehensive_testing_20250909_150149"
+    )
     os.makedirs(results_dir, exist_ok=True)
 
     # JSON report for detailed analysis
     json_file = os.path.join(results_dir, f"system_assessment_report_{timestamp}.json")
-    with open(json_file, 'w') as f:
+    with open(json_file, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
     # Human-readable report
     text_file = os.path.join(results_dir, f"system_assessment_summary_{timestamp}.txt")
-    with open(text_file, 'w') as f:
+    with open(text_file, "w") as f:
         f.write("AutoBot Comprehensive System Assessment Report\n")
         f.write(f"Generated: {report['timestamp']}\n")
-        f.write("="*80 + "\n\n")
+        f.write("=" * 80 + "\n\n")
 
         stats = report["overall_statistics"]
         f.write(f"Overall Success Rate: {stats['success_rate']:.1f}%\n")
         f.write(f"Total Tests: {stats['total_tests']}\n")
-        f.write(f"Passed: {stats['passed']}, Failed: {stats['failed']}, Warnings: {stats['warnings']}\n\n")
+        f.write(
+            f"Passed: {stats['passed']}, Failed: {stats['failed']}, Warnings: {stats['warnings']}\n\n"
+        )
 
         f.write("Detailed Results:\n")
-        f.write("-"*50 + "\n")
+        f.write("-" * 50 + "\n")
         for result in report["detailed_results"]:
             f.write(f"[{result['status']}] {result['category']} - {result['name']}\n")
             f.write(f"  {result['message']}\n")
-            if result['severity'] != "INFO":
+            if result["severity"] != "INFO":
                 f.write(f"  Severity: {result['severity']}\n")
             f.write("\n")
 

@@ -10,20 +10,19 @@ query intent detection (Issue #249 Phase 2), and conversation-aware
 query enhancement (Issue #249 Phase 3).
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from src.advanced_rag_optimizer import RAGMetrics, SearchResult
 from src.services.chat_knowledge_service import (
     ChatKnowledgeService,
+    ConversationContextEnhancer,
     QueryKnowledgeIntent,
     QueryKnowledgeIntentDetector,
-    QueryIntentResult,
-    get_query_intent_detector,
-    EnhancedQuery,
-    ConversationContextEnhancer,
     get_context_enhancer,
+    get_query_intent_detector,
 )
-from src.advanced_rag_optimizer import SearchResult, RAGMetrics
 
 
 @pytest.fixture
@@ -503,11 +502,11 @@ def sample_conversation_history():
     return [
         {
             "user": "How do I configure Redis?",
-            "assistant": "Redis is configured in config/redis.yaml. You can set the host, port, and database settings there."
+            "assistant": "Redis is configured in config/redis.yaml. You can set the host, port, and database settings there.",
         },
         {
             "user": "What port does it use?",
-            "assistant": "Redis uses port 6379 by default."
+            "assistant": "Redis uses port 6379 by default.",
         },
     ]
 
@@ -527,7 +526,11 @@ class TestConversationContextEnhancer:
         assert result.enhancement_applied is True
         assert "Redis" in result.enhanced_query or "context" in result.enhanced_query
         assert result.original_query == "How do I restart it?"
-        assert "pronoun" in result.reasoning.lower() or "reference" in result.reasoning.lower() or "context" in result.reasoning.lower()
+        assert (
+            "pronoun" in result.reasoning.lower()
+            or "reference" in result.reasoning.lower()
+            or "context" in result.reasoning.lower()
+        )
 
     def test_enhance_query_without_pronoun(self, context_enhancer):
         """Test that queries without pronouns don't get enhanced."""
@@ -592,9 +595,12 @@ class TestConversationContextEnhancer:
         assert context_enhancer._needs_context_enhancement("and?") is True
 
         # Should not need enhancement (explicit, no pronouns)
-        assert context_enhancer._needs_context_enhancement(
-            "What is the best way to configure Redis connection pooling?"
-        ) is False
+        assert (
+            context_enhancer._needs_context_enhancement(
+                "What is the best way to configure Redis connection pooling?"
+            )
+            is False
+        )
 
     def test_global_enhancer_singleton(self):
         """Test that get_context_enhancer returns singleton."""
@@ -617,7 +623,7 @@ async def test_conversation_aware_retrieve_with_context(
     conversation_history = [
         {
             "user": "How do I configure Redis?",
-            "assistant": "Redis is configured in config/redis.yaml."
+            "assistant": "Redis is configured in config/redis.yaml.",
         },
     ]
 
@@ -645,7 +651,7 @@ async def test_conversation_aware_retrieve_skips_commands(
     conversation_history = [
         {
             "user": "How do I check Redis status?",
-            "assistant": "You can use redis-cli ping."
+            "assistant": "You can use redis-cli ping.",
         },
     ]
 

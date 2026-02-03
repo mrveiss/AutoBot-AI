@@ -15,17 +15,17 @@ Test Coverage:
 Related Issue: #160 - Enhanced System Prompts Testing and Validation
 """
 
+from unittest.mock import patch
+
 import pytest
-from typing import Dict, List, Optional
-from unittest.mock import patch, MagicMock
 
 from src.chat_intent_detector import (
+    CONTEXT_PROMPT_MAP,
+    EXIT_KEYWORDS,
+    INTENT_KEYWORDS,
     detect_exit_intent,
     detect_user_intent,
     select_context_prompt,
-    EXIT_KEYWORDS,
-    INTENT_KEYWORDS,
-    CONTEXT_PROMPT_MAP,
 )
 
 
@@ -213,7 +213,9 @@ class TestDetectUserIntent:
         """Messages with 'distributed' should return architecture intent"""
         # Note: "distributed setup" is in installation keywords as a phrase
         # "distributed" alone should return architecture
-        assert detect_user_intent("Explain the distributed architecture") == "architecture"
+        assert (
+            detect_user_intent("Explain the distributed architecture") == "architecture"
+        )
 
     def test_vm_keyword_returns_architecture(self):
         """Messages about VMs (general) should return architecture intent"""
@@ -368,9 +370,7 @@ class TestDetectUserIntent:
 
     def test_context_boost_from_history(self):
         """Conversation history should boost related intent scores"""
-        history = [
-            {"assistant": "Let me help you with the installation process."}
-        ]
+        history = [{"assistant": "Let me help you with the installation process."}]
         # Without history, this might be general. With installation context, it boosts.
         result = detect_user_intent("What's next?", history)
         # The context boost should influence (may still be general if no keywords)
@@ -392,7 +392,7 @@ class TestDetectUserIntent:
         """Should consider last 2 assistant messages from history"""
         history = [
             {"assistant": "Here's how to install AutoBot."},
-            {"assistant": "The setup process takes about 25 minutes."}
+            {"assistant": "The setup process takes about 25 minutes."},
         ]
         result = detect_user_intent("Tell me more", history)
         # install, setup = installation context
@@ -435,7 +435,7 @@ class TestSelectContextPrompt:
     # Context Prompt Loading and Combination
     # =============================================================================
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_installation_intent_loads_context(self, mock_get_prompt, base_prompt):
         """Installation intent should load and combine context prompt"""
         mock_get_prompt.return_value = "Installation help content"
@@ -448,7 +448,7 @@ class TestSelectContextPrompt:
         assert "CONTEXT-SPECIFIC GUIDANCE" in result
         assert "installation conversation" in result
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_architecture_intent_loads_context(self, mock_get_prompt, base_prompt):
         """Architecture intent should load and combine context prompt"""
         mock_get_prompt.return_value = "Architecture explanation content"
@@ -460,7 +460,7 @@ class TestSelectContextPrompt:
         assert "Architecture explanation content" in result
         assert "architecture conversation" in result
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_troubleshooting_intent_loads_context(self, mock_get_prompt, base_prompt):
         """Troubleshooting intent should load and combine context prompt"""
         mock_get_prompt.return_value = "Troubleshooting guide content"
@@ -472,7 +472,7 @@ class TestSelectContextPrompt:
         assert "Troubleshooting guide content" in result
         assert "troubleshooting conversation" in result
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_api_intent_loads_context(self, mock_get_prompt, base_prompt):
         """API intent should load and combine context prompt"""
         mock_get_prompt.return_value = "API documentation content"
@@ -488,7 +488,7 @@ class TestSelectContextPrompt:
     # Error Handling
     # =============================================================================
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_prompt_load_failure_returns_base(self, mock_get_prompt, base_prompt):
         """If context prompt fails to load, should return base prompt"""
         mock_get_prompt.side_effect = FileNotFoundError("Prompt not found")
@@ -497,7 +497,7 @@ class TestSelectContextPrompt:
 
         assert result == base_prompt
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_prompt_load_exception_returns_base(self, mock_get_prompt, base_prompt):
         """Any exception during prompt load should return base prompt"""
         mock_get_prompt.side_effect = Exception("Unexpected error")
@@ -510,7 +510,7 @@ class TestSelectContextPrompt:
     # Combined Prompt Structure
     # =============================================================================
 
-    @patch('src.chat_intent_detector.get_prompt')
+    @patch("src.chat_intent_detector.get_prompt")
     def test_combined_prompt_structure(self, mock_get_prompt, base_prompt):
         """Combined prompt should have proper structure"""
         mock_get_prompt.return_value = "Context content here"
@@ -568,7 +568,6 @@ class TestIntegration:
 
     def test_full_intent_detection_to_prompt_selection(self):
         """Test full flow from message to enhanced prompt"""
-        base_prompt = "You are AutoBot."
 
         # Test installation flow
         message = "How do I install AutoBot?"

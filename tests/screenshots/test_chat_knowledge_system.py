@@ -5,15 +5,12 @@ Tests the complete integration of chat context, file associations, and knowledge
 """
 
 import asyncio
-import json
 import logging
 import os
 import tempfile
 import time
-from datetime import datetime
 
 import aiohttp
-import pytest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

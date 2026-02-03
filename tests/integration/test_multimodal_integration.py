@@ -9,12 +9,8 @@ components under realistic scenarios.
 import asyncio
 import base64
 import io
-import json
-import tempfile
 import time
-from pathlib import Path
-from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -25,7 +21,6 @@ from src.context_aware_decision_system import (
     DecisionType,
     context_aware_decision_system,
 )
-from src.modern_ai_integration import AIProvider, modern_ai_integration
 
 # Import multi-modal components
 from src.multimodal_processor import (
@@ -46,7 +41,6 @@ class TestMultiModalWorkflowIntegration:
 
     def teardown_method(self):
         """Clean up after tests"""
-        pass
 
     def create_test_image(
         self, width: int = 400, height: int = 300, color: str = "lightblue"

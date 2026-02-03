@@ -4,13 +4,12 @@ Test the new security scanning agent implementations
 """
 
 import asyncio
-import json
 import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.agents.security_scanner_agent import security_scanner_agent
 from src.agents.network_discovery_agent import network_discovery_agent
+from src.agents.security_scanner_agent import security_scanner_agent
 
 
 async def test_security_scanner():
@@ -108,7 +107,7 @@ async def test_network_discovery():
 
     print(f"Status: {inventory_result.get('status')}")
     if inventory_result.get("status") == "success":
-        assets = inventory_result.get("assets", [])
+        inventory_result.get("assets", [])
         categories = inventory_result.get("categories", {})
         print(f"Total assets: {inventory_result.get('total_assets', 0)}")
         print("Asset categories:")

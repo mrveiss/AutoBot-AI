@@ -5,10 +5,8 @@ Demonstrates the complete workflow with browser automation
 """
 
 import asyncio
+
 import aiohttp
-import json
-import time
-from typing import Dict, Any
 
 
 async def test_playwright_service():

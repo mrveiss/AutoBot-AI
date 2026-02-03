@@ -15,9 +15,8 @@ These tests use concurrent execution to verify no race conditions exist.
 
 import asyncio
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -29,7 +28,7 @@ class TestTracingServiceSingleton:
     def skip_if_opentelemetry_unavailable(self):
         """Skip tests if OpenTelemetry has import issues"""
         try:
-            from backend.services.tracing_service import TracingService
+            pass
         except ImportError as e:
             pytest.skip(f"TracingService unavailable: {e}")
 
@@ -184,6 +183,7 @@ class TestConfigServiceFileLocking:
         """Test that concurrent config saves don't corrupt file"""
         import tempfile
         from pathlib import Path
+
         from backend.services.config_service import ConfigService
         from src.config import unified_config_manager
 
@@ -237,18 +237,14 @@ class TestExistingLockVerification:
         from backend.api import analytics_performance
 
         assert hasattr(analytics_performance, "_analysis_history_lock")
-        assert isinstance(
-            analytics_performance._analysis_history_lock, asyncio.Lock
-        )
+        assert isinstance(analytics_performance._analysis_history_lock, asyncio.Lock)
 
     def test_analytics_precommit_has_lock(self):
         """Verify analytics_precommit.py has thread lock"""
         from backend.api import analytics_precommit
 
         assert hasattr(analytics_precommit, "_history_lock")
-        assert isinstance(
-            analytics_precommit._history_lock, type(threading.Lock())
-        )
+        assert isinstance(analytics_precommit._history_lock, type(threading.Lock()))
 
     def test_browser_mcp_has_lock(self):
         """Verify browser_mcp.py has async lock"""
@@ -262,9 +258,7 @@ class TestExistingLockVerification:
         from backend.api import analytics_controller
 
         assert hasattr(analytics_controller, "_analytics_state_lock")
-        assert isinstance(
-            analytics_controller._analytics_state_lock, asyncio.Lock
-        )
+        assert isinstance(analytics_controller._analytics_state_lock, asyncio.Lock)
 
 
 class TestDoubleCheckedLocking:
@@ -274,14 +268,15 @@ class TestDoubleCheckedLocking:
     def skip_if_opentelemetry_unavailable(self):
         """Skip tests if OpenTelemetry has import issues"""
         try:
-            from backend.services.tracing_service import TracingService
+            pass
         except ImportError as e:
             pytest.skip(f"TracingService unavailable: {e}")
 
     def test_tracing_service_double_check(self):
         """Test TracingService uses double-checked locking"""
-        from backend.services.tracing_service import TracingService
         import inspect
+
+        from backend.services.tracing_service import TracingService
 
         # Get the source of __new__
         source = inspect.getsource(TracingService.__new__)
@@ -290,9 +285,9 @@ class TestDoubleCheckedLocking:
         assert "if cls._instance is None:" in source
         assert "with cls._lock:" in source
         # Should have two None checks (outer and inner)
-        assert source.count("_instance is None") >= 2, (
-            "Double-checked locking not implemented"
-        )
+        assert (
+            source.count("_instance is None") >= 2
+        ), "Double-checked locking not implemented"
 
 
 if __name__ == "__main__":

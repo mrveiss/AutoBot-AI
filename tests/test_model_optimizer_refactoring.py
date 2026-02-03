@@ -6,19 +6,17 @@ Test suite for model_optimizer.py refactoring (Issue #353)
 Verifies backward compatibility and Feature Envy fixes
 """
 
-import asyncio
-import pytest
 from src.utils.model_optimizer import (
-    ModelOptimizer,
-    get_model_optimizer,
-    TaskRequest,
     ModelInfo,
-    TaskComplexity,
+    ModelOptimizer,
     ModelPerformanceLevel,
-    SystemResources,
-    SystemResourceAnalyzer,
     ModelPerformanceTracker,
     ModelSelector,
+    SystemResourceAnalyzer,
+    SystemResources,
+    TaskComplexity,
+    TaskRequest,
+    get_model_optimizer,
 )
 
 
@@ -55,7 +53,9 @@ def test_system_resources_dataclass():
     assert resources_dict["available_memory_gb"] == 16.0
 
     # Test high load scenario
-    high_load = SystemResources(cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0)
+    high_load = SystemResources(
+        cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0
+    )
     assert high_load.allows_large_models() is False
     assert high_load.get_max_model_size_gb() == 4.0
 
@@ -79,7 +79,9 @@ def test_task_request_analyze_complexity():
     complex_task = TaskRequest(
         query="Design a scalable microservices architecture", task_type="code"
     )
-    assert complex_task.analyze_complexity(complexity_keywords) == TaskComplexity.COMPLEX
+    assert (
+        complex_task.analyze_complexity(complexity_keywords) == TaskComplexity.COMPLEX
+    )
 
     # Specialized query
     specialized_task = TaskRequest(
@@ -105,15 +107,23 @@ def test_model_info_fits_resource_constraints():
     )
 
     # Test with SystemResources (new API)
-    resources = SystemResources(cpu_percent=50.0, memory_percent=60.0, available_memory_gb=10.0)
+    resources = SystemResources(
+        cpu_percent=50.0, memory_percent=60.0, available_memory_gb=10.0
+    )
     assert model.fits_resource_constraints(resources) is True
 
     # Test with dict (backward compatibility)
-    resources_dict = {"cpu_percent": 50.0, "memory_percent": 60.0, "available_memory_gb": 10.0}
+    resources_dict = {
+        "cpu_percent": 50.0,
+        "memory_percent": 60.0,
+        "available_memory_gb": 10.0,
+    }
     assert model.fits_resource_constraints(resources_dict) is True
 
     # Test resource constraints
-    low_resources = SystemResources(cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0)
+    low_resources = SystemResources(
+        cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0
+    )
     assert model.fits_resource_constraints(low_resources) is False
 
     print("✅ ModelInfo.fits_resource_constraints() backward compatible")
@@ -186,7 +196,11 @@ def test_model_optimizer_delegation():
     assert filtered[0].name == "large-model"
 
     # Test filter_by_resources delegation (dict API)
-    resources_dict = {"cpu_percent": 85.0, "memory_percent": 80.0, "available_memory_gb": 3.0}
+    resources_dict = {
+        "cpu_percent": 85.0,
+        "memory_percent": 80.0,
+        "available_memory_gb": 3.0,
+    }
     filtered = optimizer._filter_models_by_resources(models, resources_dict)
     assert len(filtered) == 1  # Only small model fits
     assert filtered[0].name == "small-model"
@@ -243,7 +257,9 @@ def test_model_selector_methods():
     assert filtered[0].name == "advanced"
 
     # Test filter_by_resources
-    resources = SystemResources(cpu_percent=50.0, memory_percent=60.0, available_memory_gb=6.0)
+    resources = SystemResources(
+        cpu_percent=50.0, memory_percent=60.0, available_memory_gb=6.0
+    )
     filtered = selector.filter_by_resources(models, resources)
     assert len(filtered) == 2  # Lightweight and standard fit
     assert "advanced" not in [m.name for m in filtered]
@@ -270,4 +286,6 @@ if __name__ == "__main__":
     test_global_optimizer_singleton()
     test_model_selector_methods()
 
-    print("\n✅ All tests passed! Feature Envy refactoring successful with full backward compatibility.")
+    print(
+        "\n✅ All tests passed! Feature Envy refactoring successful with full backward compatibility."
+    )

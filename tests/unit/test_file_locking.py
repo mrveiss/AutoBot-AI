@@ -17,12 +17,10 @@ These tests verify the acceptance criteria:
 """
 
 import asyncio
-import os
 import tempfile
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -45,8 +43,9 @@ class TestWebsocketsNPUEventsLocking:
 
     def test_init_npu_worker_websocket_uses_lock(self):
         """Test that init_npu_worker_websocket uses the lock"""
-        from backend.api import websockets
         import inspect
+
+        from backend.api import websockets
 
         source = inspect.getsource(websockets.init_npu_worker_websocket)
 
@@ -54,9 +53,9 @@ class TestWebsocketsNPUEventsLocking:
         assert "_npu_events_lock" in source, "Lock not used in function"
         assert "with _npu_events_lock:" in source, "Lock context manager not used"
         # Check for double-check pattern (two checks of _npu_events_subscribed)
-        assert source.count("_npu_events_subscribed") >= 2, (
-            "Double-checked locking not implemented"
-        )
+        assert (
+            source.count("_npu_events_subscribed") >= 2
+        ), "Double-checked locking not implemented"
 
     def test_concurrent_init_npu_worker_websocket(self):
         """Test concurrent calls to init_npu_worker_websocket"""
@@ -307,8 +306,9 @@ class TestConcurrentFileWriteSafety:
     @pytest.mark.asyncio
     async def test_concurrent_writes_same_file_no_corruption(self):
         """Test that concurrent writes to same file don't corrupt data"""
-        from backend.api.filesystem_mcp import _get_file_lock
         import aiofiles
+
+        from backend.api.filesystem_mcp import _get_file_lock
 
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = Path(tmpdir) / "concurrent_test.txt"
@@ -326,10 +326,9 @@ class TestConcurrentFileWriteSafety:
                     errors.append(e)
 
             # Run 20 concurrent writes
-            await asyncio.gather(*[
-                write_to_file(f"Content from writer {i}\n" * 100)
-                for i in range(20)
-            ])
+            await asyncio.gather(
+                *[write_to_file(f"Content from writer {i}\n" * 100) for i in range(20)]
+            )
 
             assert len(errors) == 0, f"Errors during concurrent writes: {errors}"
             assert write_count["count"] == 20
@@ -346,9 +345,11 @@ class TestConcurrentFileWriteSafety:
     @pytest.mark.asyncio
     async def test_different_files_can_write_concurrently(self):
         """Test that writes to different files happen concurrently"""
-        from backend.api.filesystem_mcp import _get_file_lock
-        import aiofiles
         import time
+
+        import aiofiles
+
+        from backend.api.filesystem_mcp import _get_file_lock
 
         with tempfile.TemporaryDirectory() as tmpdir:
             start_times = {}
@@ -370,9 +371,9 @@ class TestConcurrentFileWriteSafety:
             # If writes were serialized, total time would be ~50ms
             # If concurrent, should be close to 10ms
             total_elapsed = max(end_times.values()) - min(start_times.values())
-            assert total_elapsed < 0.03, (
-                f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.03s)"
-            )
+            assert (
+                total_elapsed < 0.03
+            ), f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.03s)"
 
 
 class TestLockPatternConsistency:
@@ -382,8 +383,8 @@ class TestLockPatternConsistency:
     async def test_all_locks_are_asyncio_locks(self):
         """Verify all file locks use asyncio.Lock"""
         from backend.api.filesystem_mcp import _get_file_lock as fs_lock
-        from backend.api.prompts import _get_prompt_file_lock as prompt_lock
         from backend.api.logs import _get_log_file_lock as log_lock
+        from backend.api.prompts import _get_prompt_file_lock as prompt_lock
 
         fs = await fs_lock("/test/fs.txt")
         prompt = await prompt_lock("/test/prompt.md")
@@ -396,7 +397,7 @@ class TestLockPatternConsistency:
     @pytest.mark.asyncio
     async def test_lock_dicts_are_isolated(self):
         """Test that each module has its own lock dictionary"""
-        from backend.api import filesystem_mcp, prompts, logs
+        from backend.api import filesystem_mcp, logs, prompts
 
         # Each should have its own dict, not shared
         assert filesystem_mcp._file_locks is not prompts._prompt_file_locks

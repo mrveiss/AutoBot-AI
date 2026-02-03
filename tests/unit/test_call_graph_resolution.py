@@ -13,12 +13,16 @@ Tests the following functionality:
 
 import ast
 
-import pytest
-
 from backend.api.codebase_analytics.endpoints.call_graph import (
-    _extract_import_context, _resolve_callee_id)
+    _extract_import_context,
+    _resolve_callee_id,
+)
 from backend.api.codebase_analytics.endpoints.shared import (
-    COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, is_external_module)
+    COMMON_THIRD_PARTY,
+    STDLIB_MODULES,
+    ImportContext,
+    is_external_module,
+)
 
 
 class TestImportContext:
@@ -51,12 +55,12 @@ class TestImportContext:
         """Test adding from...import with alias."""
         ctx = ImportContext()
         ctx.add_import(
-            module="src.utils.redis_client",
-            name="get_redis_client",
-            alias="get_redis"
+            module="src.utils.redis_client", name="get_redis_client", alias="get_redis"
         )
 
-        assert ctx.resolve_name("get_redis") == "src.utils.redis_client.get_redis_client"
+        assert (
+            ctx.resolve_name("get_redis") == "src.utils.redis_client.get_redis_client"
+        )
         assert ctx.resolve_name("get_redis_client") is None
 
     def test_is_external_stdlib(self):
@@ -160,7 +164,7 @@ class TestExtractImportContext:
 
     def test_complex_code(self):
         """Test extracting imports from code with functions."""
-        code = '''
+        code = """
 import json
 from pathlib import Path
 from src.utils.helper import helper_func as hf
@@ -169,7 +173,7 @@ def my_function():
     data = json.loads("{}")
     path = Path("/tmp")
     hf()
-'''
+"""
         tree = ast.parse(code)
         ctx = _extract_import_context(tree)
 
@@ -277,13 +281,13 @@ class TestResolveCalleeId:
 
     def test_resolve_with_alias(self):
         """Test resolving aliased import."""
-        functions = {"src.utils.redis_client.get_redis_client": {"name": "get_redis_client"}}
+        functions = {
+            "src.utils.redis_client.get_redis_client": {"name": "get_redis_client"}
+        }
 
         ctx = ImportContext()
         ctx.add_import(
-            module="src.utils.redis_client",
-            name="get_redis_client",
-            alias="get_redis"
+            module="src.utils.redis_client", name="get_redis_client", alias="get_redis"
         )
 
         callee_id, is_external = _resolve_callee_id(

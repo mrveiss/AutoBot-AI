@@ -6,7 +6,6 @@ Test suite for threat_detection.py refactoring
 Verifies backward compatibility and Feature Envy fixes
 """
 
-import asyncio
 import tempfile
 from collections import deque
 from datetime import datetime, timedelta
@@ -345,7 +344,9 @@ class TestAnalysisContext:
         freq = context.get_recent_action_frequency("test_user", "api_request", 24)
 
         # Verify same result as calling history directly
-        direct_freq = history.get_recent_action_frequency("test_user", "api_request", 24)
+        direct_freq = history.get_recent_action_frequency(
+            "test_user", "api_request", 24
+        )
         assert freq == direct_freq  # Delegation should return same result
 
 
@@ -426,7 +427,9 @@ class TestThreatDetectionEngineBackwardCompatibility:
         assert result.threat_category == ThreatCategory.BRUTE_FORCE
 
     @pytest.mark.asyncio
-    async def test_engine_get_user_risk_assessment(self, temp_config_path, sample_event):
+    async def test_engine_get_user_risk_assessment(
+        self, temp_config_path, sample_event
+    ):
         """Test get_user_risk_assessment backward compatibility"""
         engine = ThreatDetectionEngine(config_path=temp_config_path)
 

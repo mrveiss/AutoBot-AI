@@ -4,7 +4,6 @@ Test security agents with research-based tool discovery
 """
 
 import asyncio
-import json
 import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")

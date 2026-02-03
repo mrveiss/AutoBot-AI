@@ -3,11 +3,13 @@
 # Author: mrveiss
 """Tests for Input Validator - Issue #712."""
 
-import pytest
 
 from src.security.input_validator import (
-    WebResearchInputValidator, InputValidationError,
-    get_input_validator, validate_research_query, validate_url, sanitize_web_content,
+    WebResearchInputValidator,
+    get_input_validator,
+    sanitize_web_content,
+    validate_research_query,
+    validate_url,
 )
 
 
@@ -55,12 +57,16 @@ class TestQueryValidation:
 
     def test_suspicious_keywords_single(self):
         validator = WebResearchInputValidator()
-        result = validator.validate_research_query("learn about sql injection prevention")
+        result = validator.validate_research_query(
+            "learn about sql injection prevention"
+        )
         assert result["risk_level"] in ["medium", "low"]
 
     def test_suspicious_keywords_multiple(self):
         validator = WebResearchInputValidator()
-        result = validator.validate_research_query("exploit vulnerability backdoor malware")
+        result = validator.validate_research_query(
+            "exploit vulnerability backdoor malware"
+        )
         assert result["safe"] is False
         assert result["risk_level"] == "high"
 
@@ -166,7 +172,9 @@ class TestContentSanitization:
 
     def test_unsafe_content_type(self):
         validator = WebResearchInputValidator()
-        result = validator.sanitize_web_content("<p>test</p>", "application/octet-stream")
+        result = validator.sanitize_web_content(
+            "<p>test</p>", "application/octet-stream"
+        )
         assert len(result["warnings"]) > 0
 
 
