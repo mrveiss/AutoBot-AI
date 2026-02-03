@@ -12,13 +12,11 @@ Author: AutoBot Code Analysis Suite
 Date: 2025-08-12
 """
 
-import os
-import re
 import json
-import ast
-from typing import Dict, List, Tuple, Optional, Any
-from pathlib import Path
 import logging
+import re
+from pathlib import Path
+from typing import Any, Dict, List
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -206,14 +204,18 @@ class VueSpecificFixAgent:
 
             if not has_cleanup:
                 issues.append(
-    {
-        "line": add_listener["line"],
-        "content": add_listener["content"],
-        "event": add_listener["event"],
-        "handler": add_listener["handler"],
-        "issue_type": "missing_event_cleanup",
-        "suggested_cleanup": f"removeEventListener('{add_listener['event']}', {add_listener['handler']})",
-         } )
+                    {
+                        "line": add_listener["line"],
+                        "content": add_listener["content"],
+                        "event": add_listener["event"],
+                        "handler": add_listener["handler"],
+                        "issue_type": "missing_event_cleanup",
+                        "suggested_cleanup": (
+                            f"removeEventListener('{add_listener['event']}', "
+                            f"{add_listener['handler']})"
+                        ),
+                    }
+                )
 
         return issues
 
@@ -284,8 +286,8 @@ class VueSpecificFixAgent:
 
     def generate_cleanup_code(self, issue: Dict[str, Any]) -> str:
         """Generate cleanup code for event listeners."""
-        event = issue["event"]
-        handler = issue["handler"]
+        issue["event"]
+        issue["handler"]
 
         # Detect Vue 3 Composition API vs Options API
         cleanup_code = f"""
@@ -550,7 +552,12 @@ Generated on: {analysis_results['timestamp']}
             if file_data.get("vfor_index_keys"):
                 report += f"\n**{file_data['file']}**:\n"
                 for issue in file_data["vfor_index_keys"]:
-                    report += f"- Line {issue['line']}: Changed `:key=\"{issue['current_key']}\"` to `:key=\"{issue['suggested_key']}\"`\n"
+                    curr_key = issue["current_key"]
+                    sugg_key = issue["suggested_key"]
+                    report += (
+                        f"- Line {issue['line']}: "
+                        f'Changed `:key="{curr_key}"` to `:key="{sugg_key}"`\n'
+                    )
 
         report += f"""
 ### Event Listener Cleanup ({fixes_summary['fixes_by_type'].get('event_cleanup_fix', 0)} fixes)

@@ -568,7 +568,10 @@ class TagsMixin:
                 "source_tags": existing_source_tags,
                 "target_tag": target_tag,
                 "affected_count": updated_count,
-                "message": f"Merged {len(existing_source_tags)} tags into '{target_tag}', {updated_count} facts updated",
+                "message": (
+                    f"Merged {len(existing_source_tags)} tags into '{target_tag}', "
+                    f"{updated_count} facts updated"
+                ),
             }
 
         except Exception as e:

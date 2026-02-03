@@ -21,6 +21,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+from src.config import cfg
 
 # Import centralized components
 from src.constants.model_constants import model_config
@@ -29,7 +30,6 @@ from src.constants.threshold_constants import (
     ResourceThresholds,
     TimingConstants,
 )
-from src.config import cfg
 from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client
@@ -160,7 +160,8 @@ class AIHardwareAccelerator:
         npu_worker_port = os.getenv("AUTOBOT_NPU_WORKER_PORT")
         if not npu_worker_host or not npu_worker_port:
             raise ValueError(
-                "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and AUTOBOT_NPU_WORKER_PORT environment variables must be set"
+                "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and "
+                "AUTOBOT_NPU_WORKER_PORT environment variables must be set"
             )
         self.npu_worker_url = cfg.get(
             "npu_worker.url", f"http://{npu_worker_host}:{npu_worker_port}"
@@ -298,20 +299,22 @@ class AIHardwareAccelerator:
         # Estimate NPU utilization from loaded models and task count (Issue #376)
         loaded_models = len(health_data.get("loaded_models", []))
         utilization = min(
-            loaded_models * HardwareAcceleratorConfig.NPU_UTILIZATION_PER_MODEL,
-            100.0
+            loaded_models * HardwareAcceleratorConfig.NPU_UTILIZATION_PER_MODEL, 100.0
         )  # Rough estimation
 
-        power_delta = HardwareAcceleratorConfig.NPU_MAX_POWER_W - HardwareAcceleratorConfig.NPU_BASE_POWER_W
+        power_delta = (
+            HardwareAcceleratorConfig.NPU_MAX_POWER_W
+            - HardwareAcceleratorConfig.NPU_BASE_POWER_W
+        )
         self.device_metrics[HardwareDevice.NPU] = HardwareMetrics(
             device=HardwareDevice.NPU,
             utilization_percent=utilization,
-            temperature_c=HardwareAcceleratorConfig.NPU_BASE_TEMPERATURE_C + (
+            temperature_c=HardwareAcceleratorConfig.NPU_BASE_TEMPERATURE_C
+            + (
                 utilization * HardwareAcceleratorConfig.NPU_TEMP_UTILIZATION_FACTOR
             ),  # Estimated
-            power_usage_w=HardwareAcceleratorConfig.NPU_BASE_POWER_W + (
-                utilization / 100.0 * power_delta
-            ),  # 2-10W range
+            power_usage_w=HardwareAcceleratorConfig.NPU_BASE_POWER_W
+            + (utilization / 100.0 * power_delta),  # 2-10W range
             available_memory_mb=HardwareAcceleratorConfig.NPU_MEMORY_MB,
             last_updated=datetime.now(),
         )
@@ -325,7 +328,9 @@ class AIHardwareAccelerator:
             except Exception as e:
                 logger.error("❌ Hardware monitoring error: %s", e)
 
-    def _classify_by_threshold(self, value: int, light_threshold: int, mod_threshold: int) -> TaskComplexity:
+    def _classify_by_threshold(
+        self, value: int, light_threshold: int, mod_threshold: int
+    ) -> TaskComplexity:
         """Classify by value thresholds (Issue #315 - extracted helper)."""
         if value < light_threshold:
             return TaskComplexity.LIGHTWEIGHT
@@ -382,13 +387,21 @@ class AIHardwareAccelerator:
             # Lightweight tasks: NPU preferred for power efficiency (Issue #376)
             if self.device_status[HardwareDevice.NPU]["available"]:
                 npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
-                if not npu_metrics or npu_metrics.utilization_percent < ResourceThresholds.NPU_BUSY_THRESHOLD:
+                if (
+                    not npu_metrics
+                    or npu_metrics.utilization_percent
+                    < ResourceThresholds.NPU_BUSY_THRESHOLD
+                ):
                     return HardwareDevice.NPU
 
             # Fallback to GPU if available
             if self.device_status[HardwareDevice.GPU]["available"]:
                 gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
-                if not gpu_metrics or gpu_metrics.utilization_percent < ResourceThresholds.GPU_MODERATE_THRESHOLD:
+                if (
+                    not gpu_metrics
+                    or gpu_metrics.utilization_percent
+                    < ResourceThresholds.GPU_MODERATE_THRESHOLD
+                ):
                     return HardwareDevice.GPU
 
             return HardwareDevice.CPU
@@ -397,13 +410,21 @@ class AIHardwareAccelerator:
             # Moderate tasks: GPU preferred for performance (Issue #376)
             if self.device_status[HardwareDevice.GPU]["available"]:
                 gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
-                if not gpu_metrics or gpu_metrics.utilization_percent < ResourceThresholds.GPU_BUSY_THRESHOLD:
+                if (
+                    not gpu_metrics
+                    or gpu_metrics.utilization_percent
+                    < ResourceThresholds.GPU_BUSY_THRESHOLD
+                ):
                     return HardwareDevice.GPU
 
             # NPU can handle some moderate tasks
             if self.device_status[HardwareDevice.NPU]["available"]:
                 npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
-                if not npu_metrics or npu_metrics.utilization_percent < ResourceThresholds.NPU_AVAILABLE_THRESHOLD:
+                if (
+                    not npu_metrics
+                    or npu_metrics.utilization_percent
+                    < ResourceThresholds.NPU_AVAILABLE_THRESHOLD
+                ):
                     return HardwareDevice.NPU
 
             return HardwareDevice.CPU
@@ -423,9 +444,13 @@ class AIHardwareAccelerator:
 
         try:
             result = await self._route_to_processor(task, selected_device)
-            return self._create_success_result(task, selected_device, result, start_time)
+            return self._create_success_result(
+                task, selected_device, result, start_time
+            )
         except Exception as e:
-            logger.error("❌ Task %s failed on %s: %s", task.task_id, selected_device.value, e)
+            logger.error(
+                "❌ Task %s failed on %s: %s", task.task_id, selected_device.value, e
+            )
             return await self._handle_task_failure(task, selected_device, e, start_time)
 
     async def _route_to_processor(
@@ -439,7 +464,11 @@ class AIHardwareAccelerator:
         return await self._process_on_cpu(task)
 
     def _create_success_result(
-        self, task: ProcessingTask, device: HardwareDevice, result: Any, start_time: float
+        self,
+        task: ProcessingTask,
+        device: HardwareDevice,
+        result: Any,
+        start_time: float,
     ) -> ProcessingResult:
         """Create successful processing result (Issue #315 - extracted)."""
         processing_time = (time.time() - start_time) * 1000
@@ -453,7 +482,11 @@ class AIHardwareAccelerator:
         )
 
     async def _handle_task_failure(
-        self, task: ProcessingTask, selected_device: HardwareDevice, error: Exception, start_time: float
+        self,
+        task: ProcessingTask,
+        selected_device: HardwareDevice,
+        error: Exception,
+        start_time: float,
     ) -> ProcessingResult:
         """Handle task failure with fallback (Issue #315 - extracted)."""
         fallback_device = self._get_fallback_device(selected_device)
@@ -464,7 +497,9 @@ class AIHardwareAccelerator:
                 task, fallback_device, self._process_on_gpu, self._process_on_cpu
             )
             if fallback_result is not None:
-                return self._create_success_result(task, fallback_device, fallback_result, start_time)
+                return self._create_success_result(
+                    task, fallback_device, fallback_result, start_time
+                )
 
         processing_time = (time.time() - start_time) * 1000
         return ProcessingResult(
@@ -582,13 +617,19 @@ class AIHardwareAccelerator:
             # CLIP: 512 dims, Wav2Vec2: 768 dims, Text: varies
             self.text_projection = torch.nn.Linear(
                 HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim
-            ).to(device)  # MiniLM outputs 384
+            ).to(
+                device
+            )  # MiniLM outputs 384
             self.image_projection = torch.nn.Linear(
                 HardwareAcceleratorConfig.CLIP_OUTPUT_DIM, self.unified_dim
-            ).to(device)  # CLIP outputs 512
+            ).to(
+                device
+            )  # CLIP outputs 512
             self.audio_projection = torch.nn.Linear(
                 HardwareAcceleratorConfig.WAV2VEC_OUTPUT_DIM, self.unified_dim
-            ).to(device)  # Wav2Vec2 outputs 768
+            ).to(
+                device
+            )  # Wav2Vec2 outputs 768
 
             logger.info("✅ Multi-modal models initialized successfully")
         except Exception as e:
@@ -605,7 +646,11 @@ class AIHardwareAccelerator:
 
         sentences = [content] if isinstance(content, str) else content
         embeddings = await chunker._compute_sentence_embeddings_async(sentences)
-        raw_embedding = embeddings[0] if len(embeddings) > 0 else np.zeros(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM)
+        raw_embedding = (
+            embeddings[0]
+            if len(embeddings) > 0
+            else np.zeros(HardwareAcceleratorConfig.MINILM_OUTPUT_DIM)
+        )
 
         if self.text_projection:
             with torch.no_grad():

@@ -13,7 +13,6 @@ import time
 from typing import Any, Dict, List, Optional
 
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -70,7 +69,9 @@ class KnowledgeRetrievalAgent:
 
         logger.info(
             "Knowledge Retrieval Agent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
     async def _ensure_kb_initialized(self):

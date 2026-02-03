@@ -183,7 +183,9 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 "conflict_severity": (
                     "high"
                     if consistency_score < 0.5
-                    else "medium" if consistency_score < 0.7 else "low"
+                    else "medium"
+                    if consistency_score < 0.7
+                    else "low"
                 ),
                 "conflicting_areas": self._identify_conflicting_areas(judgment),
                 "resolution_suggestions": judgment.improvement_suggestions,
@@ -216,20 +218,29 @@ class MultiAgentArbitrator(BaseLLMJudge):
         evaluations = []
         for i, (response, agent_type) in enumerate(zip(agent_responses, agent_types)):
             eval_context = {
-                "user_request": user_request, "agent_type": agent_type,
-                "context": context, "consensus_method": consensus_method,
+                "user_request": user_request,
+                "agent_type": agent_type,
+                "context": context,
+                "consensus_method": consensus_method,
                 "response_index": i,
             }
             judgment = await self.make_judgment(
                 subject=response,
-                criteria=[JudgmentDimension.QUALITY, JudgmentDimension.RELEVANCE,
-                          JudgmentDimension.CONSISTENCY],
+                criteria=[
+                    JudgmentDimension.QUALITY,
+                    JudgmentDimension.RELEVANCE,
+                    JudgmentDimension.CONSISTENCY,
+                ],
                 context=eval_context,
             )
-            evaluations.append({
-                "response": response, "agent_type": agent_type,
-                "evaluation": judgment, "index": i,
-            })
+            evaluations.append(
+                {
+                    "response": response,
+                    "agent_type": agent_type,
+                    "evaluation": judgment,
+                    "index": i,
+                }
+            )
         return evaluations
 
     def _select_consensus_response(
@@ -248,8 +259,11 @@ class MultiAgentArbitrator(BaseLLMJudge):
         return self._simple_majority_consensus(evaluations)
 
     async def coordinate_agent_consensus(
-        self, user_request: Dict[str, Any], agent_responses: List[Dict[str, Any]],
-        agent_types: List[str], context: Dict[str, Any],
+        self,
+        user_request: Dict[str, Any],
+        agent_responses: List[Dict[str, Any]],
+        agent_types: List[str],
+        context: Dict[str, Any],
         consensus_method: str = "weighted_voting",
     ) -> Dict[str, Any]:
         """Coordinate agents to reach consensus. Issue #665: Refactored with helpers."""
@@ -257,7 +271,9 @@ class MultiAgentArbitrator(BaseLLMJudge):
             evaluations = await self._evaluate_responses_for_consensus(
                 user_request, agent_responses, agent_types, context, consensus_method
             )
-            consensus_response = self._select_consensus_response(evaluations, consensus_method)
+            consensus_response = self._select_consensus_response(
+                evaluations, consensus_method
+            )
             consensus_confidence = self._calculate_consensus_confidence(evaluations)
 
             return {
@@ -267,14 +283,21 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 "consensus_method": consensus_method,
                 "evaluation_summary": {
                     "total_responses": len(evaluations),
-                    "average_quality": sum(e["evaluation"].overall_score for e in evaluations) / len(evaluations),
+                    "average_quality": sum(
+                        e["evaluation"].overall_score for e in evaluations
+                    )
+                    / len(evaluations),
                     "agreement_level": consensus_confidence,
                 },
                 "detailed_evaluations": evaluations,
             }
         except Exception as e:
             logger.error("Error coordinating agent consensus: %s", e)
-            return {"consensus_response": None, "error": str(e), "consensus_confidence": 0.0}
+            return {
+                "consensus_response": None,
+                "error": str(e),
+                "consensus_confidence": 0.0,
+            }
 
     async def _prepare_judgment_prompt(
         self,

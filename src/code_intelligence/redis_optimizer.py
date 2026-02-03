@@ -531,7 +531,10 @@ class RedisOptimizer:
             line_start=ops[0].line_number,
             line_end=ops[-1].line_number,
             description=f"Found {len(ops)} sequential {op_label} operations that can be pipelined",
-            suggestion=f"Use Redis pipeline or M{op_label} for batching these {'reads' if op_type == 'get' else 'writes'}",
+            suggestion=(
+                f"Use Redis pipeline or M{op_label} for batching these "
+                f"{'reads' if op_type == 'get' else 'writes'}"
+            ),
             estimated_improvement=f"~{len(ops) - 1} fewer network round-trips",
             current_code=self._get_code_range(
                 source_lines, ops[0].line_number, ops[-1].line_number
@@ -819,7 +822,10 @@ class RedisOptimizer:
                     current_code=self._get_code_range(
                         source_lines, line_number, line_number + 2
                     ),
-                    optimized_code="from src.utils.redis_client import get_redis_client\nredis = get_redis_client(database='main')",
+                    optimized_code=(
+                        "from src.utils.redis_client import get_redis_client\n"
+                        "redis = get_redis_client(database='main')"
+                    ),
                     metrics={"violates_canonical_pattern": True},
                 )
             )

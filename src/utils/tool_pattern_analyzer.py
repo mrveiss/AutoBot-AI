@@ -26,7 +26,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 
-
 logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for tool classification (Issue #326)
@@ -262,11 +261,17 @@ class ToolPatternAnalyzer:
             base_cost = 8
 
         # Medium-high cost tools (O(1) lookup - Issue #326)
-        elif any(keyword in tool_name.lower() for keyword in WRITE_KEYWORDS | EXECUTION_KEYWORDS):
+        elif any(
+            keyword in tool_name.lower()
+            for keyword in WRITE_KEYWORDS | EXECUTION_KEYWORDS
+        ):
             base_cost = 6
 
         # Medium cost tools (O(1) lookup - Issue #326)
-        elif any(keyword in tool_name.lower() for keyword in SEARCH_KEYWORDS | ANALYSIS_KEYWORDS):
+        elif any(
+            keyword in tool_name.lower()
+            for keyword in SEARCH_KEYWORDS | ANALYSIS_KEYWORDS
+        ):
             base_cost = 4
 
         # Low cost tools (O(1) lookup - Issue #326)
@@ -277,7 +282,9 @@ class ToolPatternAnalyzer:
         if isinstance(parameters, dict):
             # Large file operations cost more (O(1) lookup - Issue #326)
             if "file_path" in parameters and isinstance(parameters["file_path"], str):
-                if any(path in parameters["file_path"] for path in LARGE_PATH_INDICATORS):
+                if any(
+                    path in parameters["file_path"] for path in LARGE_PATH_INDICATORS
+                ):
                     base_cost += 1
 
             # Complex operations cost more
@@ -393,7 +400,9 @@ class ToolPatternAnalyzer:
             self.cached_analysis = self._build_analysis_summary()
 
             logger.info(
-                f"Pattern analysis complete. Found {len(self.detected_patterns)} patterns and {len(self.optimization_opportunities)} optimization opportunities"
+                "Pattern analysis complete. Found %d patterns and %d optimization opportunities",
+                len(self.detected_patterns),
+                len(self.optimization_opportunities),
             )
 
         except Exception as e:
@@ -505,12 +514,10 @@ class ToolPatternAnalyzer:
                 and recent_calls[i + 1].call_type == ToolCallType.WRITE_OPERATION
                 and recent_calls[i + 2].call_type == ToolCallType.READ_OPERATION
             ):
-
                 # Check if reading same file
                 if recent_calls[i].parameters.get("file_path") == recent_calls[
                     i + 2
                 ].parameters.get("file_path"):
-
                     pattern = ToolPattern(
                         pattern_name="Inefficient Read-Write-Read",
                         tools_involved=[

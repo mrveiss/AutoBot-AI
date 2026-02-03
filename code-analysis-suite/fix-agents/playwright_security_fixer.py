@@ -11,15 +11,15 @@ Author: AutoBot Playwright Security Specialist
 Version: 1.0.0
 """
 
+import hashlib
+import json
 import os
 import re
-import sys
-import json
 import shutil
-import hashlib
+import sys
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 
 class PlaywrightSecurityFixer:
@@ -134,9 +134,22 @@ class PlaywrightSecurityFixer:
         head_start, head_content, head_end = head_match.groups()
 
         # Security headers optimized for Playwright reports
-        security_headers = """
+        csp_content = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' ws: wss: http: https:; "
+            "media-src 'self' blob:; "
+            "object-src 'none'; "
+            "child-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self';"
+        )
+        security_headers = f"""
 <!-- AutoBot Security Enhancement: XSS Protection Headers -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:; media-src 'self' blob:; object-src 'none'; child-src 'self'; frame-ancestors 'none'; base-uri 'self';">
+<meta http-equiv="Content-Security-Policy" content="{csp_content}">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta http-equiv="X-Frame-Options" content="DENY">
 <meta http-equiv="X-XSS-Protection" content="1; mode=block">

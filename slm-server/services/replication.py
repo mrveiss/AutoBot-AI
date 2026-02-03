@@ -12,7 +12,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -183,23 +183,29 @@ class ReplicationService:
 
             # Check key difference
             if key_diff == 0:
-                result["checks"].append({
-                    "name": "key_count",
-                    "status": "passed",
-                    "message": f"Key counts match: {source_keys}",
-                })
+                result["checks"].append(
+                    {
+                        "name": "key_count",
+                        "status": "passed",
+                        "message": f"Key counts match: {source_keys}",
+                    }
+                )
             elif key_diff <= 10:
-                result["checks"].append({
-                    "name": "key_count",
-                    "status": "warning",
-                    "message": f"Minor key difference: {key_diff} keys",
-                })
+                result["checks"].append(
+                    {
+                        "name": "key_count",
+                        "status": "warning",
+                        "message": f"Minor key difference: {key_diff} keys",
+                    }
+                )
             else:
-                result["checks"].append({
-                    "name": "key_count",
-                    "status": "failed",
-                    "message": f"Significant key difference: {key_diff} keys",
-                })
+                result["checks"].append(
+                    {
+                        "name": "key_count",
+                        "status": "failed",
+                        "message": f"Significant key difference: {key_diff} keys",
+                    }
+                )
 
             # Get replication lag info
             repl_info = await self._get_replication_info(
@@ -214,42 +220,54 @@ class ReplicationService:
                 result["lag"]["link_status"] = link_status
 
                 if link_status == "up":
-                    result["checks"].append({
-                        "name": "replication_link",
-                        "status": "passed",
-                        "message": "Replication link is up",
-                    })
+                    result["checks"].append(
+                        {
+                            "name": "replication_link",
+                            "status": "passed",
+                            "message": "Replication link is up",
+                        }
+                    )
                 else:
-                    result["checks"].append({
-                        "name": "replication_link",
-                        "status": "failed",
-                        "message": f"Replication link status: {link_status}",
-                    })
+                    result["checks"].append(
+                        {
+                            "name": "replication_link",
+                            "status": "failed",
+                            "message": f"Replication link status: {link_status}",
+                        }
+                    )
 
                 if lag_bytes == 0:
-                    result["checks"].append({
-                        "name": "replication_lag",
-                        "status": "passed",
-                        "message": "No replication lag",
-                    })
+                    result["checks"].append(
+                        {
+                            "name": "replication_lag",
+                            "status": "passed",
+                            "message": "No replication lag",
+                        }
+                    )
                 elif lag_bytes < 1024:
-                    result["checks"].append({
-                        "name": "replication_lag",
-                        "status": "warning",
-                        "message": f"Minor lag: {lag_bytes} bytes",
-                    })
+                    result["checks"].append(
+                        {
+                            "name": "replication_lag",
+                            "status": "warning",
+                            "message": f"Minor lag: {lag_bytes} bytes",
+                        }
+                    )
                 else:
-                    result["checks"].append({
-                        "name": "replication_lag",
-                        "status": "failed",
-                        "message": f"Significant lag: {lag_bytes} bytes",
-                    })
+                    result["checks"].append(
+                        {
+                            "name": "replication_lag",
+                            "status": "failed",
+                            "message": f"Significant lag: {lag_bytes} bytes",
+                        }
+                    )
             else:
-                result["checks"].append({
-                    "name": "role_check",
-                    "status": "warning",
-                    "message": f"Target role is '{repl_info.get('role', 'unknown')}', not 'slave'",
-                })
+                result["checks"].append(
+                    {
+                        "name": "role_check",
+                        "status": "warning",
+                        "message": f"Target role is '{repl_info.get('role', 'unknown')}', not 'slave'",
+                    }
+                )
 
             # Determine overall sync status
             failed_checks = [c for c in result["checks"] if c["status"] == "failed"]
@@ -257,11 +275,13 @@ class ReplicationService:
 
         except Exception as e:
             logger.error("Sync verification failed: %s", e)
-            result["checks"].append({
-                "name": "verification",
-                "status": "failed",
-                "message": str(e)[:200],
-            })
+            result["checks"].append(
+                {
+                    "name": "verification",
+                    "status": "failed",
+                    "message": str(e)[:200],
+                }
+            )
 
         return result
 
@@ -388,7 +408,9 @@ class ReplicationService:
             # Check if replication is still active
             if repl_info.get("master_link_status") != "up":
                 replication.status = ReplicationStatus.FAILED.value
-                replication.error = f"Master link down: {repl_info.get('master_link_status')}"
+                replication.error = (
+                    f"Master link down: {repl_info.get('master_link_status')}"
+                )
 
             await db.commit()
             return repl_info
@@ -401,17 +423,20 @@ class ReplicationService:
     # Private Methods
     # =========================================================================
 
-    async def _get_redis_password(
-        self, host: str, ssh_user: str, ssh_port: int
-    ) -> str:
+    async def _get_redis_password(self, host: str, ssh_user: str, ssh_port: int) -> str:
         """Get Redis password from config file."""
         cmd = [
             "/usr/bin/ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            "-o", "BatchMode=yes",
-            "-p", str(ssh_port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(ssh_port),
             f"{ssh_user}@{host}",
             "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'",
         ]
@@ -462,10 +487,14 @@ class ReplicationService:
             cmd = [
                 "ansible-playbook",
                 str(playbook_path),
-                "-i", f"{target_ip},",
-                "-e", f"ansible_user={ssh_user}",
-                "-e", f"ansible_port={ssh_port}",
-                "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "-i",
+                f"{target_ip},",
+                "-e",
+                f"ansible_user={ssh_user}",
+                "-e",
+                f"ansible_port={ssh_port}",
+                "-e",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -478,7 +507,10 @@ class ReplicationService:
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=300)
 
             if process.returncode != 0:
-                logger.error("Ansible replication failed: %s", stdout.decode("utf-8", errors="replace"))
+                logger.error(
+                    "Ansible replication failed: %s",
+                    stdout.decode("utf-8", errors="replace"),
+                )
                 return False
 
             return True
@@ -513,10 +545,14 @@ class ReplicationService:
             cmd = [
                 "ansible-playbook",
                 str(playbook_path),
-                "-i", f"{target_ip},",
-                "-e", f"ansible_user={ssh_user}",
-                "-e", f"ansible_port={ssh_port}",
-                "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "-i",
+                f"{target_ip},",
+                "-e",
+                f"ansible_user={ssh_user}",
+                "-e",
+                f"ansible_port={ssh_port}",
+                "-e",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -529,7 +565,10 @@ class ReplicationService:
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=120)
 
             if process.returncode != 0:
-                logger.error("Ansible promotion failed: %s", stdout.decode("utf-8", errors="replace"))
+                logger.error(
+                    "Ansible promotion failed: %s",
+                    stdout.decode("utf-8", errors="replace"),
+                )
                 return False
 
             return True
@@ -578,10 +617,14 @@ class ReplicationService:
 
         cmd = [
             "/usr/bin/ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=10",
-            "-p", str(ssh_port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+            "-p",
+            str(ssh_port),
             f"{ssh_user}@{host}",
             f"{auth_prefix} redis-cli INFO replication",
         ]
@@ -633,18 +676,22 @@ class ReplicationService:
             auth_prefix = f"REDISCLI_AUTH='{redis_password}'"
 
         cmd = [
-    "/usr/bin/ssh",
-    "-o",
-    "StrictHostKeyChecking=no",
-    "-o",
-    "UserKnownHostsFile=/dev/null",
-    "-o",
-    "ConnectTimeout=10",
-    "-p",
-    str(ssh_port),
-    f"{ssh_user}@{host}",
-    f"{auth_prefix} redis-cli INFO keyspace && {auth_prefix} redis-cli DBSIZE && {auth_prefix} redis-cli INFO memory",
-     ]
+            "/usr/bin/ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+            "-p",
+            str(ssh_port),
+            f"{ssh_user}@{host}",
+            (
+                f"{auth_prefix} redis-cli INFO keyspace && "
+                f"{auth_prefix} redis-cli DBSIZE && "
+                f"{auth_prefix} redis-cli INFO memory"
+            ),
+        ]
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -726,7 +773,10 @@ class ReplicationService:
                     )
                     replication = result.scalar_one_or_none()
 
-                    if not replication or replication.status != ReplicationStatus.ACTIVE.value:
+                    if (
+                        not replication
+                        or replication.status != ReplicationStatus.ACTIVE.value
+                    ):
                         logger.info("Lag monitor stopping for %s", replication_id)
                         break
 

@@ -30,8 +30,7 @@ Usage:
 
 import logging
 from enum import Enum
-from functools import wraps
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Union
 
 from fastapi import Request
 
@@ -287,7 +286,9 @@ def _get_user_permissions(user_role: str) -> List[str]:
     try:
         role_enum = Role(user_role.lower())
         role_perms = ROLE_PERMISSIONS.get(role_enum, [])
-        permissions.extend([p.value if isinstance(p, Permission) else p for p in role_perms])
+        permissions.extend(
+            [p.value if isinstance(p, Permission) else p for p in role_perms]
+        )
     except ValueError:
         # Unknown role, check if it's in SecurityLayer defaults
         pass
@@ -369,7 +370,9 @@ def require_permission(
             raise_auth_error("AUTH_0002", "Authentication required")
 
         # Check permission
-        perm_str = permission.value if isinstance(permission, Permission) else permission
+        perm_str = (
+            permission.value if isinstance(permission, Permission) else permission
+        )
         if not has_permission(user_data, permission):
             # Audit log the denied access
             _security_layer.audit_log(
@@ -392,7 +395,9 @@ def require_permission(
     return dependency
 
 
-def require_role(*roles: Union[Role, str], allow_single_user_bypass: bool = True) -> Callable:
+def require_role(
+    *roles: Union[Role, str], allow_single_user_bypass: bool = True
+) -> Callable:
     """
     FastAPI dependency that requires one of the specified roles.
 
@@ -551,4 +556,6 @@ def check_agent_execute_permission(request: Request) -> bool:
 
 def check_shell_execute_permission(request: Request) -> bool:
     """Dependency for shell execution (dangerous). Issue #744."""
-    return require_permission(Permission.SHELL_EXECUTE, allow_single_user_bypass=False)(request)
+    return require_permission(Permission.SHELL_EXECUTE, allow_single_user_bypass=False)(
+        request
+    )

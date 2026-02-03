@@ -24,16 +24,13 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from backend.type_defs.common import Metadata
-
 from src.secure_command_executor import CommandRisk
 
 # Permission system v2 imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
-    from backend.services.permission_matcher import PermissionMatcher, MatchResult
-    from backend.services.approval_memory import ApprovalMemoryManager
     from src.config.ssot_config import PermissionMode
 
 logger = logging.getLogger(__name__)
@@ -468,6 +465,7 @@ class CommandApprovalManager:
         """
         try:
             from src.config.ssot_config import config
+
             return config.permission.enabled
         except ImportError:
             return False
@@ -481,7 +479,8 @@ class CommandApprovalManager:
             Current PermissionMode or None if v2 disabled
         """
         try:
-            from src.config.ssot_config import config, PermissionMode
+            from src.config.ssot_config import config
+
             if not config.permission.enabled:
                 return None
             return config.permission.mode
@@ -512,12 +511,13 @@ class CommandApprovalManager:
         """
         try:
             from src.config.ssot_config import config
+
             if not config.permission.enabled:
                 return None, None
 
-            from backend.services.permission_matcher import (
-                PermissionMatcher,
+            from backend.services.permission_matcher import (  # noqa: F811
                 MatchResult,
+                PermissionMatcher,
             )
 
             matcher = PermissionMatcher(is_admin=is_admin)
@@ -577,10 +577,16 @@ class CommandApprovalManager:
         """
         try:
             from src.config.ssot_config import config
-            if not config.permission.enabled or not config.permission.approval_memory_enabled:
+
+            if (
+                not config.permission.enabled
+                or not config.permission.approval_memory_enabled
+            ):
                 return False
 
-            from backend.services.approval_memory import ApprovalMemoryManager
+            from backend.services.approval_memory import (  # noqa: F811
+                ApprovalMemoryManager,
+            )
 
             memory = ApprovalMemoryManager()
             return await memory.check_remembered(
@@ -623,10 +629,16 @@ class CommandApprovalManager:
         """
         try:
             from src.config.ssot_config import config
-            if not config.permission.enabled or not config.permission.approval_memory_enabled:
+
+            if (
+                not config.permission.enabled
+                or not config.permission.approval_memory_enabled
+            ):
                 return False
 
-            from backend.services.approval_memory import ApprovalMemoryManager
+            from backend.services.approval_memory import (  # noqa: F811
+                ApprovalMemoryManager,
+            )
 
             memory = ApprovalMemoryManager()
             return await memory.remember_approval(

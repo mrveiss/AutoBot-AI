@@ -477,9 +477,12 @@ class SSOIntegrationFramework:
                     "created_at": datetime.utcnow(),
                 }
 
+            saml_request = urllib.parse.quote(encoded_request)
+            relay_state = state or ""
             return {
                 "auth_url": (
-                    f"{provider.config['sso_url']}?SAMLRequest={urllib.parse.quote(encoded_request)}&RelayState={state or ''}"
+                    f"{provider.config['sso_url']}?SAMLRequest={saml_request}"
+                    f"&RelayState={relay_state}"
                 ),
                 "request_id": request_id,
                 "method": "redirect",

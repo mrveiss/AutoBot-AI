@@ -22,11 +22,7 @@ from .cloud_batcher import CloudRequestBatcher
 from .connection_pool import ConnectionPoolManager, PoolConfig
 from .prompt_compressor import CompressionConfig, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitHandler
-from .router import (
-    OptimizationCategory,
-    OptimizationConfig,
-    get_optimization_router,
-)
+from .router import OptimizationCategory, OptimizationConfig, get_optimization_router
 
 logger = logging.getLogger(__name__)
 

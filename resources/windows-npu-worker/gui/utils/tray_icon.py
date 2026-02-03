@@ -2,9 +2,9 @@
 System Tray Icon Helper
 """
 
-from PySide6.QtWidgets import QSystemTrayIcon, QMenu
-from PySide6.QtGui import QIcon, QAction
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 
 class TrayIconManager(QObject):
@@ -58,7 +58,12 @@ class TrayIconManager(QObject):
         """Hide tray icon"""
         self.tray_icon.hide()
 
-    def show_message(self, title: str, message: str,
-                     icon=QSystemTrayIcon.MessageIcon.Information, duration: int = 2000):
+    def show_message(
+        self,
+        title: str,
+        message: str,
+        icon=QSystemTrayIcon.MessageIcon.Information,
+        duration: int = 2000,
+    ):
         """Show tray notification"""
         self.tray_icon.showMessage(title, message, icon, duration)

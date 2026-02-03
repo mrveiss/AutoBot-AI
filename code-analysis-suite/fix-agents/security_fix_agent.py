@@ -17,15 +17,15 @@ Author: AutoBot Security Fix Agent
 Version: 1.0.0
 """
 
+import hashlib
+import json
 import os
 import re
-import sys
-import json
 import shutil
-import hashlib
+import sys
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 
 class SecurityFixAgent:
@@ -262,7 +262,7 @@ class SecurityFixAgent:
             has_doctype = "<!DOCTYPE" in content.upper()
             has_html_tag = "<html" in content.lower()
             has_head_tag = "<head" in content.lower()
-            has_body_tag = "<body" in content.lower()
+            "<body" in content.lower()
 
             return has_doctype and has_html_tag and has_head_tag
 
@@ -473,7 +473,10 @@ class SecurityFixAgent:
                 report_content += f"- **File:** `{vuln['file']}`\n"
                 report_content += f"- **Line:** {vuln['line']}\n"
                 report_content += f"- **Severity:** {vuln['severity']}\n"
-                report_content += f"- **Pattern:** `{vuln['match'][:100]}{'...' if len(vuln['match']) > 100 else ''}`\n\n"
+                ellipsis = "..." if len(vuln["match"]) > 100 else ""
+                report_content += (
+                    f"- **Pattern:** `{vuln['match'][:100]}{ellipsis}`\n\n"
+                )
 
         # Applied fixes
         if self.report["fixes_applied"]:
@@ -484,8 +487,14 @@ class SecurityFixAgent:
                 )
                 report_content += f"- **Line:** {fix['line']}\n"
                 report_content += f"- **Severity:** {fix['severity']}\n"
-                report_content += f"- **Original:** `{fix['original'][:80]}{'...' if len(fix['original']) > 80 else ''}`\n"
-                report_content += f"- **Fixed:** `{fix['fixed'][:80]}{'...' if len(fix['fixed']) > 80 else ''}`\n\n"
+                orig_ellipsis = "..." if len(fix["original"]) > 80 else ""
+                fixed_ellipsis = "..." if len(fix["fixed"]) > 80 else ""
+                report_content += (
+                    f"- **Original:** `{fix['original'][:80]}{orig_ellipsis}`\n"
+                )
+                report_content += (
+                    f"- **Fixed:** `{fix['fixed'][:80]}{fixed_ellipsis}`\n\n"
+                )
 
         # Recommendations
         report_content += "## Security Recommendations\n\n"

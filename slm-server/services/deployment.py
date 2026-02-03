@@ -148,7 +148,9 @@ class DeploymentService:
             return None
 
         if deployment.status != DeploymentStatus.COMPLETED.value:
-            raise ValueError(f"Cannot rollback deployment in status: {deployment.status}")
+            raise ValueError(
+                f"Cannot rollback deployment in status: {deployment.status}"
+            )
 
         # Get the node
         node_result = await db.execute(
@@ -261,8 +263,14 @@ class DeploymentService:
                             try:
                                 ssh_password = decrypt_data(encrypted_password)
                             except Exception as e:
-                                logger.error("Failed to decrypt SSH password for node %s: %s", node_id, e)
-                                raise RuntimeError("Failed to decrypt stored credentials")
+                                logger.error(
+                                    "Failed to decrypt SSH password for node %s: %s",
+                                    node_id,
+                                    e,
+                                )
+                                raise RuntimeError(
+                                    "Failed to decrypt stored credentials"
+                                )
                         else:
                             # Legacy plaintext password (migration path)
                             ssh_password = encrypted_password
@@ -347,19 +355,19 @@ class DeploymentService:
         ansible_cmd = self._find_ansible_playbook()
         roles_str = ",".join(roles)
         cmd = [
-    ansible_cmd,
-    str(playbook_path),
-    "-i",
-    f"{host},",
-    "-e",
-    f"target_roles={roles_str}",
-    "-e",
-    f"target_host={host}",
-    "-e",
-    "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
-    "-e",
-    "ansible_ssh_pipelining=false",
-     ]
+            ansible_cmd,
+            str(playbook_path),
+            "-i",
+            f"{host},",
+            "-e",
+            f"target_roles={roles_str}",
+            "-e",
+            f"target_host={host}",
+            "-e",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "-e",
+            "ansible_ssh_pipelining=false",
+        ]
 
         # Add SSH user if provided
         if ssh_user:
@@ -375,10 +383,14 @@ class DeploymentService:
                 raise RuntimeError(
                     "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
                 )
-            cmd.extend([
-                "-e", "ansible_ssh_pass=" + ssh_password,
-                "-e", "ansible_become_pass=" + ssh_password,
-            ])
+            cmd.extend(
+                [
+                    "-e",
+                    "ansible_ssh_pass=" + ssh_password,
+                    "-e",
+                    "ansible_become_pass=" + ssh_password,
+                ]
+            )
 
         logger.debug("Running deployment: %s", " ".join(cmd[:10]) + " ...")
 
@@ -456,7 +468,9 @@ class DeploymentService:
                     try:
                         effective_password = decrypt_data(encrypted_password)
                     except Exception as e:
-                        logger.error("Failed to decrypt SSH password for node %s: %s", node_id, e)
+                        logger.error(
+                            "Failed to decrypt SSH password for node %s: %s", node_id, e
+                        )
                         return False, "Failed to decrypt stored credentials"
                 else:
                     # Legacy plaintext password (migration path)
@@ -486,7 +500,9 @@ class DeploymentService:
 
             await db.commit()
 
-            logger.info("Enrollment completed for node %s - auth_method set to key", node_id)
+            logger.info(
+                "Enrollment completed for node %s - auth_method set to key", node_id
+            )
             return True, f"Agent deployed successfully. Output:\n{output}"
 
         except Exception as e:
@@ -496,8 +512,12 @@ class DeploymentService:
             return False, str(e)
 
     async def _execute_enrollment_playbook(
-        self, host: str, node_id: str, ssh_user: str, ssh_port: int,
-        ssh_password: Optional[str] = None
+        self,
+        host: str,
+        node_id: str,
+        ssh_user: str,
+        ssh_port: int,
+        ssh_password: Optional[str] = None,
     ) -> str:
         """Execute the SLM agent enrollment playbook."""
         playbook_path = self.ansible_dir / "enroll.yml"
@@ -516,27 +536,27 @@ class DeploymentService:
         # Always skip host key checking for automated enrollment
         # Use ControlPath=none to avoid PTY issues when running from uvicorn
         cmd = [
-    ansible_cmd,
-    str(playbook_path),
-    "-i",
-    f"{host},",
-    "-e",
-    f"ansible_host={host}",
-    "-e",
-    f"ansible_user={ssh_user}",
-    "-e",
-    f"ansible_port={ssh_port}",
-    "-e",
-    f"slm_node_id={node_id}",
-    "-e",
-    f"slm_admin_url={admin_url}",
-    "-e",
-    f"slm_heartbeat_interval={settings.heartbeat_interval}",
-    "-e",
-    "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
-    "-e",
-    "ansible_ssh_pipelining=false",
-     ]
+            ansible_cmd,
+            str(playbook_path),
+            "-i",
+            f"{host},",
+            "-e",
+            f"ansible_host={host}",
+            "-e",
+            f"ansible_user={ssh_user}",
+            "-e",
+            f"ansible_port={ssh_port}",
+            "-e",
+            f"slm_node_id={node_id}",
+            "-e",
+            f"slm_admin_url={admin_url}",
+            "-e",
+            f"slm_heartbeat_interval={settings.heartbeat_interval}",
+            "-e",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "-e",
+            "ansible_ssh_pipelining=false",
+        ]
 
         # Add password authentication if provided
         if ssh_password:
@@ -545,10 +565,14 @@ class DeploymentService:
                     "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
                 )
             # Use sshpass with ansible for both SSH and sudo
-            cmd.extend([
-                "-e", "ansible_ssh_pass=" + ssh_password,
-                "-e", "ansible_become_pass=" + ssh_password,
-            ])
+            cmd.extend(
+                [
+                    "-e",
+                    "ansible_ssh_pass=" + ssh_password,
+                    "-e",
+                    "ansible_become_pass=" + ssh_password,
+                ]
+            )
 
         logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
 
@@ -609,11 +633,16 @@ class DeploymentService:
                 # Generate RSA key pair
                 proc = await asyncio.create_subprocess_exec(
                     "ssh-keygen",
-                    "-t", "rsa",
-                    "-b", "4096",
-                    "-f", str(privkey_path),
-                    "-N", "",  # No passphrase
-                    "-C", "slm-server@autobot",
+                    "-t",
+                    "rsa",
+                    "-b",
+                    "4096",
+                    "-f",
+                    str(privkey_path),
+                    "-N",
+                    "",  # No passphrase
+                    "-C",
+                    "slm-server@autobot",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )

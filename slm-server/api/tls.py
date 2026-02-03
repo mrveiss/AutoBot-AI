@@ -9,14 +9,12 @@ Certificates are stored encrypted and served to Ansible for deployment.
 """
 
 import logging
-from typing import Optional
-
-from typing_extensions import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 from models.database import Node
 from models.schemas import (
@@ -25,7 +23,6 @@ from models.schemas import (
     TLSCredentialResponse,
     TLSCredentialUpdate,
     TLSEndpointsResponse,
-    TLSCertificateInfo,
 )
 from services.auth import get_current_user
 from services.database import get_db
@@ -293,7 +290,8 @@ async def list_tls_endpoints(
 
     # Count certificates expiring within 30 days
     expiring_soon = sum(
-        1 for e in endpoints
+        1
+        for e in endpoints
         if e.days_until_expiry is not None and e.days_until_expiry <= 30
     )
 
@@ -320,12 +318,11 @@ async def list_expiring_certificates(
     # Convert to endpoint responses
     endpoints = []
     for cred in credentials:
-        result = await db.execute(
-            select(Node).where(Node.node_id == cred.node_id)
-        )
+        result = await db.execute(select(Node).where(Node.node_id == cred.node_id))
         node = result.scalar_one_or_none()
         if node:
             from datetime import datetime
+
             days_until = None
             if cred.tls_expires_at:
                 delta = cred.tls_expires_at - datetime.utcnow()
@@ -384,9 +381,7 @@ async def renew_tls_certificate(
         )
 
     # Get the node for deployment
-    result = await db.execute(
-        select(Node).where(Node.node_id == credential.node_id)
-    )
+    result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(
@@ -413,7 +408,9 @@ async def renew_tls_certificate(
 
         logger.info(
             "TLS certificate renewed: %s -> %s (node: %s)",
-            credential_id, new_credential.credential_id, node.hostname
+            credential_id,
+            new_credential.credential_id,
+            node.hostname,
         )
 
         return {
@@ -421,9 +418,15 @@ async def renew_tls_certificate(
             "message": "Certificate renewed successfully",
             "old_credential_id": credential_id,
             "new_credential_id": new_credential.credential_id,
-            "expires_at": new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None,
-            "deployed": deployment_result.get("success", False) if deployment_result else False,
-            "deployment_message": deployment_result.get("message") if deployment_result else None,
+            "expires_at": new_credential.tls_expires_at.isoformat()
+            if new_credential.tls_expires_at
+            else None,
+            "deployed": deployment_result.get("success", False)
+            if deployment_result
+            else False,
+            "deployment_message": deployment_result.get("message")
+            if deployment_result
+            else None,
         }
 
     except Exception as e:
@@ -442,7 +445,9 @@ async def rotate_tls_certificate(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     deploy: bool = Query(True, description="Deploy new cert to node immediately"),
-    deactivate_old: bool = Query(True, description="Deactivate old cert after successful deployment"),
+    deactivate_old: bool = Query(
+        True, description="Deactivate old cert after successful deployment"
+    ),
 ):
     """
     Rotate a TLS certificate (full key rotation).
@@ -464,9 +469,7 @@ async def rotate_tls_certificate(
         )
 
     # Get the node for deployment
-    result = await db.execute(
-        select(Node).where(Node.node_id == credential.node_id)
-    )
+    result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(
@@ -498,23 +501,30 @@ async def rotate_tls_certificate(
 
         logger.info(
             "TLS certificate rotated: %s -> %s (node: %s)",
-            credential_id, new_credential.credential_id, node.hostname
+            credential_id,
+            new_credential.credential_id,
+            node.hostname,
         )
 
         return {
-    "success": True,
-    "message": "Certificate rotated successfully",
-    "old_credential_id": credential_id,
-    "old_deactivated": deactivate_old and deployment_result.get(
-        "success",
-        False) if deployment_result else False,
-        "new_credential_id": new_credential.credential_id,
-        "expires_at": new_credential.tls_expires_at.isoformat() if new_credential.tls_expires_at else None,
-        "deployed": deployment_result.get(
-            "success",
-            False) if deployment_result else False,
-            "deployment_message": deployment_result.get("message") if deployment_result else None,
-             }
+            "success": True,
+            "message": "Certificate rotated successfully",
+            "old_credential_id": credential_id,
+            "old_deactivated": deactivate_old
+            and deployment_result.get("success", False)
+            if deployment_result
+            else False,
+            "new_credential_id": new_credential.credential_id,
+            "expires_at": new_credential.tls_expires_at.isoformat()
+            if new_credential.tls_expires_at
+            else None,
+            "deployed": deployment_result.get("success", False)
+            if deployment_result
+            else False,
+            "deployment_message": deployment_result.get("message")
+            if deployment_result
+            else None,
+        }
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
@@ -530,7 +540,9 @@ async def rotate_tls_certificate(
 async def bulk_renew_expiring_certificates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
-    days: int = Query(30, ge=1, le=365, description="Renew certs expiring within N days"),
+    days: int = Query(
+        30, ge=1, le=365, description="Renew certs expiring within N days"
+    ),
     deploy: bool = Query(False, description="Deploy renewed certs immediately"),
 ):
     """
@@ -557,9 +569,7 @@ async def bulk_renew_expiring_certificates(
     for cred in credentials:
         try:
             # Get node
-            result = await db.execute(
-                select(Node).where(Node.node_id == cred.node_id)
-            )
+            result = await db.execute(select(Node).where(Node.node_id == cred.node_id))
             node = result.scalar_one_or_none()
 
             # Renew certificate
@@ -574,36 +584,45 @@ async def bulk_renew_expiring_certificates(
 
             if new_cred:
                 renewed += 1
-                results.append({
-                    "old_credential_id": cred.credential_id,
-                    "new_credential_id": new_cred.credential_id,
-                    "node_id": cred.node_id,
-                    "success": True,
-                    "deployed": deployment_result.get("success", False) if deployment_result else False,
-                })
+                results.append(
+                    {
+                        "old_credential_id": cred.credential_id,
+                        "new_credential_id": new_cred.credential_id,
+                        "node_id": cred.node_id,
+                        "success": True,
+                        "deployed": deployment_result.get("success", False)
+                        if deployment_result
+                        else False,
+                    }
+                )
             else:
                 failed += 1
-                results.append({
-                    "old_credential_id": cred.credential_id,
-                    "node_id": cred.node_id,
-                    "success": False,
-                    "error": "Renewal failed",
-                })
+                results.append(
+                    {
+                        "old_credential_id": cred.credential_id,
+                        "node_id": cred.node_id,
+                        "success": False,
+                        "error": "Renewal failed",
+                    }
+                )
 
         except Exception as e:
             failed += 1
-            results.append({
-                "old_credential_id": cred.credential_id,
-                "node_id": cred.node_id,
-                "success": False,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "old_credential_id": cred.credential_id,
+                    "node_id": cred.node_id,
+                    "success": False,
+                    "error": str(e),
+                }
+            )
 
     logger.info("Bulk certificate renewal: %d renewed, %d failed", renewed, failed)
 
     return {
         "success": failed == 0,
-        "message": f"Renewed {renewed} certificate(s)" + (f", {failed} failed" if failed else ""),
+        "message": f"Renewed {renewed} certificate(s)"
+        + (f", {failed} failed" if failed else ""),
         "renewed": renewed,
         "failed": failed,
         "results": results,
@@ -637,11 +656,16 @@ async def _deploy_certificate_to_node(node, credential, db) -> dict:
         # Deploy via SSH (simplified - in production would use Ansible)
         ssh_cmd = [
             "ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=30",
-            "-o", "BatchMode=yes",
-            "-p", str(node.ssh_port or 22),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=30",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(node.ssh_port or 22),
             f"{node.ssh_user or 'autobot'}@{node.ip_address}",
             # Deploy cert files and reload nginx
             "sudo mkdir -p /etc/ssl/autobot && "

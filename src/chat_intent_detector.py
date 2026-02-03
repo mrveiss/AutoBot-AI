@@ -198,9 +198,7 @@ def detect_exit_intent(message: str) -> bool:
     # If message contains any non-exit context phrase, don't trigger exit
     for phrase in non_exit_context_phrases:
         if phrase in message_lower:
-            logger.debug(
-                "Exit keyword found but in non-exit context: '%s'", phrase
-            )
+            logger.debug("Exit keyword found but in non-exit context: '%s'", phrase)
             return False
 
     for exit_word in EXIT_KEYWORDS:

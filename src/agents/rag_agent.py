@@ -13,7 +13,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -76,7 +75,9 @@ class RAGAgent(StandardizedAgent):
 
         logger.info(
             "RAG Agent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
     async def handle_document_query(self, request: AgentRequest) -> Dict[str, Any]:
@@ -140,8 +141,7 @@ class RAGAgent(StandardizedAgent):
             "confidence_score": synthesis_result.get("confidence", 0.8),
             "document_analysis": document_analysis,
             "sources_used": [
-                doc.get("metadata", {}).get("filename", "Unknown")
-                for doc in documents
+                doc.get("metadata", {}).get("filename", "Unknown") for doc in documents
             ],
             "agent_type": "rag",
             "model_used": self.model_name,

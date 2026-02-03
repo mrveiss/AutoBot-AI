@@ -154,9 +154,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Save machine profile
         await self._save_machine_profile()
 
-        logger.info(
-            f"Machine profile detected: {new_profile.machine_id}"
-        )
+        logger.info(f"Machine profile detected: {new_profile.machine_id}")
         logger.info(
             f"OS: {os_info.os_type.value} ({os_info.distro.value if os_info.distro else 'N/A'})"
         )
@@ -175,7 +173,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Create hash of components
         machine_string = "|".join(components)
-        machine_hash = hashlib.md5(machine_string.encode(), usedforsecurity=False).hexdigest()[:12]
+        machine_hash = hashlib.md5(
+            machine_string.encode(), usedforsecurity=False
+        ).hexdigest()[:12]
 
         return f"{os_info.os_type.value}_{machine_hash}"
 
@@ -190,9 +190,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         )
 
         try:
-            async with aiofiles.open(
-                profile_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(profile_file, "w", encoding="utf-8") as f:
                 await f.write(
                     json.dumps(self.current_machine_profile.to_dict(), indent=2)
                 )
@@ -282,9 +280,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             logger.info("Adapting tools from %s", yaml_file)
 
             try:
-                async with aiofiles.open(
-                    yaml_file, "r", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     tools_data = yaml.safe_load(content)
             except OSError as e:
@@ -297,9 +293,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             if adapted_tools["tools"]:  # Only save if there are applicable tools
                 machine_file = machine_tools_dir / yaml_file.name
                 try:
-                    async with aiofiles.open(
-                        machine_file, "w", encoding="utf-8"
-                    ) as f:
+                    async with aiofiles.open(machine_file, "w", encoding="utf-8") as f:
                         await f.write(
                             yaml.dump(adapted_tools, default_flow_style=False, indent=2)
                         )
@@ -393,7 +387,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return
 
         machine_workflows_dir = self._get_machine_knowledge_dir() / "workflows"
-        await asyncio.to_thread(machine_workflows_dir.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            machine_workflows_dir.mkdir, parents=True, exist_ok=True
+        )
 
         # Issue #358 - wrap glob in lambda to avoid blocking
         yaml_files = await asyncio.to_thread(lambda: list(workflows_dir.glob("*.yaml")))
@@ -401,9 +397,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             logger.info("Adapting workflow from %s", yaml_file)
 
             try:
-                async with aiofiles.open(
-                    yaml_file, "r", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     workflow_data = yaml.safe_load(content)
             except OSError as e:
@@ -416,11 +410,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             if adapted_workflow:  # Only save if workflow is applicable
                 machine_file = machine_workflows_dir / yaml_file.name
                 try:
-                    async with aiofiles.open(
-                        machine_file, "w", encoding="utf-8"
-                    ) as f:
+                    async with aiofiles.open(machine_file, "w", encoding="utf-8") as f:
                         await f.write(
-                            yaml.dump(adapted_workflow, default_flow_style=False, indent=2)
+                            yaml.dump(
+                                adapted_workflow, default_flow_style=False, indent=2
+                            )
                         )
                 except OSError as e:
                     logger.error(
@@ -455,8 +449,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Skip workflow if critical tools are missing
         if missing_tools:
+            workflow_name = workflow_data.get("metadata", {}).get("name", "Unknown")
             logger.info(
-                f"Skipping workflow {workflow_data.get('metadata', {}).get('name', 'Unknown')} - missing tools: {missing_tools}"
+                "Skipping workflow %s - missing tools: %s", workflow_name, missing_tools
             )
             return None
 
@@ -482,11 +477,15 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return
 
         machine_procedures_dir = self._get_machine_knowledge_dir() / "procedures"
-        await asyncio.to_thread(machine_procedures_dir.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            machine_procedures_dir.mkdir, parents=True, exist_ok=True
+        )
 
         # Simply copy procedures for now - future enhancement could adapt commands
         # Issue #358 - wrap glob in lambda to avoid blocking
-        yaml_files = await asyncio.to_thread(lambda: list(procedures_dir.glob("*.yaml")))
+        yaml_files = await asyncio.to_thread(
+            lambda: list(procedures_dir.glob("*.yaml"))
+        )
         for yaml_file in yaml_files:
             machine_file = machine_procedures_dir / yaml_file.name
             await asyncio.to_thread(shutil.copy2, yaml_file, machine_file)
@@ -634,9 +633,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         # Only integrate man pages on Linux systems
         if profile.os_type.value != "linux":
-            logger.info(
-                f"Man page integration skipped for {profile.os_type.value}"
-            )
+            logger.info(f"Man page integration skipped for {profile.os_type.value}")
             return
 
         logger.info("Integrating man pages for available tools...")
@@ -733,9 +730,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Save as YAML
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
         try:
-            async with aiofiles.open(
-                yaml_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(yaml_file, "w", encoding="utf-8") as f:
                 await f.write(
                     yaml.dump(knowledge_data, default_flow_style=False, indent=2)
                 )
@@ -758,15 +753,11 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             **results,
             "integration_date": datetime.now().isoformat(),
             "machine_id": profile.machine_id if profile else "unknown",
-            "total_available_tools": (
-                len(profile.available_tools) if profile else 0
-            ),
+            "total_available_tools": (len(profile.available_tools) if profile else 0),
         }
 
         try:
-            async with aiofiles.open(
-                summary_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(summary_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(summary_data, indent=2))
             logger.info("Saved man page integration summary to %s", summary_file)
         except OSError as e:
@@ -840,7 +831,9 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                         f"{tool.get('name', '')} {tool.get('purpose', '')} {usage_basic}"
                     ]
                     # Add options text
-                    text_parts.extend(option.lower() for option in tool.get("options", []))
+                    text_parts.extend(
+                        option.lower() for option in tool.get("options", [])
+                    )
                     # Add examples
                     text_parts.extend(
                         f"{example.get('description', '')} {example.get('command', '')}".lower()

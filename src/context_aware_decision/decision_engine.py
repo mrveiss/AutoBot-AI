@@ -630,7 +630,10 @@ class DecisionEngine:
             alternative_actions=[opt for _, opt in scored_optimizations[1:3]],
             confidence=confidence,
             confidence_level=confidence_level,
-            reasoning=f"Selected workflow optimization based on efficiency, risk, and complexity analysis (score: {best_score:.2f})",
+            reasoning=(
+                f"Selected workflow optimization based on efficiency, risk, "
+                f"and complexity analysis (score: {best_score:.2f})"
+            ),
             supporting_evidence=[
                 {"type": "workflow_analysis", "optimizations_found": optimization_count}
             ],

@@ -20,7 +20,9 @@ from typing import Any, FrozenSet, Optional
 from src.autobot_memory_graph import AutoBotMemoryGraph
 
 # Issue #380: Module-level frozenset for security-related tags
-_SECURITY_TAGS: FrozenSet[str] = frozenset({"security", "vulnerability", "host", "service"})
+_SECURITY_TAGS: FrozenSet[str] = frozenset(
+    {"security", "vulnerability", "host", "service"}
+)
 
 
 @dataclass
@@ -372,7 +374,9 @@ class SecurityMemoryIntegration:
             relation_type="relates_to",
         )
         if affected_port and affected_service:
-            service_entity = f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
+            service_entity = (
+                f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
+            )
             await self._create_security_relation(
                 from_entity=service_entity,
                 to_entity=entity_name,
@@ -444,7 +448,18 @@ class SecurityMemoryIntegration:
         affected_service: Optional[str],
         references: Optional[list[str]],
         metadata: Optional[dict[str, Any]],
-    ) -> tuple[str, str, Optional[str], str, str, str, Optional[int], Optional[str], Optional[list[str]], Optional[dict[str, Any]]]:
+    ) -> tuple[
+        str,
+        str,
+        Optional[str],
+        str,
+        str,
+        str,
+        Optional[int],
+        Optional[str],
+        Optional[list[str]],
+        Optional[dict[str, Any]],
+    ]:
         """
         Extract and validate vulnerability parameters from request or kwargs.
 
@@ -503,11 +518,18 @@ class SecurityMemoryIntegration:
         )
 
     async def create_vulnerability_entity(
-        self, request: Optional[VulnerabilityRequest] = None, *,
-        assessment_id: Optional[str] = None, host_ip: Optional[str] = None,
-        cve_id: Optional[str] = None, title: str = "", severity: str = "unknown",
-        description: str = "", affected_port: Optional[int] = None,
-        affected_service: Optional[str] = None, references: Optional[list[str]] = None,
+        self,
+        request: Optional[VulnerabilityRequest] = None,
+        *,
+        assessment_id: Optional[str] = None,
+        host_ip: Optional[str] = None,
+        cve_id: Optional[str] = None,
+        title: str = "",
+        severity: str = "unknown",
+        description: str = "",
+        affected_port: Optional[int] = None,
+        affected_service: Optional[str] = None,
+        references: Optional[list[str]] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """
@@ -526,21 +548,57 @@ class SecurityMemoryIntegration:
         Returns:
             dict[str, Any]: Created entity data.
         """
-        (assessment_id, host_ip, cve_id, title, severity, description,
-         affected_port, affected_service, references, metadata) = \
-            self._extract_vulnerability_params(
-                request, assessment_id, host_ip, cve_id, title, severity,
-                description, affected_port, affected_service, references, metadata)
+        (
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        ) = self._extract_vulnerability_params(
+            request,
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        )
         await self.ensure_initialized()
         vuln_name = cve_id or title or "Unknown Vulnerability"
         entity_name = f"Vuln: {vuln_name} on {host_ip}"
         observations = self._build_vuln_observations(
-            vuln_name, severity, host_ip, description,
-            affected_port, affected_service, references)
+            vuln_name,
+            severity,
+            host_ip,
+            description,
+            affected_port,
+            affected_service,
+            references,
+        )
         entity = await self._store_vulnerability_in_memory(
-            entity_name, observations, assessment_id, host_ip, cve_id,
-            title, severity, affected_port, affected_service, metadata)
-        await self._create_vuln_relations(host_ip, entity_name, affected_port, affected_service)
+            entity_name,
+            observations,
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            affected_port,
+            affected_service,
+            metadata,
+        )
+        await self._create_vuln_relations(
+            host_ip, entity_name, affected_port, affected_service
+        )
         logger.info("Created vulnerability entity: %s", entity_name)
         return entity
 
@@ -579,7 +637,9 @@ class SecurityMemoryIntegration:
             )
             return True
         except Exception as e:
-            logger.warning("Failed to create relation %s -> %s: %s", from_entity, to_entity, e)
+            logger.warning(
+                "Failed to create relation %s -> %s: %s", from_entity, to_entity, e
+            )
             return False
 
     async def search_security_findings(
@@ -616,7 +676,8 @@ class SecurityMemoryIntegration:
 
         # Filter for security-related entities
         security_results = [
-            r for r in results
+            r
+            for r in results
             if r.get("metadata", {}).get("type") in SECURITY_ENTITY_TYPES
             or any(tag in r.get("tags", []) for tag in _SECURITY_TAGS)
         ]
@@ -716,9 +777,12 @@ class SecurityMemoryIntegration:
             "vulnerabilities": len(vulnerabilities),
             "severity_distribution": severity_counts,
             "critical_vulns": [
-                v for v in vulnerabilities
+                v
+                for v in vulnerabilities
                 if v.get("metadata", {}).get("severity") == "critical"
-            ][:5],  # Top 5 critical
+            ][
+                :5
+            ],  # Top 5 critical
         }
 
 

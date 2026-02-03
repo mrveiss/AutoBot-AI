@@ -162,25 +162,29 @@ class AsyncChatWorkflow:
 
             # Stage 4: Build and return result
             return self._build_success_result(
-                llm_response, message_type, knowledge_status,
-                kb_results, workflow_steps, chat_id
+                llm_response,
+                message_type,
+                knowledge_status,
+                kb_results,
+                workflow_steps,
+                chat_id,
             )
 
         except Exception as e:
             return await self._build_error_result(e, workflow_steps, chat_id)
 
-    async def _workflow_initialize(
-        self, workflow_steps: List[Dict[str, Any]]
-    ) -> None:
+    async def _workflow_initialize(self, workflow_steps: List[Dict[str, Any]]) -> None:
         """Initialize workflow with status messages. Issue #281: Extracted helper."""
         await self.add_workflow_message(
             "thought", "🤔 I'm analyzing your message...", step="initialization"
         )
-        workflow_steps.append({
-            "step": "initialization",
-            "status": "completed",
-            "timestamp": time.time(),
-        })
+        workflow_steps.append(
+            {
+                "step": "initialization",
+                "status": "completed",
+                "timestamp": time.time(),
+            }
+        )
         await self.add_workflow_message(
             "planning", "📋 Planning my response approach...", step="planning"
         )
@@ -195,14 +199,18 @@ class AsyncChatWorkflow:
         )
         message_type = await self._classify_message(user_message)
         await self.add_workflow_message(
-            "utility", f"✅ Classified as: {message_type.value}",
-            step="classification", result=message_type.value
+            "utility",
+            f"✅ Classified as: {message_type.value}",
+            step="classification",
+            result=message_type.value,
         )
-        workflow_steps.append({
-            "step": "classification",
-            "result": message_type.value,
-            "timestamp": time.time(),
-        })
+        workflow_steps.append(
+            {
+                "step": "classification",
+                "result": message_type.value,
+                "timestamp": time.time(),
+            }
+        )
         return message_type
 
     async def _workflow_knowledge_search(
@@ -216,8 +224,10 @@ class AsyncChatWorkflow:
         kb_results: List[Dict[str, Any]] = []
         await asyncio.sleep(0.1)  # Simulate search
         await self.add_workflow_message(
-            "utility", "📚 Knowledge base search completed",
-            step="knowledge_search", results_count=len(kb_results)
+            "utility",
+            "📚 Knowledge base search completed",
+            step="knowledge_search",
+            results_count=len(kb_results),
         )
         return knowledge_status, kb_results
 
@@ -233,23 +243,32 @@ class AsyncChatWorkflow:
         )
         llm_response = await self._generate_llm_response(user_message, llm)
         await self.add_workflow_message(
-            "utility", "✅ LLM response received", step="llm_generation",
+            "utility",
+            "✅ LLM response received",
+            step="llm_generation",
             response_length=len(llm_response.content),
-            model=llm_response.model, processing_time=llm_response.processing_time
+            model=llm_response.model,
+            processing_time=llm_response.processing_time,
         )
-        workflow_steps.append({
-            "step": "llm_generation",
-            "model": llm_response.model,
-            "tokens_used": llm_response.tokens_used,
-            "processing_time": llm_response.processing_time,
-            "timestamp": time.time(),
-        })
+        workflow_steps.append(
+            {
+                "step": "llm_generation",
+                "model": llm_response.model,
+                "tokens_used": llm_response.tokens_used,
+                "processing_time": llm_response.processing_time,
+                "timestamp": time.time(),
+            }
+        )
         return llm_response
 
     def _build_success_result(
-        self, llm_response: LLMResponse, message_type: MessageType,
-        knowledge_status: KnowledgeStatus, kb_results: List[Dict[str, Any]],
-        workflow_steps: List[Dict[str, Any]], chat_id: str
+        self,
+        llm_response: LLMResponse,
+        message_type: MessageType,
+        knowledge_status: KnowledgeStatus,
+        kb_results: List[Dict[str, Any]],
+        workflow_steps: List[Dict[str, Any]],
+        chat_id: str,
     ) -> ChatWorkflowResult:
         """Build successful workflow result. Issue #281: Extracted helper."""
         processing_time = time.time() - self._start_time
@@ -273,8 +292,10 @@ class AsyncChatWorkflow:
     ) -> ChatWorkflowResult:
         """Build error workflow result. Issue #281: Extracted helper."""
         await self.add_workflow_message(
-            "debug", f"❌ WORKFLOW: Error occurred: {str(error)}",
-            step="error_handling", error=str(error)
+            "debug",
+            f"❌ WORKFLOW: Error occurred: {str(error)}",
+            step="error_handling",
+            error=str(error),
         )
         processing_time = time.time() - self._start_time
         return ChatWorkflowResult(
@@ -316,12 +337,16 @@ class AsyncChatWorkflow:
         messages = [ChatMessage(role="user", content=user_message)]
 
         # Add system prompt for AutoBot context
-        system_prompt = """You are AutoBot, an advanced autonomous AI assistant. Provide helpful, accurate, and concise responses."""
+        system_prompt = (
+            "You are AutoBot, an advanced autonomous AI assistant. "
+            "Provide helpful, accurate, and concise responses."
+        )
         messages.insert(0, ChatMessage(role="system", content=system_prompt))
 
         # Generate response with timeout
         response = await asyncio.wait_for(
-            llm.chat_completion(messages, stream=False), timeout=TimingConstants.SHORT_TIMEOUT
+            llm.chat_completion(messages, stream=False),
+            timeout=TimingConstants.SHORT_TIMEOUT,
         )
 
         return response

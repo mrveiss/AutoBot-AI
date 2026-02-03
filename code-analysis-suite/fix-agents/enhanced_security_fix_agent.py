@@ -19,15 +19,15 @@ Author: AutoBot Enhanced Security Fix Agent
 Version: 2.0.0
 """
 
+import hashlib
+import json
 import os
 import re
-import sys
-import json
 import shutil
-import hashlib
+import sys
 from datetime import datetime
-from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class EnhancedSecurityFixAgent:
@@ -109,7 +109,22 @@ class EnhancedSecurityFixAgent:
 
         # Security enhancement templates
         self.security_enhancements = {
-            "csp_header": """<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';">""",
+            "csp_header": (
+                '<meta http-equiv="Content-Security-Policy" content="'
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: blob:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' ws: wss:; "
+                "media-src 'self'; "
+                "object-src 'none'; "
+                "child-src 'self'; "
+                "frame-ancestors 'self'; "
+                "base-uri 'self'; "
+                "form-action 'self';"
+                '">'
+            ),
             "dom_purify_script": """
 <script>
 // DOM Sanitization Helper - Enhanced Security
@@ -481,9 +496,7 @@ class EnhancedSecurityFixAgent:
                     f"   📚 {library_vulns} in library/framework code (will be mitigated with CSP)"
                 )
             if direct_vulns > 0:
-                print(
-                    f"   🎯 {direct_vulns} in direct application code (will be fixed)"
-                )
+                print(f"   🎯 {direct_vulns} in direct application code (will be fixed)")
 
             # Create backup
             backup_path = self.create_backup(file_path)
@@ -666,7 +679,10 @@ class EnhancedSecurityFixAgent:
                         "LOW": "🟢",
                     }[severity]
                     report_content += f"- {icon} **{severity}:** {severity_counts[severity]} vulnerabilities\n"
-            report_content += f"- 📚 **Library/Framework Code:** {library_vulns} vulnerabilities (mitigated with CSP)\n\n"
+            report_content += (
+                f"- 📚 **Library/Framework Code:** "
+                f"{library_vulns} vulnerabilities (mitigated with CSP)\n\n"
+            )
 
         # Security enhancements applied
         if self.report["security_enhancements"]:
@@ -699,7 +715,10 @@ class EnhancedSecurityFixAgent:
                 report_content += f"- **File:** `{vuln['file']}`\n"
                 report_content += f"- **Line:** {vuln['line']}\n"
                 report_content += f"- **Severity:** {vuln['severity']}\n"
-                report_content += f"- **Pattern:** `{vuln['match'][:100]}{'...' if len(vuln['match']) > 100 else ''}`\n\n"
+                ellipsis = "..." if len(vuln["match"]) > 100 else ""
+                report_content += (
+                    f"- **Pattern:** `{vuln['match'][:100]}{ellipsis}`\n\n"
+                )
 
         # Applied fixes
         if self.report["fixes_applied"]:
@@ -710,8 +729,14 @@ class EnhancedSecurityFixAgent:
                 )
                 report_content += f"- **Line:** {fix['line']}\n"
                 report_content += f"- **Severity:** {fix['severity']}\n"
-                report_content += f"- **Original:** `{fix['original'][:80]}{'...' if len(fix['original']) > 80 else ''}`\n"
-                report_content += f"- **Fixed:** `{fix['fixed'][:80]}{'...' if len(fix['fixed']) > 80 else ''}`\n\n"
+                orig_ellipsis = "..." if len(fix["original"]) > 80 else ""
+                fixed_ellipsis = "..." if len(fix["fixed"]) > 80 else ""
+                report_content += (
+                    f"- **Original:** `{fix['original'][:80]}{orig_ellipsis}`\n"
+                )
+                report_content += (
+                    f"- **Fixed:** `{fix['fixed'][:80]}{fixed_ellipsis}`\n\n"
+                )
 
         # Recommendations
         report_content += "## Security Recommendations & Status\n\n"

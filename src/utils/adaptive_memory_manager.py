@@ -15,7 +15,6 @@ from typing import Any, Dict, Optional
 
 import psutil
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -161,7 +160,10 @@ class AdaptiveMemoryManager:
             # Check memory after cleanup
             memory_after = psutil.virtual_memory()
             logger.info(
-                f"Memory cleanup completed: {memory.percent:.1f}% -> {memory_after.percent:.1f}%, collected {collected} objects"
+                "Memory cleanup completed: %.1f%% -> %.1f%%, collected %d objects",
+                memory.percent,
+                memory_after.percent,
+                collected,
             )
 
         except Exception as e:

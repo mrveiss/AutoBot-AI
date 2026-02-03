@@ -462,7 +462,10 @@ class CrossLanguagePatternDetector:
                     "missing_in_backend",
                     frontend_definition=str(ts_fields[field_name]),
                     severity=PatternSeverity.MEDIUM,
-                    recommendation=f"Consider adding field '{field_name}' to backend model '{name}' or remove from frontend",
+                    recommendation=(
+                        f"Consider adding field '{field_name}' to backend model "
+                        f"'{name}' or remove from frontend"
+                    ),
                 )
             )
 
@@ -568,7 +571,10 @@ class CrossLanguagePatternDetector:
                             typescript_code=ts_v.get("code", "")[:200],
                             similarity_score=0.8,  # Assume high similarity for same type
                             severity=PatternSeverity.MEDIUM,
-                            recommendation=f"Consider consolidating '{vtype}' validation logic into a shared schema or specification",
+                            recommendation=(
+                                f"Consider consolidating '{vtype}' validation logic "
+                                "into a shared schema or specification"
+                            ),
                         )
                     )
 

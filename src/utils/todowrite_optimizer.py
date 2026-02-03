@@ -28,7 +28,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -68,7 +67,9 @@ class OptimizedTodoItem:
     def __post_init__(self):
         """Calculate similarity hash for deduplication"""
         content_normalized = self.content.lower().strip()
-        self.similarity_hash = hashlib.md5(content_normalized.encode(), usedforsecurity=False).hexdigest()[:8]
+        self.similarity_hash = hashlib.md5(
+            content_normalized.encode(), usedforsecurity=False
+        ).hexdigest()[:8]
 
 
 @dataclass
@@ -308,7 +309,9 @@ class TodoWriteOptimizer:
                 self.pending_todos.clear()
 
                 logger.info(
-                    f"Successfully optimized batch of {len(batch.todos)} todos, saved {batch.estimated_api_savings} API calls"
+                    "Successfully optimized batch of %d todos, saved %d API calls",
+                    len(batch.todos),
+                    batch.estimated_api_savings,
                 )
 
                 return batch
@@ -473,8 +476,7 @@ class TodoWriteOptimizer:
             ready_todos = []
             for todo in remaining_todos:
                 if not todo.dependencies or all(
-                    dep in completed_contents
-                    for dep in todo.dependencies
+                    dep in completed_contents for dep in todo.dependencies
                 ):
                     ready_todos.append(todo)
 

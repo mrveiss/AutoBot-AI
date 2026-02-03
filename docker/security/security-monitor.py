@@ -14,7 +14,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import psutil
 
@@ -223,12 +223,15 @@ class SecurityMonitor:
 
         # Memory usage anomaly
         if metrics.get("memory_percent", 0) > self.memory_threshold:
-            anomalies.append( { "type": "high_memory_usage",
-    "severity": "medium",
-    "value": metrics["memory_percent"],
-    "threshold": self.memory_threshold,
-    "message": f"Memory usage {metrics['memory_percent']:.1f}% exceeds threshold {self.memory_threshold}%",
-     } )
+            anomalies.append(
+                {
+                    "type": "high_memory_usage",
+                    "severity": "medium",
+                    "value": metrics["memory_percent"],
+                    "threshold": self.memory_threshold,
+                    "message": f"Memory usage {metrics['memory_percent']:.1f}% exceeds threshold {self.memory_threshold}%",
+                }
+            )
 
         # Disk usage anomaly
         if metrics.get("disk_percent", 0) > self.disk_threshold:

@@ -31,7 +31,9 @@ FILE_TRANSFER_OPS = {"upload", "download", "transfer"}
 FILE_TRANSFER_OPS_SIMPLE = {"upload", "download"}
 
 # Issue #380: Module-level frozensets to avoid repeated list creation
-_SENSITIVE_FILE_KEYWORDS = frozenset({"password", "secret", "key", "token", "credential"})
+_SENSITIVE_FILE_KEYWORDS = frozenset(
+    {"password", "secret", "key", "token", "credential"}
+)
 _SYSTEM_DIRECTORIES = frozenset({"/etc/", "/usr/", "/var/"})
 _SENSITIVE_PORTS = frozenset({22, 23, 3389, 5900, 135, 139, 445})
 _REMOTE_ACCESS_PORTS = frozenset({22, 3389})  # SSH and RDP ports for auth requirements
@@ -420,9 +422,13 @@ Please provide your evaluation in the required JSON format with:
 Focus on protecting system integrity, user data, and organizational security while enabling legitimate operations."""
 
     def _prepare_command_security_prompt(
-        self, command: str, execution_context: Dict[str, Any],
-        user_permissions: List[str], environment: str,
-        risk_patterns: Dict[str, Any], context: Dict[str, Any],
+        self,
+        command: str,
+        execution_context: Dict[str, Any],
+        user_permissions: List[str],
+        environment: str,
+        risk_patterns: Dict[str, Any],
+        context: Dict[str, Any],
     ) -> str:
         """Prepare prompt for command security evaluation. Issue #665: Refactored."""
         prompt = f"""

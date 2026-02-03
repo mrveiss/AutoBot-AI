@@ -147,8 +147,9 @@ class ProgressIndicator:
         progress_bar = "█" * int(percentage // 4) + "░" * (25 - int(percentage // 4))
 
         step_info = f" - {message}" if message else ""
+        progress = f"{percentage:.1f}% ({self.current_step}/{self.total_steps})"
         print(
-            f"\r🔄 {self.description}: [{progress_bar}] {percentage:.1f}% ({self.current_step}/{self.total_steps}){step_info}",
+            f"\r🔄 {self.description}: [{progress_bar}] {progress}{step_info}",
             end="",
         )
 

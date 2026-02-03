@@ -32,8 +32,8 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.constants.path_constants import PATH
 from src.config import UnifiedConfigManager
+from src.constants.path_constants import PATH
 from src.utils.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,9 @@ class StartupValidator:
             )
         else:
             logger.error(
-                f"❌ Startup validation failed with {len(self.result.errors)} errors and {len(self.result.warnings)} warnings."
+                "❌ Startup validation failed with %d errors and %d warnings.",
+                len(self.result.errors),
+                len(self.result.warnings),
             )
 
         for warning in self.result.warnings:

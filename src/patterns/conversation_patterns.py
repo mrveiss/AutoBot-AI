@@ -114,10 +114,13 @@ class ConversationPatterns:
         """Issue #380: Cache templates to avoid repeated dict creation."""
         return {
             ConversationType.GREETING: (
-                "Hello! I'm AutoBot, your AI assistant. I'm here to help you with various tasks including system commands, research, security analysis, and more. What can I help you with today?"
+                "Hello! I'm AutoBot, your AI assistant. I'm here to help you with "
+                "various tasks including system commands, research, security analysis, "
+                "and more. What can I help you with today?"
             ),
             ConversationType.STATUS_INQUIRY: (
-                "I'm doing well and ready to help! My systems are operational and I'm equipped with various capabilities. What would you like to work on?"
+                "I'm doing well and ready to help! My systems are operational and I'm "
+                "equipped with various capabilities. What would you like to work on?"
             ),
             ConversationType.GRATITUDE: (
                 "You're welcome! I'm always happy to help. Let me know if you need anything else."

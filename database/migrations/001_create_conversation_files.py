@@ -32,8 +32,12 @@ class ConversationFilesMigration:
     VERSION = "001"
     DESCRIPTION = "Create conversation_files database and schema"
 
-    def __init__(self, data_dir: Optional[Path] = None, schema_dir: Optional[Path]
-                 = None, db_path: Optional[Path] = None):
+    def __init__(
+        self,
+        data_dir: Optional[Path] = None,
+        schema_dir: Optional[Path] = None,
+        db_path: Optional[Path] = None,
+    ):
         """
         Initialize migration with configurable paths.
 
@@ -76,7 +80,7 @@ class ConversationFilesMigration:
                 f"Expected location: {self.schema_path.absolute()}"
             )
 
-        with open(self.schema_path, 'r', encoding='utf-8') as f:
+        with open(self.schema_path, "r", encoding="utf-8") as f:
             schema_content = f.read()
 
         logger.info(f"Read schema from: {self.schema_path}")
@@ -92,7 +96,7 @@ class ConversationFilesMigration:
         connection = sqlite3.connect(
             str(self.db_path),
             timeout=TimingConstants.SHORT_TIMEOUT,
-            isolation_level=None  # Autocommit mode for DDL
+            isolation_level=None,  # Autocommit mode for DDL
         )
 
         # Enable foreign keys
@@ -146,37 +150,37 @@ class ConversationFilesMigration:
         try:
             # Expected tables
             expected_tables = {
-                'conversation_files',
-                'file_metadata',
-                'session_file_associations',
-                'file_access_log',
-                'file_cleanup_queue'
+                "conversation_files",
+                "file_metadata",
+                "session_file_associations",
+                "file_access_log",
+                "file_cleanup_queue",
             }
 
             # Expected views
             expected_views = {
-                'v_active_files',
-                'v_session_file_summary',
-                'v_pending_cleanups'
+                "v_active_files",
+                "v_session_file_summary",
+                "v_pending_cleanups",
             }
 
             # Expected indexes
             expected_indexes = {
-                'idx_conversation_files_session',
-                'idx_conversation_files_hash',
-                'idx_conversation_files_uploaded_at',
-                'idx_file_metadata_file_id',
-                'idx_session_associations_session',
-                'idx_session_associations_file',
-                'idx_file_access_log_file',
-                'idx_cleanup_queue_processed'
+                "idx_conversation_files_session",
+                "idx_conversation_files_hash",
+                "idx_conversation_files_uploaded_at",
+                "idx_file_metadata_file_id",
+                "idx_session_associations_session",
+                "idx_session_associations_file",
+                "idx_file_access_log_file",
+                "idx_cleanup_queue_processed",
             }
 
             # Expected triggers
             expected_triggers = {
-                'trg_conversation_files_soft_delete',
-                'trg_conversation_files_upload_log',
-                'trg_session_association_cleanup_schedule'
+                "trg_conversation_files_soft_delete",
+                "trg_conversation_files_upload_log",
+                "trg_session_association_cleanup_schedule",
             }
 
             # Validate tables
@@ -202,7 +206,9 @@ class ConversationFilesMigration:
             logger.info(f"✓ All {len(expected_views)} views created")
 
             # Validate indexes
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'")
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'"
+            )
             actual_indexes = {row[0] for row in cursor.fetchall()}
 
             missing_indexes = expected_indexes - actual_indexes
@@ -250,7 +256,8 @@ class ConversationFilesMigration:
 
         try:
             # Create migrations tracking table if it doesn't exist
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS schema_migrations (
                     migration_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     version TEXT NOT NULL UNIQUE,
@@ -259,14 +266,18 @@ class ConversationFilesMigration:
                     status TEXT DEFAULT 'completed',
                     execution_time_ms INTEGER
                 )
-            """)
+            """
+            )
 
             # Record this migration (INSERT OR IGNORE for idempotency - safe for concurrent initialization)
             # If version already exists, silently skip (no error) - critical for multi-VM distributed environment
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR IGNORE INTO schema_migrations (version, description, status)
                 VALUES (?, ?, 'completed')
-            """, (self.VERSION, self.DESCRIPTION))
+            """,
+                (self.VERSION, self.DESCRIPTION),
+            )
 
             self.connection.commit()
             logger.info(f"Recorded migration {self.VERSION} in schema_migrations table")
@@ -373,12 +384,12 @@ class ConversationFilesMigration:
 
                 # Drop tables (in reverse dependency order)
                 tables_to_drop = [
-                    'file_cleanup_queue',
-                    'file_access_log',
-                    'session_file_associations',
-                    'file_metadata',
-                    'conversation_files',
-                    'schema_migrations'
+                    "file_cleanup_queue",
+                    "file_access_log",
+                    "session_file_associations",
+                    "file_metadata",
+                    "conversation_files",
+                    "schema_migrations",
                 ]
 
                 for table in tables_to_drop:
@@ -432,7 +443,7 @@ if __name__ == "__main__":
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # Run migration

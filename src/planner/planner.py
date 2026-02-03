@@ -22,7 +22,7 @@ from src.constants.threshold_constants import (
     RetryConfig,
     TimingConstants,
 )
-from src.events.types import EventType, create_plan_event
+from src.events.types import create_plan_event
 from src.planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,9 @@ class PlannerConfig:
 
     max_steps_per_plan: int = 20  # Plan-specific, no constant needed
     plan_ttl_seconds: int = TimingConstants.HOURLY_INTERVAL * 24  # 86400 = 24 hours
-    llm_temperature: float = LLMDefaults.DEFAULT_TEMPERATURE - 0.4  # 0.3 for planning precision
+    llm_temperature: float = (
+        LLMDefaults.DEFAULT_TEMPERATURE - 0.4
+    )  # 0.3 for planning precision
     enable_parallel_steps: bool = True
     max_parallel_steps: int = BatchConfig.SMALL_BATCH // 2  # 5 parallel steps
     auto_retry_failed_steps: bool = True
@@ -64,7 +66,6 @@ class PlannerModule(ABC):
         context: Optional[dict] = None,
     ) -> ExecutionPlan:
         """Create a new execution plan for a task"""
-        pass
 
     @abstractmethod
     async def update_plan(
@@ -74,7 +75,6 @@ class PlannerModule(ABC):
         reason: str,
     ) -> ExecutionPlan:
         """Update an existing plan based on new information"""
-        pass
 
     @abstractmethod
     async def start_step(
@@ -83,7 +83,6 @@ class PlannerModule(ABC):
         step_id: str,
     ) -> PlanStep:
         """Mark a step as in_progress"""
-        pass
 
     @abstractmethod
     async def complete_step(
@@ -94,7 +93,6 @@ class PlannerModule(ABC):
         tools_used: Optional[list[str]] = None,
     ) -> PlanStep:
         """Mark a step as completed with optional reflection"""
-        pass
 
     @abstractmethod
     async def fail_step(
@@ -105,17 +103,14 @@ class PlannerModule(ABC):
         reflection: Optional[str] = None,
     ) -> PlanStep:
         """Mark a step as failed"""
-        pass
 
     @abstractmethod
     async def get_plan(self, plan_id: str) -> Optional[ExecutionPlan]:
         """Get a plan by ID"""
-        pass
 
     @abstractmethod
     async def get_current_step(self, plan_id: str) -> Optional[PlanStep]:
         """Get the currently executing step"""
-        pass
 
 
 # =============================================================================
@@ -204,7 +199,11 @@ Output ONLY valid JSON in this format:
             if k not in ("task_id",):  # Skip internal keys
                 context_items.append(f"- {k}: {v}")
 
-        return "\n".join(context_items) if context_items else "No additional context provided."
+        return (
+            "\n".join(context_items)
+            if context_items
+            else "No additional context provided."
+        )
 
     def _populate_plan_steps(self, plan: ExecutionPlan, plan_data: dict) -> None:
         """
@@ -467,7 +466,9 @@ Output ONLY valid JSON in this format:
             )
             await self.event_stream.publish(event)
 
-        logger.warning("Failed step %d: %s - %s", step.step_number, step.description[:40], error)
+        logger.warning(
+            "Failed step %d: %s - %s", step.step_number, step.description[:40], error
+        )
         return step
 
     async def skip_step(
@@ -492,7 +493,9 @@ Output ONLY valid JSON in this format:
         plan.update_metrics()
         await self._store_plan(plan)
 
-        logger.info("Skipped step %d: %s - %s", step.step_number, step.description[:40], reason)
+        logger.info(
+            "Skipped step %d: %s - %s", step.step_number, step.description[:40], reason
+        )
         return step
 
     async def update_plan(
@@ -507,17 +510,20 @@ Output ONLY valid JSON in this format:
             raise ValueError(f"Plan not found: {plan_id}")
 
         # Store update in history
-        plan.update_history.append({
-            "version": plan.version,
-            "reason": reason,
-            "timestamp": datetime.utcnow().isoformat(),
-            "previous_steps": [s.to_dict() for s in plan.steps],
-        })
+        plan.update_history.append(
+            {
+                "version": plan.version,
+                "reason": reason,
+                "timestamp": datetime.utcnow().isoformat(),
+                "previous_steps": [s.to_dict() for s in plan.steps],
+            }
+        )
         plan.version += 1
 
         # Re-plan remaining steps
         remaining = [
-            s for s in plan.steps
+            s
+            for s in plan.steps
             if s.status in (StepStatus.PENDING, StepStatus.BLOCKED)
         ]
 
@@ -535,9 +541,7 @@ Output ONLY valid JSON in this format:
             completed_steps = [
                 s for s in plan.steps if s.status == StepStatus.COMPLETED
             ]
-            in_progress = [
-                s for s in plan.steps if s.status == StepStatus.IN_PROGRESS
-            ]
+            in_progress = [s for s in plan.steps if s.status == StepStatus.IN_PROGRESS]
 
             plan.steps = completed_steps + in_progress + new_plan.steps
 
@@ -610,7 +614,7 @@ Output ONLY valid JSON in this format:
     def _parse_plan_response(self, response: str) -> dict:
         """Parse LLM response into plan data"""
         # Try to extract JSON from response
-        json_match = re.search(r'\{[\s\S]*\}', response)
+        json_match = re.search(r"\{[\s\S]*\}", response)
         if json_match:
             try:
                 return json.loads(json_match.group())

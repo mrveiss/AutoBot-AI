@@ -73,9 +73,7 @@ class LLMSelfAwareness:
         return {
             "name": "AutoBot",
             "version": "1.0.0",
-            "description": (
-                "Advanced AI-powered automation and development assistant"
-            ),
+            "description": ("Advanced AI-powered automation and development assistant"),
             "current_phase": project_status["current_phase"],
             "system_maturity": capabilities["system_maturity"],
         }
@@ -121,9 +119,7 @@ class LLMSelfAwareness:
             "last_validation": capabilities["last_progression_check"],
             "recent_changes": len(state_summary.get("recent_changes", [])),
             "milestones_achieved": sum(
-                1
-                for m in state_summary.get("milestones", {}).values()
-                if m["achieved"]
+                1 for m in state_summary.get("milestones", {}).values() if m["achieved"]
             ),
         }
 
@@ -217,26 +213,57 @@ class LLMSelfAwareness:
         return {
             "core": ["basic_api", "configuration_management", "logging"],
             "ai": [
-                "llm_interface", "ai_reasoning", "natural_language_processing",
-                "multimodal_ai", "code_search", "intelligent_agents", "local_models",
+                "llm_interface",
+                "ai_reasoning",
+                "natural_language_processing",
+                "multimodal_ai",
+                "code_search",
+                "intelligent_agents",
+                "local_models",
             ],
-            "security": ["security_layer", "authentication", "access_control", "audit_logging"],
+            "security": [
+                "security_layer",
+                "authentication",
+                "access_control",
+                "audit_logging",
+            ],
             "interface": [
-                "web_interface", "user_interaction", "visual_feedback",
-                "desktop_streaming", "takeover_control", "advanced_ui",
+                "web_interface",
+                "user_interaction",
+                "visual_feedback",
+                "desktop_streaming",
+                "takeover_control",
+                "advanced_ui",
             ],
             "data": [
-                "knowledge_storage", "memory_management", "data_persistence",
-                "caching", "embedding_storage", "knowledge_enhancement",
+                "knowledge_storage",
+                "memory_management",
+                "data_persistence",
+                "caching",
+                "embedding_storage",
+                "knowledge_enhancement",
             ],
             "automation": [
-                "agent_coordination", "workflow_management", "task_planning",
-                "auto_documentation", "self_improvement", "error_recovery",
+                "agent_coordination",
+                "workflow_management",
+                "task_planning",
+                "auto_documentation",
+                "self_improvement",
+                "error_recovery",
             ],
-            "monitoring": ["monitoring", "alerting", "health_checks", "performance_tracking"],
+            "monitoring": [
+                "monitoring",
+                "alerting",
+                "health_checks",
+                "performance_tracking",
+            ],
             "development": [
-                "connection_pooling", "performance_optimization", "containerization",
-                "scalability", "production_deployment", "openvino_acceleration",
+                "connection_pooling",
+                "performance_optimization",
+                "containerization",
+                "scalability",
+                "production_deployment",
+                "openvino_acceleration",
             ],
         }
 
@@ -262,8 +289,14 @@ class LLMSelfAwareness:
     def _categorize_capabilities(self, capabilities: List[str]) -> Dict[str, List[str]]:
         """Categorize capabilities by type (Issue #315 - reduced nesting)."""
         categories = {
-            "core": [], "ai": [], "security": [], "interface": [],
-            "data": [], "automation": [], "monitoring": [], "development": [],
+            "core": [],
+            "ai": [],
+            "security": [],
+            "interface": [],
+            "data": [],
+            "automation": [],
+            "monitoring": [],
+            "development": [],
         }
 
         categorization_rules = self._get_categorization_rules()
@@ -281,7 +314,9 @@ class LLMSelfAwareness:
         # Remove empty categories
         return {k: v for k, v in categories.items() if v}
 
-    def _find_explicit_category(self, capability: str, rules: Dict[str, List[str]]) -> Optional[str]:
+    def _find_explicit_category(
+        self, capability: str, rules: Dict[str, List[str]]
+    ) -> Optional[str]:
         """Find category from explicit rules (Issue #315)."""
         for category, keywords in rules.items():
             if capability in keywords:
@@ -373,7 +408,9 @@ class LLMSelfAwareness:
         self, prompt: str, context_level: str = "basic"
     ) -> str:
         """Inject system awareness context into a prompt"""
-        include_detailed = context_level in DETAILED_CONTEXT_LEVELS  # O(1) lookup (Issue #326)
+        include_detailed = (
+            context_level in DETAILED_CONTEXT_LEVELS
+        )  # O(1) lookup (Issue #326)
         context = await self.get_system_context(include_detailed=include_detailed)
 
         # Build context injection
@@ -396,7 +433,9 @@ Your Current Capabilities by Category:
                 if len(caps) > 5:
                     line += f" (and {len(caps) - 5} more)"
                 capability_lines.append(line)
-        awareness_prompt += "\n".join(capability_lines) + "\n" if capability_lines else ""
+        awareness_prompt += (
+            "\n".join(capability_lines) + "\n" if capability_lines else ""
+        )
 
         awareness_prompt += f"""
 System Metrics:
@@ -475,7 +514,9 @@ You should be aware of your current capabilities and limitations based on the sy
                     )
 
         # Add phase-specific recommendations
-        if any(word in query_lower for word in PROGRESSION_QUERIES):  # O(1) lookup (Issue #326)
+        if any(
+            word in query_lower for word in PROGRESSION_QUERIES
+        ):  # O(1) lookup (Issue #326)
             response["recommendations"].append(
                 {
                     "type": "phase_progression",
@@ -489,7 +530,9 @@ You should be aware of your current capabilities and limitations based on the sy
                 }
             )
 
-        if any(word in query_lower for word in CAPABILITY_QUERIES):  # O(1) lookup (Issue #326)
+        if any(
+            word in query_lower for word in CAPABILITY_QUERIES
+        ):  # O(1) lookup (Issue #326)
             response["recommendations"].append(
                 {
                     "type": "capability_info",
@@ -539,7 +582,9 @@ You should be aware of your current capabilities and limitations based on the sy
                 await f.write(json.dumps(export_data, indent=2, default=str))
             logger.info("System awareness data exported to %s", output_path)
         except OSError as e:
-            logger.error("Failed to export system awareness data to %s: %s", output_path, e)
+            logger.error(
+                "Failed to export system awareness data to %s: %s", output_path, e
+            )
             raise
         return output_path
 

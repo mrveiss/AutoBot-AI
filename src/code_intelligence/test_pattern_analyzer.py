@@ -535,7 +535,10 @@ class TestPatternAnalyzer:
                 file_path=file_path,
                 line_number=func.lineno,
                 test_name=func.name,
-                description=f"Test '{func.name}' has {assertions} assertions (max recommended: {self.MAX_ASSERTIONS_PER_TEST})",
+                description=(
+                    f"Test '{func.name}' has {assertions} assertions "
+                    f"(max recommended: {self.MAX_ASSERTIONS_PER_TEST})"
+                ),
                 suggestion="Consider splitting into multiple focused tests",
                 metrics={"assertion_count": assertions},
             )
@@ -559,7 +562,10 @@ class TestPatternAnalyzer:
                 file_path=file_path,
                 line_number=func.lineno,
                 test_name=func.name,
-                description=f"Test '{func.name}' contains patterns that may cause flakiness (time.sleep, random, datetime)",
+                description=(
+                    f"Test '{func.name}' contains patterns that may cause flakiness "
+                    "(time.sleep, random, datetime)"
+                ),
                 suggestion="Use deterministic mocks for time, random, and datetime operations",
                 metrics={},
             )

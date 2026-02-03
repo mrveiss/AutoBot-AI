@@ -29,16 +29,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
 
-
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.constants.threshold_constants import TimingConstants
 from src.knowledge_base import KnowledgeBase
 from src.utils.logging_manager import get_llm_logger
-from src.utils.semantic_chunker_gpu import (
-    get_gpu_semantic_chunker,
-)
+from src.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("knowledge_sync_incremental")
 
@@ -278,7 +275,9 @@ class IncrementalKnowledgeSync:
                 logger.info("No existing sync state found")
 
         except OSError as e:
-            logger.warning("Failed to read sync state file %s: %s", self.file_metadata_path, e)
+            logger.warning(
+                "Failed to read sync state file %s: %s", self.file_metadata_path, e
+            )
             self.file_metadata = {}
         except Exception as e:
             logger.warning("Failed to load sync state: %s", e)
@@ -306,7 +305,9 @@ class IncrementalKnowledgeSync:
             logger.info("Saved metadata for %d files", len(self.file_metadata))
 
         except OSError as e:
-            logger.error("Failed to write sync state file %s: %s", self.file_metadata_path, e)
+            logger.error(
+                "Failed to write sync state file %s: %s", self.file_metadata_path, e
+            )
         except Exception as e:
             logger.error("Failed to save sync state: %s", e)
 
@@ -411,7 +412,9 @@ class IncrementalKnowledgeSync:
             start_time = time.time()
 
             # Create metadata and chunk using extracted helpers (Issue #665)
-            base_metadata = self._create_chunk_base_metadata(file_path, relative_path, content)
+            base_metadata = self._create_chunk_base_metadata(
+                file_path, relative_path, content
+            )
             chunks = await self.semantic_chunker.chunk_text(content, base_metadata)
             processing_time = time.time() - start_time
 
@@ -422,11 +425,22 @@ class IncrementalKnowledgeSync:
 
             # Create file metadata using extracted helper (Issue #665)
             metadata = self._create_file_metadata(
-                file_path, relative_path, content_hash, file_stat,
-                vector_ids, fact_ids, len(chunks), processing_time
+                file_path,
+                relative_path,
+                content_hash,
+                file_stat,
+                vector_ids,
+                fact_ids,
+                len(chunks),
+                processing_time,
             )
 
-            logger.info("Processed: %s -> %d chunks in %.3fs", relative_path, len(chunks), processing_time)
+            logger.info(
+                "Processed: %s -> %d chunks in %.3fs",
+                relative_path,
+                len(chunks),
+                processing_time,
+            )
             return metadata
 
         except OSError as e:
@@ -580,14 +594,15 @@ class IncrementalKnowledgeSync:
             if metadata.fact_ids:
                 await asyncio.gather(
                     *[_delete_fact_safe(self.kb, fid) for fid in metadata.fact_ids],
-                    return_exceptions=True
+                    return_exceptions=True,
                 )
 
             # Remove from metadata
             del self.file_metadata[file_path]
 
             logger.info(
-                "Removed knowledge for: %s", Path(file_path).relative_to(self.project_root)
+                "Removed knowledge for: %s",
+                Path(file_path).relative_to(self.project_root),
             )
 
     def _update_metadata_from_results(
@@ -644,14 +659,18 @@ class IncrementalKnowledgeSync:
         # Step 4: Process changed/new files with GPU acceleration
         if changed_files:
             logger.info(
-                "Processing %d changed files with GPU acceleration...", len(changed_files)
+                "Processing %d changed files with GPU acceleration...",
+                len(changed_files),
             )
 
             # Process files in parallel batches for maximum performance
             semaphore = asyncio.Semaphore(self.max_concurrent_files)
 
             # Process files concurrently using extracted helper (Issue #315)
-            tasks = [_process_file_with_semaphore(semaphore, self, fp) for fp in changed_files]
+            tasks = [
+                _process_file_with_semaphore(semaphore, self, fp)
+                for fp in changed_files
+            ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Update metadata for successful results
@@ -755,7 +774,8 @@ class IncrementalKnowledgeSync:
         Runs without blocking user operations.
         """
         logger.info(
-            "Starting background sync daemon (check every %d minutes)", check_interval_minutes
+            "Starting background sync daemon (check every %d minutes)",
+            check_interval_minutes,
         )
 
         while True:
@@ -775,7 +795,9 @@ class IncrementalKnowledgeSync:
 
             except Exception as e:
                 logger.error("Background sync error: %s", e)
-                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_TIMEOUT
+                )  # Wait before retry
 
     def get_sync_status(self) -> Dict[str, Any]:
         """Get current sync status and statistics."""
@@ -848,7 +870,8 @@ if __name__ == "__main__":
         else:
             metrics = await run_incremental_sync()
             print(
-                f"Sync completed - processed {metrics.total_chunks_processed} chunks in {metrics.total_processing_time:.3f}s"
+                f"Sync completed - processed {metrics.total_chunks_processed} chunks "
+                f"in {metrics.total_processing_time:.3f}s"
             )
 
     asyncio.run(main())

@@ -1182,7 +1182,8 @@ before summarizing.
 
         # Issue #651: Log decision to continue
         logger.info(
-            "[Issue #651] Iteration %d: Completed with %d new result(s), pending_approval=%s - continuing to next iteration",
+            "[Issue #651] Iteration %d: Completed with %d new result(s), "
+            "pending_approval=%s - continuing to next iteration",
             iteration,
             len(new_results),
             has_pending_approval,

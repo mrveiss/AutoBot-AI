@@ -165,7 +165,8 @@ class CircuitBreaker:
             recent_calls = [
                 record
                 for record in self.call_history
-                if current_time - record.timestamp < CircuitBreakerDefaults.RECENT_CALLS_WINDOW
+                if current_time - record.timestamp
+                < CircuitBreakerDefaults.RECENT_CALLS_WINDOW
             ]
 
             if len(recent_calls) < self.config.min_calls_for_evaluation:
@@ -226,11 +227,16 @@ class CircuitBreaker:
             if self.state == CircuitState.HALF_OPEN:
                 self.success_count += 1
                 logger.debug(
-                    f"Circuit breaker {self.name}: Success in HALF_OPEN ({self.success_count}/{self.config.success_threshold})"
+                    "Circuit breaker %s: Success in HALF_OPEN (%d/%d)",
+                    self.name,
+                    self.success_count,
+                    self.config.success_threshold,
                 )
 
                 if self.success_count >= self.config.success_threshold:
-                    logger.info("Circuit breaker %s: Transitioning to CLOSED", self.name)
+                    logger.info(
+                        "Circuit breaker %s: Transitioning to CLOSED", self.name
+                    )
                     self.state = CircuitState.CLOSED
                     self.failure_count = 0
                     self.success_count = 0
@@ -390,7 +396,8 @@ class CircuitBreaker:
         recent_calls = [
             record
             for record in self.call_history
-            if time.time() - record.timestamp < CircuitBreakerDefaults.PERFORMANCE_WINDOW
+            if time.time() - record.timestamp
+            < CircuitBreakerDefaults.PERFORMANCE_WINDOW
         ]
 
         if not recent_calls:
@@ -410,9 +417,15 @@ class CircuitBreaker:
         p95_duration = avg_duration
         if len(durations) >= CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE:
             try:
-                quantiles = statistics.quantiles(durations, n=CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE)
-                p95_idx = CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE - 2  # 18 for n=20 (95th percentile)
-                p95_duration = quantiles[p95_idx] if len(quantiles) > p95_idx else avg_duration
+                quantiles = statistics.quantiles(
+                    durations, n=CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE
+                )
+                p95_idx = (
+                    CircuitBreakerDefaults.QUANTILE_SAMPLE_SIZE - 2
+                )  # 18 for n=20 (95th percentile)
+                p95_duration = (
+                    quantiles[p95_idx] if len(quantiles) > p95_idx else avg_duration
+                )
             except Exception:
                 p95_duration = avg_duration
 

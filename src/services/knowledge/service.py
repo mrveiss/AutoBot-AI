@@ -64,7 +64,7 @@ class ChatKnowledgeService:
         logger.info(
             "ChatKnowledgeService initialized with intent detection, "
             "conversation-aware RAG, doc_search=%s",
-            enable_doc_search
+            enable_doc_search,
         )
 
     async def retrieve_relevant_knowledge(
@@ -125,14 +125,16 @@ class ChatKnowledgeService:
                 len(filtered_results),
                 len(results),
                 score_threshold,
-                retrieval_time
+                retrieval_time,
             )
 
             return context_string, citations
 
         except Exception as e:
             # Graceful degradation - don't break chat flow
-            logger.error("Knowledge retrieval failed for query '%s...': %s", query[:50], e)
+            logger.error(
+                "Knowledge retrieval failed for query '%s...': %s", query[:50], e
+            )
             logger.debug("Returning empty knowledge context due to error")
             return "", []
 
@@ -168,7 +170,7 @@ class ChatKnowledgeService:
                     "Filtered out result (score %.3f < %s): %s...",
                     score,
                     threshold,
-                    result.content[:80]
+                    result.content[:80],
                 )
 
         return filtered
@@ -273,9 +275,15 @@ class ChatKnowledgeService:
 
         # AutoBot-specific queries
         autobot_keywords = {
-            "autobot", "how do i use", "how to use autobot",
-            "what can you do", "help me with autobot", "autobot feature",
-            "this tool", "your capability", "your feature",
+            "autobot",
+            "how do i use",
+            "how to use autobot",
+            "what can you do",
+            "help me with autobot",
+            "autobot feature",
+            "this tool",
+            "your capability",
+            "your feature",
         }
         if any(kw in query_lower for kw in autobot_keywords):
             logger.debug("[Smart Category] Selected: autobot_knowledge")
@@ -283,10 +291,28 @@ class ChatKnowledgeService:
 
         # System/technical queries
         system_keywords = {
-            "command", "terminal", "bash", "shell", "linux", "install",
-            "configure", "config", "setup", "man page", "syntax",
-            "chmod", "chown", "grep", "awk", "sed", "systemctl",
-            "docker", "kubernetes", "service", "daemon", "process",
+            "command",
+            "terminal",
+            "bash",
+            "shell",
+            "linux",
+            "install",
+            "configure",
+            "config",
+            "setup",
+            "man page",
+            "syntax",
+            "chmod",
+            "chown",
+            "grep",
+            "awk",
+            "sed",
+            "systemctl",
+            "docker",
+            "kubernetes",
+            "service",
+            "daemon",
+            "process",
         }
         if any(kw in query_lower for kw in system_keywords):
             logger.debug("[Smart Category] Selected: system_knowledge")
@@ -294,8 +320,13 @@ class ChatKnowledgeService:
 
         # User preference queries
         user_keywords = {
-            "my preference", "i like", "i prefer", "remember that",
-            "last time", "as i mentioned", "my settings",
+            "my preference",
+            "i like",
+            "i prefer",
+            "remember that",
+            "last time",
+            "as i mentioned",
+            "my settings",
         }
         if any(kw in query_lower for kw in user_keywords):
             logger.debug("[Smart Category] Selected: user_knowledge")
@@ -316,6 +347,7 @@ class ChatKnowledgeService:
         Determine if knowledge retrieval should be skipped.
 
         Issue #665: Extracted from smart_retrieve_knowledge to reduce function length.
+        Issue #750: Deduplicated from conversation_aware_retrieve.
 
         Args:
             intent_result: Query intent detection result
@@ -329,10 +361,9 @@ class ChatKnowledgeService:
 
         if not intent_result.should_use_knowledge:
             logger.info(
-                "[Smart RAG] Skipping retrieval - intent=%s, confidence=%.2f, reason=%s",
+                "[RAG] Skipping retrieval - intent=%s, confidence=%.2f",
                 intent_result.intent.value,
                 intent_result.confidence,
-                intent_result.reasoning
             )
             return True
 
@@ -381,7 +412,7 @@ class ChatKnowledgeService:
             "[Smart RAG] Retrieving - intent=%s, confidence=%.2f, categories=%s",
             intent_result.intent.value,
             intent_result.confidence,
-            effective_categories or "all"
+            effective_categories or "all",
         )
 
         context_string, citations = await self.retrieve_relevant_knowledge(
@@ -394,7 +425,7 @@ class ChatKnowledgeService:
         logger.info(
             "[Smart RAG] Completed in %.3fs - %d citations found",
             time.time() - start_time,
-            len(citations)
+            len(citations),
         )
 
         return context_string, citations, intent_result
@@ -439,43 +470,15 @@ class ChatKnowledgeService:
                 "[Conversation RAG] Query enhanced: '%s...' → '%s...' (entities: %s)",
                 query[:50],
                 enhanced_query.enhanced_query[:80],
-                enhanced_query.context_entities
+                enhanced_query.context_entities,
             )
         else:
             logger.debug(
                 "[Conversation RAG] No enhancement needed for query: '%s...'",
-                query[:50]
+                query[:50],
             )
 
         return enhanced_query
-
-    def _should_skip_retrieval(
-        self,
-        intent_result: QueryIntentResult,
-        force_retrieval: bool,
-    ) -> bool:
-        """
-        Check if knowledge retrieval should be skipped based on intent.
-
-        Issue #665: Extracted from conversation_aware_retrieve for clarity.
-
-        Args:
-            intent_result: Detected query intent
-            force_retrieval: If True, never skip retrieval
-
-        Returns:
-            True if retrieval should be skipped, False otherwise
-        """
-        if force_retrieval:
-            return False
-        if not intent_result.should_use_knowledge:
-            logger.info(
-                "[Conversation RAG] Skipping - intent=%s, confidence=%.2f",
-                intent_result.intent.value,
-                intent_result.confidence
-            )
-            return True
-        return False
 
     def _get_effective_categories(
         self,
@@ -569,7 +572,7 @@ class ChatKnowledgeService:
             time.time() - start_time,
             len(citations),
             enhanced_query.enhancement_applied,
-            effective_categories or "all"
+            effective_categories or "all",
         )
         return context_string, citations, intent_result, enhanced_query
 
@@ -604,8 +607,7 @@ class ChatKnowledgeService:
             # Check if query is about documentation
             if not self.doc_searcher.is_documentation_query(query):
                 logger.debug(
-                    "[Doc Search] Query not documentation-related: '%s...'",
-                    query[:50]
+                    "[Doc Search] Query not documentation-related: '%s...'", query[:50]
                 )
                 return "", []
 
@@ -628,7 +630,7 @@ class ChatKnowledgeService:
                 "[Doc Search] Found %d documentation chunks in %.3fs for: '%s...'",
                 len(results),
                 retrieval_time,
-                query[:50]
+                query[:50],
             )
 
             return context, results

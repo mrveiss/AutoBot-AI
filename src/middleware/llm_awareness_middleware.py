@@ -75,9 +75,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
         """Check if request should have awareness context injected (Issue #337)."""
         if request.method != "POST":
             return False
-        return any(
-            request.url.path.startswith(path) for path in self.enable_for_paths
-        )
+        return any(request.url.path.startswith(path) for path in self.enable_for_paths)
 
     async def _ensure_awareness_initialized(self) -> bool:
         """Initialize awareness module if needed (Issue #337 - extracted helper)."""
@@ -124,7 +122,9 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             modified_body = await self._inject_awareness_into_field(request_data, field)
             request._body = modified_body
             _update_request_headers(request, modified_body)
-            logger.debug("Injected awareness context for %s in %s", field, request.url.path)
+            logger.debug(
+                "Injected awareness context for %s in %s", field, request.url.path
+            )
 
         except Exception as e:
             logger.error("Error injecting awareness context: %s", e)
@@ -215,7 +215,9 @@ Active capabilities ({context['current_capabilities']['count']}):"""
             # Add capability categories using list + join (O(n)) instead of += (O(n²))
             cap_lines = [
                 f"- {category.title()}: {len(caps)} capabilities"
-                for category, caps in context["current_capabilities"]["categories"].items()
+                for category, caps in context["current_capabilities"][
+                    "categories"
+                ].items()
                 if caps
             ]
             prefix += "\n" + "\n".join(cap_lines) if cap_lines else ""

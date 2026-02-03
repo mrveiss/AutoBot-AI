@@ -71,7 +71,9 @@ class ReconcilerService:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         # Default: 3 missed heartbeats = unhealthy
-        self._heartbeat_timeout = settings.heartbeat_interval * settings.unhealthy_threshold
+        self._heartbeat_timeout = (
+            settings.heartbeat_interval * settings.unhealthy_threshold
+        )
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
         self._remediation_tracker: Dict[str, Dict] = {}
         # Track service restart attempts: {(node_id, service_name): {"count": int, "last_attempt": datetime}}
@@ -116,8 +118,9 @@ class ReconcilerService:
 
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats and network reachability."""
-        from services.database import db_service
         from sqlalchemy import or_
+
+        from services.database import db_service
 
         async with db_service.session() as db:
             timeout_setting = await db.execute(
@@ -133,18 +136,15 @@ class ReconcilerService:
             result = await db.execute(
                 select(Node)
                 .where(
-                    Node.status.in_([
-                        NodeStatus.ONLINE.value,
-                        NodeStatus.DEGRADED.value,
-                        NodeStatus.OFFLINE.value,
-                    ])
-                )
-                .where(
-                    or_(
-                        Node.last_heartbeat < cutoff,
-                        Node.last_heartbeat.is_(None)
+                    Node.status.in_(
+                        [
+                            NodeStatus.ONLINE.value,
+                            NodeStatus.DEGRADED.value,
+                            NodeStatus.OFFLINE.value,
+                        ]
                     )
                 )
+                .where(or_(Node.last_heartbeat < cutoff, Node.last_heartbeat.is_(None)))
             )
             stale_nodes = result.scalars().all()
 
@@ -164,7 +164,10 @@ class ReconcilerService:
                             event_type=EventType.HEALTH_CHECK.value,
                             severity=EventSeverity.WARNING.value,
                             message=f"Node {node.hostname} reachable but agent not responding",
-                            details={"old_status": old_status, "reason": "no_heartbeat"},
+                            details={
+                                "old_status": old_status,
+                                "reason": "no_heartbeat",
+                            },
                         )
                         db.add(event)
                         logger.info(
@@ -206,7 +209,12 @@ class ReconcilerService:
         """Check if a host responds to ping."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ping", "-c", "1", "-W", str(timeout), ip_address,
+                "ping",
+                "-c",
+                "1",
+                "-W",
+                str(timeout),
+                ip_address,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -222,6 +230,7 @@ class ReconcilerService:
         """Broadcast node status change via WebSocket."""
         try:
             from api.websocket import ws_manager
+
             await ws_manager.send_node_status(node_id, status, hostname)
         except Exception as e:
             logger.debug("Failed to broadcast node status: %s", e)
@@ -232,7 +241,10 @@ class ReconcilerService:
         """Broadcast remediation event via WebSocket."""
         try:
             from api.websocket import ws_manager
-            await ws_manager.send_remediation_event(node_id, event_type, success, message)
+
+            await ws_manager.send_remediation_event(
+                node_id, event_type, success, message
+            )
         except Exception as e:
             logger.debug("Failed to broadcast remediation event: %s", e)
 
@@ -283,7 +295,9 @@ class ReconcilerService:
         now = datetime.utcnow()
 
         # Check remediation tracker
-        tracker = self._remediation_tracker.get(node_id, {"count": 0, "last_attempt": None})
+        tracker = self._remediation_tracker.get(
+            node_id, {"count": 0, "last_attempt": None}
+        )
 
         # Check cooldown
         if tracker["last_attempt"]:
@@ -291,7 +305,8 @@ class ReconcilerService:
             if elapsed < REMEDIATION_COOLDOWN:
                 logger.debug(
                     "Node %s in remediation cooldown (%d seconds remaining)",
-                    node_id, REMEDIATION_COOLDOWN - elapsed
+                    node_id,
+                    REMEDIATION_COOLDOWN - elapsed,
                 )
                 return False
 
@@ -299,28 +314,35 @@ class ReconcilerService:
         if tracker["count"] >= MAX_REMEDIATION_ATTEMPTS:
             logger.warning(
                 "Node %s exceeded max remediation attempts (%d). Human intervention required.",
-                node_id, MAX_REMEDIATION_ATTEMPTS
+                node_id,
+                MAX_REMEDIATION_ATTEMPTS,
             )
             # Create event for human attention
             event = NodeEvent(
-    event_id=str(
-        uuid.uuid4())[
-            :16],
-            node_id=node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
-            severity=EventSeverity.WARNING.value,
-            message=f"Node {node.hostname} requires human intervention after {MAX_REMEDIATION_ATTEMPTS} failed remediation attempts",
-            details={
-                "attempts": tracker["count"],
-                "action_required": "manual_review"},
-                 )
+                event_id=str(uuid.uuid4())[:16],
+                node_id=node_id,
+                event_type=EventType.REMEDIATION_COMPLETED.value,
+                severity=EventSeverity.WARNING.value,
+                message=(
+                    f"Node {node.hostname} requires human intervention after "
+                    f"{MAX_REMEDIATION_ATTEMPTS} failed remediation attempts"
+                ),
+                details={
+                    "attempts": tracker["count"],
+                    "action_required": "manual_review",
+                },
+            )
             db.add(event)
             await db.commit()
             return False
 
         # Attempt remediation - restart the SLM agent service
-        logger.info("Attempting remediation for node %s (attempt %d/%d)",
-                   node_id, tracker["count"] + 1, MAX_REMEDIATION_ATTEMPTS)
+        logger.info(
+            "Attempting remediation for node %s (attempt %d/%d)",
+            node_id,
+            tracker["count"] + 1,
+            MAX_REMEDIATION_ATTEMPTS,
+        )
 
         # Create remediation started event
         event = NodeEvent(
@@ -336,7 +358,9 @@ class ReconcilerService:
 
         # Broadcast remediation started via WebSocket
         await self._broadcast_remediation_event(
-            node_id, "started", message=f"Attempting to restart SLM agent on {node.hostname}"
+            node_id,
+            "started",
+            message=f"Attempting to restart SLM agent on {node.hostname}",
         )
 
         # Try to restart the SLM agent via SSH
@@ -344,7 +368,7 @@ class ReconcilerService:
             node.ip_address,
             node.ssh_user or "autobot",
             node.ssh_port or 22,
-            "slm-agent"
+            "slm-agent",
         )
 
         # Update tracker
@@ -366,8 +390,10 @@ class ReconcilerService:
             logger.info("Remediation successful for node %s", node_id)
             # Broadcast success via WebSocket
             await self._broadcast_remediation_event(
-                node_id, "completed", success=True,
-                message=f"Successfully restarted SLM agent on {node.hostname}"
+                node_id,
+                "completed",
+                success=True,
+                message=f"Successfully restarted SLM agent on {node.hostname}",
             )
         else:
             event = NodeEvent(
@@ -376,14 +402,21 @@ class ReconcilerService:
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.WARNING.value,
                 message=f"Failed to restart SLM agent on {node.hostname}",
-                details={"action": "restart_agent", "success": False,
-                        "attempts_remaining": MAX_REMEDIATION_ATTEMPTS - tracker["count"] - 1},
+                details={
+                    "action": "restart_agent",
+                    "success": False,
+                    "attempts_remaining": MAX_REMEDIATION_ATTEMPTS
+                    - tracker["count"]
+                    - 1,
+                },
             )
             logger.warning("Remediation failed for node %s", node_id)
             # Broadcast failure via WebSocket
             await self._broadcast_remediation_event(
-                node_id, "completed", success=False,
-                message=f"Failed to restart SLM agent on {node.hostname}"
+                node_id,
+                "completed",
+                success=False,
+                message=f"Failed to restart SLM agent on {node.hostname}",
             )
 
         db.add(event)
@@ -405,11 +438,16 @@ class ReconcilerService:
             # Use SSH with BatchMode to avoid password prompts
             ssh_cmd = [
                 "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-o", "BatchMode=yes",
-                "-p", str(ssh_port),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "BatchMode=yes",
+                "-p",
+                str(ssh_port),
                 f"{ssh_user}@{ip_address}",
                 f"sudo systemctl restart {service_name}",
             ]
@@ -426,16 +464,14 @@ class ReconcilerService:
             )
 
             if proc.returncode == 0:
-                logger.info(
-                    "Successfully restarted %s on %s",
-                    service_name, ip_address
-                )
+                logger.info("Successfully restarted %s on %s", service_name, ip_address)
                 return True
             else:
                 logger.warning(
                     "Failed to restart %s on %s: %s",
-                    service_name, ip_address,
-                    stderr.decode("utf-8", errors="replace").strip()
+                    service_name,
+                    ip_address,
+                    stderr.decode("utf-8", errors="replace").strip(),
                 )
                 return False
 
@@ -462,7 +498,8 @@ class ReconcilerService:
                 del self._service_remediation_tracker[key]
                 logger.info(
                     "Reset service remediation tracker for %s on %s",
-                    service_name, node_id
+                    service_name,
+                    node_id,
                 )
         else:
             keys_to_remove = [
@@ -511,7 +548,8 @@ class ReconcilerService:
                 if await self._is_remediation_suppressed(db, service.node_id):
                     logger.debug(
                         "Skipping service remediation for %s on %s - maintenance window",
-                        service.service_name, service.node_id
+                        service.service_name,
+                        service.node_id,
                     )
                     continue
 
@@ -549,8 +587,9 @@ class ReconcilerService:
             if elapsed < SERVICE_REMEDIATION_COOLDOWN:
                 logger.debug(
                     "Service %s on %s in remediation cooldown (%d seconds remaining)",
-                    service.service_name, node.node_id,
-                    SERVICE_REMEDIATION_COOLDOWN - elapsed
+                    service.service_name,
+                    node.node_id,
+                    SERVICE_REMEDIATION_COOLDOWN - elapsed,
                 )
                 return False
 
@@ -559,7 +598,9 @@ class ReconcilerService:
             logger.warning(
                 "Service %s on %s exceeded max restart attempts (%d). "
                 "Human intervention required.",
-                service.service_name, node.node_id, MAX_SERVICE_RESTART_ATTEMPTS
+                service.service_name,
+                node.node_id,
+                MAX_SERVICE_RESTART_ATTEMPTS,
             )
             # Create event for human attention
             event = NodeEvent(
@@ -584,14 +625,18 @@ class ReconcilerService:
         # Attempt restart
         logger.info(
             "Attempting to restart service %s on %s (attempt %d/%d)",
-            service.service_name, node.node_id,
-            tracker["count"] + 1, MAX_SERVICE_RESTART_ATTEMPTS
+            service.service_name,
+            node.node_id,
+            tracker["count"] + 1,
+            MAX_SERVICE_RESTART_ATTEMPTS,
         )
 
         # Broadcast restart starting
         await self._broadcast_service_remediation(
-            node.node_id, service.service_name, "started",
-            message=f"Attempting to restart {service.service_name} on {node.hostname}"
+            node.node_id,
+            service.service_name,
+            "started",
+            message=f"Attempting to restart {service.service_name} on {node.hostname}",
         )
 
         # Try to restart via SSH
@@ -613,26 +658,33 @@ class ReconcilerService:
             service.status = ServiceStatus.RUNNING.value
             logger.info(
                 "Successfully restarted service %s on %s",
-                service.service_name, node.node_id
+                service.service_name,
+                node.node_id,
             )
             await self._broadcast_service_remediation(
-                node.node_id, service.service_name, "completed",
+                node.node_id,
+                service.service_name,
+                "completed",
                 success=True,
-                message=f"Successfully restarted {service.service_name}"
+                message=f"Successfully restarted {service.service_name}",
             )
         else:
             logger.warning(
                 "Failed to restart service %s on %s (attempt %d/%d)",
-                service.service_name, node.node_id,
-                tracker["count"] + 1, MAX_SERVICE_RESTART_ATTEMPTS
+                service.service_name,
+                node.node_id,
+                tracker["count"] + 1,
+                MAX_SERVICE_RESTART_ATTEMPTS,
             )
             await self._broadcast_service_remediation(
-                node.node_id, service.service_name, "completed",
+                node.node_id,
+                service.service_name,
+                "completed",
                 success=False,
                 message=(
                     f"Failed to restart {service.service_name} "
                     f"(attempt {tracker['count'] + 1}/{MAX_SERVICE_RESTART_ATTEMPTS})"
-                )
+                ),
             )
 
         await db.commit()
@@ -649,11 +701,13 @@ class ReconcilerService:
         """Broadcast service remediation event via WebSocket."""
         try:
             from api.websocket import ws_manager
+
             await ws_manager.send_service_status(
-                node_id, service_name,
-                status="restarting" if event_type == "started" else (
-                    "running" if success else "failed"
-                ),
+                node_id,
+                service_name,
+                status="restarting"
+                if event_type == "started"
+                else ("running" if success else "failed"),
                 action="auto_restart",
                 success=success if event_type == "completed" else None,
                 message=message,
@@ -686,7 +740,9 @@ class ReconcilerService:
                 select(Setting).where(Setting.key == "rollback_window_seconds")
             )
             window_setting = rollback_window_setting.scalar_one_or_none()
-            rollback_window = int(window_setting.value) if window_setting else DEFAULT_ROLLBACK_WINDOW
+            rollback_window = (
+                int(window_setting.value) if window_setting else DEFAULT_ROLLBACK_WINDOW
+            )
 
             cutoff = datetime.utcnow() - timedelta(seconds=rollback_window)
 
@@ -720,12 +776,15 @@ class ReconcilerService:
             return
 
         # Check if already rolled back
-        if recent_deployment.extra_data and recent_deployment.extra_data.get("auto_rollback_attempted"):
+        if recent_deployment.extra_data and recent_deployment.extra_data.get(
+            "auto_rollback_attempted"
+        ):
             return
 
         logger.info(
             "Node %s degraded after recent deployment %s - triggering auto-rollback",
-            node.node_id, recent_deployment.deployment_id
+            node.node_id,
+            recent_deployment.deployment_id,
         )
 
         # Create rollback started event
@@ -749,7 +808,7 @@ class ReconcilerService:
             node.node_id,
             recent_deployment.deployment_id,
             "started",
-            message=f"Auto-rollback triggered due to {node.status} status after deployment"
+            message=f"Auto-rollback triggered due to {node.status} status after deployment",
         )
 
         # Perform the rollback
@@ -774,7 +833,7 @@ class ReconcilerService:
                 recent_deployment.deployment_id,
                 "completed",
                 success=True,
-                message="Deployment rolled back successfully"
+                message="Deployment rolled back successfully",
             )
         else:
             event = NodeEvent(
@@ -794,7 +853,7 @@ class ReconcilerService:
                 recent_deployment.deployment_id,
                 "completed",
                 success=False,
-                message="Rollback failed - manual intervention required"
+                message="Rollback failed - manual intervention required",
             )
 
         db.add(event)
@@ -826,14 +885,17 @@ class ReconcilerService:
 
             logger.info(
                 "Auto-rollback completed for deployment %s on node %s - removed roles: %s",
-                deployment.deployment_id, node.node_id, deployment.roles
+                deployment.deployment_id,
+                node.node_id,
+                deployment.roles,
             )
             return True
 
         except Exception as e:
             logger.error(
                 "Auto-rollback failed for deployment %s: %s",
-                deployment.deployment_id, e
+                deployment.deployment_id,
+                e,
             )
             # Mark that rollback was attempted even if it failed
             deployment.extra_data = {
@@ -855,6 +917,7 @@ class ReconcilerService:
         """Broadcast rollback event via WebSocket."""
         try:
             from api.websocket import ws_manager
+
             await ws_manager.broadcast(
                 "events:global",
                 {
@@ -872,12 +935,11 @@ class ReconcilerService:
         except Exception as e:
             logger.debug("Failed to broadcast rollback event: %s", e)
 
-    async def _is_remediation_suppressed(
-        self, db: AsyncSession, node_id: str
-    ) -> bool:
+    async def _is_remediation_suppressed(self, db: AsyncSession, node_id: str) -> bool:
         """Check if remediation is suppressed for a node due to maintenance window."""
         try:
             from api.maintenance import should_suppress_remediation
+
             return await should_suppress_remediation(db, node_id)
         except ImportError:
             return False
@@ -897,9 +959,7 @@ class ReconcilerService:
 
             result = await db.execute(
                 select(Node).where(
-                    Node.status.in_(
-                        [NodeStatus.DEGRADED.value, NodeStatus.ERROR.value]
-                    )
+                    Node.status.in_([NodeStatus.DEGRADED.value, NodeStatus.ERROR.value])
                 )
             )
             degraded_nodes = result.scalars().all()
@@ -949,14 +1009,16 @@ class ReconcilerService:
 
             # Sync discovered services to database (Issue #728)
             # Support both "discovered_services" (v1.1.0+) and "services" (v1.0.0) keys
-            services_data = extra_data.get("discovered_services") or extra_data.get("services")
+            services_data = extra_data.get("discovered_services") or extra_data.get(
+                "services"
+            )
             if services_data:
-                await self._sync_discovered_services(
-                    db, node.node_id, services_data
-                )
+                await self._sync_discovered_services(db, node.node_id, services_data)
 
         old_status = node.status
-        new_status = self._calculate_node_status(cpu_percent, memory_percent, disk_percent)
+        new_status = self._calculate_node_status(
+            cpu_percent, memory_percent, disk_percent
+        )
 
         # Create event if status changed
         if old_status != new_status:
@@ -982,8 +1044,7 @@ class ReconcilerService:
             )
             db.add(event)
             logger.info(
-                "Node %s status changed: %s -> %s",
-                node.node_id, old_status, new_status
+                "Node %s status changed: %s -> %s", node.node_id, old_status, new_status
             )
             # Broadcast status change via WebSocket
             await self._broadcast_node_status(node.node_id, new_status, node.hostname)
@@ -996,9 +1057,16 @@ class ReconcilerService:
         # Broadcast health update via WebSocket
         try:
             from api.websocket import ws_manager
+
             await ws_manager.send_health_update(
-                node.node_id, cpu_percent, memory_percent, disk_percent, new_status,
-                last_heartbeat=node.last_heartbeat.isoformat() if node.last_heartbeat else None
+                node.node_id,
+                cpu_percent,
+                memory_percent,
+                disk_percent,
+                new_status,
+                last_heartbeat=node.last_heartbeat.isoformat()
+                if node.last_heartbeat
+                else None,
             )
         except Exception as e:
             logger.debug("Failed to broadcast health update: %s", e)

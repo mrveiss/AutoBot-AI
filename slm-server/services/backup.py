@@ -11,8 +11,6 @@ for stateful services (Redis, PostgreSQL, etc).
 import asyncio
 import hashlib
 import logging
-import os
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -26,7 +24,9 @@ from models.database import Backup, BackupStatus, Node
 logger = logging.getLogger(__name__)
 
 # Backup storage directory
-BACKUP_STORAGE_DIR = Path(settings.backup_dir if hasattr(settings, 'backup_dir') else "/var/lib/slm/backups")
+BACKUP_STORAGE_DIR = Path(
+    settings.backup_dir if hasattr(settings, "backup_dir") else "/var/lib/slm/backups"
+)
 
 
 class BackupService:
@@ -51,9 +51,7 @@ class BackupService:
         ssh_port = node.ssh_port or 22
 
         # Update backup status to in_progress
-        result = await db.execute(
-            select(Backup).where(Backup.backup_id == backup_id)
-        )
+        result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
         backup = result.scalar_one_or_none()
         if not backup:
             return False, "Backup not found"
@@ -67,8 +65,10 @@ class BackupService:
             # Use REDISCLI_AUTH env var to avoid shell escaping issues with special chars
             redis_auth_prefix = ""
             auth_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'"
+                host,
+                ssh_user,
+                ssh_port,
+                "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'",
             )
             success, auth_output = await self._run_command(auth_cmd, timeout=10)
             redis_password = auth_output.strip() if success else ""
@@ -78,8 +78,10 @@ class BackupService:
 
             # Get Redis data directory and filename using env var for auth
             config_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                f"{redis_auth_prefix} redis-cli CONFIG GET dir && {redis_auth_prefix} redis-cli CONFIG GET dbfilename"
+                host,
+                ssh_user,
+                ssh_port,
+                f"{redis_auth_prefix} redis-cli CONFIG GET dir && {redis_auth_prefix} redis-cli CONFIG GET dbfilename",
             )
             success, config_output = await self._run_command(config_cmd, timeout=15)
 
@@ -87,7 +89,9 @@ class BackupService:
             redis_dir = "/var/lib/redis"  # default fallback
             redis_dbfilename = "dump.rdb"  # default fallback
             if success:
-                lines = [l.strip() for l in config_output.strip().split('\n') if l.strip()]
+                lines = [
+                    l.strip() for l in config_output.strip().split("\n") if l.strip()
+                ]
                 for i, line in enumerate(lines):
                     if line == "dir" and i + 1 < len(lines):
                         redis_dir = lines[i + 1]
@@ -100,8 +104,7 @@ class BackupService:
             # Step 1: Trigger BGSAVE
             logger.info("Starting Redis BGSAVE on %s", host)
             bgsave_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                f"{redis_auth_prefix} redis-cli BGSAVE"
+                host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli BGSAVE"
             )
             success, output = await self._run_command(bgsave_cmd, timeout=30)
             if not success:
@@ -113,20 +116,24 @@ class BackupService:
 
             # Step 3: Get RDB file size
             size_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                f"stat -c '%s' {rdb_path} 2>/dev/null || echo '0'"
+                host,
+                ssh_user,
+                ssh_port,
+                f"stat -c '%s' {rdb_path} 2>/dev/null || echo '0'",
             )
             success, size_output = await self._run_command(size_cmd, timeout=15)
             size_bytes = 0
             if success:
-                size_str = size_output.strip().split('\n')[-1]
+                size_str = size_output.strip().split("\n")[-1]
                 if size_str.isdigit():
                     size_bytes = int(size_str)
 
             # Step 4: Calculate checksum
             checksum_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                f"sha256sum {rdb_path} 2>/dev/null | cut -d' ' -f1"
+                host,
+                ssh_user,
+                ssh_port,
+                f"sha256sum {rdb_path} 2>/dev/null | cut -d' ' -f1",
             )
             success, checksum = await self._run_command(checksum_cmd, timeout=60)
             checksum = checksum.strip() if success else None
@@ -137,9 +144,13 @@ class BackupService:
             backup_path = BACKUP_STORAGE_DIR / backup_filename
 
             scp_cmd = [
-                "/usr/bin/scp", "-o", "StrictHostKeyChecking=no",
-                "-o", "ConnectTimeout=30",
-                "-P", str(ssh_port),
+                "/usr/bin/scp",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "ConnectTimeout=30",
+                "-P",
+                str(ssh_port),
                 f"{ssh_user}@{host}:{rdb_path}",
                 str(backup_path),
             ]
@@ -162,13 +173,16 @@ class BackupService:
                 if checksum and local_checksum != checksum:
                     logger.warning(
                         "Checksum mismatch: remote=%s, local=%s",
-                        checksum, local_checksum
+                        checksum,
+                        local_checksum,
                     )
                     backup.extra_data = {"checksum_warning": "mismatch detected"}
 
                 backup.status = BackupStatus.COMPLETED.value
                 backup.backup_path = str(backup_path)
-                backup.size_bytes = backup_path.stat().st_size if backup_path.exists() else size_bytes
+                backup.size_bytes = (
+                    backup_path.stat().st_size if backup_path.exists() else size_bytes
+                )
                 backup.checksum = local_checksum or checksum
                 backup.extra_data = {
                     "location": "local",
@@ -181,7 +195,9 @@ class BackupService:
 
             logger.info(
                 "Backup %s completed: %s bytes, checksum=%s",
-                backup_id, backup.size_bytes, backup.checksum
+                backup_id,
+                backup.size_bytes,
+                backup.checksum,
             )
             return True, "Backup completed successfully"
 
@@ -201,9 +217,7 @@ class BackupService:
 
         Returns (success, message).
         """
-        result = await db.execute(
-            select(Backup).where(Backup.backup_id == backup_id)
-        )
+        result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
         backup = result.scalar_one_or_none()
         if not backup:
             return False, "Backup not found"
@@ -219,8 +233,7 @@ class BackupService:
             # Step 1: Stop Redis
             logger.info("Stopping Redis on %s for restore", host)
             stop_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                "sudo systemctl stop redis-server"
+                host, ssh_user, ssh_port, "sudo systemctl stop redis-server"
             )
             await self._run_command(stop_cmd, timeout=30)
 
@@ -229,8 +242,11 @@ class BackupService:
             if backup.extra_data and backup.extra_data.get("location") == "local":
                 # Copy from SLM storage
                 scp_cmd = [
-                    "/usr/bin/scp", "-o", "StrictHostKeyChecking=no",
-                    "-P", str(ssh_port),
+                    "/usr/bin/scp",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-P",
+                    str(ssh_port),
                     backup_path,
                     f"{ssh_user}@{host}:/tmp/restore.rdb",
                 ]
@@ -240,9 +256,11 @@ class BackupService:
 
                 # Move file to Redis data directory
                 mv_cmd = self._build_ssh_command(
-                    host, ssh_user, ssh_port,
+                    host,
+                    ssh_user,
+                    ssh_port,
                     "sudo mv /tmp/restore.rdb /var/lib/redis/dump.rdb && "
-                    "sudo chown redis:redis /var/lib/redis/dump.rdb"
+                    "sudo chown redis:redis /var/lib/redis/dump.rdb",
                 )
                 success, output = await self._run_command(mv_cmd, timeout=30)
                 if not success:
@@ -250,8 +268,7 @@ class BackupService:
             else:
                 # Backup is on the same node, just verify it exists
                 verify_cmd = self._build_ssh_command(
-                    host, ssh_user, ssh_port,
-                    f"test -f {backup_path} && echo 'exists'"
+                    host, ssh_user, ssh_port, f"test -f {backup_path} && echo 'exists'"
                 )
                 success, output = await self._run_command(verify_cmd, timeout=10)
                 if not success or "exists" not in output:
@@ -260,8 +277,7 @@ class BackupService:
             # Step 3: Start Redis
             logger.info("Starting Redis on %s after restore", host)
             start_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                "sudo systemctl start redis-server"
+                host, ssh_user, ssh_port, "sudo systemctl start redis-server"
             )
             success, output = await self._run_command(start_cmd, timeout=30)
             if not success:
@@ -271,8 +287,7 @@ class BackupService:
             await asyncio.sleep(3)  # Give Redis time to load data
 
             verify_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                "redis-cli PING && redis-cli DBSIZE"
+                host, ssh_user, ssh_port, "redis-cli PING && redis-cli DBSIZE"
             )
             success, verify_output = await self._run_command(verify_cmd, timeout=15)
             if not success or "PONG" not in verify_output:
@@ -348,8 +363,7 @@ class BackupService:
 
         while (datetime.utcnow() - start_time).seconds < max_wait:
             cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port,
-                f"{redis_auth_prefix} redis-cli LASTSAVE"
+                host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli LASTSAVE"
             )
             success, output = await self._run_command(cmd, timeout=10)
 
@@ -379,24 +393,25 @@ class BackupService:
         logger.error("Backup %s failed: %s", backup.backup_id, error)
         return False, error
 
-    def _build_ssh_command(
-        self, host: str, user: str, port: int, command: str
-    ) -> list:
+    def _build_ssh_command(self, host: str, user: str, port: int, command: str) -> list:
         """Build SSH command list."""
         return [
             "/usr/bin/ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=15",
-            "-o", "BatchMode=yes",
-            "-p", str(port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=15",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(port),
             f"{user}@{host}",
             command,
         ]
 
-    async def _run_command(
-        self, cmd: list, timeout: int = 60
-    ) -> Tuple[bool, str]:
+    async def _run_command(self, cmd: list, timeout: int = 60) -> Tuple[bool, str]:
         """Run a command and return (success, output)."""
         try:
             process = await asyncio.create_subprocess_exec(
@@ -404,9 +419,7 @@ class BackupService:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            stdout, _ = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
             output = stdout.decode("utf-8", errors="replace")
             return process.returncode == 0, output
         except asyncio.TimeoutError:

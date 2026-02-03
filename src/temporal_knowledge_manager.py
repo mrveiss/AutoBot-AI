@@ -158,9 +158,7 @@ class TemporalKnowledgeManager:
             return KnowledgePriority.CRITICAL
 
         # High priority content (Issue #326: O(1) lookups)
-        if any(
-            keyword in category for keyword in HIGH_CATEGORY_KEYWORDS
-        ):
+        if any(keyword in category for keyword in HIGH_CATEGORY_KEYWORDS):
             return KnowledgePriority.HIGH
         if any(keyword in source_path for keyword in HIGH_PATH_KEYWORDS):
             return KnowledgePriority.HIGH
@@ -307,7 +305,7 @@ class TemporalKnowledgeManager:
 
             results = await asyncio.gather(
                 *[delete_content(cid) for cid in job.content_ids],
-                return_exceptions=True
+                return_exceptions=True,
             )
 
             # Process results and update temporal tracking
@@ -452,7 +450,9 @@ class TemporalKnowledgeManager:
 
                     if invalidation_jobs or refresh_candidates:
                         logger.info(
-                            f"Temporal processing: {len(invalidation_jobs)} invalidations, {len(refresh_candidates)} refreshes"
+                            "Temporal processing: %d invalidations, %d refreshes",
+                            len(invalidation_jobs),
+                            len(refresh_candidates),
                         )
 
                 except asyncio.CancelledError:
@@ -460,7 +460,9 @@ class TemporalKnowledgeManager:
                     break
                 except Exception as e:
                     logger.error("Temporal background processing error: %s", e)
-                    await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retry
+                    await asyncio.sleep(
+                        TimingConstants.STANDARD_TIMEOUT
+                    )  # Wait before retry
 
         finally:
             self.is_running = False

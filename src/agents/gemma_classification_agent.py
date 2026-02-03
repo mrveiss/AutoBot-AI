@@ -15,7 +15,6 @@ import aiohttp
 from src.agents.classification_agent import ClassificationResult
 from src.autobot_types import TaskComplexity
 from src.config.ssot_config import (
-    AgentConfigurationError,
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -58,7 +57,9 @@ class GemmaClassificationAgent(StandardizedAgent):
 
         logger.info(
             "GemmaClassificationAgent initialized with provider=%s, endpoint=%s, model=%s",
-            self.llm_provider, self.llm_endpoint, self.model_name
+            self.llm_provider,
+            self.llm_endpoint,
+            self.model_name,
         )
 
         self.capabilities = [
@@ -90,7 +91,12 @@ class GemmaClassificationAgent(StandardizedAgent):
 
     def _initialize_classification_prompt(self):
         """Initialize the optimized classification prompt for Gemma."""
-        self.classification_prompt = """You are an expert classification agent for AutoBot. Analyze the user request and respond with JSON ONLY.
+        self.classification_prompt = (
+            (
+                "You are an expert classification agent for AutoBot. "
+                "Analyze the user request and respond with JSON ONLY."
+            )
+            + """
 
 COMPLEXITY LEVELS:
 - SIMPLE: Basic questions, definitions, greetings, explanations from knowledge base
@@ -119,6 +125,7 @@ Respond with valid JSON:
     "tools_required": false,
     "web_browsing_needed": false
 }}"""
+        )
 
     async def classify_request(self, user_message: str) -> ClassificationResult:
         """Classify user request using Gemma models with fallback."""
@@ -207,7 +214,9 @@ Respond with valid JSON:
             timeout=timeout,
         ) as response:
             if response.status != 200:
-                logger.warning("Gemma model %s returned status %s", model, response.status)
+                logger.warning(
+                    "Gemma model %s returned status %s", model, response.status
+                )
                 return None
 
             response_text = await self._read_streaming_response(response)

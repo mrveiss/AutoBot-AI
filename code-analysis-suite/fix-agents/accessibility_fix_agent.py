@@ -10,13 +10,12 @@ Focuses on:
 - WCAG 2.1 AA compliance improvements
 """
 
-import os
-import re
 import json
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 class AccessibilityFixAgent:
@@ -491,8 +490,11 @@ class AccessibilityFixAgent:
 """
 
         for fix_record in self.report_data["fixes_applied"]:
+            init_score = fix_record["initial_score"]
+            final_score = fix_record["final_score"]
+            improvement = fix_record["accessibility_score_improvement"]
             report_content += f"""### {fix_record['file']}
-**Accessibility Score**: {fix_record['initial_score']} → {fix_record['final_score']} (+{fix_record['accessibility_score_improvement']})
+**Accessibility Score**: {init_score} → {final_score} (+{improvement})
 **Backup**: {fix_record['backup']}
 
 **Fixes Applied**:

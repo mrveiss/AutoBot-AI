@@ -23,6 +23,13 @@ from src.ai_hardware_accelerator import (
     accelerated_embedding_generation,
     get_ai_accelerator,
 )
+from src.config import cfg
+
+# Import existing AutoBot components
+from src.constants.threshold_constants import TimingConstants
+from src.knowledge.embedding_cache import get_embedding_cache
+from src.knowledge_base import KnowledgeBase
+from src.utils.chromadb_client import get_chromadb_client
 
 # Issue #387: GPU-accelerated vector search
 from src.utils.gpu_vector_search import (
@@ -32,13 +39,6 @@ from src.utils.gpu_vector_search import (
     VectorSearchConfig,
     get_hybrid_vector_search,
 )
-
-# Import existing AutoBot components
-from src.constants.threshold_constants import TimingConstants
-from src.knowledge.embedding_cache import get_embedding_cache
-from src.knowledge_base import KnowledgeBase
-from src.config import cfg
-from src.utils.chromadb_client import get_chromadb_client
 from src.utils.http_client import get_http_client
 from src.utils.logging_manager import get_llm_logger
 
@@ -170,7 +170,8 @@ class NPUSemanticSearch:
         npu_worker_port = os.getenv("AUTOBOT_NPU_WORKER_PORT")
         if not npu_worker_host or not npu_worker_port:
             raise ValueError(
-                "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and AUTOBOT_NPU_WORKER_PORT environment variables must be set"
+                "NPU Worker configuration missing: AUTOBOT_NPU_WORKER_HOST and "
+                "AUTOBOT_NPU_WORKER_PORT environment variables must be set"
             )
         self.npu_worker_url = cfg.get(
             "npu_worker.url", f"http://{npu_worker_host}:{npu_worker_port}"
@@ -395,7 +396,9 @@ class NPUSemanticSearch:
         if not query.strip():
             return [], self._create_empty_metrics()
 
-        logger.info("🔍 Enhanced search: '%s...' (top_k=%s)", query[:50], similarity_top_k)
+        logger.info(
+            "🔍 Enhanced search: '%s...' (top_k=%s)", query[:50], similarity_top_k
+        )
 
         # Check cache first
         cache_key = self._generate_cache_key(query, similarity_top_k, filters)
@@ -407,7 +410,10 @@ class NPUSemanticSearch:
         try:
             # Step 1: Generate query embedding with optimal hardware
             embedding_start = time.time()
-            query_embedding, embedding_device = await self._generate_optimized_embedding(
+            (
+                query_embedding,
+                embedding_device,
+            ) = await self._generate_optimized_embedding(
                 query, enable_npu_acceleration, force_device
             )
             embedding_time = (time.time() - embedding_start) * 1000
@@ -655,7 +661,9 @@ class NPUSemanticSearch:
         if not queries:
             return []
 
-        logger.info("🔍 Batch search: %s queries (top_k=%s)", len(queries), similarity_top_k)
+        logger.info(
+            "🔍 Batch search: %s queries (top_k=%s)", len(queries), similarity_top_k
+        )
 
         # Process all queries in parallel with controlled concurrency
         semaphore = asyncio.Semaphore(10)  # Limit concurrent searches
@@ -715,12 +723,12 @@ class NPUSemanticSearch:
         avg_time = sum(r["total_time_ms"] for r in successful_runs) / len(
             successful_runs
         )
-        avg_embedding_time = sum(
-            r["embedding_time_ms"] for r in successful_runs
-        ) / len(successful_runs)
-        avg_search_time = sum(
-            r["search_time_ms"] for r in successful_runs
-        ) / len(successful_runs)
+        avg_embedding_time = sum(r["embedding_time_ms"] for r in successful_runs) / len(
+            successful_runs
+        )
+        avg_search_time = sum(r["search_time_ms"] for r in successful_runs) / len(
+            successful_runs
+        )
 
         return {
             "average_total_time_ms": avg_time,
@@ -763,12 +771,8 @@ class NPUSemanticSearch:
                             "iteration": iteration,
                             "total_time_ms": (end_time - start_time) * 1000,
                             "results_count": len(search_results),
-                            "embedding_time_ms": (
-                                metrics.embedding_generation_time_ms
-                            ),
-                            "search_time_ms": (
-                                metrics.similarity_computation_time_ms
-                            ),
+                            "embedding_time_ms": (metrics.embedding_generation_time_ms),
+                            "search_time_ms": (metrics.similarity_computation_time_ms),
                             "device_used": metrics.device_used,
                         }
                     )
@@ -879,9 +883,7 @@ class NPUSemanticSearch:
                             "description": f"AutoBot {modality} embeddings",
                         },
                     )
-                    logger.info(
-                        f"✅ Created new ChromaDB collection: {collection_name}"
-                    )
+                    logger.info(f"✅ Created new ChromaDB collection: {collection_name}")
 
                 self.collections[modality] = collection
 
@@ -1066,7 +1068,9 @@ class NPUSemanticSearch:
 
             # Determine target modalities
             if target_modalities is None:
-                target_modalities = _DEFAULT_TARGET_MODALITIES  # Issue #380: use module constant
+                target_modalities = (
+                    _DEFAULT_TARGET_MODALITIES  # Issue #380: use module constant
+                )
 
             # Use configured threshold if not provided
             threshold = similarity_threshold or self.similarity_threshold

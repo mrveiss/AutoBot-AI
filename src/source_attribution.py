@@ -14,7 +14,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -157,7 +156,10 @@ class SourceAttributionManager:
             # Force garbage collection to free memory immediately
             gc.collect()
             logger.info(
-                f"SOURCE CLEANUP: Trimmed sources from {old_count} to {len(self.sources)} (limit: {self.max_sources}) and freed memory"
+                "SOURCE CLEANUP: Trimmed sources from %d to %d (limit: %d) and freed memory",
+                old_count,
+                len(self.sources),
+                self.max_sources,
             )
 
     def add_kb_source(

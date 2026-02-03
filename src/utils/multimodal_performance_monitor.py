@@ -89,8 +89,11 @@ class MultiModalPerformanceMonitor:
         if self.gpu_available:
             self.device_properties = torch.cuda.get_device_properties(0)
             self.total_gpu_memory = self.device_properties.total_memory
+            gpu_gb = self.total_gpu_memory / 1024**3
             logger.info(
-                f"GPU Performance Monitor initialized: {self.device_properties.name} ({self.total_gpu_memory / 1024**3:.1f}GB)"
+                "GPU Performance Monitor initialized: %s (%.1fGB)",
+                self.device_properties.name,
+                gpu_gb,
             )
         else:
             logger.warning(
@@ -290,8 +293,12 @@ class MultiModalPerformanceMonitor:
             throughput_stats = self._calculate_throughput()
 
             metrics = self._build_performance_metrics(
-                timestamp, gpu_stats, cpu_percent, memory,
-                processing_stats, throughput_stats
+                timestamp,
+                gpu_stats,
+                cpu_percent,
+                memory,
+                processing_stats,
+                throughput_stats,
             )
 
             with self._lock:
