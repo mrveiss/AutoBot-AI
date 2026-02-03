@@ -38,6 +38,7 @@ from api import (
     vnc_router,
     websocket_router,
 )
+from api.roles import router as roles_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
 
     await db_service.initialize()
     await _ensure_admin_user()
+    await _seed_default_roles()
     await reconciler_service.start()
 
     # Start version checker background task (Issue #741)
@@ -112,6 +114,16 @@ async def _ensure_admin_user():
         logger.warning("CHANGE THE DEFAULT PASSWORD IMMEDIATELY!")
 
 
+async def _seed_default_roles():
+    """Seed default roles if they don't exist (Issue #779)."""
+    from services.role_registry import seed_default_roles
+
+    async with db_service.session() as db:
+        created = await seed_default_roles(db)
+        if created > 0:
+            logger.info("Seeded %d default roles", created)
+
+
 app = FastAPI(
     title="SLM Backend",
     description="Service Lifecycle Manager for AutoBot",
@@ -149,6 +161,7 @@ app.include_router(node_tls_router, prefix="/api")
 app.include_router(tls_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(code_sync_router, prefix="/api")
+app.include_router(roles_router, prefix="/api")
 app.include_router(orchestration_router, prefix="/api")
 app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
