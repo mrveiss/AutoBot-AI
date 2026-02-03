@@ -25,6 +25,67 @@ logger = logging.getLogger(__name__)
 _USER_DATA_TYPES = ("user_preferences", "user_history")
 
 
+def _extract_request_from_call(args: tuple, kwargs: dict) -> Any:
+    """
+    Extract FastAPI Request object from function arguments.
+
+    Issue #620: Extracted from cache_response to reduce function length.
+
+    Args:
+        args: Positional arguments to search
+        kwargs: Keyword arguments to search
+
+    Returns:
+        Request object if found, None otherwise
+    """
+    from fastapi import Request
+
+    # Check kwargs first
+    for value in kwargs.values():
+        if isinstance(value, Request):
+            return value
+
+    # Fallback to args
+    for arg in args:
+        if isinstance(arg, Request):
+            return arg
+
+    return None
+
+
+def _generate_cache_key(
+    explicit_key: Optional[str],
+    request: Any,
+    func: Callable,
+    kwargs: dict,
+) -> str:
+    """
+    Generate a cache key based on available context.
+
+    Issue #620: Extracted from cache_response to reduce function length.
+
+    Args:
+        explicit_key: Explicitly provided cache key
+        request: FastAPI Request object (may be None)
+        func: The decorated function
+        kwargs: Function keyword arguments
+
+    Returns:
+        Generated cache key string
+    """
+    if explicit_key:
+        return explicit_key
+
+    if request:
+        # Include query parameters in cache key for uniqueness
+        query_hash = hash(str(sorted(request.query_params.items())))
+        return f"endpoint:{request.url.path}:{query_hash}"
+
+    # Fallback for non-HTTP endpoints
+    params_hash = hash(str(sorted(kwargs.items())))
+    return f"func:{func.__name__}:{params_hash}"
+
+
 class CacheStrategy(Enum):
     """Cache strategies for different data types"""
 
@@ -497,9 +558,7 @@ class AdvancedCacheManager:
             all_keys.append(key)
         return all_keys
 
-    async def _get_keys_with_timestamps(
-        self, keys: List[str]
-    ) -> List[tuple]:
+    async def _get_keys_with_timestamps(self, keys: List[str]) -> List[tuple]:
         """Get keys with their timestamps for LRU sorting (Issue #315: extracted).
 
         Args:
@@ -521,7 +580,7 @@ class AdvancedCacheManager:
                 entry = json.loads(cached_data)
                 timestamp = entry.get("timestamp", 0)
                 keys_with_time.append((timestamp, key))
-            except Exception:
+            except Exception:  # nosec B112 - intentional skip on parse errors
                 continue
 
         return keys_with_time
@@ -552,7 +611,9 @@ class AdvancedCacheManager:
 
         deleted_count = await self.redis_client.delete(*keys_to_remove)
         logger.info(
-            "LRU eviction: Removed %d old entries from %s cache", deleted_count, data_type
+            "LRU eviction: Removed %d old entries from %s cache",
+            deleted_count,
+            data_type,
         )
         return deleted_count
 
@@ -642,8 +703,7 @@ def smart_cache(
             else:
                 # Default key generation from function name and args
                 args_hash = hashlib.md5(
-                    str(args + tuple(kwargs.items())).encode(),
-                    usedforsecurity=False
+                    str(args + tuple(kwargs.items())).encode(), usedforsecurity=False
                 ).hexdigest()[:8]
                 cache_key = f"{func.__name__}:{args_hash}"
 
@@ -822,7 +882,9 @@ class SimpleCacheManager:
             if keys:
                 deleted_count = await self._cache.redis_client.delete(*keys)
                 logger.info(
-                    "Cache CLEAR: %d keys deleted for pattern: %s", deleted_count, pattern
+                    "Cache CLEAR: %d keys deleted for pattern: %s",
+                    deleted_count,
+                    pattern,
                 )
                 return deleted_count
             else:
@@ -871,8 +933,11 @@ class SimpleCacheManager:
     def cache_response(self, cache_key: str = None, ttl: int = None):
         """
         Decorator for caching HTTP responses.
+
         Compatible with original CacheManager.cache_response().
         Supports FastAPI Request objects for automatic key generation.
+
+        Issue #620: Refactored to use extracted helper functions.
         """
         actual_ttl = ttl or self.default_ttl
 
@@ -882,35 +947,9 @@ class SimpleCacheManager:
             @wraps(func)
             async def wrapper(*args, **kwargs):
                 """Async wrapper that caches successful HTTP responses."""
-                from fastapi import Request
-
-                # Extract request object from FastAPI dependency injection
-                request = None
-
-                # Check for Request object in kwargs
-                for key, value in kwargs.items():
-                    if isinstance(value, Request):
-                        request = value
-                        break
-
-                # Fallback: check args for Request object
-                if not request:
-                    for arg in args:
-                        if isinstance(arg, Request):
-                            request = arg
-                            break
-
-                # Generate cache key based on request or function
-                if cache_key:
-                    key = cache_key
-                elif request:
-                    # Include query parameters in cache key for uniqueness
-                    query_hash = hash(str(sorted(request.query_params.items())))
-                    key = f"endpoint:{request.url.path}:{query_hash}"
-                else:
-                    # Fallback for non-HTTP endpoints
-                    params_hash = hash(str(sorted(kwargs.items())))
-                    key = f"func:{func.__name__}:{params_hash}"
+                # Issue #620: Extract request and generate key using helpers
+                request = _extract_request_from_call(args, kwargs)
+                key = _generate_cache_key(cache_key, request, func, kwargs)
 
                 # Try to get from cache first
                 try:

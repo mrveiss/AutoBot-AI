@@ -21,6 +21,76 @@ config = UnifiedConfigManager()
 _WORD_BOUNDARY_RE = re.compile(r"\b[a-zA-Z0-9]+\b")
 
 
+def _build_word_frequency_map(text: str) -> Dict[str, int]:
+    """
+    Build a frequency map of words in the given text.
+
+    Issue #620: Extracted from calculate_keyword_score to reduce function length.
+
+    Args:
+        text: Document text to analyze
+
+    Returns:
+        Dictionary mapping words to their occurrence counts
+    """
+    words = _WORD_BOUNDARY_RE.findall(text.lower())
+    word_count: Dict[str, int] = defaultdict(int)
+    for word in words:
+        word_count[word] += 1
+    return word_count
+
+
+def _calculate_single_keyword_score(
+    keyword: str,
+    word_count: Dict[str, int],
+    total_words: int,
+    document_metadata: Dict[str, Any],
+) -> float:
+    """
+    Calculate relevance score for a single keyword in a document.
+
+    Issue #620: Extracted from calculate_keyword_score to reduce function length.
+
+    Args:
+        keyword: The keyword to score
+        word_count: Word frequency map for the document
+        total_words: Total word count in document
+        document_metadata: Document metadata for source boost
+
+    Returns:
+        Score between 0.0 and 1.0 for this keyword
+    """
+    keyword_lower = keyword.lower()
+    keyword_count = word_count.get(keyword_lower, 0)
+
+    if keyword_count > 0:
+        # TF-IDF-like scoring
+        tf = keyword_count / total_words  # Term frequency
+
+        # Boost score for exact matches in title/source
+        title_boost = 1.0
+        source = document_metadata.get("source", "").lower()
+        if keyword_lower in source:
+            title_boost = 2.0
+
+        # Boost score for multiple occurrences
+        frequency_boost = min(math.log(keyword_count + 1), 2.0)
+
+        return tf * title_boost * frequency_boost
+
+    # Check for partial matches
+    document_words = list(word_count.keys())
+    partial_matches = [
+        word
+        for word in document_words
+        if keyword_lower in word or word in keyword_lower
+    ]
+    if partial_matches:
+        return len(partial_matches) / total_words * 0.5
+
+    return 0.0
+
+
 class HybridSearchEngine:
     """
     Hybrid search engine that combines semantic and keyword-based search.
@@ -122,56 +192,28 @@ class HybridSearchEngine:
         document_text: str,
         document_metadata: Dict[str, Any],
     ) -> float:
-        """Calculate keyword-based relevance score for a document."""
+        """
+        Calculate keyword-based relevance score for a document.
+
+        Issue #620: Refactored to use extracted helper functions.
+        """
         if not query_keywords:
             return 0.0
 
-        document_text_lower = document_text.lower()
-        # Issue #380: use pre-compiled pattern
-        document_words = _WORD_BOUNDARY_RE.findall(document_text_lower)
-        document_word_count = defaultdict(int)
+        # Issue #620: Use helper to build word frequency map
+        word_count = _build_word_frequency_map(document_text)
+        total_words = sum(word_count.values())
 
-        # Count word frequencies in document
-        for word in document_words:
-            document_word_count[word] += 1
-
-        total_document_words = len(document_words)
-        if total_document_words == 0:
+        if total_words == 0:
             return 0.0
 
-        keyword_scores = []
-
-        for keyword in query_keywords:
-            keyword_lower = keyword.lower()
-            keyword_count = document_word_count.get(keyword_lower, 0)
-
-            if keyword_count > 0:
-                # TF-IDF-like scoring
-                tf = keyword_count / total_document_words  # Term frequency
-
-                # Boost score for exact matches in title/source
-                title_boost = 1.0
-                source = document_metadata.get("source", "").lower()
-                if keyword_lower in source:
-                    title_boost = 2.0
-
-                # Boost score for multiple occurrences
-                frequency_boost = min(math.log(keyword_count + 1), 2.0)
-
-                keyword_score = tf * title_boost * frequency_boost
-                keyword_scores.append(keyword_score)
-            else:
-                # Check for partial matches
-                partial_matches = [
-                    word
-                    for word in document_words
-                    if keyword_lower in word or word in keyword_lower
-                ]
-                if partial_matches:
-                    partial_score = len(partial_matches) / total_document_words * 0.5
-                    keyword_scores.append(partial_score)
-                else:
-                    keyword_scores.append(0.0)
+        # Issue #620: Calculate score for each keyword using helper
+        keyword_scores = [
+            _calculate_single_keyword_score(
+                keyword, word_count, total_words, document_metadata
+            )
+            for keyword in query_keywords
+        ]
 
         # Average keyword score with emphasis on matches
         if keyword_scores:
