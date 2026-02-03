@@ -63,7 +63,7 @@ REGISTRY_DEFAULTS = {
     "timeout.http": "30",
     "timeout.redis": "5",
     "timeout.llm": "120",
-    # TLS Configuration (Issue #768)
+    # TLS Configuration (Issue #164)
     "tls.redis_enabled": "false",
     "tls.backend_enabled": "false",
     "tls.frontend_enabled": "false",

@@ -652,7 +652,7 @@ async def enable_tls_on_services(
     2. Run the enable-tls.yml Ansible playbook
     3. Restart affected services with TLS enabled
 
-    Issue #768: Full TLS deployment via SLM.
+    Issue #164: Full TLS deployment via SLM.
     """
     import asyncio
     import os

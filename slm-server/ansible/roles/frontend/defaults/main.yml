@@ -24,7 +24,7 @@ frontend_port: 5173
 # Backend connection
 frontend_backend_url: "http://172.16.168.20:8001"
 
-# TLS Configuration (Issue #768)
+# TLS Configuration (Issue #164)
 frontend_tls_enabled: false
 frontend_tls_port: 443
 frontend_tls_cert_dir: /etc/autobot/certs

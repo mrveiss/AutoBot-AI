@@ -144,14 +144,14 @@ const eventSeverityFilter = ref('')
 
 const tabs = [
   { id: 'overview', name: 'Security Overview' },
-  { id: 'tls-settings', name: 'TLS Settings' },  // Issue #768
+  { id: 'tls-settings', name: 'TLS Settings' },  // Issue #164
   { id: 'certificates', name: 'TLS Certificates' },
   { id: 'audit', name: 'Audit Logs' },
   { id: 'threats', name: 'Threat Detection' },
   { id: 'policies', name: 'Security Policies' },
 ]
 
-// TLS Settings State (Issue #768)
+// TLS Settings State (Issue #164)
 interface TLSServiceStatus {
   name: string
   displayName: string
@@ -459,7 +459,7 @@ async function togglePolicyEnforcement(policyId: string, currentlyEnforced: bool
   }
 }
 
-// TLS Settings functions (Issue #768)
+// TLS Settings functions (Issue #164)
 function toggleTlsService(serviceName: string) {
   const index = selectedTlsServices.value.indexOf(serviceName)
   if (index === -1) {
@@ -659,7 +659,7 @@ const scoreColor = computed(() => {
       </template>
     </div>
 
-    <!-- TLS Settings (Issue #768) -->
+    <!-- TLS Settings (Issue #164) -->
     <div v-else-if="activeTab === 'tls-settings'">
       <!-- Header -->
       <div class="mb-6">

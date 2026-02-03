@@ -92,6 +92,7 @@ class VMConfig(BaseSettings):
     redis: str = Field(default="172.16.168.23", alias="AUTOBOT_REDIS_HOST")
     aistack: str = Field(default="172.16.168.24", alias="AUTOBOT_AI_STACK_HOST")
     browser: str = Field(default="172.16.168.25", alias="AUTOBOT_BROWSER_SERVICE_HOST")
+    slm: str = Field(default="172.16.168.19", alias="AUTOBOT_SLM_HOST")  # Issue #768
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
 
@@ -112,6 +113,7 @@ class PortConfig(BaseSettings):
     browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
+    slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
 
@@ -755,7 +757,11 @@ class TLSMode(str, Enum):
 
 
 class TLSConfig(BaseSettings):
-    """TLS/PKI Configuration for secure communications."""
+    """TLS/PKI Configuration for secure communications.
+
+    Issue #164: Added frontend TLS support for HTTPS on 172.16.168.21.
+    TLS certificates are managed and deployed via SLM (172.16.168.19).
+    """
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -769,16 +775,36 @@ class TLSConfig(BaseSettings):
     remote_cert_dir: str = Field(
         default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR"
     )
+    # Service-specific TLS settings
     redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
     redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
     backend_tls_enabled: bool = Field(
         default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED"
     )
+    backend_tls_port: int = Field(default=8443, alias="AUTOBOT_BACKEND_TLS_PORT")
+    # Issue #164: Frontend TLS (HTTPS) support
+    frontend_tls_enabled: bool = Field(
+        default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED"
+    )
+    frontend_tls_port: int = Field(default=443, alias="AUTOBOT_FRONTEND_TLS_PORT")
+    # SLM TLS settings (admin server)
+    slm_tls_enabled: bool = Field(default=False, alias="AUTOBOT_SLM_TLS_ENABLED")
+    slm_tls_port: int = Field(default=443, alias="AUTOBOT_SLM_TLS_PORT")
 
     @property
     def is_enabled(self) -> bool:
         """Check if TLS is enabled."""
         return self.mode != TLSMode.DISABLED
+
+    @property
+    def any_service_tls_enabled(self) -> bool:
+        """Check if any service has TLS enabled."""
+        return (
+            self.redis_tls_enabled
+            or self.backend_tls_enabled
+            or self.frontend_tls_enabled
+            or self.slm_tls_enabled
+        )
 
 
 class FeatureConfig(BaseSettings):
@@ -840,14 +866,19 @@ class AutoBotConfig(BaseSettings):
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
 
     # Computed URL properties for backward compatibility
+    # Issue #164: Support HTTPS when TLS is enabled
     @property
     def backend_url(self) -> str:
-        """Get the full backend API URL."""
+        """Get the full backend API URL (HTTP or HTTPS based on TLS config)."""
+        if self.tls.backend_tls_enabled:
+            return f"https://{self.vm.main}:{self.tls.backend_tls_port}"
         return f"http://{self.vm.main}:{self.port.backend}"
 
     @property
     def frontend_url(self) -> str:
-        """Get the full frontend URL."""
+        """Get the full frontend URL (HTTP or HTTPS based on TLS config)."""
+        if self.tls.frontend_tls_enabled:
+            return f"https://{self.vm.frontend}:{self.tls.frontend_tls_port}"
         return f"http://{self.vm.frontend}:{self.port.frontend}"
 
     @property
@@ -932,6 +963,13 @@ class AutoBotConfig(BaseSettings):
         """Get the VNC desktop URL."""
         return f"http://{self.vm.main}:{self.port.vnc}/vnc.html"
 
+    @property
+    def slm_url(self) -> str:
+        """Get the SLM Admin server URL (Issue #768)."""
+        if self.tls.slm_tls_enabled:
+            return f"https://{self.vm.slm}:{self.tls.slm_tls_port}"
+        return f"http://{self.vm.slm}:{self.port.slm}"
+
     def get_redis_url_for_db(self, db_number: int) -> str:
         """Get Redis URL for a specific database number."""
         base = self.redis_url_with_auth
@@ -959,6 +997,7 @@ class AutoBotConfig(BaseSettings):
             "npu_worker": self.npu_worker_url,
             "browser": self.browser_service_url,
             "vnc": self.vnc_url,
+            "slm": self.slm_url,  # Issue #768
         }
         return url_map.get(service_name.lower())
 

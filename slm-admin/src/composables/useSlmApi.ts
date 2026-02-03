@@ -775,7 +775,7 @@ export function useSlmApi() {
     return response.data
   }
 
-  // TLS Service Enablement (Issue #768)
+  // TLS Service Enablement (Issue #164)
   interface TLSEnableResponse {
     success: boolean
     message: string
@@ -1230,7 +1230,7 @@ export function useSlmApi() {
     renewTlsCertificate,
     rotateTlsCertificate,
     bulkRenewExpiringCertificates,
-    enableTlsOnServices,  // Issue #768
+    enableTlsOnServices,  // Issue #164
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,
