@@ -11,9 +11,10 @@ import time
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing monitoring functionality
@@ -183,10 +184,11 @@ class ServicesResponse(BaseModel):
     error_code_prefix="SERVICES",
 )
 @router.get("/services", response_model=ServicesResponse)
-async def get_services():
+async def get_services(admin_check: bool = Depends(check_admin_permission)):
     """Get list of all available services with their status.
 
     Issue #315: Refactored to use helper functions for reduced nesting depth.
+    Issue #744: Requires admin authentication.
     """
     try:
         # Get services from monitoring (uses helper)
@@ -224,8 +226,11 @@ async def get_services():
     error_code_prefix="SERVICES",
 )
 @router.get("/health")
-async def get_health():
-    """Simple health check endpoint"""
+async def get_health(admin_check: bool = Depends(check_admin_permission)):
+    """Simple health check endpoint
+
+    Issue #744: Requires admin authentication.
+    """
     return {"status": "healthy", "timestamp": datetime.now()}
 
 
@@ -235,8 +240,11 @@ async def get_health():
     error_code_prefix="SERVICES",
 )
 @router.get("/services/health")
-async def get_services_health():
-    """Get service health status - alias to monitoring endpoint"""
+async def get_services_health(admin_check: bool = Depends(check_admin_permission)):
+    """Get service health status - alias to monitoring endpoint
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Try to use existing monitoring endpoint first
         if monitoring_services_health:
@@ -254,7 +262,9 @@ async def get_services_health():
             "overall_status": (
                 "healthy"
                 if services_data.error_count == 0
-                else "degraded" if services_data.error_count < 2 else "critical"
+                else "degraded"
+                if services_data.error_count < 2
+                else "critical"
             ),
             "total_services": services_data.total_count,
             "healthy_services": services_data.healthy_count,
@@ -289,11 +299,27 @@ def _build_vm_definitions() -> list:
     from src.constants.network_constants import NetworkConstants
 
     return [
-        ("Frontend VM", str(NetworkConstants.FRONTEND_HOST), ["frontend", "web-interface"]),
-        ("NPU Worker VM", str(NetworkConstants.NPU_WORKER_HOST), ["npu-worker", "hardware-acceleration"]),
+        (
+            "Frontend VM",
+            str(NetworkConstants.FRONTEND_HOST),
+            ["frontend", "web-interface"],
+        ),
+        (
+            "NPU Worker VM",
+            str(NetworkConstants.NPU_WORKER_HOST),
+            ["npu-worker", "hardware-acceleration"],
+        ),
         ("Redis VM", str(NetworkConstants.REDIS_HOST), ["redis", "database", "cache"]),
-        ("AI Stack VM", str(NetworkConstants.AI_STACK_HOST), ["ai-processing", "llm", "inference"]),
-        ("Browser VM", str(NetworkConstants.BROWSER_VM_IP), ["browser-automation", "playwright"]),
+        (
+            "AI Stack VM",
+            str(NetworkConstants.AI_STACK_HOST),
+            ["ai-processing", "llm", "inference"],
+        ),
+        (
+            "Browser VM",
+            str(NetworkConstants.BROWSER_VM_IP),
+            ["browser-automation", "playwright"],
+        ),
     ]
 
 
@@ -314,11 +340,12 @@ def _build_vm_status_list(vm_definitions: list) -> list:
     error_code_prefix="SERVICES",
 )
 @router.get("/vms/status")
-async def get_vms_status():
+async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get VM status for distributed infrastructure.
 
     Issue #665: Refactored to use data-driven helper functions.
+    Issue #744: Requires admin authentication.
     """
     try:
         vm_definitions = _build_vm_definitions()
@@ -349,8 +376,11 @@ async def get_vms_status():
     error_code_prefix="SERVICES",
 )
 @router.get("/version", response_model=SystemInfo)
-async def get_version():
-    """Get application version and system information"""
+async def get_version(admin_check: bool = Depends(check_admin_permission)):
+    """Get application version and system information
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Get configuration
         from src.config import unified_config_manager

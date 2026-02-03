@@ -27,25 +27,13 @@ Usage:
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.services.permission_matcher import (
-    MatchResult,
-    PermissionMatcher,
-    PermissionRule,
-    get_permission_matcher,
-)
-from backend.services.approval_memory import (
-    ApprovalMemoryManager,
-    ApprovalRecord,
-    get_approval_memory,
-)
-from src.config.ssot_config import (
-    PermissionAction,
-    PermissionMode,
-    config,
-)
+from backend.services.approval_memory import get_approval_memory
+from backend.services.permission_matcher import get_permission_matcher
+from src.auth_middleware import check_admin_permission
+from src.config.ssot_config import PermissionAction, PermissionMode, config
 
 logger = logging.getLogger(__name__)
 
@@ -156,11 +144,13 @@ class CheckCommandResponse(BaseModel):
 
 
 @router.get("/status", response_model=PermissionStatusResponse)
-async def get_permission_status():
+async def get_permission_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get permission system status.
 
     Returns current configuration and statistics.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         matcher = get_permission_matcher()
@@ -185,12 +175,17 @@ async def get_permission_status():
 
 
 @router.get("/mode", response_model=PermissionModeResponse)
-async def get_permission_mode(is_admin: bool = Query(default=False)):
+async def get_permission_mode(
+    admin_check: bool = Depends(check_admin_permission),
+    is_admin: bool = Query(default=False),
+):
     """
     Get current permission mode.
 
     Args:
         is_admin: Whether user has admin privileges (affects allowed modes)
+
+    Issue #744: Requires admin authentication.
     """
     try:
         matcher = get_permission_matcher(is_admin=is_admin)
@@ -208,13 +203,19 @@ async def get_permission_mode(is_admin: bool = Query(default=False)):
 
 
 @router.put("/mode", response_model=PermissionModeResponse)
-async def set_permission_mode(request: PermissionModeRequest, is_admin: bool = Query(default=False)):
+async def set_permission_mode(
+    request: PermissionModeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    is_admin: bool = Query(default=False),
+):
     """
     Set permission mode.
 
     Args:
         request: New mode to set
         is_admin: Whether user has admin privileges
+
+    Issue #744: Requires admin authentication.
     """
     try:
         # Validate mode
@@ -257,9 +258,11 @@ async def set_permission_mode(request: PermissionModeRequest, is_admin: bool = Q
 
 
 @router.get("/rules", response_model=PermissionRulesResponse)
-async def get_permission_rules():
+async def get_permission_rules(admin_check: bool = Depends(check_admin_permission)):
     """
     Get all permission rules.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         matcher = get_permission_matcher()
@@ -300,11 +303,17 @@ async def get_permission_rules():
 
 
 @router.post("/rules")
-async def add_permission_rule(request: AddRuleRequest, is_admin: bool = Query(default=False)):
+async def add_permission_rule(
+    request: AddRuleRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    is_admin: bool = Query(default=False),
+):
     """
     Add a new permission rule.
 
     Note: Adding ALLOW rules requires admin privileges.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         # Validate action
@@ -342,9 +351,13 @@ async def add_permission_rule(request: AddRuleRequest, is_admin: bool = Query(de
 
 
 @router.delete("/rules")
-async def remove_permission_rule(request: RemoveRuleRequest):
+async def remove_permission_rule(
+    request: RemoveRuleRequest, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Remove a permission rule.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         matcher = get_permission_matcher()
@@ -367,11 +380,17 @@ async def remove_permission_rule(request: RemoveRuleRequest):
 
 
 @router.post("/check", response_model=CheckCommandResponse)
-async def check_command(request: CheckCommandRequest, is_admin: bool = Query(default=False)):
+async def check_command(
+    request: CheckCommandRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    is_admin: bool = Query(default=False),
+):
     """
     Check what action would be taken for a command.
 
     Useful for previewing permission decisions without executing.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         matcher = get_permission_matcher(is_admin=is_admin)
@@ -390,10 +409,13 @@ async def check_command(request: CheckCommandRequest, is_admin: bool = Query(def
 @router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
 async def get_project_approvals(
     project_path: str,
+    admin_check: bool = Depends(check_admin_permission),
     user_id: str = Query(..., description="User ID"),
 ):
     """
     Get stored approvals for a project.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         memory = get_approval_memory()
@@ -422,6 +444,7 @@ async def get_project_approvals(
 @router.delete("/memory/{project_path:path}")
 async def clear_project_approvals(
     project_path: str,
+    admin_check: bool = Depends(check_admin_permission),
     user_id: Optional[str] = Query(default=None, description="User ID (optional)"),
 ):
     """
@@ -429,6 +452,8 @@ async def clear_project_approvals(
 
     If user_id is provided, only clears that user's approvals.
     Otherwise, clears all approvals for the project.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         memory = get_approval_memory()
@@ -454,6 +479,7 @@ async def clear_project_approvals(
 
 @router.post("/memory")
 async def store_approval(
+    admin_check: bool = Depends(check_admin_permission),
     project_path: str = Query(..., description="Project path"),
     user_id: str = Query(..., description="User ID"),
     command: str = Query(..., description="Approved command"),
@@ -463,6 +489,8 @@ async def store_approval(
 ):
     """
     Store a command approval in memory.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         memory = get_approval_memory()
@@ -493,9 +521,11 @@ async def store_approval(
 
 
 @router.get("/memory/stats")
-async def get_memory_stats():
+async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
     """
     Get approval memory statistics.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         memory = get_approval_memory()

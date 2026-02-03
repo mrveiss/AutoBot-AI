@@ -15,9 +15,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.constants.path_constants import PATH
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -133,38 +134,76 @@ class ConversationAnalysisResult(BaseModel):
 # Common user intent patterns for AutoBot
 INTENT_PATTERNS = [
     # Code-related intents
-    ("code_review", r"\b(review|check|analyze)\b.*\b(code|file|function)\b", "Code Review Request"),
-    ("code_generation", r"\b(create|write|generate|implement)\b.*\b(code|function|class|script)\b", "Code Generation"),
-    ("code_fix", r"\b(fix|debug|resolve|solve)\b.*\b(bug|error|issue|problem)\b", "Bug Fix Request"),
-    ("code_explain", r"\b(explain|understand|what does)\b.*\b(code|function|this)\b", "Code Explanation"),
-    ("code_refactor", r"\b(refactor|improve|optimize|clean)\b.*\b(code|function)\b", "Code Refactoring"),
-
+    (
+        "code_review",
+        r"\b(review|check|analyze)\b.*\b(code|file|function)\b",
+        "Code Review Request",
+    ),
+    (
+        "code_generation",
+        r"\b(create|write|generate|implement)\b.*\b(code|function|class|script)\b",
+        "Code Generation",
+    ),
+    (
+        "code_fix",
+        r"\b(fix|debug|resolve|solve)\b.*\b(bug|error|issue|problem)\b",
+        "Bug Fix Request",
+    ),
+    (
+        "code_explain",
+        r"\b(explain|understand|what does)\b.*\b(code|function|this)\b",
+        "Code Explanation",
+    ),
+    (
+        "code_refactor",
+        r"\b(refactor|improve|optimize|clean)\b.*\b(code|function)\b",
+        "Code Refactoring",
+    ),
     # File operations
     ("file_read", r"\b(read|show|display|open)\b.*\b(file|content)\b", "File Reading"),
     ("file_write", r"\b(write|create|save)\b.*\b(file)\b", "File Writing"),
-    ("file_search", r"\b(find|search|locate|where)\b.*\b(file|function|class)\b", "File Search"),
-
+    (
+        "file_search",
+        r"\b(find|search|locate|where)\b.*\b(file|function|class)\b",
+        "File Search",
+    ),
     # System operations
-    ("system_status", r"\b(status|health|check)\b.*\b(system|service|server)\b", "System Status"),
-    ("system_restart", r"\b(restart|reboot|reload)\b.*\b(service|server|system)\b", "System Restart"),
-
+    (
+        "system_status",
+        r"\b(status|health|check)\b.*\b(system|service|server)\b",
+        "System Status",
+    ),
+    (
+        "system_restart",
+        r"\b(restart|reboot|reload)\b.*\b(service|server|system)\b",
+        "System Restart",
+    ),
     # Knowledge operations
     ("knowledge_search", r"\b(what|how|why|when|where)\b.*\?", "Knowledge Query"),
-    ("knowledge_add", r"\b(add|store|remember|save)\b.*\b(knowledge|fact|info)\b", "Knowledge Addition"),
-
+    (
+        "knowledge_add",
+        r"\b(add|store|remember|save)\b.*\b(knowledge|fact|info)\b",
+        "Knowledge Addition",
+    ),
     # Terminal/Command operations
     ("terminal_command", r"\b(run|execute|command)\b", "Terminal Command"),
-    ("terminal_output", r"\b(output|result|response)\b.*\b(command|terminal)\b", "Terminal Output"),
-
+    (
+        "terminal_output",
+        r"\b(output|result|response)\b.*\b(command|terminal)\b",
+        "Terminal Output",
+    ),
     # Git operations
     ("git_status", r"\b(git)\b.*\b(status|diff|log)\b", "Git Status"),
     ("git_commit", r"\b(commit|push|pull)\b", "Git Operations"),
-
     # General assistance
     ("help_request", r"\b(help|assist|support)\b", "Help Request"),
     ("greeting", r"^(hi|hello|hey|good morning|good afternoon)\b", "Greeting"),
     ("thanks", r"\b(thank|thanks|appreciate)\b", "Appreciation"),
-    ("clarification", r"\b(what do you mean|clarify|explain more)\b", "Clarification Request"),
+    (
+        "clarification",
+        r"\b(what do you mean|clarify|explain more)\b",
+        "Clarification Request",
+    ),
 ]
 
 # O(1) lookup for intent names by ID (Issue #315 + #326)
@@ -275,7 +314,9 @@ class ConversationAnalyzer:
         bottlenecks = []
 
         # Analyze intent transitions
-        intent_transitions: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        intent_transitions: Dict[str, Dict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
         intent_failures: Dict[str, int] = defaultdict(int)
         intent_repetitions: Dict[str, int] = defaultdict(int)
 
@@ -309,8 +350,8 @@ class ConversationAnalyzer:
                         suggested_improvements=[
                             "Improve response clarity",
                             "Add confirmation prompts",
-                            "Provide step-by-step guidance"
-                        ]
+                            "Provide step-by-step guidance",
+                        ],
                     )
                 )
 
@@ -327,8 +368,8 @@ class ConversationAnalyzer:
                         suggested_improvements=[
                             f"Review {intent_id} handling logic",
                             "Add better error messages",
-                            "Provide alternative approaches"
-                        ]
+                            "Provide alternative approaches",
+                        ],
                     )
                 )
 
@@ -339,7 +380,17 @@ class ConversationAnalyzer:
     def _process_conversation_data(
         self,
         conversations: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict], Counter, Dict[str, List[float]], Counter, Counter, int, int, int, int]:
+    ) -> Tuple[
+        List[Dict],
+        Counter,
+        Dict[str, List[float]],
+        Counter,
+        Counter,
+        int,
+        int,
+        int,
+        int,
+    ]:
         """
         Process all conversations and extract aggregated data.
 
@@ -378,7 +429,9 @@ class ConversationAnalyzer:
 
             # Track intent success
             if conv_data["intents"]:
-                success_rate = conv_data["success_indicators"] / max(1, len(conv_data["intents"]))
+                success_rate = conv_data["success_indicators"] / max(
+                    1, len(conv_data["intents"])
+                )
                 for intent in set(conv_data["intents"]):
                     intent_success[intent].append(success_rate)
 
@@ -398,8 +451,15 @@ class ConversationAnalyzer:
                     logger.debug("Failed to parse conversation timestamp: %s", e)
 
         return (
-            processed_convs, intent_counts, intent_success, flow_counts,
-            hourly_dist, total_messages, total_duration, total_success, total_frustration
+            processed_convs,
+            intent_counts,
+            intent_success,
+            flow_counts,
+            hourly_dist,
+            total_messages,
+            total_duration,
+            total_success,
+            total_frustration,
         )
 
     def _build_intent_patterns(
@@ -502,27 +562,42 @@ class ConversationAnalyzer:
 
         # Process all conversations (Issue #281: uses helper)
         (
-            processed_convs, intent_counts, intent_success, flow_counts,
-            hourly_dist, total_messages, total_duration, total_success, total_frustration
+            processed_convs,
+            intent_counts,
+            intent_success,
+            flow_counts,
+            hourly_dist,
+            total_messages,
+            total_duration,
+            total_success,
+            total_frustration,
         ) = self._process_conversation_data(conversations)
 
         # Calculate metrics
         n_convs = len(conversations)
         satisfaction = (total_success / max(1, total_success + total_frustration)) * 100
-        resolution_rate = sum(1 for c in processed_convs if c["success_indicators"] > 0) / max(1, n_convs) * 100
+        resolution_rate = (
+            sum(1 for c in processed_convs if c["success_indicators"] > 0)
+            / max(1, n_convs)
+            * 100
+        )
 
         metrics = ConversationMetrics(
             total_conversations=n_convs,
             total_messages=total_messages,
             avg_messages_per_conversation=round(total_messages / max(1, n_convs), 1),
-            avg_conversation_duration_seconds=round(total_duration / max(1, n_convs), 1),
+            avg_conversation_duration_seconds=round(
+                total_duration / max(1, n_convs), 1
+            ),
             user_satisfaction_estimate=round(satisfaction, 1),
             resolution_rate=round(resolution_rate, 1),
             escalation_rate=round(total_frustration / max(1, n_convs) * 100, 1),
         )
 
         # Build intent patterns (Issue #281: uses helper)
-        intent_patterns = self._build_intent_patterns(intent_counts, intent_success, total_messages)
+        intent_patterns = self._build_intent_patterns(
+            intent_counts, intent_success, total_messages
+        )
 
         # Build common flows (Issue #281: uses helper)
         common_flows = self._build_common_flows(flow_counts)
@@ -558,7 +633,11 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     cutoff = datetime.now() - timedelta(hours=hours)
 
     # Try to load from chat history files
-    chat_dir = PATH.DATA_DIR / "chat_history" if hasattr(PATH, "DATA_DIR") else Path("data/chat_history")
+    chat_dir = (
+        PATH.DATA_DIR / "chat_history"
+        if hasattr(PATH, "DATA_DIR")
+        else Path("data/chat_history")
+    )
 
     # Issue #358 - avoid blocking
     if not await asyncio.to_thread(chat_dir.exists):
@@ -594,13 +673,18 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
 )
 @router.get("/analyze", response_model=ConversationAnalysisResult)
 async def analyze_conversations(
-    hours: int = Query(24, ge=1, le=168, description="Hours of conversations to analyze"),
+    hours: int = Query(
+        24, ge=1, le=168, description="Hours of conversations to analyze"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Analyze conversation patterns and flows.
 
     Discovers user intents, common conversation paths, bottlenecks,
     and calculates key metrics.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         # Load conversations
@@ -645,8 +729,13 @@ async def analyze_conversations(
 @router.get("/intents")
 async def get_intent_stats(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get detailed intent statistics"""
+    """
+    Get detailed intent statistics.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         conversations = await load_chat_sessions(hours)
 
@@ -668,14 +757,20 @@ async def get_intent_stats(
 
         # Format results using O(1) lookup (Issue #315 + #326)
         results = []
-        for intent_id, stats in sorted(intent_stats.items(), key=lambda x: x[1]["count"], reverse=True):
-            results.append({
-                "intent_id": intent_id,
-                "intent_name": _get_intent_name(intent_id),
-                "count": stats["count"],
-                "success_rate": round(stats["success_count"] / max(1, stats["count"]) * 100, 1),
-                "samples": stats["samples"],
-            })
+        for intent_id, stats in sorted(
+            intent_stats.items(), key=lambda x: x[1]["count"], reverse=True
+        ):
+            results.append(
+                {
+                    "intent_id": intent_id,
+                    "intent_name": _get_intent_name(intent_id),
+                    "count": stats["count"],
+                    "success_rate": round(
+                        stats["success_count"] / max(1, stats["count"]) * 100, 1
+                    ),
+                    "samples": stats["samples"],
+                }
+            )
 
         return {
             "intents": results,
@@ -698,8 +793,13 @@ async def get_intent_stats(
 async def get_flow_paths(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
     min_frequency: int = Query(2, ge=1, description="Minimum flow frequency"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get common conversation flow paths"""
+    """
+    Get common conversation flow paths.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         conversations = await load_chat_sessions(hours)
 
@@ -720,16 +820,26 @@ async def get_flow_paths(
 
         # Filter and format
         flows = []
-        for path, data in sorted(flow_data.items(), key=lambda x: x[1]["count"], reverse=True):
+        for path, data in sorted(
+            flow_data.items(), key=lambda x: x[1]["count"], reverse=True
+        ):
             if data["count"] >= min_frequency:
-                avg_duration = sum(data["durations"]) / len(data["durations"]) if data["durations"] else 0
-                flows.append({
-                    "path": list(path),
-                    "frequency": data["count"],
-                    "avg_duration_seconds": round(avg_duration, 1),
-                    "completion_rate": round(data["successes"] / data["count"] * 100, 1),
-                    "path_display": " → ".join(path),
-                })
+                avg_duration = (
+                    sum(data["durations"]) / len(data["durations"])
+                    if data["durations"]
+                    else 0
+                )
+                flows.append(
+                    {
+                        "path": list(path),
+                        "frequency": data["count"],
+                        "avg_duration_seconds": round(avg_duration, 1),
+                        "completion_rate": round(
+                            data["successes"] / data["count"] * 100, 1
+                        ),
+                        "path_display": " → ".join(path),
+                    }
+                )
 
         return {
             "flows": flows[:20],
@@ -750,8 +860,13 @@ async def get_flow_paths(
 @router.get("/bottlenecks")
 async def get_bottlenecks(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get identified conversation bottlenecks"""
+    """
+    Get identified conversation bottlenecks.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         conversations = await load_chat_sessions(hours)
 
@@ -784,8 +899,13 @@ async def get_bottlenecks(
 @router.get("/distribution")
 async def get_hourly_distribution(
     hours: int = Query(24, ge=1, le=168, description="Hours to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get conversation distribution by hour (Issue #315: depth 6→3)"""
+    """
+    Get conversation distribution by hour (Issue #315: depth 6→3).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         conversations = await load_chat_sessions(hours)
 
@@ -821,8 +941,15 @@ async def get_hourly_distribution(
     error_code_prefix="CONVFLOW",
 )
 @router.post("/detect-intent")
-async def detect_intent(message: str = Query(..., description="Message to analyze")):
-    """Detect intent from a single message"""
+async def detect_intent(
+    message: str = Query(..., description="Message to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Detect intent from a single message.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         intent_id, intent_name = conversation_analyzer.detect_intent(message)
 

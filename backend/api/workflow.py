@@ -11,12 +11,12 @@ import time
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
-from backend.models.task_context import WorkflowStepContext
-from backend.type_defs.common import Metadata
-
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from backend.models.task_context import WorkflowStepContext
+from backend.type_defs.common import Metadata
+from src.auth_middleware import check_admin_permission
 from src.event_manager import event_manager
 from src.metrics.system_monitor import system_monitor
 from src.metrics.workflow_metrics import workflow_metrics
@@ -53,9 +53,13 @@ async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:
-        request = ResearchRequest(query="network security scanning tools", focus="tools")
+        request = ResearchRequest(
+            query="network security scanning tools", focus="tools"
+        )
         result = await research_agent.research_specific_tools(request)
-        ctx.step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
+        ctx.step[
+            "result"
+        ] = f"Research completed: {result.get('summary', 'Tools researched')}"
     elif "installation guide" in action_lower:
         result = await research_agent.get_tool_installation_guide("nmap")
         guide = result.get("installation_guide", "Guide obtained")
@@ -162,7 +166,9 @@ async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
     result = await network_discovery_agent.execute(ctx.action, discovery_context)
     status = result.get("status")
     hosts_found = result.get("hosts_found", 0)
-    ctx.step["result"] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
+    ctx.step[
+        "result"
+    ] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
     ctx.step["discovery_results"] = result
 
 
@@ -176,19 +182,31 @@ async def _handle_system_commands_step(ctx: WorkflowStepContext) -> None:
     if "install tool" in action_lower:
         tool_info = {"name": "nmap", "package_name": "nmap"}
         result = await cmd_agent.install_tool(tool_info, ctx.workflow_id)
-        ctx.step["result"] = f"Installation result: {result.get('response', 'Tool installed')}"
+        ctx.step[
+            "result"
+        ] = f"Installation result: {result.get('response', 'Tool installed')}"
     elif "verify installation" in action_lower:
-        result = await cmd_agent.execute_command_with_output("nmap --version", ctx.workflow_id)
-        ctx.step["result"] = f"Verification result: {result.get('output', 'Tool verified')}"
+        result = await cmd_agent.execute_command_with_output(
+            "nmap --version", ctx.workflow_id
+        )
+        ctx.step[
+            "result"
+        ] = f"Verification result: {result.get('output', 'Tool verified')}"
     else:
-        result = await cmd_agent.execute_command_with_output(ctx.action, ctx.workflow_id)
-        ctx.step["result"] = f"Command executed: {result.get('output', 'Command completed')}"
+        result = await cmd_agent.execute_command_with_output(
+            ctx.action, ctx.workflow_id
+        )
+        ctx.step[
+            "result"
+        ] = f"Command executed: {result.get('output', 'Command completed')}"
 
 
 async def _handle_fallback_step(ctx: WorkflowStepContext, agent_type: str) -> None:
     """Handle unknown agent type with fallback (Issue #336 - extracted handler, Issue #322 - context)."""
     result = await ctx.orchestrator.execute_goal(f"{agent_type}: {ctx.action}")
-    ctx.step["result"] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+    ctx.step[
+        "result"
+    ] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
 
 
 # Issue #336: Dispatch table for agent step handlers
@@ -248,12 +266,8 @@ async def _try_lightweight_routing(
         return {
             "success": True,
             "type": "lightweight_response",
-            "result": result.get(
-                "simple_response", "Response generated successfully"
-            ),
-            "routing_method": result.get(
-                "routing_reason", "lightweight_pattern_match"
-            ),
+            "result": result.get("simple_response", "Response generated successfully"),
+            "routing_method": result.get("routing_reason", "lightweight_pattern_match"),
         }
     else:
         # Complex requests need full orchestrator (currently blocked)
@@ -358,8 +372,10 @@ _approvals_lock = asyncio.Lock()
     error_code_prefix="WORKFLOW",
 )
 @router.get("/workflows")
-async def list_active_workflows():
-    """List all active workflows with their current status."""
+async def list_active_workflows(admin_check: bool = Depends(check_admin_permission)):
+    """List all active workflows with their current status.
+
+    Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         workflows_summary = []
 
@@ -372,7 +388,9 @@ async def list_active_workflows():
                 "current_step": workflow_data.get("current_step", 0),
                 "status": workflow_data.get("status", "unknown"),
                 "created_at": workflow_data.get("created_at", ""),
-                "estimated_duration": workflow_data.get("estimated_duration", "unknown"),
+                "estimated_duration": workflow_data.get(
+                    "estimated_duration", "unknown"
+                ),
                 "agents_involved": workflow_data.get("agents_involved", []),
             }
             workflows_summary.append(summary)
@@ -392,8 +410,12 @@ async def list_active_workflows():
     error_code_prefix="WORKFLOW",
 )
 @router.get("/workflow/{workflow_id}")
-async def get_workflow_details(workflow_id: str):
-    """Get detailed information about a specific workflow."""
+async def get_workflow_details(
+    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get detailed information about a specific workflow.
+
+    Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         if workflow_id not in active_workflows:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -410,8 +432,12 @@ async def get_workflow_details(workflow_id: str):
     error_code_prefix="WORKFLOW",
 )
 @router.get("/workflow/{workflow_id}/status")
-async def get_workflow_status(workflow_id: str):
-    """Get current status of a workflow."""
+async def get_workflow_status(
+    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get current status of a workflow.
+
+    Issue #744: Requires admin authentication."""
     if workflow_id not in active_workflows:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -442,8 +468,14 @@ async def get_workflow_status(workflow_id: str):
     error_code_prefix="WORKFLOW",
 )
 @router.post("/workflow/{workflow_id}/approve")
-async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResponse):
-    """Approve or deny a workflow step that requires user confirmation."""
+async def approve_workflow_step(
+    workflow_id: str,
+    approval: WorkflowApprovalResponse,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Approve or deny a workflow step that requires user confirmation.
+
+    Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         if workflow_id not in active_workflows:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -474,7 +506,9 @@ async def approve_workflow_step(workflow_id: str, approval: WorkflowApprovalResp
         current_step = workflow.get("current_step", 0)
 
         if current_step < len(steps):
-            steps[current_step]["status"] = "approved" if approval.approved else "denied"
+            steps[current_step]["status"] = (
+                "approved" if approval.approved else "denied"
+            )
             steps[current_step]["user_response"] = approval.user_input
 
         # Get workflow type for metrics
@@ -514,10 +548,12 @@ async def execute_workflow(
     workflow_request: WorkflowExecutionRequest,
     background_tasks: BackgroundTasks,
     request: Request,
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Execute a workflow with coordination of multiple agents.
     Issue #281: Refactored from 158 lines to use extracted helper methods.
+    Issue #744: Requires admin authentication.
     """
     # Validate orchestrators (Issue #281: uses helper)
     lightweight_orchestrator, orchestrator = _validate_orchestrators(request)
@@ -665,7 +701,9 @@ async def _wait_for_step_approval(
         return None
 
 
-async def _publish_step_started(workflow_id: str, step: Metadata, step_index: int, total_steps: int) -> None:
+async def _publish_step_started(
+    workflow_id: str, step: Metadata, step_index: int, total_steps: int
+) -> None:
     """
     Publish workflow step started event.
 
@@ -710,7 +748,9 @@ async def _publish_step_completed(workflow_id: str, step: Metadata) -> None:
     )
 
 
-def _record_workflow_metrics(workflow_type: str, workflow_start_time: float, status: str) -> None:
+def _record_workflow_metrics(
+    workflow_type: str, workflow_start_time: float, status: str
+) -> None:
     """
     Record Prometheus metrics for workflow completion.
 
@@ -930,8 +970,12 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
     error_code_prefix="WORKFLOW",
 )
 @router.delete("/workflow/{workflow_id}")
-async def cancel_workflow(workflow_id: str):
-    """Cancel an active workflow."""
+async def cancel_workflow(
+    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Cancel an active workflow.
+
+    Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         if workflow_id not in active_workflows:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -963,8 +1007,12 @@ async def cancel_workflow(workflow_id: str):
     error_code_prefix="WORKFLOW",
 )
 @router.get("/workflow/{workflow_id}/pending_approvals")
-async def get_pending_approvals(workflow_id: str):
-    """Get pending approval requests for a workflow."""
+async def get_pending_approvals(
+    workflow_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get pending approval requests for a workflow.
+
+    Issue #744: Requires admin authentication."""
     if workflow_id not in active_workflows:
         raise HTTPException(status_code=404, detail="Workflow not found")
 

@@ -8,8 +8,9 @@ import time
 from typing import Dict, Optional
 
 import aiofiles
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -49,7 +50,11 @@ async def _get_prompt_file_lock(filepath: str) -> asyncio.Lock:
 
 
 async def _read_prompt_file(
-    full_path: str, rel_path: str, entry: str, base_path: str, semaphore: asyncio.Semaphore
+    full_path: str,
+    rel_path: str,
+    entry: str,
+    base_path: str,
+    semaphore: asyncio.Semaphore,
 ) -> tuple:
     """Read a single prompt file with semaphore-limited concurrency (Issue #315: extracted).
 
@@ -212,8 +217,11 @@ async def _collect_prompt_files(
     error_code_prefix="PROMPTS",
 )
 @router.get("/")
-async def get_prompts():
-    """Get all prompts from filesystem with caching."""
+async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
+    """Get all prompts from filesystem with caching.
+
+    Issue #744: Requires admin authentication.
+    """
     global _prompts_cache, _cache_timestamp
 
     try:
@@ -231,7 +239,7 @@ async def get_prompts():
         # Issue #358 - avoid blocking
         prompts_dir = await asyncio.to_thread(
             os.path.abspath,
-            os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+            os.path.join(os.path.dirname(__file__), "..", "..", "prompts"),
         )
         prompts = []
         defaults = {}
@@ -271,8 +279,11 @@ async def get_prompts():
     error_code_prefix="PROMPTS",
 )
 @router.post("/cache/clear")
-async def clear_prompts_cache():
-    """Clear the prompts cache to force reload on next request"""
+async def clear_prompts_cache(admin_check: bool = Depends(check_admin_permission)):
+    """Clear the prompts cache to force reload on next request.
+
+    Issue #744: Requires admin authentication.
+    """
     global _prompts_cache, _cache_timestamp
     async with _cache_lock:
         _prompts_cache = None
@@ -288,15 +299,20 @@ async def clear_prompts_cache():
 )
 @router.post("/{prompt_id}")
 @router.put("/{prompt_id}")  # Issue #570: Support PUT for frontend compatibility
-async def save_prompt(prompt_id: str, request: dict):
-    """Save or update a prompt file by ID."""
+async def save_prompt(
+    prompt_id: str, request: dict, admin_check: bool = Depends(check_admin_permission)
+):
+    """Save or update a prompt file by ID.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         content = request.get("content", "")
         # Derive the file path from the prompt_id, relative to project root
         # Issue #358 - avoid blocking
         prompts_dir = await asyncio.to_thread(
             os.path.abspath,
-            os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+            os.path.join(os.path.dirname(__file__), "..", "..", "prompts"),
         )
 
         # Sanitize prompt_id to prevent path traversal
@@ -348,7 +364,9 @@ async def save_prompt(prompt_id: str, request: dict):
         }
     except OSError as e:
         logger.error("Failed to write prompt file %s: %s", prompt_id, e)
-        raise HTTPException(status_code=500, detail=f"Failed to save prompt file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to save prompt file: {str(e)}"
+        )
     except Exception as e:
         logger.error("Error saving prompt %s: %s", prompt_id, str(e))
         raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
@@ -360,13 +378,18 @@ async def save_prompt(prompt_id: str, request: dict):
     error_code_prefix="PROMPTS",
 )
 @router.post("/{prompt_id}/revert")
-async def revert_prompt(prompt_id: str):
-    """Revert a prompt to its default version."""
+async def revert_prompt(
+    prompt_id: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Revert a prompt to its default version.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Issue #358 - avoid blocking
         prompts_dir = await asyncio.to_thread(
             os.path.abspath,
-            os.path.join(os.path.dirname(__file__), "..", "..", "prompts")
+            os.path.join(os.path.dirname(__file__), "..", "..", "prompts"),
         )
         # Check if there is a default version of this prompt
         default_file_path = os.path.join(
@@ -378,7 +401,9 @@ async def revert_prompt(prompt_id: str):
                 default_content = await f.read()
             # Save the default content to the custom prompt location
             custom_file_path = os.path.join(prompts_dir, prompt_id.replace("_", "/"))
-            await asyncio.to_thread(os.makedirs, os.path.dirname(custom_file_path), exist_ok=True)
+            await asyncio.to_thread(
+                os.makedirs, os.path.dirname(custom_file_path), exist_ok=True
+            )
             # Issue #514: Use per-file locking to prevent concurrent write corruption
             file_lock = await _get_prompt_file_lock(custom_file_path)
             async with file_lock:
@@ -408,8 +433,12 @@ async def revert_prompt(prompt_id: str):
                 status_code=404, detail=f"No default prompt found for {prompt_id}"
             )
     except OSError as e:
-        logger.error("Failed to read/write prompt file during revert %s: %s", prompt_id, e)
-        raise HTTPException(status_code=500, detail=f"Failed to access prompt file: {str(e)}")
+        logger.error(
+            "Failed to read/write prompt file during revert %s: %s", prompt_id, e
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to access prompt file: {str(e)}"
+        )
     except Exception as e:
         logger.error("Error reverting prompt %s: %s", prompt_id, str(e))
         raise HTTPException(status_code=500, detail=f"Error reverting prompt: {str(e)}")

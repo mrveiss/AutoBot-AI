@@ -17,16 +17,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Set
 
-from backend.type_defs.common import Metadata
-
 import aiofiles
-from fastapi import APIRouter, HTTPException, Query, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import StreamingResponse
 
+from backend.type_defs.common import Metadata
+from backend.utils.io_executor import run_in_log_executor
+from src.auth_middleware import check_admin_permission
 from src.constants.path_constants import PATH
 from src.constants.threshold_constants import TimingConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from backend.utils.io_executor import run_in_log_executor
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
 from typing import Dict
+
 _log_file_locks: Dict[str, asyncio.Lock] = {}
 _log_locks_lock = asyncio.Lock()
 
@@ -63,6 +64,7 @@ async def _get_log_file_lock(filepath: str) -> asyncio.Lock:
         if filepath not in _log_file_locks:
             _log_file_locks[filepath] = asyncio.Lock()
         return _log_file_locks[filepath]
+
 
 # Docker container names and their tags for log access
 CONTAINER_LOGS = {
@@ -111,9 +113,7 @@ def _parse_file_content_lines(
     return logs
 
 
-async def _tail_file_to_websocket(
-    file_path: Path, websocket: WebSocket
-) -> None:
+async def _tail_file_to_websocket(file_path: Path, websocket: WebSocket) -> None:
     """Tail a log file and send lines to WebSocket (Issue #315: extracted).
 
     Sends last 50 lines initially, then watches for new lines.
@@ -189,7 +189,8 @@ async def _collect_file_logs(
 
     # Filter files first
     filtered_files = [
-        (fp, fp.stem) for fp in log_files
+        (fp, fp.stem)
+        for fp in log_files
         if not source_filter or fp.stem in source_filter
     ]
 
@@ -208,8 +209,7 @@ async def _collect_file_logs(
             return []
 
     results = await asyncio.gather(
-        *[read_file_logs(fp, fn) for fp, fn in filtered_files],
-        return_exceptions=True
+        *[read_file_logs(fp, fn) for fp, fn in filtered_files], return_exceptions=True
     )
 
     # Flatten results
@@ -224,7 +224,11 @@ async def _get_container_output(container_name: str, service: str) -> Optional[b
     """Get stdout from a Docker container (Issue #315 - extracted helper)."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "logs", container_name, "--timestamps", "--tail=50",
+            "docker",
+            "logs",
+            container_name,
+            "--timestamps",
+            "--tail=50",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -288,7 +292,7 @@ async def _collect_container_logs(
 
     results = await asyncio.gather(
         *[get_and_parse_container_logs(svc, cn) for svc, cn in filtered_containers],
-        return_exceptions=True
+        return_exceptions=True,
     )
 
     # Flatten results
@@ -326,19 +330,25 @@ async def _get_file_log_sources() -> List[Metadata]:
         }
 
     results = await asyncio.gather(
-        *[get_file_info(fp) for fp in log_files],
-        return_exceptions=True
+        *[get_file_info(fp) for fp in log_files], return_exceptions=True
     )
 
     return [r for r in results if isinstance(r, dict)]
 
 
-async def _check_container_status(service: str, container_name: str) -> Optional[Metadata]:
+async def _check_container_status(
+    service: str, container_name: str
+) -> Optional[Metadata]:
     """Check status of a single Docker container (Issue #315 - extracted helper)."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "ps", "-a", "--filter", f"name={container_name}",
-            "--format", "{{.Names}}\t{{.Status}}",
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"name={container_name}",
+            "--format",
+            "{{.Names}}\t{{.Status}}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -377,8 +387,11 @@ async def _get_container_log_sources() -> List[Metadata]:
 )
 # Issue #552: Fixed duplicate /logs prefix - router already mounted at /api/logs
 @router.get("/sources")
-async def get_log_sources():
-    """Get all available log sources (files + Docker containers) (Issue #315 - refactored)."""
+async def get_log_sources(admin_check: bool = Depends(check_admin_permission)):
+    """Get all available log sources (files + Docker containers) (Issue #315 - refactored).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Issue #379: Parallelize independent log source collection
         file_logs, container_logs = await asyncio.gather(
@@ -441,8 +454,14 @@ async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
     error_code_prefix="LOGS",
 )
 @router.get("/recent")
-async def get_recent_logs(limit: int = 100):
-    """Get recent log entries across all log files (Issue #315 - refactored)."""
+async def get_recent_logs(
+    limit: int = 100,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get recent log entries across all log files (Issue #315 - refactored).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         log_dir = str(PATH.LOGS_DIR)
         recent_entries = []
@@ -469,8 +488,13 @@ async def get_recent_logs(limit: int = 100):
     error_code_prefix="LOGS",
 )
 @router.get("/list")
-async def list_logs() -> List[Metadata]:
-    """List all available log files (backward compatibility)"""
+async def list_logs(
+    admin_check: bool = Depends(check_admin_permission),
+) -> List[Metadata]:
+    """List all available log files (backward compatibility).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         sources = await get_log_sources()
         return sources["file_logs"]
@@ -487,11 +511,15 @@ async def list_logs() -> List[Metadata]:
 @router.get("/read/{filename}")
 async def read_log(
     filename: str,
+    admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(100, description="Number of lines to read"),
     offset: int = Query(0, description="Line offset"),
     tail: bool = Query(False, description="Read from end of file"),
 ):
-    """Read log file content"""
+    """Read log file content.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         file_path = LOG_DIR / filename
         file_exists = await run_in_log_executor(file_path.exists)
@@ -537,11 +565,15 @@ async def read_log(
 @router.get("/container/{service}")
 async def read_container_logs(
     service: str,
+    admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(100, ge=1, le=10000, description="Number of lines to read"),
     since: Optional[str] = Query(None, description="Duration like '1h', '30m', '1d'"),
     tail: bool = Query(True, description="Read from end of logs"),
 ):
-    """Read logs from a Docker container"""
+    """Read logs from a Docker container.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         if service not in CONTAINER_LOGS:
             raise HTTPException(
@@ -568,9 +600,7 @@ async def read_container_logs(
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=30
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()
@@ -578,7 +608,8 @@ async def read_container_logs(
 
         if process.returncode != 0:
             raise HTTPException(
-                status_code=500, detail=f"Failed to get container logs: {stderr.decode()}"
+                status_code=500,
+                detail=f"Failed to get container logs: {stderr.decode()}",
             )
 
         # Parse logs
@@ -675,13 +706,17 @@ def parse_docker_log_line(line: str, service: str) -> Metadata:
 )
 @router.get("/unified")
 async def get_unified_logs(
+    admin_check: bool = Depends(check_admin_permission),
     lines: int = Query(
         100, ge=1, le=1000, description="Total number of lines to return"
     ),
     level: Optional[str] = Query(None, description="Filter by log level"),
     sources: Optional[str] = Query(None, description="Comma-separated list of sources"),
 ):
-    """Get unified logs from all sources, merged by timestamp"""
+    """Get unified logs from all sources, merged by timestamp.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Parse sources filter
         source_filter: Set[str] = set()
@@ -751,8 +786,14 @@ def parse_file_log_line(line: str, source: str) -> Metadata:
     error_code_prefix="LOGS",
 )
 @router.get("/stream/{filename}")
-async def stream_log(filename: str):
-    """Stream log file content"""
+async def stream_log(
+    filename: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Stream log file content.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         file_path = LOG_DIR / filename
         file_exists = await run_in_log_executor(file_path.exists)
@@ -865,7 +906,9 @@ async def _search_single_log_file(
             if not _line_matches_query(line_content, query, case_sensitive):
                 continue
 
-            results.append(_create_search_result(file_path.name, line_num, line_content))
+            results.append(
+                _create_search_result(file_path.name, line_num, line_content)
+            )
 
             if current_count + len(results) >= max_results:
                 break
@@ -880,12 +923,16 @@ async def _search_single_log_file(
 )
 @router.get("/search")
 async def search_logs(
+    admin_check: bool = Depends(check_admin_permission),
     query: str = Query(..., description="Search query"),
     filename: Optional[str] = Query(None, description="Specific file to search"),
     case_sensitive: bool = Query(False, description="Case sensitive search"),
     max_results: int = Query(100, description="Maximum results"),
 ):
-    """Search across log files"""
+    """Search across log files.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         results = []
         files_to_search = []
@@ -897,7 +944,9 @@ async def search_logs(
                 files_to_search.append(file_path)
         else:
             # Issue #358 - use lambda for proper glob() execution in thread
-            files_to_search = await run_in_log_executor(lambda: list(LOG_DIR.glob("*.log")))
+            files_to_search = await run_in_log_executor(
+                lambda: list(LOG_DIR.glob("*.log"))
+            )
 
         for file_path in files_to_search:
             if len(results) >= max_results:
@@ -930,8 +979,14 @@ async def search_logs(
     error_code_prefix="LOGS",
 )
 @router.delete("/clear/{filename}")
-async def clear_log(filename: str):
-    """Clear a log file (truncate to 0 bytes)"""
+async def clear_log(
+    filename: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Clear a log file (truncate to 0 bytes).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         file_path = LOG_DIR / filename
         file_exists = await run_in_log_executor(file_path.exists)
