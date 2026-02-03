@@ -8,6 +8,7 @@ Terminal completion service using bash compgen for authentic completion.
 import asyncio
 import logging
 import os
+import shlex
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -87,19 +88,22 @@ class TerminalCompletionService:
 
     async def _complete_commands(self, prefix: str, env: dict) -> List[str]:
         """Complete commands using compgen."""
-        cmd = f'compgen -A alias -A builtin -A command -- "{prefix}" 2>/dev/null'
+        safe_prefix = shlex.quote(prefix)
+        cmd = f"compgen -A alias -A builtin -A command -- {safe_prefix} 2>/dev/null"
         return await self._run_compgen(cmd, env)
 
     async def _complete_env_vars(self, prefix: str, env: dict) -> List[str]:
         """Complete environment variable names."""
-        cmd = f'compgen -v -- "{prefix}" 2>/dev/null'
+        safe_prefix = shlex.quote(prefix)
+        cmd = f"compgen -v -- {safe_prefix} 2>/dev/null"
         completions = await self._run_compgen(cmd, env)
         return ["$" + c for c in completions]
 
     async def _complete_paths(self, prefix: str, cwd: str) -> List[str]:
         """Complete file and directory paths."""
         expanded_prefix = os.path.expanduser(prefix)
-        cmd = f'compgen -f -- "{expanded_prefix}" 2>/dev/null'
+        safe_prefix = shlex.quote(expanded_prefix)
+        cmd = f"compgen -f -- {safe_prefix} 2>/dev/null"
         completions = await self._run_compgen(
             cmd, {"HOME": os.environ.get("HOME", "")}, cwd
         )
@@ -126,7 +130,7 @@ class TerminalCompletionService:
                 cwd=cwd,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
-            lines = stdout.decode().strip().split("\n")
+            lines = stdout.decode(encoding="utf-8").strip().split("\n")
             return [line for line in lines if line]
         except asyncio.TimeoutError:
             logger.warning("Completion command timed out")
