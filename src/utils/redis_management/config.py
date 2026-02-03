@@ -64,15 +64,24 @@ class RedisConfig:
             self.password = os.getenv("REDIS_PASSWORD") or os.getenv(
                 "AUTOBOT_REDIS_PASSWORD"
             )
-        # Auto-load TLS settings from SSOT config
+        # Auto-load TLS settings from SSOT config - Issue #164
         if os.getenv("AUTOBOT_REDIS_TLS_ENABLED", "").lower() == "true":
             self.ssl = True
             self.port = int(os.getenv("AUTOBOT_REDIS_TLS_PORT", "6380"))
-            cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
-            project_root = "/home/kali/Desktop/AutoBot"
-            self.ssl_ca_certs = os.path.join(project_root, cert_dir, "ca", "ca-cert.pem")
-            self.ssl_certfile = os.path.join(project_root, cert_dir, "main-host", "server-cert.pem")
-            self.ssl_keyfile = os.path.join(project_root, cert_dir, "main-host", "server-key.pem")
+
+            # Check for explicit cert paths first (set by SLM enable-tls playbook)
+            self.ssl_ca_certs = os.getenv("AUTOBOT_TLS_CA_PATH")
+            self.ssl_certfile = os.getenv("AUTOBOT_TLS_CERT_PATH")
+            self.ssl_keyfile = os.getenv("AUTOBOT_TLS_KEY_PATH")
+
+            # Fallback to legacy cert_dir pattern for backwards compatibility
+            if not self.ssl_ca_certs or not self.ssl_certfile or not self.ssl_keyfile:
+                from pathlib import Path
+                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+                project_root = Path(__file__).parent.parent.parent.parent
+                self.ssl_ca_certs = str(project_root / cert_dir / "ca" / "ca-cert.pem")
+                self.ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
+                self.ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
 
 
 class RedisConfigLoader:
