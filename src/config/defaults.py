@@ -17,11 +17,21 @@ from src.config.registry import ConfigRegistry
 
 
 def _get_backend_config(
-    ollama_host: str, ollama_port: int, bind_host: str, backend_port: int
+    llm_host: str, llm_port: int, bind_host: str, backend_port: int
 ) -> Dict[str, Any]:
-    """Get backend LLM and server configuration."""
+    """Get backend LLM and server configuration.
+
+    Args:
+        llm_host: LLM service host (provider-agnostic, defaults to Ollama endpoint)
+        llm_port: LLM service port
+        bind_host: Server bind address
+        backend_port: Backend API port
+    """
     # Lazy import to avoid circular dependency
     from src.constants.model_constants import ModelConstants
+
+    # Build provider-agnostic LLM config (default provider is Ollama)
+    llm_base_url = f"http://{llm_host}:{llm_port}"
 
     return {
         "llm": {
@@ -30,8 +40,8 @@ def _get_backend_config(
                 "provider": "ollama",
                 "providers": {
                     "ollama": {
-                        "endpoint": f"http://{ollama_host}:{ollama_port}/api/generate",
-                        "host": f"http://{ollama_host}:{ollama_port}",
+                        "endpoint": f"{llm_base_url}/api/generate",
+                        "host": llm_base_url,
                         "models": [],
                         "selected_model": os.getenv(
                             "AUTOBOT_DEFAULT_LLM_MODEL",
@@ -44,8 +54,8 @@ def _get_backend_config(
                 "provider": "ollama",
                 "providers": {
                     "ollama": {
-                        "endpoint": f"http://{ollama_host}:{ollama_port}/api/embeddings",
-                        "host": f"http://{ollama_host}:{ollama_port}",
+                        "endpoint": f"{llm_base_url}/api/embeddings",
+                        "host": llm_base_url,
                         "models": [],
                         "selected_model": os.getenv(
                             "AUTOBOT_EMBEDDING_MODEL", "nomic-embed-text"
@@ -265,24 +275,26 @@ def get_default_config() -> Dict[str, Any]:
     """Get default configuration values.
 
     Issue #763: Now uses ConfigRegistry with fallback to NetworkConstants.
+
+    Note: LLM host/port are provider-agnostic. The default provider is Ollama,
+    but agents can override via their individual configurations.
     """
     # Lazy import to avoid circular dependency
     from src.constants.network_constants import NetworkConstants
 
-    # Use ConfigRegistry with NetworkConstants fallbacks
-    ollama_host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_HOST)
-    ollama_port = int(
-        ConfigRegistry.get("port.ollama", str(NetworkConstants.OLLAMA_PORT))
-    )
+    # LLM service configuration (provider-agnostic)
+    # Default uses Ollama endpoint, but agents can use different providers
+    llm_host = ConfigRegistry.get("vm.llm", NetworkConstants.AI_STACK_HOST)
+    llm_port = int(ConfigRegistry.get("port.llm", str(NetworkConstants.OLLAMA_PORT)))
+
+    # Infrastructure configuration
     redis_host = ConfigRegistry.get("vm.redis", NetworkConstants.REDIS_VM_IP)
     redis_port = int(ConfigRegistry.get("port.redis", str(NetworkConstants.REDIS_PORT)))
     bind_host = NetworkConstants.BIND_ALL_INTERFACES
     backend_port = NetworkConstants.BACKEND_PORT
 
     config = {
-        "backend": _get_backend_config(
-            ollama_host, ollama_port, bind_host, backend_port
-        ),
+        "backend": _get_backend_config(llm_host, llm_port, bind_host, backend_port),
         "deployment": {
             "mode": "local",
             "host": redis_host,
