@@ -760,22 +760,45 @@ class LLMPatternAnalyzer:
 
         return recommendations
 
-    async def get_model_comparison(self) -> List[Dict[str, Any]]:
-        """Compare costs and usage across different models"""
-        redis = await self._get_redis()
+    async def _fetch_usage_records_batch(self, redis, days: int = 7) -> List[List]:
+        """
+        Fetch usage records from Redis for the specified number of days.
 
-        models = {}
+        Issue #620: Extracted from get_model_comparison to reduce function length.
 
-        # Aggregate data from last 7 days - batch fetch all lists using pipeline
+        Args:
+            redis: Redis client instance
+            days: Number of days to fetch (default: 7)
+
+        Returns:
+            List of record lists from Redis pipeline
+        """
         dates = [
-            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
+            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(days)
         ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 
         async with redis.pipeline() as pipe:
             for key in usage_keys:
                 await pipe.lrange(key, 0, -1)
-            all_records_lists = await pipe.execute()
+            return await pipe.execute()
+
+    def _aggregate_model_usage_data(
+        self, all_records_lists: List[List]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Aggregate usage records into per-model statistics.
+
+        Issue #620: Extracted from get_model_comparison to reduce function length.
+
+        Args:
+            all_records_lists: List of record lists from Redis
+
+        Returns:
+            Dict mapping model names to aggregated statistics
+        """
+        models: Dict[str, Dict[str, Any]] = {}
 
         for records in all_records_lists:
             for record_str in records:
@@ -810,7 +833,22 @@ class LLMPatternAnalyzer:
                 except json.JSONDecodeError:
                     continue
 
-        # Calculate averages
+        return models
+
+    def _build_model_comparison_result(
+        self, models: Dict[str, Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Build comparison result list with calculated averages.
+
+        Issue #620: Extracted from get_model_comparison to reduce function length.
+
+        Args:
+            models: Aggregated model statistics
+
+        Returns:
+            List of model comparison dicts sorted by total cost
+        """
         result = []
         for model_data in models.values():
             count = model_data["request_count"]
@@ -819,8 +857,10 @@ class LLMPatternAnalyzer:
                     {
                         "model": model_data["model"],
                         "request_count": count,
-                        "total_tokens": model_data["total_input_tokens"]
-                        + model_data["total_output_tokens"],
+                        "total_tokens": (
+                            model_data["total_input_tokens"]
+                            + model_data["total_output_tokens"]
+                        ),
                         "total_cost": round(model_data["total_cost"], 4),
                         "avg_cost_per_request": round(
                             model_data["total_cost"] / count, 6
@@ -834,10 +874,28 @@ class LLMPatternAnalyzer:
                     }
                 )
 
-        # Sort by total cost
         result.sort(key=lambda x: x["total_cost"], reverse=True)
-
         return result
+
+    async def get_model_comparison(self) -> List[Dict[str, Any]]:
+        """
+        Compare costs and usage across different models.
+
+        Issue #620: Refactored to use extracted helper methods.
+
+        Returns:
+            List of model comparison statistics sorted by total cost
+        """
+        redis = await self._get_redis()
+
+        # Fetch records from last 7 days
+        all_records_lists = await self._fetch_usage_records_batch(redis, days=7)
+
+        # Aggregate into per-model statistics
+        models = self._aggregate_model_usage_data(all_records_lists)
+
+        # Build and return sorted comparison result
+        return self._build_model_comparison_result(models)
 
     async def get_category_distribution(self) -> Dict[str, Any]:
         """Get distribution of prompt categories"""

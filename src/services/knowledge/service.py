@@ -43,6 +43,60 @@ class ChatKnowledgeService:
     Issue #250: Added documentation search integration for AutoBot self-awareness.
     """
 
+    # Issue #620: Extracted keyword sets from _select_categories_for_intent
+    AUTOBOT_KEYWORDS = frozenset(
+        {
+            "autobot",
+            "how do i use",
+            "how to use autobot",
+            "what can you do",
+            "help me with autobot",
+            "autobot feature",
+            "this tool",
+            "your capability",
+            "your feature",
+        }
+    )
+
+    SYSTEM_KEYWORDS = frozenset(
+        {
+            "command",
+            "terminal",
+            "bash",
+            "shell",
+            "linux",
+            "install",
+            "configure",
+            "config",
+            "setup",
+            "man page",
+            "syntax",
+            "chmod",
+            "chown",
+            "grep",
+            "awk",
+            "sed",
+            "systemctl",
+            "docker",
+            "kubernetes",
+            "service",
+            "daemon",
+            "process",
+        }
+    )
+
+    USER_KEYWORDS = frozenset(
+        {
+            "my preference",
+            "i like",
+            "i prefer",
+            "remember that",
+            "last time",
+            "as i mentioned",
+            "my settings",
+        }
+    )
+
     def __init__(self, rag_service: RAGService, enable_doc_search: bool = True):
         """
         Initialize chat knowledge service.
@@ -254,6 +308,27 @@ class ChatKnowledgeService:
 
         return citations
 
+    def _match_category_keywords(
+        self, query_lower: str, keywords: frozenset, category: str
+    ) -> Optional[List[str]]:
+        """
+        Check if query matches any keywords for a category.
+
+        Issue #620: Extracted from _select_categories_for_intent.
+
+        Args:
+            query_lower: Lowercase query string
+            keywords: Set of keywords to match
+            category: Category name to return if matched
+
+        Returns:
+            List containing the category if matched, None otherwise
+        """
+        if any(kw in query_lower for kw in keywords):
+            logger.debug("[Smart Category] Selected: %s", category)
+            return [category]
+        return None
+
     def _select_categories_for_intent(
         self,
         intent_result: QueryIntentResult,
@@ -263,6 +338,7 @@ class ChatKnowledgeService:
         Select appropriate categories based on query intent.
 
         Issue #556: Smart category selection for optimized retrieval.
+        Issue #620: Refactored to use class constants and helper method.
 
         Args:
             intent_result: Detected query intent
@@ -273,68 +349,20 @@ class ChatKnowledgeService:
         """
         query_lower = query.lower()
 
-        # AutoBot-specific queries
-        autobot_keywords = {
-            "autobot",
-            "how do i use",
-            "how to use autobot",
-            "what can you do",
-            "help me with autobot",
-            "autobot feature",
-            "this tool",
-            "your capability",
-            "your feature",
-        }
-        if any(kw in query_lower for kw in autobot_keywords):
-            logger.debug("[Smart Category] Selected: autobot_knowledge")
-            return ["autobot_knowledge"]
+        # Check each category in priority order
+        category_checks = [
+            (self.AUTOBOT_KEYWORDS, "autobot_knowledge"),
+            (self.SYSTEM_KEYWORDS, "system_knowledge"),
+            (self.USER_KEYWORDS, "user_knowledge"),
+        ]
 
-        # System/technical queries
-        system_keywords = {
-            "command",
-            "terminal",
-            "bash",
-            "shell",
-            "linux",
-            "install",
-            "configure",
-            "config",
-            "setup",
-            "man page",
-            "syntax",
-            "chmod",
-            "chown",
-            "grep",
-            "awk",
-            "sed",
-            "systemctl",
-            "docker",
-            "kubernetes",
-            "service",
-            "daemon",
-            "process",
-        }
-        if any(kw in query_lower for kw in system_keywords):
-            logger.debug("[Smart Category] Selected: system_knowledge")
-            return ["system_knowledge"]
-
-        # User preference queries
-        user_keywords = {
-            "my preference",
-            "i like",
-            "i prefer",
-            "remember that",
-            "last time",
-            "as i mentioned",
-            "my settings",
-        }
-        if any(kw in query_lower for kw in user_keywords):
-            logger.debug("[Smart Category] Selected: user_knowledge")
-            return ["user_knowledge"]
+        for keywords, category in category_checks:
+            result = self._match_category_keywords(query_lower, keywords, category)
+            if result:
+                return result
 
         # For KNOWLEDGE_QUERY intent, search all relevant categories
         if intent_result.intent == QueryKnowledgeIntent.KNOWLEDGE_QUERY:
-            # Return None to search all categories
             logger.debug("[Smart Category] No specific category - searching all")
             return None
 
