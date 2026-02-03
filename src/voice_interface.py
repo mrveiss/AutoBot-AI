@@ -174,8 +174,11 @@ def _vosk_recognize_blocking(
         audio_queue.put(bytes(indata))
 
     with sd.RawInputStream(
-        samplerate=sample_rate, blocksize=block_size,
-        dtype="int16", channels=1, callback=callback,
+        samplerate=sample_rate,
+        blocksize=block_size,
+        dtype="int16",
+        channels=1,
+        callback=callback,
     ):
         logger.debug("Vosk listening started...")
         start_time = asyncio.get_event_loop().time()
@@ -186,7 +189,9 @@ def _vosk_recognize_blocking(
 
             if result := _check_vosk_timeout(elapsed, timeout, speech_detected):
                 return result
-            if result := _check_vosk_phrase_limit(elapsed, phrase_time_limit, recognizer):
+            if result := _check_vosk_phrase_limit(
+                elapsed, phrase_time_limit, recognizer
+            ):
                 return result
 
             try:
@@ -316,7 +321,9 @@ class VoiceInterface:
             volume = self.voice_config.get("pyttsx3_volume", 1.0)
             engine.setProperty("rate", rate)
             engine.setProperty("volume", volume)
-            logger.debug("pyttsx3 engine initialized (rate=%d, volume=%.1f)", rate, volume)
+            logger.debug(
+                "pyttsx3 engine initialized (rate=%d, volume=%.1f)", rate, volume
+            )
             return engine
         except Exception as e:
             logger.error("Failed to initialize pyttsx3: %s", e)
@@ -703,7 +710,9 @@ class VoiceInterface:
         for name, method in backends:
             logger.debug("Trying STT backend: %s", name)
             try:
-                result = await method(timeout=timeout, phrase_time_limit=phrase_time_limit)
+                result = await method(
+                    timeout=timeout, phrase_time_limit=phrase_time_limit
+                )
                 if result.get("status") == "success":
                     result["backend"] = name
                     return result
@@ -722,49 +731,49 @@ class VoiceInterface:
             "message": f"All STT backends failed: {'; '.join(errors)}",
         }
 
-    async def speak_with_fallback(self, text: str) -> Dict[str, Any]:
+    def _get_tts_backend_priority(self) -> list:
         """
-        Speak text with automatic fallback between TTS backends.
+        Get ordered list of TTS backends based on preference.
 
-        Tries preferred TTS backend first, falls back to alternatives.
-
-        Args:
-            text: Text to speak.
+        Issue #620: Extracted from speak_with_fallback to reduce complexity.
 
         Returns:
-            Dict with status and message.
+            List of (name, method) tuples in priority order
         """
+        backend_map = {
+            "coqui": (COQUI_TTS_AVAILABLE, self._speak_coqui_tts),
+            "pyttsx3": (PYTTSX3_AVAILABLE, self.speak_text),
+            "gtts": (GTTS_AVAILABLE, self._speak_gtts),
+        }
+
+        # Define priority orders for each preference
+        priority_orders = {
+            "coqui": ["coqui", "pyttsx3", "gtts"],
+            "gtts": ["gtts", "pyttsx3", "coqui"],
+        }
+        # Default priority is pyttsx3 first
+        order = priority_orders.get(self.preferred_tts, ["pyttsx3", "coqui", "gtts"])
+
         backends = []
+        for name in order:
+            available, method = backend_map[name]
+            if available:
+                backends.append((name, method))
+        return backends
 
-        # Order based on preference
-        if self.preferred_tts == "coqui":
-            if COQUI_TTS_AVAILABLE:
-                backends.append(("coqui", self._speak_coqui_tts))
-            if PYTTSX3_AVAILABLE:
-                backends.append(("pyttsx3", self.speak_text))
-            if GTTS_AVAILABLE:
-                backends.append(("gtts", self._speak_gtts))
-        elif self.preferred_tts == "gtts":
-            if GTTS_AVAILABLE:
-                backends.append(("gtts", self._speak_gtts))
-            if PYTTSX3_AVAILABLE:
-                backends.append(("pyttsx3", self.speak_text))
-            if COQUI_TTS_AVAILABLE:
-                backends.append(("coqui", self._speak_coqui_tts))
-        else:  # Default: pyttsx3
-            if PYTTSX3_AVAILABLE:
-                backends.append(("pyttsx3", self.speak_text))
-            if COQUI_TTS_AVAILABLE:
-                backends.append(("coqui", self._speak_coqui_tts))
-            if GTTS_AVAILABLE:
-                backends.append(("gtts", self._speak_gtts))
+    async def _try_tts_backends(self, text: str, backends: list) -> Dict[str, Any]:
+        """
+        Try TTS backends in order until one succeeds.
 
-        if not backends:
-            return {
-                "status": "error",
-                "message": "No TTS backends available.",
-            }
+        Issue #620: Extracted from speak_with_fallback to reduce complexity.
 
+        Args:
+            text: Text to speak
+            backends: List of (name, method) tuples to try
+
+        Returns:
+            Result dict with status, message, and backend used
+        """
         errors = []
         for name, method in backends:
             logger.debug("Trying TTS backend: %s", name)
@@ -783,6 +792,32 @@ class VoiceInterface:
             "status": "error",
             "message": f"All TTS backends failed: {'; '.join(errors)}",
         }
+
+    async def speak_with_fallback(self, text: str) -> Dict[str, Any]:
+        """
+        Speak text with automatic fallback between TTS backends.
+
+        Issue #620: Refactored to use helper methods.
+
+        Tries preferred TTS backend first, falls back to alternatives.
+
+        Args:
+            text: Text to speak.
+
+        Returns:
+            Dict with status and message.
+        """
+        # Issue #620: Use helper to get backend priority
+        backends = self._get_tts_backend_priority()
+
+        if not backends:
+            return {
+                "status": "error",
+                "message": "No TTS backends available.",
+            }
+
+        # Issue #620: Use helper to try backends
+        return await self._try_tts_backends(text, backends)
 
 
 # Example Usage (for testing)

@@ -689,10 +689,86 @@ class Phase9PerformanceMonitor:
 
         return services
 
+    def _check_redis_service_status(self) -> str:
+        """
+        Check Redis service health status.
+
+        Issue #620: Extracted from _collect_single_service_metrics.
+
+        Returns:
+            Status string: "healthy", "critical", or "offline"
+        """
+        if not self.redis_client:
+            return "offline"
+        try:
+            self.redis_client.ping()
+            return "healthy"
+        except Exception:
+            return "critical"
+
+    async def _check_http_service_status(self, host: str, port: int, path: str) -> str:
+        """
+        Check HTTP service health status.
+
+        Issue #620: Extracted from _collect_single_service_metrics.
+
+        Args:
+            host: Service host
+            port: Service port
+            path: Health check endpoint path
+
+        Returns:
+            Status string: "healthy", "degraded", "critical", or "offline"
+        """
+        if not path:
+            return "offline"
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=5.0)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(f"http://{host}:{port}{path}") as response:
+                    if response.status == 200:
+                        return "healthy"
+                    elif 200 <= response.status < 400:
+                        return "degraded"
+                    else:
+                        return "critical"
+        except Exception:
+            return "critical"
+
+    def _calculate_service_health_score(
+        self, status: str, response_time_ms: float
+    ) -> float:
+        """
+        Calculate health score based on status and response time.
+
+        Issue #620: Extracted from _collect_single_service_metrics.
+
+        Args:
+            status: Service status string
+            response_time_ms: Response time in milliseconds
+
+        Returns:
+            Health score from 0.0 to 100.0
+        """
+        if status == "critical":
+            return 0.0
+        elif status == "degraded":
+            return 60.0
+        elif response_time_ms > 1000:
+            return 40.0
+        elif response_time_ms > 500:
+            return 70.0
+        return 100.0
+
     async def _collect_single_service_metrics(
         self, service_config: Dict[str, Any]
     ) -> Optional[ServicePerformanceMetrics]:
-        """Collect metrics for a single service"""
+        """
+        Collect metrics for a single service.
+
+        Issue #620: Refactored to use helper methods.
+        """
         try:
             service_name = service_config["name"]
             host = service_config["host"]
@@ -701,50 +777,26 @@ class Phase9PerformanceMonitor:
 
             # Measure response time and check health
             start_time = time.time()
-            status = "offline"
 
+            # Issue #620: Use helpers for status checks
             if service_name == "Redis":
-                # Special handling for Redis
-                if self.redis_client:
-                    try:
-                        self.redis_client.ping()
-                        status = "healthy"
-                    except Exception:
-                        status = "critical"
+                status = self._check_redis_service_status()
             else:
-                # HTTP health check
-                if path:
-                    timeout = aiohttp.ClientTimeout(total=5.0)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.get(
-                            f"http://{host}:{port}{path}"
-                        ) as response:
-                            if response.status == 200:
-                                status = "healthy"
-                            elif 200 <= response.status < 400:
-                                status = "degraded"
-                            else:
-                                status = "critical"
+                status = await self._check_http_service_status(host, port, path)
 
             response_time_ms = round((time.time() - start_time) * 1000, 1)
 
-            # Calculate additional metrics (would need service-specific implementation)
-            throughput = 0.0  # Requests per second
-            error_rate = 0.0  # Error percentage
-            uptime_hours = 24.0  # Placeholder
-            memory_usage_mb = 0.0  # Service-specific memory usage
-            cpu_usage_percent = 0.0  # Service-specific CPU usage
+            # Placeholder metrics (service-specific implementation needed)
+            throughput = 0.0
+            error_rate = 0.0
+            uptime_hours = 24.0
+            memory_usage_mb = 0.0
+            cpu_usage_percent = 0.0
 
-            # Health score calculation
-            health_score = 100.0
-            if status == "critical":
-                health_score = 0.0
-            elif status == "degraded":
-                health_score = 60.0
-            elif response_time_ms > 1000:
-                health_score = 40.0
-            elif response_time_ms > 500:
-                health_score = 70.0
+            # Issue #620: Use helper for health score
+            health_score = self._calculate_service_health_score(
+                status, response_time_ms
+            )
 
             return ServicePerformanceMetrics(
                 timestamp=time.time(),
