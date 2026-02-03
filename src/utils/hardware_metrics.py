@@ -1250,78 +1250,102 @@ class Phase9PerformanceMonitor:
         """Add callback function for performance alerts"""
         self.alert_callbacks.append(callback)
 
-    def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
-        """Generate performance optimization recommendations"""
+    def _get_gpu_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate GPU-specific optimization recommendations. Issue #620."""
         recommendations = []
+        if not self.gpu_metrics_buffer:
+            return recommendations
 
+        latest_gpu = self.gpu_metrics_buffer[-1]
+
+        if latest_gpu.utilization_percent < 50:
+            recommendations.append(
+                {
+                    "category": "gpu",
+                    "priority": "medium",
+                    "recommendation": "GPU underutilized - verify AI workloads use GPU acceleration",
+                    "action": "Check CUDA availability and batch sizes in semantic chunking",
+                    "expected_improvement": "2-3x performance increase for AI tasks",
+                }
+            )
+
+        if latest_gpu.memory_utilization_percent > 90:
+            recommendations.append(
+                {
+                    "category": "gpu",
+                    "priority": "high",
+                    "recommendation": "GPU memory near capacity - optimize memory usage",
+                    "action": "Reduce batch sizes or implement gradient checkpointing",
+                    "expected_improvement": "Prevent out-of-memory errors",
+                }
+            )
+
+        return recommendations
+
+    def _get_npu_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate NPU-specific optimization recommendations. Issue #620."""
+        recommendations = []
+        if not self.npu_available or not self.npu_metrics_buffer:
+            return recommendations
+
+        latest_npu = self.npu_metrics_buffer[-1]
+
+        if latest_npu.acceleration_ratio < 3.0:
+            recommendations.append(
+                {
+                    "category": "npu",
+                    "priority": "medium",
+                    "recommendation": "NPU acceleration below optimal - check model optimization",
+                    "action": "Verify OpenVINO model optimization and NPU driver status",
+                    "expected_improvement": "Up to 5x speedup for inference tasks",
+                }
+            )
+
+        return recommendations
+
+    def _get_system_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate system-wide optimization recommendations. Issue #620."""
+        recommendations = []
+        if not self.system_metrics_buffer:
+            return recommendations
+
+        latest_system = self.system_metrics_buffer[-1]
+
+        if latest_system.memory_usage_percent > 85:
+            recommendations.append(
+                {
+                    "category": "memory",
+                    "priority": "high",
+                    "recommendation": "High memory usage detected",
+                    "action": "Enable aggressive cleanup in chat history and conversation managers",
+                    "expected_improvement": "Prevent system slowdown and swapping",
+                }
+            )
+
+        if latest_system.cpu_load_1m > 20:  # High for 22-core system
+            recommendations.append(
+                {
+                    "category": "cpu",
+                    "priority": "medium",
+                    "recommendation": "High CPU load detected",
+                    "action": "Optimize parallel processing and check for CPU-intensive tasks",
+                    "expected_improvement": "Better system responsiveness",
+                }
+            )
+
+        return recommendations
+
+    def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
+        """Generate performance optimization recommendations.
+
+        Issue #620: Refactored to extract _get_gpu_recommendations,
+        _get_npu_recommendations, and _get_system_recommendations.
+        """
         try:
-            # GPU optimization recommendations
-            if self.gpu_metrics_buffer:
-                latest_gpu = self.gpu_metrics_buffer[-1]
-
-                if latest_gpu.utilization_percent < 50:
-                    recommendations.append(
-                        {
-                            "category": "gpu",
-                            "priority": "medium",
-                            "recommendation": "GPU underutilized - verify AI workloads use GPU acceleration",
-                            "action": "Check CUDA availability and batch sizes in semantic chunking",
-                            "expected_improvement": "2-3x performance increase for AI tasks",
-                        }
-                    )
-
-                if latest_gpu.memory_utilization_percent > 90:
-                    recommendations.append(
-                        {
-                            "category": "gpu",
-                            "priority": "high",
-                            "recommendation": "GPU memory near capacity - optimize memory usage",
-                            "action": "Reduce batch sizes or implement gradient checkpointing",
-                            "expected_improvement": "Prevent out-of-memory errors",
-                        }
-                    )
-
-            # NPU optimization recommendations
-            if self.npu_available and self.npu_metrics_buffer:
-                latest_npu = self.npu_metrics_buffer[-1]
-
-                if latest_npu.acceleration_ratio < 3.0:
-                    recommendations.append(
-                        {
-                            "category": "npu",
-                            "priority": "medium",
-                            "recommendation": "NPU acceleration below optimal - check model optimization",
-                            "action": "Verify OpenVINO model optimization and NPU driver status",
-                            "expected_improvement": "Up to 5x speedup for inference tasks",
-                        }
-                    )
-
-            # System optimization recommendations
-            if self.system_metrics_buffer:
-                latest_system = self.system_metrics_buffer[-1]
-
-                if latest_system.memory_usage_percent > 85:
-                    recommendations.append(
-                        {
-                            "category": "memory",
-                            "priority": "high",
-                            "recommendation": "High memory usage detected",
-                            "action": "Enable aggressive cleanup in chat history and conversation managers",
-                            "expected_improvement": "Prevent system slowdown and swapping",
-                        }
-                    )
-
-                if latest_system.cpu_load_1m > 20:  # High for 22-core system
-                    recommendations.append(
-                        {
-                            "category": "cpu",
-                            "priority": "medium",
-                            "recommendation": "High CPU load detected",
-                            "action": "Optimize parallel processing and check for CPU-intensive tasks",
-                            "expected_improvement": "Better system responsiveness",
-                        }
-                    )
-
+            recommendations = []
+            recommendations.extend(self._get_gpu_recommendations())
+            recommendations.extend(self._get_npu_recommendations())
+            recommendations.extend(self._get_system_recommendations())
             return recommendations
 
         except Exception as e:

@@ -1153,6 +1153,31 @@ async def pair_worker(
     operation="worker_heartbeat",
     error_code_prefix="NPU_WORKERS",
 )
+def _update_prometheus_heartbeat_metrics(heartbeat: WorkerHeartbeat) -> None:
+    """Update Prometheus metrics for worker heartbeat. Issue #620."""
+    import time
+
+    try:
+        from src.monitoring.prometheus_metrics import get_metrics_manager
+
+        metrics = get_metrics_manager()
+        if metrics and hasattr(metrics, "performance"):
+            perf = metrics.performance
+            perf.update_npu_worker_status(
+                heartbeat.worker_id,
+                heartbeat.platform,
+                heartbeat.status == "online",
+            )
+            perf.update_npu_worker_metrics(
+                heartbeat.worker_id,
+                heartbeat.current_load,
+                heartbeat.uptime_seconds,
+            )
+            perf.update_npu_worker_heartbeat(heartbeat.worker_id, time.time())
+    except Exception as metrics_error:
+        logger.warning("Failed to update Prometheus metrics: %s", metrics_error)
+
+
 @router.post("/npu/workers/heartbeat")
 async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     """
@@ -1161,6 +1186,8 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     Issue #641: Workers no longer self-register via heartbeat.
     Workers must be explicitly paired via /npu/workers/pair endpoint.
     Heartbeats from unpaired workers are rejected.
+
+    Issue #620: Refactored to extract _update_prometheus_heartbeat_metrics.
 
     Args:
         heartbeat: Heartbeat data from worker
@@ -1171,7 +1198,6 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     Raises:
         400: If worker is not paired (Issue #641)
     """
-    import time
     from datetime import datetime
 
     try:
@@ -1198,26 +1224,8 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
         # Update worker status from heartbeat
         await manager.update_worker_status_from_heartbeat(heartbeat)
 
-        # Update Prometheus metrics
-        try:
-            from src.monitoring.prometheus_metrics import get_metrics_manager
-
-            metrics = get_metrics_manager()
-            if metrics and hasattr(metrics, "performance"):
-                perf = metrics.performance
-                perf.update_npu_worker_status(
-                    heartbeat.worker_id,
-                    heartbeat.platform,
-                    heartbeat.status == "online",
-                )
-                perf.update_npu_worker_metrics(
-                    heartbeat.worker_id,
-                    heartbeat.current_load,
-                    heartbeat.uptime_seconds,
-                )
-                perf.update_npu_worker_heartbeat(heartbeat.worker_id, time.time())
-        except Exception as metrics_error:
-            logger.warning("Failed to update Prometheus metrics: %s", metrics_error)
+        # Update Prometheus metrics (Issue #620: uses helper)
+        _update_prometheus_heartbeat_metrics(heartbeat)
 
         logger.debug(
             "Received heartbeat from worker %s: status=%s",
@@ -1232,6 +1240,8 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
             "message": "Heartbeat received",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to process heartbeat from %s: %s", heartbeat.worker_id, e)
         raise HTTPException(
