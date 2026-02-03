@@ -297,8 +297,11 @@ class ConversationAnalyzer:
         """
         if not messages:
             return {
-                "turns": 0, "intents": [], "duration_seconds": 0,
-                "success_indicators": 0, "frustration_indicators": 0,
+                "turns": 0,
+                "intents": [],
+                "duration_seconds": 0,
+                "success_indicators": 0,
+                "frustration_indicators": 0,
             }
 
         intents: List[str] = []
@@ -497,8 +500,17 @@ class ConversationAnalyzer:
     def _process_conversation_data(
         self,
         conversations: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict], Counter, Dict[str, List[float]], Counter, Counter,
-               int, int, int, int]:
+    ) -> Tuple[
+        List[Dict],
+        Counter,
+        Dict[str, List[float]],
+        Counter,
+        Counter,
+        int,
+        int,
+        int,
+        int,
+    ]:
         """
         Process all conversations and extract aggregated data.
 
@@ -528,9 +540,15 @@ class ConversationAnalyzer:
             self._update_hourly_distribution(messages, hourly_dist)
 
         return (
-            processed_convs, intent_counts, intent_success, flow_counts,
-            hourly_dist, totals["messages"], totals["duration"],
-            totals["success"], totals["frustration"],
+            processed_convs,
+            intent_counts,
+            intent_success,
+            flow_counts,
+            hourly_dist,
+            totals["messages"],
+            totals["duration"],
+            totals["success"],
+            totals["frustration"],
         )
 
     def _build_intent_patterns(
@@ -675,8 +693,14 @@ class ConversationAnalyzer:
 
         # Process all conversations
         (
-            processed_convs, intent_counts, intent_success, flow_counts,
-            hourly_dist, total_messages, total_duration, total_success,
+            processed_convs,
+            intent_counts,
+            intent_success,
+            flow_counts,
+            hourly_dist,
+            total_messages,
+            total_duration,
+            total_success,
             total_frustration,
         ) = self._process_conversation_data(conversations)
 
@@ -684,8 +708,12 @@ class ConversationAnalyzer:
 
         # Calculate metrics using helper
         metrics = self._calculate_metrics(
-            n_convs, processed_convs, total_messages, total_duration,
-            total_success, total_frustration,
+            n_convs,
+            processed_convs,
+            total_messages,
+            total_duration,
+            total_success,
+            total_frustration,
         )
 
         # Build result components

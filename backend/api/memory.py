@@ -542,7 +542,9 @@ async def list_all_entities(
     request_id = generate_request_id()
 
     try:
-        logger.info("[%s] Listing entities: type=%s, limit=%s", request_id, entity_type, limit)
+        logger.info(
+            "[%s] Listing entities: type=%s, limit=%s", request_id, entity_type, limit
+        )
 
         entities = await memory_graph.search_entities(
             query="*", entity_type=entity_type, limit=limit
@@ -1287,8 +1289,13 @@ async def get_related_entities(
         logger.info("[%s] Found %s related entities", request_id, len(related))
 
         return _build_related_entities_response(
-            request_id, entity_id, entity_name, related,
-            relation_type, direction, max_depth
+            request_id,
+            entity_id,
+            entity_name,
+            related,
+            relation_type,
+            direction,
+            max_depth,
         )
 
     except HTTPException:

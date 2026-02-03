@@ -225,7 +225,9 @@ class CodeChunker:
         # Determine chunk type and collect definition block
         chunk_type = "function" if "def " in stripped_line else "class"
         current_indent = len(line) - len(line.lstrip())
-        block_lines, new_i = self._collect_definition_block(lines, i + 1, current_indent)
+        block_lines, new_i = self._collect_definition_block(
+            lines, i + 1, current_indent
+        )
         full_block = [line] + block_lines
 
         # Save the function/class chunk
@@ -252,7 +254,13 @@ class CodeChunker:
 
             if stripped_line.startswith(_CODE_DEF_PREFIXES):
                 i, current_chunk, current_chunk_type = self._process_definition_line(
-                    lines, line, stripped_line, i, chunks, current_chunk, current_chunk_type
+                    lines,
+                    line,
+                    stripped_line,
+                    i,
+                    chunks,
+                    current_chunk,
+                    current_chunk_type,
                 )
                 continue
 
@@ -261,14 +269,21 @@ class CodeChunker:
 
             if len("\n".join(current_chunk)) > self.max_chunk_size:
                 self._append_chunk_if_valid(
-                    chunks, current_chunk, current_chunk_type, i - len(current_chunk) + 1, i
+                    chunks,
+                    current_chunk,
+                    current_chunk_type,
+                    i - len(current_chunk) + 1,
+                    i,
                 )
                 current_chunk = []
 
         if current_chunk:
             self._append_chunk_if_valid(
-                chunks, current_chunk, current_chunk_type,
-                len(lines) - len(current_chunk) + 1, len(lines)
+                chunks,
+                current_chunk,
+                current_chunk_type,
+                len(lines) - len(current_chunk) + 1,
+                len(lines),
             )
 
         return chunks
@@ -284,18 +299,22 @@ class CodeChunker:
         if len(script_content) > self.max_chunk_size:
             script_chunks = self.chunk_javascript_content(script_content)
             for i, chunk in enumerate(script_chunks):
-                chunks.append({
-                    "content": f"<script>\n{chunk['content']}\n</script>",
-                    "type": "script",
-                    "section": f"script_part_{i+1}",
-                    "script_type": chunk.get("type", "general"),
-                })
+                chunks.append(
+                    {
+                        "content": f"<script>\n{chunk['content']}\n</script>",
+                        "type": "script",
+                        "section": f"script_part_{i+1}",
+                        "script_type": chunk.get("type", "general"),
+                    }
+                )
         else:
-            chunks.append({
-                "content": f"<script>\n{script_content}\n</script>",
-                "type": "script",
-                "section": "script",
-            })
+            chunks.append(
+                {
+                    "content": f"<script>\n{script_content}\n</script>",
+                    "type": "script",
+                    "section": "script",
+                }
+            )
 
     def chunk_vue_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Chunk Vue files by template, script, and style sections."""
@@ -307,11 +326,13 @@ class CodeChunker:
         if template_match:
             template_content = template_match.group(1).strip()
             if template_content:
-                chunks.append({
-                    "content": f"<template>\n{template_content}\n</template>",
-                    "type": "template",
-                    "section": "template",
-                })
+                chunks.append(
+                    {
+                        "content": f"<template>\n{template_content}\n</template>",
+                        "type": "template",
+                        "section": "template",
+                    }
+                )
 
         if script_match:
             script_content = script_match.group(1).strip()
@@ -321,13 +342,19 @@ class CodeChunker:
         if style_match:
             style_content = style_match.group(1).strip()
             if style_content:
-                chunks.append({
-                    "content": f"<style>\n{style_content}\n</style>",
-                    "type": "style",
-                    "section": "style",
-                })
+                chunks.append(
+                    {
+                        "content": f"<style>\n{style_content}\n</style>",
+                        "type": "style",
+                        "section": "style",
+                    }
+                )
 
-        return chunks if chunks else [{"content": content, "type": "vue_file", "section": "complete"}]
+        return (
+            chunks
+            if chunks
+            else [{"content": content, "type": "vue_file", "section": "complete"}]
+        )
 
     def chunk_javascript_content(self, content: str) -> List[Dict[str, Any]]:
         """Chunk JavaScript content by functions and logical blocks"""
@@ -386,12 +413,14 @@ class CodeChunker:
         """
         chunk_content = "\n".join(lines)
         if chunk_content.strip():
-            chunks.append({
-                "content": chunk_content,
-                "type": "section",
-                "heading": heading,
-                "level": level,
-            })
+            chunks.append(
+                {
+                    "content": chunk_content,
+                    "type": "section",
+                    "heading": heading,
+                    "level": level,
+                }
+            )
 
     def chunk_markdown_file(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Chunk Markdown files by headings and sections."""
@@ -406,18 +435,24 @@ class CodeChunker:
 
             if heading_match:
                 if current_chunk:
-                    self._append_md_section_chunk(chunks, current_chunk, current_heading, current_level)
+                    self._append_md_section_chunk(
+                        chunks, current_chunk, current_heading, current_level
+                    )
                 current_level = len(heading_match.group(1))
                 current_heading = heading_match.group(2)
                 current_chunk = [line]
             else:
                 current_chunk.append(line)
                 if len("\n".join(current_chunk)) > self.max_chunk_size:
-                    self._append_md_section_chunk(chunks, current_chunk, current_heading, current_level)
+                    self._append_md_section_chunk(
+                        chunks, current_chunk, current_heading, current_level
+                    )
                     current_chunk = []
 
         if current_chunk:
-            self._append_md_section_chunk(chunks, current_chunk, current_heading, current_level)
+            self._append_md_section_chunk(
+                chunks, current_chunk, current_heading, current_level
+            )
 
         return chunks if chunks else [{"content": content, "type": "document"}]
 
@@ -459,9 +494,24 @@ class CodebaseIndexingService:
         Issue #620.
         """
         return {
-            "*.py", "*.vue", "*.js", "*.ts", "*.md", "*.yaml", "*.yml",
-            "*.json", "*.txt", "*.rst", "*.css", "*.scss", "*.html",
-            "*.sh", "*.bash", "*.dockerfile", "Dockerfile*", "*.env*",
+            "*.py",
+            "*.vue",
+            "*.js",
+            "*.ts",
+            "*.md",
+            "*.yaml",
+            "*.yml",
+            "*.json",
+            "*.txt",
+            "*.rst",
+            "*.css",
+            "*.scss",
+            "*.html",
+            "*.sh",
+            "*.bash",
+            "*.dockerfile",
+            "Dockerfile*",
+            "*.env*",
         }
 
     def _get_exclude_patterns(self) -> set:
@@ -471,10 +521,24 @@ class CodebaseIndexingService:
         Issue #620.
         """
         return {
-            "__pycache__", "*.pyc", "*.pyo", ".git", ".gitignore",
-            "node_modules", ".npm", ".vscode", ".idea", "*.log",
-            "dist", "build", ".next", ".nuxt", "coverage",
-            "*.min.js", "*.min.css", "*.map",
+            "__pycache__",
+            "*.pyc",
+            "*.pyo",
+            ".git",
+            ".gitignore",
+            "node_modules",
+            ".npm",
+            ".vscode",
+            ".idea",
+            "*.log",
+            "dist",
+            "build",
+            ".next",
+            ".nuxt",
+            "coverage",
+            "*.min.js",
+            "*.min.css",
+            "*.map",
         }
 
     def _get_exclude_dirs(self) -> set:
@@ -484,9 +548,21 @@ class CodebaseIndexingService:
         Issue #620.
         """
         return {
-            ".git", "node_modules", "__pycache__", ".pytest_cache",
-            "venv", ".venv", "env", ".env", "dist", "build",
-            ".next", ".nuxt", "coverage", "logs", ".logs",
+            ".git",
+            "node_modules",
+            "__pycache__",
+            ".pytest_cache",
+            "venv",
+            ".venv",
+            "env",
+            ".env",
+            "dist",
+            "build",
+            ".next",
+            ".nuxt",
+            "coverage",
+            "logs",
+            ".logs",
         }
 
     def _get_category_mapping(self) -> Dict[str, List[str]]:
@@ -662,8 +738,13 @@ class CodebaseIndexingService:
         return metadata
 
     async def _store_single_chunk(
-        self, chunk: Dict[str, Any], metadata: Dict[str, Any],
-        knowledge_base, index: int, total: int, relative_path: str
+        self,
+        chunk: Dict[str, Any],
+        metadata: Dict[str, Any],
+        knowledge_base,
+        index: int,
+        total: int,
+        relative_path: str,
     ) -> bool:
         """
         Store a single chunk in the knowledge base.
@@ -678,7 +759,9 @@ class CodebaseIndexingService:
         if result and result.get("status") == "success":
             logger.debug("Stored chunk %s/%s for %s", index + 1, total, relative_path)
             return True
-        logger.warning("Failed to store chunk %s for %s: %s", index + 1, relative_path, result)
+        logger.warning(
+            "Failed to store chunk %s for %s: %s", index + 1, relative_path, result
+        )
         return False
 
     async def _store_chunks(
@@ -696,7 +779,12 @@ class CodebaseIndexingService:
                 ):
                     stored_count += 1
             except Exception as e:
-                logger.error("Error storing chunk %s for %s: %s", i + 1, file_info.relative_path, e)
+                logger.error(
+                    "Error storing chunk %s for %s: %s",
+                    i + 1,
+                    file_info.relative_path,
+                    e,
+                )
                 self.progress.errors.append(
                     f"Chunk storage error in {file_info.relative_path}[{i+1}]: {str(e)}"
                 )
@@ -715,7 +803,9 @@ class CodebaseIndexingService:
             logger.info("Indexed %s: %s chunks", file_info.relative_path, stored_count)
         else:
             self.progress.failed_files += 1
-            self.progress.errors.append(f"No chunks stored for: {file_info.relative_path}")
+            self.progress.errors.append(
+                f"No chunks stored for: {file_info.relative_path}"
+            )
         self.progress.processed_files += 1
         return stored_count > 0
 
@@ -728,7 +818,9 @@ class CodebaseIndexingService:
             content = await self._read_file_content(file_info.path)
             if content is None:
                 self.progress.failed_files += 1
-                self.progress.errors.append(f"Could not read file: {file_info.relative_path}")
+                self.progress.errors.append(
+                    f"Could not read file: {file_info.relative_path}"
+                )
                 return False
 
             if not content.strip():
@@ -749,7 +841,9 @@ class CodebaseIndexingService:
             logger.error("Error indexing file %s: %s", file_info.relative_path, e)
             self.progress.failed_files += 1
             self.progress.processed_files += 1
-            self.progress.errors.append(f"Indexing error in {file_info.relative_path}: {str(e)}")
+            self.progress.errors.append(
+                f"Indexing error in {file_info.relative_path}: {str(e)}"
+            )
             return False
 
     def _group_files_by_category(self, files: List) -> Dict[str, List]:
@@ -864,11 +958,16 @@ class CodebaseIndexingService:
             successful_in_batch = sum(1 for r in results if r is True)
             logger.info(
                 "Category %s batch %s: %s/%s files indexed",
-                category, i // batch_size + 1, successful_in_batch, len(batch),
+                category,
+                i // batch_size + 1,
+                successful_in_batch,
+                len(batch),
             )
             await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
-    def _handle_reindex_error(self, category: str, error: Exception) -> IndexingProgress:
+    def _handle_reindex_error(
+        self, category: str, error: Exception
+    ) -> IndexingProgress:
         """
         Handle error during category reindexing.
 
@@ -908,7 +1007,8 @@ class CodebaseIndexingService:
             self.progress.end_time = datetime.now()
             logger.info(
                 "Category %s reindexing completed: %s successful",
-                category, self.progress.successful_files,
+                category,
+                self.progress.successful_files,
             )
             return self.progress
 
