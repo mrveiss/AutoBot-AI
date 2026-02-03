@@ -12,10 +12,12 @@
  * - /api/workflow_automation/* - Workflow automation management
  */
 
-import { ref, computed, reactive, onUnmounted } from 'vue';
+import { ref, computed, reactive, onUnmounted, onMounted } from 'vue';
 import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
+import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
+import type { WorkflowTemplateSummary, WorkflowTemplateDetail } from '@/types/workflowTemplates';
 
 const logger = createLogger('useWorkflowBuilder');
 
@@ -586,9 +588,20 @@ export function useWorkflowBuilder() {
   });
 
   // ==================================================================================
-  // WORKFLOW TEMPLATES
+  // WORKFLOW TEMPLATES - API Integration (Issue #778)
   // ==================================================================================
 
+  // Templates API composable
+  const {
+    templates: apiTemplates,
+    loading: loadingApiTemplates,
+    error: apiTemplatesError,
+    fetchTemplates: fetchApiTemplates,
+    createWorkflowFromTemplate: createFromApiTemplate,
+    executeTemplate: executeApiTemplate
+  } = useWorkflowTemplates();
+
+  // Hardcoded fallback templates
   const builtInTemplates: WorkflowTemplate[] = [
     {
       id: 'system_update',
@@ -768,7 +781,51 @@ export function useWorkflowBuilder() {
     },
   ];
 
-  const templates = ref<WorkflowTemplate[]>(builtInTemplates);
+  // Templates with API fallback - use API templates if available, otherwise fallback to built-in
+  const templates = computed<WorkflowTemplate[]>(() => {
+    if (apiTemplates.value.length > 0) {
+      // Convert API templates to WorkflowTemplate format
+      return apiTemplates.value.map(apiTemplate => ({
+        id: apiTemplate.id,
+        name: apiTemplate.name,
+        description: apiTemplate.description,
+        category: apiTemplate.category,
+        icon: apiTemplate.icon || getDefaultIconForCategory(apiTemplate.category),
+        steps: 'steps' in apiTemplate
+          ? (apiTemplate as WorkflowTemplateDetail).steps.map(step => ({
+              command: step.command,
+              description: step.description,
+              risk_level: step.risk_level,
+              requires_confirmation: step.requires_confirmation,
+              estimated_duration: step.estimated_duration_seconds
+            }))
+          : []
+      }));
+    }
+    return builtInTemplates;
+  });
+
+  // Helper to get default icon for category
+  function getDefaultIconForCategory(category: string): string {
+    const icons: Record<string, string> = {
+      security: 'fas fa-shield-alt',
+      research: 'fas fa-search',
+      development: 'fas fa-code',
+      system_admin: 'fas fa-server',
+      analysis: 'fas fa-chart-bar',
+      System: 'fas fa-cog',
+      Development: 'fas fa-code',
+      Security: 'fas fa-lock',
+      Backup: 'fas fa-database'
+    };
+    return icons[category] || 'fas fa-tasks';
+  }
+
+  /** Load templates from API */
+  async function loadTemplates(): Promise<void> {
+    await fetchApiTemplates();
+    logger.debug('Templates loaded from API:', apiTemplates.value.length);
+  }
 
   // ==================================================================================
   // METHODS - ORCHESTRATION API
@@ -1230,7 +1287,9 @@ export function useWorkflowBuilder() {
     loadingStrategies,
     loadingCapabilities,
     loadingExamples,
+    loadingApiTemplates,
     error,
+    apiTemplatesError,
     activeWorkflows,
     currentWorkflow,
     workflowPlan,
@@ -1244,6 +1303,7 @@ export function useWorkflowBuilder() {
     selectedNodeId,
     wsConnected,
     templates,
+    builtInTemplates,
 
     // Computed
     hasActiveWorkflows,
@@ -1261,6 +1321,11 @@ export function useWorkflowBuilder() {
     loadExampleWorkflows,
     executeOrchestrationWorkflow,
     createPlan,
+
+    // Template methods (Issue #778)
+    loadTemplates,
+    createFromApiTemplate,
+    executeApiTemplate,
 
     // Workflow automation methods
     loadActiveWorkflows,
