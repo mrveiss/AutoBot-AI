@@ -32,7 +32,7 @@ Endpoints:
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from backend.models.npu_models import (
@@ -44,6 +44,7 @@ from backend.models.npu_models import (
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -63,9 +64,11 @@ router = APIRouter()
     error_code_prefix="NPU_WORKERS",
 )
 @router.get("/npu/workers", response_model=List[NPUWorkerDetails])
-async def list_workers():
+async def list_workers(admin_check: bool = Depends(check_admin_permission)):
     """
     List all registered NPU workers with their current status.
+
+    Issue #744: Requires admin authentication.
 
     Returns:
         List of worker details including configuration and runtime status
@@ -91,9 +94,14 @@ async def list_workers():
 @router.post(
     "/npu/workers", response_model=NPUWorkerDetails, status_code=status.HTTP_201_CREATED
 )
-async def add_worker(worker_config: NPUWorkerConfig):
+async def add_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_config: NPUWorkerConfig = None,
+):
     """
     Register a new NPU worker.
+
+    Issue #744: Requires admin authentication.
 
     The worker will be validated by testing connectivity before registration.
 
@@ -131,9 +139,14 @@ async def add_worker(worker_config: NPUWorkerConfig):
     error_code_prefix="NPU_WORKERS",
 )
 @router.get("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
-async def get_worker(worker_id: str):
+async def get_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+):
     """
     Get detailed information about a specific worker.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         worker_id: Worker identifier
@@ -173,9 +186,15 @@ async def get_worker(worker_id: str):
     error_code_prefix="NPU_WORKERS",
 )
 @router.put("/npu/workers/{worker_id}", response_model=NPUWorkerDetails)
-async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
+async def update_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+    worker_config: NPUWorkerConfig = None,
+):
     """
     Update existing worker configuration.
+
+    Issue #744: Requires admin authentication.
 
     The updated configuration will be validated by testing connectivity.
 
@@ -224,9 +243,14 @@ async def update_worker(worker_id: str, worker_config: NPUWorkerConfig):
     error_code_prefix="NPU_WORKERS",
 )
 @router.delete("/npu/workers/{worker_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_worker(worker_id: str):
+async def remove_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+):
     """
     Remove worker from registry.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         worker_id: Worker identifier
@@ -259,9 +283,14 @@ async def remove_worker(worker_id: str):
     error_code_prefix="NPU_WORKERS",
 )
 @router.post("/npu/workers/{worker_id}/test", response_model=WorkerTestResult)
-async def test_worker(worker_id: str):
+async def test_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+):
     """
     Test connection to a specific worker.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         worker_id: Worker identifier
@@ -309,9 +338,14 @@ async def test_worker(worker_id: str):
 @router.get(
     "/npu/workers/{worker_id}/metrics", response_model=Optional[NPUWorkerMetrics]
 )
-async def get_worker_metrics(worker_id: str):
+async def get_worker_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+):
     """
     Get performance metrics for a specific worker.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         worker_id: Worker identifier
@@ -357,9 +391,14 @@ async def get_worker_metrics(worker_id: str):
     error_code_prefix="NPU_WORKERS",
 )
 @router.get("/npu/workers/{worker_id}/logging")
-async def get_worker_log_level(worker_id: str):
+async def get_worker_log_level(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+):
     """
     Get the current log level of a worker.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         worker_id: Worker identifier
@@ -410,9 +449,15 @@ async def get_worker_log_level(worker_id: str):
     error_code_prefix="NPU_WORKERS",
 )
 @router.put("/npu/workers/{worker_id}/logging")
-async def set_worker_log_level(worker_id: str, level: str = "INFO"):
+async def set_worker_log_level(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+    level: str = "INFO",
+):
     """
     Set the log level of a worker at runtime.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         worker_id: Worker identifier
@@ -451,8 +496,7 @@ async def set_worker_log_level(worker_id: str, level: str = "INFO"):
 
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.put(
-                f"{worker_url}/config/logging",
-                params={"level": level}
+                f"{worker_url}/config/logging", params={"level": level}
             )
             if response.status_code != 200:
                 raise HTTPException(
@@ -484,9 +528,13 @@ async def set_worker_log_level(worker_id: str, level: str = "INFO"):
     error_code_prefix="NPU_WORKERS",
 )
 @router.get("/npu/load-balancing", response_model=LoadBalancingConfig)
-async def get_load_balancing_config():
+async def get_load_balancing_config(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get current load balancing configuration.
+
+    Issue #744: Requires admin authentication.
 
     Returns:
         Load balancing configuration including strategy and health check settings
@@ -510,9 +558,14 @@ async def get_load_balancing_config():
     error_code_prefix="NPU_WORKERS",
 )
 @router.put("/npu/load-balancing", response_model=LoadBalancingConfig)
-async def update_load_balancing_config(config: LoadBalancingConfig):
+async def update_load_balancing_config(
+    admin_check: bool = Depends(check_admin_permission),
+    config: LoadBalancingConfig = None,
+):
     """
     Update load balancing configuration.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         config: New load balancing configuration
@@ -553,9 +606,11 @@ async def update_load_balancing_config(config: LoadBalancingConfig):
     error_code_prefix="NPU_WORKERS",
 )
 @router.get("/npu/status")
-async def get_npu_status():
+async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
     """
     Get overall NPU worker pool status.
+
+    Issue #744: Requires admin authentication.
 
     Returns:
         Summary of worker pool health and availability
@@ -604,9 +659,14 @@ async def get_npu_status():
     error_code_prefix="NPU_WORKERS",
 )
 @router.post("/npu/workers/{worker_id}/unpair")
-async def unpair_worker(worker_id: str):
+async def unpair_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+):
     """
     Unpair a worker from the master (Issue #640).
+
+    Issue #744: Requires admin authentication.
 
     This clears the worker's registration, allowing it to re-pair
     when it next starts or receives a bootstrap request.
@@ -704,7 +764,9 @@ async def _handle_existing_worker_removal(
     platform = worker.config.platform
 
     if worker.status.status == "online" and not force:
-        logger.warning("Attempted to re-pair active worker %s without force flag", worker_id)
+        logger.warning(
+            "Attempted to re-pair active worker %s without force flag", worker_id
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Worker is currently active. Use force=true to re-pair anyway.",
@@ -722,9 +784,15 @@ async def _handle_existing_worker_removal(
     error_code_prefix="NPU_WORKERS",
 )
 @router.post("/npu/workers/{worker_id}/repair")
-async def repair_worker(worker_id: str, request: dict = None):
+async def repair_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    worker_id: str = None,
+    request: dict = None,
+):
     """
     Re-pair a worker with the master (Issue #640).
+
+    Issue #744: Requires admin authentication.
 
     This initiates a re-pairing sequence:
     1. Removes existing worker registration (if any)
@@ -768,8 +836,7 @@ async def repair_worker(worker_id: str, request: dict = None):
         new_worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
 
         logger.info(
-            "Re-pair initiated for worker %s -> new ID: %s",
-            worker_id, new_worker_id
+            "Re-pair initiated for worker %s -> new ID: %s", worker_id, new_worker_id
         )
 
         return {
@@ -806,12 +873,15 @@ import httpx
 @dataclass
 class WorkerHealthInfo:
     """Health information from a worker."""
+
     platform: str
     existing_worker_id: Optional[str]
     already_paired: bool
 
 
-async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> WorkerHealthInfo:
+async def _check_worker_health(
+    client: httpx.AsyncClient, worker_url: str
+) -> WorkerHealthInfo:
     """
     Check if worker is reachable and get health information.
 
@@ -842,7 +912,9 @@ async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> Wo
 
         logger.info(
             "Worker reachable: platform=%s, existing_id=%s, paired=%s",
-            info.platform, info.existing_worker_id, info.already_paired
+            info.platform,
+            info.existing_worker_id,
+            info.already_paired,
         )
         return info
 
@@ -988,9 +1060,14 @@ async def _register_worker_in_backend(
     error_code_prefix="NPU_WORKERS",
 )
 @router.post("/npu/workers/pair")
-async def pair_worker(request: dict):
+async def pair_worker(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+):
     """
     Issue #641: Pair with an NPU worker at the given IP:port.
+
+    Issue #744: Requires admin authentication.
 
     This is the AUTHORITATIVE way to register workers. The main host:
     1. Contacts the worker at the given URL
@@ -1109,12 +1186,13 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
             logger.warning(
                 "Heartbeat from unpaired worker %s at %s - ignoring. "
                 "Worker must be paired via /npu/workers/pair endpoint.",
-                heartbeat.worker_id, heartbeat.url
+                heartbeat.worker_id,
+                heartbeat.url,
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Worker '{heartbeat.worker_id}' is not paired. "
-                       f"Add worker via GUI or POST /api/npu/workers/pair",
+                f"Add worker via GUI or POST /api/npu/workers/pair",
             )
 
         # Update worker status from heartbeat
@@ -1125,20 +1203,27 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
             from src.monitoring.prometheus_metrics import get_metrics_manager
 
             metrics = get_metrics_manager()
-            if metrics and hasattr(metrics, 'performance'):
+            if metrics and hasattr(metrics, "performance"):
                 perf = metrics.performance
                 perf.update_npu_worker_status(
-                    heartbeat.worker_id, heartbeat.platform, heartbeat.status == "online"
+                    heartbeat.worker_id,
+                    heartbeat.platform,
+                    heartbeat.status == "online",
                 )
                 perf.update_npu_worker_metrics(
-                    heartbeat.worker_id, heartbeat.current_load, heartbeat.uptime_seconds
+                    heartbeat.worker_id,
+                    heartbeat.current_load,
+                    heartbeat.uptime_seconds,
                 )
                 perf.update_npu_worker_heartbeat(heartbeat.worker_id, time.time())
         except Exception as metrics_error:
             logger.warning("Failed to update Prometheus metrics: %s", metrics_error)
 
-        logger.debug("Received heartbeat from worker %s: status=%s",
-                     heartbeat.worker_id, heartbeat.status)
+        logger.debug(
+            "Received heartbeat from worker %s: status=%s",
+            heartbeat.worker_id,
+            heartbeat.status,
+        )
 
         return {
             "acknowledged": True,
@@ -1271,6 +1356,7 @@ async def worker_bootstrap(request: dict):
         # Issue #640: Only generate new ID if "auto" - reuse existing IDs
         if worker_id == "auto" or not worker_id:
             import uuid
+
             worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
             logger.info("Generated new worker ID: %s", worker_id)
         else:
@@ -1281,7 +1367,9 @@ async def worker_bootstrap(request: dict):
 
         logger.info(
             "Bootstrap config sent to worker %s (%s) at %s",
-            worker_id, platform, worker_url
+            worker_id,
+            platform,
+            worker_url,
         )
 
         return {
