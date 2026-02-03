@@ -883,3 +883,22 @@ class Role(Base):
     post_sync_cmd = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NodeRole(Base):
+    """Node-role assignment with version tracking (Issue #779)."""
+
+    __tablename__ = "node_roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    role_name = Column(String(50), nullable=False, index=True)
+    assignment_type = Column(String(20), default="auto")  # auto | manual
+    status = Column(String(20), default=RoleStatus.NOT_INSTALLED.value)
+    current_version = Column(String(64), nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_role"),)
