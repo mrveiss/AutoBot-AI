@@ -795,6 +795,67 @@ class SecurityWorkflowManager:
         except Exception as e:
             logger.warning("Failed to create service entity in Memory MCP: %s", e)
 
+    def _find_or_create_host(
+        self,
+        assessment: SecurityAssessment,
+        host_ip: str,
+    ) -> tuple[TargetHost, bool]:
+        """
+        Find existing host or create new one in assessment. Issue #620.
+
+        Args:
+            assessment: The security assessment
+            host_ip: Host IP address to find or create
+
+        Returns:
+            Tuple of (host, is_new_host)
+        """
+        host = next((h for h in assessment.hosts if h.ip == host_ip), None)
+        is_new_host = host is None
+        if not host:
+            host = TargetHost(ip=host_ip, status="up")
+            assessment.hosts.append(host)
+        return host, is_new_host
+
+    def _build_vulnerability_record(
+        self,
+        cve_id: Optional[str],
+        title: str,
+        severity: str,
+        description: str,
+        affected_service: Optional[str],
+        affected_port: Optional[int],
+        references: Optional[list[str]],
+        metadata: Optional[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Build vulnerability record dictionary. Issue #620.
+
+        Args:
+            cve_id: CVE identifier
+            title: Vulnerability title
+            severity: Severity level
+            description: Vulnerability description
+            affected_service: Affected service name
+            affected_port: Affected port number
+            references: Reference URLs
+            metadata: Additional metadata
+
+        Returns:
+            Vulnerability dictionary
+        """
+        return {
+            "cve_id": cve_id,
+            "title": title,
+            "severity": severity,
+            "description": description,
+            "affected_service": affected_service,
+            "affected_port": affected_port,
+            "references": references or [],
+            "discovered_at": datetime.now(timezone.utc).isoformat(),
+            "metadata": metadata or {},
+        }
+
     async def add_vulnerability(
         self,
         assessment_id: str,
@@ -809,7 +870,7 @@ class SecurityWorkflowManager:
         metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[SecurityAssessment]:
         """
-        Add a discovered vulnerability.
+        Add a discovered vulnerability. Issue #620: Refactored with extracted helpers.
 
         Args:
             assessment_id: Assessment UUID
@@ -830,33 +891,21 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
-        # Find or create host
-        host = next((h for h in assessment.hosts if h.ip == host_ip), None)
-        is_new_host = host is None
-        if not host:
-            host = TargetHost(ip=host_ip, status="up")
-            assessment.hosts.append(host)
-
-        vuln = {
-            "cve_id": cve_id,
-            "title": title,
-            "severity": severity,
-            "description": description,
-            "affected_service": affected_service,
-            "affected_port": affected_port,
-            "references": references or [],
-            "discovered_at": datetime.now(timezone.utc).isoformat(),
-            "metadata": metadata or {},
-        }
+        host, is_new_host = self._find_or_create_host(assessment, host_ip)
+        vuln = self._build_vulnerability_record(
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_service,
+            affected_port,
+            references,
+            metadata,
+        )
         host.vulnerabilities.append(vuln)
-
-        # Also add to findings
-        finding = {
-            "type": "vulnerability",
-            "host": host_ip,
-            "data": vuln,
-        }
-        assessment.findings.append(finding)
+        assessment.findings.append(
+            {"type": "vulnerability", "host": host_ip, "data": vuln}
+        )
 
         await self._save_assessment(assessment)
         logger.info(
@@ -866,7 +915,6 @@ class SecurityWorkflowManager:
             assessment_id,
         )
 
-        # Issue #398: Create Memory MCP entities (uses extracted helper)
         await self._create_vulnerability_memory_entity(
             assessment_id,
             host_ip,
@@ -880,7 +928,6 @@ class SecurityWorkflowManager:
             references,
             metadata,
         )
-
         return assessment
 
     async def _create_vulnerability_memory_entity(

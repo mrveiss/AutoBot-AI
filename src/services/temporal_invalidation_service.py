@@ -436,6 +436,94 @@ class TemporalInvalidationService:
             return 0
         return await self._invalidate_facts(facts_to_invalidate, invalidation_reasons)
 
+    async def _execute_sweep_core(
+        self,
+        start_time: datetime,
+        source_filter: Optional[str],
+        dry_run: bool,
+        rules: Dict[str, InvalidationRule],
+        all_facts: List[AtomicFact],
+    ) -> Dict[str, Any]:
+        """
+        Execute core sweep logic after rules and facts are loaded. Issue #620.
+
+        Args:
+            start_time: When the sweep started
+            source_filter: Optional source filter applied
+            dry_run: Whether this is a dry run
+            rules: Loaded invalidation rules
+            all_facts: Facts to process
+
+        Returns:
+            Sweep result dictionary
+        """
+        enabled_rules = {k: v for k, v in rules.items() if v.enabled}
+        logger.info("Using %s enabled invalidation rules", len(enabled_rules))
+
+        if not all_facts:
+            return self._build_no_facts_response()
+
+        logger.info("Processing %s active facts", len(all_facts))
+
+        # Process and invalidate facts (Issue #620: uses helper)
+        sweep_data = await self._process_and_invalidate_facts(
+            start_time, source_filter, dry_run, enabled_rules, all_facts
+        )
+
+        logger.info(
+            "Invalidation sweep completed: %s/%s facts invalidated",
+            sweep_data["invalidated_count"],
+            len(sweep_data["facts_to_invalidate"]),
+        )
+
+        return sweep_data["result"]
+
+    async def _process_and_invalidate_facts(
+        self,
+        start_time: datetime,
+        source_filter: Optional[str],
+        dry_run: bool,
+        enabled_rules: Dict[str, InvalidationRule],
+        all_facts: List[AtomicFact],
+    ) -> Dict[str, Any]:
+        """Process facts against rules and execute invalidation. Issue #620."""
+        (
+            facts_to_invalidate,
+            invalidation_reasons,
+            rule_statistics,
+        ) = self._process_facts_against_rules(all_facts, enabled_rules)
+        processing_time = (datetime.now() - start_time).total_seconds()
+        invalidated_count = await self._execute_invalidation(
+            dry_run, facts_to_invalidate, invalidation_reasons
+        )
+
+        await self._record_invalidation_sweep(
+            source_filter=source_filter,
+            dry_run=dry_run,
+            facts_processed=len(all_facts),
+            facts_identified=len(facts_to_invalidate),
+            facts_invalidated=invalidated_count,
+            processing_time=processing_time,
+            rule_statistics=rule_statistics,
+        )
+
+        result = self._build_sweep_result(
+            dry_run,
+            all_facts,
+            facts_to_invalidate,
+            invalidated_count,
+            processing_time,
+            enabled_rules,
+            rule_statistics,
+            source_filter,
+            invalidation_reasons,
+        )
+        return {
+            "facts_to_invalidate": facts_to_invalidate,
+            "invalidated_count": invalidated_count,
+            "result": result,
+        }
+
     def _build_sweep_error_response(
         self, message: str, processing_time: Optional[float] = None
     ) -> Dict[str, Any]:
@@ -478,7 +566,7 @@ class TemporalInvalidationService:
         """
         Run a comprehensive invalidation sweep.
 
-        Issue #665: Refactored to use _build_sweep_error_response and _build_no_facts_response.
+        Issue #620: Refactored using Extract Method pattern for maintainability.
 
         Args:
             source_filter: Optional source filter
@@ -504,58 +592,10 @@ class TemporalInvalidationService:
                     "No invalidation rules available"
                 )
 
-            enabled_rules = {k: v for k, v in rules.items() if v.enabled}
-            logger.info("Using %s enabled invalidation rules", len(enabled_rules))
-
-            if not all_facts:
-                return self._build_no_facts_response()
-
-            logger.info("Processing %s active facts", len(all_facts))
-
-            # Process facts against rules (Issue #281: uses helper)
-            (
-                facts_to_invalidate,
-                invalidation_reasons,
-                rule_statistics,
-            ) = self._process_facts_against_rules(all_facts, enabled_rules)
-
-            processing_time = (datetime.now() - start_time).total_seconds()
-
-            # Execute invalidation (Issue #665: uses helper)
-            invalidated_count = await self._execute_invalidation(
-                dry_run, facts_to_invalidate, invalidation_reasons
+            # Execute core sweep logic (Issue #620: uses helper)
+            return await self._execute_sweep_core(
+                start_time, source_filter, dry_run, rules, all_facts
             )
-
-            # Record invalidation sweep history
-            await self._record_invalidation_sweep(
-                source_filter=source_filter,
-                dry_run=dry_run,
-                facts_processed=len(all_facts),
-                facts_identified=len(facts_to_invalidate),
-                facts_invalidated=invalidated_count,
-                processing_time=processing_time,
-                rule_statistics=rule_statistics,
-            )
-
-            # Build result (Issue #281: uses helper)
-            result = self._build_sweep_result(
-                dry_run=dry_run,
-                all_facts=all_facts,
-                facts_to_invalidate=facts_to_invalidate,
-                invalidated_count=invalidated_count,
-                processing_time=processing_time,
-                enabled_rules=enabled_rules,
-                rule_statistics=rule_statistics,
-                source_filter=source_filter,
-                invalidation_reasons=invalidation_reasons,
-            )
-
-            logger.info(
-                "Invalidation sweep completed: %s/%s facts invalidated",
-                invalidated_count,
-                len(facts_to_invalidate),
-            )
-            return result
 
         except Exception as e:
             logger.error("Error in invalidation sweep: %s", e)
