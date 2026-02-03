@@ -186,6 +186,122 @@ class OllamaProvider:
             "error": str(error),
         }
 
+    def _record_success_span_attributes(
+        self, span, processing_time: float, content: str
+    ) -> None:
+        """
+        Record success attributes on OpenTelemetry span. Issue #620.
+
+        Args:
+            span: OpenTelemetry span
+            processing_time: Time taken to process request
+            content: Response content
+        """
+        if span.is_recording():
+            span.set_attribute("llm.duration_ms", processing_time * 1000)
+            span.set_attribute("llm.response_length", len(content))
+            span.set_status(Status(StatusCode.OK))
+
+    def _build_span_attributes(
+        self, model: str, use_streaming: bool, request: LLMRequest
+    ) -> dict:
+        """
+        Build span attributes for OpenTelemetry tracing. Issue #620.
+
+        Args:
+            model: Model name
+            use_streaming: Whether streaming is enabled
+            request: LLM request object
+
+        Returns:
+            Dict of span attributes
+        """
+        return {
+            "llm.provider": "ollama",
+            "llm.model": model,
+            "llm.streaming": use_streaming,
+            "llm.request_id": request.request_id,
+            "llm.temperature": request.temperature,
+            "llm.prompt_messages": len(request.messages),
+        }
+
+    async def _execute_request(
+        self,
+        url: str,
+        headers: dict,
+        data: dict,
+        request_id: str,
+        model: str,
+        use_streaming: bool,
+    ) -> dict:
+        """
+        Execute LLM request and validate response type. Issue #620.
+
+        Args:
+            url: API URL
+            headers: Request headers
+            data: Request data
+            request_id: Request identifier
+            model: Model name
+            use_streaming: Whether streaming is enabled
+
+        Returns:
+            Response dictionary
+        """
+        if use_streaming:
+            response = await self.stream_response(url, headers, data, request_id, model)
+            self.streaming_manager.record_success(model)
+        else:
+            response = await self.non_streaming_request(url, headers, data, request_id)
+
+        if not isinstance(response, dict):
+            logger.error(
+                f"Streaming response is not a dict: {type(response)} - {response}"
+            )
+            response = {"message": {"content": str(response)}, "model": model}
+
+        return response
+
+    def _handle_streaming_error(
+        self,
+        span,
+        model: str,
+        start_time: float,
+        request_id: str,
+        error: Exception,
+    ) -> LLMResponse:
+        """
+        Handle streaming failure and build error response. Issue #620.
+
+        Args:
+            span: OpenTelemetry span
+            model: Model name
+            start_time: Request start time
+            request_id: Request identifier
+            error: Exception that occurred
+
+        Returns:
+            LLMResponse with error information
+        """
+        self.streaming_manager.record_failure(model)
+        logger.error("Streaming REQUIRED but failed for %s: %s", model, error)
+        processing_time = time.time() - start_time
+
+        response = self.build_error_response(model, error)
+        content = self.extract_content(response)
+
+        if span.is_recording():
+            span.set_attribute("llm.fallback_used", True)
+
+        return self.build_response(
+            content,
+            response,
+            model,
+            processing_time,
+            request_id,
+            fallback_used=True,
+        )
+
     def _create_streaming_timeout(self) -> aiohttp.ClientTimeout:
         """
         Issue #665: Extracted from stream_response to reduce function length.
@@ -355,46 +471,24 @@ class OllamaProvider:
         data = self.build_request_data(request, model, use_streaming)
 
         # Issue #697: Create span for LLM inference with model attributes
+        # Issue #620: Extracted span attributes to helper method
+        span_attrs = self._build_span_attributes(model, use_streaming, request)
         with _tracer.start_as_current_span(
-            "llm.inference",
-            kind=SpanKind.CLIENT,
-            attributes={
-                "llm.provider": "ollama",
-                "llm.model": model,
-                "llm.streaming": use_streaming,
-                "llm.request_id": request.request_id,
-                "llm.temperature": request.temperature,
-                "llm.prompt_messages": len(request.messages),
-            },
+            "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
         ) as span:
             start_time = time.time()
 
             try:
-                if use_streaming:
-                    response = await self.stream_response(
-                        url, headers, data, request.request_id, model
-                    )
-                    self.streaming_manager.record_success(model)
-                else:
-                    response = await self.non_streaming_request(
-                        url, headers, data, request.request_id
-                    )
-
+                # Issue #620: Extracted request execution to helper method
+                response = await self._execute_request(
+                    url, headers, data, request.request_id, model, use_streaming
+                )
                 processing_time = time.time() - start_time
-
-                if not isinstance(response, dict):
-                    logger.error(
-                        f"Streaming response is not a dict: {type(response)} - {response}"
-                    )
-                    response = {"message": {"content": str(response)}, "model": model}
-
                 content = self.extract_content(response)
 
                 # Issue #697: Record response attributes on span
-                if span.is_recording():
-                    span.set_attribute("llm.duration_ms", processing_time * 1000)
-                    span.set_attribute("llm.response_length", len(content))
-                    span.set_status(Status(StatusCode.OK))
+                # Issue #620: Extracted to helper method
+                self._record_success_span_attributes(span, processing_time, content)
 
                 return self.build_response(
                     content, response, model, processing_time, request.request_id
@@ -408,23 +502,9 @@ class OllamaProvider:
                     span.set_attribute("llm.error", True)
 
                 if use_streaming:
-                    self.streaming_manager.record_failure(model)
-                    logger.error("Streaming REQUIRED but failed for %s: %s", model, e)
-                    processing_time = time.time() - start_time
-
-                    response = self.build_error_response(model, e)
-                    content = self.extract_content(response)
-
-                    if span.is_recording():
-                        span.set_attribute("llm.fallback_used", True)
-
-                    return self.build_response(
-                        content,
-                        response,
-                        model,
-                        processing_time,
-                        request.request_id,
-                        fallback_used=True,
+                    # Issue #620: Extracted streaming error handling
+                    return self._handle_streaming_error(
+                        span, model, start_time, request.request_id, e
                     )
 
                 raise e

@@ -41,6 +41,89 @@ class OpenAIProvider:
         """
         self.api_key = api_key
 
+    def _record_success_span_attributes(
+        self, span, response, processing_time: float
+    ) -> None:
+        """
+        Record success attributes on OpenTelemetry span. Issue #620.
+
+        Args:
+            span: OpenTelemetry span
+            response: OpenAI API response
+            processing_time: Time taken to process request
+        """
+        if span.is_recording():
+            span.set_attribute("llm.duration_ms", processing_time * 1000)
+            span.set_attribute(
+                "llm.response_length", len(response.choices[0].message.content)
+            )
+            span.set_attribute("llm.prompt_tokens", response.usage.prompt_tokens)
+            span.set_attribute(
+                "llm.completion_tokens", response.usage.completion_tokens
+            )
+            span.set_attribute("llm.total_tokens", response.usage.total_tokens)
+            span.set_status(Status(StatusCode.OK))
+
+    def _build_response(
+        self, response, processing_time: float, request_id: str
+    ) -> LLMResponse:
+        """
+        Build LLMResponse from OpenAI API response. Issue #620.
+
+        Args:
+            response: OpenAI API response
+            processing_time: Time taken to process request
+            request_id: Request identifier
+
+        Returns:
+            LLMResponse object
+        """
+        return LLMResponse(
+            content=response.choices[0].message.content,
+            model=response.model,
+            provider="openai",
+            processing_time=processing_time,
+            request_id=request_id,
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            },
+        )
+
+    def _build_span_attributes(self, model: str, request: LLMRequest) -> dict:
+        """
+        Build span attributes for OpenTelemetry tracing. Issue #620.
+
+        Args:
+            model: Model name
+            request: LLM request object
+
+        Returns:
+            Dict of span attributes
+        """
+        return {
+            "llm.provider": "openai",
+            "llm.model": model,
+            "llm.request_id": request.request_id,
+            "llm.temperature": request.temperature,
+            "llm.max_tokens": request.max_tokens or 0,
+            "llm.prompt_messages": len(request.messages),
+        }
+
+    def _record_error_span_attributes(self, span, error: Exception) -> None:
+        """
+        Record error attributes on OpenTelemetry span. Issue #620.
+
+        Args:
+            span: OpenTelemetry span
+            error: Exception that occurred
+        """
+        if span.is_recording():
+            span.set_status(Status(StatusCode.ERROR, str(error)))
+            span.record_exception(error)
+            span.set_attribute("llm.error", True)
+
     @circuit_breaker_async("openai_service")
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """
@@ -66,17 +149,10 @@ class OpenAIProvider:
         model = request.model_name or "gpt-3.5-turbo"
 
         # Issue #697: Create span for LLM inference with model attributes
+        # Issue #620: Extracted span attributes to helper method
+        span_attrs = self._build_span_attributes(model, request)
         with _tracer.start_as_current_span(
-            "llm.inference",
-            kind=SpanKind.CLIENT,
-            attributes={
-                "llm.provider": "openai",
-                "llm.model": model,
-                "llm.request_id": request.request_id,
-                "llm.temperature": request.temperature,
-                "llm.max_tokens": request.max_tokens or 0,
-                "llm.prompt_messages": len(request.messages),
-            },
+            "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
         ) as span:
             start_time = time.time()
 
@@ -87,47 +163,18 @@ class OpenAIProvider:
                     temperature=request.temperature,
                     max_tokens=request.max_tokens,
                 )
-
                 processing_time = time.time() - start_time
 
-                # Issue #697: Record response attributes on span
-                if span.is_recording():
-                    span.set_attribute("llm.duration_ms", processing_time * 1000)
-                    span.set_attribute(
-                        "llm.response_length", len(response.choices[0].message.content)
-                    )
-                    span.set_attribute(
-                        "llm.prompt_tokens", response.usage.prompt_tokens
-                    )
-                    span.set_attribute(
-                        "llm.completion_tokens", response.usage.completion_tokens
-                    )
-                    span.set_attribute("llm.total_tokens", response.usage.total_tokens)
-                    span.set_status(Status(StatusCode.OK))
-
-                return LLMResponse(
-                    content=response.choices[0].message.content,
-                    model=response.model,
-                    provider="openai",
-                    processing_time=processing_time,
-                    request_id=request.request_id,
-                    usage={
-                        "prompt_tokens": response.usage.prompt_tokens,
-                        "completion_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens,
-                    },
+                # Issue #697/#620: Extracted to helper methods
+                self._record_success_span_attributes(span, response, processing_time)
+                return self._build_response(
+                    response, processing_time, request.request_id
                 )
 
             except Exception as e:
-                processing_time = time.time() - start_time
                 logger.error("OpenAI completion error: %s", e)
-
-                # Issue #697: Record error on span
-                if span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
-                    span.record_exception(e)
-                    span.set_attribute("llm.error", True)
-
+                # Issue #620: Extracted error span recording
+                self._record_error_span_attributes(span, e)
                 raise
 
 
