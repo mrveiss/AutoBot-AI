@@ -485,7 +485,9 @@ async def check_staged_files(
             results.extend(run_check(check, filepath, content))
 
     # Calculate statistics (Issue #620)
-    stats = _calculate_check_statistics(results, enabled_checks, staged_files, start_time)
+    stats = _calculate_check_statistics(
+        results, enabled_checks, staged_files, start_time
+    )
 
     result = CommitCheckResult(
         passed=not stats["blocked"],
@@ -671,7 +673,7 @@ async def install_hooks(
 
     # Create pre-commit hook script with dynamic port from NetworkConstants
     backend_port = NetworkConstants.BACKEND_PORT
-    hook_content = f"""#!/bin/bash
+    hook_content = f"""#!/bin/bash  # noqa: E501
 # AutoBot Pre-commit Hook v1.0.0
 # Copyright (c) 2025 mrveiss
 
