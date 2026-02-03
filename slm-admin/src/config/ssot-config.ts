@@ -39,11 +39,25 @@ export interface SLMConfig {
   }[]
 }
 
+// Detect protocol from browser context
+const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
+
+// Build WebSocket URL using current host (nginx proxy handles routing)
+// This ensures wss:// is used when page is served over https://
+function getWsBaseUrl(): string {
+  if (typeof window === 'undefined') return 'ws://localhost:8000'
+  const wsProtocol = isSecure ? 'wss:' : 'ws:'
+  // Use current host (nginx) - nginx proxies /api/ws to backend
+  return `${wsProtocol}//${window.location.host}`
+}
+
 const config: SLMConfig = {
-  httpProtocol: 'http',
-  apiBaseUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-  wsProtocol: 'ws',
-  wsBaseUrl: import.meta.env.VITE_WS_URL || 'ws://localhost:8000',
+  httpProtocol: isSecure ? 'https' : 'http',
+  // Use relative path - nginx proxies /api/ to backend
+  apiBaseUrl: import.meta.env.VITE_API_URL || '',
+  wsProtocol: isSecure ? 'wss' : 'ws',
+  // Use current host - nginx proxies WebSocket connections
+  wsBaseUrl: import.meta.env.VITE_WS_URL || getWsBaseUrl(),
   vm: {
     main: '172.16.168.20',
     frontend: '172.16.168.21',
