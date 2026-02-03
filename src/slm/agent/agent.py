@@ -161,52 +161,66 @@ class SLMAgent:
             logger.debug("Failed to fetch role definitions: %s", e)
         return False
 
-    async def send_heartbeat(self) -> bool:
-        """Send heartbeat with health data to admin."""
-        import platform
+    def _build_role_report(self) -> dict:
+        """
+        Build role detection report for heartbeat payload.
 
-        # Fetch role definitions if not loaded (Issue #779)
+        Returns a dictionary mapping role names to their status details.
+        Issue #620.
+        """
         if not self._role_definitions_loaded:
-            await self._fetch_role_definitions()
+            return {}
 
-        health = self.collector.collect()
-        # Payload matches HeartbeatRequest schema
-        os_info = f"{platform.system()} {platform.release()}"
-        # Issue #741: Get code version for heartbeat
-        code_version = self.version_manager.get_version()
-
-        # Detect roles (Issue #779)
-        role_report = {}
-        if self._role_definitions_loaded:
-            role_statuses = self.role_detector.detect_all()
-            role_report = {
-                name: {
-                    "path_exists": status.path_exists,
-                    "path": status.path,
-                    "service_running": status.service_running,
-                    "service_name": status.service_name,
-                    "ports": status.ports,
-                    "version": status.version,
-                    "status": status.status,
-                }
-                for name, status in role_statuses.items()
+        role_statuses = self.role_detector.detect_all()
+        return {
+            name: {
+                "path_exists": status.path_exists,
+                "path": status.path,
+                "service_running": status.service_running,
+                "service_name": status.service_name,
+                "ports": status.ports,
+                "version": status.version,
+                "status": status.status,
             }
+            for name, status in role_statuses.items()
+        }
 
-        # Get listening ports (Issue #779)
-        listening_ports = [
+    def _build_listening_ports_list(self) -> list:
+        """
+        Build list of listening ports for heartbeat payload.
+
+        Returns a list of dictionaries with port, process, and pid info.
+        Issue #620.
+        """
+        return [
             {"port": p.port, "process": p.process, "pid": p.pid}
             for p in get_listening_ports()
         ]
 
-        payload = {
+    def _build_heartbeat_payload(
+        self, health: dict, os_info: str, code_version: Optional[str]
+    ) -> dict:
+        """
+        Build the complete heartbeat payload.
+
+        Args:
+            health: Health data from collector.
+            os_info: Operating system information string.
+            code_version: Current code version hash.
+
+        Returns:
+            Dictionary payload matching HeartbeatRequest schema.
+        Issue #620.
+        """
+        return {
             "cpu_percent": health.get("cpu_percent", 0.0),
             "memory_percent": health.get("memory_percent", 0.0),
             "disk_percent": health.get("disk_percent", 0.0),
             "agent_version": "1.0.0",
             "os_info": os_info,
             "code_version": code_version,  # Issue #741: Add code version
-            "role_report": role_report,  # Issue #779: Add role detection
-            "listening_ports": listening_ports,  # Issue #779: Add listening ports
+            "role_report": self._build_role_report(),  # Issue #779: Add role detection
+            "listening_ports": self._build_listening_ports_list(),  # Issue #779
             "extra_data": {
                 "services": health.get("services", {}),
                 "discovered_services": health.get("discovered_services", []),
@@ -216,6 +230,17 @@ class SLMAgent:
             },
         }
 
+    async def _send_heartbeat_request(self, payload: dict) -> bool:
+        """
+        Send heartbeat HTTP request to admin server.
+
+        Args:
+            payload: Heartbeat payload dictionary.
+
+        Returns:
+            True if heartbeat was accepted, False otherwise.
+        Issue #620.
+        """
         try:
             async with aiohttp.ClientSession() as session:
                 url = f"{self.admin_url}/api/nodes/{self.node_id}/heartbeat"
@@ -242,6 +267,21 @@ class SLMAgent:
             logger.warning("Failed to send heartbeat: %s", e)
             self.buffer_event("heartbeat", payload)
             return False
+
+    async def send_heartbeat(self) -> bool:
+        """Send heartbeat with health data to admin."""
+        import platform
+
+        # Fetch role definitions if not loaded (Issue #779)
+        if not self._role_definitions_loaded:
+            await self._fetch_role_definitions()
+
+        health = self.collector.collect()
+        os_info = f"{platform.system()} {platform.release()}"
+        code_version = self.version_manager.get_version()
+
+        payload = self._build_heartbeat_payload(health, os_info, code_version)
+        return await self._send_heartbeat_request(payload)
 
     async def sync_buffered_events(self):
         """Sync buffered events to admin."""
