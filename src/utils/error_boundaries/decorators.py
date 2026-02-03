@@ -17,12 +17,7 @@ from typing import Callable
 from src.constants.threshold_constants import RetryConfig
 
 from .boundary_manager import get_error_boundary_manager
-from .types import (
-    APIErrorResponse,
-    ErrorCategory,
-    ErrorContext,
-    RecoveryStrategy,
-)
+from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +98,98 @@ def _handle_sync_attempt(
         return (True, asyncio.run(manager.handle_error(e, context)))
 
 
+def _create_async_boundary_wrapper(
+    func: Callable,
+    comp_name: str,
+    func_name: str,
+    recovery_strategy: RecoveryStrategy,
+    max_retries: int,
+) -> Callable:
+    """
+    Create async wrapper for error boundary decorator. Issue #620.
+
+    Args:
+        func: Async function to wrap
+        comp_name: Component name for error context
+        func_name: Function name for error context
+        recovery_strategy: Recovery strategy to use
+        max_retries: Maximum retry attempts
+
+    Returns:
+        Async wrapper function with error boundary protection
+    """
+
+    @functools.wraps(func)
+    async def async_wrapper(*args, **kwargs):
+        """Async wrapper that executes function with error boundary protection."""
+        manager = get_error_boundary_manager()
+        context = ErrorContext(
+            component=comp_name, function=func_name, args=args, kwargs=kwargs
+        )
+
+        for attempt in range(max_retries + 1):
+            done, result = await _handle_async_attempt(
+                func,
+                args,
+                kwargs,
+                attempt,
+                max_retries,
+                recovery_strategy,
+                manager,
+                context,
+            )
+            if done:
+                return result
+
+    return async_wrapper
+
+
+def _create_sync_boundary_wrapper(
+    func: Callable,
+    comp_name: str,
+    func_name: str,
+    recovery_strategy: RecoveryStrategy,
+    max_retries: int,
+) -> Callable:
+    """
+    Create sync wrapper for error boundary decorator. Issue #620.
+
+    Args:
+        func: Sync function to wrap
+        comp_name: Component name for error context
+        func_name: Function name for error context
+        recovery_strategy: Recovery strategy to use
+        max_retries: Maximum retry attempts
+
+    Returns:
+        Sync wrapper function with error boundary protection
+    """
+
+    @functools.wraps(func)
+    def sync_wrapper(*args, **kwargs):
+        """Sync wrapper that executes function with error boundary protection."""
+        manager = get_error_boundary_manager()
+        context = ErrorContext(
+            component=comp_name, function=func_name, args=args, kwargs=kwargs
+        )
+
+        for attempt in range(max_retries + 1):
+            done, result = _handle_sync_attempt(
+                func,
+                args,
+                kwargs,
+                attempt,
+                max_retries,
+                recovery_strategy,
+                manager,
+                context,
+            )
+            if done:
+                return result
+
+    return sync_wrapper
+
+
 def error_boundary(
     component: str = None,
     function: str = None,
@@ -128,55 +215,13 @@ def error_boundary(
         func_name = function or func.__name__
 
         if asyncio.iscoroutinefunction(func):
-
-            @functools.wraps(func)
-            async def async_wrapper(*args, **kwargs):
-                """Async wrapper that executes function with error boundary protection."""
-                manager = get_error_boundary_manager()
-                context = ErrorContext(
-                    component=comp_name, function=func_name, args=args, kwargs=kwargs
-                )
-
-                for attempt in range(max_retries + 1):
-                    done, result = await _handle_async_attempt(
-                        func,
-                        args,
-                        kwargs,
-                        attempt,
-                        max_retries,
-                        recovery_strategy,
-                        manager,
-                        context,
-                    )
-                    if done:
-                        return result
-
-            return async_wrapper
+            return _create_async_boundary_wrapper(
+                func, comp_name, func_name, recovery_strategy, max_retries
+            )
         else:
-
-            @functools.wraps(func)
-            def sync_wrapper(*args, **kwargs):
-                """Sync wrapper that executes function with error boundary protection."""
-                manager = get_error_boundary_manager()
-                context = ErrorContext(
-                    component=comp_name, function=func_name, args=args, kwargs=kwargs
-                )
-
-                for attempt in range(max_retries + 1):
-                    done, result = _handle_sync_attempt(
-                        func,
-                        args,
-                        kwargs,
-                        attempt,
-                        max_retries,
-                        recovery_strategy,
-                        manager,
-                        context,
-                    )
-                    if done:
-                        return result
-
-            return sync_wrapper
+            return _create_sync_boundary_wrapper(
+                func, comp_name, func_name, recovery_strategy, max_retries
+            )
 
     return decorator
 

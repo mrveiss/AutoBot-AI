@@ -841,6 +841,105 @@ class TestPatternAnalyzer:
     # Main Analysis Methods
     # =========================================================================
 
+    def _collect_python_files(self, directory: str) -> tuple[List[str], List[str]]:
+        """Collect test and source Python files from directory. Issue #620.
+
+        Args:
+            directory: Root directory to scan
+
+        Returns:
+            Tuple of (test_files, source_files)
+        """
+        test_files: List[str] = []
+        source_files: List[str] = []
+
+        for root, dirs, files in os.walk(directory):
+            dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
+
+            for file in files:
+                if not file.endswith(".py"):
+                    continue
+
+                file_path = os.path.join(root, file)
+                if self._should_exclude(file_path):
+                    continue
+
+                if self.is_test_file(file_path):
+                    test_files.append(file_path)
+                else:
+                    source_files.append(file_path)
+
+        return test_files, source_files
+
+    def _aggregate_test_analysis(
+        self, test_files: List[str]
+    ) -> tuple[int, int, List[TestAntiPatternResult]]:
+        """Analyze test files and aggregate results. Issue #620.
+
+        Args:
+            test_files: List of test file paths
+
+        Returns:
+            Tuple of (total_tests, total_assertions, all_anti_patterns)
+        """
+        total_tests = 0
+        total_assertions = 0
+        all_anti_patterns: List[TestAntiPatternResult] = []
+
+        for test_file in test_files:
+            report = self.analyze_test_file(test_file)
+            total_tests += report.test_count
+            total_assertions += report.assertion_count
+            all_anti_patterns.extend(report.anti_patterns)
+
+        return total_tests, total_assertions, all_anti_patterns
+
+    def _build_severity_distribution(
+        self, anti_patterns: List[TestAntiPatternResult]
+    ) -> Dict[str, int]:
+        """Build severity distribution from anti-patterns. Issue #620.
+
+        Args:
+            anti_patterns: List of detected anti-patterns
+
+        Returns:
+            Dictionary mapping severity level to count
+        """
+        severity_dist: Dict[str, int] = {}
+        for pattern in anti_patterns:
+            severity = pattern.severity.value
+            severity_dist[severity] = severity_dist.get(severity, 0) + 1
+        return severity_dist
+
+    def _generate_analysis_suggestions(
+        self,
+        coverage_gaps: List[CoverageGap],
+        severity_dist: Dict[str, int],
+        quality_metrics: Dict[TestQualityMetric, float],
+    ) -> List[str]:
+        """Generate suggestions based on analysis results. Issue #620.
+
+        Args:
+            coverage_gaps: List of coverage gaps found
+            severity_dist: Severity distribution dictionary
+            quality_metrics: Quality metrics dictionary
+
+        Returns:
+            List of suggestion strings
+        """
+        suggestions: List[str] = []
+
+        if len(coverage_gaps) > 0:
+            suggestions.append(
+                f"Add tests for {len(coverage_gaps)} untested modules/functions"
+            )
+        if severity_dist.get("high", 0) > 0:
+            suggestions.append(f"Fix {severity_dist['high']} high-severity test issues")
+        if quality_metrics.get(TestQualityMetric.OVERALL_SCORE, 0) < 70:
+            suggestions.append("Improve test quality score by addressing anti-patterns")
+
+        return suggestions
+
     def analyze_test_file(self, file_path: str) -> TestQualityReport:
         """
         Analyze a single test file for anti-patterns and quality issues.
@@ -927,60 +1026,27 @@ class TestPatternAnalyzer:
         Returns:
             TestAnalysisReport with comprehensive findings
         """
-        test_files = []
-        source_files = []
-        all_anti_patterns = []
-        total_tests = 0
-        total_assertions = 0
-
         # Collect all Python files
-        for root, dirs, files in os.walk(directory):
-            # Filter excluded directories
-            dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
+        test_files, source_files = self._collect_python_files(directory)
 
-            for file in files:
-                if not file.endswith(".py"):
-                    continue
-
-                file_path = os.path.join(root, file)
-
-                if self._should_exclude(file_path):
-                    continue
-
-                if self.is_test_file(file_path):
-                    test_files.append(file_path)
-                else:
-                    source_files.append(file_path)
-
-        # Analyze each test file
-        for test_file in test_files:
-            report = self.analyze_test_file(test_file)
-            total_tests += report.test_count
-            total_assertions += report.assertion_count
-            all_anti_patterns.extend(report.anti_patterns)
+        # Analyze each test file and aggregate results
+        (
+            total_tests,
+            total_assertions,
+            all_anti_patterns,
+        ) = self._aggregate_test_analysis(test_files)
 
         # Find coverage gaps
         coverage_gaps = self._find_coverage_gaps(source_files, test_files)
 
-        # Calculate severity distribution
-        severity_dist: Dict[str, int] = {}
-        for pattern in all_anti_patterns:
-            severity = pattern.severity.value
-            severity_dist[severity] = severity_dist.get(severity, 0) + 1
-
-        # Calculate overall metrics
+        # Calculate severity distribution and quality metrics
+        severity_dist = self._build_severity_distribution(all_anti_patterns)
         quality_metrics = self._calculate_quality_metrics(test_files, all_anti_patterns)
 
         # Generate suggestions
-        suggestions = []
-        if len(coverage_gaps) > 0:
-            suggestions.append(
-                f"Add tests for {len(coverage_gaps)} untested modules/functions"
-            )
-        if severity_dist.get("high", 0) > 0:
-            suggestions.append(f"Fix {severity_dist['high']} high-severity test issues")
-        if quality_metrics.get(TestQualityMetric.OVERALL_SCORE, 0) < 70:
-            suggestions.append("Improve test quality score by addressing anti-patterns")
+        suggestions = self._generate_analysis_suggestions(
+            coverage_gaps, severity_dist, quality_metrics
+        )
 
         return TestAnalysisReport(
             scan_path=directory,
