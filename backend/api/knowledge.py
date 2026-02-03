@@ -534,11 +534,84 @@ async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
     return result.get("fact_id")
 
 
+def _fallback_html_strip(html_content: str) -> tuple:
+    """
+    Fallback HTML stripping using regex when parser fails.
+
+    Issue #620.
+
+    Args:
+        html_content: Raw HTML content
+
+    Returns:
+        Tuple of (plain_text, empty_title)
+    """
+    import re
+    from html import unescape
+
+    text = re.sub(r"<[^>]+>", " ", html_content)
+    text = unescape(text)
+    return re.sub(r"\s+", " ", text).strip(), ""
+
+
+class _HtmlTextExtractor:
+    """
+    HTML parser that extracts text content and title.
+
+    Skips script and style tag content for safe text extraction.
+    Issue #620.
+    """
+
+    def __init__(self):
+        from html.parser import HTMLParser
+
+        self._parser = HTMLParser()
+        self._parser.handle_starttag = self._handle_starttag
+        self._parser.handle_endtag = self._handle_endtag
+        self._parser.handle_data = self._handle_data
+        self.text_parts = []
+        self.title = ""
+        self._in_script = False
+        self._in_style = False
+        self._in_title = False
+
+    def _handle_starttag(self, tag, attrs):
+        tag_lower = tag.lower()
+        if tag_lower == "script":
+            self._in_script = True
+        elif tag_lower == "style":
+            self._in_style = True
+        elif tag_lower == "title":
+            self._in_title = True
+
+    def _handle_endtag(self, tag):
+        tag_lower = tag.lower()
+        if tag_lower == "script":
+            self._in_script = False
+        elif tag_lower == "style":
+            self._in_style = False
+        elif tag_lower == "title":
+            self._in_title = False
+
+    def _handle_data(self, data):
+        if self._in_title:
+            self.title = data.strip()
+        elif not self._in_script and not self._in_style:
+            text = data.strip()
+            if text:
+                self.text_parts.append(text)
+
+    def feed(self, html_content: str):
+        """Feed HTML content to the parser. Issue #620."""
+        self._parser.feed(html_content)
+
+
 def _sanitize_html_content(html_content: str) -> tuple:
     """
-    Safely extract text and title from HTML content (Issue #549 Code Review: Security fix).
+    Safely extract text and title from HTML content.
 
     Uses html.parser for safe HTML processing instead of regex.
+    Issue #549 Code Review: Security fix.
 
     Args:
         html_content: Raw HTML content
@@ -546,57 +619,14 @@ def _sanitize_html_content(html_content: str) -> tuple:
     Returns:
         Tuple of (plain_text, extracted_title)
     """
-    from html import unescape
-    from html.parser import HTMLParser
-
-    class TextExtractor(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.text_parts = []
-            self.title = ""
-            self._in_script = False
-            self._in_style = False
-            self._in_title = False
-
-        def handle_starttag(self, tag, attrs):
-            tag_lower = tag.lower()
-            if tag_lower == "script":
-                self._in_script = True
-            elif tag_lower == "style":
-                self._in_style = True
-            elif tag_lower == "title":
-                self._in_title = True
-
-        def handle_endtag(self, tag):
-            tag_lower = tag.lower()
-            if tag_lower == "script":
-                self._in_script = False
-            elif tag_lower == "style":
-                self._in_style = False
-            elif tag_lower == "title":
-                self._in_title = False
-
-        def handle_data(self, data):
-            if self._in_title:
-                self.title = data.strip()
-            elif not self._in_script and not self._in_style:
-                text = data.strip()
-                if text:
-                    self.text_parts.append(text)
-
-    parser = TextExtractor()
+    extractor = _HtmlTextExtractor()
     try:
-        parser.feed(html_content)
+        extractor.feed(html_content)
     except Exception:
-        # Fallback: just unescape and strip tags with regex
-        import re
+        return _fallback_html_strip(html_content)
 
-        text = re.sub(r"<[^>]+>", " ", html_content)
-        text = unescape(text)
-        return re.sub(r"\s+", " ", text).strip(), ""
-
-    plain_text = " ".join(parser.text_parts)
-    return plain_text, parser.title
+    plain_text = " ".join(extractor.text_parts)
+    return plain_text, extractor.title
 
 
 def _validate_file_upload(filename: str, file_size: int) -> None:
@@ -749,6 +779,70 @@ async def add_url_to_knowledge(
     }
 
 
+def _extract_pdf_content(filename: str, file_content: bytes) -> str:
+    """
+    Extract text content from PDF file.
+
+    Issue #620.
+
+    Args:
+        filename: Name of the file for error logging
+        file_content: Raw PDF bytes
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        HTTPException: If pypdf library is missing or parsing fails
+    """
+    import io
+
+    try:
+        import pypdf
+
+        pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
+        return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+    except ImportError:
+        raise HTTPException(
+            status_code=400, detail="PDF support requires pypdf library"
+        )
+    except Exception as e:
+        logger.error("PDF parse error for %s: %s", filename, e)
+        raise HTTPException(status_code=400, detail="Failed to parse PDF file")
+
+
+def _extract_docx_content(filename: str, file_content: bytes) -> str:
+    """
+    Extract text content from DOCX file.
+
+    Issue #620.
+
+    Args:
+        filename: Name of the file for error logging
+        file_content: Raw DOCX bytes
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        HTTPException: If python-docx library is missing or parsing fails
+    """
+    import io
+
+    try:
+        import docx
+
+        doc = docx.Document(io.BytesIO(file_content))
+        return "\n".join(para.text for para in doc.paragraphs)
+    except ImportError:
+        raise HTTPException(
+            status_code=400, detail="DOCX support requires python-docx library"
+        )
+    except Exception as e:
+        logger.error("DOCX parse error for %s: %s", filename, e)
+        raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
+
+
 def _extract_file_content(filename: str, file_content: bytes) -> str:
     """
     Extract text content from uploaded file based on extension.
@@ -763,7 +857,6 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
     Raises:
         HTTPException: If file cannot be parsed or library is missing
     """
-    import io
     import os
 
     ext = os.path.splitext(filename.lower())[1]
@@ -784,32 +877,10 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
             return file_content.decode("utf-8", errors="replace")
 
     if ext == ".pdf":
-        try:
-            import pypdf
-
-            pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
-            return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
-        except ImportError:
-            raise HTTPException(
-                status_code=400, detail="PDF support requires pypdf library"
-            )
-        except Exception as e:
-            logger.error("PDF parse error for %s: %s", filename, e)
-            raise HTTPException(status_code=400, detail="Failed to parse PDF file")
+        return _extract_pdf_content(filename, file_content)
 
     if ext == ".docx":
-        try:
-            import docx
-
-            doc = docx.Document(io.BytesIO(file_content))
-            return "\n".join(para.text for para in doc.paragraphs)
-        except ImportError:
-            raise HTTPException(
-                status_code=400, detail="DOCX support requires python-docx library"
-            )
-        except Exception as e:
-            logger.error("DOCX parse error for %s: %s", filename, e)
-            raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
+        return _extract_docx_content(filename, file_content)
 
     # Default: treat as text
     return file_content.decode("utf-8", errors="replace")
@@ -1789,6 +1860,73 @@ async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int)
     }
 
 
+def _extract_fact_metadata(fact_data: dict) -> dict:
+    """
+    Extract and parse metadata from Redis fact data.
+
+    Handles both bytes and string keys from Redis responses.
+    Issue #620.
+
+    Args:
+        fact_data: Raw fact data from Redis hgetall
+
+    Returns:
+        Parsed metadata dictionary
+    """
+    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
+    return json.loads(
+        metadata_str.decode("utf-8")
+        if isinstance(metadata_str, bytes)
+        else metadata_str
+    )
+
+
+def _extract_fact_content(fact_data: dict) -> str:
+    """
+    Extract content string from Redis fact data.
+
+    Handles both bytes and string keys from Redis responses.
+    Issue #620.
+
+    Args:
+        fact_data: Raw fact data from Redis hgetall
+
+    Returns:
+        Content string
+    """
+    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
+    return (
+        content_raw.decode("utf-8")
+        if isinstance(content_raw, bytes)
+        else str(content_raw)
+        if content_raw
+        else ""
+    )
+
+
+def _extract_fact_created_at(fact_data: dict) -> str:
+    """
+    Extract created_at timestamp from Redis fact data.
+
+    Handles both bytes and string keys from Redis responses.
+    Issue #620.
+
+    Args:
+        fact_data: Raw fact data from Redis hgetall
+
+    Returns:
+        Created at timestamp string
+    """
+    created_at_raw = fact_data.get("created_at") or fact_data.get(b"created_at", b"")
+    return (
+        created_at_raw.decode("utf-8")
+        if isinstance(created_at_raw, bytes)
+        else str(created_at_raw)
+        if created_at_raw
+        else ""
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_by_key",
@@ -1813,54 +1951,22 @@ async def get_fact_by_key(
 
     Issue #744: Requires admin authentication.
     """
-    # Additional security check for path traversal (Issue #328 - uses shared validation)
     if contains_path_traversal(fact_key):
         raise HTTPException(
             status_code=400, detail="Invalid fact_key: path traversal not allowed"
         )
 
     kb = await get_or_create_knowledge_base(req.app)
-    import json
-
-    # Get fact data from Redis hash - async operation
     fact_data = await asyncio.to_thread(kb.redis_client.hgetall, fact_key)
 
     if not fact_data:
         raise HTTPException(status_code=404, detail=f"Fact not found: {fact_key}")
 
-    # Extract metadata (handle both bytes and string keys from Redis)
-    metadata_str = fact_data.get("metadata") or fact_data.get(b"metadata", b"{}")
-    metadata = json.loads(
-        metadata_str.decode("utf-8")
-        if isinstance(metadata_str, bytes)
-        else metadata_str
-    )
-
-    # Extract content (handle both bytes and string keys from Redis)
-    content_raw = fact_data.get("content") or fact_data.get(b"content", b"")
-    content = (
-        content_raw.decode("utf-8")
-        if isinstance(content_raw, bytes)
-        else str(content_raw)
-        if content_raw
-        else ""
-    )
-
-    # Extract created_at (handle both bytes and string keys from Redis)
-    created_at_raw = fact_data.get("created_at") or fact_data.get(b"created_at", b"")
-    created_at = (
-        created_at_raw.decode("utf-8")
-        if isinstance(created_at_raw, bytes)
-        else str(created_at_raw)
-        if created_at_raw
-        else ""
-    )
-
     return {
         "key": fact_key,
-        "content": content,
-        "metadata": metadata,
-        "created_at": created_at,
+        "content": _extract_fact_content(fact_data),
+        "metadata": _extract_fact_metadata(fact_data),
+        "created_at": _extract_fact_created_at(fact_data),
     }
 
 

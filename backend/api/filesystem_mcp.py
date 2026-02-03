@@ -235,78 +235,162 @@ class GetFileInfoRequest(BaseModel):
     path: str = Field(..., description="File or directory path")
 
 
+def _create_read_text_file_tool() -> MCPTool:
+    """
+    Create MCP tool definition for reading text files.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="read_text_file",
+        description=(
+            "Read complete text file contents with optional head/tail parameters for"
+            "large files"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to text file"},
+                "head": {"type": "integer", "description": "Read only first N lines"},
+                "tail": {"type": "integer", "description": "Read only last N lines"},
+            },
+            "required": ["path"],
+        },
+    )
+
+
+def _create_read_media_file_tool() -> MCPTool:
+    """
+    Create MCP tool definition for reading media files.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="read_media_file",
+        description=(
+            "Read media files (images, audio) as base64-encoded data with"
+            "MIME type detection"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to media file"}
+            },
+            "required": ["path"],
+        },
+    )
+
+
+def _create_read_multiple_files_tool() -> MCPTool:
+    """
+    Create MCP tool definition for batch reading multiple files.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="read_multiple_files",
+        description=(
+            "Batch read multiple text files efficiently with graceful error handling per"
+            "file"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of absolute file paths to read",
+                }
+            },
+            "required": ["paths"],
+        },
+    )
+
+
 def _get_read_operation_tools() -> List[MCPTool]:
     """
     Get MCP tools for file read operations.
 
     Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
+    Issue #620: Further refactored to use individual tool creation helpers.
 
     Returns:
         List of MCPTool definitions for read operations
     """
     return [
-        MCPTool(
-            name="read_text_file",
-            description=(
-                "Read complete text file contents with optional head/tail parameters for"
-                "large files"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to text file",
-                    },
-                    "head": {
-                        "type": "integer",
-                        "description": "Read only first N lines",
-                    },
-                    "tail": {
-                        "type": "integer",
-                        "description": "Read only last N lines",
-                    },
-                },
-                "required": ["path"],
-            },
-        ),
-        MCPTool(
-            name="read_media_file",
-            description=(
-                "Read media files (images, audio) as base64-encoded data with"
-                "MIME type detection"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Absolute path to media file",
-                    }
-                },
-                "required": ["path"],
-            },
-        ),
-        MCPTool(
-            name="read_multiple_files",
-            description=(
-                "Batch read multiple text files efficiently with graceful error handling per"
-                "file"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "paths": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of absolute file paths to read",
-                    }
-                },
-                "required": ["paths"],
-            },
-        ),
+        _create_read_text_file_tool(),
+        _create_read_media_file_tool(),
+        _create_read_multiple_files_tool(),
     ]
+
+
+def _create_write_file_tool() -> MCPTool:
+    """
+    Create MCP tool definition for writing files.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="write_file",
+        description=(
+            "Create new file or completely overwrite existing file with"
+            "provided content"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to file"},
+                "content": {"type": "string", "description": "File content to write"},
+            },
+            "required": ["path", "content"],
+        },
+    )
+
+
+def _create_edit_file_tool() -> MCPTool:
+    """
+    Create MCP tool definition for editing files with find-and-replace.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="edit_file",
+        description=(
+            "Selectively modify file contents using pattern-based find-and-replace"
+            "edits"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to file"},
+                "edits": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "old_text": {
+                                "type": "string",
+                                "description": "Text to find",
+                            },
+                            "new_text": {
+                                "type": "string",
+                                "description": "Replacement text",
+                            },
+                        },
+                        "required": ["old_text", "new_text"],
+                    },
+                    "description": "List of find-and-replace operations",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Preview changes without applying",
+                    "default": False,
+                },
+            },
+            "required": ["path", "edits"],
+        },
+    )
 
 
 def _get_write_operation_tools() -> List[MCPTool]:
@@ -315,66 +399,14 @@ def _get_write_operation_tools() -> List[MCPTool]:
 
     Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
+    Issue #620: Further refactored to use individual tool creation helpers.
 
     Returns:
         List of MCPTool definitions for write operations
     """
     return [
-        MCPTool(
-            name="write_file",
-            description=(
-                "Create new file or completely overwrite existing file with"
-                "provided content"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Absolute path to file"},
-                    "content": {
-                        "type": "string",
-                        "description": "File content to write",
-                    },
-                },
-                "required": ["path", "content"],
-            },
-        ),
-        MCPTool(
-            name="edit_file",
-            description=(
-                "Selectively modify file contents using pattern-based find-and-replace"
-                "edits"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Absolute path to file"},
-                    "edits": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "old_text": {
-                                    "type": "string",
-                                    "description": "Text to find",
-                                },
-                                "new_text": {
-                                    "type": "string",
-                                    "description": "Replacement text",
-                                },
-                            },
-                            "required": ["old_text", "new_text"],
-                        },
-                        "description": "List of find-and-replace operations",
-                    },
-                    "dry_run": {
-                        "type": "boolean",
-                        "description": "Preview changes without applying",
-                        "default": False,
-                    },
-                },
-                "required": ["path", "edits"],
-            },
-        ),
+        _create_write_file_tool(),
+        _create_edit_file_tool(),
     ]
 
 
@@ -504,73 +536,110 @@ def _get_directory_management_tools() -> List[MCPTool]:
     ]
 
 
+def _create_search_files_tool() -> MCPTool:
+    """
+    Create MCP tool definition for searching files by glob pattern.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="search_files",
+        description=(
+            "Recursively search for files matching glob pattern with"
+            "optional exclusion patterns"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Directory to search in"},
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern (e.g., '*.py', '**/*.json')",
+                },
+                "exclude_patterns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Patterns to exclude from results",
+                },
+            },
+            "required": ["path", "pattern"],
+        },
+    )
+
+
+def _create_directory_tree_tool() -> MCPTool:
+    """
+    Create MCP tool definition for getting recursive directory tree.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="directory_tree",
+        description=(
+            "Get recursive directory structure as JSON tree with files and"
+            "subdirectories"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Root directory path"}
+            },
+            "required": ["path"],
+        },
+    )
+
+
+def _create_get_file_info_tool() -> MCPTool:
+    """
+    Create MCP tool definition for getting file/directory metadata.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="get_file_info",
+        description=(
+            "Get comprehensive file/directory metadata (size, timestamps, permissions,"
+            "type)"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File or directory path"}
+            },
+            "required": ["path"],
+        },
+    )
+
+
+def _create_list_allowed_directories_tool() -> MCPTool:
+    """
+    Create MCP tool definition for listing allowed directories.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="list_allowed_directories",
+        description="Display current filesystem access boundaries and allowed directory paths",
+        input_schema={"type": "object", "properties": {}},
+    )
+
+
 def _get_discovery_analysis_tools() -> List[MCPTool]:
     """
     Get MCP tools for file/directory discovery and analysis.
 
     Issue #281: Extracted from get_filesystem_mcp_tools to reduce function length
     and improve maintainability of tool definitions by category.
+    Issue #620: Further refactored to use individual tool creation helpers.
 
     Returns:
         List of MCPTool definitions for discovery/analysis operations
     """
     return [
-        MCPTool(
-            name="search_files",
-            description=(
-                "Recursively search for files matching glob pattern with"
-                "optional exclusion patterns"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Directory to search in"},
-                    "pattern": {
-                        "type": "string",
-                        "description": "Glob pattern (e.g., '*.py', '**/*.json')",
-                    },
-                    "exclude_patterns": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Patterns to exclude from results",
-                    },
-                },
-                "required": ["path", "pattern"],
-            },
-        ),
-        MCPTool(
-            name="directory_tree",
-            description=(
-                "Get recursive directory structure as JSON tree with files and"
-                "subdirectories"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Root directory path"}
-                },
-                "required": ["path"],
-            },
-        ),
-        MCPTool(
-            name="get_file_info",
-            description=(
-                "Get comprehensive file/directory metadata (size, timestamps, permissions,"
-                "type)"
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "File or directory path"}
-                },
-                "required": ["path"],
-            },
-        ),
-        MCPTool(
-            name="list_allowed_directories",
-            description="Display current filesystem access boundaries and allowed directory paths",
-            input_schema={"type": "object", "properties": {}},
-        ),
+        _create_search_files_tool(),
+        _create_directory_tree_tool(),
+        _create_get_file_info_tool(),
+        _create_list_allowed_directories_tool(),
     ]
 
 
@@ -884,6 +953,57 @@ async def write_file_mcp(
         raise HTTPException(status_code=500, detail=f"Error writing file: {str(e)}")
 
 
+async def _validate_file_path(path: str) -> None:
+    """
+    Validate that path is an allowed, existing file.
+
+    Issue #620.
+
+    Args:
+        path: File path to validate
+
+    Raises:
+        HTTPException: If path is not allowed, doesn't exist, or isn't a file
+    """
+    if not is_path_allowed(path):
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path not in allowed directories"
+        )
+
+    path_exists = await run_in_file_executor(os.path.exists, path)
+    if not path_exists:
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    is_file = await run_in_file_executor(os.path.isfile, path)
+    if not is_file:
+        raise HTTPException(status_code=400, detail=f"Path is not a file: {path}")
+
+
+def _apply_edits_to_content(content: str, edits: list) -> tuple:
+    """
+    Apply find-and-replace edits to content.
+
+    Issue #620.
+
+    Args:
+        content: Original file content
+        edits: List of edit dictionaries with old_text/new_text
+
+    Returns:
+        Tuple of (modified_content, list_of_applied_edits)
+    """
+    edits_applied = []
+    for edit in edits:
+        old_text = edit.get("old_text", edit.get("oldText"))
+        new_text = edit.get("new_text", edit.get("newText"))
+
+        if old_text in content:
+            content = content.replace(old_text, new_text)
+            edits_applied.append({"old": old_text[:50], "new": new_text[:50]})
+
+    return content, edits_applied
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="edit_file_mcp",
@@ -895,44 +1015,24 @@ async def edit_file_mcp(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Metadata:
     """
-    Edit file using find-and-replace patterns
+    Edit file using find-and-replace patterns.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use extracted helper methods.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
-
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
-
-    is_file = await run_in_file_executor(os.path.isfile, request.path)
-    if not is_file:
-        raise HTTPException(
-            status_code=400, detail=f"Path is not a file: {request.path}"
-        )
+    await _validate_file_path(request.path)
 
     try:
         # Issue #514: Use per-file locking to prevent concurrent read-modify-write corruption
         file_lock = await _get_file_lock(request.path)
         async with file_lock:
             async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
-                content = await f.read()
+                original_content = await f.read()
 
-            original_content = content
-            edits_applied = []
+            content, edits_applied = _apply_edits_to_content(
+                original_content, request.edits
+            )
 
-            for edit in request.edits:
-                old_text = edit.get("old_text", edit.get("oldText"))
-                new_text = edit.get("new_text", edit.get("newText"))
-
-                if old_text in content:
-                    content = content.replace(old_text, new_text)
-                    edits_applied.append({"old": old_text[:50], "new": new_text[:50]})
-
-            # Write changes if not dry run
             if not request.dry_run:
                 async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
                     await f.write(content)
@@ -946,6 +1046,8 @@ async def edit_file_mcp(
             "size_before": len(original_content),
             "size_after": len(content),
         }
+    except HTTPException:
+        raise
     except OSError as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to read/write file: {str(e)}"

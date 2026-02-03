@@ -595,11 +595,7 @@ class ChatWorkflowManager(
         llm_response: str,
         current_segment: str,
     ) -> tuple:
-        """
-        Process type transitions and update streaming message state.
-
-        Issue #620: Extracted from _stream_llm_response. Issue #620.
-        """
+        """Process type transitions and update streaming message state. Issue #620."""
         complete_msg, _, new_segment, new_type = self._handle_type_transition(
             new_type,
             current_message_type,
@@ -608,7 +604,6 @@ class ChatWorkflowManager(
             llm_response,
             chunk_text,
         )
-
         (
             new_msg,
             new_segment_val,
@@ -624,14 +619,12 @@ class ChatWorkflowManager(
             used_knowledge,
             rag_citations,
         )
-
         if new_msg:
             streaming_msg, current_segment, current_message_type = (
                 new_msg,
                 new_segment_val,
                 new_type,
             )
-
         return (
             complete_msg,
             streaming_msg,
@@ -649,20 +642,63 @@ class ChatWorkflowManager(
         transition_content: Optional[str],
         current_message_type: str,
     ) -> None:
-        """
-        Stream chunk content to the streaming message.
-
-        Issue #620: Extracted from _stream_llm_response to reduce function length.
-        Issue #656: Uses stream() to append chunk and increment version.
-        Issue #680: After type transition, stream content AFTER the tag. Issue #620.
-        """
-        if just_transitioned and transition_content is not None:
-            if transition_content:
-                streaming_msg.stream(transition_content)
+        """Stream chunk content to the streaming message. Issue #620."""
+        if just_transitioned and transition_content:
+            streaming_msg.stream(transition_content)
         else:
             streaming_msg.stream(chunk_text)
         streaming_msg.set_metadata("display_type", current_message_type)
         streaming_msg.set_metadata("message_type", "llm_response_chunk")
+
+    def _handle_tool_call_done(self, chunk_data: Dict[str, Any], llm_response: str):
+        """Handle completion when tool call is done. Issue #620."""
+        if chunk_data.get("done", False):
+            self._log_stream_completion(llm_response)
+            return (None, llm_response, True, False)
+        return None
+
+    def _process_chunk_with_transitions(
+        self,
+        chunk_text: str,
+        new_type: str,
+        current_message_type: str,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+        llm_response: str,
+        current_segment: str,
+    ):
+        """Process chunk and apply type transitions. Issue #620."""
+        result = self._process_chunk_type_transition(
+            chunk_text,
+            new_type,
+            current_message_type,
+            streaming_msg,
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+            llm_response,
+            current_segment,
+        )
+        (
+            complete_msg,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+            just_transitioned,
+            transition_content,
+        ) = result
+        self._stream_chunk_content(
+            streaming_msg,
+            chunk_text,
+            just_transitioned,
+            transition_content,
+            current_message_type,
+        )
+        return complete_msg, streaming_msg, current_segment, current_message_type
 
     async def _stream_llm_response(
         self,
@@ -672,18 +708,9 @@ class ChatWorkflowManager(
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
     ):
-        """
-        Stream LLM response chunks and yield WorkflowMessages.
-
-        Issue #620: Refactored using Extract Method to reduce function length.
-        Issue #656: Uses StreamingMessage for stable identity and version tracking.
-        Issue #727: Stops streaming after </tool_call> to prevent hallucination display.
-        """
-        llm_response = ""
-        current_segment = ""
-        current_message_type = "response"
+        """Stream LLM response chunks. Issue #620."""
+        llm_response, current_segment, current_message_type = "", "", "response"
         tool_call_completed = False
-
         streaming_msg = self._init_streaming_message(
             "response",
             selected_model,
@@ -705,15 +732,14 @@ class ChatWorkflowManager(
             ) = self._process_chunk_and_detect_type(
                 chunk_data, llm_response, current_segment, current_message_type
             )
-
             tool_call_completed = self._check_tool_call_completion(
                 llm_response, tool_call_completed
             )
 
             if tool_call_completed:
-                if chunk_data.get("done", False):
-                    self._log_stream_completion(llm_response)
-                    yield (None, llm_response, True, False)
+                done_result = self._handle_tool_call_done(chunk_data, llm_response)
+                if done_result:
+                    yield done_result
                     break
                 continue
 
@@ -723,9 +749,7 @@ class ChatWorkflowManager(
                     streaming_msg,
                     current_segment,
                     current_message_type,
-                    just_transitioned,
-                    transition_content,
-                ) = self._process_chunk_type_transition(
+                ) = self._process_chunk_with_transitions(
                     chunk_text,
                     new_type,
                     current_message_type,
@@ -737,17 +761,8 @@ class ChatWorkflowManager(
                     llm_response,
                     current_segment,
                 )
-
                 if complete_msg:
                     yield (complete_msg, llm_response, False, True)
-
-                self._stream_chunk_content(
-                    streaming_msg,
-                    chunk_text,
-                    just_transitioned,
-                    transition_content,
-                    current_message_type,
-                )
                 yield (streaming_msg.to_workflow_message(), llm_response, False, False)
 
             if chunk_data.get("done", False):
@@ -938,12 +953,7 @@ before summarizing.
         rag_citations: List[Dict[str, Any]],
         iteration: int,
     ):
-        """
-        Process a single LLM iteration.
-
-        Issue #620: Refactored using Extract Method to reduce function length.
-        Yields WorkflowMessage chunks, then (llm_response, tool_calls).
-        """
+        """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620."""
         import aiohttp
 
         payload = self._get_llm_request_payload(selected_model, current_prompt)
@@ -956,7 +966,6 @@ before summarizing.
                 logger.info(
                     "[ChatWorkflowManager] Ollama response status: %s", response.status
                 )
-
                 if response.status != 200:
                     yield self._create_llm_service_error(response.status)
                     yield (None, None)

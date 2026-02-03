@@ -457,6 +457,214 @@ def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> l
         return results
 
 
+# =============================================================================
+# Helper Functions for Endpoint Refactoring (Issue #620)
+# =============================================================================
+
+
+async def _validate_path_exists(path: str) -> None:
+    """
+    Validate that a path exists on the filesystem.
+
+    Raises HTTPException with 400 status if path does not exist.
+    Issue #620.
+
+    Args:
+        path: Filesystem path to validate
+
+    Raises:
+        HTTPException: If path does not exist
+    """
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+
+
+async def _validate_path_is_directory(path: str) -> None:
+    """
+    Validate that a path is a directory.
+
+    Raises HTTPException with 400 status if path is not a directory.
+    Issue #620.
+
+    Args:
+        path: Filesystem path to validate
+
+    Raises:
+        HTTPException: If path is not a directory
+    """
+    is_dir = await asyncio.to_thread(os.path.isdir, path)
+    if not is_dir:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path is not a directory: {path}",
+        )
+
+
+def _filter_antipatterns_by_severity(
+    anti_patterns: list,
+    min_severity: Optional[str],
+) -> list:
+    """
+    Filter anti-patterns by minimum severity level.
+
+    Issue #620.
+
+    Args:
+        anti_patterns: List of detected anti-patterns
+        min_severity: Minimum severity level to include
+
+    Returns:
+        Filtered list of anti-patterns
+    """
+    if not min_severity:
+        return anti_patterns
+
+    try:
+        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
+        return [
+            p
+            for p in anti_patterns
+            if _SEVERITY_ORDER.index(p.severity.value) >= min_idx
+        ]
+    except ValueError:
+        logger.warning("Invalid severity filter: %s", min_severity)
+        return anti_patterns
+
+
+async def _run_redis_analysis(
+    optimizer: RedisOptimizer,
+    path: str,
+    exclude_patterns: Optional[list],
+) -> list:
+    """
+    Execute Redis analysis on file or directory.
+
+    Issue #620.
+
+    Args:
+        optimizer: RedisOptimizer instance
+        path: Path to analyze
+        exclude_patterns: Patterns to exclude from analysis
+
+    Returns:
+        List of optimization results
+    """
+    is_file = await asyncio.to_thread(os.path.isfile, path)
+    if is_file:
+        return await asyncio.to_thread(optimizer.analyze_file, path)
+    return await asyncio.to_thread(
+        optimizer.analyze_directory,
+        path,
+        exclude_patterns=exclude_patterns,
+    )
+
+
+def _filter_redis_results_by_severity(
+    results: list,
+    min_severity: Optional[str],
+) -> list:
+    """
+    Filter Redis optimization results by minimum severity level.
+
+    Issue #620.
+
+    Args:
+        results: List of Redis optimization results
+        min_severity: Minimum severity level to include
+
+    Returns:
+        Filtered list of results
+    """
+    if not min_severity:
+        return results
+
+    try:
+        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
+        return [
+            r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
+        ]
+    except ValueError:
+        logger.warning("Invalid severity filter: %s", min_severity)
+        return results
+
+
+def _build_redis_analysis_response(
+    path: str,
+    results: list,
+    summary: dict,
+) -> dict:
+    """
+    Build JSON response content for Redis analysis endpoint.
+
+    Issue #620.
+
+    Args:
+        path: Analyzed path
+        results: List of optimization results
+        summary: Analysis summary from optimizer
+
+    Returns:
+        Response content dictionary
+    """
+    return {
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "path": path,
+        "optimizations": [r.to_dict() for r in results],
+        "summary": summary,
+    }
+
+
+async def _generate_report_response(
+    analyzer,
+    path: str,
+    format_type: str,
+) -> JSONResponse:
+    """
+    Generate report response in requested format (json or markdown).
+
+    Issue #620.
+
+    Args:
+        analyzer: Analyzer instance with generate_report method
+        path: Analyzed path
+        format_type: Report format ('json' or 'markdown')
+
+    Returns:
+        JSONResponse with report content
+    """
+    report = await asyncio.to_thread(analyzer.generate_report, format=format_type)
+
+    if format_type == "markdown":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "format": "markdown",
+                "report": report,
+            },
+        )
+
+    import json as json_module
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "path": path,
+            "format": "json",
+            "report": json_module.loads(report),
+        },
+    )
+
+
 class AnalysisRequest(BaseModel):
     """Request model for code analysis."""
 
@@ -494,41 +702,21 @@ async def analyze_codebase(
     Analyze a codebase for anti-patterns and code smells.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored using Extract Method pattern.
 
     Scans all Python files in the specified directory and returns
     a comprehensive report of detected anti-patterns.
     """
-    # Validate path exists
-    path_exists = await asyncio.to_thread(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {request.path}",
-        )
-
-    is_dir = await asyncio.to_thread(os.path.isdir, request.path)
-    if not is_dir:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a directory: {request.path}",
-        )
+    await _validate_path_exists(request.path)
+    await _validate_path_is_directory(request.path)
 
     try:
         detector = AntiPatternDetector(exclude_dirs=request.exclude_dirs)
         report = await asyncio.to_thread(detector.analyze_directory, request.path)
-
-        # Filter by severity if specified
-        if request.min_severity:
-            try:
-                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
-                filtered_patterns = [
-                    p
-                    for p in report.anti_patterns
-                    if _SEVERITY_ORDER.index(p.severity.value) >= min_idx
-                ]
-                report.anti_patterns = filtered_patterns
-            except ValueError:
-                logger.warning("Invalid severity filter: %s", request.min_severity)
+        report.anti_patterns = _filter_antipatterns_by_severity(
+            report.anti_patterns,
+            request.min_severity,
+        )
 
         return JSONResponse(
             status_code=200,
@@ -734,62 +922,32 @@ async def analyze_redis_usage_endpoint(
     Analyze Redis usage patterns in a codebase.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored using Extract Method pattern.
 
-    Identifies optimization opportunities including:
-    - Pipeline opportunities (sequential operations that can be batched)
-    - Lua script candidates (complex atomic operations)
-    - Data structure improvements
-    - Connection management patterns
-    - Cache invalidation strategies
+    Identifies optimization opportunities including pipeline opportunities,
+    Lua script candidates, data structure improvements, connection management
+    patterns, and cache invalidation strategies.
 
     Part of Issue #220 - Redis Operation Optimizer
     """
-    path_exists = await asyncio.to_thread(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {request.path}",
-        )
+    await _validate_path_exists(request.path)
 
     try:
         optimizer = RedisOptimizer(project_root=request.path)
+        results = await _run_redis_analysis(
+            optimizer,
+            request.path,
+            request.exclude_patterns,
+        )
+        results = _filter_redis_results_by_severity(results, request.min_severity)
 
-        is_file = await asyncio.to_thread(os.path.isfile, request.path)
-        if is_file:
-            results = await asyncio.to_thread(optimizer.analyze_file, request.path)
-        else:
-            results = await asyncio.to_thread(
-                optimizer.analyze_directory,
-                request.path,
-                exclude_patterns=request.exclude_patterns,
-            )
-
-        # Filter by severity if specified (Issue #380: use module-level constant)
-        if request.min_severity:
-            try:
-                min_idx = _SEVERITY_ORDER.index(request.min_severity.lower())
-                results = [
-                    r
-                    for r in results
-                    if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
-                ]
-            except ValueError:
-                logger.warning("Invalid severity filter: %s", request.min_severity)
-
-        # Get summary
         optimizer.results = results
         summary = optimizer.get_summary()
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "timestamp": datetime.now().isoformat(),
-                "path": request.path,
-                "optimizations": [r.to_dict() for r in results],
-                "summary": summary,
-            },
+        response_content = _build_redis_analysis_response(
+            request.path, results, summary
         )
+
+        return JSONResponse(status_code=200, content=response_content)
 
     except Exception as e:
         logger.error("Redis analysis failed: %s", e)
@@ -1218,49 +1376,18 @@ async def get_security_report(
     Generate a comprehensive security report.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored using Extract Method pattern.
 
-    Returns a detailed security analysis report including:
-    - Executive summary
-    - All findings with remediation advice
-    - OWASP Top 10 mapping
-    - Top recommendations
+    Returns a detailed security analysis report including executive summary,
+    all findings with remediation advice, OWASP Top 10 mapping, and
+    top recommendations.
     """
-    path_exists = await asyncio.to_thread(os.path.exists, path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+    await _validate_path_exists(path)
 
     try:
         analyzer = SecurityAnalyzer(project_root=path)
         await asyncio.to_thread(analyzer.analyze_directory)
-        report = await asyncio.to_thread(analyzer.generate_report, format=format)
-
-        if format == "markdown":
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "timestamp": datetime.now().isoformat(),
-                    "path": path,
-                    "format": "markdown",
-                    "report": report,
-                },
-            )
-        else:
-            import json
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "timestamp": datetime.now().isoformat(),
-                    "path": path,
-                    "format": "json",
-                    "report": json.loads(report),
-                },
-            )
+        return await _generate_report_response(analyzer, path, format)
 
     except Exception as e:
         logger.error("Security report generation failed: %s", e)
@@ -1535,49 +1662,18 @@ async def get_performance_report(
     Generate a comprehensive performance report.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored using Extract Method pattern.
 
-    Returns a detailed performance analysis report including:
-    - Summary with score and grade
-    - All findings with optimization recommendations
-    - Complexity analysis
-    - Top recommendations
+    Returns a detailed performance analysis report including summary with
+    score and grade, all findings with optimization recommendations,
+    complexity analysis, and top recommendations.
     """
-    path_exists = await asyncio.to_thread(os.path.exists, path)
-    if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+    await _validate_path_exists(path)
 
     try:
         analyzer = PerformanceAnalyzer(project_root=path)
         await asyncio.to_thread(analyzer.analyze_directory)
-        report = await asyncio.to_thread(analyzer.generate_report, format=format)
-
-        if format == "markdown":
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "timestamp": datetime.now().isoformat(),
-                    "path": path,
-                    "format": "markdown",
-                    "report": report,
-                },
-            )
-        else:
-            import json
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "timestamp": datetime.now().isoformat(),
-                    "path": path,
-                    "format": "json",
-                    "report": json.loads(report),
-                },
-            )
+        return await _generate_report_response(analyzer, path, format)
 
     except Exception as e:
         logger.error("Performance report generation failed: %s", e)
