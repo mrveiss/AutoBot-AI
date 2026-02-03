@@ -35,16 +35,23 @@ _redis_tls_enabled = ssot_config.tls.redis_tls_enabled
 _redis_port = ssot_config.tls.redis_tls_port if _redis_tls_enabled else ssot_config.port.redis
 _redis_scheme = "rediss" if _redis_tls_enabled else "redis"
 
-# Build SSL context for TLS connections - Issue #725
+# Build SSL context for TLS connections - Issue #725, #164
 _broker_ssl_options = None
 _backend_ssl_options = None
 
 if _redis_tls_enabled:
-    _project_root = Path(__file__).parent.parent
-    _cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
-    _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
-    _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
-    _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
+    # Check for explicit cert paths first (set by SLM enable-tls playbook)
+    _ca_cert = os.getenv("AUTOBOT_TLS_CA_PATH")
+    _client_cert = os.getenv("AUTOBOT_TLS_CERT_PATH")
+    _client_key = os.getenv("AUTOBOT_TLS_KEY_PATH")
+
+    # Fallback to legacy cert_dir pattern for backwards compatibility
+    if not _ca_cert or not _client_cert or not _client_key:
+        _project_root = Path(__file__).parent.parent
+        _cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
+        _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
+        _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
+        _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
 
     # Create SSL context for mTLS
     _ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
