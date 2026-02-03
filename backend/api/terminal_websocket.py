@@ -6,6 +6,7 @@ Handles bi-directional WebSocket communication for interactive terminal sessions
 import asyncio
 import json
 import logging
+import os
 from typing import Any, Dict
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -202,7 +203,9 @@ class TerminalWebSocketHandler:
         """Handle tab_completion message. Issue #749."""
         text = data.get("text", "")
         cursor = data.get("cursor", len(text))
-        cwd = data.get("cwd", "/home")
+        cwd = data.get("cwd", os.path.expanduser("~"))
+        if not os.path.isdir(cwd):
+            cwd = os.path.expanduser("~")
 
         try:
             result = await completion_service.get_completions(text, cursor, cwd)
@@ -223,7 +226,7 @@ class TerminalWebSocketHandler:
 
     async def _handle_history_get(self, chat_id: str, data: Dict[str, Any]) -> None:
         """Handle history_get message. Issue #749."""
-        limit = data.get("limit", 100)
+        limit = min(max(1, data.get("limit", 100)), 1000)
         user_id = data.get("user_id", chat_id)  # Default to chat_id as user identifier
 
         try:
@@ -241,7 +244,7 @@ class TerminalWebSocketHandler:
         """Handle history_search message. Issue #749."""
         query = data.get("query", "")
         user_id = data.get("user_id", chat_id)
-        limit = data.get("limit", 50)
+        limit = min(max(1, data.get("limit", 50)), 1000)
 
         try:
             matches = await history_service.search_history(user_id, query, limit=limit)
