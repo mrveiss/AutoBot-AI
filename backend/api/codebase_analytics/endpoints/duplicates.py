@@ -180,6 +180,145 @@ def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
         return None
 
 
+def _build_timeout_response() -> dict:
+    """
+    Build response for analysis timeout case.
+
+    Issue #620: Extracted from get_duplicate_code to reduce function length.
+
+    Returns:
+        JSONResponse-compatible dict for timeout scenario
+    """
+    return {
+        "status": "partial",
+        "message": (
+            f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. "
+            "Try a higher min_similarity threshold."
+        ),
+        "duplicates": [],
+        "total_count": 0,
+        "storage_type": "timeout",
+    }
+
+
+def _build_detection_error_response(error_msg: str) -> dict:
+    """
+    Build error response for duplicate detection failure.
+
+    Issue #620: Extracted from get_duplicate_code to reduce function length.
+
+    Args:
+        error_msg: Error message to include
+
+    Returns:
+        JSONResponse-compatible dict for error scenario
+    """
+    return {
+        "status": "error",
+        "message": f"Duplicate detection failed: {error_msg}",
+        "duplicates": [],
+        "total_count": 0,
+    }
+
+
+def _process_and_cache_analysis(analysis, project_root: str) -> dict:
+    """
+    Convert analysis to result dict and log completion.
+
+    Issue #620: Extracted from get_duplicate_code to reduce function length.
+
+    Args:
+        analysis: Analysis result object
+        project_root: Project root path
+
+    Returns:
+        Result dict suitable for JSONResponse
+    """
+    global _duplicate_cache
+
+    result = _convert_analysis_to_result(analysis, project_root)
+    _duplicate_cache = result
+
+    logger.info(
+        "Duplicate analysis complete: %d duplicates (%d high, %d medium, %d low)",
+        analysis.total_duplicates,
+        analysis.high_similarity_count,
+        analysis.medium_similarity_count,
+        analysis.low_similarity_count,
+    )
+
+    return result
+
+
+async def _run_duplicate_analysis(
+    project_root: str, min_similarity: float, use_semantic: bool
+):
+    """
+    Run duplicate analysis with semantic or standard detection.
+
+    Issue #620: Extracted from get_duplicate_code to reduce function length.
+
+    Args:
+        project_root: Root directory to analyze
+        min_similarity: Minimum similarity threshold
+        use_semantic: Whether to use semantic analysis
+
+    Returns:
+        Analysis result or None if timeout/failure
+    """
+    analysis = None
+
+    if use_semantic:
+        analysis = await _run_semantic_analysis(project_root, min_similarity)
+
+    if analysis is None:
+        analysis = await _run_standard_analysis(project_root, min_similarity)
+
+    return analysis
+
+
+def _check_duplicate_cache(refresh: bool) -> Optional[JSONResponse]:
+    """
+    Check if cached results are available and return them.
+
+    Issue #620: Extracted from get_duplicate_code to reduce function length.
+
+    Args:
+        refresh: Whether to force fresh analysis
+
+    Returns:
+        JSONResponse with cached data, or None if cache miss/refresh requested
+    """
+    if _duplicate_cache and not refresh:
+        logger.info(
+            "Returning cached duplicate analysis (%d duplicates)",
+            _duplicate_cache.get("total_count", 0),
+        )
+        return JSONResponse(_duplicate_cache)
+    return None
+
+
+def _handle_detection_failure(error: Exception) -> JSONResponse:
+    """
+    Handle duplicate detection failure with fallback.
+
+    Issue #620: Extracted from get_duplicate_code to reduce function length.
+
+    Args:
+        error: Exception that occurred
+
+    Returns:
+        JSONResponse with fallback data or error response
+    """
+    logger.error("Duplicate detection failed: %s", error, exc_info=True)
+
+    fallback = _get_chromadb_fallback(str(error))
+    if fallback:
+        return JSONResponse(fallback)
+
+    return JSONResponse(_build_detection_error_response(str(error)))
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
@@ -211,73 +350,30 @@ async def get_duplicate_code(
     Returns:
         JSON with duplicates, statistics, and analysis metadata
     """
-    global _duplicate_cache
-
-    # Use cached results if available and not refreshing
-    if _duplicate_cache and not refresh:
-        logger.info(
-            "Returning cached duplicate analysis (%d duplicates)",
-            _duplicate_cache.get("total_count", 0),
-        )
-        return JSONResponse(_duplicate_cache)
+    # Check cache first - Issue #620: Use helper
+    cached = _check_duplicate_cache(refresh)
+    if cached:
+        return cached
 
     project_root = _get_project_root()
 
     try:
-        # Try semantic analysis first if requested
-        analysis = None
-        if use_semantic:
-            analysis = await _run_semantic_analysis(project_root, min_similarity)
-
-        # Fall back to standard analysis
-        if analysis is None:
-            analysis = await _run_standard_analysis(project_root, min_similarity)
-
-        # Handle timeout case
-        if analysis is None:
-            return JSONResponse(
-                {
-                    "status": "partial",
-                    "message": (
-                        f"Analysis timed out after {AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT}s. "
-                        "Try a higher min_similarity threshold."
-                    ),
-                    "duplicates": [],
-                    "total_count": 0,
-                    "storage_type": "timeout",
-                }
-            )
-
-        # Convert and cache results
-        result = _convert_analysis_to_result(analysis, project_root)
-        _duplicate_cache = result
-
-        logger.info(
-            "Duplicate analysis complete: %d duplicates (%d high, %d medium, %d low)",
-            analysis.total_duplicates,
-            analysis.high_similarity_count,
-            analysis.medium_similarity_count,
-            analysis.low_similarity_count,
+        # Run analysis (semantic or standard) - Issue #620: Use helper
+        analysis = await _run_duplicate_analysis(
+            project_root, min_similarity, use_semantic
         )
 
+        # Handle timeout case - Issue #620: Use helper
+        if analysis is None:
+            return JSONResponse(_build_timeout_response())
+
+        # Convert, cache, and return results - Issue #620: Use helper
+        result = _process_and_cache_analysis(analysis, project_root)
         return JSONResponse(result)
 
     except Exception as e:
-        logger.error("Duplicate detection failed: %s", e, exc_info=True)
-
-        # Try ChromaDB fallback
-        fallback = _get_chromadb_fallback(str(e))
-        if fallback:
-            return JSONResponse(fallback)
-
-        return JSONResponse(
-            {
-                "status": "error",
-                "message": f"Duplicate detection failed: {str(e)}",
-                "duplicates": [],
-                "total_count": 0,
-            }
-        )
+        # Issue #620: Use helper for error handling
+        return _handle_detection_failure(e)
 
 
 def _make_relative_path(path: str, project_root: str) -> str:

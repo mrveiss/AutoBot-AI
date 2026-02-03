@@ -90,6 +90,16 @@ logger = logging.getLogger(__name__)
 class ConfigManager:
     """Centralized configuration manager"""
 
+    # Issue #620: Extracted from get_ollama_runtime_config for clarity
+    OLLAMA_TASK_OPTIMIZATIONS = {
+        "chat": {"temperature": 0.8, "num_predict": 256, "top_p": 0.9},
+        "system_commands": {"temperature": 0.3, "num_predict": 128, "top_p": 0.7},
+        "knowledge_retrieval": {"temperature": 0.4, "num_predict": 200, "top_p": 0.8},
+        "rag": {"temperature": 0.6, "num_predict": 512, "top_p": 0.85},
+        "research": {"temperature": 0.7, "num_predict": 600, "top_p": 0.9},
+        "orchestrator": {"temperature": 0.5, "num_predict": 400, "top_p": 0.8},
+    }
+
     def __init__(self, config_dir: str = "config"):
         # Find project root dynamically (directory containing this file is
         # src/, parent is project root)
@@ -568,8 +578,36 @@ class ConfigManager:
                 }
             }
 
+    def _apply_ollama_env_overrides(self, config: Dict[str, Any]) -> None:
+        """
+        Apply environment variable overrides to Ollama config.
+
+        Issue #620: Extracted from get_ollama_runtime_config to reduce function length.
+
+        Args:
+            config: Ollama configuration dict to modify in-place
+        """
+        env_overrides = {
+            "AUTOBOT_LLM_TEMPERATURE": "temperature",
+            "AUTOBOT_LLM_TOP_P": "top_p",
+            "AUTOBOT_LLM_NUM_PREDICT": "num_predict",
+        }
+
+        for env_var, config_key in env_overrides.items():
+            env_value = os.getenv(env_var)
+            if env_value:
+                try:
+                    if config_key in ["temperature", "top_p"]:
+                        config[config_key] = float(env_value)
+                    elif config_key == "num_predict":
+                        config[config_key] = int(env_value)
+                except ValueError:
+                    logger.warning(f"Invalid value for {env_var}: {env_value}")
+
     def get_ollama_runtime_config(self, task_type: str = "default") -> Dict[str, Any]:
         """Get Ollama runtime configuration with hardware optimization.
+
+        Issue #620: Refactored to use class constant and helper method.
 
         Args:
             task_type: Agent type for task-specific optimization
@@ -593,61 +631,12 @@ class ConfigManager:
         if device_config.get("ollama_options"):
             ollama_config.update(device_config["ollama_options"])
 
-        # Task-specific optimizations
-        task_optimizations = {
-            "chat": {
-                "temperature": 0.8,
-                "num_predict": 256,  # Shorter responses for chat
-                "top_p": 0.9,
-            },
-            "system_commands": {
-                "temperature": 0.3,  # More deterministic for commands
-                "num_predict": 128,
-                "top_p": 0.7,
-            },
-            "knowledge_retrieval": {
-                "temperature": 0.4,  # Factual responses
-                "num_predict": 200,
-                "top_p": 0.8,
-            },
-            "rag": {
-                "temperature": 0.6,  # Balanced for synthesis
-                "num_predict": 512,
-                "top_p": 0.85,
-            },
-            "research": {
-                "temperature": 0.7,  # Creative for research
-                "num_predict": 600,
-                "top_p": 0.9,
-            },
-            "orchestrator": {
-                "temperature": 0.5,  # Balanced for coordination
-                "num_predict": 400,
-                "top_p": 0.8,
-            },
-        }
+        # Apply task-specific optimizations from class constant
+        if task_type in self.OLLAMA_TASK_OPTIMIZATIONS:
+            ollama_config.update(self.OLLAMA_TASK_OPTIMIZATIONS[task_type])
 
-        # Apply task-specific optimizations
-        if task_type in task_optimizations:
-            ollama_config.update(task_optimizations[task_type])
-
-        # Environment variable overrides
-        env_overrides = {
-            "AUTOBOT_LLM_TEMPERATURE": "temperature",
-            "AUTOBOT_LLM_TOP_P": "top_p",
-            "AUTOBOT_LLM_NUM_PREDICT": "num_predict",
-        }
-
-        for env_var, config_key in env_overrides.items():
-            env_value = os.getenv(env_var)
-            if env_value:
-                try:
-                    if config_key in ["temperature", "top_p"]:
-                        ollama_config[config_key] = float(env_value)
-                    elif config_key == "num_predict":
-                        ollama_config[config_key] = int(env_value)
-                except ValueError:
-                    logger.warning(f"Invalid value for {env_var}: {env_value}")
+        # Apply environment variable overrides
+        self._apply_ollama_env_overrides(ollama_config)
 
         return ollama_config
 
@@ -669,7 +658,7 @@ class ConfigManager:
         backend_config = self.get("backend", {})
 
         defaults = {
-            "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),
+            "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),  # nosec B104
             "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
             "api_endpoint": os.getenv(
                 "AUTOBOT_BACKEND_API_ENDPOINT", "http://localhost:8001"
