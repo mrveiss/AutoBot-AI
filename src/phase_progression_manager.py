@@ -148,8 +148,8 @@ class PhaseProgressionManager:
             },
         }
 
-    def _get_operational_phase_rules(self) -> Dict[str, Dict[str, Any]]:
-        """Get rules for operational phases (5-8)."""
+    def _get_performance_optimization_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 5: Performance Optimization. Issue #620."""
         return {
             "Phase 5: Performance Optimization": {
                 "prerequisites": [
@@ -171,6 +171,11 @@ class PhaseProgressionManager:
                     "performance_optimization",
                 ],
             },
+        }
+
+    def _get_monitoring_alerting_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 6: Monitoring and Alerting. Issue #620."""
+        return {
             "Phase 6: Monitoring and Alerting": {
                 "prerequisites": [
                     "Phase 4: Security and Authentication",
@@ -189,6 +194,11 @@ class PhaseProgressionManager:
                     "performance_tracking",
                 ],
             },
+        }
+
+    def _get_frontend_ui_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 7: Frontend and UI. Issue #620."""
+        return {
             "Phase 7: Frontend and UI": {
                 "prerequisites": ["Phase 6: Monitoring and Alerting"],
                 "auto_progression": True,
@@ -206,6 +216,11 @@ class PhaseProgressionManager:
                     "visual_feedback",
                 ],
             },
+        }
+
+    def _get_agent_orchestration_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 8: Agent Orchestration. Issue #620."""
+        return {
             "Phase 8: Agent Orchestration": {
                 "prerequisites": [
                     "Phase 6: Monitoring and Alerting",
@@ -227,6 +242,15 @@ class PhaseProgressionManager:
                 ],
             },
         }
+
+    def _get_operational_phase_rules(self) -> Dict[str, Dict[str, Any]]:
+        """Get rules for operational phases (5-8). Issue #620."""
+        rules: Dict[str, Dict[str, Any]] = {}
+        rules.update(self._get_performance_optimization_rule())
+        rules.update(self._get_monitoring_alerting_rule())
+        rules.update(self._get_frontend_ui_rule())
+        rules.update(self._get_agent_orchestration_rule())
+        return rules
 
     def _get_advanced_phase_rules(self) -> Dict[str, Dict[str, Any]]:
         """Get rules for advanced phases (9-10)."""
@@ -265,8 +289,8 @@ class PhaseProgressionManager:
             },
         }
 
-    def _get_future_phase_rules(self) -> Dict[str, Dict[str, Any]]:
-        """Get rules for future roadmap phases (manual activation)."""
+    def _get_agent_orchestrator_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 5: Agent Orchestrator and Planning Logic. Issue #620."""
         return {
             "Phase 5: Agent Orchestrator and Planning Logic": {
                 "prerequisites": ["Phase 8: Agent Orchestration"],
@@ -283,6 +307,11 @@ class PhaseProgressionManager:
                     "task_planning",
                 ],
             },
+        }
+
+    def _get_memory_enhancement_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 7: Agent Memory and Knowledge Base Enhancement. Issue #620."""
+        return {
             "Phase 7: Agent Memory and Knowledge Base Enhancement": {
                 "prerequisites": [
                     "Phase 2: Knowledge Base and Memory",
@@ -300,6 +329,11 @@ class PhaseProgressionManager:
                     "knowledge_enhancement",
                 ],
             },
+        }
+
+    def _get_enhanced_interface_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 8: Enhanced Interface and Web Control Panel. Issue #620."""
+        return {
             "Phase 8: Enhanced Interface and Web Control Panel": {
                 "prerequisites": [
                     "Phase 7: Frontend and UI",
@@ -314,6 +348,11 @@ class PhaseProgressionManager:
                     "advanced_ui",
                 ],
             },
+        }
+
+    def _get_local_intelligence_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 11: Local Intelligence Model Support. Issue #620."""
+        return {
             "Phase 11: Local Intelligence Model Support": {
                 "prerequisites": [
                     "Phase 3: LLM Integration",
@@ -331,6 +370,11 @@ class PhaseProgressionManager:
                     "model_optimization",
                 ],
             },
+        }
+
+    def _get_openvino_acceleration_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 12: OpenVINO Acceleration. Issue #620."""
+        return {
             "Phase 12: OpenVINO Acceleration (CPU/iGPU)": {
                 "prerequisites": ["Phase 11: Local Intelligence Model Support"],
                 "auto_progression": False,
@@ -346,6 +390,16 @@ class PhaseProgressionManager:
                 ],
             },
         }
+
+    def _get_future_phase_rules(self) -> Dict[str, Dict[str, Any]]:
+        """Get rules for future roadmap phases (manual activation). Issue #620."""
+        rules: Dict[str, Dict[str, Any]] = {}
+        rules.update(self._get_agent_orchestrator_rule())
+        rules.update(self._get_memory_enhancement_rule())
+        rules.update(self._get_enhanced_interface_rule())
+        rules.update(self._get_local_intelligence_rule())
+        rules.update(self._get_openvino_acceleration_rule())
+        return rules
 
     def _define_progression_rules(self) -> Dict[str, Dict[str, Any]]:
         """Define rules for automatic phase progression."""
