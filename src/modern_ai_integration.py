@@ -10,6 +10,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -586,7 +587,9 @@ class LocalModelProvider(BaseAIProvider):
 
         if self._ollama_available:
             self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"
-            logger.info("LocalModelProvider initialized with Ollama at %s", self._ollama_url)
+            logger.info(
+                "LocalModelProvider initialized with Ollama at %s", self._ollama_url
+            )
         else:
             logger.warning(
                 "Ollama not configured. Set AUTOBOT_OLLAMA_HOST and "
@@ -649,7 +652,9 @@ class LocalModelProvider(BaseAIProvider):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        raise aiohttp.ClientError(f"HTTP {response.status}: {error_text}")
+                        raise aiohttp.ClientError(
+                            f"HTTP {response.status}: {error_text}"
+                        )
 
                     result = await response.json()
 
@@ -765,8 +770,10 @@ class LocalModelProvider(BaseAIProvider):
 
         if not self._ollama_available:
             return self._build_vision_error_response(
-                request, "Error: Ollama not configured for vision model.",
-                start_time, "ollama_not_configured"
+                request,
+                "Error: Ollama not configured for vision model.",
+                start_time,
+                "ollama_not_configured",
             )
 
         try:
@@ -778,7 +785,11 @@ class LocalModelProvider(BaseAIProvider):
                 user_message["images"] = request.images
             messages.append(user_message)
 
-            data = {"model": self.config.model_name, "messages": messages, "stream": False}
+            data = {
+                "model": self.config.model_name,
+                "messages": messages,
+                "stream": False,
+            }
 
             async with aiohttp.ClientSession() as session:
                 timeout = aiohttp.ClientTimeout(total=180.0)
@@ -787,16 +798,22 @@ class LocalModelProvider(BaseAIProvider):
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        raise aiohttp.ClientError(f"HTTP {response.status}: {error_text}")
+                        raise aiohttp.ClientError(
+                            f"HTTP {response.status}: {error_text}"
+                        )
                     result = await response.json()
 
-            return self._build_vision_success_response(request, result, time.time() - start_time)
+            return self._build_vision_success_response(
+                request, result, time.time() - start_time
+            )
 
         except Exception as e:
             logger.error("Ollama vision request failed: %s", e)
             return self._build_vision_error_response(
-                request, f"Error: Vision model request failed - {str(e)}",
-                start_time, str(e)
+                request,
+                f"Error: Vision model request failed - {str(e)}",
+                start_time,
+                str(e),
             )
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
@@ -840,7 +857,10 @@ class ModernAIIntegration:
                     ModelCapability.FUNCTION_CALLING,
                     ModelCapability.VISION,
                 ],
-                api_endpoint="https://api.openai.com/v1/chat/completions",
+                api_endpoint=os.getenv(
+                    "OPENAI_API_BASE_URL", "https://api.openai.com/v1"
+                )
+                + "/chat/completions",
                 api_key=None,  # Should be loaded from config/environment
                 max_tokens=4000,
                 temperature=0.7,
@@ -860,7 +880,10 @@ class ModernAIIntegration:
                     ModelCapability.MULTIMODAL,
                     ModelCapability.VISION,
                 ],
-                api_endpoint="https://api.anthropic.com/v1/messages",
+                api_endpoint=os.getenv(
+                    "ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1"
+                )
+                + "/messages",
                 api_key=None,  # Should be loaded from config/environment
                 max_tokens=4000,
                 temperature=0.7,
