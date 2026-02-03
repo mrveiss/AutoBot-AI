@@ -676,6 +676,69 @@ class SecurityWorkflowManager:
 
         return assessment
 
+    def _build_port_info(
+        self,
+        port: int,
+        protocol: str,
+        state: str,
+        service: Optional[str],
+        version: Optional[str],
+        product: Optional[str],
+    ) -> dict[str, Any]:
+        """
+        Build port information dictionary. Issue #620.
+
+        Args:
+            port: Port number
+            protocol: Protocol (tcp/udp)
+            state: Port state (open/closed/filtered)
+            service: Service name
+            version: Service version
+            product: Product name
+
+        Returns:
+            Port information dictionary
+        """
+        return {
+            "port": port,
+            "protocol": protocol,
+            "state": state,
+            "service": service,
+            "version": version,
+            "product": product,
+            "discovered_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _add_service_if_identified(
+        self,
+        host: TargetHost,
+        port: int,
+        protocol: str,
+        service: Optional[str],
+        version: Optional[str],
+        product: Optional[str],
+    ) -> None:
+        """
+        Add service information to host if service is identified. Issue #620.
+
+        Args:
+            host: Target host to add service to
+            port: Port number
+            protocol: Protocol (tcp/udp)
+            service: Service name (if None, no service is added)
+            version: Service version
+            product: Product name
+        """
+        if service:
+            service_info = {
+                "port": port,
+                "name": service,
+                "version": version,
+                "protocol": protocol,
+                "product": product,
+            }
+            host.services.append(service_info)
+
     async def add_port(
         self,
         assessment_id: str,
@@ -688,7 +751,7 @@ class SecurityWorkflowManager:
         product: Optional[str] = None,
     ) -> Optional[SecurityAssessment]:
         """
-        Add a discovered port to a host.
+        Add a discovered port to a host. Issue #620: Refactored with extracted helpers.
 
         Args:
             assessment_id: Assessment UUID
@@ -707,52 +770,21 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
-        # Find or create host
-        host = next((h for h in assessment.hosts if h.ip == host_ip), None)
-        is_new_host = host is None
-        if not host:
-            host = TargetHost(ip=host_ip, status="up")
-            assessment.hosts.append(host)
-
-        # Add port
-        port_info = {
-            "port": port,
-            "protocol": protocol,
-            "state": state,
-            "service": service,
-            "version": version,
-            "product": product,
-            "discovered_at": datetime.now(timezone.utc).isoformat(),
-        }
+        host, is_new_host = self._find_or_create_host(assessment, host_ip)
+        port_info = self._build_port_info(
+            port, protocol, state, service, version, product
+        )
         host.ports.append(port_info)
-
-        # Add to services if identified
-        if service:
-            service_info = {
-                "port": port,
-                "name": service,
-                "version": version,
-                "protocol": protocol,
-                "product": product,
-            }
-            host.services.append(service_info)
+        self._add_service_if_identified(host, port, protocol, service, version, product)
 
         await self._save_assessment(assessment)
-        logger.info("to %s in assessment %s", host_ip, assessment_id)
-
-        # Issue #398: Create Memory MCP entities (uses extracted helper)
-        await self._create_port_memory_entity(
-            assessment_id,
-            host_ip,
-            is_new_host,
-            port,
-            protocol,
-            state,
-            service,
-            version,
-            product,
+        logger.info(
+            "Added port %d to %s in assessment %s", port, host_ip, assessment_id
         )
 
+        await self._create_port_memory_entity(
+            assessment_id, host_ip, is_new_host, port_info, service, state
+        )
         return assessment
 
     async def _create_port_memory_entity(
@@ -760,37 +792,40 @@ class SecurityWorkflowManager:
         assessment_id: str,
         host_ip: str,
         is_new_host: bool,
-        port: int,
-        protocol: str,
-        state: str,
+        port_info: dict[str, Any],
         service: Optional[str],
-        version: Optional[str],
-        product: Optional[str],
+        state: str,
     ) -> None:
-        """Create Memory MCP entities for port discovery (Issue #398: extracted)."""
+        """
+        Create Memory MCP entities for port discovery. Issue #620.
+
+        Args:
+            assessment_id: Assessment UUID
+            host_ip: Host IP address
+            is_new_host: Whether this is a newly discovered host
+            port_info: Port information dictionary from _build_port_info
+            service: Service name (if identified)
+            state: Port state
+        """
         try:
             memory = await _get_memory_integration()
             if not memory:
                 return
 
-            # Create host entity if new
             if is_new_host:
                 await memory.create_host_entity(
-                    assessment_id=assessment_id,
-                    ip=host_ip,
-                    status="up",
+                    assessment_id=assessment_id, ip=host_ip, status="up"
                 )
 
-            # Create service entity for identified services
             if service and state == "open":
                 await memory.create_service_entity(
                     assessment_id=assessment_id,
                     host_ip=host_ip,
-                    port=port,
-                    protocol=protocol,
+                    port=port_info["port"],
+                    protocol=port_info["protocol"],
                     service_name=service,
-                    version=version,
-                    product=product,
+                    version=port_info.get("version"),
+                    product=port_info.get("product"),
                 )
         except Exception as e:
             logger.warning("Failed to create service entity in Memory MCP: %s", e)

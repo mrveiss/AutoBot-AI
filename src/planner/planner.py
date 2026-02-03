@@ -237,19 +237,75 @@ Output ONLY valid JSON in this format:
                     if dep_num in step_id_map
                 ]
 
-    async def create_plan(
+    async def _publish_plan_event(
         self,
-        task_description: str,
-        context: Optional[dict] = None,
-    ) -> ExecutionPlan:
+        plan: ExecutionPlan,
+        is_update: bool,
+        changes_made: Optional[list[str]] = None,
+        reflection: Optional[str] = None,
+    ) -> None:
         """
-        Create a new execution plan using LLM.
+        Publish a plan event to the event stream. Issue #620.
 
-        Issue #665: Refactored with extracted helper methods.
+        Args:
+            plan: The execution plan to publish
+            is_update: Whether this is an update to existing plan
+            changes_made: List of changes made (for updates)
+            reflection: Optional reflection text
         """
-        context = context or {}
+        if not self.event_stream:
+            return
 
-        # Format context for prompt (Issue #665: uses helper)
+        event = create_plan_event(
+            task_description=plan.task_description,
+            steps=[s.to_dict() for s in plan.steps],
+            current_step=plan.current_step_number,
+            total_steps=plan.total_steps,
+            status=plan.status.value,
+            task_id=plan.task_id,
+            is_update=is_update,
+            changes_made=changes_made,
+            reflection=reflection,
+        )
+        await self.event_stream.publish(event)
+
+    async def _get_plan_and_step(
+        self, plan_id: str, step_id: str
+    ) -> tuple[ExecutionPlan, PlanStep]:
+        """
+        Retrieve plan and step by IDs, raising errors if not found. Issue #620.
+
+        Args:
+            plan_id: The plan identifier
+            step_id: The step identifier
+
+        Returns:
+            Tuple of (ExecutionPlan, PlanStep)
+
+        Raises:
+            ValueError: If plan or step not found
+        """
+        plan = await self.get_plan(plan_id)
+        if not plan:
+            raise ValueError(f"Plan not found: {plan_id}")
+
+        step = plan.get_step_by_id(step_id)
+        if not step:
+            raise ValueError(f"Step not found: {step_id}")
+
+        return plan, step
+
+    async def _generate_plan_data(self, task_description: str, context: dict) -> dict:
+        """
+        Generate plan data using LLM or fallback. Issue #620.
+
+        Args:
+            task_description: Description of the task
+            context: Context dictionary
+
+        Returns:
+            Plan data dictionary with task_description and steps
+        """
         context_str = self._format_context_for_prompt(context)
 
         prompt = self.PLAN_GENERATION_PROMPT.format(
@@ -259,7 +315,6 @@ Output ONLY valid JSON in this format:
         )
 
         try:
-            # Generate plan with LLM
             if hasattr(self.llm, "generate"):
                 response = await self.llm.generate(
                     prompt=prompt,
@@ -268,15 +323,33 @@ Output ONLY valid JSON in this format:
             elif hasattr(self.llm, "complete"):
                 response = await self.llm.complete(prompt)
             else:
-                # Fallback for testing without LLM
                 response = self._generate_fallback_plan(task_description)
 
-            # Parse response
-            plan_data = self._parse_plan_response(response)
+            return self._parse_plan_response(response)
 
         except Exception as e:
             logger.warning("LLM plan generation failed: %s, using fallback", e)
-            plan_data = self._generate_simple_plan(task_description)
+            return self._generate_simple_plan(task_description)
+
+    async def create_plan(
+        self,
+        task_description: str,
+        context: Optional[dict] = None,
+    ) -> ExecutionPlan:
+        """
+        Create a new execution plan using LLM. Issue #620.
+
+        Args:
+            task_description: Description of the task to plan
+            context: Optional context dictionary
+
+        Returns:
+            ExecutionPlan with generated steps
+        """
+        context = context or {}
+
+        # Generate plan data using LLM or fallback (Issue #620: uses helper)
+        plan_data = await self._generate_plan_data(task_description, context)
 
         # Create plan object
         plan = ExecutionPlan(
@@ -294,18 +367,8 @@ Output ONLY valid JSON in this format:
         # Store plan
         await self._store_plan(plan)
 
-        # Publish PLAN event
-        if self.event_stream:
-            event = create_plan_event(
-                task_description=plan.task_description,
-                steps=[s.to_dict() for s in plan.steps],
-                current_step=0,
-                total_steps=plan.total_steps,
-                status=plan.status.value,
-                task_id=plan.task_id,
-                is_update=False,
-            )
-            await self.event_stream.publish(event)
+        # Publish PLAN event (Issue #620: uses helper)
+        await self._publish_plan_event(plan, is_update=False)
 
         logger.info(
             "Created plan %s with %d steps for: %s",
@@ -317,14 +380,17 @@ Output ONLY valid JSON in this format:
         return plan
 
     async def start_step(self, plan_id: str, step_id: str) -> PlanStep:
-        """Mark a step as in_progress"""
-        plan = await self.get_plan(plan_id)
-        if not plan:
-            raise ValueError(f"Plan not found: {plan_id}")
+        """
+        Mark a step as in_progress. Issue #620.
 
-        step = plan.get_step_by_id(step_id)
-        if not step:
-            raise ValueError(f"Step not found: {step_id}")
+        Args:
+            plan_id: The plan identifier
+            step_id: The step identifier
+
+        Returns:
+            The updated PlanStep
+        """
+        plan, step = await self._get_plan_and_step(plan_id, step_id)
 
         step.status = StepStatus.IN_PROGRESS
         step.started_at = datetime.utcnow()
@@ -336,19 +402,11 @@ Output ONLY valid JSON in this format:
         plan.update_metrics()
         await self._store_plan(plan)
 
-        # Publish PLAN update event
-        if self.event_stream:
-            event = create_plan_event(
-                task_description=plan.task_description,
-                steps=[s.to_dict() for s in plan.steps],
-                current_step=plan.current_step_number,
-                total_steps=plan.total_steps,
-                status=plan.status.value,
-                task_id=plan.task_id,
-                is_update=True,
-                changes_made=[f"Started step {step.step_number}: {step.description}"],
-            )
-            await self.event_stream.publish(event)
+        await self._publish_plan_event(
+            plan,
+            is_update=True,
+            changes_made=[f"Started step {step.step_number}: {step.description}"],
+        )
 
         logger.debug("Started step %d: %s", step.step_number, step.description[:40])
         return step
@@ -360,15 +418,54 @@ Output ONLY valid JSON in this format:
         reflection: Optional[str] = None,
         tools_used: Optional[list[str]] = None,
     ) -> PlanStep:
-        """Mark a step as completed"""
-        plan = await self.get_plan(plan_id)
-        if not plan:
-            raise ValueError(f"Plan not found: {plan_id}")
+        """
+        Mark a step as completed. Issue #620.
 
-        step = plan.get_step_by_id(step_id)
-        if not step:
-            raise ValueError(f"Step not found: {step_id}")
+        Args:
+            plan_id: The plan identifier
+            step_id: The step identifier
+            reflection: Optional reflection on the completed step
+            tools_used: Optional list of tools used during step
 
+        Returns:
+            The updated PlanStep
+        """
+        plan, step = await self._get_plan_and_step(plan_id, step_id)
+
+        self._finalize_step_completion(step, reflection, tools_used)
+        self._check_plan_completion(plan)
+
+        await self._store_plan(plan)
+
+        await self._publish_plan_event(
+            plan,
+            is_update=True,
+            changes_made=[f"Completed step {step.step_number}: {step.description}"],
+            reflection=reflection,
+        )
+
+        logger.debug(
+            "Completed step %d: %s (%.1fms)",
+            step.step_number,
+            step.description[:40],
+            step.actual_duration_ms or 0,
+        )
+        return step
+
+    def _finalize_step_completion(
+        self,
+        step: PlanStep,
+        reflection: Optional[str] = None,
+        tools_used: Optional[list[str]] = None,
+    ) -> None:
+        """
+        Finalize step completion by setting status and calculating duration. Issue #620.
+
+        Args:
+            step: The step to finalize
+            reflection: Optional reflection text
+            tools_used: Optional list of tools used
+        """
         step.status = StepStatus.COMPLETED
         step.completed_at = datetime.utcnow()
         step.reflection = reflection
@@ -381,37 +478,18 @@ Output ONLY valid JSON in this format:
                 step.completed_at - step.started_at
             ).total_seconds() * 1000
 
+    def _check_plan_completion(self, plan: ExecutionPlan) -> None:
+        """
+        Check if plan is complete and update status accordingly. Issue #620.
+
+        Args:
+            plan: The plan to check
+        """
         plan.update_metrics()
 
-        # Check if plan is complete
         if plan.is_complete():
             plan.status = PlanStatus.COMPLETED
             plan.completed_at = datetime.utcnow()
-
-        await self._store_plan(plan)
-
-        # Publish PLAN update event
-        if self.event_stream:
-            event = create_plan_event(
-                task_description=plan.task_description,
-                steps=[s.to_dict() for s in plan.steps],
-                current_step=plan.current_step_number,
-                total_steps=plan.total_steps,
-                status=plan.status.value,
-                task_id=plan.task_id,
-                is_update=True,
-                changes_made=[f"Completed step {step.step_number}: {step.description}"],
-                reflection=reflection,
-            )
-            await self.event_stream.publish(event)
-
-        logger.debug(
-            "Completed step %d: %s (%.1fms)",
-            step.step_number,
-            step.description[:40],
-            step.actual_duration_ms or 0,
-        )
-        return step
 
     async def fail_step(
         self,
@@ -420,15 +498,52 @@ Output ONLY valid JSON in this format:
         error: str,
         reflection: Optional[str] = None,
     ) -> PlanStep:
-        """Mark a step as failed"""
-        plan = await self.get_plan(plan_id)
-        if not plan:
-            raise ValueError(f"Plan not found: {plan_id}")
+        """
+        Mark a step as failed. Issue #620.
 
-        step = plan.get_step_by_id(step_id)
-        if not step:
-            raise ValueError(f"Step not found: {step_id}")
+        Args:
+            plan_id: The plan identifier
+            step_id: The step identifier
+            error: Error message describing the failure
+            reflection: Optional reflection on the failure
 
+        Returns:
+            The updated PlanStep
+        """
+        plan, step = await self._get_plan_and_step(plan_id, step_id)
+
+        self._finalize_step_failure(plan, step, error, reflection)
+
+        await self._store_plan(plan)
+
+        await self._publish_plan_event(
+            plan,
+            is_update=True,
+            changes_made=[f"Failed step {step.step_number}: {error}"],
+            reflection=reflection,
+        )
+
+        logger.warning(
+            "Failed step %d: %s - %s", step.step_number, step.description[:40], error
+        )
+        return step
+
+    def _finalize_step_failure(
+        self,
+        plan: ExecutionPlan,
+        step: PlanStep,
+        error: str,
+        reflection: Optional[str] = None,
+    ) -> None:
+        """
+        Finalize step failure and block dependent steps. Issue #620.
+
+        Args:
+            plan: The execution plan
+            step: The failed step
+            error: Error message
+            reflection: Optional reflection text
+        """
         step.status = StepStatus.FAILED
         step.completed_at = datetime.utcnow()
         step.reflection = reflection or f"Failed: {error}"
@@ -449,42 +564,24 @@ Output ONLY valid JSON in this format:
         if plan.has_failures():
             plan.status = PlanStatus.FAILED
 
-        await self._store_plan(plan)
-
-        # Publish PLAN update event
-        if self.event_stream:
-            event = create_plan_event(
-                task_description=plan.task_description,
-                steps=[s.to_dict() for s in plan.steps],
-                current_step=plan.current_step_number,
-                total_steps=plan.total_steps,
-                status=plan.status.value,
-                task_id=plan.task_id,
-                is_update=True,
-                changes_made=[f"Failed step {step.step_number}: {error}"],
-                reflection=reflection,
-            )
-            await self.event_stream.publish(event)
-
-        logger.warning(
-            "Failed step %d: %s - %s", step.step_number, step.description[:40], error
-        )
-        return step
-
     async def skip_step(
         self,
         plan_id: str,
         step_id: str,
         reason: str,
     ) -> PlanStep:
-        """Skip a step (won't block dependents)"""
-        plan = await self.get_plan(plan_id)
-        if not plan:
-            raise ValueError(f"Plan not found: {plan_id}")
+        """
+        Skip a step (won't block dependents). Issue #620.
 
-        step = plan.get_step_by_id(step_id)
-        if not step:
-            raise ValueError(f"Step not found: {step_id}")
+        Args:
+            plan_id: The plan identifier
+            step_id: The step identifier
+            reason: Reason for skipping
+
+        Returns:
+            The updated PlanStep
+        """
+        plan, step = await self._get_plan_and_step(plan_id, step_id)
 
         step.status = StepStatus.SKIPPED
         step.reflection = f"Skipped: {reason}"
@@ -504,12 +601,44 @@ Output ONLY valid JSON in this format:
         new_context: dict,
         reason: str,
     ) -> ExecutionPlan:
-        """Update an existing plan based on new information"""
+        """
+        Update an existing plan based on new information. Issue #620.
+
+        Args:
+            plan_id: The plan identifier
+            new_context: New context for replanning
+            reason: Reason for the update
+
+        Returns:
+            The updated ExecutionPlan
+        """
         plan = await self.get_plan(plan_id)
         if not plan:
             raise ValueError(f"Plan not found: {plan_id}")
 
-        # Store update in history
+        self._record_plan_update_history(plan, reason)
+        await self._replan_remaining_steps(plan, new_context)
+
+        plan.update_metrics()
+        await self._store_plan(plan)
+
+        await self._publish_plan_event(
+            plan,
+            is_update=True,
+            changes_made=[f"Plan updated: {reason}"],
+        )
+
+        logger.info("Updated plan %s: %s", plan.plan_id[:8], reason)
+        return plan
+
+    def _record_plan_update_history(self, plan: ExecutionPlan, reason: str) -> None:
+        """
+        Record plan update in history and increment version. Issue #620.
+
+        Args:
+            plan: The plan to update
+            reason: Reason for the update
+        """
         plan.update_history.append(
             {
                 "version": plan.version,
@@ -520,54 +649,43 @@ Output ONLY valid JSON in this format:
         )
         plan.version += 1
 
-        # Re-plan remaining steps
+    async def _replan_remaining_steps(
+        self, plan: ExecutionPlan, new_context: dict
+    ) -> None:
+        """
+        Re-plan remaining steps based on new context. Issue #620.
+
+        Args:
+            plan: The plan to update
+            new_context: New context for replanning
+        """
         remaining = [
             s
             for s in plan.steps
             if s.status in (StepStatus.PENDING, StepStatus.BLOCKED)
         ]
 
-        if remaining:
-            remaining_descriptions = [s.description for s in remaining]
-            new_context["remaining_work"] = ", ".join(remaining_descriptions)
+        if not remaining:
+            return
 
-            # Generate updated plan for remaining work
-            new_plan = await self.create_plan(
-                task_description=f"Continue: {plan.task_description}",
-                context=new_context,
-            )
+        remaining_descriptions = [s.description for s in remaining]
+        new_context["remaining_work"] = ", ".join(remaining_descriptions)
 
-            # Replace pending/blocked steps
-            completed_steps = [
-                s for s in plan.steps if s.status == StepStatus.COMPLETED
-            ]
-            in_progress = [s for s in plan.steps if s.status == StepStatus.IN_PROGRESS]
+        # Generate updated plan for remaining work
+        new_plan = await self.create_plan(
+            task_description=f"Continue: {plan.task_description}",
+            context=new_context,
+        )
 
-            plan.steps = completed_steps + in_progress + new_plan.steps
+        # Replace pending/blocked steps
+        completed_steps = [s for s in plan.steps if s.status == StepStatus.COMPLETED]
+        in_progress = [s for s in plan.steps if s.status == StepStatus.IN_PROGRESS]
 
-            # Renumber steps
-            for i, step in enumerate(plan.steps):
-                step.step_number = i + 1
+        plan.steps = completed_steps + in_progress + new_plan.steps
 
-        plan.update_metrics()
-        await self._store_plan(plan)
-
-        # Publish PLAN update event
-        if self.event_stream:
-            event = create_plan_event(
-                task_description=plan.task_description,
-                steps=[s.to_dict() for s in plan.steps],
-                current_step=plan.current_step_number,
-                total_steps=plan.total_steps,
-                status=plan.status.value,
-                task_id=plan.task_id,
-                is_update=True,
-                changes_made=[f"Plan updated: {reason}"],
-            )
-            await self.event_stream.publish(event)
-
-        logger.info("Updated plan %s: %s", plan.plan_id[:8], reason)
-        return plan
+        # Renumber steps
+        for i, step in enumerate(plan.steps):
+            step.step_number = i + 1
 
     async def get_plan(self, plan_id: str) -> Optional[ExecutionPlan]:
         """Get plan from cache or Redis"""
