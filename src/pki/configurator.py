@@ -25,6 +25,17 @@ from src.pki.config import VM_DEFINITIONS, TLSConfig
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ConfigurationResult:
+    """Result of service configuration."""
+
+    service_name: str
+    vm_name: str
+    success: bool
+    message: str
+    restart_required: bool = False
+
+
 def _build_redis_tls_config(
     remote_cert_dir: str,
     auth_clients: str = "optional",
@@ -82,15 +93,83 @@ async def _write_tls_config_to_redis(conn, tls_config: str) -> None:
     await conn.run(f"rm {temp_config}")
 
 
-@dataclass
-class ConfigurationResult:
-    """Result of service configuration."""
+async def _check_redis_service_status(conn) -> Optional[ConfigurationResult]:
+    """
+    Check if Redis Stack service is running.
 
-    service_name: str
-    vm_name: str
-    success: bool
-    message: str
-    restart_required: bool = False
+    Issue #620: Extracted from configure_redis_tls to reduce function length.
+
+    Args:
+        conn: AsyncSSH connection
+
+    Returns:
+        ConfigurationResult with failure if Redis not running, None if running OK.
+    """
+    status_result = await conn.run(
+        "systemctl is-active redis-stack-server",
+    )
+    if status_result.returncode != 0:
+        return ConfigurationResult(
+            service_name="redis-stack-server",
+            vm_name="redis",
+            success=False,
+            message="Redis Stack is not running",
+        )
+    return None
+
+
+async def _apply_redis_tls_config(
+    conn,
+    remote_cert_dir: str,
+    auth_clients: str,
+    disable_plain_port: bool,
+) -> ConfigurationResult:
+    """
+    Check for existing TLS config and apply if needed.
+
+    Issue #620: Extracted from configure_redis_tls to reduce function length.
+
+    Args:
+        conn: AsyncSSH connection
+        remote_cert_dir: Remote directory path for certificates
+        auth_clients: Client authentication mode
+        disable_plain_port: If True, disables non-TLS port
+
+    Returns:
+        ConfigurationResult indicating success/failure and if restart needed.
+    """
+    # Check if TLS config already exists (Issue #725: Use correct config path)
+    check_result = await conn.run(
+        "grep -q 'tls-port' /etc/redis-stack/redis-stack.conf 2>/dev/null || echo 'not_found'"
+    )
+
+    if "not_found" in check_result.stdout:
+        # Issue #665: Uses extracted helpers
+        # Issue #725: Pass auth_clients and disable_plain_port
+        tls_config = _build_redis_tls_config(
+            remote_cert_dir,
+            auth_clients=auth_clients,
+            disable_plain_port=disable_plain_port,
+        )
+        await _write_tls_config_to_redis(conn, tls_config)
+
+        logger.info("Redis TLS configuration added")
+        return ConfigurationResult(
+            service_name="redis-stack-server",
+            vm_name="redis",
+            success=True,
+            message="TLS configuration added. Redis restart required.",
+            restart_required=True,
+        )
+
+    logger.info("Redis TLS already configured")
+    return ConfigurationResult(
+        service_name="redis-stack-server",
+        vm_name="redis",
+        success=True,
+        message="TLS already configured",
+        restart_required=False,
+    )
 
 
 class ServiceConfigurator:
@@ -129,6 +208,8 @@ class ServiceConfigurator:
         and SFTP operations.
         Issue #725: Added auth_clients and disable_plain_port parameters.
         Issue #694: Use SSOT config for Redis IP.
+        Issue #620: Further refactored with _check_redis_service_status and
+        _apply_redis_tls_config helpers to reduce function length.
 
         Args:
             auth_clients: Client authentication mode ("optional", "yes", "no")
@@ -137,7 +218,6 @@ class ServiceConfigurator:
         from src.config.ssot_config import config
 
         vm_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
-
         logger.info("Configuring Redis Stack for TLS")
 
         try:
@@ -148,49 +228,17 @@ class ServiceConfigurator:
                 known_hosts=None,
                 connect_timeout=10,
             ) as conn:
-                # Check if Redis Stack is running
-                status_result = await conn.run(
-                    "systemctl is-active redis-stack-server",
-                )
-                if status_result.returncode != 0:
-                    return ConfigurationResult(
-                        service_name="redis-stack-server",
-                        vm_name="redis",
-                        success=False,
-                        message="Redis Stack is not running",
-                    )
+                # Issue #620: Use extracted helper for service status check
+                status_error = await _check_redis_service_status(conn)
+                if status_error:
+                    return status_error
 
-                # Check if TLS config already exists (Issue #725: Use correct config path)
-                check_result = await conn.run(
-                    "grep -q 'tls-port' /etc/redis-stack/redis-stack.conf 2>/dev/null || echo 'not_found'"
-                )
-
-                if "not_found" in check_result.stdout:
-                    # Issue #665: Uses extracted helpers
-                    # Issue #725: Pass auth_clients and disable_plain_port
-                    tls_config = _build_redis_tls_config(
-                        self.config.remote_cert_dir,
-                        auth_clients=auth_clients,
-                        disable_plain_port=disable_plain_port,
-                    )
-                    await _write_tls_config_to_redis(conn, tls_config)
-
-                    logger.info("Redis TLS configuration added")
-                    return ConfigurationResult(
-                        service_name="redis-stack-server",
-                        vm_name="redis",
-                        success=True,
-                        message="TLS configuration added. Redis restart required.",
-                        restart_required=True,
-                    )
-
-                logger.info("Redis TLS already configured")
-                return ConfigurationResult(
-                    service_name="redis-stack-server",
-                    vm_name="redis",
-                    success=True,
-                    message="TLS already configured",
-                    restart_required=False,
+                # Issue #620: Use extracted helper for TLS config application
+                return await _apply_redis_tls_config(
+                    conn,
+                    self.config.remote_cert_dir,
+                    auth_clients,
+                    disable_plain_port,
                 )
 
         except asyncssh.Error as e:

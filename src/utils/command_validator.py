@@ -73,8 +73,13 @@ class CommandValidator:
         self.logger = logging.getLogger(__name__)
         self._init_whitelist()
 
-    def _get_system_commands(self) -> Dict[str, CommandPattern]:
-        """Get system information command patterns."""
+    def _get_process_user_commands(self) -> Dict[str, CommandPattern]:
+        """
+        Get process and user identification command patterns.
+
+        Returns command patterns for ps, whoami, and id commands used
+        for process listing and user identification. Issue #620.
+        """
         return {
             "ps": CommandPattern(
                 command="ps",
@@ -83,6 +88,30 @@ class CommandValidator:
                 max_args=1,
                 description="Process status listing",
             ),
+            "whoami": CommandPattern(
+                command="whoami",
+                allowed_args=[],
+                arg_patterns={},
+                max_args=0,
+                description="Current user identification",
+            ),
+            "id": CommandPattern(
+                command="id",
+                allowed_args=["-u", "-g", "-G"],
+                arg_patterns={"-u": r"^-u$", "-g": r"^-g$", "-G": r"^-G$"},
+                max_args=1,
+                description="User and group ID information",
+            ),
+        }
+
+    def _get_directory_commands(self) -> Dict[str, CommandPattern]:
+        """
+        Get directory listing and navigation command patterns.
+
+        Returns command patterns for ls and pwd commands used
+        for directory listing and navigation. Issue #620.
+        """
+        return {
             "ls": CommandPattern(
                 command="ls",
                 allowed_args=[
@@ -113,20 +142,16 @@ class CommandValidator:
                 max_args=0,
                 description="Print working directory",
             ),
-            "whoami": CommandPattern(
-                command="whoami",
-                allowed_args=[],
-                arg_patterns={},
-                max_args=0,
-                description="Current user identification",
-            ),
-            "id": CommandPattern(
-                command="id",
-                allowed_args=["-u", "-g", "-G"],
-                arg_patterns={"-u": r"^-u$", "-g": r"^-g$", "-G": r"^-G$"},
-                max_args=1,
-                description="User and group ID information",
-            ),
+        }
+
+    def _get_system_info_commands(self) -> Dict[str, CommandPattern]:
+        """
+        Get system information and resource command patterns.
+
+        Returns command patterns for uname, uptime, date, df, and free
+        commands used for system information queries. Issue #620.
+        """
+        return {
             "uname": CommandPattern(
                 command="uname",
                 allowed_args=["-a", "-r", "-s"],
@@ -148,8 +173,8 @@ class CommandValidator:
                 max_args=0,
                 description="Current date and time",
             ),
-            "d": CommandPattern(
-                command="d",
+            "df": CommandPattern(
+                command="df",
                 allowed_args=["-h", "--human-readable"],
                 arg_patterns={"-h": r"^-h$", "--human-readable": r"^--human-readable$"},
                 max_args=1,
@@ -163,6 +188,19 @@ class CommandValidator:
                 description="Memory usage information",
             ),
         }
+
+    def _get_system_commands(self) -> Dict[str, CommandPattern]:
+        """
+        Get all system information command patterns.
+
+        Aggregates command patterns from helper methods for process/user,
+        directory, and system info commands. Issue #620.
+        """
+        commands: Dict[str, CommandPattern] = {}
+        commands.update(self._get_process_user_commands())
+        commands.update(self._get_directory_commands())
+        commands.update(self._get_system_info_commands())
+        return commands
 
     def _get_network_commands(self) -> Dict[str, CommandPattern]:
         """Get network information command patterns."""
@@ -257,7 +295,11 @@ class CommandValidator:
         return command_parts, None
 
     def _validate_whitelist_and_args(self, command_parts: List[str]) -> tuple:
-        """Validate command against whitelist and check arguments. Returns (pattern, error_result or None)."""
+        """
+        Validate command against whitelist and check arguments.
+
+        Returns (pattern, error_result or None). Issue #620.
+        """
         base_command = command_parts[0]
         if base_command not in self.whitelist:
             return None, self._invalid_result(
@@ -269,7 +311,8 @@ class CommandValidator:
 
         if len(args) > pattern.max_args:
             return None, self._invalid_result(
-                f"Too many arguments for '{base_command}' (max: {pattern.max_args}, got: {len(args)})"
+                f"Too many arguments for '{base_command}' "
+                f"(max: {pattern.max_args}, got: {len(args)})"
             )
 
         arg_validation = self._validate_arguments(args, pattern)
