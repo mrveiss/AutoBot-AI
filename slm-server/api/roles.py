@@ -8,7 +8,7 @@ CRUD endpoints for role definitions.
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -29,16 +29,16 @@ class RoleResponse(BaseModel):
     """Role response schema."""
 
     name: str
-    display_name: str | None
-    sync_type: str | None
+    display_name: Optional[str] = None
+    sync_type: Optional[str] = None
     source_paths: list
     target_path: str
-    systemd_service: str | None
+    systemd_service: Optional[str] = None
     auto_restart: bool
-    health_check_port: int | None
-    health_check_path: str | None
-    pre_sync_cmd: str | None
-    post_sync_cmd: str | None
+    health_check_port: Optional[int] = None
+    health_check_path: Optional[str] = None
+    pre_sync_cmd: Optional[str] = None
+    post_sync_cmd: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -48,31 +48,31 @@ class RoleCreate(BaseModel):
     """Role creation schema."""
 
     name: str = Field(..., min_length=1, max_length=50)
-    display_name: str | None = None
+    display_name: Optional[str] = None
     sync_type: str = SyncType.COMPONENT.value
     source_paths: list = Field(default_factory=list)
     target_path: str = Field(..., min_length=1)
-    systemd_service: str | None = None
+    systemd_service: Optional[str] = None
     auto_restart: bool = False
-    health_check_port: int | None = None
-    health_check_path: str | None = None
-    pre_sync_cmd: str | None = None
-    post_sync_cmd: str | None = None
+    health_check_port: Optional[int] = None
+    health_check_path: Optional[str] = None
+    pre_sync_cmd: Optional[str] = None
+    post_sync_cmd: Optional[str] = None
 
 
 class RoleUpdate(BaseModel):
     """Role update schema."""
 
-    display_name: str | None = None
-    sync_type: str | None = None
-    source_paths: list | None = None
-    target_path: str | None = None
-    systemd_service: str | None = None
-    auto_restart: bool | None = None
-    health_check_port: int | None = None
-    health_check_path: str | None = None
-    pre_sync_cmd: str | None = None
-    post_sync_cmd: str | None = None
+    display_name: Optional[str] = None
+    sync_type: Optional[str] = None
+    source_paths: Optional[list] = None
+    target_path: Optional[str] = None
+    systemd_service: Optional[str] = None
+    auto_restart: Optional[bool] = None
+    health_check_port: Optional[int] = None
+    health_check_path: Optional[str] = None
+    pre_sync_cmd: Optional[str] = None
+    post_sync_cmd: Optional[str] = None
 
 
 @router.get("", response_model=List[RoleResponse])

@@ -29,12 +29,12 @@ class CodeSourceResponse(BaseModel):
     """Code source configuration response."""
 
     node_id: str
-    hostname: str | None
-    ip_address: str | None
+    hostname: Optional[str] = None
+    ip_address: Optional[str] = None
     repo_path: str
     branch: str
-    last_known_commit: str | None
-    last_notified_at: datetime | None
+    last_known_commit: Optional[str] = None
+    last_notified_at: Optional[datetime] = None
     is_active: bool
 
     class Config:
@@ -55,7 +55,7 @@ class CodeNotification(BaseModel):
     node_id: str
     commit: str
     branch: str = "main"
-    message: str | None = None
+    message: Optional[str] = None
     is_code_source: bool = True
 
 
