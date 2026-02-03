@@ -115,6 +115,11 @@ class Node(Base):
     code_version = Column(String(64), nullable=True)
     code_status = Column(String(20), default=CodeStatus.UNKNOWN.value)
 
+    # Role-based tracking (Issue #779)
+    detected_roles = Column(JSON, default=list)
+    listening_ports = Column(JSON, default=list)
+    role_versions = Column(JSON, default=dict)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
