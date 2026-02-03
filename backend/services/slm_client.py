@@ -34,16 +34,21 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 logger = logging.getLogger(__name__)
 
-# Default SLM server URL (can be overridden via init)
-DEFAULT_SLM_URL = "http://172.16.168.19:8000"
+# SLM server URL from environment (no hardcoded fallback per SSOT requirements)
+# Set SLM_URL environment variable or SLM client will be unavailable
+DEFAULT_SLM_URL = os.getenv("SLM_URL")
+if not DEFAULT_SLM_URL:
+    logger.warning("SLM_URL not set - SLM client will be unavailable until configured")
 
-# Ultimate fallback configuration
+# Ultimate fallback configuration (uses env vars where available)
 ULTIMATE_FALLBACK_CONFIG = {
-    "llm_provider": "ollama",
-    "llm_endpoint": "http://localhost:11434",
-    "llm_model": "mistral:7b-instruct",
-    "llm_timeout": 30,
-    "llm_temperature": 0.7,
+    "llm_provider": os.getenv("AUTOBOT_LLM_PROVIDER", "ollama"),
+    "llm_endpoint": os.getenv(
+        "OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    ),
+    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "mistral:7b-instruct"),
+    "llm_timeout": int(os.getenv("AUTOBOT_LLM_TIMEOUT", "30")),
+    "llm_temperature": float(os.getenv("AUTOBOT_LLM_TEMPERATURE", "0.7")),
     "llm_max_tokens": None,
     "llm_api_key": None,
 }
