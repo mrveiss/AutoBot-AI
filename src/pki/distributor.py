@@ -22,7 +22,7 @@ import asyncssh
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from src.pki.config import TLSConfig, VM_DEFINITIONS, VMCertificateInfo
+from src.pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 
 logger = logging.getLogger(__name__)
 
@@ -166,14 +166,114 @@ class CertificateDistributor:
 
         return files_copied
 
-    async def _distribute_to_vm(
-        self, vm_info: VMCertificateInfo
+    async def _verify_remote_certificate(
+        self,
+        conn: asyncssh.SSHClientConnection,
+        remote_dir: str,
+    ) -> None:
+        """
+        Verify certificate chain on remote host.
+
+        Issue #620: Extracted from _distribute_to_vm to reduce function length.
+
+        Args:
+            conn: SSH connection
+            remote_dir: Remote directory containing certificates
+
+        Raises:
+            RuntimeError: If certificate verification fails
+        """
+        ca_remote = f"{remote_dir}/ca-cert.pem"
+        cert_remote = f"{remote_dir}/server-cert.pem"
+        verify_result = await conn.run(
+            f"openssl verify -CAfile {ca_remote} {cert_remote}",
+        )
+        if verify_result.returncode != 0:
+            raise RuntimeError(
+                f"Certificate verification failed: {verify_result.stderr}"
+            )
+
+    def _record_span_error(
+        self,
+        span: trace.Span,
+        error: Exception,
+        error_type: Optional[str] = None,
+    ) -> None:
+        """
+        Record error information on OpenTelemetry span.
+
+        Issue #620: Extracted from _distribute_to_vm to reduce function length.
+
+        Args:
+            span: OpenTelemetry span to record error on
+            error: Exception that occurred
+            error_type: Optional error type attribute
+        """
+        if span.is_recording():
+            span.set_status(Status(StatusCode.ERROR, str(error)))
+            span.record_exception(error)
+            if error_type:
+                span.set_attribute("ssh.error_type", error_type)
+
+    async def _execute_distribution(
+        self,
+        conn: asyncssh.SSHClientConnection,
+        vm_info: VMCertificateInfo,
+        span: trace.Span,
     ) -> DistributionResult:
+        """
+        Execute the certificate distribution over an established SSH connection.
+
+        Issue #620: Extracted from _distribute_to_vm to reduce function length.
+
+        Args:
+            conn: Established SSH connection
+            vm_info: VM certificate information
+            span: OpenTelemetry span for tracing
+
+        Returns:
+            DistributionResult indicating success or failure
+        """
+        remote_dir = self.config.remote_cert_dir
+
+        # Prepare directory (Issue #665: uses helper)
+        await self._prepare_remote_directory(conn, remote_dir)
+
+        # Copy all certificates (Issue #665: uses helper)
+        files_copied = await self._copy_certificates(conn, vm_info, remote_dir)
+
+        # Set final ownership to root
+        await conn.run(f"sudo chown root:root {remote_dir}/*.pem", check=True)
+
+        # Verify certificate on remote (Issue #620: uses helper)
+        await self._verify_remote_certificate(conn, remote_dir)
+
+        # Issue #697: Record success attributes
+        if span.is_recording():
+            span.set_attribute("ssh.files_copied", len(files_copied))
+            span.set_status(Status(StatusCode.OK))
+
+        logger.info(f"Successfully distributed certificates to {vm_info.name}")
+        return DistributionResult(
+            vm_name=vm_info.name,
+            success=True,
+            message="Certificates distributed and verified",
+            files_copied=files_copied,
+        )
+
+    async def _distribute_to_vm(self, vm_info: VMCertificateInfo) -> DistributionResult:
         """
         Distribute certificates to a single VM.
 
+        Issue #620: Refactored using Extract Method pattern.
         Issue #665: Refactored to use extracted helper methods.
         Issue #697: Added OpenTelemetry tracing for SSH operations.
+
+        Args:
+            vm_info: VM certificate information
+
+        Returns:
+            DistributionResult indicating success or failure
         """
         logger.info(f"Distributing certificates to {vm_info.name} ({vm_info.ip})")
 
@@ -196,54 +296,11 @@ class CertificateDistributor:
                     known_hosts=None,  # TODO: Use proper known_hosts in production
                     connect_timeout=10,
                 ) as conn:
-                    remote_dir = self.config.remote_cert_dir
-
-                    # Prepare directory (Issue #665: uses helper)
-                    await self._prepare_remote_directory(conn, remote_dir)
-
-                    # Copy all certificates (Issue #665: uses helper)
-                    files_copied = await self._copy_certificates(
-                        conn, vm_info, remote_dir
-                    )
-
-                    # Set final ownership to root
-                    await conn.run(
-                        f"sudo chown root:root {remote_dir}/*.pem", check=True
-                    )
-
-                    # Verify certificate on remote
-                    ca_remote = f"{remote_dir}/ca-cert.pem"
-                    cert_remote = f"{remote_dir}/server-cert.pem"
-                    verify_result = await conn.run(
-                        f"openssl verify -CAfile {ca_remote} {cert_remote}",
-                    )
-                    if verify_result.returncode != 0:
-                        raise RuntimeError(
-                            f"Certificate verification failed: {verify_result.stderr}"
-                        )
-
-                    # Issue #697: Record success attributes
-                    if span.is_recording():
-                        span.set_attribute("ssh.files_copied", len(files_copied))
-                        span.set_status(Status(StatusCode.OK))
-
-                    logger.info(
-                        f"Successfully distributed certificates to {vm_info.name}"
-                    )
-                    return DistributionResult(
-                        vm_name=vm_info.name,
-                        success=True,
-                        message="Certificates distributed and verified",
-                        files_copied=files_copied,
-                    )
+                    return await self._execute_distribution(conn, vm_info, span)
 
             except asyncssh.Error as e:
                 logger.error(f"SSH error distributing to {vm_info.name}: {e}")
-                # Issue #697: Record SSH error on span
-                if span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, f"SSH error: {e}"))
-                    span.record_exception(e)
-                    span.set_attribute("ssh.error_type", "asyncssh_error")
+                self._record_span_error(span, e, error_type="asyncssh_error")
                 return DistributionResult(
                     vm_name=vm_info.name,
                     success=False,
@@ -251,10 +308,7 @@ class CertificateDistributor:
                 )
             except Exception as e:
                 logger.error(f"Error distributing to {vm_info.name}: {e}")
-                # Issue #697: Record general error on span
-                if span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
-                    span.record_exception(e)
+                self._record_span_error(span, e)
                 return DistributionResult(
                     vm_name=vm_info.name,
                     success=False,
@@ -273,7 +327,7 @@ class CertificateDistributor:
         content = local_path.read_bytes()
 
         # Write to temporary location
-        temp_path = f"/tmp/{local_path.name}"
+        temp_path = f"/tmp/{local_path.name}"  # nosec B108 - remote VM temp dir
         async with conn.start_sftp_client() as sftp:
             async with sftp.open(temp_path, "wb") as f:
                 await f.write(content)
@@ -298,7 +352,6 @@ class CertificateDistributor:
                     known_hosts=None,
                     connect_timeout=10,
                 ) as conn:
-
                     remote_dir = self.config.remote_cert_dir
 
                     # Check all required files exist
