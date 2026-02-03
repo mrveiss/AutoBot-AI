@@ -157,9 +157,13 @@ class ConversationFlowAnalyzer:
 
         # Issue #281: Use extracted helper for message parsing
         for msg in messages:
-            parsed_msg, intent, err_inc, clar_inc, sat_signal = (
-                self._parse_single_message(msg)
-            )
+            (
+                parsed_msg,
+                intent,
+                err_inc,
+                clar_inc,
+                sat_signal,
+            ) = self._parse_single_message(msg)
             parsed_messages.append(parsed_msg)
             total_latency += parsed_msg.latency_ms or 0.0
 
@@ -262,6 +266,84 @@ class ConversationFlowAnalyzer:
         counter = Counter(substantive_intents)
         return counter.most_common(1)[0][0]
 
+    def _ingest_conversations(
+        self,
+        conversations: Optional[List[List[Dict[str, Any]]]] = None,
+        flows: Optional[List[ConversationFlow]] = None,
+    ) -> None:
+        """
+        Parse and ingest raw conversations and flows into internal storage.
+
+        Args:
+            conversations: Raw conversation data (list of message lists)
+            flows: Pre-parsed ConversationFlow objects
+
+        Issue #620.
+        """
+        if conversations:
+            for i, conv in enumerate(conversations):
+                flow = self.parse_conversation(conv, session_id=f"session_{i}")
+                self._flows.append(flow)
+
+        if flows:
+            self._flows.extend(flows)
+
+    def _compute_basic_statistics(self) -> Dict[str, Any]:
+        """
+        Compute basic statistics from analyzed flows.
+
+        Returns:
+            Dict with total_messages, avg_turns, avg_latency, success_rate
+
+        Issue #620.
+        """
+        total_messages = sum(len(f.messages) for f in self._flows)
+        avg_turns = sum(f.turn_count for f in self._flows) / len(self._flows)
+        avg_latency = sum(f.total_latency_ms for f in self._flows) / len(self._flows)
+        success_rate = sum(1 for f in self._flows if f.successful) / len(self._flows)
+
+        return {
+            "total_messages": total_messages,
+            "avg_turns": avg_turns,
+            "avg_latency": avg_latency,
+            "success_rate": success_rate,
+        }
+
+    def _build_analysis_result(
+        self,
+        stats: Dict[str, Any],
+        intent_dist: Dict[IntentCategory, int],
+        response_dist: Dict[ResponseType, int],
+        flow_patterns: List[FlowPattern],
+        bottlenecks: List[Bottleneck],
+        optimizations: List[Optimization],
+        common_paths: List[List[IntentCategory]],
+        error_recovery: List[Dict[str, Any]],
+        cache_opportunities: List[Dict[str, Any]],
+        health_score: float,
+    ) -> AnalysisResult:
+        """
+        Build the final AnalysisResult from computed components.
+
+        Issue #620.
+        """
+        return AnalysisResult(
+            total_conversations=len(self._flows),
+            total_messages=stats["total_messages"],
+            avg_turn_count=stats["avg_turns"],
+            avg_latency_ms=stats["avg_latency"],
+            success_rate=stats["success_rate"],
+            intent_distribution=intent_dist,
+            response_type_distribution=response_dist,
+            flow_patterns=flow_patterns,
+            bottlenecks=bottlenecks,
+            optimizations=optimizations,
+            common_paths=common_paths,
+            error_recovery_patterns=error_recovery,
+            cache_opportunities=cache_opportunities,
+            health_score=health_score,
+        )
+
     def analyze(
         self,
         conversations: Optional[List[List[Dict[str, Any]]]] = None,
@@ -277,66 +359,35 @@ class ConversationFlowAnalyzer:
         Returns:
             AnalysisResult with patterns, bottlenecks, and optimizations
         """
-        # Parse conversations if provided
-        if conversations:
-            for i, conv in enumerate(conversations):
-                flow = self.parse_conversation(conv, session_id=f"session_{i}")
-                self._flows.append(flow)
-
-        if flows:
-            self._flows.extend(flows)
+        self._ingest_conversations(conversations, flows)
 
         if not self._flows:
             return self._empty_result()
 
-        # Compute statistics
-        total_messages = sum(len(f.messages) for f in self._flows)
-        avg_turns = sum(f.turn_count for f in self._flows) / len(self._flows)
-        avg_latency = sum(f.total_latency_ms for f in self._flows) / len(self._flows)
-        success_rate = sum(1 for f in self._flows if f.successful) / len(self._flows)
-
-        # Compute distributions
+        stats = self._compute_basic_statistics()
         intent_dist = self._compute_intent_distribution()
         response_dist = self._compute_response_distribution()
-
-        # Extract patterns
         flow_patterns = self._extract_flow_patterns()
-
-        # Detect bottlenecks
         bottlenecks = self._detect_bottlenecks()
-
-        # Generate optimizations
         optimizations = self._generate_optimizations(flow_patterns, bottlenecks)
-
-        # Find common paths
         common_paths = self._find_common_paths()
-
-        # Analyze error recovery
         error_recovery = self._analyze_error_recovery()
-
-        # Find cache opportunities
         cache_opportunities = self._find_cache_opportunities()
-
-        # Calculate health score
         health_score = self._calculate_health_score(
-            success_rate, avg_latency, len(bottlenecks)
+            stats["success_rate"], stats["avg_latency"], len(bottlenecks)
         )
 
-        return AnalysisResult(
-            total_conversations=len(self._flows),
-            total_messages=total_messages,
-            avg_turn_count=avg_turns,
-            avg_latency_ms=avg_latency,
-            success_rate=success_rate,
-            intent_distribution=intent_dist,
-            response_type_distribution=response_dist,
-            flow_patterns=flow_patterns,
-            bottlenecks=bottlenecks,
-            optimizations=optimizations,
-            common_paths=common_paths,
-            error_recovery_patterns=error_recovery,
-            cache_opportunities=cache_opportunities,
-            health_score=health_score,
+        return self._build_analysis_result(
+            stats,
+            intent_dist,
+            response_dist,
+            flow_patterns,
+            bottlenecks,
+            optimizations,
+            common_paths,
+            error_recovery,
+            cache_opportunities,
+            health_score,
         )
 
     def _empty_result(self) -> AnalysisResult:
@@ -378,9 +429,9 @@ class ConversationFlowAnalyzer:
     def _extract_flow_patterns(self) -> List[FlowPattern]:
         """Extract common flow patterns."""
         # Group flows by intent sequence (as tuple for hashability)
-        sequence_groups: Dict[Tuple[IntentCategory, ...], List[ConversationFlow]] = (
-            defaultdict(list)
-        )
+        sequence_groups: Dict[
+            Tuple[IntentCategory, ...], List[ConversationFlow]
+        ] = defaultdict(list)
 
         for flow in self._flows:
             # Use first 5 intents as pattern key
@@ -463,7 +514,11 @@ class ConversationFlowAnalyzer:
             BottleneckType.SLOW_RESPONSE,
             "High latency detected in {count} sessions",
             slow_severity,
-            ["Consider caching common responses", "Optimize LLM prompt length", "Review tool call latency"],
+            [
+                "Consider caching common responses",
+                "Optimize LLM prompt length",
+                "Review tool call latency",
+            ],
         )
         if bottleneck:
             bottlenecks.append(bottleneck)
@@ -479,7 +534,11 @@ class ConversationFlowAnalyzer:
             BottleneckType.REPEATED_CLARIFICATION,
             "Excessive clarifications in {count} sessions",
             "high",
-            ["Improve initial intent classification", "Add disambiguation prompts", "Enhance context gathering"],
+            [
+                "Improve initial intent classification",
+                "Add disambiguation prompts",
+                "Enhance context gathering",
+            ],
         )
         if bottleneck:
             bottlenecks.append(bottleneck)
@@ -491,23 +550,29 @@ class ConversationFlowAnalyzer:
             BottleneckType.ERROR_LOOP,
             "Multiple errors in {count} sessions",
             "critical",
-            ["Improve error handling and recovery", "Add fallback responses", "Implement graceful degradation"],
+            [
+                "Improve error handling and recovery",
+                "Add fallback responses",
+                "Implement graceful degradation",
+            ],
         )
         if bottleneck:
             bottlenecks.append(bottleneck)
 
         # Excessive turns detection
         long_sessions = [
-            f.session_id
-            for f in self._flows
-            if f.turn_count > self.max_turns_threshold
+            f.session_id for f in self._flows if f.turn_count > self.max_turns_threshold
         ]
         bottleneck = self._create_bottleneck_if_significant(
             long_sessions,
             BottleneckType.EXCESSIVE_TURNS,
             "Excessive turns in {count} sessions",
             "medium",
-            ["Add workflow shortcuts", "Improve single-turn completions", "Reduce back-and-forth"],
+            [
+                "Add workflow shortcuts",
+                "Improve single-turn completions",
+                "Reduce back-and-forth",
+            ],
         )
         if bottleneck:
             bottlenecks.append(bottleneck)

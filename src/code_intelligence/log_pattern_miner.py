@@ -466,25 +466,20 @@ class LogPatternMiner:
                 entries.append(entry)
         return entries
 
-    def analyze(
-        self, log_files: Optional[list[str]] = None, content: Optional[str] = None
-    ) -> MiningResult:
-        """
-        Analyze logs and extract patterns.
+    def _parse_all_sources(
+        self, log_files: Optional[list[str]], content: Optional[str]
+    ) -> int:
+        """Parse all log sources and populate entries.
 
         Args:
             log_files: List of log file paths
             content: Direct log content string
 
         Returns:
-            MiningResult with all findings
-        """
-        self.entries = []
-        self.patterns = []
-        self.anomalies = []
-        self.sessions = {}
+            Number of files successfully analyzed.
 
-        # Parse all sources
+        Issue #620.
+        """
         files_analyzed = 0
 
         if log_files:
@@ -500,34 +495,42 @@ class LogPatternMiner:
             if entries:
                 files_analyzed += 1
 
-        if not self.entries:
-            return MiningResult(
-                id=f"mining-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                timestamp=datetime.now(),
-                files_analyzed=0,
-                total_entries=0,
-                time_range=(datetime.now(), datetime.now()),
-                patterns=[],
-                anomalies=[],
-                sessions=[],
-                statistics={},
-                summary={"message": "No log entries found"},
-            )
+        return files_analyzed
 
-        # Sort by timestamp
-        self.entries.sort(key=lambda e: e.timestamp)
+    def _create_empty_result(self) -> MiningResult:
+        """Create an empty MiningResult when no entries are found.
 
-        # Extract patterns
-        self._extract_error_patterns()
-        self._extract_performance_patterns()
-        self._extract_api_patterns()
-        self._extract_session_flows()
-        self._detect_anomalies()
+        Returns:
+            MiningResult with empty/default values.
 
-        # Calculate statistics
+        Issue #620.
+        """
+        return MiningResult(
+            id=f"mining-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            timestamp=datetime.now(),
+            files_analyzed=0,
+            total_entries=0,
+            time_range=(datetime.now(), datetime.now()),
+            patterns=[],
+            anomalies=[],
+            sessions=[],
+            statistics={},
+            summary={"message": "No log entries found"},
+        )
+
+    def _build_mining_result(self, files_analyzed: int) -> MiningResult:
+        """Build the final MiningResult with all extracted data.
+
+        Args:
+            files_analyzed: Number of files successfully analyzed.
+
+        Returns:
+            Complete MiningResult with patterns, anomalies, and statistics.
+
+        Issue #620.
+        """
         statistics = self._calculate_statistics()
         summary = self._generate_summary()
-
         time_range = (self.entries[0].timestamp, self.entries[-1].timestamp)
 
         return MiningResult(
@@ -542,6 +545,40 @@ class LogPatternMiner:
             statistics=statistics,
             summary=summary,
         )
+
+    def analyze(
+        self, log_files: Optional[list[str]] = None, content: Optional[str] = None
+    ) -> MiningResult:
+        """Analyze logs and extract patterns.
+
+        Args:
+            log_files: List of log file paths
+            content: Direct log content string
+
+        Returns:
+            MiningResult with all findings
+        """
+        self.entries = []
+        self.patterns = []
+        self.anomalies = []
+        self.sessions = {}
+
+        files_analyzed = self._parse_all_sources(log_files, content)
+
+        if not self.entries:
+            return self._create_empty_result()
+
+        # Sort by timestamp
+        self.entries.sort(key=lambda e: e.timestamp)
+
+        # Extract patterns
+        self._extract_error_patterns()
+        self._extract_performance_patterns()
+        self._extract_api_patterns()
+        self._extract_session_flows()
+        self._detect_anomalies()
+
+        return self._build_mining_result(files_analyzed)
 
     def _extract_error_patterns(self) -> None:
         """Extract recurring error patterns."""

@@ -29,18 +29,6 @@ from src.constants.threshold_constants import (
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
 
-# Import existing orchestrator components
-from src.orchestrator import Orchestrator, TaskComplexity
-from src.retry_mechanism import RetryStrategy, retry_async
-
-# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from src.utils.agent_selection import (
-    find_best_agent_for_task as _find_best_agent,
-    release_agent as _release_agent,
-    reserve_agent as _reserve_agent,
-    update_agent_performance as _update_performance,
-)
-
 # Issue #381: Import from refactored orchestration package
 from src.orchestration import (
     AgentCapability,
@@ -54,6 +42,16 @@ from src.orchestration import (
     WorkflowPlanner,
     get_default_agents,
 )
+
+# Import existing orchestrator components
+from src.orchestrator import Orchestrator, TaskComplexity
+from src.retry_mechanism import RetryStrategy, retry_async
+
+# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
+from src.utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from src.utils.agent_selection import release_agent as _release_agent
+from src.utils.agent_selection import reserve_agent as _reserve_agent
+from src.utils.agent_selection import update_agent_performance as _update_performance
 
 # Re-export for backward compatibility
 __all__ = [
@@ -273,10 +271,94 @@ class EnhancedOrchestrator:
         self, workflow_id: str, execution_result: Dict[str, Any]
     ) -> None:
         """Generate and sync workflow documentation."""
-        await self._documenter.generate_workflow_documentation(workflow_id, execution_result)
+        await self._documenter.generate_workflow_documentation(
+            workflow_id, execution_result
+        )
         doc = self._documenter.get_doc(workflow_id)
         if doc:
             self.workflow_documentation[workflow_id] = doc
+
+    async def _execute_workflow_steps(
+        self,
+        workflow_id: str,
+        user_request: str,
+        context: Dict[str, Any],
+        start_time: float,
+        auto_document: bool,
+        require_plan_approval: bool,
+        plan_approval_callback: Optional[Callable],
+    ) -> Dict[str, Any]:
+        """
+        Execute the core workflow steps including planning and execution.
+
+        Returns rejection result if plan not approved, otherwise success result.
+
+        Issue #620.
+        """
+        complexity = self.base_orchestrator.classify_request_complexity(user_request)
+        planner = self._get_planner()
+        enhanced_steps = await planner.plan_enhanced_workflow_steps(
+            user_request, complexity, context
+        )
+
+        if require_plan_approval:
+            rejection = await self._request_and_check_plan_approval(
+                workflow_id,
+                user_request,
+                enhanced_steps,
+                plan_approval_callback,
+                start_time,
+            )
+            if rejection:
+                return rejection
+
+        executor = self._get_executor()
+        execution_result = await executor.execute_coordinated_workflow(
+            workflow_id, enhanced_steps, context
+        )
+
+        self._update_workflow_metrics(
+            workflow_id, start_time, execution_result["status"] == "completed"
+        )
+
+        if auto_document:
+            await self._handle_auto_documentation(workflow_id, execution_result)
+
+        if self.knowledge_extraction_enabled:
+            await self._documenter.extract_workflow_knowledge(
+                workflow_id, user_request, execution_result, self.agent_registry
+            )
+
+        return self._build_workflow_success_result(
+            workflow_id, execution_result, start_time, auto_document
+        )
+
+    async def _handle_workflow_failure(
+        self,
+        workflow_id: str,
+        error: Exception,
+        start_time: float,
+        auto_document: bool,
+    ) -> Dict[str, Any]:
+        """
+        Handle workflow failure by logging and documenting the error.
+
+        Issue #620.
+        """
+        logger.error("Enhanced workflow %s failed: %s", workflow_id, error)
+
+        if auto_document:
+            await self._documenter.document_workflow_failure(workflow_id, str(error))
+            doc = self._documenter.get_doc(workflow_id)
+            if doc:
+                self.workflow_documentation[workflow_id] = doc
+
+        return {
+            "workflow_id": workflow_id,
+            "status": "failed",
+            "error": str(error),
+            "execution_time": time.time() - start_time,
+        }
 
     @circuit_breaker_async(
         "workflow_execution",
@@ -311,56 +393,20 @@ class EnhancedOrchestrator:
                 workflow_id, user_request, context, start_time, auto_document
             )
 
-            complexity = self.base_orchestrator.classify_request_complexity(user_request)
-            planner = self._get_planner()
-            enhanced_steps = await planner.plan_enhanced_workflow_steps(
-                user_request, complexity, context
-            )
-
-            # Issue #390: Present plan for approval before execution
-            if require_plan_approval:
-                rejection = await self._request_and_check_plan_approval(
-                    workflow_id, user_request, enhanced_steps, plan_approval_callback, start_time
-                )
-                if rejection:
-                    return rejection
-
-            executor = self._get_executor()
-            execution_result = await executor.execute_coordinated_workflow(
-                workflow_id, enhanced_steps, context
-            )
-
-            self._update_workflow_metrics(
-                workflow_id, start_time, execution_result["status"] == "completed"
-            )
-
-            if auto_document:
-                await self._handle_auto_documentation(workflow_id, execution_result)
-
-            if self.knowledge_extraction_enabled:
-                await self._documenter.extract_workflow_knowledge(
-                    workflow_id, user_request, execution_result, self.agent_registry
-                )
-
-            return self._build_workflow_success_result(
-                workflow_id, execution_result, start_time, auto_document
+            return await self._execute_workflow_steps(
+                workflow_id,
+                user_request,
+                context,
+                start_time,
+                auto_document,
+                require_plan_approval,
+                plan_approval_callback,
             )
 
         except Exception as e:
-            logger.error("Enhanced workflow %s failed: %s", workflow_id, e)
-
-            if auto_document:
-                await self._documenter.document_workflow_failure(workflow_id, str(e))
-                doc = self._documenter.get_doc(workflow_id)
-                if doc:
-                    self.workflow_documentation[workflow_id] = doc
-
-            return {
-                "workflow_id": workflow_id,
-                "status": "failed",
-                "error": str(e),
-                "execution_time": time.time() - start_time,
-            }
+            return await self._handle_workflow_failure(
+                workflow_id, e, start_time, auto_document
+            )
 
     def get_plan_summary(
         self,

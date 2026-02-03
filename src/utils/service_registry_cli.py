@@ -22,7 +22,6 @@ import json
 import sys
 import time
 
-
 from .service_registry import ServiceStatus, get_service_registry, get_service_url
 
 
@@ -264,24 +263,28 @@ def cmd_deploy_info(args):
         return 1
 
 
-def main():
-    """Main CLI entry point"""
+def _create_argument_parser() -> argparse.ArgumentParser:
+    """Create and configure the argument parser with all subcommands.
+
+    Returns:
+        Configured ArgumentParser instance.
+
+    Issue #620.
+    """
     parser = argparse.ArgumentParser(
         description="AutoBot Service Registry CLI Tool",
         epilog="Use this tool to debug service discovery issues and validate deployments.",
     )
 
     parser.add_argument("--config", "-c", help="Configuration file path", default=None)
-
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Status command (no arguments needed)
+    # Simple commands (no arguments needed)
     subparsers.add_parser("status", help="Show registry status")
-
-    # Health command (no arguments needed)
     subparsers.add_parser("health", help="Check service health")
+    subparsers.add_parser("deploy", help="Show deployment info")
 
     # URL command
     url_parser = subparsers.add_parser("url", help="Get service URL")
@@ -300,15 +303,20 @@ def main():
     test_all_parser = subparsers.add_parser("test-all", help="Test all services")
     test_all_parser.add_argument("--json", action="store_true", help="JSON output")
 
-    # Deploy info command (no arguments needed)
-    subparsers.add_parser("deploy", help="Show deployment info")
+    return parser
 
-    args = parser.parse_args()
 
-    if not args.command:
-        parser.print_help()
-        return 1
+def _dispatch_command(args: argparse.Namespace) -> int:
+    """Dispatch command to appropriate handler.
 
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+
+    Issue #620.
+    """
     # Command dispatch table (Issue #315 - reduced nesting)
     sync_commands = {
         "status": cmd_status,
@@ -322,15 +330,26 @@ def main():
         "test-all": cmd_test_all,
     }
 
-    try:
-        if args.command in sync_commands:
-            return sync_commands[args.command](args)
-        elif args.command in async_commands:
-            return asyncio.run(async_commands[args.command](args))
-        else:
-            print_status("error", f"Unknown command: {args.command}")
-            return 1
+    if args.command in sync_commands:
+        return sync_commands[args.command](args)
+    elif args.command in async_commands:
+        return asyncio.run(async_commands[args.command](args))
+    else:
+        print_status("error", f"Unknown command: {args.command}")
+        return 1
 
+
+def main():
+    """Main CLI entry point."""
+    parser = _create_argument_parser()
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return 1
+
+    try:
+        return _dispatch_command(args)
     except KeyboardInterrupt:
         print_status("warning", "Operation cancelled by user")
         return 1
