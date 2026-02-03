@@ -1,0 +1,16 @@
+[Unit]
+Description=TigerVNC Server for Browser VM
+After=network.target
+
+[Service]
+Type=forking
+User=autobot
+WorkingDirectory=/home/autobot
+ExecStartPre=-/usr/bin/vncserver -kill :1
+ExecStart=/usr/bin/vncserver :1 -localhost no -SecurityTypes None -rfbport 5901 --I-KNOW-THIS-IS-INSECURE -geometry 1920x1080 -depth 24
+ExecStop=/usr/bin/vncserver -kill :1
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

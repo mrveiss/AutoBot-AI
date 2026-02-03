@@ -1,246 +1,753 @@
 <template>
   <div class="file-browser">
-    <h2>File Browser</h2>
-    <div class="file-actions">
-      <button @click="refreshFiles">Refresh</button>
-      <button @click="uploadFile">Upload File</button>
-    </div>
-    <div class="file-list-container">
-      <table class="file-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Size</th>
-            <th>Last Modified</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(file, index) in files" :key="index">
-            <td>{{ file.name }}</td>
-            <td>{{ file.is_dir ? 'Directory' : 'File' }}</td>
-            <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>
-            <td>{{ formatDate(file.last_modified) }}</td>
-            <td>
-              <button @click="viewFile(file)" v-if="!file.is_dir">View</button>
-              <button @click="deleteFile(file)">Delete</button>
-            </td>
-          </tr>
-          <tr v-if="files.length === 0">
-            <td colspan="5" class="no-files">No files or directories found.</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Header (with integrated path navigation) -->
+    <FileBrowserHeader
+      :view-mode="viewMode"
+      :current-path="currentPath"
+      @upload="triggerFileUpload"
+      @new-folder="createNewFolder"
+      @navigate-to-path="navigateToPath"
+    />
+
+    <!-- File Preview Modal -->
+    <FilePreview
+      :show-preview="showPreview"
+      :preview-file="previewFile"
+      @close="closePreview"
+      @download="downloadPreviewFile"
+    />
+
+    <!-- Main Content Area -->
+    <div class="file-content-container">
+      <!-- Tree View -->
+      <div v-if="viewMode === 'tree'" class="tree-view">
+        <FileTreeView
+          :directory-tree="directoryTree"
+          :selected-path="selectedPath"
+          @toggle-node="toggleNode"
+          @expand-all="expandAll"
+          @collapse-all="collapseAll"
+        />
+
+        <!-- File List Panel in Tree View -->
+        <div class="files-panel">
+          <div class="files-header">
+            <h3><i class="fas fa-files"></i> {{ selectedPath || '/' }} Contents</h3>
+
+            <!-- File Upload (Inline) -->
+            <FileUpload
+              ref="fileUploadRef"
+              @files-selected="handleFileSelected"
+              class="file-upload-inline"
+            />
+
+            <div class="file-actions-inline">
+              <button @click="refreshFiles" aria-label="Refresh files">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+              <button @click="toggleView" aria-label="Toggle view mode">
+                <i :class="viewMode === 'tree' ? 'fas fa-list' : 'fas fa-tree'"></i>
+                {{ viewMode === 'tree' ? 'List View' : 'Tree View' }}
+              </button>
+            </div>
+          </div>
+          <FileListTable
+            :files="sortedFiles"
+            :sort-field="sortField"
+            :sort-order="sortOrder"
+            :current-path="currentPath"
+            @sort="sortBy"
+            @navigate="navigateToPath"
+            @view-file="viewFile"
+            @rename-file="renameFile"
+            @delete-file="deleteFile"
+          />
+        </div>
+      </div>
+
+      <!-- List View -->
+      <div v-else class="list-view">
+        <FileListTable
+          :files="sortedFiles"
+          :sort-field="sortField"
+          :sort-order="sortOrder"
+          :current-path="currentPath"
+          @sort="sortBy"
+          @navigate="navigateToPath"
+          @view-file="viewFile"
+          @rename-file="renameFile"
+          @delete-file="deleteFile"
+        />
+      </div>
     </div>
   </div>
 </template>
 
-<script>
-import { ref } from 'vue';
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import apiClient from '@/utils/ApiClient.js'
+import { useUserStore } from '@/stores/useUserStore'
+import { useAsyncHandler } from '@/composables/useErrorHandler'
+import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 
-export default {
-  name: 'FileBrowser',
-  setup() {
-    const files = ref([]);
+// Issue #608: Activity logger for session tracking
+const { logFileActivity } = useSessionActivityLogger()
 
-    const refreshFiles = async () => {
-      try {
-        console.log('Refreshing file list');
-        const response = await fetch('/api/files');
-        if (response.ok) {
-          files.value = await response.json();
-        } else {
-          console.error('Failed to fetch files:', response.statusText);
-          alert('Failed to refresh file list. Backend integration pending.');
-        }
-      } catch (error) {
-        console.error('Error fetching files:', error);
-        alert('Error refreshing file list. Backend integration pending.');
-      }
-    };
+// Import components
+import FileBrowserHeader from './file-browser/FileBrowserHeader.vue'
+import FileUpload from './file-browser/FileUpload.vue'
+import FilePreview from './file-browser/FilePreview.vue'
+import FileTreeView from './file-browser/FileTreeView.vue'
+import FileListTable from './file-browser/FileListTable.vue'
 
-    const uploadFile = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.onchange = async (event) => {
-        const file = event.target.files[0];
-        if (file) {
-          const formData = new FormData();
-          formData.append('file', file);
-          try {
-            const response = await fetch('/api/files/upload', {
-              method: 'POST',
-              body: formData
-            });
-            if (response.ok) {
-              alert(`File ${file.name} uploaded successfully.`);
-              refreshFiles();
-            } else {
-              alert('Failed to upload file. Backend integration pending.');
-            }
-          } catch (error) {
-            console.error('Error uploading file:', error);
-            alert('Error uploading file. Backend integration pending.');
-          }
-        }
-      };
-      input.click();
-    };
+// Component props
+interface Props {
+  chatContext?: boolean
+}
 
-    const viewFile = async (file) => {
-      try {
-        console.log('Viewing file:', file.name);
-        const response = await fetch(`/api/files/view?path=${encodeURIComponent(file.path)}`);
-        if (response.ok) {
-          const content = await response.text();
-          alert(`Content of ${file.name}:\n${content.substring(0, 200)}...`);
-        } else {
-          alert(`Failed to view ${file.name}. Backend integration pending.`);
-        }
-      } catch (error) {
-        console.error('Error viewing file:', error);
-        alert(`Error viewing ${file.name}. Backend integration pending.`);
-      }
-    };
+const props = withDefaults(defineProps<Props>(), {
+  chatContext: false
+})
 
-    const deleteFile = async (file) => {
-      try {
-        console.log('Deleting file:', file.name);
-        const response = await fetch(`/api/files/delete?path=${encodeURIComponent(file.path)}`, {
-          method: 'DELETE'
-        });
-        if (response.ok) {
-          alert(`Deleted ${file.name}.`);
-          refreshFiles();
-        } else {
-          alert(`Failed to delete ${file.name}. Backend integration pending.`);
-        }
-      } catch (error) {
-        console.error('Error deleting file:', error);
-        alert(`Error deleting ${file.name}. Backend integration pending.`);
-      }
-    };
+// Template refs
+const fileUploadRef = ref<InstanceType<typeof FileUpload>>()
 
-    const formatSize = (bytes) => {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / 1048576).toFixed(1) + ' MB';
-    };
+// State
+const files = ref<any[]>([])
+const directoryTree = ref<any[]>([])
+const currentPath = ref('/')
+const selectedPath = ref('')
+const viewMode = ref<'tree' | 'list'>('tree')
+const sortField = ref('name')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+const showPreview = ref(false)
+const previewFile = ref<any>(null)
 
-    const formatDate = (timestamp) => {
-      const date = new Date(timestamp * 1000);
-      return date.toLocaleString();
-    };
+const userStore = useUserStore()
 
-    // Initial load of files
-    refreshFiles();
+// Computed properties
+const sortedFiles = computed(() => {
+  const sorted = [...files.value].sort((a, b) => {
+    let aVal = a[sortField.value]
+    let bVal = b[sortField.value]
 
-    return {
-      files,
-      refreshFiles,
-      uploadFile,
-      viewFile,
-      deleteFile,
-      formatSize,
-      formatDate
-    };
+    // Handle different sort fields
+    if (sortField.value === 'size') {
+      aVal = a.size || 0
+      bVal = b.size || 0
+    } else if (sortField.value === 'modified') {
+      aVal = new Date(a.last_modified || 0)
+      bVal = new Date(b.last_modified || 0)
+    } else if (sortField.value === 'type') {
+      aVal = a.is_dir ? 'Directory' : getFileType(a.name)
+      bVal = b.is_dir ? 'Directory' : getFileType(b.name)
+    }
+
+    // Sort directories first
+    if (a.is_dir && !b.is_dir) return -1
+    if (!a.is_dir && b.is_dir) return 1
+
+    // Then sort by field
+    if (aVal < bVal) return sortOrder.value === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortOrder.value === 'asc' ? 1 : -1
+    return 0
+  })
+
+  return sorted
+})
+
+// Methods
+const { execute: refreshFiles, loading: isRefreshingFiles } = useAsyncHandler(
+  async () => {
+    // ApiClient.get() returns parsed JSON directly, not a Response object
+    // Use type assertion since ApiClient is JavaScript
+    const data = await apiClient.get(`/api/files/list?path=${encodeURIComponent(currentPath.value)}`) as any
+    files.value = (data as any).files || []
+
+    if (viewMode.value === 'tree') {
+      await loadDirectoryTree()
+    }
+  },
+  {
+    onError: () => {
+      files.value = []
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
   }
-};
+)
+
+const { execute: loadDirectoryTree, loading: isLoadingTree } = useAsyncHandler(
+  async () => {
+    // ApiClient.get() returns parsed JSON directly, not a Response object
+    // Use type assertion since ApiClient is JavaScript
+    const data = await apiClient.get('/api/files/tree') as any
+    directoryTree.value = (data as any).tree || []
+  },
+  {
+    onError: () => {
+      directoryTree.value = []
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
+
+const navigateToPath = (path: string) => {
+  const previousPath = currentPath.value
+  currentPath.value = path
+  selectedPath.value = path
+  refreshFiles()
+
+  // Issue #608: Log navigation activity
+  if (props.chatContext) {
+    logFileActivity('navigate', path, {
+      fromPath: previousPath,
+      toPath: path
+    })
+  }
+}
+
+const toggleView = () => {
+  viewMode.value = viewMode.value === 'tree' ? 'list' : 'tree'
+  if (viewMode.value === 'tree') {
+    loadDirectoryTree()
+  }
+}
+
+const sortBy = (field: string) => {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
+const triggerFileUpload = () => {
+  fileUploadRef.value?.triggerFileSelect()
+}
+
+const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
+  async (fileList: FileList) => {
+    const formData = new FormData()
+
+    Array.from(fileList).forEach((file) => {
+      formData.append('files', file)
+    })
+
+    formData.append('path', currentPath.value)
+
+    await apiClient.post('/api/files/upload', formData)
+    await refreshFiles()
+
+    // Issue #608: Log file upload activity
+    if (props.chatContext) {
+      const fileNames = Array.from(fileList).map(f => f.name).join(', ')
+      const totalSize = Array.from(fileList).reduce((sum, f) => sum + f.size, 0)
+      logFileActivity('upload', currentPath.value, {
+        fileNames,
+        fileCount: fileList.length,
+        totalSize
+      })
+    }
+  },
+  {
+    onError: () => {
+      alert('Failed to upload files. Please check file size limits and format requirements, then try again.')
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
+
+const handleFileSelected = async (fileList: FileList) => {
+  await uploadFiles(fileList)
+}
+
+const { execute: viewFile, loading: isViewingFile } = useAsyncHandler(
+  async (file: any) => {
+    // ApiClient.get() returns parsed JSON directly, not a Response object
+    // Use type assertion since ApiClient is JavaScript
+    const data = await apiClient.get(`/api/files/preview?path=${encodeURIComponent(file.path)}`) as any
+    previewFile.value = {
+      name: file.name,
+      type: (data as any).type,
+      url: (data as any).url,
+      content: (data as any).content,
+      fileType: getFileType(file.name),
+      size: file.size
+    }
+    showPreview.value = true
+
+    // Issue #608: Log file view activity
+    if (props.chatContext) {
+      logFileActivity('view', file.path, {
+        fileName: file.name,
+        fileType: getFileType(file.name),
+        size: file.size
+      })
+    }
+  },
+  {
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
+
+const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
+  async (file: any) => {
+    const itemType = file.is_dir ? 'folder' : 'file'
+    await apiClient.delete(`/api/files/delete?path=${encodeURIComponent(file.path)}`)
+    await refreshFiles()
+
+    // Issue #608: Log file/folder delete activity
+    if (props.chatContext) {
+      logFileActivity('delete', file.path, {
+        fileName: file.name,
+        isDir: file.is_dir,
+        itemType
+      })
+    }
+    return itemType
+  },
+  {
+    onError: () => {
+      alert(`Failed to delete item. Please try again.`)
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
+
+const deleteFile = async (file: any) => {
+  const message = file.is_dir
+    ? `Are you sure you want to delete the folder "${file.name}" and all its contents?`
+    : `Are you sure you want to delete "${file.name}"?`
+
+  if (confirm(message)) {
+    await performDelete(file)
+  }
+}
+
+const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
+  async (file: any, newName: string) => {
+    const formData = new FormData()
+    formData.append('path', file.path)
+    formData.append('new_name', newName)
+
+    await apiClient.post('/api/files/rename', formData)
+    await refreshFiles()
+
+    // Issue #608: Log file/folder rename activity
+    if (props.chatContext) {
+      logFileActivity('rename', file.path, {
+        oldName: file.name,
+        newName,
+        isDir: file.is_dir
+      })
+    }
+  },
+  {
+    onError: () => {
+      alert(`Failed to rename item. Please try again.`)
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
+
+const renameFile = async (file: any) => {
+  const itemType = file.is_dir ? 'folder' : 'file'
+  const newName = prompt(`Enter new name for ${itemType} "${file.name}":`, file.name)
+
+  if (newName && newName !== file.name) {
+    await performRename(file, newName)
+  }
+}
+
+const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHandler(
+  async (folderName: string) => {
+    const formData = new FormData()
+    formData.append('path', currentPath.value)
+    formData.append('name', folderName)
+
+    await apiClient.post('/api/files/create_directory', formData)
+    await refreshFiles()
+
+    // Issue #608: Log folder creation activity
+    if (props.chatContext) {
+      logFileActivity('create_folder', `${currentPath.value}/${folderName}`, {
+        folderName,
+        parentPath: currentPath.value
+      })
+    }
+  },
+  {
+    onError: () => {
+      alert('Failed to create folder. Please try again.')
+    },
+    logErrors: true,
+    errorPrefix: '[FileBrowser]'
+  }
+)
+
+const createNewFolder = async () => {
+  const folderName = prompt('Enter new folder name:')
+
+  if (folderName) {
+    await performCreateFolder(folderName)
+  }
+}
+
+const closePreview = () => {
+  showPreview.value = false
+  previewFile.value = null
+}
+
+const downloadPreviewFile = (file: any) => {
+  if (file.url) {
+    const a = document.createElement('a')
+    a.href = file.url
+    a.download = file.name
+    a.click()
+  }
+}
+
+const toggleNode = (item: any) => {
+  if (item.is_dir) {
+    item.expanded = !item.expanded
+    selectedPath.value = item.path
+    navigateToPath(item.path)
+  }
+}
+
+const expandAll = () => {
+  const expandNodeRecursively = (nodes: any[]) => {
+    nodes.forEach(node => {
+      if (node.is_dir) {
+        node.expanded = true
+        if (node.children) {
+          expandNodeRecursively(node.children)
+        }
+      }
+    })
+  }
+  expandNodeRecursively(directoryTree.value)
+}
+
+const collapseAll = () => {
+  const collapseNodeRecursively = (nodes: any[]) => {
+    nodes.forEach(node => {
+      if (node.is_dir) {
+        node.expanded = false
+        if (node.children) {
+          collapseNodeRecursively(node.children)
+        }
+      }
+    })
+  }
+  collapseNodeRecursively(directoryTree.value)
+}
+
+// Helper methods
+const getFileType = (filename: string): string => {
+  const extension = filename.split('.').pop()?.toLowerCase()
+  if (!extension) return 'Unknown'
+
+  const typeMap: Record<string, string> = {
+    txt: 'Text',
+    md: 'Markdown',
+    js: 'JavaScript',
+    ts: 'TypeScript',
+    html: 'HTML',
+    css: 'CSS',
+    vue: 'Vue Component',
+    json: 'JSON',
+    jpg: 'JPEG Image',
+    jpeg: 'JPEG Image',
+    png: 'PNG Image',
+    gif: 'GIF Image',
+    svg: 'SVG Image',
+    pdf: 'PDF Document',
+    zip: 'ZIP Archive',
+    tar: 'TAR Archive',
+    gz: 'GZ Archive'
+  }
+
+  return typeMap[extension] || extension.toUpperCase() + ' File'
+}
+
+// Lifecycle
+onMounted(() => {
+  refreshFiles()
+})
 </script>
 
 <style scoped>
 .file-browser {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: 15px;
+  @apply h-full flex flex-col bg-gray-50 p-6;
+}
+
+.file-content-container {
+  @apply flex-1 flex flex-col min-h-0;
+}
+
+.tree-view {
+  @apply flex gap-6 h-full;
+}
+
+.files-panel {
+  @apply flex-1 bg-white border border-gray-200 rounded-lg;
+}
+
+.files-header {
+  @apply p-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-4;
+}
+
+.files-header h3 {
+  @apply text-lg font-semibold text-gray-900 flex items-center gap-2 flex-shrink-0;
+}
+
+.file-upload-inline {
+  @apply flex-1 min-w-0;
+}
+
+/* Style FileUpload component when used inline */
+.file-upload-inline :deep(.file-upload-section) {
+  @apply mb-0 p-0 border border-gray-300 rounded-md bg-white hover:border-gray-400;
+}
+
+.file-upload-inline :deep(.file-upload-inline-wrapper) {
+  @apply gap-1;
+}
+
+.file-upload-inline :deep(.file-input-label) {
+  @apply text-sm gap-1;
+}
+
+.file-upload-inline :deep(.visible-file-input) {
+  @apply text-sm min-w-[150px] py-0;
+}
+
+.file-actions-inline {
+  @apply flex gap-2 flex-shrink-0 ml-auto;
+}
+
+.file-actions-inline button {
+  @apply px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
+}
+
+.file-actions-inline button:hover {
+  @apply shadow-sm;
+}
+
+.file-actions-inline button i {
+  @apply text-sm;
+}
+
+.list-view {
+  @apply flex-1;
+}
+
+/* File Preview Modal Styles */
+.file-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  max-width: 90vw;
+  max-height: 90vh;
+  width: 800px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8f9fa;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+  word-break: break-all;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.modal-body {
+  flex: 1;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.file-browser h2 {
-  margin: 0 0 15px 0;
-  font-size: 20px;
+/* HTML Preview */
+.html-preview {
+  flex: 1;
+  display: flex;
+}
+
+.html-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Image Preview */
+.image-preview {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background-color: #f8f9fa;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Text/Code Preview */
+.text-preview, .json-preview {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.text-preview pre, .json-preview pre {
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.json-preview pre {
+  background-color: #f1f8ff;
+  border-color: #c8e1ff;
+}
+
+/* PDF Preview */
+.pdf-preview {
+  flex: 1;
+  display: flex;
+}
+
+.pdf-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* File Info */
+.file-info {
+  flex: 1;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background-color: #f8f9fa;
+}
+
+.file-info p {
+  margin: 8px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.file-info p strong {
   color: #007bff;
 }
 
-.file-actions {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.file-actions button {
+.download-btn {
+  margin-top: 20px;
+  padding: 10px 20px;
   background-color: #007bff;
   color: white;
   border: none;
-  padding: 8px 15px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  font-size: 16px;
+  transition: background-color 0.2s;
 }
 
-.file-actions button:hover {
+.download-btn:hover {
   background-color: #0056b3;
 }
 
-.file-list-container {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-}
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95vw;
+    height: 85vh;
+  }
 
-.file-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+  .modal-header {
+    padding: 12px 16px;
+  }
 
-.file-table th {
-  background-color: #f8f9fa;
-  padding: 10px;
-  text-align: left;
-  border-bottom: 2px solid #dee2e6;
-  color: #495057;
-}
+  .modal-header h3 {
+    font-size: 16px;
+  }
 
-.file-table td {
-  padding: 10px;
-  border-bottom: 1px solid #dee2e6;
-}
+  .text-preview, .json-preview {
+    padding: 16px;
+  }
 
-.file-table tr:hover {
-  background-color: #f1f1f1;
-}
-
-.file-table button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-right: 5px;
-  transition: background-color 0.3s;
-}
-
-.file-table button:hover {
-  background-color: #0056b3;
-}
-
-.file-table button:last-child {
-  background-color: #dc3545;
-}
-
-.file-table button:last-child:hover {
-  background-color: #c82333;
-}
-
-.no-files {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
+  .text-preview pre, .json-preview pre {
+    font-size: 12px;
+    padding: 12px;
+  }
 }
 </style>

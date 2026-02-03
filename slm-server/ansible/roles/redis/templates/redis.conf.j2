@@ -1,0 +1,56 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+# Redis Configuration for AutoBot
+
+# Network
+bind {{ redis_bind }}
+{% if redis_tls_enabled | default(false) | bool and redis_tls_disable_plain_port | default(false) | bool %}
+port 0
+{% else %}
+port {{ redis_port }}
+{% endif %}
+protected-mode no
+
+# TLS Configuration (Issue #725: mTLS support)
+{% if redis_tls_enabled | default(false) | bool %}
+tls-port {{ redis_tls_port }}
+tls-cert-file {{ redis_tls_cert_dir }}/server-cert.pem
+tls-key-file {{ redis_tls_cert_dir }}/server-key.pem
+tls-ca-cert-file {{ redis_tls_cert_dir }}/ca-cert.pem
+tls-auth-clients {{ redis_tls_auth_clients | default('optional') }}
+{% endif %}
+
+{% if redis_password | length > 0 %}
+# Authentication
+requirepass {{ redis_password }}
+{% endif %}
+
+# Memory
+maxmemory {{ redis_maxmemory }}
+maxmemory-policy {{ redis_maxmemory_policy }}
+
+# Persistence
+dir {{ redis_data_dir }}
+{% if redis_save_enabled %}
+save 900 1
+save 300 10
+save 60 10000
+{% else %}
+save ""
+{% endif %}
+
+{% if redis_appendonly %}
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
+{% endif %}
+
+# Logging
+loglevel notice
+logfile /var/log/redis/redis-server.log
+
+# General
+daemonize no
+supervised systemd
+pidfile /run/redis/redis-server.pid

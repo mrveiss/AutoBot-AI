@@ -1,834 +1,971 @@
 <template>
-  <div class="settings-panel">
-    <h2>Settings</h2>
-    <div class="settings-tabs">
-      <button 
-        v-for="tab in tabs" 
-        :key="tab.id"
-        :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
-        {{ tab.label }}
+  <ErrorBoundary fallback="Settings panel failed to load.">
+<div class="settings-panel-layout">
+  <!-- Sidebar Navigation -->
+  <SettingsTabNavigation
+    :hasUnsavedChanges="hasUnsavedChanges"
+    :tabs="tabs"
+  />
+
+  <!-- Main Content -->
+  <main class="settings-content">
+    <!-- Loading indicator -->
+    <div v-if="settingsLoadingStatus === 'loading'" class="settings-loading">
+      <div class="loading-spinner"></div>
+      <p>Loading settings...</p>
+    </div>
+
+    <!-- Settings status message -->
+    <div v-if="settingsLoadingStatus === 'offline'" class="settings-status offline">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>Backend offline - using cached settings</span>
+    </div>
+
+    <!-- Router View for Settings Sub-routes -->
+    <div class="settings-content-inner">
+      <router-view
+        v-if="isSettingsLoaded"
+        :settings="settings"
+        :isSettingsLoaded="isSettingsLoaded"
+        :healthStatus="healthStatus"
+        :cacheConfig="cacheConfig"
+        :cacheActivity="cacheActivity"
+        :cacheStats="cacheStats"
+        :isSaving="isSaving"
+        :isClearing="isClearing"
+        :cacheApiAvailable="cacheApiAvailable"
+        :activeBackendSubTab="activeBackendSubTab"
+        @setting-changed="handleSettingChanged"
+        @change="markAsChanged"
+        @subtab-changed="activeBackendSubTab = $event"
+        @cache-config-changed="updateCacheConfig"
+        @save-cache-config="saveCacheConfig"
+        @refresh-cache-activity="refreshCacheActivity"
+        @refresh-cache-stats="refreshCacheStats"
+        @clear-cache="clearCache"
+        @clear-redis-cache="clearRedisCache"
+        @clear-cache-type="clearCacheType"
+        @warmup-caches="warmupCaches"
+        @prompt-selected="selectPrompt"
+        @edited-content-changed="updatePromptEditedContent"
+        @selected-prompt-cleared="clearSelectedPrompt"
+        @load-prompts="loadPrompts"
+        @save-prompt="savePrompt"
+        @revert-prompt-to-default="revertPromptToDefault"
+      />
+    </div>
+
+    <!-- Save Settings Button -->
+    <div v-if="isSettingsLoaded && hasUnsavedChanges" class="settings-actions">
+      <button @click="saveSettings" :disabled="isSaving" class="save-settings-btn">
+        <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+        {{ isSaving ? 'Saving...' : 'Save Settings' }}
+      </button>
+      <button @click="discardChanges" :disabled="isSaving" class="discard-btn">
+        <i class="fas fa-undo"></i>
+        Discard Changes
       </button>
     </div>
-    <div class="settings-content">
-      <!-- Chat Settings -->
-      <div v-if="activeTab === 'chat'" class="settings-section">
-        <h3>Chat Settings</h3>
-        <div class="setting-item">
-          <label>Auto Scroll to Bottom</label>
-          <input type="checkbox" v-model="settings.chat.auto_scroll" />
-        </div>
-        <div class="setting-item">
-          <label>Max Messages</label>
-          <input type="number" v-model="settings.chat.max_messages" min="10" max="1000" />
-        </div>
-        <div class="setting-item">
-          <label>Message Retention (Days)</label>
-          <input type="number" v-model="settings.chat.message_retention_days" min="1" max="365" />
-        </div>
-      </div>
-
-      <!-- Backend Settings -->
-      <div v-if="activeTab === 'backend'" class="settings-section">
-        <div class="sub-tabs">
-          <button 
-            :class="{ active: activeBackendSubTab === 'general' }"
-            @click="activeBackendSubTab = 'general'"
-          >
-            General
-          </button>
-          <button 
-            :class="{ active: activeBackendSubTab === 'llm' }"
-            @click="activeBackendSubTab = 'llm'"
-          >
-            LLM
-          </button>
-        </div>
-        <div v-if="activeBackendSubTab === 'general'" class="sub-tab-content">
-          <h3>Backend General Settings</h3>
-          <div class="setting-item">
-            <label>API Endpoint</label>
-            <input type="text" v-model="settings.backend.api_endpoint" />
-          </div>
-          <div class="setting-item">
-            <label>Server Host</label>
-            <input type="text" v-model="settings.backend.server_host" />
-          </div>
-          <div class="setting-item">
-            <label>Server Port</label>
-            <input type="number" v-model="settings.backend.server_port" min="1" max="65535" />
-          </div>
-          <div class="setting-item">
-            <label>Chat Data Directory</label>
-            <input type="text" v-model="settings.backend.chat_data_dir" />
-          </div>
-          <div class="setting-item">
-            <label>CORS Origins (comma separated)</label>
-            <input type="text" v-model="corsOriginsString" />
-          </div>
-        </div>
-        <div v-if="activeBackendSubTab === 'llm'" class="sub-tab-content">
-          <h3>LLM Settings</h3>
-          <div class="setting-item">
-            <label>Ollama Endpoint</label>
-            <input type="text" v-model="settings.backend.ollama_endpoint" />
-          </div>
-          <div class="setting-item">
-            <label>Model</label>
-            <input type="text" v-model="settings.backend.ollama_model" />
-          </div>
-          <div class="setting-item">
-            <label>Timeout (seconds)</label>
-            <input type="number" v-model="settings.backend.timeout" min="10" max="300" />
-          </div>
-          <div class="setting-item">
-            <label>Max Retries</label>
-            <input type="number" v-model="settings.backend.max_retries" min="1" max="10" />
-          </div>
-          <div class="setting-item">
-            <label>Enable Streaming</label>
-            <input type="checkbox" v-model="settings.backend.streaming" />
-          </div>
-        </div>
-      </div>
-
-      <!-- UI Settings -->
-      <div v-if="activeTab === 'ui'" class="settings-section">
-        <h3>UI Settings</h3>
-        <div class="setting-item">
-          <label>Theme</label>
-          <select v-model="settings.ui.theme">
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-        <div class="setting-item">
-          <label>Font Size</label>
-          <select v-model="settings.ui.font_size">
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
-        </div>
-        <div class="setting-item">
-          <label>Language</label>
-          <select v-model="settings.ui.language">
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-          </select>
-        </div>
-        <div class="setting-item">
-          <label>Enable Animations</label>
-          <input type="checkbox" v-model="settings.ui.animations" />
-        </div>
-        <div class="setting-item">
-          <label>Vue Developer Mode</label>
-          <input type="checkbox" v-model="settings.ui.developer_mode" />
-        </div>
-      </div>
-
-      <!-- Security Settings -->
-      <div v-if="activeTab === 'security'" class="settings-section">
-        <h3>Security Settings</h3>
-        <div class="setting-item">
-          <label>Enable Encryption</label>
-          <input type="checkbox" v-model="settings.security.enable_encryption" />
-        </div>
-        <div class="setting-item">
-          <label>Session Timeout (Minutes)</label>
-          <input type="number" v-model="settings.security.session_timeout_minutes" min="1" max="1440" />
-        </div>
-      </div>
-
-      <!-- Logging Settings -->
-      <div v-if="activeTab === 'logging'" class="settings-section">
-        <h3>Logging Settings</h3>
-        <div class="setting-item">
-          <label>Log Level</label>
-          <select v-model="settings.logging.log_level">
-            <option value="debug">Debug</option>
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="error">Error</option>
-          </select>
-        </div>
-        <div class="setting-item">
-          <label>Log to File</label>
-          <input type="checkbox" v-model="settings.logging.log_to_file" />
-        </div>
-        <div class="setting-item">
-          <label>Log File Path</label>
-          <input type="text" v-model="settings.logging.log_file_path" :disabled="!settings.logging.log_to_file" />
-        </div>
-      </div>
-
-      <!-- Knowledge Base Settings -->
-      <div v-if="activeTab === 'knowledgeBase'" class="settings-section">
-        <h3>Knowledge Base</h3>
-        <div class="setting-item">
-          <label>Enable Knowledge Base</label>
-          <input type="checkbox" v-model="settings.knowledge_base.enabled" />
-        </div>
-        <div class="setting-item">
-          <label>Update Frequency (Days)</label>
-          <input type="number" v-model="settings.knowledge_base.update_frequency_days" min="1" max="30" :disabled="!settings.knowledge_base.enabled" />
-        </div>
-      </div>
-
-      <!-- Voice Interface Settings -->
-      <div v-if="activeTab === 'voiceInterface'" class="settings-section">
-        <h3>Voice Interface</h3>
-        <div class="setting-item">
-          <label>Enable Voice Interface</label>
-          <input type="checkbox" v-model="settings.voice_interface.enabled" />
-        </div>
-        <div class="setting-item">
-          <label>Voice</label>
-          <select v-model="settings.voice_interface.voice" :disabled="!settings.voice_interface.enabled">
-            <option value="default">Default</option>
-            <option value="male1">Male 1</option>
-            <option value="female1">Female 1</option>
-          </select>
-        </div>
-        <div class="setting-item">
-          <label>Speech Rate</label>
-          <input type="number" v-model="settings.voice_interface.speech_rate" min="0.5" max="2.0" step="0.1" :disabled="!settings.voice_interface.enabled" />
-        </div>
-      </div>
-      
-      <!-- System Prompts Settings -->
-      <div v-if="activeTab === 'prompts'" class="settings-section">
-        <h3>System Prompts</h3>
-        <div class="prompts-container">
-          <div class="prompts-list">
-            <div v-for="prompt in settings.prompts.list" :key="prompt.id" class="prompt-item" :class="{ 'active': settings.prompts.selectedPrompt && settings.prompts.selectedPrompt.id === prompt.id }" @click="selectPrompt(prompt)">
-              <div class="prompt-name">{{ prompt.name || prompt.id }}</div>
-              <div class="prompt-type">{{ prompt.type || 'Unknown Type' }}</div>
-            </div>
-            <div v-if="settings.prompts.list.length === 0" class="no-prompts">No prompts available. Please check backend connection.</div>
-          </div>
-          <div class="prompt-editor" v-if="settings.prompts.selectedPrompt">
-            <h4>Editing: {{ settings.prompts.selectedPrompt.name || settings.prompts.selectedPrompt.id }}</h4>
-            <textarea v-model="settings.prompts.editedContent" rows="10" placeholder="Edit prompt content here..."></textarea>
-            <div class="editor-actions">
-              <button @click="savePrompt">Save Changes</button>
-              <button @click="revertPromptToDefault(settings.prompts.selectedPrompt.id)">Revert to Default</button>
-              <button @click="settings.prompts.selectedPrompt = null">Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="settings-actions">
-      <button @click="saveSettings">Save Settings</button>
-    </div>
-  </div>
+  </main>
+</div>
+  </ErrorBoundary>
 </template>
 
-<script>
-import { ref, onMounted, watch, computed } from 'vue';
+<script setup lang="ts">
+import { ref, reactive, onMounted, provide } from 'vue'
+import axios from 'axios'
+import { createLogger } from '@/utils/debugUtils'
 
-export default {
-  name: 'SettingsPanel',
-  setup() {
-    // Define tabs for settings organization
-    const tabs = [
-      { id: 'chat', label: 'Chat' },
-      { id: 'backend', label: 'Backend' },
-      { id: 'ui', label: 'UI' },
-      { id: 'security', label: 'Security' },
-      { id: 'logging', label: 'Logging' },
-      { id: 'knowledgeBase', label: 'Knowledge Base' },
-      { id: 'voiceInterface', label: 'Voice Interface' },
-      { id: 'prompts', label: 'System Prompts' }
-    ];
-    const activeTab = ref('chat');
-    const activeBackendSubTab = ref('general');
+const logger = createLogger('SettingsPanel')
 
-    // Settings structure to match a comprehensive config file
-    const settings = ref({
-      message_display: {
-        show_thoughts: true,
-        show_json: false,
-        show_utility: false,
-        show_planning: true,
-        show_debug: false
-      },
-      chat: {
-        auto_scroll: true,
-        max_messages: 100,
-        message_retention_days: 30
-      },
-      backend: {
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434/api/generate',
-        ollama_model: 'llama2',
-        server_host: '0.0.0.0',
-        server_port: 8001,
-        chat_data_dir: 'data/chats',
-        cors_origins: [
-          'http://localhost',
-          'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'http://localhost:8080',
-          'http://127.0.0.1:8080'
-        ],
-        timeout: 60,
-        max_retries: 3,
-        streaming: false
-      },
-      ui: {
-        theme: 'light',
-        font_size: 'medium',
-        language: 'en',
-        animations: true,
-        developer_mode: false
-      },
-      security: {
-        enable_encryption: false,
-        session_timeout_minutes: 30
-      },
-      logging: {
-        log_level: 'info',
-        log_to_file: false,
-        log_file_path: '/var/log/autobot.log'
-      },
-      knowledge_base: {
-        enabled: true,
-        update_frequency_days: 7
-      },
-      voice_interface: {
-        enabled: false,
-        voice: 'default',
-        speech_rate: 1.0
-      },
-      prompts: {
-        list: [],
-        selectedPrompt: null,
-        editedContent: '',
-        defaults: {}
+// Import error handling composables
+import { useAsyncHandler } from '../composables/useErrorHandler'
+import { useToast } from '../composables/useToast'
+
+// Import sub-components
+import ErrorBoundary from './ErrorBoundary.vue'
+import SettingsTabNavigation from './settings/SettingsTabNavigation.vue'
+
+// Import services and types
+import cacheService from '../services/CacheService'
+import {
+  createDefaultSettings,
+  createDefaultCacheConfig,
+  createCacheActivityItem
+} from '../types/settings'
+import type {
+  SettingsStructure,
+  SettingsTab,
+  ChatSettings as ChatSettingsType,
+  UISettings as UISettingsType,
+  LoggingSettings as LoggingSettingsType,
+  PromptsSettings as PromptsSettingsType,
+  DeveloperSettings as DeveloperSettingsType,
+  BackendSettings as BackendSettingsType,
+  HealthStatus,
+  CacheActivityItem,
+  CacheStats,
+  CacheConfig,
+  Prompt
+} from '../types/settings'
+
+// Initialize settings with proper structure to prevent undefined props
+const getDefaultSettings = (): SettingsStructure => createDefaultSettings()
+
+// Reactive state
+const settings = ref<SettingsStructure>(getDefaultSettings())
+const hasUnsavedChanges = ref<boolean>(false)
+const isSettingsLoaded = ref<boolean>(false)
+const settingsLoadingStatus = ref<'loading' | 'loaded' | 'offline'>('loading')
+const isSaving = ref<boolean>(false)
+const isClearing = ref<boolean>(false)
+const healthStatus = ref<HealthStatus | null>(null)
+const cacheApiAvailable = ref<boolean>(false)
+
+const tabs = ref<SettingsTab[]>([
+  { id: 'user', label: 'User Management' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'backend', label: 'Backend' },
+  { id: 'optimization', label: 'LLM Optimization' },
+  { id: 'ui', label: 'UI' },
+  { id: 'logging', label: 'Logging' },
+  { id: 'log-forwarding', label: 'Log Forwarding' },
+  { id: 'cache', label: 'Cache' },
+  { id: 'prompts', label: 'Prompts' },
+  { id: 'infrastructure', label: 'Infrastructure' },
+  { id: 'developer', label: 'Developer' },
+  { id: 'feature-flags', label: 'Feature Flags' }
+])
+const activeBackendSubTab = ref('agents')
+
+// Cache state
+const cacheConfig = reactive<CacheConfig>(createDefaultCacheConfig())
+const cacheActivity = ref<CacheActivityItem[]>([])
+const cacheStats = ref<CacheStats | null>(null)
+
+// Toast notifications
+const { showToast } = useToast()
+
+// Notification helper for useAsyncHandler
+const notify = (message: string, type: 'success' | 'error' | 'info') => {
+  showToast(message, type, type === 'error' ? 5000 : 3000)
+}
+
+// Helper functions
+const markAsChanged = () => {
+  hasUnsavedChanges.value = true
+}
+
+// Generic setting change handler that routes to appropriate update function
+const handleSettingChanged = (key: string, value: any) => {
+  const [category, ...rest] = key.split('.')
+  const subKey = rest.join('.')
+
+  switch (category) {
+    case 'chat':
+      updateChatSetting(subKey || key, value)
+      break
+    case 'user':
+      updateUserSetting(subKey || key, value)
+      break
+    case 'backend':
+      updateBackendSetting(subKey || key, value)
+      break
+    case 'ui':
+      updateUISetting(subKey || key, value)
+      break
+    case 'logging':
+      updateLoggingSetting(subKey || key, value)
+      break
+    case 'developer':
+      if (subKey.startsWith('rum.')) {
+        updateRUMSetting(subKey.replace('rum.', ''), value)
+      } else {
+        updateDeveloperSetting(subKey || key, value)
       }
-    });
-
-    // Computed property for CORS origins as a string for input field
-    const corsOriginsString = computed({
-      get() {
-        return settings.value.backend.cors_origins.join(', ');
-      },
-      set(value) {
-        settings.value.backend.cors_origins = value.split(',').map(origin => origin.trim()).filter(origin => origin);
-      }
-    });
-
-    onMounted(async () => {
-      // Load settings from backend first, then local storage
-      await loadSettingsFromBackend();
-      const savedSettings = localStorage.getItem('chat_settings');
-      if (savedSettings) {
-        try {
-          const parsedSettings = JSON.parse(savedSettings);
-          // Merge with defaults to ensure all properties exist, prioritizing backend then local storage
-          settings.value = deepMerge(deepMerge(defaultSettings(), settings.value), parsedSettings);
-        } catch (e) {
-          console.error('Error parsing saved settings:', e);
-        }
-      }
-    });
-
-    // Function to deep merge objects
-    const deepMerge = (target, source) => {
-      const output = { ...target };
-      for (const key in source) {
-        if (source.hasOwnProperty(key)) {
-          if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
-            output[key] = deepMerge(target[key] || {}, source[key]);
-          } else {
-            output[key] = source[key];
-          }
-        }
-      }
-      return output;
-    };
-
-    // Default settings structure
-    const defaultSettings = () => ({
-      message_display: {
-        show_thoughts: true,
-        show_json: false,
-        show_utility: false,
-        show_planning: true,
-        show_debug: true  // Enabled by default for developer mode
-      },
-      chat: {
-        auto_scroll: true,
-        max_messages: 100,
-        message_retention_days: 30
-      },
-      backend: {
-        api_endpoint: 'http://localhost:8001',
-        ollama_endpoint: 'http://localhost:11434/api/generate',
-        ollama_model: 'llama2',
-        server_host: '0.0.0.0',
-        server_port: 8001,
-        chat_data_dir: 'data/chats',
-        cors_origins: [
-          'http://localhost',
-          'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'http://localhost:8080',
-          'http://127.0.0.1:8080'
-        ],
-        timeout: 60,
-        max_retries: 3,
-        streaming: false
-      },
-      ui: {
-        theme: 'light',
-        font_size: 'medium',
-        language: 'en',
-        animations: true,
-        developer_mode: false
-      },
-      security: {
-        enable_encryption: false,
-        session_timeout_minutes: 30
-      },
-      logging: {
-        log_level: 'debug',  // Set to debug by default for developer mode
-        log_to_file: false,
-        log_file_path: '/var/log/autobot.log'
-      },
-      knowledge_base: {
-        enabled: true,
-        update_frequency_days: 7
-      },
-      voice_interface: {
-        enabled: false,
-        voice: 'default',
-        speech_rate: 1.0
-      },
-      prompts: {
-        list: [],
-        selectedPrompt: null,
-        editedContent: '',
-        defaults: {}
-      }
-    });
-
-    // Function to load settings from backend
-    const loadSettingsFromBackend = async () => {
-      try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`);
-        if (response.ok) {
-          const backendSettings = await response.json();
-          // Merge backend settings with local defaults to ensure all properties exist
-          settings.value = deepMerge(defaultSettings(), backendSettings);
-          // Save to local storage as well
-          localStorage.setItem('chat_settings', JSON.stringify(settings.value));
-        } else {
-          console.error('Failed to load settings from backend:', response.statusText);
-        }
-      } catch (error) {
-        console.error('Error loading settings from backend:', error);
-      }
-      // Load prompts after settings are loaded
-      await loadPrompts();
-    };
-
-    // Function to save settings to local storage and backend
-    const saveSettings = async () => {
-      localStorage.setItem('chat_settings', JSON.stringify(settings.value));
-      try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/settings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ settings: settings.value })
-        });
-        if (!response.ok) {
-          console.error('Failed to save settings to backend:', response.statusText);
-        } else {
-          console.log('Settings saved successfully to backend.');
-        }
-      } catch (error) {
-        console.error('Error saving settings to backend:', error);
-      }
-    };
-
-    // Watch for changes in settings and save them to local storage
-    watch(settings, () => {
-      localStorage.setItem('chat_settings', JSON.stringify(settings.value));
-    }, { deep: true });
-
-    // Function to load prompts from backend
-    const loadPrompts = async () => {
-      try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts`);
-        if (response.ok) {
-          const promptsData = await response.json();
-          settings.value.prompts.list = promptsData.prompts || [];
-          settings.value.prompts.defaults = promptsData.defaults || {};
-        } else {
-          console.error('Failed to load prompts from backend:', response.statusText);
-        }
-      } catch (error) {
-        console.error('Error loading prompts from backend:', error);
-      }
-    };
-
-    // Function to select a prompt for editing
-    const selectPrompt = (prompt) => {
-      settings.value.prompts.selectedPrompt = prompt;
-      settings.value.prompts.editedContent = prompt.content || '';
-    };
-
-    // Function to save edited prompt content
-    const savePrompt = async () => {
-      if (!settings.value.prompts.selectedPrompt) return;
-      try {
-        const promptId = settings.value.prompts.selectedPrompt.id;
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ content: settings.value.prompts.editedContent })
-        });
-        if (response.ok) {
-          // Update the prompt in the list
-          const updatedPrompt = await response.json();
-          const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
-          if (index !== -1) {
-            settings.value.prompts.list[index] = updatedPrompt;
-          }
-          // Clear selection
-          settings.value.prompts.selectedPrompt = null;
-          settings.value.prompts.editedContent = '';
-        } else {
-          console.error('Failed to save prompt to backend:', response.statusText);
-        }
-      } catch (error) {
-        console.error('Error saving prompt to backend:', error);
-      }
-    };
-
-    // Function to revert a prompt to default
-    const revertPromptToDefault = async (promptId) => {
-      try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/prompts/${promptId}/revert`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          // Update the prompt in the list
-          const updatedPrompt = await response.json();
-          const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
-          if (index !== -1) {
-            settings.value.prompts.list[index] = updatedPrompt;
-          }
-          // If this prompt was selected, update the editor
-          if (settings.value.prompts.selectedPrompt && settings.value.prompts.selectedPrompt.id === promptId) {
-            settings.value.prompts.selectedPrompt = updatedPrompt;
-            settings.value.prompts.editedContent = updatedPrompt.content || '';
-          }
-        } else {
-          console.error('Failed to revert prompt to default:', response.statusText);
-        }
-      } catch (error) {
-        console.error('Error reverting prompt to default:', error);
-      }
-    };
-
-    return {
-      settings,
-      saveSettings,
-      tabs,
-      activeTab,
-      activeBackendSubTab,
-      corsOriginsString,
-      selectPrompt,
-      savePrompt,
-      revertPromptToDefault
-    };
+      break
+    case 'llm':
+      updateLLMSetting(subKey || key, value)
+      break
+    default:
+      // For settings without category prefix
+      markAsChanged()
   }
-};
+}
+
+const updateChatSetting = (key: string, value: any) => {
+  if (!settings.value.chat) {
+    settings.value.chat = {
+      auto_scroll: true,
+      max_messages: 100,
+      message_retention_days: 30
+    } as ChatSettingsType
+  }
+  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
+  const chatSettings = settings.value.chat as Record<string, any>
+  chatSettings[key] = value
+  markAsChanged()
+}
+
+const updateUserSetting = (key: string, value: any) => {
+  // Handle user management settings
+  markAsChanged()
+}
+
+const updateBackendSetting = (key: string, value: any) => {
+  if (!settings.value.backend) {
+    settings.value.backend = {} as BackendSettingsType
+  }
+  // Handle nested settings for memory and agents
+  if (key.includes('.')) {
+    const keys = key.split('.')
+    let obj: any = settings.value.backend
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!obj![keys[i]]) obj![keys[i]] = {}
+      obj = obj![keys[i]]
+    }
+    obj![keys[keys.length - 1]] = value
+  } else {
+    (settings.value.backend as any)[key] = value
+  }
+  markAsChanged()
+}
+
+const updateLLMSetting = (key: string, value: any) => {
+  if (!settings.value.backend) {
+    settings.value.backend = {} as BackendSettingsType
+  }
+  if (!settings.value.backend.llm) {
+    settings.value.backend.llm = {}
+  }
+  const keys = key.split('.')
+  let obj: any = settings.value.backend.llm
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!obj![keys[i]]) obj![keys[i]] = {}
+    obj = obj![keys[i]]
+  }
+  obj![keys[keys.length - 1]] = value
+  markAsChanged()
+}
+
+const updateUISetting = (key: string, value: any) => {
+  if (!settings.value.ui) {
+    settings.value.ui = {
+      theme: 'auto',
+      language: 'en',
+      show_timestamps: true,
+      show_status_bar: true,
+      auto_refresh_interval: 30
+    } as UISettingsType
+  }
+  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
+  const uiSettings = settings.value.ui as Record<string, any>
+  uiSettings[key] = value
+  markAsChanged()
+}
+
+const updateLoggingSetting = (key: string, value: any) => {
+  if (!settings.value.logging) {
+    settings.value.logging = {
+      level: 'info',
+      log_levels: ['debug', 'info', 'warn', 'error'],
+      console: true,
+      file: false,
+      max_file_size: 10,
+      log_requests: false,
+      log_sql: false
+    } as LoggingSettingsType
+  }
+  // Issue #156 Fix: Use Record<string, any> type assertion for dynamic property assignment
+  const loggingSettings = settings.value.logging as Record<string, any>
+  loggingSettings[key] = value
+  markAsChanged()
+}
+
+const updateDeveloperSetting = (key: string, value: any) => {
+  if (!settings.value.developer) {
+    settings.value.developer = {
+      enabled: false,
+      enhanced_errors: true,
+      endpoint_suggestions: true,
+      debug_logging: false,
+      rum: {
+        enabled: false,
+        error_tracking: true,
+        performance_monitoring: true,
+        interaction_tracking: false,
+        session_recording: false,
+        sample_rate: 100,
+        max_events_per_session: 1000
+      }
+    } as DeveloperSettingsType
+  }
+  (settings.value.developer as DeveloperSettingsType)[key as keyof DeveloperSettingsType] = value
+  markAsChanged()
+}
+
+const updateRUMSetting = (key: string, value: any) => {
+  if (!settings.value.developer) {
+    settings.value.developer = {
+      enabled: false,
+      enhanced_errors: true,
+      endpoint_suggestions: true,
+      debug_logging: false,
+      rum: {
+        enabled: false,
+        error_tracking: true,
+        performance_monitoring: true,
+        interaction_tracking: false,
+        session_recording: false,
+        sample_rate: 100,
+        max_events_per_session: 1000
+      }
+    } as DeveloperSettingsType
+  }
+  if (!settings.value.developer.rum) {
+    settings.value.developer.rum = {
+      enabled: false,
+      error_tracking: true,
+      performance_monitoring: true,
+      interaction_tracking: false,
+      session_recording: false,
+      sample_rate: 100,
+      max_events_per_session: 1000
+    }
+  }
+  (settings.value.developer.rum as any)[key] = value
+  markAsChanged()
+}
+
+const updateCacheConfig = (key: string, value: any) => {
+  (cacheConfig as any)[key] = value
+  markAsChanged()
+}
+
+const getCurrentLLMDisplay = (): string => {
+  const llmConfig = settings.value.backend?.llm
+  if (!llmConfig) return 'Not configured'
+
+  const providerType = llmConfig.provider_type || 'local'
+  if (providerType === 'local') {
+    const provider = llmConfig.local?.provider || 'ollama'
+    const model = llmConfig.local?.providers?.[provider]?.selected_model || 'Not selected'
+    return `${provider.toUpperCase()}: ${model}`
+  } else {
+    const provider = llmConfig.cloud?.provider || 'openai'
+    const model = llmConfig.cloud?.providers?.[provider]?.selected_model || 'Not selected'
+    return `${provider.toUpperCase()}: ${model}`
+  }
+}
+
+// Provide settings data for child components via router-view
+provide('settingsData', {
+  settings,
+  isSettingsLoaded,
+  healthStatus,
+  getCurrentLLMDisplay
+})
+
+// Add guard to prevent infinite loading loops
+let isLoadingSettings = false
+
+// Load settings on mount with error handling
+const loadSettings = async () => {
+  // Prevent concurrent loading calls that cause infinite loops
+  if (isLoadingSettings) {
+    return
+  }
+
+  isLoadingSettings = true
+  settingsLoadingStatus.value = 'loading'
+
+  const { execute: fetchSettings } = useAsyncHandler(
+    // Issue #552: Use trailing slash to match backend endpoint /api/settings/
+    async () => axios.get('/api/settings/'),
+    {
+      errorMessage: 'Failed to load settings',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        settings.value = {
+          ...getDefaultSettings(),
+          ...response.data
+        }
+        isSettingsLoaded.value = true
+        settingsLoadingStatus.value = 'loaded'
+        hasUnsavedChanges.value = false
+      },
+      onError: () => {
+        settingsLoadingStatus.value = 'offline'
+        // Load from cache if available
+        const cachedSettings = cacheService.get('settings')
+        if (cachedSettings) {
+          settings.value = {
+            ...getDefaultSettings(),
+            ...cachedSettings
+          }
+          isSettingsLoaded.value = true
+          notify('Using cached settings (backend offline)', 'info')
+        }
+      },
+      onFinally: () => {
+        isLoadingSettings = false
+      }
+    }
+  )
+
+  await fetchSettings()
+}
+
+const saveSettings = async () => {
+  isSaving.value = true
+
+  const { execute: postSettings } = useAsyncHandler(
+    // Issue #552: Use trailing slash to match backend endpoint /api/settings/
+    async () => axios.post('/api/settings/', settings.value),
+    {
+      errorMessage: 'Failed to save settings',
+      successMessage: 'Settings saved successfully',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: () => {
+        hasUnsavedChanges.value = false
+        // Cache the settings
+        cacheService.set('settings', settings.value, 3600)
+      },
+      onFinally: () => {
+        isSaving.value = false
+      }
+    }
+  )
+
+  await postSettings()
+}
+
+const discardChanges = () => {
+  hasUnsavedChanges.value = false
+  // Only reload if not already loading to prevent loops
+  if (!isLoadingSettings) {
+    loadSettings()
+  }
+}
+
+// Cache management functions with proper error handling
+const checkCacheApiAvailability = async () => {
+  const { execute: checkCache } = useAsyncHandler(
+    async () => axios.get('/api/cache/stats', { timeout: 3000 }),
+    {
+      logErrors: false, // Silent check - don't log errors for availability check
+      onSuccess: () => {
+        cacheApiAvailable.value = true
+      },
+      onError: () => {
+        cacheApiAvailable.value = false
+      }
+    }
+  )
+
+  await checkCache()
+}
+
+const saveCacheConfig = async () => {
+  if (!cacheApiAvailable.value) {
+    notify('Cache API not available', 'error')
+    return
+  }
+
+  isSaving.value = true
+
+  const { execute: postCacheConfig } = useAsyncHandler(
+    async () => axios.post('/api/cache/config', cacheConfig),
+    {
+      errorMessage: 'Failed to save cache configuration',
+      successMessage: 'Cache configuration saved',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: () => {
+        markAsChanged()
+      },
+      onFinally: () => {
+        isSaving.value = false
+      }
+    }
+  )
+
+  await postCacheConfig()
+}
+
+const refreshCacheActivity = async () => {
+  if (!cacheApiAvailable.value) {
+    cacheActivity.value = []
+    return
+  }
+
+  try {
+    // Note: There's no /api/cache/activity endpoint, creating fallback data
+    cacheActivity.value = [
+      createCacheActivityItem({
+        timestamp: new Date().toISOString(),
+        operation: 'cache_check',
+        key: 'settings',
+        result: 'hit',
+        duration_ms: 1.2
+      })
+    ]
+  } catch (error) {
+    logger.error('Failed to refresh cache activity:', error)
+    cacheActivity.value = []
+  }
+}
+
+const refreshCacheStats = async () => {
+  if (!cacheApiAvailable.value) {
+    cacheStats.value = {
+      status: 'unavailable',
+      message: 'Cache API not available in fast backend'
+    } as CacheStats
+    return
+  }
+
+  const { execute: getCacheStats } = useAsyncHandler(
+    async () => axios.get('/api/cache/stats'),
+    {
+      errorMessage: 'Failed to refresh cache statistics',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        cacheStats.value = response.data
+      },
+      onError: () => {
+        cacheStats.value = {
+          status: 'error',
+          message: 'Failed to load cache statistics'
+        } as CacheStats
+      }
+    }
+  )
+
+  await getCacheStats()
+}
+
+const clearCache = async (type: string) => {
+  if (!cacheApiAvailable.value) {
+    notify('Cache API not available', 'error')
+    return
+  }
+
+  isClearing.value = true
+
+  const { execute: postClearCache } = useAsyncHandler(
+    async () => axios.post(`/api/cache/clear/${type}`),
+    {
+      errorMessage: `Failed to clear ${type} cache`,
+      successMessage: `${type} cache cleared successfully`,
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postClearCache()
+}
+
+const clearRedisCache = async (database: string) => {
+  if (!cacheApiAvailable.value) {
+    notify('Cache API not available', 'error')
+    return
+  }
+
+  isClearing.value = true
+
+  const { execute: postClearRedis } = useAsyncHandler(
+    async () => axios.post(`/api/cache/redis/clear/${database}`),
+    {
+      errorMessage: `Failed to clear Redis ${database} database`,
+      successMessage: `Redis ${database} database cleared`,
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+        await refreshCacheActivity()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postClearRedis()
+}
+
+const clearCacheType = async (cacheType: string) => {
+  if (!cacheApiAvailable.value) {
+    notify('Cache API not available', 'error')
+    return
+  }
+
+  isClearing.value = true
+
+  const { execute: postClearCacheType } = useAsyncHandler(
+    async () => axios.post(`/api/cache/clear/${cacheType}`),
+    {
+      errorMessage: `Failed to clear ${cacheType} cache`,
+      successMessage: `${cacheType} cache cleared`,
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+        await refreshCacheActivity()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postClearCacheType()
+}
+
+const warmupCaches = async () => {
+  if (!cacheApiAvailable.value) {
+    notify('Cache API not available', 'error')
+    return
+  }
+
+  isClearing.value = true
+
+  const { execute: postWarmup } = useAsyncHandler(
+    async () => axios.post('/api/cache/warmup'),
+    {
+      errorMessage: 'Failed to warm up caches',
+      successMessage: 'Cache warmup completed',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        await refreshCacheStats()
+        await refreshCacheActivity()
+      },
+      onFinally: () => {
+        isClearing.value = false
+      }
+    }
+  )
+
+  await postWarmup()
+}
+
+// Prompt management functions
+const selectPrompt = (prompt: Prompt) => {
+  if (!settings.value.prompts) {
+    settings.value.prompts = {
+      list: [],
+      selectedPrompt: null,
+      editedContent: ''
+    } as PromptsSettingsType
+  }
+  settings.value.prompts.selectedPrompt = prompt
+  settings.value.prompts.editedContent = prompt.content || ''
+}
+
+const updatePromptEditedContent = (content: string) => {
+  if (!settings.value.prompts) {
+    settings.value.prompts = {
+      list: [],
+      selectedPrompt: null,
+      editedContent: ''
+    } as PromptsSettingsType
+  }
+  settings.value.prompts.editedContent = content
+}
+
+const clearSelectedPrompt = () => {
+  if (!settings.value.prompts) {
+    settings.value.prompts = {
+      list: [],
+      selectedPrompt: null,
+      editedContent: ''
+    } as PromptsSettingsType
+  }
+  settings.value.prompts.selectedPrompt = null
+  settings.value.prompts.editedContent = ''
+}
+
+const loadPrompts = async () => {
+  const { execute: getPrompts } = useAsyncHandler(
+    async () => axios.get('/api/prompts'),
+    {
+      errorMessage: 'Failed to load prompts',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        if (!settings.value.prompts) {
+          settings.value.prompts = {
+            list: [],
+            selectedPrompt: null,
+            editedContent: ''
+          } as PromptsSettingsType
+        }
+        settings.value.prompts.list = response.data
+      }
+    }
+  )
+
+  await getPrompts()
+}
+
+const savePrompt = async () => {
+  const prompt = settings.value.prompts?.selectedPrompt
+  if (!prompt || !settings.value.prompts) {
+    return
+  }
+
+  const { execute: putPrompt } = useAsyncHandler(
+    async () => axios.put(`/api/prompts/${prompt.id}`, {
+      content: settings.value.prompts!.editedContent
+    }),
+    {
+      errorMessage: 'Failed to save prompt',
+      successMessage: 'Prompt saved successfully',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        clearSelectedPrompt()
+        await loadPrompts()
+      }
+    }
+  )
+
+  await putPrompt()
+}
+
+const revertPromptToDefault = async (promptId: string) => {
+  const { execute: postRevert } = useAsyncHandler(
+    async () => axios.post(`/api/prompts/${promptId}/revert`),
+    {
+      errorMessage: 'Failed to revert prompt to default',
+      successMessage: 'Prompt reverted to default',
+      notify,
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: async () => {
+        clearSelectedPrompt()
+        await loadPrompts()
+      }
+    }
+  )
+
+  await postRevert()
+}
+
+// Load health status with corrected endpoint
+const loadHealthStatus = async () => {
+  // Try detailed health endpoint first
+  const { execute: getDetailedHealth } = useAsyncHandler(
+    async () => axios.get('/api/system/health/detailed'),
+    {
+      logErrors: true,
+      errorPrefix: '[SettingsPanel]',
+      onSuccess: (response) => {
+        healthStatus.value = response.data
+      },
+      onError: async () => {
+        // Fallback to basic health endpoint
+        const { execute: getBasicHealth } = useAsyncHandler(
+          async () => axios.get('/api/system/health'),
+          {
+            logErrors: true,
+            errorPrefix: '[SettingsPanel]',
+            onSuccess: (fallbackResponse) => {
+              healthStatus.value = {
+                basic_health: fallbackResponse.data,
+                detailed_available: false
+              } as HealthStatus
+            },
+            onError: () => {
+              healthStatus.value = {
+                status: 'unavailable',
+                message: 'Health endpoints not available'
+              } as HealthStatus
+            }
+          }
+        )
+
+        await getBasicHealth()
+      }
+    }
+  )
+
+  await getDetailedHealth()
+}
+
+onMounted(async () => {
+  // Load settings first
+  loadSettings()
+
+  // Check cache API availability
+  await checkCacheApiAvailability()
+
+  // Load health status
+  loadHealthStatus()
+
+  // Load cache data only if API is available
+  if (cacheApiAvailable.value) {
+    refreshCacheStats()
+    refreshCacheActivity()
+  } else {
+  }
+})
 </script>
 
 <style scoped>
-.settings-panel {
+/* Issue #704: Sidebar layout matching SecretsManager style */
+
+.settings-panel-layout {
   display: flex;
-  flex-direction: column;
   height: 100%;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  padding: clamp(10px, 1.5vw, 15px);
-  overflow: hidden;
-}
-
-.settings-panel h2 {
-  margin: 0 0 clamp(10px, 1.5vw, 15px) 0;
-  font-size: clamp(16px, 2vw, 20px);
-  color: #007bff;
-}
-
-.settings-tabs {
-  display: flex;
-  overflow-x: auto;
-  border-bottom: 1px solid #e9ecef;
-  margin-bottom: clamp(10px, 1.5vw, 15px);
-}
-
-.settings-tabs button {
-  background: none;
-  border: none;
-  padding: clamp(8px, 1vw, 12px) clamp(12px, 1.5vw, 16px);
-  cursor: pointer;
-  font-size: clamp(12px, 1.5vw, 14px);
-  color: #6c757d;
-  transition: all 0.3s;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-}
-
-.settings-tabs button.active {
-  color: #007bff;
-  border-bottom: 2px solid #007bff;
-}
-
-.settings-tabs button:hover:not(.active) {
-  color: #343a40;
-  background-color: rgba(0, 123, 255, 0.05);
+  min-height: 0;
+  background: var(--bg-primary);
 }
 
 .settings-content {
   flex: 1;
-  overflow-y: auto;
-  padding: clamp(5px, 1vw, 10px);
-  min-height: 0;
-}
-
-.prompts-container {
-  display: flex;
-  gap: clamp(10px, 1.5vw, 15px);
-  height: 400px;
-}
-
-.prompts-list {
-  flex: 1;
-  overflow-y: auto;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: clamp(5px, 0.8vw, 8px);
-}
-
-.prompt-item {
-  padding: clamp(8px, 1vw, 10px);
-  cursor: pointer;
-  border-radius: 3px;
-  margin-bottom: clamp(3px, 0.5vw, 5px);
-  transition: background-color 0.2s;
-}
-
-.prompt-item:hover {
-  background-color: #e9ecef;
-}
-
-.prompt-item.active {
-  background-color: #007bff;
-  color: white;
-}
-
-.prompt-name {
-  font-size: clamp(12px, 1.5vw, 14px);
-  font-weight: 500;
-}
-
-.prompt-type {
-  font-size: clamp(10px, 1.2vw, 12px);
-  opacity: 0.8;
-}
-
-.no-prompts {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: clamp(10px, 1.5vw, 15px);
-}
-
-.prompt-editor {
-  flex: 2;
   display: flex;
   flex-direction: column;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
-  padding: clamp(8px, 1vw, 10px);
+  overflow: hidden;
+  min-width: 0;
 }
 
-.prompt-editor h4 {
-  margin: 0 0 clamp(8px, 1vw, 10px) 0;
-  font-size: clamp(14px, 1.6vw, 16px);
-  color: #343a40;
-}
-
-.prompt-editor textarea {
+.settings-content-inner {
   flex: 1;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  padding: clamp(5px, 0.8vw, 8px);
-  font-size: clamp(12px, 1.4vw, 13px);
-  resize: none;
-  font-family: 'Courier New', Courier, monospace;
+  min-height: 0; /* Required for flex child to shrink and enable overflow */
+  overflow-y: auto;
+  padding: 24px;
 }
 
-.prompt-editor textarea:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.editor-actions {
+.settings-loading {
   display: flex;
-  justify-content: flex-end;
-  gap: clamp(5px, 0.8vw, 8px);
-  margin-top: clamp(8px, 1vw, 10px);
-}
-
-.editor-actions button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: clamp(5px, 0.6vw, 6px) clamp(10px, 1.2vw, 12px);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  font-size: clamp(12px, 1.4vw, 13px);
-}
-
-.editor-actions button:hover {
-  background-color: #0056b3;
-}
-
-.editor-actions button:nth-child(2) {
-  background-color: #6c757d;
-}
-
-.editor-actions button:nth-child(2):hover {
-  background-color: #5a6268;
-}
-
-.editor-actions button:nth-child(3) {
-  background-color: #dc3545;
-}
-
-.editor-actions button:nth-child(3):hover {
-  background-color: #c82333;
-}
-
-.settings-section {
-  margin-bottom: clamp(15px, 2vw, 20px);
-}
-
-.settings-section h3 {
-  margin: 0 0 clamp(8px, 1.2vw, 12px) 0;
-  font-size: clamp(14px, 1.8vw, 16px);
-  color: #343a40;
-  border-bottom: 1px solid #e9ecef;
-  padding-bottom: 5px;
-}
-
-.sub-tabs {
-  display: flex;
-  border-bottom: 1px solid #e9ecef;
-  margin-bottom: clamp(10px, 1.5vw, 15px);
-}
-
-.sub-tabs button {
-  background: none;
-  border: none;
-  padding: clamp(6px, 0.8vw, 8px) clamp(10px, 1.2vw, 12px);
-  cursor: pointer;
-  font-size: clamp(12px, 1.4vw, 13px);
-  color: #6c757d;
-  transition: all 0.3s;
-  border-bottom: 2px solid transparent;
-}
-
-.sub-tabs button.active {
-  color: #007bff;
-  border-bottom: 2px solid #007bff;
-}
-
-.sub-tabs button:hover:not(.active) {
-  color: #343a40;
-  background-color: rgba(0, 123, 255, 0.05);
-}
-
-.sub-tab-content {
-  padding: 0 clamp(5px, 0.5vw, 10px);
-}
-
-.setting-item {
-  display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: clamp(8px, 1.2vw, 12px);
-  font-size: clamp(12px, 1.5vw, 14px);
+  justify-content: center;
+  padding: var(--spacing-16) var(--spacing-5);
+  color: var(--text-secondary);
 }
 
-.setting-item label {
-  flex: 1;
-  font-weight: 500;
+.loading-spinner {
+  border: 3px solid var(--bg-tertiary);
+  border-top: 3px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--spacing-5);
 }
 
-.setting-item input[type="checkbox"],
-.setting-item input[type="radio"] {
-  margin: 0;
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-.setting-item input[type="text"],
-.setting-item input[type="number"],
-.setting-item select {
-  flex: 1;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  padding: clamp(4px, 0.6vw, 6px) clamp(8px, 1vw, 10px);
-  font-size: clamp(12px, 1.5vw, 14px);
+.settings-status {
+  padding: var(--spacing-4) var(--spacing-6);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  font-weight: var(--font-medium);
 }
 
-.setting-item input[type="text"]:focus,
-.setting-item input[type="number"]:focus,
-.setting-item select:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+.settings-status.offline {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+  border-bottom: 1px solid var(--color-warning-border);
 }
 
 .settings-actions {
   display: flex;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-default);
   justify-content: flex-end;
-  padding: clamp(10px, 1.5vw, 15px) 0;
-  border-top: 1px solid #e9ecef;
 }
 
-.settings-actions button {
-  background-color: #007bff;
-  color: white;
+.save-settings-btn {
+  background: var(--color-success);
+  color: var(--text-on-success);
   border: none;
-  padding: clamp(6px, 0.8vw, 8px) clamp(12px, 1.5vw, 16px);
-  border-radius: 4px;
+  padding: var(--spacing-3) var(--spacing-6);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.3s;
-  font-size: clamp(12px, 1.5vw, 14px);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  transition: background-color var(--duration-200) var(--ease-in-out);
 }
 
-.settings-actions button:hover {
-  background-color: #0056b3;
+.save-settings-btn:hover:not(:disabled) {
+  background: var(--color-success-hover);
+}
+
+.save-settings-btn:disabled {
+  background: var(--color-secondary);
+  cursor: not-allowed;
+}
+
+.discard-btn {
+  background: var(--color-secondary);
+  color: var(--text-on-primary);
+  border: none;
+  padding: var(--spacing-3) var(--spacing-6);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  transition: background-color var(--duration-200) var(--ease-in-out);
+}
+
+.discard-btn:hover:not(:disabled) {
+  background: var(--color-secondary-hover);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .settings-panel-layout {
+    flex-direction: column;
+  }
+
+  .settings-content-inner {
+    padding: 16px;
+  }
+
+  .settings-actions {
+    flex-direction: column;
+    gap: var(--spacing-3);
+  }
+
+  .save-settings-btn,
+  .discard-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

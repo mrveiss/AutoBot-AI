@@ -1,0 +1,109 @@
+{
+  "autobot_queries": {
+    "error_analysis": [
+      {
+        "name": "Critical Errors",
+        "query": "@l = 'Error' and (@mt like '%Exception%' or @mt like '%Failed%' or @mt like '%Critical%')",
+        "description": "Find all critical errors and exceptions"
+      },
+      {
+        "name": "WebSocket Connection Issues",
+        "query": "Source like 'Docker-*' and (@mt like '%WebSocket%' or @mt like '%connection%') and @l in ['Error', 'Warning']",
+        "description": "WebSocket and connection related issues"
+      },
+      {
+        "name": "Backend Service Errors",
+        "query": "Source like 'Backend*' and @l = 'Error'",
+        "description": "Backend service specific errors"
+      }
+    ],
+    "performance_monitoring": [
+      {
+        "name": "Slow Response Times",
+        "query": "@mt like '%ms%' and (@mt like '%slow%' or @mt like '%timeout%' or @mt like '%delay%')",
+        "description": "Performance issues and slow responses"
+      },
+      {
+        "name": "High Memory Usage",
+        "query": "@mt like '%memory%' and (@l in ['Warning', 'Error'] or @mt like '%high%' or @mt like '%usage%')",
+        "description": "Memory usage warnings and errors"
+      },
+      {
+        "name": "Container Resource Issues",
+        "query": "LogType = 'DockerContainer' and (@mt like '%CPU%' or @mt like '%memory%' or @mt like '%disk%') and @l in ['Warning', 'Error']",
+        "description": "Container resource utilization issues"
+      }
+    ],
+    "system_health": [
+      {
+        "name": "Service Startup Events",
+        "query": "@mt like '%started%' or @mt like '%initialized%' or @mt like '%ready%'",
+        "description": "Track service startup and initialization"
+      },
+      {
+        "name": "Container Health Checks",
+        "query": "@mt like '%health%' or ContainerName has @mt",
+        "description": "Docker container health status"
+      },
+      {
+        "name": "Database Connection Events",
+        "query": "@mt like '%database%' or @mt like '%redis%' or @mt like '%connection%'",
+        "description": "Database and Redis connection events"
+      }
+    ],
+    "security_monitoring": [
+      {
+        "name": "Authentication Events",
+        "query": "@mt like '%auth%' or @mt like '%login%' or @mt like '%token%'",
+        "description": "Authentication and authorization events"
+      },
+      {
+        "name": "Failed Requests",
+        "query": "@mt like '%403%' or @mt like '%401%' or @mt like '%unauthorized%'",
+        "description": "Failed authentication and authorization attempts"
+      }
+    ],
+    "operational_insights": [
+      {
+        "name": "Chat Messages",
+        "query": "Source like '*Chat*' or @mt like '%message%'",
+        "description": "Chat system message flow"
+      },
+      {
+        "name": "API Request Patterns",
+        "query": "@mt like '%GET %' or @mt like '%POST %' or @mt like '%PUT %' or @mt like '%DELETE %'",
+        "description": "API request patterns and frequency"
+      },
+      {
+        "name": "NPU Worker Activity",
+        "query": "Source like '*npu*' or ContainerName like '*npu*'",
+        "description": "NPU Worker processing activity"
+      }
+    ]
+  },
+  "dashboards": [
+    {
+      "name": "AutoBot System Overview",
+      "queries": [
+        "select Source, count(*) as MessageCount from stream group by Source",
+        "select @l as Level, count(*) as Count from stream where @t >= Now() - 1h group by @l",
+        "select ContainerName, count(*) as LogCount from stream where LogType = 'DockerContainer' group by ContainerName"
+      ]
+    },
+    {
+      "name": "Error Analytics",
+      "queries": [
+        "select @t, Source, @mt from stream where @l = 'Error' order by @t desc",
+        "select Source, count(*) as ErrorCount from stream where @l = 'Error' and @t >= Now() - 1h group by Source",
+        "select @mt, count(*) as Frequency from stream where @l = 'Error' group by @mt order by count(*) desc"
+      ]
+    },
+    {
+      "name": "Performance Metrics",
+      "queries": [
+        "select @t, Source, @mt from stream where @mt like '%ms' or @mt like '%seconds' order by @t desc",
+        "select ContainerName, count(*) as ActivityLevel from stream where LogType = 'DockerContainer' and @t >= Now() - 15m group by ContainerName"
+      ]
+    }
+  ]
+}

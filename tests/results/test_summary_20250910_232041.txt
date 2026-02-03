@@ -1,0 +1,32 @@
+AutoBot Phase 9 Comprehensive Test Report
+==================================================
+
+Test Execution: 20250910_232041
+Total Duration: 5.20 seconds
+Overall Status: NEEDS_ATTENTION
+
+Summary:
+  Total Tests: 37
+  Passed: 23 (62.2%)
+  Failed: 11
+  Warnings: 3
+  Skipped: 0
+
+Failed Tests:
+  ❌ API Endpoint - Configuration Status: Configuration Status failed (HTTP 404)
+  ❌ API Endpoint - Ollama Models: Ollama Models failed (HTTP 404)
+  ❌ API Endpoint - Redis Status: Redis Status failed (HTTP 404)
+  ❌ LLM Generation - 'What is 2+2?...': LLM generation failed (HTTP 404)
+  ❌ LLM Generation - 'Explain what AutoBot is in one...': LLM generation failed (HTTP 404)
+  ❌ LLM Generation - 'List three common Linux comman...': LLM generation failed (HTTP 404)
+  ❌ Chat Workflow - General query about AutoBot: Workflow error: Failed to create chat: 404
+  ❌ Chat Workflow - Terminal command request: Workflow error: Failed to create chat: 404
+  ❌ Chat Workflow - System configuration query: Workflow error: Failed to create chat: 404
+  ❌ WebSocket Connectivity: WebSocket connection error: BaseEventLoop.create_connection() got an unexpected keyword argument 'timeout'
+  ❌ VNC Desktop Interface: VNC connectivity error: HTTPConnectionPool(host='localhost', port=6080): Max retries exceeded with url: /vnc.html (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7764605b1540>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+Warning Tests:
+  ⚠️ Knowledge Base Statistics: Knowledge base partially loaded (1000 documents)
+  ⚠️ VNC Server Process: No VNC/KeX processes detected
+  ⚠️ Multi-Modal Capabilities: Multi-modal capabilities endpoint not available
+

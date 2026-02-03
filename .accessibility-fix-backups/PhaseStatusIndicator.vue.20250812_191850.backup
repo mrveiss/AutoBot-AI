@@ -1,0 +1,660 @@
+<template>
+  <div class="phase-status-indicator">
+    <!-- Compact header view -->
+    <div class="phase-header" @click="toggleExpanded">
+      <div class="phase-info">
+        <span class="phase-name">{{ currentPhase?.name || 'Loading...' }}</span>
+        <div class="phase-progress">
+          <div class="progress-bar">
+            <div 
+              class="progress-fill" 
+              :style="{ width: `${(projectStatus?.overall_completion || 0) * 100}%` }"
+            ></div>
+          </div>
+          <span class="progress-text">{{ ((projectStatus?.overall_completion || 0) * 100).toFixed(1) }}%</span>
+        </div>
+      </div>
+      <button class="toggle-btn" :class="{ expanded: isExpanded }">
+        <i class="fas fa-chevron-down"></i>
+      </button>
+    </div>
+
+    <!-- Expanded detailed view -->
+    <div v-if="isExpanded" class="phase-details">
+      <div class="validation-summary">
+        <div class="summary-item">
+          <i class="fas fa-tasks"></i>
+          <span>{{ projectStatus?.completed_phases || 0 }}/{{ projectStatus?.total_phases || 0 }} Phases Complete</span>
+        </div>
+        <div class="summary-item">
+          <i class="fas fa-clock"></i>
+          <span>Last validated: {{ formatDate(lastValidated) }}</span>
+        </div>
+        <div class="summary-item">
+          <i class="fas fa-rocket"></i>
+          <span>Next: {{ nextPhase?.name || 'All complete' }}</span>
+        </div>
+      </div>
+
+      <!-- Current phase capabilities -->
+      <div v-if="currentPhaseDetails" class="current-phase">
+        <h4>{{ currentPhaseDetails.name }} Progress</h4>
+        <div class="capabilities-grid">
+          <div 
+            v-for="capability in currentPhaseCapabilities" 
+            :key="capability.name"
+            class="capability-item"
+            :class="getCapabilityStatus(capability)"
+          >
+            <i :class="getCapabilityIcon(capability)"></i>
+            <span class="capability-name">{{ capability.name }}</span>
+            <span class="capability-description">{{ capability.description }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- All phases overview -->
+      <div class="phases-overview">
+        <h4>All Phases</h4>
+        <div class="phases-grid">
+          <div 
+            v-for="(phase, phaseId) in allPhases" 
+            :key="phaseId"
+            class="phase-card"
+            :class="getPhaseStatus(phase)"
+          >
+            <div class="phase-card-header">
+              <i :class="getPhaseIcon(phase)"></i>
+              <span class="phase-card-name">{{ phase.name }}</span>
+            </div>
+            <div class="phase-card-progress">
+              <div class="mini-progress-bar">
+                <div 
+                  class="mini-progress-fill" 
+                  :style="{ width: `${phase.completion * 100}%` }"
+                ></div>
+              </div>
+              <span class="mini-progress-text">{{ (phase.completion * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="phase-card-capabilities">
+              {{ phase.implemented_capabilities }}/{{ phase.capabilities }} ready
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="phase-actions">
+        <button @click="refreshStatus" class="btn btn-primary" :disabled="isLoading">
+          <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
+          Refresh Status
+        </button>
+        <button @click="runValidation" class="btn btn-secondary" :disabled="isValidating">
+          <i class="fas fa-check-circle" :class="{ 'fa-spin': isValidating }"></i>
+          Run Validation
+        </button>
+        <button @click="showReport" class="btn btn-info">
+          <i class="fas fa-file-alt"></i>
+          View Report
+        </button>
+      </div>
+    </div>
+
+    <!-- Validation Report Modal -->
+    <div v-if="showReportModal" class="modal-overlay" @click.self="closeReport">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Project Validation Report</h3>
+          <button @click="closeReport" class="close-btn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <pre class="validation-report">{{ validationReport }}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, onMounted, computed } from 'vue';
+import { apiService } from '../services/api';
+
+export default {
+  name: 'PhaseStatusIndicator',
+  setup() {
+    const isExpanded = ref(false);
+    const isLoading = ref(false);
+    const isValidating = ref(false);
+    const showReportModal = ref(false);
+    const projectStatus = ref(null);
+    const allPhases = ref({});
+    const validationReport = ref('');
+    const lastValidated = ref(null);
+
+    const currentPhase = computed(() => {
+      if (!projectStatus.value) return null;
+      return allPhases.value[projectStatus.value.current_phase];
+    });
+
+    const currentPhaseDetails = computed(() => {
+      if (!projectStatus.value) return null;
+      return allPhases.value[projectStatus.value.current_phase];
+    });
+
+    const currentPhaseCapabilities = computed(() => {
+      // This would need to be fetched from the detailed phases API
+      // For now, return mock data based on phase completion
+      if (!currentPhaseDetails.value) return [];
+      
+      const totalCaps = currentPhaseDetails.value.capabilities;
+      const implementedCaps = currentPhaseDetails.value.implemented_capabilities;
+      const mockCapabilities = [];
+      
+      for (let i = 0; i < totalCaps; i++) {
+        mockCapabilities.push({
+          name: `capability_${i + 1}`,
+          description: `Phase capability ${i + 1}`,
+          implemented: i < implementedCaps
+        });
+      }
+      
+      return mockCapabilities;
+    });
+
+    const nextPhase = computed(() => {
+      if (!projectStatus.value?.next_suggested_phase) return null;
+      return allPhases.value[projectStatus.value.next_suggested_phase] || null;
+    });
+
+    const toggleExpanded = () => {
+      isExpanded.value = !isExpanded.value;
+    };
+
+    const refreshStatus = async () => {
+      isLoading.value = true;
+      try {
+        const response = await apiService.get('/project/status');
+        if (response.data.success !== false) {
+          projectStatus.value = response.data;
+          allPhases.value = response.data.phases;
+          lastValidated.value = new Date();
+        }
+      } catch (error) {
+        console.error('Failed to refresh project status:', error);
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    const runValidation = async () => {
+      isValidating.value = true;
+      try {
+        await apiService.post('/project/validate');
+        await refreshStatus(); // Refresh after validation
+      } catch (error) {
+        console.error('Failed to run validation:', error);
+      } finally {
+        isValidating.value = false;
+      }
+    };
+
+    const showReport = async () => {
+      try {
+        const response = await apiService.get('/project/report');
+        if (response.data.success) {
+          validationReport.value = response.data.report;
+          showReportModal.value = true;
+        }
+      } catch (error) {
+        console.error('Failed to load validation report:', error);
+      }
+    };
+
+    const closeReport = () => {
+      showReportModal.value = false;
+    };
+
+    const formatDate = (date) => {
+      if (!date) return 'Never';
+      return new Date(date).toLocaleDateString() + ' ' + new Date(date).toLocaleTimeString();
+    };
+
+    const getPhaseStatus = (phase) => {
+      if (phase.is_completed) return 'phase-completed';
+      if (phase.is_active) return 'phase-active';
+      return 'phase-inactive';
+    };
+
+    const getPhaseIcon = (phase) => {
+      if (phase.is_completed) return 'fas fa-check-circle';
+      if (phase.is_active) return 'fas fa-play-circle';
+      return 'fas fa-circle';
+    };
+
+    const getCapabilityStatus = (capability) => {
+      return capability.implemented ? 'capability-implemented' : 'capability-pending';
+    };
+
+    const getCapabilityIcon = (capability) => {
+      return capability.implemented ? 'fas fa-check' : 'fas fa-clock';
+    };
+
+    onMounted(() => {
+      refreshStatus();
+    });
+
+    return {
+      isExpanded,
+      isLoading,
+      isValidating,
+      showReportModal,
+      projectStatus,
+      allPhases,
+      validationReport,
+      lastValidated,
+      currentPhase,
+      currentPhaseDetails,
+      currentPhaseCapabilities,
+      nextPhase,
+      toggleExpanded,
+      refreshStatus,
+      runValidation,
+      showReport,
+      closeReport,
+      formatDate,
+      getPhaseStatus,
+      getPhaseIcon,
+      getCapabilityStatus,
+      getCapabilityIcon
+    };
+  }
+};
+</script>
+
+<style scoped>
+.phase-status-indicator {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.phase-header {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.3s ease;
+}
+
+.phase-header:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+}
+
+.phase-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phase-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.phase-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  width: 200px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #4ade80;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 45px;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+  padding: 4px;
+}
+
+.toggle-btn.expanded {
+  transform: rotate(180deg);
+}
+
+.phase-details {
+  padding: 16px;
+  background: white;
+}
+
+.validation-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.summary-item i {
+  color: #9ca3af;
+}
+
+.current-phase h4 {
+  margin: 0 0 12px 0;
+  color: #374151;
+  font-size: 16px;
+}
+
+.capabilities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.capability-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.capability-item.capability-implemented {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.capability-item.capability-pending {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.capability-name {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.capability-description {
+  font-size: 12px;
+  color: #6b7280;
+  grid-column: 2 / -1;
+  margin-left: 24px;
+}
+
+.phases-overview h4 {
+  margin: 20px 0 12px 0;
+  color: #374151;
+  font-size: 16px;
+}
+
+.phases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.phase-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.phase-card.phase-completed {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.phase-card.phase-active {
+  background: #eff6ff;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa;
+}
+
+.phase-card.phase-inactive {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.phase-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.phase-card-header i.fa-check-circle {
+  color: #22c55e;
+}
+
+.phase-card-header i.fa-play-circle {
+  color: #3b82f6;
+}
+
+.phase-card-header i.fa-circle {
+  color: #9ca3af;
+}
+
+.phase-card-name {
+  font-weight: 500;
+  font-size: 13px;
+  color: #374151;
+}
+
+.phase-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mini-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  transition: width 0.5s ease;
+}
+
+.phase-card.phase-completed .mini-progress-fill {
+  background: #22c55e;
+}
+
+.mini-progress-text {
+  font-size: 12px;
+  color: #6b7280;
+  min-width: 30px;
+}
+
+.phase-card-capabilities {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.phase-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.btn-info {
+  background: #0891b2;
+  color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+  background: #0e7490;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90vw;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #374151;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 4px;
+}
+
+.close-btn:hover {
+  color: #374151;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  max-height: calc(80vh - 80px);
+}
+
+.validation-report {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .validation-summary {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .capabilities-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .phases-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .phase-actions {
+    flex-direction: column;
+  }
+  
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+</style>

@@ -1,120 +1,161 @@
-# AutoBot Agent
+# AutoBot - Autonomous Linux Administration Platform
 
-AutoBot is an autonomous agent designed to interact with a computer's GUI and execute tasks. It leverages LLMs for planning, a knowledge base for context, and various tools for system interaction, including GUI automation, shell command execution, and real-time diagnostics.
+AutoBot is a comprehensive autonomous system for Linux administration, featuring multi-modal AI capabilities, distributed infrastructure, and intelligent automation.
 
-## Features
+## Quick Start
 
-*   **LLM-Powered Task Planning:** Breaks down high-level goals into actionable steps.
-*   **Knowledge Base (RAG):** Integrates relevant context from documents and facts to inform decision-making.
-*   **GUI Automation:** Interacts with the desktop environment by typing, clicking elements (via image recognition), reading text (OCR), and managing windows.
-*   **Shell Command Execution:** Executes commands directly on the system.
-*   **Real-time Diagnostics:** Monitors task failures, analyzes causes, and suggests fixes, with optional user permission.
-*   **System Monitoring UI:** A web-based control panel to monitor CPU, RAM, and GPU/VRAM usage in real-time.
-*   **Flexible LLM Backends:** Supports Ollama, OpenAI, and a placeholder for local Hugging Face Transformers models.
-*   **Hardware Acceleration:** Configurable priority for OpenVINO, CUDA, ONNX Runtime, and CPU.
+### Starting AutoBot
+```bash
+# Standard startup (native VM deployment)
+bash run_autobot.sh
 
-## Installation
+# Development mode with debug features
+bash run_autobot.sh --dev
 
-This project is designed to run locally without Docker, leveraging Python virtual environments.
+# With specific options
+bash run_autobot.sh --dev --no-browser --rebuild
+```
 
-### Prerequisites
+### Initial Setup
+```bash
+# Complete initial setup
+bash setup.sh
 
-*   **Python 3.10 or higher:** Python 3.10 is recommended for the main environment. Python 3.11+ is required for OpenVINO support.
-*   **pip:** Python package installer.
-*   **Git:** For cloning the repository.
-*   **VNC Server (Optional, for GUI control):** `x11vnc` or `TigerVNC` is required for the live computer window feature.
-    *   **Ubuntu/Debian:** `sudo apt update && sudo apt install x11vnc`
-    *   **Fedora:** `sudo dnf install tigervnc-server`
-*   **Tesseract OCR (Optional, for GUI text recognition):** Required for the `read_text_from_region` GUI action.
-    *   **Ubuntu/Debian:** `sudo apt update && sudo apt install tesseract-ocr`
-    *   **Fedora:** `sudo dnf install tesseract`
-    *   **macOS:** `brew install tesseract`
+# Setup specific components
+bash setup.sh knowledge    # Knowledge base only
+bash setup.sh docker       # Docker configuration
+bash setup.sh agent        # Agent environment
+bash setup.sh system       # System configuration
+```
 
-### Steps
+## Infrastructure Overview
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-repo/autobot.git
-    cd autobot
-    ```
+**Main Machine (WSL):** 172.16.168.20 - Backend API
+**Remote VMs:**
+- VM1 Frontend: 172.16.168.21 - Web interface
+- VM2 NPU Worker: 172.16.168.22 - Hardware AI acceleration
+- VM3 Redis: 172.16.168.23 - Data layer
+- VM4 AI Stack: 172.16.168.24 - AI processing
+- VM5 Browser: 172.16.168.25 - Web automation
 
-2.  **Run the setup script:**
-    This script will create Python virtual environments, install dependencies, and download necessary frontend assets (noVNC).
+## Redis Database Architecture
 
-    ```bash
-    chmod +x setup_agent.sh
-    ./setup_agent.sh
-    ```
-    *   The script will create a main virtual environment named `AutoBot/` and an optional `venvs/openvino_env/` if Python 3.11+ is detected.
-    *   It will also copy `config/config.yaml.template` to `config/config.yaml` if `config.yaml` does not already exist.
+AutoBot uses a comprehensive Redis database architecture with specialized databases for different data types. This organization enables individual database repopulation and maintenance.
 
-3.  **Configure your LLM (Optional but Recommended):**
-    Edit `config/config.yaml` to configure your preferred LLM.
-    *   **Ollama:** Ensure Ollama is running and you have pulled the desired models (e.g., `ollama pull tinyllama`).
-    *   **OpenAI:** Add your `OPENAI_API_KEY` to `config/config.yaml` or set it as an environment variable.
+### Database Allocation
 
-    Example `config/config.yaml` snippet for Ollama:
-    ```yaml
-    llm_config:
-      default_llm: "ollama_tinyllama"
-      ollama:
-        host: "http://localhost:11434"
-        models:
-          tinyllama: "tinyllama"
-    ```
+| Database | Purpose | Current Keys | Description |
+|----------|---------|--------------|-------------|
+| **DB 0** | **Vectors** | 14,047 | LlamaIndex vectors with Redis search index support |
+| **DB 1** | **Knowledge Facts** | 27 | Knowledge base facts and metadata |
+| **DB 2** | **Prompts** | 0 | AI prompt templates and configurations |
+| **DB 3** | **Other System Data** | 200 | Restored system data and miscellaneous |
+| **DB 4** | **Metrics** | 1 | Performance and system metrics |
+| **DB 5** | **Cache** | 0 | Temporary cached data |
+| **DB 6** | **Sessions** | 0 | User session data |
+| **DB 7** | **Tasks** | 0 | Task management and workflow data |
+| **DB 8** | **Analytics** | 24,803 | Code analytics and indexing data |
+| **DB 9** | **Temp** | 0 | Temporary data storage |
+| **DB 10** | **Backup** | 20 | Backup and recovery data |
+| **DB 11** | **Additional Data** | 6,627 | Extended system data |
+| **DB 15** | **Testing** | 0 | Test data and development |
 
-## Running the Agent
+### Key Features
 
-1.  **Activate the main virtual environment:**
-    ```bash
-    source bin/activate
-    ```
+- **Individual Repopulation**: Each database can be cleared and repopulated independently
+- **Redis Search Support**: DB 0 supports Redis search indexes for vector operations
+- **Logical Separation**: Different data types are isolated for better maintainability
+- **Scalable Design**: Easy to add new databases for specific use cases
 
-2.  **Start the AutoBot agent:**
-    This script will start the backend FastAPI server, a simple frontend HTTP server, and optionally the VNC server and websockify.
+### Management Commands
 
-    ```bash
-    chmod +x run_agent.sh
-    ./run_agent.sh
-    ```
+```bash
+# Check database sizes
+for db in {0..15}; do echo -n "DB$db: "; redis-cli -h 172.16.168.23 -p 6379 -n $db DBSIZE; done
 
-3.  **Access the Control Panel:**
-    Open your web browser and navigate to `http://localhost:5174/` for the Vue.js frontend interface.
+# Clear specific database (example: temp data)
+redis-cli -h 172.16.168.23 -p 6379 -n 9 FLUSHDB
 
-## Usage
+# Backup specific database
+redis-cli -h 172.16.168.23 -p 6379 -n 0 --rdb vectors_backup.rdb
+```
 
-*   **Control Panel:** Use the web interface to submit goals, execute commands, upload files, and monitor system resources.
-*   **VNC Viewer:** If VNC is enabled in `config.yaml`, you can connect to the VNC server (default port 5900) using a VNC client with the password configured in `config.yaml`. The web interface also provides a live view via noVNC.
+### Redis Service Management
 
-## Project Structure
+AutoBot now includes comprehensive Redis service management capabilities:
 
-*   `main.py`: Main FastAPI application, defines API endpoints.
-*   `src/`: Contains core Python modules.
-    *   `orchestrator.py`: Manages task planning and dispatch.
-    *   `llm_interface.py`: Handles communication with various LLM backends.
-    *   `knowledge_base.py`: Manages RAG, document processing, and fact storage.
-    *   `diagnostics.py`: Provides system monitoring and failure analysis.
-    *   `event_manager.py`: Centralized event bus for inter-module communication.
-    *   `worker_node.py`: Executes tasks dispatched by the orchestrator.
-    *   `gui_controller.py`: Provides functions for GUI automation (mouse, keyboard, OCR, window management).
-*   `config/`: Configuration files.
-    *   `config.yaml.template`: Template for `config.yaml`.
-    *   `config.yaml`: Your active configuration (created from template by `setup_agent.sh`).
-*   `frontend/`: Web-based user interface.
-    *   `index.html`: Main HTML file.
-    *   `css/style.css`: CSS styles.
-    *   `js/main.js`: Frontend JavaScript logic.
-    *   `vendor/noVNC/`: noVNC client library (downloaded by `setup_agent.sh`).
-*   `data/`: Persistent data storage (e.g., knowledge base SQLite DB, ChromaDB embeddings).
-*   `requirements.txt`: Python dependencies.
-*   `setup_agent.sh`: Script for initial project setup.
-*   `run_agent.sh`: Script to run the AutoBot agent.
-*   `run_with_openvino.sh`: Example script to activate the OpenVINO environment (if created).
+- **Web UI Controls**: Start, stop, restart Redis from the frontend interface
+- **Health Monitoring**: Real-time health checks and status reporting
+- **Auto-Recovery**: Automatic failure detection and recovery
+- **Role-Based Access**: Granular permissions for different user roles
+- **Audit Logging**: Complete audit trail of all service operations
 
-## Contributing
+**Documentation:**
+- [Redis Service Management API](docs/api/REDIS_SERVICE_MANAGEMENT_API.md) - Complete API reference
+- [Redis Service Management User Guide](docs/user-guides/REDIS_SERVICE_MANAGEMENT_GUIDE.md) - How to use service controls
+- [Redis Service Operations Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md) - Operational procedures
+- [Redis Service Architecture](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md) - Technical architecture
 
-Contributions are welcome! Please feel free to open issues or submit pull requests.
+## Access Points
 
-## License
+- **Frontend:** http://172.16.168.21:5173
+- **Backend API:** http://172.16.168.20:8001
+- **VNC Desktop:** http://localhost:6080 (when enabled)
 
-[Specify your license here, e.g., MIT License]
+## Documentation
+
+### Core Documentation
+- [**System Configuration**](CLAUDE.md) - Complete development notes, fixes, and architecture
+- [**Scripts Organization**](scripts/README.md) - All scripts and utilities documentation
+
+### MCP & Agent Integration
+- [**LangChain MCP Integration Guide**](docs/developer/LANGCHAIN_MCP_INTEGRATION.md) - How to integrate AutoBot MCP tools with LangChain agents
+- [**MCP Security Testing**](docs/security/MCP_SECURITY_TESTING.md) - Security penetration testing for MCP bridges
+- [**MCP Agent Workflow Examples**](examples/mcp_agent_workflows/) - Working examples for research, code analysis, and VNC monitoring
+
+### Technical Reports
+- [**Network Configuration**](reports/NETWORK_STANDARDIZATION_REPORT.md) - Infrastructure standardization
+- [**Configuration Remediation**](reports/COMPREHENSIVE_CONFIGURATION_REMEDIATION_FINAL_REPORT.md) - Config fixes and improvements
+- [**Setup & Deployment**](reports/SUBAGENT_HOTEL_PHASE2_COMPLETION_REPORT.md) - Phase 2 completion details
+- [**Project Cleanup**](reports/ROOT_CLEANUP_COMPLETE.md) - File organization and cleanup
+- [**Native VM Setup**](reports/NATIVE_VM_SETUP.md) - VM deployment procedures
+
+### Analysis & Audit Reports
+- [**Hardcoded Values Audit**](reports/HARDCODED_VALUES_AUDIT.md) - Code quality improvements
+- [**Configuration Migration**](reports/CONFIGURATION_MIGRATION_GUIDE.md) - Migration procedures
+- [**Config Refactor Plan**](reports/CONFIG_REFACTOR_PLAN.md) - Refactoring strategy
+
+### Test Results
+- Test results are stored in [tests/results/](tests/results/) directory
+- API testing reports and comprehensive test outputs
+
+## Key Features
+
+- **Multi-Modal AI:** Vision, voice, and text processing capabilities
+- **Distributed Architecture:** Multi-VM deployment with service isolation
+- **Intelligent Automation:** Context-aware task execution
+- **Knowledge Base:** RAG-powered documentation and learning system
+- **Real-time Monitoring:** Comprehensive system and service monitoring
+- **Redis Service Management:** Web UI controls with auto-recovery and health monitoring
+- **Security-First:** Enhanced security layers and audit capabilities
+- **Hardware Acceleration:** NPU and GPU optimization support
+
+## Development Guidelines
+
+- Use `bash run_autobot.sh` and `bash setup.sh` only - no other startup methods
+- All reports and documentation are organized in appropriate folders
+- Follow the established file organization structure
+- See [CLAUDE.md](CLAUDE.md) for complete development procedures and fixes
+
+## Current Status: Production Ready ✅
+
+All critical issues resolved with permanent architectural fixes:
+- ✅ Chat persistence across sessions
+- ✅ 100% API endpoint functionality
+- ✅ Knowledge base fully operational (14,047 vectors with search support)
+- ✅ Distributed VM infrastructure stable
+- ✅ Multi-service coordination working
+- ✅ Hardware optimization active
+- ✅ Redis service management with auto-recovery
+
+For detailed technical information, troubleshooting, and architectural details, see [CLAUDE.md](CLAUDE.md).

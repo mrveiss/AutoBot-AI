@@ -1,0 +1,369 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Chat Intent Detector - User Intent Classification for Chat Workflows
+
+This module provides intent detection capabilities for chat workflows, enabling
+context-aware responses based on user's conversation goals.
+
+Extracted from src/chat_workflow_manager.py as part of Phase 2 refactoring
+(Issue #40 - Targeted Refactoring).
+
+Key Features:
+- Exit intent detection for conversation termination
+- Multi-category intent classification (installation, architecture, troubleshooting, API, general)
+- Context-aware intent scoring based on conversation history
+- Dynamic context prompt selection based on detected intent
+
+Functions:
+- detect_exit_intent(): Detect if user wants to end conversation
+- detect_user_intent(): Classify user's intent from message
+- select_context_prompt(): Select appropriate system prompt based on intent
+
+Related Issue: #40 - Chat/Conversation Targeted Refactoring
+Created: 2025-01-14 (Phase 2)
+"""
+
+import logging
+from typing import Dict, List, Optional
+
+from src.prompt_manager import get_prompt
+
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Constants
+# =============================================================================
+
+# Exit intent detection keywords
+EXIT_KEYWORDS = {
+    "goodbye",
+    "bye",
+    "exit",
+    "quit",
+    "end chat",
+    "stop",
+    "that's all",
+    "thanks goodbye",
+    "bye bye",
+    "see you",
+    "farewell",
+    "good bye",
+    "later",
+    "end conversation",
+    "no more",
+    "i'm done",
+    "im done",
+    "close chat",
+}
+
+# Intent keyword mappings
+INTENT_KEYWORDS = {
+    "installation": {
+        "install",
+        "setup",
+        "configure",
+        "deployment",
+        "deploy",
+        "first time",
+        "getting started",
+        "how to start",
+        "run autobot",
+        "start autobot",
+        "vm setup",
+        "distributed setup",
+    },
+    "architecture": {
+        "architecture",
+        "design",
+        "why",
+        "how does",
+        "how is",
+        "vm",
+        "virtual machine",
+        "distributed",
+        "infrastructure",
+        "service",
+        "component",
+        "system design",
+        "how many",
+    },
+    "troubleshooting": {
+        "error",
+        "issue",
+        "problem",
+        "not working",
+        "broken",
+        "failed",
+        "fail",
+        "crash",
+        "timeout",
+        "can't",
+        "cannot",
+        "stuck",
+        "help",
+        "fix",
+        "debug",
+        "troubleshoot",
+    },
+    "api": {
+        "api",
+        "endpoint",
+        "request",
+        "response",
+        "integration",
+        "curl",
+        "http",
+        "rest",
+        "websocket",
+        "stream",
+        "documentation",
+        "docs",
+        "how to call",
+        "how to use",
+    },
+}
+
+# Context prompt mapping for each intent
+CONTEXT_PROMPT_MAP = {
+    "installation": "chat.installation_help",
+    "architecture": "chat.architecture_explanation",
+    "troubleshooting": "chat.troubleshooting",
+    "api": "chat.api_documentation",
+}
+
+# =============================================================================
+# Public Functions
+# =============================================================================
+
+
+def detect_exit_intent(message: str) -> bool:
+    """
+    Detect if user explicitly wants to end the conversation.
+
+    This function checks for explicit exit phrases and keywords that indicate
+    the user wants to terminate the chat session. It's designed to avoid
+    false positives by checking for question marks (which typically indicate
+    the user is asking about exiting, not actually exiting).
+
+    Args:
+        message: User's message to analyze
+
+    Returns:
+        bool: True if user explicitly wants to exit, False otherwise
+
+    Example:
+        >>> detect_exit_intent("goodbye")
+        True
+        >>> detect_exit_intent("How do I exit the application?")
+        False
+        >>> detect_exit_intent("thanks, bye!")
+        True
+    """
+    message_lower = message.lower().strip()
+
+    # Check for exact exit phrases
+    if message_lower in EXIT_KEYWORDS:
+        logger.info("Exit intent detected: '%s'", message_lower)
+        return True
+
+    # Check for exit keywords in message (with word boundaries)
+    words = message_lower.split()
+
+    # Context phrases that indicate the user is asking ABOUT exit, not trying to exit
+    # These are compound terms where exit/quit/etc are part of technical concepts
+    non_exit_context_phrases = {
+        "exit code",
+        "exit status",
+        "exit signal",
+        "exit value",
+        "exit point",
+        "quit command",
+        "quit signal",
+        "stop signal",
+        "stop command",
+        "about exit",
+        "about the exit",
+        "the exit",
+        "what exit",
+        "which exit",
+        "bye command",
+        "the bye",
+        "how to quit",
+        "explain how",
+        "tell me about",
+    }
+
+    # If message contains any non-exit context phrase, don't trigger exit
+    for phrase in non_exit_context_phrases:
+        if phrase in message_lower:
+            logger.debug(
+                "Exit keyword found but in non-exit context: '%s'", phrase
+            )
+            return False
+
+    for exit_word in EXIT_KEYWORDS:
+        if exit_word in words:
+            # Only consider it an exit if it's not part of a question
+            if "?" not in message:
+                logger.info("Exit intent detected from keyword: '%s'", exit_word)
+                return True
+
+    return False
+
+
+def detect_user_intent(
+    message: str, conversation_history: Optional[List[Dict[str, str]]] = None
+) -> str:
+    """
+    Detect user's intent to select appropriate context prompt.
+
+    This function analyzes the user's message and conversation history to
+    classify their intent into one of several categories. It uses keyword
+    matching and contextual boosting to improve accuracy.
+
+    Intent Categories:
+    - installation: Setup, deployment, getting started questions
+    - architecture: System design, component explanations
+    - troubleshooting: Error resolution, debugging, fixes
+    - api: API usage, endpoints, integration
+    - general: General conversation (fallback)
+
+    Args:
+        message: User's message to analyze
+        conversation_history: Previous conversation messages for context
+            Format: [{"user": "msg1", "assistant": "resp1"}, ...]
+
+    Returns:
+        str: Detected intent ('installation', 'architecture', 'troubleshooting', 'api', 'general')
+
+    Example:
+        >>> detect_user_intent("How do I install AutoBot?")
+        'installation'
+        >>> detect_user_intent("What's the architecture of the system?")
+        'architecture'
+        >>> detect_user_intent("I'm getting a timeout error")
+        'troubleshooting'
+    """
+    message_lower = message.lower().strip()
+
+    # Count keyword matches for each intent
+    intent_scores = {
+        intent: sum(1 for kw in keywords if kw in message_lower)
+        for intent, keywords in INTENT_KEYWORDS.items()
+    }
+
+    # Check conversation context for intent continuation
+    if conversation_history and len(conversation_history) > 0:
+        # Get last assistant response to maintain context
+        last_responses = [msg.get("assistant", "") for msg in conversation_history[-2:]]
+        context = " ".join(last_responses).lower()
+
+        # Boost scores based on conversation context
+        for intent, keywords in INTENT_KEYWORDS.items():
+            if any(kw in context for kw in keywords):
+                intent_scores[intent] += 0.5
+
+    # Find highest scoring intent
+    max_score = max(intent_scores.values())
+
+    if max_score > 0:
+        detected_intent = max(intent_scores, key=intent_scores.get)
+        logger.debug(
+            f"Intent detected: {detected_intent} (score: {max_score}) for message: {message[:50]}..."
+        )
+        return detected_intent
+
+    # Default to general if no specific intent detected
+    logger.debug(
+        f"No specific intent detected, using general context for: {message[:50]}..."
+    )
+    return "general"
+
+
+def select_context_prompt(intent: str, base_prompt: str) -> str:
+    """
+    Select and combine appropriate context prompt based on detected intent.
+
+    This function loads intent-specific context prompts and combines them
+    with the base system prompt to provide tailored responses based on
+    the user's needs.
+
+    Args:
+        intent: Detected user intent ('installation', 'architecture', etc.)
+        base_prompt: Base system prompt to use as foundation
+
+    Returns:
+        str: Combined prompt with base + context-specific instructions
+
+    Prompt Structure:
+        {base_prompt}
+
+        ---
+
+        ## CONTEXT-SPECIFIC GUIDANCE
+
+        {context_prompt}
+
+        ---
+
+        **Remember**: Follow both the general conversation management rules above
+        AND the context-specific guidance for this {intent} conversation.
+
+    Example:
+        >>> base = "You are AutoBot, a helpful assistant."
+        >>> enhanced = select_context_prompt("installation", base)
+        >>> "installation" in enhanced.lower()
+        True
+
+    Note:
+        Falls back to base_prompt if:
+        - Intent is 'general'
+        - Intent not in mapping
+        - Context prompt fails to load
+    """
+    # If general intent, return base prompt only
+    if intent == "general" or intent not in CONTEXT_PROMPT_MAP:
+        logger.debug("Using base system prompt (general context)")
+        return base_prompt
+
+    # Load context-specific prompt
+    try:
+        context_key = CONTEXT_PROMPT_MAP[intent]
+        context_prompt = get_prompt(context_key)
+        logger.info("Loaded context prompt: %s for intent: %s", context_key, intent)
+
+        # Combine base prompt with context-specific prompt
+        combined_prompt = f"""{base_prompt}
+
+---
+
+## CONTEXT-SPECIFIC GUIDANCE
+
+{context_prompt}
+
+---
+
+**Remember**: Follow both the general conversation management rules above AND the context-specific guidance for this {intent} conversation."""
+
+        return combined_prompt
+
+    except Exception as e:
+        logger.warning("Failed to load context prompt for intent '%s': %s", intent, e)
+        logger.warning("Falling back to base system prompt")
+        return base_prompt
+
+
+# =============================================================================
+# Module Information
+# =============================================================================
+
+__all__ = [
+    "detect_exit_intent",
+    "detect_user_intent",
+    "select_context_prompt",
+    "EXIT_KEYWORDS",
+    "INTENT_KEYWORDS",
+    "CONTEXT_PROMPT_MAP",
+]

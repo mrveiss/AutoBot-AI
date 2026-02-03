@@ -1,0 +1,217 @@
+# AutoBot Zero-Downtime Deployment Configuration
+# ==============================================
+#
+# Configuration for blue-green, rolling, and canary deployments
+
+# Global deployment settings
+deployment:
+  health_check_timeout: 300      # Maximum time to wait for health checks (seconds)
+  health_check_interval: 10      # Interval between health checks (seconds)
+  deployment_timeout: 1800       # Maximum deployment time (seconds)
+  rollback_timeout: 600          # Maximum rollback time (seconds)
+  traffic_switch_timeout: 60     # Maximum time for traffic switching (seconds)
+
+  # Pre-deployment checks
+  pre_deployment_backup: true    # Create backup before deployment
+  run_tests: true               # Run tests before deployment
+  validate_config: true         # Validate configuration files
+
+  # Post-deployment checks
+  smoke_tests: true             # Run smoke tests after deployment
+  monitoring_duration: 300      # How long to monitor after deployment (seconds)
+
+# Service-specific configuration
+services:
+  backend:
+    port: 8001
+    health_endpoint: "/api/system/health"
+    startup_time: 30              # Time to wait for service startup (seconds)
+    graceful_shutdown_timeout: 30 # Time to wait for graceful shutdown
+    dependencies: ["redis", "ai-stack"]
+    scaling:
+      min_instances: 1
+      max_instances: 3
+      target_cpu_percent: 70
+
+  frontend:
+    port: 5173
+    health_endpoint: "/"
+    startup_time: 20
+    graceful_shutdown_timeout: 15
+    dependencies: ["backend"]
+    scaling:
+      min_instances: 1
+      max_instances: 2
+      target_cpu_percent: 80
+
+  ai-stack:
+    port: 8080
+    health_endpoint: "/health"
+    startup_time: 45
+    graceful_shutdown_timeout: 30
+    dependencies: ["redis"]
+    scaling:
+      min_instances: 1
+      max_instances: 2
+      target_cpu_percent: 75
+
+  npu-worker:
+    port: 8081
+    health_endpoint: "/health"
+    startup_time: 25
+    graceful_shutdown_timeout: 20
+    dependencies: ["redis"]
+    scaling:
+      min_instances: 1
+      max_instances: 2
+      target_cpu_percent: 80
+
+  redis:
+    port: 6379
+    health_endpoint: "/"  # Redis ping
+    startup_time: 10
+    graceful_shutdown_timeout: 15
+    dependencies: []
+    scaling:
+      min_instances: 1
+      max_instances: 1  # Redis typically runs as single instance
+
+# Load balancer configuration
+load_balancer:
+  type: nginx                    # nginx, haproxy, or none
+  config_file: /etc/nginx/conf.d/autobot.conf
+  config_backup_dir: /etc/nginx/conf.d/backups
+  reload_command: sudo nginx -s reload
+  test_command: sudo nginx -t    # Test configuration before reload
+
+  # Health check configuration for load balancer
+  health_check:
+    interval: 5                  # Health check interval (seconds)
+    timeout: 3                   # Health check timeout (seconds)
+    retries: 3                   # Number of failed checks before marking unhealthy
+
+# Blue-Green deployment specific settings
+blue_green:
+  # Port offsets for green environment
+  green_port_offset: 1000        # Green ports = original + 1000
+
+  # Traffic switch configuration
+  switch_method: "instant"       # instant, gradual
+  verification_time: 120         # Time to verify green before cleanup (seconds)
+
+  # Environment cleanup
+  cleanup_blue_after_success: true
+  keep_blue_on_failure: true
+
+# Rolling deployment specific settings
+rolling:
+  default_batch_size: 1          # Default number of instances to update at once
+  max_unavailable: 1             # Maximum number of unavailable instances
+  batch_interval: 30             # Time between batches (seconds)
+
+  # Rolling back strategy
+  rollback_on_failure: true
+  failure_threshold: 1           # Number of failures to trigger rollback
+
+# Canary deployment specific settings
+canary:
+  initial_traffic_percent: 5     # Initial traffic to canary
+  traffic_increment: 25          # How much to increase traffic each step
+  increment_interval: 300        # Time between traffic increases (seconds)
+
+  # Canary port offset
+  canary_port_offset: 2000       # Canary ports = original + 2000
+
+  # Success criteria
+  success_rate_threshold: 99.5   # Minimum success rate (%)
+  response_time_threshold: 2.0   # Maximum response time (seconds)
+  error_rate_threshold: 0.5     # Maximum error rate (%)
+
+# Monitoring and alerting during deployments
+monitoring:
+  # Metrics to monitor during deployment
+  key_metrics:
+    - cpu_usage
+    - memory_usage
+    - response_time
+    - error_rate
+    - request_count
+
+  # Alert thresholds during deployment
+  alert_thresholds:
+    cpu_usage: 90                # CPU usage percentage
+    memory_usage: 85             # Memory usage percentage
+    response_time: 5.0           # Response time in seconds
+    error_rate: 5.0             # Error rate percentage
+
+  # Integration settings
+  prometheus_url: "http://localhost:9090"
+  grafana_url: "http://localhost:3001"
+  alert_webhook_url: ""         # Slack/Teams webhook for alerts
+
+# Database migration settings
+database:
+  # Migration strategy
+  migration_strategy: "before_deployment"  # before_deployment, after_deployment, during_deployment
+
+  # Migration settings
+  backup_before_migration: true
+  migration_timeout: 600        # Maximum migration time (seconds)
+  rollback_migrations: true     # Allow migration rollback
+
+  # Connection settings during deployment
+  connection_pool_size: 20
+  connection_timeout: 30
+
+# File and asset management
+assets:
+  # Static file deployment
+  deploy_assets: true
+  asset_path: "autobot-vue/dist"
+  cdn_sync: false               # Sync to CDN
+  cache_bust: true              # Add cache-busting parameters
+
+# Testing configuration
+testing:
+  # Test suites to run
+  unit_tests: true
+  integration_tests: true
+  smoke_tests: true
+  performance_tests: false      # Run performance tests (slower)
+
+  # Test timeouts
+  unit_test_timeout: 300
+  integration_test_timeout: 600
+  smoke_test_timeout: 120
+
+  # Test commands
+  unit_test_command: "python -m pytest tests/unit/ -v"
+  integration_test_command: "python -m pytest tests/integration/ -v"
+  smoke_test_command: "python tests/smoke_tests.py"
+
+# Rollback configuration
+rollback:
+  # Automatic rollback triggers
+  auto_rollback: true
+  rollback_on_health_failure: true
+  rollback_on_alert_threshold: true
+
+  # Rollback methods
+  rollback_method: "backup"      # backup, git_tag, previous_deployment
+
+  # Rollback verification
+  verify_rollback: true
+  rollback_verification_timeout: 300
+
+# Notification settings
+notifications:
+  # Notification channels
+  slack_webhook: ""
+  teams_webhook: ""
+  email_recipients: []
+
+  # When to notify
+  notify_on_start: true
+  notify_on_success: true
+  notify_on_failure: true
+  notify_on_rollback: true

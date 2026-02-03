@@ -1,25 +1,435 @@
-# Ignore virtual environment directories
+# === PYTHON VIRTUAL ENVIRONMENT ===
+# Virtual environment directories (created by setup_agent.sh)
+AutoBot/
 venvs/
-__pycache__/
-lib64/
 bin/
-include/
 lib/
+!scripts/lib/
+lib64/
+include/
 share/
+pyvenv.cfg
 
-# Ignore generated files and directories
-logs/
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
 *.pyc
+*.pyo
 
-# Ignore development and configuration files
-config/*.yaml
-*.db
-*.sqlite3
-.env
-.vscode/
+# === NODE.JS AND NPM ===
+# Node.js dependencies
+node_modules/
+autobot-vue/node_modules/
+
+# Package manager lock files
+# Note: package-lock.json should be committed to ensure consistent dependency versions
+yarn.lock
+pnpm-lock.yaml
+
+# NPM cache
+.npm/
+.yarn/
+
+# === BUILD OUTPUTS ===
+# Frontend build outputs
 dist/
 build/
-*.log
+frontend/static/assets/
+frontend/static/js/
+static/assets/
+static/js/
 
+# Vue.js build outputs and cache
+autobot-vue/dist/
+autobot-vue/.vite/
+
+# === APPLICATION DATA ===
+# CRITICAL: Ignore data directory contents EXCEPT configuration files
+# User data and runtime files should NEVER be committed to git
+# Issue #515: Allow mcp_tools/ and knowledge/ configuration YAML files
+data/*
+!data/.gitkeep
+!data/*/.gitkeep
+!data/mcp_tools/
+!data/knowledge/
+
+# Analysis outputs - large JSON files and results
+analysis/**/*.json
+analysis/**/results.txt
+analysis/**/output.txt
+
+# === SECURITY & AUTHENTICATION ===
+# SSH keys and certificates
+*.pem
+*.key
+*.pub
+*.ppk
+*.p12
+*.pfx
+*.crt
+*.cer
+*.ca
+*.ca-bundle
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+authorized_keys
+known_hosts
+autobot_key*
+ssh_host_*
+
+# Password files
+*.pass
+*.password
+*.passwd
+credentials*
+# Note: secrets.py and secrets_service.py are legitimate code files for secrets management
+# Only exclude actual secret/password data files:
+*.secrets
+.secrets
+secrets.txt
+secrets.json
+secrets.yaml
+secrets.conf
+secrets.key
+**/secrets.key
+
+# Authentication tokens
+*.token
+*token.txt
+*token.json
+*.auth
+*auth.json
+
+# === CONFIGURATION FILES ===
+# Configuration files with sensitive data
+config/*.yaml
+config/settings.json
+backend/config/settings.json
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# === LOG FILES ===
+# All log files go in the unified logs/ directory
+logs/
+*.log
+# Prevent root directory log files (they belong in logs/)
+/backend*.log
+/frontend*.log
+/autobot*.log
+
+# === DATABASE FILES ===
+*.db
+*.sqlite
+*.sqlite3
+
+# === CACHE DIRECTORIES ===
+.cache/
+.pip-cache/
+.vite/
+.turbo/
+.nuxt/
+.next/
+.output/
+
+# === TEMPORARY FILES ===
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# === ROOT DIRECTORY PROTECTION ===
+# Prevent files that should be in organized directories from polluting root
+/test*.py            # Test files belong in tests/
+/TEST*.py           # Test files belong in tests/  
+/*REPORT*.md        # Reports belong in reports/
+/*SUMMARY*.md       # Summaries belong in reports/
+/*GUIDE*.md         # Guides belong in docs/ or reports/
+/*ANALYSIS*.md      # Analysis belong in analysis/ or reports/
+/*.log              # Log files belong in logs/
+/*.log.*            # Rotated log files belong in logs/
+/*.bak              # Backup files belong in backups/
+/*.backup           # Backup files belong in backups/
+/*_backup.*         # Backup files belong in backups/
+/*.old              # Old files belong in backups/
+/*_old.*            # Old files belong in backups/
+/analysis_*.json    # Analysis outputs belong in analysis/
+/test_results_*.json # Test results belong in tests/results/
+/profile_*.txt      # Profiles belong in reports/performance/
+/trace_*.log        # Traces belong in logs/performance/
+/benchmark_*.json   # Benchmarks belong in tests/benchmarks/
+
+# === OS GENERATED FILES ===
 *:Zone.Identifier
 *.Identifier
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === EDITOR FILES ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.backup
+
+# === REDIS FILES ===
+dump.rdb
+*.rdb
+redis.conf
+
+# === MODEL FILES (AI/ML models, not code) ===
+/models/
+ollama/
+*.ggml
+*.bin
+.huggingface/
+
+# === RUNTIME FILES ===
+*.pid
+*.seed
+*.pid.lock
+*.sock
+*.dmp
+core.*
+
+# === SETUP ARTIFACTS ===
+setup.log
+install.log
+
+# === TESTING ARTIFACTS ===
+coverage/
+.nyc_output/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# === TEST GENERATED FILES ===
+# All test-generated files must be in test_results folder
+test_results/
+tests/results/
+tests/**/output/
+tests/**/*.generated
+tests/**/*.report
+tests/**/*.result
+tests/**/*.tmp
+tests/**/*.log
+
+# === REPORTS FOLDER ===
+# All reports are generated content and should not be committed
+reports/
+
+# === REPORTS AND ANALYSIS (GENERATED) ===
+# Generated reports that can be recreated
+docs/reports/*.json
+docs/reports/*-report.json
+docs/reports/*-report.md
+docs/reports/*analysis*.json
+docs/reports/code-quality-*.json
+docs/reports/security-*.json
+docs/reports/performance-*.json
+docs/reports/accessibility-*.json
+docs/reports/console-*.json
+docs/reports/frontend-*.json
+docs/reports/backend-*.json
+
+# Legacy report patterns (prevent in root)
+/*_analysis_report.json
+/*-analysis-report.json
+/code_analysis_report.json
+/architectural_analysis_report.json
+/env_analysis_report.json
+/frontend_analysis_report.json
+/gpu_model_recommendations.json
+/security_audit_results.json
+
+# Legacy test and QA reports (prevent in root)
+/TESTING_FRAMEWORK_SUMMARY.md
+/TEST_RESULTS_SUMMARY.md
+/FRONTEND_FIXES_COMPLETION_SUMMARY.md
+/accessibility-fix-report.*
+/console-cleanup-report.*
+
+# === CHROME/CHROMADB ===
+chromadb/
+*.chromadb
+
+# === BUILD TOOLS CACHE ===
+.eslintcache
+.prettiercache
+*.tsbuildinfo
+.vue-tsc-cache/
+
+# === PACKAGE DISTRIBUTIONS ===
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+wheels/
+*.whl
+
+# === JUPYTER ===
+.ipynb_checkpoints
+
+# === DOCKER ===
+.dockerignore
+Dockerfile.*
+
+# === MISC ===
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+share/python-wheels/
+
+# noVNC vendor files
+novnc/
+
+# External test files
+tests/external/
+
+# Environment templates with example secrets
+examples/env_template.txt
+data/file_manager_root/Rag_optimization_methods.md
+# Security audit files with git commit hashes
+reports/**/security_audit_*.json
+
+# === EXTERNAL GIT REPOSITORIES ===
+# External projects/submodules that are independent repositories
+code-index-mcp/
+mcp-github-project-manager/
+mcp-tools/context7/
+mcp-tools/mcp-structured-thinking/
+mcp-tools/mcp-task-manager-server/
+
+# Large log and analysis files
+*.log.bak
+reports/archives/**/duplicate_analysis_results*.json
+reports/archives/**/*.log.bak
+
+# Files over 50MB
+reports/archives/archive_*/other/*.log.bak
+reports/archives/archive_*/analysis_reports/duplicate_analysis_results*.json
+
+# Logs and backups - should never be in repo
+*.log
+*.log.*
+*.bak
+*.backup
+*.old
+*.tmp
+*.temp
+
+# Archive directories with logs/backups
+reports/archives/
+logs/
+backups/
+temp/
+tmp/
+
+# Large files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# TLS Certificates (generated by scripts/security/generate-tls-certificates.sh)
+certs/
+*.pem
+*.csr
+*.key
+*.crt
+config/service-keys/
+
+# === MCP DIRECTORY EXCLUSIONS ===
+# Prevent MCP binaries and archives from being tracked
+.mcp/github-mcp-server
+.mcp/github-mcp-server*
+.mcp/*.tar.gz
+.mcp/*.zip
+.mcp/node_modules/
+
+# === IDE DIRECTORIES (STRENGTHEN EXCLUSIONS) ===
+# Ensure .vscode directories are excluded at all levels
+/.vscode/
+**/.vscode/
+.vscode/*
+*/.vscode/
+
+# === BACKUP DIRECTORIES THAT KEEP APPEARING ===
+# Specific backup directories from past debugging sessions
+.accessibility-fix-backups/
+.console-cleanup-backups/
+.sidebar-backups/
+backup/
+backups/
+
+# === ADDITIONAL CLOUD PROVIDER CREDENTIALS ===
+# AWS credentials
+.aws/credentials
+.aws/config
+
+# Google Cloud credentials
+gcloud-credentials.json
+*-gcloud-key.json
+service-account*.json
+
+# Azure credentials
+.azure/credentials
+
+# === DATABASE BACKUPS ===
+# Database backup files
+*.sql.gz
+*.sql.bz2
+*.dump
+*.backup.sql
+database-backup-*
+
+# === KUBERNETES SECRETS ===
+secrets/
+*secret.yaml
+*secret.yml
+
+# === TERRAFORM STATE ===
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# === ANSIBLE VAULT ===
+vault.yml
+vault.yaml
+*-vault.yml
+# Issue #700: Vault password files
+.vault_pass
+.vault_password
+*vault_pass*
+*vault_password*
+ansible/inventory/group_vars/vault.yml
+
+.claude/agents-optimized/
+.claude/.optimization_cache.json
+
+# Git worktrees for isolated development
+.worktrees/
+
+# Redis admin credentials (Issue #725)
+certs/.redis-admin-credentials
+slm-server/.env
+dev_creds_backup

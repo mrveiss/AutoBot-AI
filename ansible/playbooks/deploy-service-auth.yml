@@ -1,0 +1,216 @@
+---
+# Service Authentication Deployment Playbook
+# Deploys service keys and authentication middleware to AutoBot's 6-VM infrastructure
+
+- name: "Deploy Service Authentication - Day 2 (Logging Mode)"
+  hosts: all
+  become: true
+  vars:
+    service_keys_backup: "config/service-keys"
+    middleware_file: "{{ middleware_type | default('service_auth_logging.py') }}"
+    deployment_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+
+  pre_tasks:
+    - name: Display deployment information
+      debug:
+        msg:
+          - "🔐 AutoBot Service Authentication Deployment"
+          - "Deployment Mode: {{ 'LOGGING' if middleware_file == 'service_auth_logging.py' else 'ENFORCEMENT' }}"
+          - "Target Hosts: {{ ansible_play_hosts | length }} VMs"
+          - "Timestamp: {{ deployment_timestamp }}"
+          - "Middleware: {{ middleware_file }}"
+      run_once: true
+      delegate_to: localhost
+
+  tasks:
+    # ==========================================
+    # DISTRIBUTE SERVICE KEYS TO ALL VMS
+    # ==========================================
+
+    - name: Create AutoBot configuration directory
+      file:
+        path: /etc/autobot
+        state: directory
+        owner: autobot
+        group: autobot
+        mode: '0750'
+
+    - name: Create service keys directory
+      file:
+        path: /etc/autobot/service-keys
+        state: directory
+        owner: autobot
+        group: autobot
+        mode: '0700'  # Restrictive - keys are sensitive
+
+    - name: Find latest service keys backup
+      find:
+        paths: "{{ playbook_dir }}/../../config/service-keys"
+        patterns: "service-keys-*.yaml"
+      register: service_keys_files
+      delegate_to: localhost
+      run_once: true
+
+    - name: Get latest keys file
+      set_fact:
+        latest_keys_file: "{{ (service_keys_files.files | sort(attribute='mtime') | last).path }}"
+      run_once: true
+      delegate_to: localhost
+
+    - name: Display keys file being deployed
+      debug:
+        msg: "Deploying keys from: {{ latest_keys_file }}"
+      run_once: true
+
+    - name: Load service keys configuration
+      set_fact:
+        service_keys_config: "{{ lookup('file', latest_keys_file) | from_yaml }}"
+      delegate_to: localhost
+
+    - name: Determine this host's service ID
+      set_fact:
+        this_service_id: >-
+          {%- if inventory_hostname in groups['backend'] -%}main-backend
+          {%- elif inventory_hostname in groups['frontend'] -%}frontend
+          {%- elif inventory_hostname in groups['npu'] -%}npu-worker
+          {%- elif inventory_hostname in groups['database'] -%}redis-stack
+          {%- elif inventory_hostname in groups['aiml'] -%}ai-stack
+          {%- elif inventory_hostname in groups['browser'] -%}browser-service
+          {%- else -%}unknown{%- endif -%}
+
+    - name: Display assigned service ID
+      debug:
+        msg: "This host is: {{ this_service_id }} ({{ inventory_hostname }})"
+
+    - name: Deploy service key to VM
+      copy:
+        content: |
+          # Service Authentication Key
+          # Service: {{ this_service_id }}
+          # Generated: {{ service_keys_config.generated_at }}
+          # DO NOT SHARE OR COMMIT TO VERSION CONTROL
+
+          SERVICE_ID={{ this_service_id }}
+          SERVICE_KEY={{ service_keys_config.services[this_service_id].key }}
+          REDIS_HOST={{ service_keys_config.redis_host }}
+          REDIS_PORT={{ service_keys_config.redis_port }}
+        dest: /etc/autobot/service-keys/{{ this_service_id }}.env
+        owner: autobot
+        group: autobot
+        mode: '0600'  # Read-only by autobot user
+      when: this_service_id != 'unknown'
+
+    - name: Verify service key deployed
+      stat:
+        path: /etc/autobot/service-keys/{{ this_service_id }}.env
+      register: key_file_stat
+      when: this_service_id != 'unknown'
+
+    - name: Display deployment status
+      debug:
+        msg: "✅ Service key deployed: {{ key_file_stat.stat.path if key_file_stat.stat.exists else 'FAILED' }}"
+      when: this_service_id != 'unknown'
+
+    # ==========================================
+    # DEPLOY MIDDLEWARE TO MAIN BACKEND
+    # ==========================================
+
+    - name: Deploy service authentication middleware
+      when: inventory_hostname in groups['backend']
+      block:
+        - name: Create backend middleware directory
+          file:
+            path: /home/autobot/backend/middleware
+            state: directory
+            owner: autobot
+            group: autobot
+            mode: '0755'
+
+        - name: Copy authentication middleware file
+          copy:
+            src: "{{ playbook_dir }}/../../backend/middleware/{{ middleware_file }}"
+            dest: /home/autobot/backend/middleware/{{ middleware_file }}
+            owner: autobot
+            group: autobot
+            mode: '0644'
+
+        - name: Copy service_auth.py module
+          copy:
+            src: "{{ playbook_dir }}/../../backend/security/service_auth.py"
+            dest: /home/autobot/backend/security/service_auth.py
+            owner: autobot
+            group: autobot
+            mode: '0644'
+
+        - name: Update app_factory.py to load middleware
+          blockinfile:
+            path: /home/autobot/backend/app_factory.py
+            marker: "# {mark} SERVICE AUTH MIDDLEWARE - ANSIBLE MANAGED"
+            insertafter: "def create_app"
+            block: |
+              # Service authentication middleware
+              from backend.middleware.{{ middleware_file.replace('.py', '') }} import {{ 'ServiceAuthLoggingMiddleware' if 'logging' in middleware_file else 'ServiceAuthEnforcementMiddleware' }}
+              app.add_middleware({{ 'ServiceAuthLoggingMiddleware' if 'logging' in middleware_file else 'ServiceAuthEnforcementMiddleware' }})
+
+        - name: Restart backend service
+          systemd:
+            name: autobot-backend
+            state: restarted
+          ignore_errors: true  # Service might not be systemd-managed yet
+
+    # ==========================================
+    # DEPLOY SERVICE CLIENT TO ALL VMS
+    # ==========================================
+
+    - name: Deploy service HTTP client
+      copy:
+        src: "{{ playbook_dir }}/../../backend/utils/service_client.py"
+        dest: /home/autobot/backend/utils/service_client.py
+        owner: autobot
+        group: autobot
+        mode: '0644'
+
+    # ==========================================
+    # VERIFICATION
+    # ==========================================
+
+    - name: Verify service key file exists
+      stat:
+        path: /etc/autobot/service-keys/{{ this_service_id }}.env
+      register: final_key_check
+      when: this_service_id != 'unknown'
+
+    - name: Display final verification
+      debug:
+        msg:
+          - "✅ Deployment complete for {{ this_service_id }}"
+          - "Service key: {{ 'PRESENT' if final_key_check.stat.exists else 'MISSING' }}"
+          - "Middleware: {{ middleware_file }}"
+      when: this_service_id != 'unknown'
+
+# ==========================================
+# POST-DEPLOYMENT SUMMARY
+# ==========================================
+
+- name: "Deployment Summary"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Display completion message
+      debug:
+        msg:
+          - "🎉 Service Authentication Deployment Complete!"
+          - "=========================================="
+          - ""
+          - "Deployment Mode: {{ 'LOGGING (Day 2)' if middleware_file == 'service_auth_logging.py' else 'ENFORCEMENT (Day 3)' }}"
+          - "VMs Configured: 6 (main-backend, frontend, npu-worker, redis-stack, ai-stack, browser-service)"
+          - ""
+          - "Next Steps:"
+          - "  1. Monitor logs: tail -f /var/log/autobot/service-auth-audit.log"
+          - "  2. Verify auth attempts: grep 'Auth' /var/log/autobot/*.log"
+          - "  3. Wait 24 hours for logging phase"
+          - "  4. Review patterns before enabling enforcement"
+          - ""
+          - "To switch to enforcement mode:"
+          - "  ansible-playbook deploy-service-auth.yml --extra-vars 'middleware_file=service_auth_enforcement.py'"

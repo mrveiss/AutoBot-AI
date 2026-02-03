@@ -1,0 +1,21 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+[Unit]
+Description=AutoBot Frontend (Vite Dev Server)
+After=network.target
+
+[Service]
+Type=simple
+User={{ frontend_user }}
+Group={{ frontend_group }}
+WorkingDirectory={{ frontend_install_dir }}/autobot-vue
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/npm run dev -- --host {{ frontend_host }} --port {{ frontend_port }}
+Restart=always
+RestartSec=5
+StandardOutput=append:{{ frontend_log_dir }}/frontend.log
+StandardError=append:{{ frontend_log_dir }}/frontend-error.log
+
+[Install]
+WantedBy=multi-user.target

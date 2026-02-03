@@ -1,0 +1,24 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# AI Stack configuration defaults
+ai_user: autobot
+ai_group: autobot
+ai_install_dir: /opt/autobot/ai-stack
+ai_log_dir: /var/log/autobot
+ai_data_dir: /var/lib/autobot
+
+# Server settings
+ai_host: "0.0.0.0"
+ai_port: 8080
+
+# ChromaDB
+chromadb_persist_dir: /var/lib/autobot/chromadb
+chromadb_host: "0.0.0.0"
+chromadb_port: 8000
+
+# Redis connection
+ai_redis_host: "172.16.168.23"
+ai_redis_port: 6379
+ai_redis_password: ""

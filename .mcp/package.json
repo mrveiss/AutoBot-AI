@@ -1,0 +1,17 @@
+{
+  "name": "autobot-mcp-server",
+  "version": "1.0.0",
+  "description": "Custom MCP server for AutoBot development workflow",
+  "type": "module",
+  "main": "autobot-mcp-server.js",
+  "scripts": {
+    "start": "node autobot-mcp-server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.4"
+  },
+  "keywords": ["mcp", "autobot", "development", "workflow"],
+  "author": "AutoBot Development Team",
+  "license": "MIT"
+}

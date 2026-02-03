@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  playwright-vnc:
+    image: mcr.microsoft.com/playwright:v1.54.0-jammy
+    container_name: autobot-playwright-vnc
+    restart: unless-stopped
+    environment:
+      - DISPLAY=:99
+      - HEADLESS=false
+      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
+      - SCREEN_WIDTH=1920
+      - SCREEN_HEIGHT=1080
+      - SCREEN_DEPTH=24
+      - DEBIAN_FRONTEND=noninteractive
+      - TZ=UTC
+    volumes:
+      - ./playwright-server.js:/app/server.js
+    ports:
+      - "3000:3000"    # Playwright API
+      - "5901:5901"    # VNC port (avoiding Kali's default 5900)
+      - "6080:6080"    # noVNC web interface
+    command: >
+      bash -c "
+        set -e
+        echo '🚀 Setting up VNC environment...'
+
+        # Install required packages only if not present
+        export DEBIAN_FRONTEND=noninteractive
+        if ! command -v supervisord &> /dev/null; then
+          apt-get update -qq
+          apt-get install -y --no-install-recommends x11vnc xvfb novnc websockify supervisor
+          apt-get clean && rm -rf /var/lib/apt/lists/*
+        fi
+
+        # Create supervisor config directory
+        mkdir -p /etc/supervisor/conf.d
+
+        # Create supervisor config file
+        echo '[supervisord]' > /etc/supervisor/conf.d/autobot.conf
+        echo 'nodaemon=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'logfile=/var/log/supervisor/supervisord.log' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'pidfile=/tmp/supervisord.pid' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:xvfb]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -ac -nolisten tcp' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=100' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:x11vnc]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/bin/x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -ncache 10 -forever -shared -rfbport 5901' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=200' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:novnc]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=/usr/share/novnc/utils/launch.sh --vnc localhost:5901 --listen 6080' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=300' >> /etc/supervisor/conf.d/autobot.conf
+        echo '' >> /etc/supervisor/conf.d/autobot.conf
+        echo '[program:playwright]' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'command=bash -c \"cd /app && if [ ! -f package.json ]; then npm init -y; fi && npm install express playwright && node server.js\"' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autostart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'autorestart=true' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'priority=400' >> /etc/supervisor/conf.d/autobot.conf
+        echo 'environment=DISPLAY=\":99\",HEADLESS=\"false\"' >> /etc/supervisor/conf.d/autobot.conf
+
+        # Create log directory for supervisor
+        mkdir -p /var/log/supervisor /var/log
+
+        echo '🚀 Starting all services with supervisor...'
+        exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health && curl -f http://localhost:6080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+networks:
+  default:
+    name: autobot-network
+    external: true

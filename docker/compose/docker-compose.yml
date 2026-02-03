@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  # Redis Stack - Data persistence and caching
+  redis:
+    image: redis/redis-stack:latest
+    container_name: autobot-redis
+    ports:
+      - "6379:6379"
+      - "8001:8001"  # RedisInsight web UI
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    networks:
+      - autobot-network
+
+  # Knowledge Base Service - RAG and vector operations
+  knowledge-base:
+    build:
+      context: .
+      dockerfile: docker/knowledge-base.Dockerfile
+    container_name: autobot-knowledge-base
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data:/app/data:ro
+      - knowledge_data:/app/vector_store
+    environment:
+      - CHROMA_HOST=0.0.0.0
+      - CHROMA_PORT=8002
+      - REDIS_URL=redis://redis:6379
+      - EMBEDDING_MODEL=nomic-embed-text
+    depends_on:
+      - redis
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # RAG Agent - Document processing and synthesis
+  rag-agent:
+    build:
+      context: .
+      dockerfile: docker/rag-agent.Dockerfile
+    container_name: autobot-rag-agent
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./data:/app/data:ro
+      - ./prompts:/app/prompts:ro
+    environment:
+      - AGENT_TYPE=rag
+      - MODEL_NAME=artifish/llama3.2-uncensored:latest
+      - REDIS_URL=redis://redis:6379
+      - KNOWLEDGE_BASE_URL=http://knowledge-base:8002
+    depends_on:
+      - redis
+      - knowledge-base
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 2G
+
+  # Chat Agent - Lightweight conversational AI
+  chat-agent:
+    build:
+      context: .
+      dockerfile: docker/chat-agent.Dockerfile
+    container_name: autobot-chat-agent
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./prompts:/app/prompts:ro
+    environment:
+      - AGENT_TYPE=chat
+      - MODEL_NAME=llama3.2:3b-instruct-q4_K_M
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Research Agent with Playwright - Web scraping and automation
+  research-agent:
+    build:
+      context: .
+      dockerfile: docker/research-agent.Dockerfile
+    container_name: autobot-research-agent
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./data:/app/data:ro
+      - ./prompts:/app/prompts:ro
+    environment:
+      - AGENT_TYPE=research
+      - MODEL_NAME=artifish/llama3.2-uncensored:latest
+      - REDIS_URL=redis://redis:6379
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    depends_on:
+      - redis
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    # Enable GUI for Playwright in headless mode
+    shm_size: 2gb
+
+  # Frontend - Vue 3 application
+  frontend:
+    build:
+      context: ./autobot-vue
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: autobot-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./autobot-vue/src:/app/src:ro
+      - ./autobot-vue/public:/app/public:ro
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8001
+    networks:
+      - autobot-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+volumes:
+  redis_data:
+    driver: local
+  knowledge_data:
+    driver: local
+
+networks:
+  autobot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

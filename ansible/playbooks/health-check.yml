@@ -1,0 +1,544 @@
+---
+# Health Check Playbook
+# Validates all AutoBot services across the 5-VM deployment
+
+- name: "AutoBot Health Check and Validation"
+  hosts: all
+  gather_facts: true
+  serial: "{{ ansible_serial | default(0) }}"  # Check all VMs in parallel
+  
+  vars:
+    health_check_timeout: 30
+    service_check_retries: 3
+    
+  pre_tasks:
+    - name: Display health check information
+      debug:
+        msg:
+          - "🏥 AutoBot Health Check Starting"
+          - "VM: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "Role: {{ group_names | join(', ') }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      tags: always
+
+  tasks:
+    # ==========================================
+    # SYSTEM HEALTH CHECKS
+    # ==========================================
+    
+    - name: Check system uptime and load
+      command: uptime
+      register: system_uptime
+      changed_when: false
+      tags: [system, always]
+
+    - name: Display system status
+      debug:
+        msg: "System status: {{ system_uptime.stdout }}"
+      tags: [system, always]
+
+    - name: Check available disk space
+      shell: df -h / | tail -n 1 | awk '{print $4 " free (" $5 " used)"}'
+      register: disk_usage
+      changed_when: false
+      tags: [system, always]
+
+    - name: Display disk usage
+      debug:
+        msg: "Disk usage: {{ disk_usage.stdout }}"
+      tags: [system, always]
+
+    - name: Check memory usage
+      shell: free -h | grep '^Mem:' | awk '{print $7 " free (" $3 " used)"}'
+      register: memory_usage
+      changed_when: false
+      tags: [system, always]
+
+    - name: Display memory usage
+      debug:
+        msg: "Memory usage: {{ memory_usage.stdout }}"
+      tags: [system, always]
+
+    - name: Check for high CPU usage processes
+      shell: ps aux --sort=-%cpu | head -10
+      register: cpu_processes
+      changed_when: false
+      tags: [system]
+
+    # ==========================================
+    # NETWORK CONNECTIVITY CHECKS
+    # ==========================================
+    
+    - name: Test internal network connectivity
+      command: ping -c 3 {{ hostvars[item]['ansible_default_ipv4']['address'] }}
+      loop: "{{ groups['all'] }}"
+      when: item != inventory_hostname
+      register: network_tests
+      changed_when: false
+      failed_when: false
+      tags: [network]
+
+    - name: Display network test results
+      debug:
+        msg: "Network connectivity to {{ item.item }}: {{ 'OK' if item.rc == 0 else 'FAILED' }}"
+      loop: "{{ network_tests.results | default([]) }}"
+      when: item is not skipped
+      tags: [network]
+
+    - name: Check DNS resolution
+      command: nslookup google.com
+      register: dns_test
+      changed_when: false
+      failed_when: false
+      tags: [network]
+
+    - name: Display DNS test result
+      debug:
+        msg: "DNS resolution: {{ 'OK' if dns_test.rc == 0 else 'FAILED' }}"
+      tags: [network]
+
+    # ==========================================
+    # FRONTEND VM HEALTH CHECKS
+    # ==========================================
+    
+    - name: Check Nginx status (Frontend)
+      systemd:
+        name: nginx
+      register: nginx_status
+      when: inventory_hostname in groups['frontend']
+      tags: [frontend, services]
+
+    - name: Test Nginx configuration (Frontend)
+      command: nginx -t
+      register: nginx_config_test
+      changed_when: false
+      when: inventory_hostname in groups['frontend']
+      tags: [frontend, services]
+
+    - name: Check frontend application port (Frontend)
+      wait_for:
+        port: 5173
+        host: 127.0.0.1
+        timeout: 10
+      when: inventory_hostname in groups['frontend']
+      tags: [frontend, services]
+
+    - name: Test frontend HTTP response (Frontend)
+      uri:
+        url: "http://127.0.0.1/health"
+        method: GET
+        timeout: 10
+      register: frontend_http_test
+      when: inventory_hostname in groups['frontend']
+      tags: [frontend, services]
+
+    # ==========================================
+    # BACKEND VM HEALTH CHECKS
+    # ==========================================
+    
+    - name: Check AutoBot backend service (Backend)
+      systemd:
+        name: autobot-backend
+      register: backend_service_status
+      when: inventory_hostname in groups['backend']
+      tags: [backend, services]
+
+    - name: Test backend API health endpoint (Backend)
+      uri:
+        url: "http://127.0.0.1:8001/api/health"
+        method: GET
+        timeout: 15
+      register: backend_health_test
+      when: inventory_hostname in groups['backend']
+      tags: [backend, services]
+
+    - name: Test backend system status endpoint (Backend)
+      uri:
+        url: "http://127.0.0.1:8001/api/system/status"
+        method: GET
+        timeout: 15
+      register: backend_status_test
+      when: inventory_hostname in groups['backend']
+      tags: [backend, services]
+
+    - name: Check backend log files (Backend)
+      stat:
+        path: "/var/log/autobot/backend"
+      register: backend_logs
+      when: inventory_hostname in groups['backend']
+      tags: [backend, logs]
+
+    # ==========================================
+    # DATABASE VM HEALTH CHECKS
+    # ==========================================
+    
+    - name: Check Redis Stack service (Database)
+      systemd:
+        name: redis-stack-server
+      register: redis_service_status
+      when: inventory_hostname in groups['database']
+      tags: [database, services]
+
+    - name: Test Redis connectivity (Database)
+      command: redis-cli -h 127.0.0.1 -p 6379 ping
+      register: redis_ping_test
+      changed_when: false
+      when: inventory_hostname in groups['database']
+      tags: [database, services]
+
+    - name: Check Redis memory usage (Database)
+      command: redis-cli -h 127.0.0.1 -p 6379 info memory
+      register: redis_memory_info
+      changed_when: false
+      when: inventory_hostname in groups['database']
+      tags: [database, monitoring]
+
+    - name: Check Redis database sizes (Database)
+      shell: |
+        for db in {0..9} 15; do
+          size=$(redis-cli -h 127.0.0.1 -p 6379 -n $db dbsize)
+          echo "DB $db: $size keys"
+        done
+      register: redis_db_sizes
+      changed_when: false
+      when: inventory_hostname in groups['database']
+      tags: [database, monitoring]
+
+    - name: Display Redis database information (Database)
+      debug:
+        msg: "{{ redis_db_sizes.stdout_lines }}"
+      when: inventory_hostname in groups['database'] and redis_db_sizes is defined
+      tags: [database, monitoring]
+
+    - name: Test RedisInsight accessibility (Database)
+      uri:
+        url: "http://127.0.0.1:8002"
+        method: GET
+        timeout: 10
+      register: redisinsight_test
+      failed_when: false
+      when: inventory_hostname in groups['database']
+      tags: [database, services]
+
+    # ==========================================
+    # AI/ML VM HEALTH CHECKS
+    # ==========================================
+    
+    - name: Check AI Stack service (AI/ML)
+      systemd:
+        name: autobot-ai-stack
+      register: ai_stack_service_status
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, services]
+
+    - name: Check NPU Worker service (AI/ML)
+      systemd:
+        name: autobot-npu-worker
+      register: npu_worker_service_status
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, services]
+
+    - name: Test AI Stack health endpoint (AI/ML)
+      uri:
+        url: "http://127.0.0.1:8080/health"
+        method: GET
+        timeout: 20
+      register: ai_stack_health_test
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, services]
+
+    - name: Test NPU Worker health endpoint (AI/ML)
+      uri:
+        url: "http://127.0.0.1:8081/health"
+        method: GET
+        timeout: 20
+      register: npu_worker_health_test
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, services]
+
+    - name: Check for GPU/NPU devices (AI/ML)
+      shell: |
+        echo "GPU devices:"
+        lspci | grep -i 'vga\|3d\|nvidia' || echo "No GPU devices found"
+        echo "NPU/AI devices:"
+        lspci | grep -i 'neural\|npu\|ai' || echo "No NPU devices found"
+        echo "Intel devices:"
+        lspci | grep -i intel || echo "No Intel devices found"
+      register: hardware_devices
+      changed_when: false
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, hardware]
+
+    - name: Display hardware devices (AI/ML)
+      debug:
+        msg: "{{ hardware_devices.stdout_lines }}"
+      when: inventory_hostname in groups['aiml'] and hardware_devices is defined
+      tags: [aiml, hardware]
+
+    - name: Check model storage (AI/ML)
+      stat:
+        path: "/var/lib/autobot/models"
+      register: model_storage_check
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, storage]
+
+    - name: Count model files (AI/ML)
+      find:
+        paths: "/var/lib/autobot/models"
+        patterns: "*"
+        file_type: file
+        recurse: true
+      register: model_files_count
+      when: inventory_hostname in groups['aiml'] and model_storage_check.stat.exists
+      tags: [aiml, storage]
+
+    - name: Display model storage information (AI/ML)
+      debug:
+        msg: "Model storage: {{ model_files_count.matched | default(0) }} files in {{ model_storage_check.stat.path if model_storage_check.stat.exists else 'directory not found' }}"
+      when: inventory_hostname in groups['aiml']
+      tags: [aiml, storage]
+
+    # ==========================================
+    # BROWSER VM HEALTH CHECKS
+    # ==========================================
+    
+    - name: Check VNC server service (Browser)
+      systemd:
+        name: autobot-vnc-server
+      register: vnc_service_status
+      when: inventory_hostname in groups['browser']
+      tags: [browser, services]
+
+    - name: Check Playwright service (Browser)
+      systemd:
+        name: autobot-playwright
+      register: playwright_service_status
+      when: inventory_hostname in groups['browser']
+      tags: [browser, services]
+
+    - name: Test VNC server port (Browser)
+      wait_for:
+        port: 5901
+        host: 127.0.0.1
+        timeout: 10
+      register: vnc_port_test
+      when: inventory_hostname in groups['browser']
+      tags: [browser, services]
+
+    - name: Test Playwright API health (Browser)
+      uri:
+        url: "http://127.0.0.1:3000/health"
+        method: GET
+        timeout: 15
+      register: playwright_health_test
+      when: inventory_hostname in groups['browser']
+      tags: [browser, services]
+
+    - name: Check desktop environment processes (Browser)
+      shell: ps aux | grep -E '(xfce|vnc|X)' | grep -v grep
+      register: desktop_processes
+      changed_when: false
+      when: inventory_hostname in groups['browser']
+      tags: [browser, desktop]
+
+    - name: Display desktop processes (Browser)
+      debug:
+        msg: "Desktop processes: {{ desktop_processes.stdout_lines | length }} running"
+      when: inventory_hostname in groups['browser'] and desktop_processes is defined
+      tags: [browser, desktop]
+
+    # ==========================================
+    # SECURITY CHECKS
+    # ==========================================
+    
+    - name: Check firewall status
+      command: ufw status
+      register: firewall_status
+      changed_when: false
+      tags: [security]
+
+    - name: Display firewall status
+      debug:
+        msg: "Firewall: {{ 'Active' if 'Status: active' in firewall_status.stdout else 'Inactive' }}"
+      tags: [security]
+
+    - name: Check fail2ban status
+      systemd:
+        name: fail2ban
+      register: fail2ban_status
+      tags: [security]
+
+    - name: Check for suspicious processes
+      shell: ps aux --sort=-%cpu | head -20
+      register: top_processes
+      changed_when: false
+      tags: [security]
+
+    # ==========================================
+    # LOG FILE CHECKS
+    # ==========================================
+    
+    - name: Check for recent errors in system logs
+      shell: journalctl --since "1 hour ago" --priority=err --no-pager --lines=10
+      register: system_errors
+      changed_when: false
+      failed_when: false
+      tags: [logs]
+
+    - name: Display recent system errors
+      debug:
+        msg: "Recent errors: {{ system_errors.stdout_lines | length }} found"
+      when: system_errors.stdout_lines is defined and system_errors.stdout_lines | length > 0
+      tags: [logs]
+
+    - name: Check AutoBot service logs
+      shell: journalctl -u autobot-* --since "1 hour ago" --no-pager --lines=5
+      register: autobot_logs
+      changed_when: false
+      failed_when: false
+      tags: [logs]
+
+  post_tasks:
+    # ==========================================
+    # VM-SPECIFIC HEALTH SUMMARY
+    # ==========================================
+    
+    - name: Generate VM health summary
+      set_fact:
+        vm_health_summary:
+          vm_name: "{{ inventory_hostname }}"
+          vm_role: "{{ group_names | join(', ') }}"
+          system_uptime: "{{ system_uptime.stdout | default('Unknown') }}"
+          disk_usage: "{{ disk_usage.stdout | default('Unknown') }}"
+          memory_usage: "{{ memory_usage.stdout | default('Unknown') }}"
+          services_status: "{{ 'OK' if ansible_failed_task is not defined else 'Issues detected' }}"
+      tags: always
+
+    - name: Display VM health summary
+      debug:
+        msg:
+          - "🏥 {{ vm_health_summary.vm_name }} Health Summary"
+          - "======================================"
+          - "Role: {{ vm_health_summary.vm_role }}"
+          - "Uptime: {{ vm_health_summary.system_uptime }}"
+          - "Disk: {{ vm_health_summary.disk_usage }}"
+          - "Memory: {{ vm_health_summary.memory_usage }}"
+          - "Services: {{ vm_health_summary.services_status }}"
+      tags: always
+
+# ==========================================
+# INTEGRATION TESTS
+# ==========================================
+
+- name: "Integration Health Tests"
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Test frontend to backend connectivity
+      uri:
+        url: "http://192.168.100.10/api/health"
+        method: GET
+        timeout: 15
+      register: frontend_backend_test
+      failed_when: false
+      tags: [integration]
+
+    - name: Test backend to database connectivity
+      uri:
+        url: "http://192.168.100.20:8001/api/system/redis"
+        method: GET
+        timeout: 15
+      register: backend_database_test
+      failed_when: false
+      tags: [integration]
+
+    - name: Test backend to AI/ML connectivity
+      uri:
+        url: "http://192.168.100.20:8001/api/ai/status"
+        method: GET
+        timeout: 30
+      register: backend_ai_test
+      failed_when: false
+      tags: [integration]
+
+    - name: Display integration test results
+      debug:
+        msg:
+          - "🔗 Integration Test Results"
+          - "=============================="
+          - "Frontend → Backend: {{ 'OK' if frontend_backend_test.status == 200 else 'FAILED' }}"
+          - "Backend → Database: {{ 'OK' if backend_database_test.status == 200 else 'FAILED' }}"
+          - "Backend → AI/ML: {{ 'OK' if backend_ai_test.status == 200 else 'TIMEOUT/FAILED' }}"
+      tags: [integration]
+
+# ==========================================
+# FINAL HEALTH REPORT
+# ==========================================
+
+- name: "Generate Final Health Report"
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Collect VM health data
+      set_fact:
+        overall_health:
+          frontend_vm: "{{ hostvars[groups['frontend'][0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) }}"
+          backend_vm: "{{ hostvars[groups['backend'][0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) }}"
+          database_vm: "{{ hostvars[groups['database'][0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) }}"
+          aiml_vm: "{{ hostvars[groups['aiml'][0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) }}"
+          browser_vm: "{{ hostvars[groups['browser'][0]]['vm_health_summary'] | default({'services_status': 'Unknown'}) }}"
+
+    - name: Generate final health report
+      debug:
+        msg:
+          - ""
+          - "🎉 AutoBot Health Check Complete"
+          - "======================================="
+          - ""
+          - "🌐 Frontend VM: {{ overall_health.frontend_vm.services_status }}"
+          - "🔧 Backend VM: {{ overall_health.backend_vm.services_status }}"
+          - "🗄️ Database VM: {{ overall_health.database_vm.services_status }}"
+          - "🤖 AI/ML VM: {{ overall_health.aiml_vm.services_status }}"
+          - "🌐 Browser VM: {{ overall_health.browser_vm.services_status }}"
+          - ""
+          - "📊 Service Endpoints:"
+          - "  Frontend: http://192.168.100.10"
+          - "  Backend: http://192.168.100.20:8001/api"
+          - "  Database: redis://192.168.100.50:6379"
+          - "  AI Stack: http://192.168.100.30:8080"
+          - "  Browser: http://192.168.100.40:3000"
+          - ""
+          - "🔍 For detailed analysis, check individual VM logs:"
+          - "  sudo journalctl -u autobot-* --since '1 hour ago'"
+          - ""
+          - "✅ Health check completed at {{ ansible_date_time.iso8601 }}"
+
+    - name: Save health report to file
+      copy:
+        content: |
+          AutoBot Health Check Report
+          ===========================
+          Date: {{ ansible_date_time.iso8601 }}
+          
+          VM Health Status:
+          - Frontend VM: {{ overall_health.frontend_vm.services_status }}
+          - Backend VM: {{ overall_health.backend_vm.services_status }}
+          - Database VM: {{ overall_health.database_vm.services_status }}
+          - AI/ML VM: {{ overall_health.aiml_vm.services_status }}
+          - Browser VM: {{ overall_health.browser_vm.services_status }}
+          
+          Integration Tests:
+          - Frontend → Backend: {{ 'OK' if hostvars['localhost']['frontend_backend_test']['status'] | default(0) == 200 else 'FAILED' }}
+          - Backend → Database: {{ 'OK' if hostvars['localhost']['backend_database_test']['status'] | default(0) == 200 else 'FAILED' }}
+          - Backend → AI/ML: {{ 'OK' if hostvars['localhost']['backend_ai_test']['status'] | default(0) == 200 else 'TIMEOUT/FAILED' }}
+          
+          Next Steps:
+          1. Review any failed services
+          2. Check system logs for errors
+          3. Validate application functionality
+          4. Monitor resource usage
+        dest: "/var/log/autobot/health-check-report-{{ ansible_date_time.iso8601_basic_short }}.txt"
+        mode: '0644'
+      become: true

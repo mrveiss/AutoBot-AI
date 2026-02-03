@@ -1,0 +1,29 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Backend configuration defaults
+backend_user: autobot
+backend_group: autobot
+backend_install_dir: /opt/autobot/backend
+backend_log_dir: /var/log/autobot
+backend_data_dir: /var/lib/autobot
+
+# Deployment
+backend_repo_url: "https://github.com/mrveiss/AutoBot-AI.git"
+backend_version: main
+backend_deploy_from_git: true
+
+# Server settings
+backend_host: "0.0.0.0"
+backend_port: 8001
+backend_workers: 4
+
+# Redis connection
+backend_redis_host: "172.16.168.23"
+backend_redis_port: 6379
+backend_redis_password: ""
+
+# API settings
+backend_secret_key: "change-me-in-production"
+backend_cors_origins: "*"

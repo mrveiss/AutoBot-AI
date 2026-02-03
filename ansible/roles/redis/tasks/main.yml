@@ -1,0 +1,164 @@
+---
+# Redis role - Redis Stack deployment for AutoBot database layer
+
+- name: "Redis | Add Redis GPG key"
+  apt_key:
+    url: https://packages.redis.io/gpg
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Add Redis Stack repository"
+  apt_repository:
+    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    state: present
+    filename: redis
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Update apt cache"
+  apt:
+    update_cache: yes
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Install Redis Stack"
+  apt:
+    name:
+      - redis-stack-server
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Create Redis data directory"
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: redis
+    group: redis
+    mode: '0755'
+  become: yes
+  tags: ['redis', 'directories']
+
+- name: "Redis | Configure Redis Stack"
+  template:
+    src: redis-stack.conf.j2
+    dest: /etc/redis-stack.conf
+    owner: redis
+    group: redis
+    mode: '0640'
+    backup: yes
+  become: yes
+  notify: restart redis-stack
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Configure firewall - Allow Redis port"
+  ufw:
+    rule: allow
+    port: "{{ redis_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "Redis Stack"
+  become: yes
+  notify: reload firewall
+  tags: ['redis', 'firewall']
+
+- name: "Redis | Configure firewall - Allow RedisInsight port"
+  ufw:
+    rule: allow
+    port: "{{ redis_insight_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "RedisInsight"
+  become: yes
+  notify: reload firewall
+  tags: ['redis', 'firewall']
+
+- name: "Redis | Create systemd override directory"
+  file:
+    path: /etc/systemd/system/redis-stack-server.service.d
+    state: directory
+    mode: '0755'
+  become: yes
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Configure systemd service override"
+  template:
+    src: redis-stack-override.conf.j2
+    dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart redis-stack
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Enable and start Redis Stack"
+  systemd:
+    name: redis-stack-server
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+  tags: ['redis', 'service']
+
+- name: "Redis | Wait for Redis to be ready"
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: "{{ redis_port }}"
+    timeout: 60
+    state: started
+  tags: ['redis', 'validation']
+
+- name: "Redis | Test Redis connectivity"
+  command: >
+    redis-cli -h {{ ansible_default_ipv4.address }} -p {{ redis_port }}
+    {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
+    ping
+  register: redis_ping
+  changed_when: false
+  no_log: true  # Hide password from logs
+  tags: ['redis', 'validation']
+
+- name: "Redis | Create backup directory"
+  file:
+    path: /var/backups/redis
+    state: directory
+    owner: redis
+    group: redis
+    mode: '0755'
+  become: yes
+  tags: ['redis', 'backup']
+
+- name: "Redis | Create backup script"
+  template:
+    src: redis-backup.sh.j2
+    dest: /usr/local/bin/redis-backup.sh
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+  tags: ['redis', 'backup']
+
+- name: "Redis | Schedule daily backups"
+  cron:
+    name: "Redis Stack daily backup"
+    job: "/usr/local/bin/redis-backup.sh >> /var/log/autobot/redis-backup.log 2>&1"
+    hour: "2"
+    minute: "0"
+    user: root
+  become: yes
+  tags: ['redis', 'backup']
+
+- name: "Redis | Display configuration summary"
+  debug:
+    msg:
+      - "=== Redis Stack Configuration Complete ==="
+      - "Redis Host: {{ ansible_default_ipv4.address }}"
+      - "Redis Port: {{ redis_port }}"
+      - "RedisInsight Port: {{ redis_insight_port }}"
+      - "Memory Limit: {{ redis_memory_limit }}"
+      - "Persistence: {{ 'Enabled' if redis_persistence else 'Disabled' }}"
+      - "Backup: Enabled (daily at 2:00 AM)"
+      - "Status: {{ redis_ping.stdout }}"
+  tags: ['redis', 'report']

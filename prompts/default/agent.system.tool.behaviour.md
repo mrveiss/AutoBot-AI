@@ -1,14 +1,16 @@
 ### behaviour_adjustment:
 update agent behaviour per user request
+write instructions to add or remove to adjustments arg
 usage:
 ~~~json
 {
     "thoughts": [
         "...",
     ],
-    "tool_name": "behaviour_update",
+    "headline": "Adjusting agent behavior per user request",
+    "tool_name": "behaviour_adjustment",
     "tool_args": {
-        "adjustments": "behavioral_rules in system prompt updated via this arg",
+        "adjustments": "remove...",
     }
 }
 ~~~

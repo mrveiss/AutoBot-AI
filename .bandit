@@ -1,0 +1,18 @@
+# Bandit security configuration for AutoBot
+# https://bandit.readthedocs.io/en/latest/config.html
+
+exclude_dirs:
+  - node_modules
+  - .venv
+  - venv
+  - __pycache__
+  - temp
+  - logs
+  - reports
+  - archive
+  - tests
+
+skips:
+  - B101  # assert_used - common in tests
+  - B601  # paramiko_calls - intentional usage
+  - B603  # subprocess_without_shell_equals_true - we use shell=False

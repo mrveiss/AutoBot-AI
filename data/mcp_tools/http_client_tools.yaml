@@ -1,0 +1,168 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# HTTP Client MCP Tool Definitions
+# Extracted from backend/api/http_client_mcp.py (Issue #515)
+#
+# Placeholders:
+#   ${DEFAULT_TIMEOUT} - Default request timeout in seconds
+#   ${MAX_TIMEOUT} - Maximum allowed timeout in seconds
+
+tools:
+  # ============================================================================
+  # Read Operations (GET, HEAD)
+  # ============================================================================
+
+  - name: http_get
+    description: >-
+      Perform HTTP GET request to retrieve data from a URL. Supports query
+      parameters and custom headers. Rate limited to 120 requests/minute.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Target URL (must be in allowed domains)"
+        headers:
+          type: object
+          description: "Optional HTTP headers (sensitive headers blocked)"
+          additionalProperties:
+            type: string
+        params:
+          type: object
+          description: "Optional query parameters"
+          additionalProperties:
+            type: string
+        timeout:
+          type: integer
+          description: "Request timeout in seconds (default: ${DEFAULT_TIMEOUT}, max: ${MAX_TIMEOUT})"
+          minimum: 1
+          maximum: ${MAX_TIMEOUT}
+      required:
+        - url
+
+  - name: http_head
+    description: >-
+      Perform HTTP HEAD request to retrieve headers only (no body). Useful for
+      checking resource existence or metadata.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Target URL to check"
+        headers:
+          type: object
+          description: "Optional HTTP headers"
+          additionalProperties:
+            type: string
+        timeout:
+          type: integer
+          description: "Request timeout (default: ${DEFAULT_TIMEOUT}s)"
+      required:
+        - url
+
+  # ============================================================================
+  # Write Operations (POST, PUT, PATCH, DELETE)
+  # ============================================================================
+
+  - name: http_post
+    description: >-
+      Perform HTTP POST request to send data to a URL. Supports JSON body or
+      form data. Rate limited to 120 requests/minute.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Target URL (must be in allowed domains)"
+        headers:
+          type: object
+          description: "Optional HTTP headers"
+          additionalProperties:
+            type: string
+        json_body:
+          type: object
+          description: "JSON request body"
+        form_data:
+          type: object
+          description: "Form data (mutually exclusive with json_body)"
+          additionalProperties:
+            type: string
+        timeout:
+          type: integer
+          description: "Request timeout (default: ${DEFAULT_TIMEOUT}s)"
+          minimum: 1
+          maximum: ${MAX_TIMEOUT}
+      required:
+        - url
+
+  - name: http_put
+    description: >-
+      Perform HTTP PUT request to update/replace resource. Typically used for
+      complete resource replacement. Rate limited.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Target URL (must be in allowed domains)"
+        headers:
+          type: object
+          description: "Optional HTTP headers"
+          additionalProperties:
+            type: string
+        json_body:
+          type: object
+          description: "JSON request body for replacement"
+        timeout:
+          type: integer
+          description: "Request timeout (default: ${DEFAULT_TIMEOUT}s)"
+      required:
+        - url
+
+  - name: http_patch
+    description: >-
+      Perform HTTP PATCH request for partial resource update. More efficient
+      than PUT for small changes. Rate limited.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Target URL (must be in allowed domains)"
+        headers:
+          type: object
+          description: "Optional HTTP headers"
+          additionalProperties:
+            type: string
+        json_body:
+          type: object
+          description: "JSON body with fields to update"
+        timeout:
+          type: integer
+          description: "Request timeout (default: ${DEFAULT_TIMEOUT}s)"
+      required:
+        - url
+
+  - name: http_delete
+    description: >-
+      Perform HTTP DELETE request to remove a resource. Use with
+      caution as this is destructive. Rate limited.
+    input_schema:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "Target URL of resource to delete"
+        headers:
+          type: object
+          description: "Optional HTTP headers"
+          additionalProperties:
+            type: string
+        timeout:
+          type: integer
+          description: "Request timeout (default: ${DEFAULT_TIMEOUT}s)"
+      required:
+        - url

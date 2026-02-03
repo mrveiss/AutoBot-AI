@@ -1,0 +1,285 @@
+# Security Scanning workflow
+# Uses self-hosted runner to avoid GitHub Actions quota limits
+#
+# NOTE: Code quality checks are set to warn-only mode while Issue #173
+# is being addressed. Once fixed, change continue-on-error to false.
+
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, dev, Dev_new_gui ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  dependency-security:
+    name: Dependency Security Scan
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python virtual environment
+      run: |
+        python3 -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+
+    - name: Install Python dependencies
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        python3 -m pip install --upgrade pip setuptools wheel
+        python3 -m pip install pip-audit bandit safety
+        # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
+        python3 -m pip install -r requirements-ci.txt --prefer-binary || {
+          echo "⚠️ Some dependencies failed to install - continuing with available tools"
+        }
+
+    - name: Python Dependency Audit
+      run: |
+        source .venv/bin/activate
+        echo "## Python Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        pip-audit --format=json --output=python-audit.json || true
+        pip-audit --format=markdown >> $GITHUB_STEP_SUMMARY || true
+
+    - name: Safety Check (Alternative Python Security)
+      run: |
+        source .venv/bin/activate
+        echo "## Safety Security Report" >> $GITHUB_STEP_SUMMARY
+        safety check --json --output safety-report.json || true
+        safety check || true
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Frontend dependencies
+      run: |
+        cd autobot-vue
+        npm ci
+
+    - name: Node.js Dependency Audit
+      run: |
+        cd autobot-vue
+        echo "## Node.js Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+        npm audit --audit-level=moderate --json > npm-audit.json || true
+        npm audit --audit-level=moderate || true
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-security-reports
+        path: |
+          python-audit.json
+          safety-report.json
+          autobot-vue/npm-audit.json
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  static-analysis:
+    name: Static Application Security Testing (SAST)
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python virtual environment
+      run: |
+        python3 -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+
+    - name: Install SAST tools
+      run: |
+        source .venv/bin/activate
+        python3 -m pip install --upgrade pip
+        python3 -m pip install bandit semgrep flake8 pylint
+
+    - name: Bandit Security Linter
+      run: |
+        source .venv/bin/activate
+        echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
+        python3 -m bandit -r src/ backend/ -f json -o bandit-report.json || true
+        python3 -m bandit -r src/ backend/ -f txt || true
+
+    - name: Semgrep SAST Scan
+      run: |
+        source .venv/bin/activate
+        echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
+        python3 -m semgrep --config=auto --json --output=semgrep-report.json src/ backend/ || true
+        python3 -m semgrep --config=auto src/ backend/ || true
+
+    - name: Python Code Quality Check
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "Note: In warn-only mode (Issue #173)" >> $GITHUB_STEP_SUMMARY
+        python3 -m flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503 \
+          --output-file=flake8-report.txt || true
+        cat flake8-report.txt || true
+
+    - name: Secret Detection
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        echo "## Secret Detection" >> $GITHUB_STEP_SUMMARY
+        # Use git-secrets or simple grep-based secret detection
+        # Check for common secret patterns (without Docker)
+        echo "Scanning for potential secrets..."
+
+        # Check for hardcoded API keys, passwords, tokens
+        SECRETS_FOUND=0
+
+        # Check for AWS keys
+        if grep -rE "AKIA[0-9A-Z]{16}" src/ backend/ 2>/dev/null; then
+          echo "⚠️ Potential AWS access key found" >> $GITHUB_STEP_SUMMARY
+          SECRETS_FOUND=$((SECRETS_FOUND + 1))
+        fi
+
+        # Check for private keys
+        if grep -rE "-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----" src/ backend/ 2>/dev/null; then
+          echo "⚠️ Potential private key found" >> $GITHUB_STEP_SUMMARY
+          SECRETS_FOUND=$((SECRETS_FOUND + 1))
+        fi
+
+        # Check for common password patterns in code (excluding tests)
+        if grep -rE "password\s*=\s*['\"][^'\"]{8,}['\"]" src/ backend/ --include="*.py" 2>/dev/null | grep -v "test\|example\|placeholder"; then
+          echo "⚠️ Potential hardcoded password found" >> $GITHUB_STEP_SUMMARY
+          SECRETS_FOUND=$((SECRETS_FOUND + 1))
+        fi
+
+        if [ $SECRETS_FOUND -eq 0 ]; then
+          echo "✅ No obvious secrets detected" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Found $SECRETS_FOUND potential secret(s) - please review" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload SAST Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: sast-security-reports
+        path: |
+          bandit-report.json
+          semgrep-report.json
+          flake8-report.txt
+        retention-days: 30
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf .venv || true
+
+  compliance-check:
+    name: Security Compliance Check
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for Security Files
+      run: |
+        echo "## Security Compliance Check" >> $GITHUB_STEP_SUMMARY
+
+        # Check for required security files
+        files=(
+          ".gitignore"
+          "requirements.txt"
+        )
+
+        missing_files=()
+        for file in "${files[@]}"; do
+          if [ ! -e "$file" ]; then
+            missing_files+=("$file")
+          fi
+        done
+
+        if [ ${#missing_files[@]} -eq 0 ]; then
+          echo "✅ All required security files present" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Missing security files:" >> $GITHUB_STEP_SUMMARY
+          printf '%s\n' "${missing_files[@]}" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Security Best Practices Check
+      run: |
+        echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
+
+        # Check for security-related imports
+        security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" src/ backend/ | wc -l)
+        echo "✅ Security-related imports found: $security_imports" >> $GITHUB_STEP_SUMMARY
+
+        # Check for input validation patterns
+        validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" src/ backend/ | wc -l)
+        echo "✅ Input validation patterns found: $validation_patterns" >> $GITHUB_STEP_SUMMARY
+
+        # Check for error handling
+        error_handling=$(grep -r "try:\|except\|raise" src/ backend/ | wc -l)
+        echo "✅ Error handling patterns found: $error_handling" >> $GITHUB_STEP_SUMMARY
+
+  security-summary:
+    name: Security Summary Report
+    runs-on: self-hosted
+    needs: [dependency-security, static-analysis, compliance-check]
+    if: always()
+
+    steps:
+    - name: Download all security reports
+      uses: actions/download-artifact@v4
+
+    - name: Generate Security Summary
+      run: |
+        echo "# 🛡️ Security Scan Summary" > security-summary.md
+        echo "" >> security-summary.md
+        echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> security-summary.md
+        echo "**Branch:** ${{ github.ref_name }}" >> security-summary.md
+        echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+        echo "" >> security-summary.md
+
+        # Check if reports exist and summarize
+        if [ -d "dependency-security-reports" ]; then
+          echo "## 📦 Dependency Security" >> security-summary.md
+          echo "- Python audit completed" >> security-summary.md
+          echo "- Node.js audit completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        if [ -d "sast-security-reports" ]; then
+          echo "## 🔍 Static Analysis Security Testing" >> security-summary.md
+          echo "- Bandit security linting completed" >> security-summary.md
+          echo "- Semgrep security analysis completed" >> security-summary.md
+          echo "- Secret detection completed" >> security-summary.md
+          echo "" >> security-summary.md
+        fi
+
+        echo "## 📋 Recommendations" >> security-summary.md
+        echo "1. Review all security reports for critical findings" >> security-summary.md
+        echo "2. Update dependencies with known vulnerabilities" >> security-summary.md
+        echo "3. Address any SAST findings in critical code paths" >> security-summary.md
+
+    - name: Upload Security Summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-summary
+        path: security-summary.md
+        retention-days: 90

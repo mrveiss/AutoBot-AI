@@ -1,0 +1,187 @@
+/* AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * Validation Dashboard CSS
+ * Extracted from scripts/validation_dashboard_generator.py (Issue #515)
+ */
+
+/* Body Override */
+body {
+    margin: 0;
+    padding: 20px;
+}
+
+/* Dashboard Container */
+.dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 3em;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.stat-label {
+    color: #666;
+    font-size: 0.9em;
+}
+
+/* Health Status Colors */
+.health-excellent { color: #4CAF50; }
+.health-good { color: #8BC34A; }
+.health-fair { color: #FF9800; }
+.health-needs_attention { color: #F44336; }
+
+/* Main Content Layout */
+.main-content {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+/* Phases Section */
+.phases-section {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Sidebar */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sidebar-section {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Phase Items */
+.phase-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    margin: 10px 0;
+    border-left: 4px solid;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.phase-progress {
+    width: 100px;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.phase-progress-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+/* Alerts */
+.alert {
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    border-left: 4px solid;
+}
+
+.alert-critical {
+    background: #ffebee;
+    border-color: #f44336;
+    color: #c62828;
+}
+
+.alert-warning {
+    background: #fff3e0;
+    border-color: #ff9800;
+    color: #e65100;
+}
+
+.alert-info {
+    background: #e3f2fd;
+    border-color: #2196f3;
+    color: #1565c0;
+}
+
+/* Recommendations */
+.recommendation {
+    padding: 15px;
+    margin: 10px 0;
+    background: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #007bff;
+}
+
+.recommendation-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.recommendation-urgency {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.urgency-high { background: #ffcdd2; color: #c62828; }
+.urgency-medium { background: #ffe0b2; color: #e65100; }
+.urgency-low { background: #c8e6c9; color: #2e7d32; }
+
+/* Chart Container */
+.chart-container {
+    margin: 20px 0;
+    height: 300px;
+}
+
+/* Refresh Info */
+.refresh-info {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 0.9em;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

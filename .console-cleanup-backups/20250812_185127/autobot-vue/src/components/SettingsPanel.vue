@@ -1,0 +1,1647 @@
+<template>
+  <div class="settings-panel">
+    <h2>Settings</h2>
+    <div class="settings-tabs">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        :class="{ active: activeTab === tab.id }"
+        @click="activeTab = tab.id"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+    <div class="settings-content">
+      <!-- Chat Settings -->
+      <div v-if="activeTab === 'chat'" class="settings-section">
+        <h3>Chat Settings</h3>
+        <div class="setting-item">
+          <label>Auto Scroll to Bottom</label>
+          <input type="checkbox" v-model="settings.chat.auto_scroll" />
+        </div>
+        <div class="setting-item">
+          <label>Max Messages</label>
+          <input type="number" v-model="settings.chat.max_messages" min="10" max="1000" />
+        </div>
+        <div class="setting-item">
+          <label>Message Retention (Days)</label>
+          <input type="number" v-model="settings.chat.message_retention_days" min="1" max="365" />
+        </div>
+      </div>
+
+      <!-- Backend Settings -->
+      <div v-if="activeTab === 'backend' && isSettingsLoaded" class="settings-section">
+        <div class="sub-tabs">
+          <button
+            :class="{ active: activeBackendSubTab === 'general' }"
+            @click="activeBackendSubTab = 'general'"
+          >
+            General
+          </button>
+          <button
+            :class="{ active: activeBackendSubTab === 'llm' }"
+            @click="activeBackendSubTab = 'llm'"
+          >
+            LLM
+          </button>
+          <button
+            :class="{ active: activeBackendSubTab === 'embedding' }"
+            @click="activeBackendSubTab = 'embedding'"
+          >
+            Embedding
+          </button>
+          <button
+            :class="{ active: activeBackendSubTab === 'memory' }"
+            @click="activeBackendSubTab = 'memory'"
+          >
+            Memory
+          </button>
+        </div>
+        <div v-if="activeBackendSubTab === 'general'" class="sub-tab-content">
+          <h3>Backend General Settings</h3>
+          <div class="setting-item">
+            <label>API Endpoint</label>
+            <input type="text" v-model="settings.backend.api_endpoint" />
+          </div>
+          <div class="setting-item">
+            <label>Server Host</label>
+            <input type="text" v-model="settings.backend.server_host" />
+          </div>
+          <div class="setting-item">
+            <label>Server Port</label>
+            <input type="number" v-model="settings.backend.server_port" min="1" max="65535" />
+          </div>
+          <div class="setting-item">
+            <label>Chat Data Directory</label>
+            <input type="text" v-model="settings.backend.chat_data_dir" />
+          </div>
+          <div class="setting-item">
+            <label>Chat History File</label>
+            <input type="text" v-model="settings.backend.chat_history_file" placeholder="data/chat_history.json" />
+          </div>
+          <div class="setting-item">
+            <label>Knowledge Base DB</label>
+            <input type="text" v-model="settings.backend.knowledge_base_db" placeholder="data/knowledge_base.db" />
+          </div>
+          <div class="setting-item">
+            <label>Reliability Stats File</label>
+            <input type="text" v-model="settings.backend.reliability_stats_file" placeholder="data/reliability_stats.json" />
+          </div>
+          <div class="setting-item">
+            <label>Audit Log File</label>
+            <input type="text" v-model="settings.backend.audit_log_file" placeholder="data/audit.log" />
+          </div>
+          <div class="setting-item">
+            <label>CORS Origins (comma separated)</label>
+            <input type="text" v-model="corsOriginsString" />
+          </div>
+        </div>
+        <div v-if="activeBackendSubTab === 'llm'" class="sub-tab-content">
+          <h3>LLM Settings</h3>
+          <div class="setting-item">
+            <label>Current LLM Status</label>
+            <div class="llm-status-display">
+              <div class="status-line">
+                <span class="status-label">Connection:</span>
+                <span :class="['status-value', healthStatus.llm.connected ? 'connected' : 'disconnected']">
+                  {{ healthStatus.llm.connected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+              <div class="status-line" v-if="healthStatus.llm.connected && healthStatus.llm.current_model">
+                <span class="status-label">Active Model:</span>
+                <span class="status-value">{{ healthStatus.llm.current_model }}</span>
+              </div>
+              <div class="status-line">
+                <span class="status-label">Configured:</span>
+                <span class="status-value">{{ getCurrentLLMConfig() }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Provider Type</label>
+            <select v-model="settings.backend.llm.provider_type" @change="onProviderTypeChange">
+              <option value="local">Local LLM</option>
+              <option value="cloud">Cloud LLM</option>
+            </select>
+          </div>
+          <div v-if="settings.backend.llm.provider_type === 'local'">
+            <div class="setting-item">
+              <label>Local Provider</label>
+              <select v-model="settings.backend.llm.local.provider" @change="onLocalProviderChange">
+                <option value="ollama">Ollama</option>
+                <option value="lmstudio">LM Studio</option>
+              </select>
+            </div>
+            <div v-if="settings.backend.llm.local.provider === 'ollama'">
+              <div class="setting-item">
+                <label>Ollama Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.local.providers.ollama.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.local.providers.ollama.selected_model" @change="notifyBackendOfProviderChange">
+                  <option v-for="model in settings.backend.llm.local.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+            <div v-else-if="settings.backend.llm.local.provider === 'lmstudio'">
+              <div class="setting-item">
+                <label>LM Studio Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.local.providers.lmstudio.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.local.providers.lmstudio.selected_model" @change="notifyBackendOfProviderChange">
+                  <option v-for="model in settings.backend.llm.local.providers.lmstudio.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="settings.backend.llm.provider_type === 'cloud'">
+            <div class="setting-item">
+              <label>Cloud Provider</label>
+              <select v-model="settings.backend.llm.cloud.provider" @change="onCloudProviderChange">
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </div>
+            <div v-if="settings.backend.llm.cloud.provider === 'openai'">
+              <div class="setting-item">
+                <label>API Key</label>
+                <input type="password" v-model="settings.backend.llm.cloud.providers.openai.api_key" placeholder="Enter API Key" />
+              </div>
+              <div class="setting-item">
+                <label>Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.cloud.providers.openai.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.cloud.providers.openai.selected_model" @change="notifyBackendOfProviderChange">
+                  <option v-for="model in settings.backend.llm.cloud.providers.openai.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+            <div v-else-if="settings.backend.llm.cloud.provider === 'anthropic'">
+              <div class="setting-item">
+                <label>API Key</label>
+                <input type="password" v-model="settings.backend.llm.cloud.providers.anthropic.api_key" placeholder="Enter API Key" />
+              </div>
+              <div class="setting-item">
+                <label>Endpoint</label>
+                <input type="text" v-model="settings.backend.llm.cloud.providers.anthropic.endpoint" />
+              </div>
+              <div class="setting-item">
+                <label>Model</label>
+                <select v-model="settings.backend.llm.cloud.providers.anthropic.selected_model" @change="notifyBackendOfProviderChange">
+                  <option v-for="model in settings.backend.llm.cloud.providers.anthropic.models" :key="model" :value="model">{{ model }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Timeout (seconds)</label>
+            <input type="number" v-model="settings.backend.timeout" min="10" max="300" />
+          </div>
+          <div class="setting-item">
+            <label>Max Retries</label>
+            <input type="number" v-model="settings.backend.max_retries" min="1" max="10" />
+          </div>
+          <div class="setting-item">
+            <label>Enable Streaming</label>
+            <input type="checkbox" v-model="settings.backend.streaming" @change="notifyBackendOfProviderChange" />
+          </div>
+          <div class="settings-actions">
+            <button @click="loadModels">Refresh Models</button>
+          </div>
+        </div>
+        <div v-if="activeBackendSubTab === 'embedding'" class="sub-tab-content">
+          <h3>Embedding Model Settings</h3>
+          <div class="setting-item">
+            <label>Current Embedding Model Status</label>
+            <div class="embedding-status-display">
+              <div class="status-line">
+                <span class="status-label">Connection:</span>
+                <span :class="['status-value', healthStatus.embedding?.connected ? 'connected' : 'disconnected']">
+                  {{ healthStatus.embedding?.connected ? 'Connected' : 'Disconnected' }}
+                </span>
+              </div>
+              <div class="status-line" v-if="healthStatus.embedding?.connected && healthStatus.embedding?.current_model">
+                <span class="status-label">Active Model:</span>
+                <span class="status-value">{{ healthStatus.embedding.current_model }}</span>
+              </div>
+              <div class="status-line">
+                <span class="status-label">Configured:</span>
+                <span class="status-value">{{ getCurrentEmbeddingConfig() }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Embedding Provider</label>
+            <select v-model="settings.backend.llm.embedding.provider" @change="onEmbeddingProviderChange">
+              <option value="ollama">Ollama</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div v-if="settings.backend.llm.embedding.provider === 'ollama'">
+            <div class="setting-item">
+              <label>Ollama Endpoint</label>
+              <input type="text" v-model="settings.backend.llm.embedding.providers.ollama.endpoint" />
+            </div>
+            <div class="setting-item">
+              <label>Embedding Model</label>
+              <select v-model="settings.backend.llm.embedding.providers.ollama.selected_model" @change="notifyBackendOfEmbeddingChange">
+                <option v-for="model in settings.backend.llm.embedding.providers.ollama.models" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+          </div>
+          <div v-else-if="settings.backend.llm.embedding.provider === 'openai'">
+            <div class="setting-item">
+              <label>API Key</label>
+              <input type="password" v-model="settings.backend.llm.embedding.providers.openai.api_key" placeholder="Enter API Key" />
+            </div>
+            <div class="setting-item">
+              <label>Endpoint</label>
+              <input type="text" v-model="settings.backend.llm.embedding.providers.openai.endpoint" />
+            </div>
+            <div class="setting-item">
+              <label>Embedding Model</label>
+              <select v-model="settings.backend.llm.embedding.providers.openai.selected_model" @change="notifyBackendOfEmbeddingChange">
+                <option v-for="model in settings.backend.llm.embedding.providers.openai.models" :key="model" :value="model">{{ model }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button @click="loadEmbeddingModels">Refresh Embedding Models</button>
+          </div>
+        </div>
+        <div v-if="activeBackendSubTab === 'memory'" class="sub-tab-content">
+          <h3>Memory Settings</h3>
+          <div class="setting-item" v-if="settings.memory && settings.memory.long_term">
+            <label>Enable Long-Term Memory</label>
+            <input type="checkbox" v-model="settings.memory.long_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.long_term">
+            <label>Long-Term Memory Retention (Days)</label>
+            <input type="number" v-model="settings.memory.long_term.retention_days" min="1" max="365" :disabled="!settings.memory.long_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.short_term">
+            <label>Enable Short-Term Memory</label>
+            <input type="checkbox" v-model="settings.memory.short_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.short_term">
+            <label>Short-Term Memory Duration (Minutes)</label>
+            <input type="number" v-model="settings.memory.short_term.duration_minutes" min="1" max="1440" :disabled="!settings.memory.short_term.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.vector_storage">
+            <label>Enable Vector Storage</label>
+            <input type="checkbox" v-model="settings.memory.vector_storage.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.vector_storage">
+            <label>Vector Storage Update Frequency (Days)</label>
+            <input type="number" v-model="settings.memory.vector_storage.update_frequency_days" min="1" max="30" :disabled="!settings.memory.vector_storage.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
+            <label>Enable ChromaDB</label>
+            <input type="checkbox" v-model="settings.memory.chromadb.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
+            <label>ChromaDB Path</label>
+            <input type="text" v-model="settings.memory.chromadb.path" :disabled="!settings.memory.chromadb.enabled" placeholder="data/chromadb/chroma.sqlite3" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.chromadb">
+            <label>ChromaDB Collection Name</label>
+            <input type="text" v-model="settings.memory.chromadb.collection_name" :disabled="!settings.memory.chromadb.enabled" placeholder="autobot_memory" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.redis">
+            <label>Enable Redis for Chat History</label>
+            <input type="checkbox" v-model="settings.memory.redis.enabled" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.redis">
+            <label class="with-description">Redis Host
+              <span class="description">Redis is used for storing and retrieving chat history efficiently, providing faster access compared to file-based storage.</span>
+            </label>
+            <input type="text" v-model="settings.memory.redis.host" :disabled="!settings.memory.redis.enabled" placeholder="localhost" />
+          </div>
+          <div class="setting-item" v-if="settings.memory && settings.memory.redis">
+            <label>Redis Port</label>
+            <input type="number" v-model="settings.memory.redis.port" min="1" max="65535" :disabled="!settings.memory.redis.enabled" placeholder="6379" />
+          </div>
+        </div>
+      </div>
+
+      <!-- UI Settings -->
+      <div v-if="activeTab === 'ui' && isSettingsLoaded" class="settings-section">
+        <h3>UI Settings</h3>
+        <div class="setting-item">
+          <label>Theme</label>
+          <select v-model="settings.ui.theme">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Font Size</label>
+          <select v-model="settings.ui.font_size">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Language</label>
+          <select v-model="settings.ui.language">
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Enable Animations</label>
+          <input type="checkbox" v-model="settings.ui.animations" />
+        </div>
+        <div class="setting-item">
+          <label>Vue Developer Mode</label>
+          <input type="checkbox" v-model="settings.ui.developer_mode" />
+        </div>
+      </div>
+
+      <!-- Security Settings -->
+      <div v-if="activeTab === 'security' && isSettingsLoaded" class="settings-section">
+        <h3>Security Settings</h3>
+        <div class="setting-item">
+          <label>Enable Encryption</label>
+          <input type="checkbox" v-model="settings.security.enable_encryption" />
+        </div>
+        <div class="setting-item">
+          <label>Session Timeout (Minutes)</label>
+          <input type="number" v-model="settings.security.session_timeout_minutes" min="1" max="1440" />
+        </div>
+      </div>
+
+      <!-- Logging Settings -->
+      <div v-if="activeTab === 'logging' && isSettingsLoaded" class="settings-section">
+        <h3>Logging Settings</h3>
+        <div class="setting-item">
+          <label>Log Level</label>
+          <select v-model="settings.logging.log_level">
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Log to File</label>
+          <input type="checkbox" v-model="settings.logging.log_to_file" />
+        </div>
+        <div class="setting-item">
+          <label>Log File Path</label>
+          <input type="text" v-model="settings.logging.log_file_path" :disabled="!settings.logging.log_to_file" />
+        </div>
+      </div>
+
+      <!-- Knowledge Base Settings -->
+      <div v-if="activeTab === 'knowledgeBase' && isSettingsLoaded" class="settings-section">
+        <h3>Knowledge Base</h3>
+        <div class="setting-item">
+          <label>Enable Knowledge Base</label>
+          <input type="checkbox" v-model="settings.knowledge_base.enabled" />
+        </div>
+        <div class="setting-item">
+          <label>Update Frequency (Days)</label>
+          <input type="number" v-model="settings.knowledge_base.update_frequency_days" min="1" max="30" :disabled="!settings.knowledge_base.enabled" />
+        </div>
+      </div>
+
+      <!-- Voice Interface Settings -->
+      <div v-if="activeTab === 'voiceInterface' && isSettingsLoaded" class="settings-section">
+        <h3>Voice Interface</h3>
+        <div class="setting-item">
+          <label>Enable Voice Interface</label>
+          <input type="checkbox" v-model="settings.voice_interface.enabled" />
+        </div>
+        <div class="setting-item">
+          <label>Voice</label>
+          <select v-model="settings.voice_interface.voice" :disabled="!settings.voice_interface.enabled">
+            <option value="default">Default</option>
+            <option value="male1">Male 1</option>
+            <option value="female1">Female 1</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Speech Rate</label>
+          <input type="number" v-model="settings.voice_interface.speech_rate" min="0.5" max="2.0" step="0.1" :disabled="!settings.voice_interface.enabled" />
+        </div>
+      </div>
+
+      <!-- Developer Settings -->
+      <div v-if="activeTab === 'developer' && isSettingsLoaded" class="settings-section">
+        <h3>Developer Mode</h3>
+        <div class="setting-item">
+          <label>Enable Developer Mode</label>
+          <input type="checkbox" v-model="settings.developer.enabled" @change="updateDeveloperConfig" />
+        </div>
+        <div v-if="settings.developer.enabled">
+          <div class="setting-item">
+            <label>Enhanced Error Messages</label>
+            <input type="checkbox" v-model="settings.developer.enhanced_errors" @change="updateDeveloperConfig" />
+          </div>
+          <div class="setting-item">
+            <label>API Endpoint Suggestions</label>
+            <input type="checkbox" v-model="settings.developer.endpoint_suggestions" @change="updateDeveloperConfig" />
+          </div>
+          <div class="setting-item">
+            <label>Debug Logging</label>
+            <input type="checkbox" v-model="settings.developer.debug_logging" @change="updateDeveloperConfig" />
+          </div>
+          <div class="developer-info" v-if="developerInfo">
+            <h4>System Information</h4>
+            <div class="info-item">
+              <strong>Available API Endpoints:</strong> {{ developerInfo.total_endpoints || 0 }}
+            </div>
+            <div class="info-item">
+              <strong>Active Routers:</strong> {{ (developerInfo.available_routers || []).join(', ') }}
+            </div>
+            <div class="settings-actions">
+              <button @click="loadDeveloperInfo">Refresh System Info</button>
+              <button @click="showApiEndpoints">View API Endpoints</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Prompts Settings -->
+      <div v-if="activeTab === 'prompts' && isSettingsLoaded" class="settings-section">
+        <h3>System Prompts</h3>
+        <div class="prompts-container">
+          <div class="prompts-list">
+            <div v-for="prompt in settings.prompts.list" :key="prompt.id" class="prompt-item" :class="{ 'active': settings.prompts.selectedPrompt && settings.prompts.selectedPrompt.id === prompt.id }" @click="selectPrompt(prompt)">
+              <div class="prompt-name">{{ prompt.name || prompt.id }}</div>
+              <div class="prompt-type">{{ prompt.type || 'Unknown Type' }}</div>
+            </div>
+            <div v-if="settings.prompts.list.length === 0" class="no-prompts">No prompts available. Please check backend connection.</div>
+          </div>
+          <div class="prompt-editor" v-if="settings.prompts.selectedPrompt">
+            <h4>Editing: {{ settings.prompts.selectedPrompt.name || settings.prompts.selectedPrompt.id }}</h4>
+            <textarea v-model="settings.prompts.editedContent" rows="10" placeholder="Edit prompt content here..."></textarea>
+            <div class="editor-actions">
+              <button @click="savePrompt">Save Changes</button>
+              <button @click="revertPromptToDefault(settings.prompts.selectedPrompt.id)">Revert to Default</button>
+              <button @click="settings.prompts.selectedPrompt = null">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <button class="control-button small" @click="loadPrompts">Load Prompts</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-actions">
+      <button @click="saveSettings" :disabled="isSaving" class="save-button">
+        {{ isSaving ? 'Saving...' : 'Save Settings' }}
+      </button>
+      <div v-if="saveMessage" :class="['save-message', saveMessageType]">
+        {{ saveMessage }}
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, onMounted, watch, computed, onUnmounted } from 'vue';
+import apiClient from '../utils/ApiClient.js';
+import { settingsService } from '../services/SettingsService.js';
+import { healthService } from '../services/HealthService.js';
+
+export default {
+  name: 'SettingsPanel',
+  setup() {
+    // Define tabs for settings organization
+    const tabs = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'backend', label: 'Backend' },
+      { id: 'ui', label: 'UI' },
+      { id: 'security', label: 'Security' },
+      { id: 'logging', label: 'Logging' },
+      { id: 'knowledgeBase', label: 'Knowledge Base' },
+      { id: 'voiceInterface', label: 'Voice Interface' },
+      { id: 'prompts', label: 'System Prompts' },
+      { id: 'developer', label: 'Developer' }
+    ];
+    const activeTab = ref('backend');
+    const activeBackendSubTab = ref('memory');
+
+    // Settings structure will be populated from backend or local storage
+    const settings = ref({});
+    const isSettingsLoaded = ref(false);
+    const developerInfo = ref(null);
+    const healthStatus = ref({
+      llm: {
+        connected: false,
+        current_model: null
+      },
+      embedding: {
+        connected: false,
+        current_model: null
+      }
+    });
+
+    // Save state management
+    const isSaving = ref(false);
+    const saveMessage = ref('');
+    const saveMessageType = ref(''); // 'success' or 'error'
+
+    // Computed property for CORS origins as a string for input field
+    const corsOriginsString = computed({
+      get() {
+        return settings.value.backend.cors_origins.join(', ');
+      },
+      set(value) {
+        settings.value.backend.cors_origins = value.split(',').map(origin => origin.trim()).filter(origin => origin);
+      }
+    });
+
+    // Function to check health status
+    const checkHealthStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/system/health');
+        if (response.ok) {
+          const data = await response.json();
+          healthStatus.value = {
+            llm: {
+              connected: data.llm_status || false,
+              current_model: data.current_model || null
+            },
+            embedding: {
+              connected: data.embedding_status || false,
+              current_model: data.current_embedding_model || null
+            }
+          };
+        }
+      } catch (error) {
+        console.error('Error checking health status:', error);
+      }
+    };
+
+    let healthCheckInterval;
+
+    onMounted(async () => {
+      // Load settings from backend
+      await loadSettingsFromBackend();
+      isSettingsLoaded.value = true;
+      // Load models after settings are loaded
+      await loadModels();
+      await loadEmbeddingModels();
+      // Check health status
+      await checkHealthStatus();
+      // Set up periodic health checks
+      healthCheckInterval = setInterval(checkHealthStatus, 10000); // Check every 10 seconds
+    });
+
+    onUnmounted(() => {
+      if (healthCheckInterval) {
+        clearInterval(healthCheckInterval);
+      }
+    });
+
+    // Function to deep merge objects
+    const deepMerge = (target, source) => {
+      const output = { ...target };
+      for (const key in source) {
+        if (source.hasOwnProperty(key)) {
+          if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
+            output[key] = deepMerge(target[key] || {}, source[key]);
+          } else {
+            output[key] = source[key];
+          }
+        }
+      }
+      return output;
+    };
+
+    // Default settings structure if backend or local storage fails
+    const defaultSettings = () => ({
+      message_display: {
+        show_thoughts: true,
+        show_json: false,
+        show_utility: false,
+        show_planning: true,
+        show_debug: false
+      },
+      chat: {
+        auto_scroll: true,
+        max_messages: 100,
+        message_retention_days: 30
+      },
+      backend: {
+        api_endpoint: 'http://localhost:8001',
+        server_host: '0.0.0.0',
+        server_port: 8001,
+        chat_data_dir: '',
+        chat_history_file: '',
+        knowledge_base_db: '',
+        reliability_stats_file: '',
+        audit_log_file: '',
+        cors_origins: [],
+        timeout: 60,
+        max_retries: 3,
+        streaming: false,
+        llm: {
+          provider_type: 'local', // 'local' or 'cloud'
+          local: {
+            provider: 'ollama', // Default local provider
+            providers: {
+              ollama: {
+                endpoint: 'http://localhost:11434/api/generate',
+                models: [],
+                selected_model: ''
+              },
+              lmstudio: {
+                endpoint: 'http://localhost:1234/v1/chat/completions',
+                models: [],
+                selected_model: ''
+              }
+            }
+          },
+          cloud: {
+            provider: 'openai', // Default cloud provider
+            providers: {
+              openai: {
+                api_key: '',
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              },
+              anthropic: {
+                api_key: '',
+                endpoint: '',
+                models: [],
+                selected_model: ''
+              }
+            }
+          },
+          embedding: {
+            provider: 'ollama', // Default embedding provider
+            providers: {
+              ollama: {
+                endpoint: 'http://localhost:11434/api/embeddings',
+                models: [],
+                selected_model: 'nomic-embed-text'
+              },
+              openai: {
+                api_key: '',
+                endpoint: 'https://api.openai.com/v1/embeddings',
+                models: ['text-embedding-ada-002', 'text-embedding-3-small', 'text-embedding-3-large'],
+                selected_model: 'text-embedding-ada-002'
+              }
+            }
+          }
+        }
+      },
+      ui: {
+        theme: 'light',
+        font_size: 'medium',
+        language: 'en',
+        animations: true,
+        developer_mode: false
+      },
+      security: {
+        enable_encryption: false,
+        session_timeout_minutes: 30
+      },
+      logging: {
+        log_level: 'info',
+        log_to_file: false,
+        log_file_path: ''
+      },
+      knowledge_base: {
+        enabled: true,
+        update_frequency_days: 7
+      },
+      voice_interface: {
+        enabled: false,
+        voice: 'default',
+        speech_rate: 1.0
+      },
+      memory: {
+        long_term: {
+          enabled: true,
+          retention_days: 30
+        },
+        short_term: {
+          enabled: true,
+          duration_minutes: 30
+        },
+        vector_storage: {
+          enabled: true,
+          update_frequency_days: 7
+        },
+        chromadb: {
+          enabled: true,
+          path: '',
+          collection_name: ''
+        },
+        redis: {
+          enabled: false,
+          host: 'localhost',
+          port: 6379
+        }
+      },
+      prompts: {
+        list: [],
+        selectedPrompt: null,
+        editedContent: '',
+        defaults: {}
+      },
+      developer: {
+        enabled: false,
+        enhanced_errors: true,
+        endpoint_suggestions: true,
+        debug_logging: false
+      }
+    });
+
+    // Function to load settings from backend config.yaml
+    const loadSettingsFromBackend = async () => {
+      try {
+        const response = await apiClient.get('/api/settings/config');
+        const configSettings = await response.json();
+        settings.value = deepMerge(defaultSettings(), configSettings);
+        // Save to local storage as well
+        localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+      } catch (error) {
+        console.error('Error loading settings from backend:', error);
+        // Load from local storage if backend fails
+        const savedSettings = localStorage.getItem('chat_settings');
+        if (savedSettings) {
+          try {
+            const parsedSettings = JSON.parse(savedSettings);
+            settings.value = deepMerge(defaultSettings(), parsedSettings);
+          } catch (e) {
+            console.error('Error parsing saved settings:', e);
+            settings.value = defaultSettings();
+          }
+        } else {
+          settings.value = defaultSettings();
+        }
+      }
+      // Load prompts after settings are loaded
+      await loadPrompts();
+    };
+
+    // Function to save settings to config.yaml via backend
+    const saveSettings = async () => {
+      isSaving.value = true;
+      saveMessage.value = '';
+      saveMessageType.value = '';
+
+      try {
+        // Create a deep copy of settings without prompts data (prompts shouldn't be saved to config.yaml)
+        const settingsToSave = JSON.parse(JSON.stringify(settings.value));
+        delete settingsToSave.prompts;
+
+        const response = await apiClient.post('/api/settings/config', settingsToSave);
+        const result = await response.json();
+        console.log('Settings saved successfully to config.yaml:', result);
+
+        // Reload settings from backend after successful save
+        await loadSettingsFromBackend();
+
+        // Show success message
+        saveMessage.value = 'Settings saved successfully!';
+        saveMessageType.value = 'success';
+
+        // Clear message after 3 seconds
+        setTimeout(() => {
+          saveMessage.value = '';
+          saveMessageType.value = '';
+        }, 3000);
+      } catch (error) {
+        console.error('Error saving settings to backend:', error);
+        saveMessage.value = `Error saving settings: ${error.message}`;
+        saveMessageType.value = 'error';
+
+        // Clear error message after 5 seconds
+        setTimeout(() => {
+          saveMessage.value = '';
+          saveMessageType.value = '';
+        }, 5000);
+      } finally {
+        isSaving.value = false;
+      }
+    };
+
+    // Watch for changes in settings and save them to local storage only
+    // Don't auto-save to backend - only save to localStorage for persistence
+    watch(settings, () => {
+      if (isSettingsLoaded.value) {
+        localStorage.setItem('chat_settings', JSON.stringify(settings.value));
+      }
+    }, { deep: true });
+
+    // Function to load prompts from backend
+    const loadPrompts = async () => {
+      try {
+        const promptsData = await apiClient.getPrompts();
+        settings.value.prompts.list = promptsData.prompts || [];
+        settings.value.prompts.defaults = promptsData.defaults || {};
+      } catch (error) {
+        console.error('Error loading prompts from backend:', error);
+      }
+    };
+
+    // Function to select a prompt for editing
+    const selectPrompt = (prompt) => {
+      settings.value.prompts.selectedPrompt = prompt;
+      settings.value.prompts.editedContent = prompt.content || '';
+    };
+
+    // Function to save edited prompt content
+    const savePrompt = async () => {
+      if (!settings.value.prompts.selectedPrompt) return;
+      try {
+        const promptId = settings.value.prompts.selectedPrompt.id;
+        const updatedPrompt = await apiClient.savePrompt(promptId, settings.value.prompts.editedContent);
+        const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
+        if (index !== -1) {
+          settings.value.prompts.list[index] = updatedPrompt;
+        }
+        // Clear selection
+        settings.value.prompts.selectedPrompt = null;
+        settings.value.prompts.editedContent = '';
+      } catch (error) {
+        console.error('Error saving prompt to backend:', error);
+      }
+    };
+
+    // Function to dynamically load models from the selected provider
+    const loadModels = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/llm/models');
+        const data = await response.json();
+        ,
+          modelsLength: data.models?.length,
+          firstModel: data.models?.[0]
+        });
+
+        if (settings.value.backend.llm.provider_type === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+
+          if (provider === 'ollama') {
+            // Handle the new API response format with model objects
+            let availableModels = [];
+
+            // Try different response structures
+            if (data.models && Array.isArray(data.models)) {
+              // If models have a structure with 'available' and 'type' fields
+              if (data.models.length > 0 && typeof data.models[0] === 'object') {
+                availableModels = data.models
+                  .filter(model => {
+                    // Include models that are available and either have no type or are ollama type
+                    return model.available !== false && (!model.type || model.type === 'ollama');
+                  })
+                  .map(model => model.name || model.id || model);
+              } else {
+                // If models are just strings
+                availableModels = data.models;
+              }
+            } else if (Array.isArray(data)) {
+              // If the response is directly an array
+              availableModels = data.map(model =>
+                typeof model === 'string' ? model : (model.name || model.id || model)
+              );
+            }
+
+            settings.value.backend.llm.local.providers.ollama.models = availableModels;
+
+            if (availableModels.length === 0) {
+              console.warn('No Ollama models found. Raw API response:', data);
+              // Try to provide helpful feedback
+              if (data.error) {
+                console.error('API Error:', data.error);
+              }
+            }
+
+            // Auto-select first model if none selected
+            if (!settings.value.backend.llm.local.providers.ollama.selected_model && availableModels.length > 0) {
+              settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0];
+            }
+
+            // Validate current selection is still available
+            const currentModel = settings.value.backend.llm.local.providers.ollama.selected_model;
+            if (currentModel && !availableModels.includes(currentModel)) {
+              settings.value.backend.llm.local.providers.ollama.selected_model = availableModels[0] || '';
+            }
+
+          } else if (provider === 'lmstudio') {
+            // Handle LM Studio models - try different response formats
+            let lmStudioModels = [];
+            if (data.models && Array.isArray(data.models)) {
+              lmStudioModels = data.models
+                .filter(model => model.available && model.type === 'lmstudio')
+                .map(model => model.name || model.id);
+            } else if (data.data && Array.isArray(data.data)) {
+              lmStudioModels = data.data.map(model => model.id || model.name);
+            } else if (Array.isArray(data)) {
+              lmStudioModels = data.map(model => model.id || model.name);
+            }
+
+            settings.value.backend.llm.local.providers.lmstudio.models = lmStudioModels;
+
+            if (!settings.value.backend.llm.local.providers.lmstudio.selected_model && lmStudioModels.length > 0) {
+              settings.value.backend.llm.local.providers.lmstudio.selected_model = lmStudioModels[0];
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading models:', error);
+        if (settings.value.backend.llm.provider_type === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+          if (provider === 'ollama') {
+            settings.value.backend.llm.local.providers.ollama.models = [];
+          } else if (provider === 'lmstudio') {
+            settings.value.backend.llm.local.providers.lmstudio.models = [];
+          }
+        }
+      }
+    };
+
+    // Function to revert a prompt to default
+    const revertPromptToDefault = async (promptId) => {
+      try {
+        const updatedPrompt = await apiClient.revertPrompt(promptId);
+        const index = settings.value.prompts.list.findIndex(p => p.id === promptId);
+        if (index !== -1) {
+          settings.value.prompts.list[index] = updatedPrompt;
+        }
+        // If this prompt was selected, update the editor
+        if (settings.value.prompts.selectedPrompt && settings.value.prompts.selectedPrompt.id === promptId) {
+          settings.value.prompts.selectedPrompt = updatedPrompt;
+          settings.value.prompts.editedContent = updatedPrompt.content || '';
+        }
+      } catch (error) {
+        console.error('Error reverting prompt to default:', error);
+      }
+    };
+
+    const onProviderTypeChange = async () => {
+      await loadModels();
+      await notifyBackendOfProviderChange();
+    };
+
+    const onLocalProviderChange = async () => {
+      await loadModels();
+      await notifyBackendOfProviderChange();
+    };
+
+    const onCloudProviderChange = async () => {
+      await notifyBackendOfProviderChange();
+    };
+
+    const notifyBackendOfProviderChange = async () => {
+      try {
+        const providerType = settings.value.backend.llm.provider_type;
+        const providerData = {
+          provider_type: providerType,
+          streaming: settings.value.backend.streaming
+        };
+
+        if (providerType === 'local') {
+          const provider = settings.value.backend.llm.local.provider;
+          const providerSettings = settings.value.backend.llm.local.providers[provider];
+
+          providerData.local_provider = provider;
+          providerData.local_model = providerSettings.selected_model;
+          providerData.local_endpoint = providerSettings.endpoint;
+        } else {
+          const provider = settings.value.backend.llm.cloud.provider;
+          const providerSettings = settings.value.backend.llm.cloud.providers[provider];
+
+          providerData.cloud_provider = provider;
+          providerData.cloud_model = providerSettings.selected_model;
+          providerData.cloud_api_key = providerSettings.api_key;
+          providerData.cloud_endpoint = providerSettings.endpoint;
+        }
+
+        const response = await apiClient.post('/api/llm/provider', providerData);
+        const result = await response.json();
+
+        // Update health status after provider change
+        await checkHealthStatus();
+      } catch (error) {
+        console.error('Error notifying backend of provider change:', error);
+      }
+    };
+
+    const getCurrentLLMDisplay = () => {
+      if (!settings.value.backend?.llm) return 'Not configured';
+
+      const providerType = settings.value.backend.llm.provider_type || 'local';
+
+      if (providerType === 'local') {
+        const provider = settings.value.backend.llm.local?.provider || 'ollama';
+        const selectedModel = settings.value.backend.llm.local?.providers?.[provider]?.selected_model;
+        const endpoint = settings.value.backend.llm.local?.providers?.[provider]?.endpoint;
+
+        if (selectedModel) {
+          const endpointInfo = endpoint ? ` @ ${endpoint}` : '';
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+        } else {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        }
+      } else {
+        const provider = settings.value.backend.llm.cloud?.provider || 'openai';
+        const selectedModel = settings.value.backend.llm.cloud?.providers?.[provider]?.selected_model;
+
+        if (selectedModel) {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}`;
+        } else {
+          return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+        }
+      }
+    };
+
+    // Developer mode functions
+    const updateDeveloperConfig = async () => {
+      try {
+        await settingsService.updateDeveloperConfig(settings.value.developer);
+        if (settings.value.developer.enabled) {
+          await loadDeveloperInfo();
+        }
+      } catch (error) {
+        console.error('Error updating developer config:', error);
+      }
+    };
+
+    const loadDeveloperInfo = async () => {
+      try {
+        const systemInfo = await settingsService.getSystemInfo();
+        const endpoints = await settingsService.getApiEndpoints();
+        developerInfo.value = {
+          ...systemInfo,
+          total_endpoints: endpoints.total_endpoints,
+          available_routers: endpoints.routers
+        };
+      } catch (error) {
+        console.error('Error loading developer info:', error);
+      }
+    };
+
+    const showApiEndpoints = async () => {
+      try {
+        const endpoints = await settingsService.getApiEndpoints();
+        alert(`Found ${endpoints.total_endpoints} API endpoints across ${endpoints.routers?.length || 0} routers. Check console for details.`);
+      } catch (error) {
+        console.error('Error showing API endpoints:', error);
+      }
+    };
+
+    // Function to get current embedding configuration display
+    const getCurrentEmbeddingConfig = () => {
+      if (!settings.value.backend?.llm?.embedding) return 'Not configured';
+
+      const provider = settings.value.backend.llm.embedding.provider || 'ollama';
+      const providerSettings = settings.value.backend.llm.embedding.providers?.[provider];
+      const selectedModel = providerSettings?.selected_model;
+
+      if (selectedModel) {
+        const endpointInfo = providerSettings?.endpoint ? ` @ ${providerSettings.endpoint}` : '';
+        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - ${selectedModel}${endpointInfo}`;
+      } else {
+        return `${provider.charAt(0).toUpperCase() + provider.slice(1)} - Not selected`;
+      }
+    };
+
+    // Function to handle embedding provider change
+    const onEmbeddingProviderChange = async () => {
+      await loadEmbeddingModels();
+      await notifyBackendOfEmbeddingChange();
+    };
+
+    // Function to notify backend of embedding configuration change
+    const notifyBackendOfEmbeddingChange = async () => {
+      try {
+        const provider = settings.value.backend.llm.embedding.provider;
+        const providerSettings = settings.value.backend.llm.embedding.providers[provider];
+
+        const embeddingData = {
+          provider: provider,
+          model: providerSettings.selected_model,
+          endpoint: providerSettings.endpoint
+        };
+
+        if (provider === 'openai') {
+          embeddingData.api_key = providerSettings.api_key;
+        }
+
+        const response = await apiClient.post('/api/llm/embedding', embeddingData);
+        const result = await response.json();
+
+        // Update health status after embedding change
+        await checkHealthStatus();
+      } catch (error) {
+        console.error('Error notifying backend of embedding change:', error);
+      }
+    };
+
+    // Function to load embedding models
+    const loadEmbeddingModels = async () => {
+      try {
+        const provider = settings.value.backend.llm.embedding.provider;
+
+        if (provider === 'ollama') {
+          // Load Ollama embedding models
+          const response = await fetch('http://localhost:8001/api/llm/embedding/models');
+          const data = await response.json();
+
+          if (data.models && Array.isArray(data.models)) {
+            settings.value.backend.llm.embedding.providers.ollama.models = data.models;
+
+            // Auto-select first model if none selected
+            if (!settings.value.backend.llm.embedding.providers.ollama.selected_model && data.models.length > 0) {
+              settings.value.backend.llm.embedding.providers.ollama.selected_model = data.models[0];
+            }
+          }
+        }
+        // OpenAI models are predefined, no need to load them
+      } catch (error) {
+        console.error('Error loading embedding models:', error);
+        if (settings.value.backend.llm.embedding.provider === 'ollama') {
+          settings.value.backend.llm.embedding.providers.ollama.models = [];
+        }
+      }
+    };
+
+    return {
+      settings,
+      saveSettings,
+      loadModels,
+      loadPrompts,
+      tabs,
+      activeTab,
+      activeBackendSubTab,
+      corsOriginsString,
+      selectPrompt,
+      savePrompt,
+      revertPromptToDefault,
+      isSettingsLoaded,
+      onProviderTypeChange,
+      onLocalProviderChange,
+      onCloudProviderChange,
+      notifyBackendOfProviderChange,
+      getCurrentLLMDisplay,
+      getCurrentLLMConfig: getCurrentLLMDisplay,
+      getCurrentEmbeddingConfig,
+      onEmbeddingProviderChange,
+      notifyBackendOfEmbeddingChange,
+      loadEmbeddingModels,
+      healthStatus,
+      checkHealthStatus,
+      developerInfo,
+      updateDeveloperConfig,
+      loadDeveloperInfo,
+      showApiEndpoints,
+      isSaving,
+      saveMessage,
+      saveMessageType
+    };
+  }
+};
+</script>
+
+<style scoped>
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: clamp(10px, 1.5vw, 15px);
+  overflow: hidden;
+}
+
+.settings-panel h2 {
+  margin: 0 0 clamp(10px, 1.5vw, 15px) 0;
+  font-size: clamp(16px, 2vw, 20px);
+  color: #007bff;
+}
+
+.settings-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid #e9ecef;
+  margin-bottom: clamp(10px, 1.5vw, 15px);
+}
+
+.settings-tabs button {
+  background: none;
+  border: none;
+  padding: clamp(8px, 1vw, 12px) clamp(12px, 1.5vw, 16px);
+  cursor: pointer;
+  font-size: clamp(12px, 1.5vw, 14px);
+  color: #6c757d;
+  transition: all 0.3s;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.settings-tabs button.active {
+  color: #007bff;
+  border-bottom: 2px solid #007bff;
+}
+
+.settings-tabs button:hover:not(.active) {
+  color: #343a40;
+  background-color: rgba(0, 123, 255, 0.05);
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: clamp(5px, 1vw, 10px);
+  min-height: 0;
+}
+
+.prompts-container {
+  display: flex;
+  gap: clamp(10px, 1.5vw, 15px);
+  height: 400px;
+}
+
+.prompts-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: clamp(5px, 0.8vw, 8px);
+}
+
+.prompt-item {
+  padding: clamp(8px, 1vw, 10px);
+  cursor: pointer;
+  border-radius: 3px;
+  margin-bottom: clamp(3px, 0.5vw, 5px);
+  transition: background-color 0.2s;
+}
+
+.prompt-item:hover {
+  background-color: #e9ecef;
+}
+
+.prompt-item.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.prompt-name {
+  font-size: clamp(12px, 1.5vw, 14px);
+  font-weight: 500;
+}
+
+.prompt-type {
+  font-size: clamp(10px, 1.2vw, 12px);
+  opacity: 0.8;
+}
+
+.no-prompts {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: clamp(10px, 1.5vw, 15px);
+}
+
+.prompt-editor {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: clamp(8px, 1vw, 10px);
+}
+
+.prompt-editor h4 {
+  margin: 0 0 clamp(8px, 1vw, 10px) 0;
+  font-size: clamp(14px, 1.6vw, 16px);
+  color: #343a40;
+}
+
+.prompt-editor textarea {
+  flex: 1;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: clamp(5px, 0.8vw, 8px);
+  font-size: clamp(12px, 1.4vw, 13px);
+  resize: none;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.prompt-editor textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: clamp(5px, 0.8vw, 8px);
+  margin-top: clamp(8px, 1vw, 10px);
+}
+
+.editor-actions button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: clamp(5px, 0.6vw, 6px) clamp(10px, 1.2vw, 12px);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  font-size: clamp(12px, 1.4vw, 13px);
+}
+
+.editor-actions button:hover {
+  background-color: #0056b3;
+}
+
+.editor-actions button:nth-child(2) {
+  background-color: #6c757d;
+}
+
+.editor-actions button:nth-child(2):hover {
+  background-color: #5a6268;
+}
+
+.editor-actions button:nth-child(3) {
+  background-color: #dc3545;
+}
+
+.editor-actions button:nth-child(3):hover {
+  background-color: #c82333;
+}
+
+.settings-section {
+  margin-bottom: clamp(15px, 2vw, 20px);
+}
+
+.settings-section h3 {
+  margin: 0 0 clamp(8px, 1.2vw, 12px) 0;
+  font-size: clamp(14px, 1.8vw, 16px);
+  color: #343a40;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 5px;
+}
+
+.sub-tabs {
+  display: flex;
+  border-bottom: 1px solid #e9ecef;
+  margin-bottom: clamp(10px, 1.5vw, 15px);
+}
+
+.sub-tabs button {
+  background: none;
+  border: none;
+  padding: clamp(6px, 0.8vw, 8px) clamp(10px, 1.2vw, 12px);
+  cursor: pointer;
+  font-size: clamp(12px, 1.4vw, 13px);
+  color: #6c757d;
+  transition: all 0.3s;
+  border-bottom: 2px solid transparent;
+}
+
+.sub-tabs button.active {
+  color: #007bff;
+  border-bottom: 2px solid #007bff;
+}
+
+.sub-tabs button:hover:not(.active) {
+  color: #343a40;
+  background-color: rgba(0, 123, 255, 0.05);
+}
+
+.sub-tab-content {
+  padding: 0 clamp(5px, 0.5vw, 10px);
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: clamp(8px, 1.2vw, 12px);
+  font-size: clamp(12px, 1.5vw, 14px);
+}
+
+.setting-item label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.setting-item label.with-description {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-item label .description {
+  font-size: clamp(10px, 1.2vw, 12px);
+  color: #6c757d;
+  font-weight: normal;
+  margin-top: 2px;
+}
+
+.setting-item input[type="checkbox"],
+.setting-item input[type="radio"] {
+  margin: 0;
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="number"],
+.setting-item select {
+  flex: 1;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: clamp(4px, 0.6vw, 6px) clamp(8px, 1vw, 10px);
+  font-size: clamp(12px, 1.5vw, 14px);
+}
+
+.setting-item input[type="text"]:focus,
+.setting-item input[type="number"]:focus,
+.setting-item select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: clamp(10px, 1.5vw, 15px) 0;
+  border-top: 1px solid #e9ecef;
+}
+
+.settings-actions button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: clamp(6px, 0.8vw, 8px) clamp(12px, 1.5vw, 16px);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  font-size: clamp(12px, 1.5vw, 14px);
+}
+
+.settings-actions button:hover {
+  background-color: #0056b3;
+}
+
+.developer-info {
+  margin-top: clamp(15px, 2vw, 20px);
+  padding: clamp(10px, 1.5vw, 15px);
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.developer-info h4 {
+  margin: 0 0 clamp(10px, 1.5vw, 15px) 0;
+  font-size: clamp(14px, 1.6vw, 16px);
+  color: #495057;
+}
+
+.info-item {
+  margin-bottom: clamp(8px, 1.2vw, 10px);
+  font-size: clamp(12px, 1.4vw, 13px);
+}
+
+.info-item strong {
+  color: #495057;
+}
+
+@media (max-width: 768px) {
+  .settings-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-title {
+    font-size: 24px;
+  }
+
+  .tab-btn {
+    padding: 12px;
+  }
+
+  .settings-actions {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .action-buttons {
+    justify-content: center;
+  }
+
+  .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .setting-item label {
+    margin-right: 0;
+  }
+
+  .setting-item input[type="text"],
+  .setting-item input[type="number"],
+  .setting-item input[type="password"],
+  .setting-item select {
+    max-width: none;
+  }
+}
+
+/* Save button and message styles */
+.save-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.save-message {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.save-message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.save-message.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.settings-actions {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* LLM and Embedding status display styles */
+.llm-status-display,
+.embedding-status-display {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 5px 0;
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.status-line:last-child {
+  margin-bottom: 0;
+}
+
+.status-label {
+  font-weight: 500;
+  color: #495057;
+}
+
+.status-value {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+.status-value.connected {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.status-value.disconnected {
+  color: #dc3545;
+  font-weight: 500;
+}
+</style>

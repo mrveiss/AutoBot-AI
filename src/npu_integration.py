@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+NPU Worker Integration
+Provides high-performance processing using NPU worker for heavy computational tasks
+"""
+
+import asyncio
+import json
+import logging
+from dataclasses import dataclass
+from typing import Any, Dict
+
+from src.constants.threshold_constants import LLMDefaults, TimingConstants
+from src.utils.http_client import get_http_client
+
+from .utils.service_registry import get_service_url
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class NPUInferenceRequest:
+    """Request payload for NPU inference (Issue #376 - use named constants)."""
+
+    model_id: str
+    input_text: str
+    max_tokens: int = LLMDefaults.DEFAULT_MAX_TOKENS
+    temperature: float = LLMDefaults.DEFAULT_TEMPERATURE
+    top_p: float = LLMDefaults.DEFAULT_TOP_P
+
+
+class NPUWorkerClient:
+    """Client for communicating with NPU inference worker"""
+
+    def __init__(self, npu_endpoint: str = None):
+        """Initialize NPU client with endpoint and HTTP client."""
+        self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
+        self._http_client = get_http_client()
+        self.available = False
+        self._check_availability_task = None
+
+    async def check_health(self) -> Dict[str, Any]:
+        """Check NPU worker health and capabilities"""
+        try:
+            async with await self._http_client.get(
+                f"{self.npu_endpoint}/health"
+            ) as response:
+                if response.status == 200:
+                    health_data = await response.json()
+                    self.available = True
+                    return health_data
+                else:
+                    self.available = False
+                    return {"status": "unhealthy", "error": f"HTTP {response.status}"}
+        except Exception as e:
+            self.available = False
+            # Issue #699: NPU workers are optional - log at DEBUG level to avoid spam
+            logger.debug(
+                "NPU worker not available (optional service - configure at /settings/infrastructure): %s",
+                e,
+            )
+            return {"status": "unavailable", "error": str(e)}
+
+    async def get_available_models(self) -> Dict[str, Any]:
+        """Get list of available models on NPU worker"""
+        try:
+            async with await self._http_client.get(
+                f"{self.npu_endpoint}/models"
+            ) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    return {"loaded_models": {}, "error": f"HTTP {response.status}"}
+        except Exception as e:
+            logger.error("Failed to get NPU models: %s", e)
+            return {"loaded_models": {}, "error": str(e)}
+
+    async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
+        """Load a model on the NPU worker"""
+        try:
+            payload = {"model_id": model_id, "device": device}
+            async with await self._http_client.post(
+                f"{self.npu_endpoint}/models/load", json=payload
+            ) as response:
+                return await response.json()
+        except Exception as e:
+            logger.error("Failed to load model %s: %s", model_id, e)
+            return {"success": False, "error": str(e)}
+
+    async def run_inference(
+        self,
+        model_id: str,
+        input_text: str,
+        max_tokens: int = LLMDefaults.DEFAULT_MAX_TOKENS,
+        temperature: float = LLMDefaults.DEFAULT_TEMPERATURE,
+        top_p: float = LLMDefaults.DEFAULT_TOP_P,
+    ) -> Dict[str, Any]:
+        """Run inference on NPU worker"""
+        try:
+            payload = {
+                "model_id": model_id,
+                "input_text": input_text,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": top_p,
+            }
+
+            async with await self._http_client.post(
+                f"{self.npu_endpoint}/inference", json=payload
+            ) as response:
+                result = await response.json()
+                if response.status == 200:
+                    return result
+                else:
+                    return {
+                        "error": result.get("detail", "Unknown error"),
+                        "success": False,
+                    }
+        except Exception as e:
+            logger.error("NPU inference failed: %s", e)
+            return {"error": str(e), "success": False}
+
+    async def offload_heavy_processing(
+        self, task_type: str, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Offload heavy processing tasks to NPU worker
+
+        Supported task types:
+        - text_analysis: Analyze large text chunks
+        - embedding_batch: Generate embeddings for multiple texts
+        - knowledge_processing: Process knowledge base operations
+        """
+        try:
+            # Check if NPU worker is available
+            await self.check_health()
+            if not self.available:
+                return {
+                    "success": False,
+                    "error": "NPU worker not available",
+                    "fallback": True,
+                }
+
+            # For now, use standard inference endpoint with task-specific prompts
+            if task_type == "text_analysis":
+                prompt = (
+                    "Analyze the following text and extract key insights:\n\n"
+                    f"{data.get('text', '')}"
+                )
+                return await self.run_inference(
+                    model_id=data.get("model_id", "default"),
+                    input_text=prompt,
+                    max_tokens=data.get("max_tokens", LLMDefaults.ANALYSIS_MAX_TOKENS),
+                )
+
+            elif task_type == "knowledge_processing":
+                prompt = (
+                    "Process and summarize this knowledge data:\n\n"
+                    f"{json.dumps(data.get('knowledge_data', {}))}"
+                )
+                return await self.run_inference(
+                    model_id=data.get("model_id", "default"),
+                    input_text=prompt,
+                    max_tokens=data.get("max_tokens", LLMDefaults.KNOWLEDGE_MAX_TOKENS),
+                )
+
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unsupported task type: {task_type}",
+                }
+
+        except Exception as e:
+            logger.error("Heavy processing offload failed: %s", e)
+            return {"success": False, "error": str(e), "fallback": True}
+
+    async def close(self):
+        """No-op: HTTP client is managed by singleton HTTPClientManager"""
+        # Using HTTPClient singleton - session management is centralized
+
+
+class NPUTaskQueue:
+    """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""
+
+    def __init__(
+        self,
+        npu_client: NPUWorkerClient,
+        max_concurrent: int = LLMDefaults.DEFAULT_CONCURRENT_WORKERS,
+    ):
+        """Initialize task queue with NPU client and worker pool."""
+        self.npu_client = npu_client
+        self.max_concurrent = max_concurrent
+        self.queue = asyncio.Queue()
+        self.workers = []
+        self.running = False
+
+    async def start_workers(self):
+        """Start background worker tasks"""
+        self.running = True
+        for i in range(self.max_concurrent):
+            worker = asyncio.create_task(self._worker(f"npu_worker_{i}"))
+            self.workers.append(worker)
+        logger.info("Started %s NPU workers", self.max_concurrent)
+
+    async def stop_workers(self):
+        """Stop background worker tasks"""
+        self.running = False
+        for worker in self.workers:
+            worker.cancel()
+        await asyncio.gather(*self.workers, return_exceptions=True)
+        self.workers = []
+        logger.info("Stopped NPU workers")
+
+    async def _worker(self, worker_id: str):
+        """Background worker that processes NPU tasks"""
+        logger.info("NPU worker %s started", worker_id)
+        while self.running:
+            try:
+                # Wait for task with timeout to allow graceful shutdown
+                task_data = await asyncio.wait_for(
+                    self.queue.get(), timeout=TimingConstants.STANDARD_DELAY
+                )
+
+                logger.debug(
+                    f"Worker {worker_id} processing task: {task_data['task_type']}"
+                )
+
+                # Process the task
+                result = await self.npu_client.offload_heavy_processing(
+                    task_data["task_type"], task_data["data"]
+                )
+
+                # Set result in the future
+                if not task_data["future"].done():
+                    task_data["future"].set_result(result)
+
+                # Mark task as done
+                self.queue.task_done()
+
+            except asyncio.TimeoutError:
+                continue  # No task available, continue loop
+            except Exception as e:
+                logger.error("NPU worker %s error: %s", worker_id, e)
+                if "future" in locals() and not task_data["future"].done():
+                    task_data["future"].set_exception(e)
+
+    async def submit_task(self, task_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit a task to the NPU queue"""
+        if not self.running:
+            await self.start_workers()
+
+        future = asyncio.Future()
+        task_data = {"task_type": task_type, "data": data, "future": future}
+
+        await self.queue.put(task_data)
+
+        try:
+            # Wait for result with timeout (Issue #376 - use named constants)
+            result = await asyncio.wait_for(
+                future, timeout=TimingConstants.SHORT_TIMEOUT
+            )
+            return result
+        except asyncio.TimeoutError:
+            return {"success": False, "error": "NPU task timeout", "fallback": True}
+
+
+# Global NPU client instance (thread-safe)
+_npu_client = None
+_npu_queue = None
+_npu_client_lock = asyncio.Lock()
+_npu_queue_lock = asyncio.Lock()
+
+
+async def get_npu_client() -> NPUWorkerClient:
+    """Get or create global NPU client instance (thread-safe)"""
+    global _npu_client
+    if _npu_client is None:
+        async with _npu_client_lock:
+            # Double-check after acquiring lock
+            if _npu_client is None:
+                _npu_client = NPUWorkerClient()
+                await _npu_client.check_health()
+    return _npu_client
+
+
+async def get_npu_queue() -> NPUTaskQueue:
+    """Get or create global NPU task queue (thread-safe)"""
+    global _npu_queue
+    if _npu_queue is None:
+        async with _npu_queue_lock:
+            # Double-check after acquiring lock
+            if _npu_queue is None:
+                client = await get_npu_client()
+                _npu_queue = NPUTaskQueue(client)
+    return _npu_queue
+
+
+async def process_with_npu_fallback(
+    task_type: str, data: Dict[str, Any], fallback_func: callable
+) -> Dict[str, Any]:
+    """
+    Try to process with NPU worker, fall back to local processing if unavailable
+    """
+    try:
+        queue = await get_npu_queue()
+        result = await queue.submit_task(task_type, data)
+
+        if result.get("fallback") or not result.get("success"):
+            logger.info("NPU processing failed, using fallback for %s", task_type)
+            return await fallback_func()
+
+        return result
+    except Exception as e:
+        # Issue #699: NPU is optional, fallback is expected - log at DEBUG
+        logger.debug(
+            "NPU processing unavailable for %s, using fallback: %s", task_type, e
+        )
+        return await fallback_func()

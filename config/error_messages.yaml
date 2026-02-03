@@ -1,0 +1,373 @@
+# AutoBot Error Message Catalog
+#
+# This catalog provides standardized error messages with codes, categories,
+# and retry guidance for consistent error handling across the application.
+#
+# Error Code Format: {PREFIX}_{NUMBER}
+# - PREFIX: Component identifier (KB, AUTH, API, LLM, etc.)
+# - NUMBER: Unique 4-digit identifier
+#
+# Categories match ErrorCategory enum in src/utils/error_boundaries.py
+
+version: "1.0.0"
+last_updated: "2025-11-09"
+
+# =============================================================================
+# KNOWLEDGE BASE ERRORS (KB_*)
+# =============================================================================
+
+knowledge_base:
+  KB_0001:
+    category: server_error
+    message: "Failed to initialize knowledge base"
+    status_code: 500
+    retry: true
+    retry_after: 30
+    details: "Check Redis connection and ChromaDB availability"
+
+  KB_0002:
+    category: not_found
+    message: "Knowledge base fact not found"
+    status_code: 404
+    retry: false
+    details: "The requested fact ID does not exist"
+
+  KB_0003:
+    category: server_error
+    message: "Failed to add fact to knowledge base"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Error during fact vectorization or storage"
+
+  KB_0004:
+    category: server_error
+    message: "Failed to search knowledge base"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Vector search operation failed"
+
+  KB_0005:
+    category: server_error
+    message: "Failed to delete fact from knowledge base"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Could not remove fact from vector store"
+
+  KB_0006:
+    category: validation
+    message: "Invalid fact content or metadata"
+    status_code: 400
+    retry: false
+    details: "Fact content must be non-empty string"
+
+  KB_0007:
+    category: server_error
+    message: "ChromaDB connection failed"
+    status_code: 500
+    retry: true
+    retry_after: 10
+    details: "Cannot connect to vector database"
+
+  KB_0008:
+    category: server_error
+    message: "Embedding generation failed"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Ollama embedding service unavailable"
+
+# =============================================================================
+# AUTHENTICATION & AUTHORIZATION ERRORS (AUTH_*)
+# =============================================================================
+
+authentication:
+  AUTH_0001:
+    category: authentication
+    message: "Invalid or expired session"
+    status_code: 401
+    retry: false
+    details: "User session has expired or is invalid"
+
+  AUTH_0002:
+    category: authentication
+    message: "Authentication required"
+    status_code: 401
+    retry: false
+    details: "This endpoint requires authentication"
+
+  AUTH_0003:
+    category: authorization
+    message: "Insufficient permissions"
+    status_code: 403
+    retry: false
+    details: "User does not have required permissions"
+
+  AUTH_0004:
+    category: authentication
+    message: "Invalid credentials"
+    status_code: 401
+    retry: false
+    details: "Username or password is incorrect"
+
+# =============================================================================
+# LLM SERVICE ERRORS (LLM_*)
+# =============================================================================
+
+llm_service:
+  LLM_0001:
+    category: service_unavailable
+    message: "LLM service unavailable"
+    status_code: 503
+    retry: true
+    retry_after: 10
+    details: "Ollama service is not responding"
+
+  LLM_0002:
+    category: external_service
+    message: "LLM request timeout"
+    status_code: 504
+    retry: true
+    retry_after: 5
+    details: "LLM took too long to respond"
+
+  LLM_0003:
+    category: validation
+    message: "Invalid prompt or parameters"
+    status_code: 400
+    retry: false
+    details: "Check prompt format and model parameters"
+
+  LLM_0004:
+    category: rate_limit
+    message: "LLM rate limit exceeded"
+    status_code: 429
+    retry: true
+    retry_after: 60
+    details: "Too many requests to LLM service"
+
+  LLM_0005:
+    category: server_error
+    message: "LLM generation failed"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Error during text generation"
+
+  LLM_0006:
+    category: not_found
+    message: "LLM model not found"
+    status_code: 404
+    retry: false
+    details: "The requested model is not available"
+
+# =============================================================================
+# CHAT WORKFLOW ERRORS (CHAT_*)
+# =============================================================================
+
+chat_workflow:
+  CHAT_0001:
+    category: server_error
+    message: "Failed to initialize chat workflow"
+    status_code: 500
+    retry: true
+    retry_after: 10
+    details: "Could not initialize chat session"
+
+  CHAT_0002:
+    category: not_found
+    message: "Chat session not found"
+    status_code: 404
+    retry: false
+    details: "The requested session ID does not exist"
+
+  CHAT_0003:
+    category: server_error
+    message: "Failed to process chat message"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Error during message processing"
+
+  CHAT_0004:
+    category: server_error
+    message: "Failed to load conversation history"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Could not retrieve conversation from Redis"
+
+  CHAT_0005:
+    category: server_error
+    message: "Failed to save conversation history"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Could not persist conversation to Redis"
+
+  CHAT_0006:
+    category: validation
+    message: "Invalid message format"
+    status_code: 400
+    retry: false
+    details: "Message must be non-empty string"
+
+# =============================================================================
+# API GENERAL ERRORS (API_*)
+# =============================================================================
+
+api:
+  API_0001:
+    category: validation
+    message: "Invalid request parameters"
+    status_code: 400
+    retry: false
+    details: "Check request body and parameters"
+
+  API_0002:
+    category: not_found
+    message: "Endpoint not found"
+    status_code: 404
+    retry: false
+    details: "The requested API endpoint does not exist"
+
+  API_0003:
+    category: server_error
+    message: "Internal server error"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "An unexpected error occurred"
+
+  API_0004:
+    category: rate_limit
+    message: "Rate limit exceeded"
+    status_code: 429
+    retry: true
+    retry_after: 60
+    details: "Too many requests from this client"
+
+  API_0005:
+    category: service_unavailable
+    message: "Service temporarily unavailable"
+    status_code: 503
+    retry: true
+    retry_after: 30
+    details: "Service is under maintenance or overloaded"
+
+# =============================================================================
+# DATABASE ERRORS (DB_*)
+# =============================================================================
+
+database:
+  DB_0001:
+    category: database
+    message: "Redis connection failed"
+    status_code: 500
+    retry: true
+    retry_after: 10
+    details: "Cannot connect to Redis server"
+
+  DB_0002:
+    category: database
+    message: "Database operation timeout"
+    status_code: 504
+    retry: true
+    retry_after: 5
+    details: "Database operation took too long"
+
+  DB_0003:
+    category: database
+    message: "Database query failed"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Error executing database query"
+
+  DB_0004:
+    category: conflict
+    message: "Duplicate key violation"
+    status_code: 409
+    retry: false
+    details: "Record with this key already exists"
+
+# =============================================================================
+# MEMORY GRAPH ERRORS (MEM_*)
+# =============================================================================
+
+memory_graph:
+  MEM_0001:
+    category: server_error
+    message: "Failed to initialize memory graph"
+    status_code: 500
+    retry: true
+    retry_after: 10
+    details: "Could not initialize memory graph connections"
+
+  MEM_0002:
+    category: server_error
+    message: "Failed to create entity"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Could not create memory graph entity"
+
+  MEM_0003:
+    category: not_found
+    message: "Entity not found"
+    status_code: 404
+    retry: false
+    details: "The requested entity does not exist"
+
+  MEM_0004:
+    category: server_error
+    message: "Failed to create relationship"
+    status_code: 500
+    retry: true
+    retry_after: 5
+    details: "Could not create entity relationship"
+
+  MEM_0005:
+    category: validation
+    message: "Invalid entity type"
+    status_code: 400
+    retry: false
+    details: "Entity type must be one of the supported types"
+
+# =============================================================================
+# SYSTEM ERRORS (SYS_*)
+# =============================================================================
+
+system:
+  SYS_0001:
+    category: system
+    message: "System initialization failed"
+    status_code: 500
+    retry: true
+    retry_after: 30
+    details: "Critical system component failed to initialize"
+
+  SYS_0002:
+    category: system
+    message: "Configuration error"
+    status_code: 500
+    retry: false
+    details: "Invalid or missing configuration"
+
+  SYS_0003:
+    category: system
+    message: "Resource exhausted"
+    status_code: 503
+    retry: true
+    retry_after: 60
+    details: "System resources (memory/CPU) exhausted"
+
+  SYS_0004:
+    category: system
+    message: "Dependency unavailable"
+    status_code: 503
+    retry: true
+    retry_after: 20
+    details: "Required system dependency is unavailable"

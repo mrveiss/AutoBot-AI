@@ -1,0 +1,227 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Redis Stack Role - Redis server with modules for AutoBot
+---
+- name: Install Redis prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+
+- name: Add Redis GPG key
+  ansible.builtin.apt_key:
+    url: https://packages.redis.io/gpg
+    state: present
+  when: redis_install_from_repo | default(true)
+
+- name: Add Redis repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+    state: present
+  when: redis_install_from_repo | default(true)
+
+- name: Install Redis Stack Server
+  ansible.builtin.apt:
+    name: redis-stack-server
+    state: present
+    update_cache: true
+  when: redis_install_stack | default(true)
+
+- name: Install Redis (standard)
+  ansible.builtin.apt:
+    name: redis-server
+    state: present
+  when: not (redis_install_stack | default(true))
+
+- name: Create Redis configuration directory
+  ansible.builtin.file:
+    path: /etc/redis
+    state: directory
+    mode: "0755"
+
+- name: Deploy Redis configuration
+  ansible.builtin.template:
+    src: redis.conf.j2
+    dest: "{{ redis_config_file }}"
+    mode: "0644"
+    owner: redis
+    group: redis
+  notify: restart redis
+
+- name: Create Redis data directory
+  ansible.builtin.file:
+    path: "{{ redis_data_dir }}"
+    state: directory
+    mode: "0750"
+    owner: redis
+    group: redis
+
+# TLS Certificate Distribution (Issue #725: mTLS support)
+- name: Create TLS certificate directory
+  ansible.builtin.file:
+    path: "{{ redis_tls_cert_dir }}"
+    state: directory
+    mode: "0755"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool
+
+# ===== Local certificate source =====
+- name: Check if TLS certificates exist on controller (local source)
+  ansible.builtin.stat:
+    path: "{{ redis_tls_ca_cert }}"
+  delegate_to: localhost
+  become: false
+  register: tls_certs_exist
+  when: redis_tls_enabled | bool and redis_tls_source == 'local'
+
+- name: Copy CA certificate (local source)
+  ansible.builtin.copy:
+    src: "{{ redis_tls_ca_cert }}"
+    dest: "{{ redis_tls_cert_dir }}/ca-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'local' and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
+- name: Copy server certificate (local source)
+  ansible.builtin.copy:
+    src: "{{ redis_tls_server_cert }}"
+    dest: "{{ redis_tls_cert_dir }}/server-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'local' and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
+- name: Copy server private key (local source)
+  ansible.builtin.copy:
+    src: "{{ redis_tls_server_key }}"
+    dest: "{{ redis_tls_cert_dir }}/server-key.pem"
+    mode: "0600"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'local' and tls_certs_exist.stat.exists | default(false)
+  notify: restart redis
+
+# ===== SLM API certificate source =====
+- name: Fetch CA certificate from SLM API
+  ansible.builtin.uri:
+    url: "{{ slm_api_url }}/api/tls/credentials/{{ redis_tls_credential_id }}/ca-cert"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ slm_api_token }}"
+    return_content: true
+  register: slm_ca_cert
+  delegate_to: localhost
+  become: false
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and redis_tls_credential_id | length > 0
+
+- name: Fetch server certificate from SLM API
+  ansible.builtin.uri:
+    url: "{{ slm_api_url }}/api/tls/credentials/{{ redis_tls_credential_id }}/server-cert"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ slm_api_token }}"
+    return_content: true
+  register: slm_server_cert
+  delegate_to: localhost
+  become: false
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and redis_tls_credential_id | length > 0
+
+- name: Fetch server private key from SLM API
+  ansible.builtin.uri:
+    url: "{{ slm_api_url }}/api/tls/credentials/{{ redis_tls_credential_id }}/server-key"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ slm_api_token }}"
+    return_content: true
+  register: slm_server_key
+  delegate_to: localhost
+  become: false
+  no_log: true  # Hide sensitive key from logs
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and redis_tls_credential_id | length > 0
+
+- name: Deploy CA certificate from SLM API
+  ansible.builtin.copy:
+    content: "{{ slm_ca_cert.content }}"
+    dest: "{{ redis_tls_cert_dir }}/ca-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and slm_ca_cert.content is defined
+  notify: restart redis
+
+- name: Deploy server certificate from SLM API
+  ansible.builtin.copy:
+    content: "{{ slm_server_cert.content }}"
+    dest: "{{ redis_tls_cert_dir }}/server-cert.pem"
+    mode: "0644"
+    owner: redis
+    group: redis
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and slm_server_cert.content is defined
+  notify: restart redis
+
+- name: Deploy server private key from SLM API
+  ansible.builtin.copy:
+    content: "{{ slm_server_key.content }}"
+    dest: "{{ redis_tls_cert_dir }}/server-key.pem"
+    mode: "0600"
+    owner: redis
+    group: redis
+  no_log: true  # Hide sensitive key from logs
+  when: redis_tls_enabled | bool and redis_tls_source == 'slm-api' and slm_server_key.content is defined
+  notify: restart redis
+
+- name: Deploy Redis systemd service override
+  ansible.builtin.template:
+    src: redis.service.j2
+    dest: /etc/systemd/system/redis-server.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart redis
+
+- name: Enable and start Redis service
+  ansible.builtin.systemd:
+    name: redis-server
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Redis to be ready (plain port)
+  ansible.builtin.wait_for:
+    port: "{{ redis_port }}"
+    delay: 2
+    timeout: 30
+  when: not (redis_tls_enabled | bool and redis_tls_disable_plain_port | bool)
+
+- name: Wait for Redis TLS port to be ready
+  ansible.builtin.wait_for:
+    port: "{{ redis_tls_port }}"
+    delay: 2
+    timeout: 30
+  when: redis_tls_enabled | bool
+
+- name: Configure Redis password if set (non-TLS)
+  ansible.builtin.command:
+    cmd: "redis-cli -p {{ redis_port }} CONFIG SET requirepass {{ redis_password }}"
+  when: redis_password | default('') | length > 0 and not (redis_tls_enabled | bool and redis_tls_disable_plain_port | bool)
+  changed_when: false
+
+- name: Configure Redis password if set (TLS)
+  ansible.builtin.command:
+    cmd: >-
+      redis-cli --tls -p {{ redis_tls_port }}
+      --cert {{ redis_tls_cert_dir }}/server-cert.pem
+      --key {{ redis_tls_cert_dir }}/server-key.pem
+      --cacert {{ redis_tls_cert_dir }}/ca-cert.pem
+      CONFIG SET requirepass {{ redis_password }}
+  when: redis_password | default('') | length > 0 and redis_tls_enabled | bool
+  changed_when: false

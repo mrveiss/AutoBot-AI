@@ -1,0 +1,16 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Browser Automation configuration defaults
+browser_user: autobot
+browser_group: autobot
+browser_install_dir: /opt/autobot/browser
+browser_log_dir: /var/log/autobot
+
+# Features
+browser_install_mcp: true
+
+# Server settings
+browser_host: "0.0.0.0"
+browser_port: 3000

@@ -1,0 +1,175 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Upgrade backend agent to v1.1.0 with service discovery
+---
+- name: Upgrade backend agent
+  hosts: main
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Deploy upgraded agent with service discovery
+      ansible.builtin.copy:
+        dest: /opt/autobot/slm/agent/agent.py
+        mode: "0755"
+        owner: autobot
+        group: autobot
+        content: |
+          #!/usr/bin/env python3
+          # AutoBot - AI-Powered Automation Platform
+          # Copyright (c) 2025 mrveiss
+          # Author: mrveiss
+          """SLM Node Agent - Lightweight heartbeat agent with service discovery."""
+
+          import logging
+          import os
+          import platform
+          import signal
+          import subprocess
+          import sys
+          import time
+
+          import psutil
+          import requests
+          import urllib3
+          import yaml
+
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+          logging.basicConfig(
+              level=logging.INFO,
+              format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+          )
+          logger = logging.getLogger("slm-agent")
+
+          # AutoBot-related services to discover
+          AUTOBOT_SERVICES = [
+              "slm-agent", "autobot-agent", "autobot-backend", "autobot-frontend",
+              "redis-server", "redis", "autobot-npu-worker",
+              "playwright-server", "browser-automation",
+              "prometheus", "grafana-server", "node_exporter",
+              "ollama", "autobot-ai-stack", "run_autobot",
+          ]
+
+
+          class SLMAgent:
+              """SLM Node Agent."""
+
+              def __init__(self, config_path: str = "/opt/autobot/config.yaml"):
+                  self.running = False
+                  self.config = self._load_config(config_path)
+
+              def _load_config(self, path: str) -> dict:
+                  if os.path.exists(path):
+                      with open(path, encoding="utf-8") as f:
+                          return yaml.safe_load(f)
+                  return {
+                      "node_id": os.environ.get("SLM_NODE_ID", "unknown"),
+                      "admin_url": os.environ.get("SLM_ADMIN_URL", "http://127.0.0.1:8000"),
+                      "heartbeat_interval": int(os.environ.get("SLM_HEARTBEAT_INTERVAL", "30")),
+                  }
+
+              def _is_service_enabled(self, name: str) -> bool:
+                  """Check if a service is enabled."""
+                  try:
+                      result = subprocess.run(
+                          ["systemctl", "is-enabled", name],
+                          capture_output=True, text=True, check=False
+                      )
+                      return result.stdout.strip() == "enabled"
+                  except Exception:
+                      return False
+
+              def discover_services(self) -> list:
+                  """Discover systemd services and their status."""
+                  services = []
+                  try:
+                      result = subprocess.run(
+                          ["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--plain"],
+                          capture_output=True, text=True, check=False
+                      )
+                      for line in result.stdout.strip().split("\n"):
+                          parts = line.split()
+                          if len(parts) >= 4:
+                              name = parts[0].replace(".service", "")
+                              if name in AUTOBOT_SERVICES or name.startswith("autobot"):
+                                  active = parts[2] if len(parts) > 2 else "unknown"
+                                  sub = parts[3] if len(parts) > 3 else "unknown"
+                                  status = "running" if active == "active" and sub == "running" else (
+                                      "failed" if sub == "failed" else "stopped"
+                                  )
+                                  services.append({
+                                      "name": name,
+                                      "status": status,
+                                      "active_state": active,
+                                      "sub_state": sub,
+                                      "enabled": self._is_service_enabled(name),
+                                  })
+                  except Exception as e:
+                      logger.error("Service discovery failed: %s", e)
+                  return services
+
+              def collect_health(self) -> dict:
+                  discovered = self.discover_services()
+                  return {
+                      "cpu_percent": psutil.cpu_percent(interval=1),
+                      "memory_percent": psutil.virtual_memory().percent,
+                      "disk_percent": psutil.disk_usage("/").percent,
+                      "agent_version": "1.1.0",
+                      "os_info": f"{platform.system()} {platform.release()}",
+                      "services": discovered,
+                  }
+
+              def send_heartbeat(self) -> bool:
+                  try:
+                      health = self.collect_health()
+                      url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
+                      # verify=False for self-signed certs on nginx proxy
+                      response = requests.post(url, json=health, timeout=10, verify=False)
+                      response.raise_for_status()
+                      logger.debug("Heartbeat sent successfully with %d services", len(health.get("services", [])))
+                      return True
+                  except Exception as e:
+                      logger.error("Heartbeat failed: %s", e)
+                      return False
+
+              def run(self):
+                  self.running = True
+                  signal.signal(signal.SIGTERM, lambda *_: setattr(self, "running", False))
+                  signal.signal(signal.SIGINT, lambda *_: setattr(self, "running", False))
+
+                  logger.info("SLM Agent starting - Node: %s", self.config["node_id"])
+                  logger.info("Admin URL: %s", self.config["admin_url"])
+                  logger.info("Heartbeat interval: %ds", self.config["heartbeat_interval"])
+
+                  while self.running:
+                      self.send_heartbeat()
+                      time.sleep(self.config["heartbeat_interval"])
+
+                  logger.info("SLM Agent stopped")
+
+
+          if __name__ == "__main__":
+              agent = SLMAgent()
+              agent.run()
+      notify: restart autobot-agent
+
+    - name: Configure passwordless sudo for autobot user
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/slm-agent
+        content: |
+          # SLM Agent passwordless sudo for service management
+          autobot ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /bin/journalctl
+        mode: "0440"
+        owner: root
+        group: root
+        validate: "visudo -cf %s"
+
+  handlers:
+    - name: restart autobot-agent
+      ansible.builtin.systemd:
+        name: autobot-agent
+        state: restarted
+        daemon_reload: true

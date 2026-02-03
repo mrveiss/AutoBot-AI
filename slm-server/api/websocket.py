@@ -1,0 +1,319 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+SLM WebSocket API Routes
+
+Provides real-time updates for deployments and system events.
+"""
+
+import asyncio
+import json
+import logging
+from typing import Dict, Set
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/ws", tags=["websocket"])
+
+
+class ConnectionManager:
+    """Manages WebSocket connections for real-time updates."""
+
+    def __init__(self):
+        self._connections: Dict[str, Set[WebSocket]] = {}
+        self._lock = asyncio.Lock()
+
+    async def connect(self, websocket: WebSocket, channel: str) -> None:
+        """Accept a WebSocket connection and subscribe to a channel."""
+        await websocket.accept()
+        async with self._lock:
+            if channel not in self._connections:
+                self._connections[channel] = set()
+            self._connections[channel].add(websocket)
+        logger.debug("WebSocket connected to channel: %s", channel)
+
+    async def disconnect(self, websocket: WebSocket, channel: str) -> None:
+        """Remove a WebSocket from a channel."""
+        async with self._lock:
+            if channel in self._connections:
+                self._connections[channel].discard(websocket)
+                if not self._connections[channel]:
+                    del self._connections[channel]
+        logger.debug("WebSocket disconnected from channel: %s", channel)
+
+    async def broadcast(self, channel: str, message: dict) -> None:
+        """Send a message to all connections on a channel."""
+        async with self._lock:
+            connections = self._connections.get(channel, set()).copy()
+
+        disconnected = []
+        for websocket in connections:
+            try:
+                await websocket.send_json(message)
+            except Exception:
+                disconnected.append(websocket)
+
+        if disconnected:
+            async with self._lock:
+                for ws in disconnected:
+                    if channel in self._connections:
+                        self._connections[channel].discard(ws)
+
+    async def send_to_deployment(self, deployment_id: str, message: dict) -> None:
+        """Send a message to all watchers of a specific deployment."""
+        await self.broadcast(f"deployment:{deployment_id}", message)
+
+    async def send_deployment_log(
+        self, deployment_id: str, log_type: str, message: str
+    ) -> None:
+        """Send a log line to deployment watchers."""
+        await self.send_to_deployment(
+            deployment_id,
+            {
+                "type": "log",
+                "log_type": log_type,
+                "message": message,
+                "deployment_id": deployment_id,
+            },
+        )
+
+    async def send_deployment_status(
+        self, deployment_id: str, status: str, progress: int = 0, error: str = None
+    ) -> None:
+        """Send a status update to deployment watchers."""
+        await self.send_to_deployment(
+            deployment_id,
+            {
+                "type": "status",
+                "status": status,
+                "progress": progress,
+                "error": error,
+                "deployment_id": deployment_id,
+            },
+        )
+
+    async def send_health_update(
+        self, node_id: str, cpu: float, memory: float, disk: float, status: str,
+        last_heartbeat: str = None
+    ) -> None:
+        """Send health update to global and node-specific event channels."""
+        from datetime import datetime
+        message = {
+            "type": "health_update",
+            "node_id": node_id,
+            "data": {
+                "status": status,
+                "cpu_percent": cpu,
+                "memory_percent": memory,
+                "disk_percent": disk,
+                "last_heartbeat": last_heartbeat or datetime.utcnow().isoformat(),
+            },
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", message)
+
+    async def send_node_status(self, node_id: str, status: str, hostname: str = None) -> None:
+        """Send node status change to global and node-specific event channels."""
+        message = {
+            "type": "node_status",
+            "node_id": node_id,
+            "data": {
+                "status": status,
+                "hostname": hostname,
+            },
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", message)
+
+    async def send_remediation_event(
+        self, node_id: str, event_type: str, success: bool = None, message: str = None
+    ) -> None:
+        """Send remediation event to global and node-specific event channels."""
+        event_message = {
+            "type": "remediation_event",
+            "node_id": node_id,
+            "data": {
+                "event_type": event_type,
+                "success": success,
+                "message": message,
+            },
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", event_message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", event_message)
+
+    async def send_service_status(
+        self,
+        node_id: str,
+        service_name: str,
+        status: str,
+        action: str = None,
+        success: bool = True,
+        message: str = None,
+    ) -> None:
+        """Send service status change to global and node-specific event channels."""
+        event_message = {
+            "type": "service_status",
+            "node_id": node_id,
+            "data": {
+                "service_name": service_name,
+                "status": status,
+                "action": action,
+                "success": success,
+                "message": message,
+            },
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", event_message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", event_message)
+
+    async def send_node_lifecycle_event(
+        self, node_id: str, event_type: str, details: dict = None
+    ) -> None:
+        """Send a general node lifecycle event (enrollment, deletion, etc.)."""
+        event_message = {
+            "type": "lifecycle_event",
+            "node_id": node_id,
+            "data": {
+                "event_type": event_type,
+                "details": details or {},
+            },
+            "timestamp": asyncio.get_event_loop().time(),
+        }
+        # Broadcast to global channel
+        await self.broadcast("events:global", event_message)
+        # Broadcast to node-specific channel
+        await self.broadcast(f"node:{node_id}", event_message)
+
+
+# Global connection manager instance
+ws_manager = ConnectionManager()
+
+
+@router.websocket("/deployments/{deployment_id}")
+async def deployment_websocket(websocket: WebSocket, deployment_id: str):
+    """WebSocket endpoint for watching deployment progress."""
+    channel = f"deployment:{deployment_id}"
+    await ws_manager.connect(websocket, channel)
+
+    try:
+        # Send initial connection confirmation
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "deployment_id": deployment_id,
+                "message": "Connected to deployment stream",
+            }
+        )
+
+        # Keep connection alive and handle any client messages
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=30.0
+                )
+                # Handle ping/pong for keepalive
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                # Send keepalive ping
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from deployment: %s", deployment_id)
+    except Exception as e:
+        logger.error("WebSocket error for deployment %s: %s", deployment_id, e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)
+
+
+@router.websocket("/events")
+async def events_websocket(websocket: WebSocket):
+    """WebSocket endpoint for global system events."""
+    channel = "events:global"
+    await ws_manager.connect(websocket, channel)
+
+    try:
+        await websocket.send_json(
+            {"type": "connected", "message": "Connected to event stream"}
+        )
+
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=30.0
+                )
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from events")
+    except Exception as e:
+        logger.error("WebSocket error for events: %s", e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)
+
+
+@router.websocket("/nodes/{node_id}")
+async def node_events_websocket(websocket: WebSocket, node_id: str):
+    """
+    WebSocket endpoint for watching a specific node's lifecycle events.
+
+    Events include:
+    - health_update: CPU, memory, disk metrics
+    - node_status: Status changes (online, offline, degraded, error)
+    - remediation_event: Auto-remediation attempts and results
+    - service_status: Service start/stop/restart events
+    - lifecycle_event: Node enrollment, deletion, configuration changes
+
+    Clients receive only events for the specified node_id.
+    """
+    channel = f"node:{node_id}"
+    await ws_manager.connect(websocket, channel)
+
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "node_id": node_id,
+            "message": f"Connected to lifecycle events for node {node_id}",
+        })
+
+        while True:
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=30.0
+                )
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from node %s events", node_id)
+    except Exception as e:
+        logger.error("WebSocket error for node %s: %s", node_id, e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)

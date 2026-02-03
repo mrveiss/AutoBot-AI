@@ -1,0 +1,44 @@
+# SLM Server - Minimal Dependencies
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+#
+# System dependencies (install via apt):
+#   sudo apt install sshpass  # Required for password-based SSH connections
+#
+
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# Data validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+typing_extensions>=4.0.0  # For Python 3.8 compatibility
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# Async utilities
+aiofiles>=23.2.0
+websockets>=12.0
+
+# Ansible integration
+ansible-runner>=2.3.0
+
+# HTTP client (for health checks)
+httpx>=0.26.0
+
+# System metrics
+psutil>=5.9.0
+
+# SSH connectivity (for connection testing and node management)
+paramiko>=3.4.0
+
+# Cron expression parsing (Issue #741 - Scheduled updates)
+croniter>=2.0.0

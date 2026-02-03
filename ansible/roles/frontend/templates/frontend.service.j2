@@ -1,0 +1,33 @@
+[Unit]
+Description=AutoBot Frontend Vue.js Development Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ frontend_user }}
+Group={{ frontend_user }}
+WorkingDirectory={{ frontend_home }}
+
+# Environment
+Environment="NODE_ENV=development"
+Environment="VITE_API_URL=http://{{ backend_host }}:{{ backend_port }}"
+Environment="PORT={{ frontend_port }}"
+
+# Start command
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port {{ frontend_port }}
+
+# Restart policy
+Restart=always
+RestartSec=5s
+
+# Limits
+LimitNOFILE=65535
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-frontend
+
+[Install]
+WantedBy=multi-user.target

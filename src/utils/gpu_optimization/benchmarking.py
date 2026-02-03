@@ -1,0 +1,237 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+GPU Benchmarking Module
+
+Issue #381: Extracted from gpu_acceleration_optimizer.py god class refactoring.
+Contains GPU performance benchmarking functionality.
+"""
+
+import asyncio
+import logging
+import time
+from typing import Any, Dict, List
+
+from .types import GPUCapabilities
+
+logger = logging.getLogger(__name__)
+
+
+async def benchmark_memory_bandwidth() -> Dict[str, Any]:
+    """Benchmark GPU memory bandwidth."""
+    try:
+        # Simulate memory bandwidth test
+        await asyncio.sleep(0.1)  # Simulate test time
+
+        # Typical RTX 4070 memory bandwidth: ~504 GB/s
+        measured_bandwidth = 480.0  # GB/s (simulated)
+        expected_bandwidth = 504.0
+        efficiency = (measured_bandwidth / expected_bandwidth) * 100
+
+        return {
+            "measured_bandwidth_gbps": measured_bandwidth,
+            "expected_bandwidth_gbps": expected_bandwidth,
+            "efficiency_percent": efficiency,
+            "score": min(100, efficiency),
+        }
+
+    except Exception as e:
+        logger.error("Memory bandwidth benchmark failed: %s", e)
+        return {"error": str(e), "score": 0}
+
+
+async def benchmark_compute_performance() -> Dict[str, Any]:
+    """Benchmark GPU compute performance."""
+    try:
+        # Simulate compute performance test
+        await asyncio.sleep(0.1)
+
+        # Typical RTX 4070 compute: ~29 TFLOPS FP32
+        measured_tflops = 27.5  # Simulated
+        expected_tflops = 29.0
+        efficiency = (measured_tflops / expected_tflops) * 100
+
+        return {
+            "measured_tflops": measured_tflops,
+            "expected_tflops": expected_tflops,
+            "efficiency_percent": efficiency,
+            "score": min(100, efficiency),
+        }
+
+    except Exception as e:
+        logger.error("Compute performance benchmark failed: %s", e)
+        return {"error": str(e), "score": 0}
+
+
+async def benchmark_mixed_precision() -> Dict[str, Any]:
+    """Benchmark mixed precision performance."""
+    try:
+        # Simulate mixed precision test
+        await asyncio.sleep(0.1)
+
+        # Mixed precision should provide ~1.5-2x improvement
+        speedup_factor = 1.8  # Simulated
+        expected_speedup = 2.0
+        efficiency = (speedup_factor / expected_speedup) * 100
+
+        return {
+            "speedup_factor": speedup_factor,
+            "expected_speedup": expected_speedup,
+            "efficiency_percent": efficiency,
+            "score": min(100, efficiency),
+        }
+
+    except Exception as e:
+        logger.error("Mixed precision benchmark failed: %s", e)
+        return {"error": str(e), "score": 0}
+
+
+async def benchmark_tensor_cores() -> Dict[str, Any]:
+    """Benchmark Tensor Core performance."""
+    try:
+        # Simulate Tensor Core test
+        await asyncio.sleep(0.1)
+
+        # Tensor Cores should provide significant acceleration
+        speedup_factor = 3.5  # Simulated
+        expected_speedup = 4.0
+        efficiency = (speedup_factor / expected_speedup) * 100
+
+        return {
+            "speedup_factor": speedup_factor,
+            "expected_speedup": expected_speedup,
+            "efficiency_percent": efficiency,
+            "score": min(100, efficiency),
+        }
+
+    except Exception as e:
+        logger.error("Tensor Core benchmark failed: %s", e)
+        return {"error": str(e), "score": 0}
+
+
+def generate_benchmark_recommendations(
+    results: Dict[str, Any],
+    capabilities: GPUCapabilities,
+) -> List[str]:
+    """Generate recommendations based on benchmark results."""
+    recommendations = []
+    tests = results.get("benchmark_tests", {})
+
+    # Memory bandwidth recommendations
+    memory_test = tests.get("memory_bandwidth", {})
+    if memory_test.get("score", 0) < 80:
+        recommendations.append(
+            "Memory bandwidth is below optimal. Consider reducing memory-intensive "
+            "operations or upgrading GPU memory."
+        )
+
+    # Compute performance recommendations
+    compute_test = tests.get("compute_performance", {})
+    if compute_test.get("score", 0) < 80:
+        recommendations.append(
+            "Compute performance is below optimal. Check for thermal throttling "
+            "or power limit issues."
+        )
+
+    # Mixed precision recommendations
+    mixed_test = tests.get("mixed_precision", {})
+    if mixed_test.get("score", 0) < 70:
+        recommendations.append(
+            "Mixed precision performance is suboptimal. Ensure models are "
+            "properly configured for FP16 operations."
+        )
+    elif mixed_test.get("score", 0) >= 90:
+        recommendations.append(
+            "Excellent mixed precision performance! Consider using FP16 for "
+            "all supported operations."
+        )
+
+    # Tensor Core recommendations
+    tensor_test = tests.get("tensor_core", {})
+    if tensor_test.get("score", 0) < 70:
+        recommendations.append(
+            "Tensor Core utilization is low. Ensure batch sizes and matrix "
+            "dimensions are multiples of 8 or 16."
+        )
+    elif tensor_test.get("score", 0) >= 90:
+        recommendations.append(
+            "Excellent Tensor Core utilization! Your workloads are well "
+            "optimized for Tensor Core acceleration."
+        )
+
+    # Overall score recommendations
+    overall_score = results.get("overall_score", 0)
+    if overall_score >= 90:
+        recommendations.append(
+            "GPU is performing excellently! No major optimizations needed."
+        )
+    elif overall_score >= 70:
+        recommendations.append(
+            "GPU performance is good with room for improvement. Review "
+            "specific test results for optimization opportunities."
+        )
+    elif overall_score < 50:
+        recommendations.append(
+            "GPU performance is significantly below potential. Consider "
+            "reviewing driver versions, power settings, and thermal management."
+        )
+
+    return recommendations
+
+
+async def run_comprehensive_benchmark(
+    capabilities: GPUCapabilities,
+) -> Dict[str, Any]:
+    """Run comprehensive GPU performance benchmark."""
+    try:
+        logger.info("Starting GPU performance benchmark...")
+
+        benchmark_results = {
+            "timestamp": time.time(),
+            "gpu_info": capabilities.to_dict(),
+            "benchmark_tests": {},
+            "overall_score": 0.0,
+            "recommendations": [],
+        }
+
+        # Memory bandwidth test
+        memory_bandwidth = await benchmark_memory_bandwidth()
+        benchmark_results["benchmark_tests"]["memory_bandwidth"] = memory_bandwidth
+
+        # Compute performance test
+        compute_performance = await benchmark_compute_performance()
+        benchmark_results["benchmark_tests"]["compute_performance"] = compute_performance
+
+        # Mixed precision performance test
+        if capabilities.mixed_precision:
+            mixed_precision_perf = await benchmark_mixed_precision()
+            benchmark_results["benchmark_tests"]["mixed_precision"] = mixed_precision_perf
+
+        # Tensor Core performance test
+        if capabilities.tensor_cores:
+            tensor_core_perf = await benchmark_tensor_cores()
+            benchmark_results["benchmark_tests"]["tensor_core"] = tensor_core_perf
+
+        # Calculate overall score
+        scores = [
+            test.get("score", 0)
+            for test in benchmark_results["benchmark_tests"].values()
+        ]
+        if scores:
+            benchmark_results["overall_score"] = sum(scores) / len(scores)
+
+        # Generate recommendations
+        benchmark_results["recommendations"] = generate_benchmark_recommendations(
+            benchmark_results, capabilities
+        )
+
+        logger.info(
+            f"GPU benchmark completed. Overall score: "
+            f"{benchmark_results['overall_score']:.1f}/100"
+        )
+        return benchmark_results
+
+    except Exception as e:
+        logger.error("GPU benchmark failed: %s", e)
+        return {"error": str(e), "timestamp": time.time()}

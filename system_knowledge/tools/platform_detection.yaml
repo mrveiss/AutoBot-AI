@@ -1,0 +1,167 @@
+metadata:
+  category: platform_detection
+  description: Platform detection and system identification tools
+  last_updated: "2025-09-09T00:00:00"
+  version: "1.0.0"
+  machine_awareness: true
+
+tools:
+  - name: platform_detector
+    type: system_detection
+    purpose: Comprehensive platform and capability detection
+    platform_variants:
+      linux:
+        installation:
+          apt: "Built-in (Python platform module)"
+          yum: "Built-in (Python platform module)"
+          pacman: "Built-in (Python platform module)"
+        usage:
+          detect_os: "python3 -c 'import platform; print(platform.system())'"
+          detect_distro: "cat /etc/os-release"
+          detect_arch: "uname -m"
+        availability_check: "python3 --version"
+      windows:
+        installation:
+          winget: "Built-in (Python platform module)"
+          choco: "Built-in (Python platform module)"
+        usage:
+          detect_os: "python -c \"import platform; print(platform.system())\""
+          detect_version: "systeminfo | findstr /B /C:\"OS Name\" /C:\"OS Version\""
+          detect_arch: "echo %PROCESSOR_ARCHITECTURE%"
+        availability_check: "python --version"
+      macos:
+        installation:
+          brew: "Built-in (Python platform module)"
+        usage:
+          detect_os: "python3 -c 'import platform; print(platform.system())'"
+          detect_version: "sw_vers"
+          detect_arch: "uname -m"
+        availability_check: "python3 --version"
+    
+    common_examples:
+      - description: Detect operating system
+        command: "python3 -c 'import platform; print(platform.system())'"
+        expected_output: "Linux/Windows/Darwin"
+        platform_specific:
+          linux: "python3 -c 'import platform; print(platform.system())'"
+          windows: "python -c \"import platform; print(platform.system())\""
+          macos: "python3 -c 'import platform; print(platform.system())'"
+      
+      - description: Get detailed system info
+        command: "python3 -c 'import platform; print(platform.uname())'"
+        expected_output: "Complete system information tuple"
+        platform_specific:
+          linux: "uname -a"
+          windows: "systeminfo"
+          macos: "system_profiler SPSoftwareDataType"
+
+  - name: package_manager_detector
+    type: package_management
+    purpose: Detect and verify package manager availability
+    platform_variants:
+      linux:
+        debian_based:
+          primary: "apt"
+          detection: "which apt"
+          test_command: "apt --version"
+        redhat_based:
+          primary: "yum"
+          fallback: "dnf"
+          detection: "which yum || which dnf"
+          test_command: "yum --version || dnf --version"
+        arch_based:
+          primary: "pacman"
+          detection: "which pacman"
+          test_command: "pacman --version"
+        suse_based:
+          primary: "zypper"
+          detection: "which zypper"
+          test_command: "zypper --version"
+      windows:
+        modern:
+          primary: "winget"
+          detection: "winget --version"
+        legacy:
+          primary: "choco"
+          detection: "choco --version"
+      macos:
+        primary: "brew"
+        fallback: "port"
+        detection: "which brew || which port"
+        test_command: "brew --version || port version"
+
+  - name: tool_availability_scanner
+    type: capability_assessment
+    purpose: Scan for available system tools and capabilities
+    scanning_categories:
+      network_tools:
+        essential: ["ping", "curl", "wget"]
+        advanced: ["nmap", "netstat", "ss", "dig", "nslookup"]
+        security: ["arp", "traceroute", "tcpdump", "wireshark"]
+      system_tools:
+        essential: ["ps", "top", "df", "du", "free"]
+        process_mgmt: ["htop", "systemctl", "service"]
+        user_mgmt: ["whoami", "id", "groups", "sudo"]
+      file_tools:
+        essential: ["ls", "find", "grep", "cat"]
+        text_processing: ["sed", "awk", "sort", "uniq", "wc"]
+        archiving: ["tar", "zip", "unzip", "gzip"]
+      development_tools:
+        version_control: ["git", "svn"]
+        interpreters: ["python", "python3", "node", "ruby"]
+        package_managers: ["pip", "pip3", "npm", "yarn"]
+        containers: ["docker", "docker-compose", "podman"]
+        editors: ["vim", "nano", "emacs", "code"]
+    
+    scan_script: |
+      #!/bin/bash
+      # Tool availability scanner
+      declare -A tools=(
+        ["network"]="ping curl wget nmap netstat ss dig nslookup arp traceroute tcpdump"
+        ["system"]="ps top df du free htop systemctl service whoami id groups sudo"
+        ["files"]="ls find grep cat sed awk sort uniq wc tar zip unzip gzip"
+        ["dev"]="git python python3 node npm docker vim nano"
+      )
+      
+      for category in "${!tools[@]}"; do
+        echo "=== $category tools ==="
+        for tool in ${tools[$category]}; do
+          if command -v "$tool" >/dev/null 2>&1; then
+            echo "✓ $tool"
+          else
+            echo "✗ $tool"
+          fi
+        done
+        echo
+      done
+
+machine_adaptation:
+  filters:
+    by_os_type:
+      linux: ["platform_detector", "package_manager_detector", "tool_availability_scanner"]
+      windows: ["platform_detector", "package_manager_detector"]
+      macos: ["platform_detector", "package_manager_detector", "tool_availability_scanner"]
+    by_package_manager:
+      apt: ["tool_availability_scanner"]
+      yum: ["tool_availability_scanner"]
+      brew: ["tool_availability_scanner"]
+      winget: []
+
+  installation_adaptation:
+    auto_detect_method: true
+    fallback_methods:
+      - "Manual compilation from source"
+      - "Portable/standalone versions"
+    permission_handling:
+      require_root: ["package_manager_detector"]
+      user_installable: ["platform_detector", "tool_availability_scanner"]
+
+  output_adaptation:
+    format_by_shell:
+      bash: "Standard UNIX output"
+      powershell: "PowerShell object output"
+      cmd: "Windows command prompt output"
+    path_separators:
+      linux: "/"
+      windows: "\\"
+      macos: "/"

@@ -2,19 +2,51 @@
   <div class="history-view">
     <h2>Chat History</h2>
     <div class="history-actions">
-      <button @click="refreshHistory">Refresh</button>
-      <button @click="clearHistory">Clear History</button>
+      <button
+        @click="refreshHistory"
+        :disabled="isRefreshing"
+        :class="{ 'loading': isRefreshing }"
+        aria-label="Refresh history">
+        <i class="fas" :class="isRefreshing ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+        {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
+      </button>
+      <button
+        @click="clearHistory"
+        :disabled="isClearing"
+        :class="{ 'loading': isClearing }"
+        aria-label="Clear history">
+        <i class="fas" :class="isClearing ? 'fa-spinner fa-spin' : 'fa-trash-alt'"></i>
+        {{ isClearing ? 'Clearing...' : 'Clear History' }}
+      </button>
     </div>
     <div class="history-list-container">
-      <div v-if="history.length === 0" class="no-history">No chat history available.</div>
-      <div v-else class="history-entries">
-        <div v-for="(entry, index) in history" :key="index" class="history-entry" @click="viewHistoryEntry(entry)">
+      <!-- Loading overlay when refreshing -->
+      <div v-if="isRefreshing" class="loading-overlay">
+        <div class="loading-content">
+          <i class="fas fa-spinner fa-spin fa-2x"></i>
+          <p>Loading history...</p>
+        </div>
+      </div>
+
+      <EmptyState
+        v-if="history.length === 0 && !isRefreshing"
+        icon="fas fa-history"
+        message="No chat history available."
+      />
+      <div v-else-if="!isRefreshing" class="history-entries">
+        <div v-for="(entry, index) in history" :key="entry.id || `history-${entry.date}`" class="history-entry" @click="viewHistoryEntry(entry)" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
           <div class="history-summary">
             <span class="history-date">{{ entry.date }}</span>
             <span class="history-preview">{{ entry.preview }}</span>
           </div>
           <div class="history-actions-entry">
-            <button @click.stop="deleteHistoryEntry(entry)">Delete</button>
+            <button
+              @click.stop="deleteHistoryEntry(entry)"
+              :disabled="isDeleting"
+              :class="{ 'deleting': isDeleting }"
+              aria-label="Delete entry">
+              <i class="fas" :class="isDeleting ? 'fa-spinner fa-spin' : 'fa-trash'"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -23,59 +55,71 @@
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import apiClient from '../utils/ApiClient.js';
+import { useAsyncHandler } from '@/composables/useErrorHandler';
+import EmptyState from '@/components/ui/EmptyState.vue';
+import { createLogger } from '@/utils/debugUtils';
+
+const logger = createLogger('HistoryView');
 
 export default {
   name: 'HistoryView',
+  components: {
+    EmptyState
+  },
   setup() {
     const history = ref([]);
 
     // Function to fetch chat history from backend
-    const refreshHistory = async () => {
-      try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats`);
-        if (response.ok) {
-          const data = await response.json();
-          const chats = data.chats || [];
-          history.value = await Promise.all(chats.map(async (chat) => {
-            try {
-              const messagesResponse = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${chat.chatId}`);
-              if (messagesResponse.ok) {
-                const messages = await messagesResponse.json();
-                // Look for the first user message to use as a preview or subject
-                const userMessage = messages.find(msg => msg.sender === 'user');
-                // If there's a user message, use it as the subject/preview
-                let subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
-                return {
-                  id: chat.chatId,
-                  date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
-                  preview: subject,
-                  name: chat.name || ''
-                };
-              }
-            } catch (error) {
-              console.error(`Error loading messages for chat ${chat.chatId}:`, error);
-            }
+    const { execute: refreshHistory, loading: isRefreshing } = useAsyncHandler(
+      async () => {
+        const response = await apiClient.getChatList();
+        const chats = response.chats || [];
+
+        // Use Promise.allSettled to handle individual chat errors gracefully
+        const results = await Promise.allSettled(
+          chats.map(async (chat) => {
+            const messagesResponse = await apiClient.getChatHistory(chat.chatId);
+            const messages = messagesResponse.history || [];
+            // Look for the first user message to use as a preview or subject
+            const userMessage = messages.find(msg => msg.sender === 'user');
+            // If there's a user message, use it as the subject/preview
+            const subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
             return {
               id: chat.chatId,
-              date: 'Unknown date',
-              preview: 'Error loading chat',
+              date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
+              preview: subject,
               name: chat.name || ''
             };
-          }));
-          console.log('Chat history refreshed from backend:', history.value.length, 'chats loaded');
-        } else {
-          console.error('Failed to load chat history from backend:', response.statusText);
+          })
+        );
+
+        // Process results - use fulfilled values, provide fallback for rejected
+        history.value = results.map((result, index) => {
+          if (result.status === 'fulfilled') {
+            return result.value;
+          } else {
+            logger.error(`Error loading messages for chat ${chats[index].chatId}:`, result.reason);
+            return {
+              id: chats[index].chatId,
+              date: 'Unknown date',
+              preview: 'Error loading chat',
+              name: chats[index].name || ''
+            };
+          }
+        });
+      },
+      {
+        onError: () => {
           // Fallback to local storage
           loadHistoryFromLocalStorage();
-        }
-      } catch (error) {
-        console.error('Error loading chat history from backend:', error);
-        // Fallback to local storage
-        loadHistoryFromLocalStorage();
+        },
+        logErrors: true,
+        errorPrefix: '[HistoryView]'
       }
-    };
-    
+    );
+
     // Function to build chat history from local storage
     const loadHistoryFromLocalStorage = () => {
       const localChats = [];
@@ -90,7 +134,7 @@ export default {
               // Look for the first user message to use as a preview or subject
               const userMessage = messages.find(msg => msg.sender === 'user');
               // If there's a user message, use it as the subject/preview
-              let subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
+              const subject = userMessage ? userMessage.text.substring(0, 30) + (userMessage.text.length > 30 ? '...' : '') : 'No subject';
               localChats.push({
                 id: chatId,
                 date: messages.length > 0 ? messages[0].timestamp : 'Unknown date',
@@ -98,69 +142,74 @@ export default {
                 name: ''
               });
             } catch (e) {
-              console.error(`Error parsing messages for chat ${chatId}:`, e);
+              logger.error(`Error parsing messages for chat ${chatId}:`, e);
             }
           }
         }
       }
       history.value = localChats;
-      console.log('Chat history loaded from local storage:', history.value.length, 'chats loaded');
     };
 
-    const clearHistory = async () => {
-      try {
-        // Since clearing all chats might be destructive, we'll just clear the list for now
-        // In a real implementation, you might want to delete each chat individually from backend
+    const { execute: performClearHistory, loading: isClearing } = useAsyncHandler(
+      async () => {
+        // Delete all chats from backend and localStorage
+        const deletePromises = history.value.map(async (entry) => {
+          try {
+            await apiClient.deleteChat(entry.id);
+            localStorage.removeItem(`chat_${entry.id}_messages`);
+          } catch (error) {
+            logger.error(`Failed to delete chat ${entry.id}:`, error);
+            // Continue with other deletions even if one fails
+          }
+        });
+
+        await Promise.allSettled(deletePromises);
+
+        // Clear local array after deletion attempts
         history.value = [];
-        console.log('Chat history cleared (local only)');
-      } catch (error) {
-        console.error('Error clearing chat history:', error);
+      },
+      {
+        onError: () => {
+          alert('Failed to clear all chat history. Some chats may not have been deleted.');
+        },
+        successMessage: 'Chat history cleared successfully',
+        logErrors: true,
+        errorPrefix: '[HistoryView]'
+      }
+    );
+
+    const clearHistory = async () => {
+      if (confirm('Are you sure you want to delete ALL chat history? This cannot be undone.')) {
+        await performClearHistory();
       }
     };
 
     const viewHistoryEntry = (entry) => {
       // Navigate to the chat in ChatInterface by updating the URL hash
       window.location.hash = `chatId=${entry.id}`;
-      console.log('Viewing history entry:', entry.id);
     };
 
-    const deleteHistoryEntry = async (entry) => {
-      try {
-        const response = await fetch(`${settings.value.backend.api_endpoint}/api/chats/${entry.id}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        if (response.ok) {
-          // Remove from local storage
-          localStorage.removeItem(`chat_${entry.id}_messages`);
-          // Remove from history list
-          history.value = history.value.filter(e => e.id !== entry.id);
-          console.log('Deleted history entry:', entry.id);
-        } else {
-          console.error('Failed to delete chat history entry:', response.statusText);
-        }
-      } catch (error) {
-        console.error('Error deleting chat history entry:', error);
+    const { execute: deleteHistoryEntry, loading: isDeleting } = useAsyncHandler(
+      async (entry) => {
+        await apiClient.deleteChat(entry.id);
+        // Remove from local storage
+        localStorage.removeItem(`chat_${entry.id}_messages`);
+        // Remove from history list
+        history.value = history.value.filter(e => e.id !== entry.id);
+      },
+      {
+        onError: () => {
+          alert('Failed to delete chat history. Please try again.');
+        },
+        logErrors: true,
+        errorPrefix: '[HistoryView]'
       }
-    };
+    );
 
-    // Settings structure to match ChatInterface
-    const settings = ref({
-      backend: {
-        api_endpoint: 'http://localhost:8001'
-      }
+    // Load history on mount
+    onMounted(() => {
+      refreshHistory();
     });
-    
-    // Load settings from local storage if available
-    const savedSettings = localStorage.getItem('chat_settings');
-    if (savedSettings) {
-      settings.value = JSON.parse(savedSettings);
-    }
-    
-    // Initial load of history after settings are initialized
-    refreshHistory();
 
     return {
       history,
@@ -168,17 +217,20 @@ export default {
       clearHistory,
       viewHistoryEntry,
       deleteHistoryEntry,
-      settings
+      isRefreshing,
+      isDeleting,
+      isClearing
     };
   }
 };
 </script>
 
 <style scoped>
+/* Issue #704: Migrated to CSS design tokens */
 .history-view {
-  background-color: white;
+  background-color: var(--bg-primary);
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   padding: 15px;
   height: 100%;
   display: flex;
@@ -188,7 +240,7 @@ export default {
 .history-view h2 {
   margin: 0 0 15px 0;
   font-size: 20px;
-  color: #007bff;
+  color: var(--color-primary);
 }
 
 .history-actions {
@@ -198,40 +250,75 @@ export default {
 }
 
 .history-actions button {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
   padding: 8px 15px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
 }
 
-.history-actions button:hover {
-  background-color: #0056b3;
+.history-actions button:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.history-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.history-actions button.loading {
+  opacity: 0.7;
 }
 
 .history-actions button:last-child {
-  background-color: #dc3545;
+  background-color: var(--color-danger);
 }
 
-.history-actions button:last-child:hover {
-  background-color: #c82333;
+.history-actions button:last-child:hover:not(:disabled) {
+  background-color: var(--color-danger-hover);
 }
 
 .history-list-container {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-light);
   border-radius: 4px;
   padding: 10px;
+  position: relative;
 }
 
-.no-history {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: 20px;
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-overlay-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: 4px;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-primary);
+}
+
+.loading-content p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .history-entries {
@@ -245,14 +332,14 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 10px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-light);
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s;
 }
 
 .history-entry:hover {
-  background-color: #f1f1f1;
+  background-color: var(--bg-hover);
 }
 
 .history-summary {
@@ -262,14 +349,14 @@ export default {
 
 .history-date {
   font-size: 14px;
-  color: #6c757d;
+  color: var(--text-tertiary);
   display: block;
   margin-bottom: 5px;
 }
 
 .history-preview {
   font-size: 16px;
-  color: #343a40;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -277,16 +364,29 @@ export default {
 }
 
 .history-actions-entry button {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--color-danger);
+  color: var(--text-on-primary);
   border: none;
   padding: 5px 10px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.history-actions-entry button:hover {
-  background-color: #c82333;
+.history-actions-entry button:hover:not(:disabled) {
+  background-color: var(--color-danger-hover);
+}
+
+.history-actions-entry button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.history-actions-entry button.deleting {
+  opacity: 0.7;
 }
 </style>

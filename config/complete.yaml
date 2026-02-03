@@ -1,0 +1,879 @@
+# AutoBot Complete Configuration
+# This file contains ALL configuration values - NO HARDCODING ALLOWED IN CODE
+# All values should be retrieved from this configuration
+
+# Infrastructure Settings
+infrastructure:
+  # Host IP addresses for all services
+  hosts:
+    backend: "172.16.168.20"
+    frontend: "172.16.168.21" 
+    npu_worker: "172.16.168.22"
+    redis: "172.16.168.23"
+    ai_stack: "172.16.168.24"
+    browser_service: "172.16.168.25"
+    ollama: "127.0.0.1"  # Ollama runs on backend host (localhost)
+    
+  # Service ports
+  ports:
+    backend: 8001
+    frontend: 5173
+    redis: 6379
+    ollama: 11434
+    ai_stack: 8080
+    npu_worker: 8081
+    browser_service: 3000
+    vnc: 6080
+    websocket: 8001
+    nginx: 80  # Production mode only - serves static files on frontend VM
+    vscode: 8080
+    
+  # Default addresses
+  defaults:
+    localhost: "127.0.0.1"
+    any_interface: "0.0.0.0"
+    docker_internal: "host.docker.internal"
+    
+  # Local host aliases
+  local_hosts:
+    - "localhost"
+    - "127.0.0.1"
+
+# ============================================================================
+# Timeout Configuration (all values in seconds)
+# ============================================================================
+# Centralized timeout configuration for all async operations.
+# KB-ASYNC-014: Comprehensive timeout configuration system
+# See: docs/architecture/TIMEOUT_CONFIGURATION_PROMETHEUS_METRICS_DESIGN.md
+# ============================================================================
+
+timeouts:
+  # Redis operation timeouts
+  redis:
+    # Connection-level timeouts
+    connection:
+      socket_connect: 2.0      # Initial connection establishment
+      socket_timeout: 2.0      # Individual socket operations
+      health_check: 1.0        # Quick health check pings
+
+    # Operation-level timeouts
+    operations:
+      get: 1.0                 # Simple key retrieval
+      set: 1.0                 # Simple key storage
+      hgetall: 2.0             # Hash retrieval
+      pipeline: 5.0            # Batch pipeline execution
+      scan_iter: 10.0          # Large key scans
+      ft_info: 2.0             # Search index info
+      flushdb: 30.0            # Database flush (destructive)
+
+    # Circuit breaker timeouts
+    circuit_breaker:
+      timeout: 60.0            # How long circuit stays open
+      threshold: 5             # Failures before opening circuit
+
+  # LlamaIndex / Vector operations
+  llamaindex:
+    embedding:
+      generation: 10.0         # Single embedding generation
+      batch: 30.0              # Batch embedding generation
+
+    indexing:
+      single_document: 10.0    # Index single document
+      batch_documents: 60.0    # Index multiple documents
+      vector_store_init: 10.0  # Initialize vector store
+
+    search:
+      query: 10.0              # Semantic search query
+      hybrid: 15.0             # Hybrid search (vector + text)
+
+  # Document processing timeouts
+  documents:
+    processing:
+      pdf_extraction: 30.0     # Extract text from PDF
+      text_chunking: 5.0       # Chunk text for indexing
+      metadata_extraction: 3.0 # Extract metadata
+
+    operations:
+      add_document: 30.0       # Complete document addition
+      batch_upload: 120.0      # Multiple document upload
+      export: 60.0             # Export knowledge base
+
+  # HTTP / API timeouts
+  http:
+    standard: 30.0             # Standard HTTP request
+    long_running: 120.0        # Long-running operations
+    streaming: 300.0           # Streaming responses
+
+  # LLM timeouts
+  llm:
+    default: 120.0             # Default LLM generation
+    fast: 30.0                 # Quick responses
+    reasoning: 300.0           # Deep reasoning tasks
+
+  # Legacy compatibility - preserved from old configuration
+  commands:
+    quick: 60
+    standard: 300
+    installation: 600
+    long_running: 1800
+
+  process:
+    startup: 10
+    termination: 5
+    validation: 10
+    health_check: 5
+
+  agent:
+    default: 60.0
+    research: 120.0
+    classification: 10.0
+
+  knowledge_base:
+    search: 10.0
+    document_insert: 30.0
+    embedding_test: 10.0
+
+  tcp:
+    port_check: 1.0
+    connect: 10.0
+
+  service_registry:
+    default: 30
+
+  communication:
+    default: 30.0
+    channel_poll: 0.1
+    websocket: 60.0
+
+  keepalive:
+    http: 60
+    websocket: 30
+    redis: 120
+
+# Environment-specific timeout overrides
+environments:
+  development:
+    timeouts:
+      redis:
+        operations:
+          scan_iter: 30.0      # More lenient for debugging
+      llamaindex:
+        search:
+          query: 20.0          # More time for debugging
+
+  production:
+    timeouts:
+      redis:
+        operations:
+          get: 0.5             # Tighter for production
+          set: 0.5
+      llamaindex:
+        search:
+          query: 5.0           # Faster production queries
+
+# File and Directory Paths
+paths:
+  # Log files
+  logs:
+    directory: "logs"
+    system: "logs/system.log"
+    backend: "logs/backend.log"
+    frontend: "logs/frontend.log"
+    rum: "logs/rum.log"
+    error: "logs/error.log"
+    debug: "logs/debug.log"
+    audit: "logs/audit.log"
+    
+  # Configuration files
+  config:
+    directory: "config"
+    main: "config/main.yaml"
+    agents: "config/agents.yaml"
+    logging: "config/logging.yaml"
+    security: "config/security"
+    
+  # Data directories
+  data:
+    directory: "data"
+    knowledge_base: "data/knowledge_base.db"
+    chats: "data/chats"
+    cache: "data/cache"
+    temp: "data/temp"
+    chromadb: "data/chromadb"
+    
+  # Static assets
+  static:
+    directory: "static"
+    uploads: "static/uploads"
+    downloads: "static/downloads"
+
+# Knowledge Base Configuration
+knowledge:
+  # Advanced RAG (Retrieval-Augmented Generation) Settings
+  rag:
+    # Hybrid search weights (must sum to 1.0)
+    hybrid_weight_semantic: 0.7  # Weight for semantic/vector similarity
+    hybrid_weight_keyword: 0.3   # Weight for keyword/BM25 matching
+
+    # Search parameters
+    max_results_per_stage: 20    # Results to consider in each retrieval stage
+    diversity_threshold: 0.85    # Similarity threshold for result diversification
+    default_max_results: 5       # Default number of final results
+
+    # Context optimization
+    default_context_length: 2000 # Default context window for RAG
+    max_context_length: 5000     # Maximum allowed context length
+
+    # Reranking configuration
+    enable_reranking: true       # Enable cross-encoder reranking
+    reranking_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Model for reranking
+
+    # Performance and caching
+    cache_ttl_seconds: 300       # Cache time-to-live (5 minutes)
+    timeout_seconds: 30.0        # Maximum time for RAG operations
+
+    # Feature flags
+    enable_advanced_rag: true    # Master switch for advanced RAG features
+    fallback_to_basic_search: true  # Fall back to basic search on errors
+
+# Service URLs and Endpoints
+services:
+  # Backend service
+  backend:
+    protocol: "http"
+    host: "${infrastructure.hosts.backend}"
+    port: "${infrastructure.ports.backend}"
+    base_url: "${services.backend.protocol}://${services.backend.host}:${services.backend.port}"
+    health_url: "${services.backend.base_url}/api/health"
+    knowledge_stats_url: "${services.backend.base_url}/api/knowledge_base/stats"
+    
+  # Frontend service
+  frontend:
+    protocol: "http"
+    host: "${infrastructure.hosts.frontend}"
+    port: "${infrastructure.ports.frontend}"
+    base_url: "${services.frontend.protocol}://${services.frontend.host}:${services.frontend.port}"
+    
+  # Ollama LLM service
+  ollama:
+    protocol: "http"
+    host: "${infrastructure.hosts.ollama}"
+    port: "${infrastructure.ports.ollama}"
+    base_url: "${services.ollama.protocol}://${services.ollama.host}:${services.ollama.port}"
+    chat_url: "${services.ollama.base_url}/api/chat"
+    generate_url: "${services.ollama.base_url}/api/generate"
+    embeddings_url: "${services.ollama.base_url}/api/embeddings"
+    models_url: "${services.ollama.base_url}/api/tags"
+    tags_endpoint: "/api/tags"
+    model_info_endpoint: "/api/show"
+    
+  # Redis service
+  redis:
+    protocol: "redis"
+    host: "${infrastructure.hosts.redis}"
+    port: "${infrastructure.ports.redis}"
+    url: "${services.redis.protocol}://${services.redis.host}:${services.redis.port}"
+    
+  # AI Stack service
+  ai_stack:
+    protocol: "http"
+    host: "${infrastructure.hosts.ai_stack}"
+    port: "${infrastructure.ports.ai_stack}"
+    base_url: "${services.ai_stack.protocol}://${services.ai_stack.host}:${services.ai_stack.port}"
+    health_url: "${services.ai_stack.base_url}/health"
+    
+  # NPU Worker service
+  npu_worker:
+    protocol: "http"
+    host: "${infrastructure.hosts.npu_worker}"
+    port: "${infrastructure.ports.npu_worker}"
+    base_url: "${services.npu_worker.protocol}://${services.npu_worker.host}:${services.npu_worker.port}"
+    health_url: "${services.npu_worker.base_url}/health"
+    
+  # Browser service
+  browser_service:
+    protocol: "http"
+    host: "${infrastructure.hosts.browser_service}"
+    port: "${infrastructure.ports.browser_service}"
+    base_url: "${services.browser_service.protocol}://${services.browser_service.host}:${services.browser_service.port}"
+    health_url: "${services.browser_service.base_url}/health"
+
+# Redis Configuration
+redis:
+  enabled: true
+  host: "${infrastructure.hosts.redis}"
+  port: "${infrastructure.ports.redis}"
+  password: null  # No password configured
+  
+  # Connection settings (tuned for higher load)
+  connection:
+    max_connections: 50  # Increased for higher concurrent load
+    min_connections: 5   # Pre-warmed connections
+    timeout: 5
+    socket_timeout: 5    # Increased for slower operations
+    socket_connect_timeout: 2
+    retry_on_timeout: true
+    
+  # Database allocation
+  databases:
+    main: 0
+    knowledge: 0  # RediSearch indexes MUST be on DB 0
+    celery_broker: 1      # Celery task broker
+    celery_results: 2     # Celery task results
+    metrics: 1    # Performance metrics and monitoring data
+    prompts: 2
+    agents: 3
+    cache: 4
+    sessions: 6
+    chat_history: 8
+    backup: 10
+    testing: 15
+
+  # Knowledge base specific - RediSearch requirement
+  kb_db: 0
+  
+  # Pub/Sub channels
+  channels:
+    command_approval_request: "command_approval_request"
+    command_approval_response_prefix: "command_approval_"
+    worker_capabilities: "worker_capabilities"
+    events: "events"
+    notifications: "notifications"
+    
+  # Vector store configuration
+  vector_prefix: "doc"
+  vector_overwrite: true
+  vector_key_pattern: "llama_index/vector_*"
+  
+  # Scan operation settings
+  scan_batch_size: 100
+  scan_max_iterations: 50
+  category_sample_size: 5
+  category_analysis_limit: 3
+  
+  # Index names
+  indexes:
+    knowledge_base: "llama_index"
+
+# Retry Configuration
+retry:
+  default_attempts: 3
+  default_delay: 1
+  max_attempts: 5
+  exponential_backoff: true
+  backoff_factor: 2
+  max_delay: 60
+  
+  # Service-specific retry settings
+  redis:
+    attempts: 3
+    delay: 1
+    
+  http:
+    attempts: 3
+    delay: 2
+    
+  llm:
+    attempts: 2
+    delay: 5
+
+# System Limits
+limits:
+  # Redis limits
+  redis:
+    max_connections: 20
+    command_timeout: 5
+    max_memory: "512MB"
+    
+  # API limits
+  api:
+    max_request_size: "10MB"
+    rate_limit: 100
+    concurrent_requests: 50
+    
+  # Process limits
+  process:
+    max_concurrent: 10
+    max_memory: "1GB"
+    max_cpu_percent: 80
+    
+  # File limits
+  file:
+    max_upload_size: "100MB"
+    max_log_size: "10MB"
+    max_cache_size: "1GB"
+
+# Runtime Detection
+runtime:
+  docker_indicator_file: "/.dockerenv"
+  docker_env_var: "DOCKER_CONTAINER"
+  wsl_indicator: "/proc/sys/fs/binfmt_misc/WSLInterop"
+  
+# Security Configuration
+security:
+  # Private network ranges
+  private_networks:
+    rfc1918:
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"
+    link_local: "169.254.0.0/16"
+    loopback: "127.0.0.0/8"
+    
+  # Allowed origins for CORS
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+    - "http://127.0.0.1:5173"
+    - "http://127.0.0.1:3000"
+    - "http://172.16.168.20:8001"
+    - "http://172.16.168.21:5173"
+    
+  # Session settings
+  session:
+    timeout_minutes: 30
+    max_sessions: 100
+    
+  # Encryption
+  encryption:
+    enabled: false
+    algorithm: "AES-256-GCM"
+
+# Performance Settings
+performance:
+  # Threading
+  threads:
+    min_workers: 2
+    max_workers: 10
+    queue_size: 100
+    
+  # Caching
+  cache:
+    enabled: true
+    ttl: 3600
+    max_size: 1000
+    
+  # Batching
+  batch:
+    size: 50
+    timeout: 5
+    
+# Health Check Settings
+health:
+  interval: 30
+  timeout: 5
+  retries: 3
+  
+  # Service-specific health checks
+  checks:
+    redis: true
+    ollama: true
+    database: true
+    filesystem: true
+
+# Feature Flags
+features:
+  use_unified_config: true
+  validate_on_load: true
+  allow_env_overrides: true
+  enable_rum: false
+  enable_analytics: true
+  enable_debug_mode: true
+  enable_hot_reload: true
+  semantic_chunking: true
+
+# Development Settings
+development:
+  debug: true
+  verbose_logging: true
+  show_stack_traces: true
+  reload_on_change: true
+  mock_external_services: false
+
+# Monitoring Settings
+monitoring:
+  enabled: true
+  metrics_interval: 60
+  log_level: "INFO"
+  
+  # What to monitor
+  track:
+    cpu: true
+    memory: true
+    disk: true
+    network: true
+    gpu: true
+    npu: true
+
+# Knowledge Base Configuration
+knowledge_base:
+  # Semantic chunking settings
+  semantic_chunking:
+    enabled: true
+    model: "nomic-embed-text:latest"
+    percentile_threshold: 95.0
+  
+  # Query settings
+  similarity_top_k: 10
+  response_mode: "compact"
+  avg_chunks_per_document: 5
+  
+  # Cache settings
+  cache:
+    enabled: true
+    ttl: 300  # 5 minutes cache TTL
+    max_size: 1000  # Maximum number of cached queries
+    prefix: "kb_cache:"  # Redis key prefix for cache entries
+
+# Search Configuration
+search:
+  # Hybrid search settings
+  hybrid:
+    enabled: true
+    semantic_weight: 0.7  # Weight for semantic similarity scores
+    keyword_weight: 0.3   # Weight for keyword matching scores
+    min_keyword_score: 0.1  # Minimum keyword score threshold
+    keyword_boost_factor: 1.5  # Boost factor for multiple keyword matches
+    semantic_top_k: 15    # Number of semantic results to retrieve for hybrid processing
+    final_top_k: 10       # Maximum number of final results to return
+    
+    # Keyword extraction settings
+    min_keyword_length: 3
+    stop_words:
+      - "the"
+      - "a"
+      - "an"
+      - "and"
+      - "or"
+      - "but"
+      - "in"
+      - "on"
+      - "at"
+      - "to"
+      - "for"
+      - "of"
+      - "with"
+      - "by"
+      - "from"
+      - "up"
+      - "about"
+      - "into"
+      - "through"
+      - "during"
+      - "is"
+      - "are"
+      - "was"
+      - "were"
+      - "be"
+      - "been"
+      - "being"
+      - "have"
+      - "has"
+      - "had"
+      - "do"
+      - "does"
+      - "did"
+      - "will"
+      - "would"
+      - "could"
+      - "should"
+      - "may"
+      - "might"
+
+# Monitoring Configuration
+monitoring:
+  # Metrics collection settings
+  metrics:
+    collection_interval: 5  # Seconds between metric collections
+    retention_hours: 24     # How long to keep metrics data
+    buffer_size: 1000       # Maximum metrics in memory buffer
+    
+  # Alert thresholds
+  alerts:
+    cpu_warning: 80         # CPU usage percentage warning threshold
+    cpu_critical: 95        # CPU usage percentage critical threshold
+    memory_warning: 85      # Memory usage percentage warning threshold
+    memory_critical: 95     # Memory usage percentage critical threshold
+    disk_warning: 85        # Disk usage percentage warning threshold
+    disk_critical: 95       # Disk usage percentage critical threshold
+    
+  # Dashboard settings
+  dashboard:
+    refresh_interval: 10    # Seconds between dashboard refreshes
+    max_data_points: 100    # Maximum data points to display in charts
+    real_time_updates: true # Enable WebSocket real-time updates
+
+# LLM Optimization Configuration
+llm:
+  # Specific model assignments for different tasks
+  models:
+    rag: "gemma3:270m"              # Lightweight model for RAG operations (291MB)
+    chat: "llama3.2:1b-instruct-q4_K_M"  # Balanced model for chat (807MB)
+    classification: "gemma3:270m"    # Fast model for message classification
+    fallback: "llama3.2:3b-instruct-q4_K_M"  # Heavier model for complex tasks
+
+  # Model optimization settings
+  optimization:
+    performance_threshold: 0.8  # Minimum performance threshold for model selection
+    cache_ttl: 3600            # Cache TTL for performance data (seconds)
+    min_samples: 5             # Minimum samples needed for reliable performance metrics
+    auto_selection: true       # Enable automatic model selection based on task
+    
+  # Model fallback strategy
+  fallback:
+    strategy: "performance"    # "performance", "size", "speed"
+    max_retries: 3            # Maximum retries before falling back
+    fallback_models:          # Ordered list of fallback models
+      - "llama3.2:3b-instruct-q4_K_M"
+      - "llama3.2:1b-instruct-q4_K_M"
+      - "gemma2:2b"
+  
+  # Performance targets
+  targets:
+    max_response_time: 30.0   # Maximum acceptable response time (seconds)
+    min_tokens_per_second: 5  # Minimum tokens/second for acceptable performance
+    min_success_rate: 0.85    # Minimum success rate threshold
+
+  # Existing LLM Configuration (continued)
+  fallback_models:
+    - "dolphin-llama3:8b"
+    - "llama3.2:3b"
+    - "nomic-embed-text:latest"
+  emergency_fallback_model: "phi:2.7b"
+  
+  # Embedding settings
+  embedding:
+    model: "nomic-embed-text:latest"
+    dimensions: 768
+    test_timeout: 10
+
+# Circuit Breaker Configuration
+circuit_breaker:
+  knowledge_base:
+    failure_threshold: 5
+  ollama:
+    failure_threshold: 3
+  openai:
+    failure_threshold: 2
+  
+  # Recovery timeouts
+  recovery: 30
+  openai_recovery: 60
+  
+  # Service registry circuit breaker
+  service_registry:
+    failure_threshold: 5
+
+# HTTP Configuration
+http:
+  connection:
+    limit: 20
+    limit_per_host: 10
+  dns_cache_ttl: 300
+
+# Hardware Configuration  
+hardware:
+  acceleration:
+    priority:
+      - "openvino_npu"
+      - "openvino" 
+      - "cuda"
+      - "cpu"
+
+# Deployment Configuration
+deployment:
+  mode: ""  # Can be set to: local, docker_local, distributed, kubernetes, cloud
+  domain: "autobot.local"
+  distributed: false
+  default_scheme: "http"
+  default_health_endpoint: "/health"
+  
+  # Kubernetes configuration
+  kubernetes:
+    service_host: false
+    
+  # Distributed deployment hosts
+  distributed:
+    default_host: "autobot.local"
+    redis_host: "redis.autobot.local"
+    backend_host: "api.autobot.local"
+    frontend_host: "app.autobot.local"
+    ai_stack_host: "ai.autobot.local"
+    npu_worker_host: "npu.autobot.local"
+    browser_host: "browser.autobot.local"
+    ollama_host: "llm.autobot.local"
+    lmstudio_host: "lmstudio.autobot.local"
+    
+  # Docker deployment service names
+  docker:
+    network: "autobot-network"
+    redis_service: "autobot-redis"
+    backend_service: "autobot-backend"
+    frontend_service: "autobot-frontend"
+    ai_stack_service: "autobot-ai-stack"
+    npu_worker_service: "autobot-npu-worker"
+    browser_service: "autobot-playwright"
+    ollama_service: "autobot-ollama"
+    lmstudio_service: "autobot-lmstudio"
+    
+  # Kubernetes DNS names
+  k8s:
+    default_dns: "autobot.default.svc.cluster.local"
+    redis_dns: "redis.autobot.svc.cluster.local"
+    backend_dns: "backend.autobot.svc.cluster.local"
+    frontend_dns: "frontend.autobot.svc.cluster.local"
+    ai_stack_dns: "ai-stack.autobot.svc.cluster.local"
+    npu_worker_dns: "npu-worker.autobot.svc.cluster.local"
+    browser_dns: "playwright.autobot.svc.cluster.local"
+    ollama_dns: "ollama.autobot.svc.cluster.local"
+    lmstudio_dns: "lmstudio.autobot.svc.cluster.local"
+
+# Service Registry Configuration
+service_registry:
+  retries: 3
+
+# AI Agents Configuration
+agents:
+  # Knowledge Base Librarian Agent
+  kb_librarian:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 15.0
+    max_results: 5
+    similarity_threshold: 0.3
+    auto_summarize: true
+    priority: 1
+
+  # Research Agent (Web Research)
+  research:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 30.0
+    max_results: 5
+    priority: 2
+    preferred_method: "basic"
+    rate_limit_requests: 5
+    rate_limit_window: 60
+    cache_ttl: 3600
+    circuit_breaker:
+      failure_threshold: 3
+      recovery_timeout: 60
+
+  # Classification Agent
+  classification:
+    enabled: true
+    model: "gemma2:2b"
+    provider: "ollama"
+    timeout_seconds: 10.0
+    priority: 1
+
+  # Chat Agent
+  chat:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 20.0
+    priority: 1
+
+  # System Commands Agent
+  system_commands:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 15.0
+    priority: 3
+
+  # Security Scanner Agent
+  security_scanner:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 30.0
+    priority: 3
+
+  # Code Analysis Agent
+  code_analysis:
+    enabled: true
+    model: "llama3.2:1b-instruct-q4_K_M"
+    provider: "ollama"
+    timeout_seconds: 25.0
+    priority: 2
+
+# Global Agent Settings
+agent_global:
+  default_timeout: 20.0
+  default_provider: "ollama"
+  default_model: "llama3.2:1b-instruct-q4_K_M"
+  max_concurrent_agents: 3
+  agent_pool_size: 5
+  health_check_interval: 300
+  performance_monitoring: true
+  retry_attempts: 2
+  retry_delay: 1.0
+  log_agent_performance: true
+  log_level: "INFO"
+
+# Web Research Configuration
+web_research:
+  enabled: true
+  security:
+    domain_validation_enabled: true
+    input_validation_enabled: true
+    content_filtering_enabled: true
+    require_user_confirmation: true
+    block_suspicious_queries: true
+    url_reputation_checking: true
+    threat_intelligence_enabled: true
+    malware_scanning: true
+    script_injection_prevention: true
+    phishing_detection: true
+    block_private_networks: true
+    block_cloud_metadata: true
+    allowed_ports: [80, 443, 8080, 8443]
+    low_risk_auto_proceed: true
+    medium_risk_require_confirmation: true
+    high_risk_block: true
+  require_user_confirmation: true
+  auto_research_threshold: 0.3
+  preferred_methods: ["basic", "advanced", "api_based"]
+  daily_research_limit: 25
+  hourly_research_limit: 5
+  per_domain_daily_limit: 3
+  min_result_quality: 0.6
+  max_results_per_query: 5
+  min_content_length: 100
+  max_content_length: 50000
+  filter_adult_content: true
+  filter_low_quality: true
+  filter_malicious_content: true
+  filter_duplicate_content: true
+  anonymize_requests: true
+  use_tor_proxy: false
+  strip_tracking_parameters: true
+  randomize_user_agent: true
+  cache_enabled: true
+  cache_duration: 3600
+  persistent_cache: false
+  security_cache_duration: 7200
+  store_results_in_kb: true
+  kb_storage_threshold: 0.7
+  fallback_to_kb_only: true
+  show_research_status: true
+
+# MCP (Manual/Context Provider) Integration
+mcp:
+  enabled: true
+  timeout_seconds: 10.0
+  cache_duration: 300
+  servers:
+    system_manuals:
+      enabled: true
+      priority: 1
+    context7:
+      enabled: true
+      priority: 2
+    help_documentation:
+      enabled: true
+      priority: 3

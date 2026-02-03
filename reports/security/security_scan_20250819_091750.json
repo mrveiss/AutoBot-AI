@@ -1,0 +1,60 @@
+{
+  "timestamp": "2025-08-19T09:17:44.773144",
+  "dependency_security": {
+    "pip_audit": {
+      "status": "error",
+      "message": "usage: pip-audit [-h] [-V] [-l] [-r REQUIREMENT] [--locked] [-f FORMAT]\n                 [-s SERVICE] [-d] [-S] [--desc [{on,off,auto}]]\n                 [--aliases [{on,off,auto}]] [--cache-dir CACHE_DIR]\n                 [--progress-spinner {on,off}] [--timeout TIMEOUT]\n                 [--path PATH] [-v] [--fix] [--require-hashes]\n                 [--index-url INDEX_URL] [--extra-index-url URL]\n                 [--skip-editable] [--no-deps] [-o FILE] [--ignore-vuln ID]\n                 [--disable-pip]\n                 [project_path]\npip-audit: error: ambiguous option: --require could match --requirement, --require-hashes\n"
+    },
+    "safety": {
+      "status": "error",
+      "message": "/home/kali/.pyenv/versions/3.10.13/lib/python3.10/site-packages/safety/safety.py:1853: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.\n  import pkg_resources\nUnable to parse the requirement: -vidia-cudnn-cu12==9.5.1.17\n"
+    },
+    "npm_audit": {
+      "status": "clean",
+      "vulnerabilities": 0
+    }
+  },
+  "static_analysis": {
+    "bandit": {
+      "status": "error",
+      "message": "/home/kali/.pyenv/versions/3.10.13/bin/python: No module named bandit\n"
+    },
+    "semgrep": {
+      "status": "tool_missing"
+    }
+  },
+  "secret_detection": {
+    "pattern_detection": {
+      "status": "completed",
+      "secrets_found": 1,
+      "findings": [
+        {
+          "file": "backend/api/secrets.py",
+          "line": 41,
+          "pattern": "potential_secret",
+          "line_content": "PASSWORD = \"password\""
+        }
+      ]
+    }
+  },
+  "compliance_check": {
+    "required_files": {
+      "missing_files": [],
+      "status": "compliant"
+    },
+    "best_practices": {
+      "security_imports": 9,
+      "validation_patterns": 280,
+      "error_handling": 4579,
+      "status": "good"
+    }
+  },
+  "summary": {
+    "overall_status": "critical",
+    "critical_issues": 1,
+    "warnings": 0,
+    "recommendations": [
+      "Remove 1 potential hardcoded secrets"
+    ]
+  }
+}

@@ -1,0 +1,160 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# System Commands Knowledge Data
+# Extracted from backend/api/knowledge_population.py (Issue #515)
+#
+# This file contains common system commands with descriptions and examples
+# for knowledge base population.
+
+commands:
+  - command: curl
+    description: "Command line tool for transferring data with URLs"
+    usage: "curl [options] <url>"
+    examples:
+      - "curl https://api.example.com/data"
+      - "curl -X POST -d 'data' https://api.example.com"
+      - "curl -H 'Authorization: Bearer token' https://api.example.com"
+      - "curl -o output.html https://example.com"
+    options:
+      - "-X: HTTP method (GET, POST, PUT, DELETE)"
+      - "-H: Add header"
+      - "-d: Data to send"
+      - "-o: Output to file"
+      - "-v: Verbose output"
+      - "--json: Send JSON data"
+
+  - command: grep
+    description: "Search text patterns in files"
+    usage: "grep [options] pattern [file...]"
+    examples:
+      - "grep 'error' /var/log/syslog"
+      - "grep -r 'function' /path/to/code/"
+      - "grep -i 'warning' *.log"
+      - "ps aux | grep python"
+    options:
+      - "-r: Recursive search"
+      - "-i: Case insensitive"
+      - "-n: Line numbers"
+      - "-v: Invert match"
+      - "-l: Files with matches only"
+
+  - command: ssh
+    description: "Secure Shell for remote login and command execution"
+    usage: "ssh [options] [user@]hostname [command]"
+    examples:
+      - "ssh user@remote-server"
+      - "ssh -i ~/.ssh/key user@server"
+      - "ssh -p 2222 user@server"
+      - "ssh user@server 'ls -la'"
+    options:
+      - "-i: Identity file (private key)"
+      - "-p: Port number"
+      - "-v: Verbose output"
+      - "-X: Enable X11 forwarding"
+      - "-L: Local port forwarding"
+
+  - command: docker
+    description: "Container platform for building, running and managing applications"
+    usage: "docker [options] COMMAND"
+    examples:
+      - "docker run -it ubuntu bash"
+      - "docker build -t myapp ."
+      - "docker ps -a"
+      - "docker exec -it container_name bash"
+    options:
+      - "run: Create and run container"
+      - "build: Build image from Dockerfile"
+      - "ps: List containers"
+      - "exec: Execute command in container"
+      - "logs: View container logs"
+
+  - command: git
+    description: "Distributed version control system"
+    usage: "git [options] COMMAND [args]"
+    examples:
+      - "git clone https://github.com/user/repo.git"
+      - "git add ."
+      - "git commit -m 'message'"
+      - "git push origin main"
+    options:
+      - "clone: Clone repository"
+      - "add: Stage changes"
+      - "commit: Create commit"
+      - "push: Upload changes"
+      - "pull: Download changes"
+
+  - command: find
+    description: "Search for files and directories"
+    usage: "find [path] [expression]"
+    examples:
+      - "find /path -name '*.py'"
+      - "find . -type f -mtime -7"
+      - "find /var -size +100M"
+      - "find . -perm 755"
+    options:
+      - "-name: File name pattern"
+      - "-type: File type (f=file, d=directory)"
+      - "-size: File size"
+      - "-mtime: Modification time"
+      - "-exec: Execute command on results"
+
+  - command: tar
+    description: "Archive files and directories"
+    usage: "tar [options] archive-file files..."
+    examples:
+      - "tar -czf archive.tar.gz folder/"
+      - "tar -xzf archive.tar.gz"
+      - "tar -tzf archive.tar.gz"
+      - "tar -xzf archive.tar.gz -C /destination/"
+    options:
+      - "-c: Create archive"
+      - "-x: Extract archive"
+      - "-z: Gzip compression"
+      - "-f: Archive filename"
+      - "-t: List contents"
+
+  - command: systemctl
+    description: "Control systemd services"
+    usage: "systemctl [options] COMMAND [service]"
+    examples:
+      - "systemctl status nginx"
+      - "systemctl start redis-server"
+      - "systemctl enable docker"
+      - "systemctl restart apache2"
+    options:
+      - "start: Start service"
+      - "stop: Stop service"
+      - "restart: Restart service"
+      - "status: Check status"
+      - "enable: Auto-start on boot"
+
+  - command: ps
+    description: "Display running processes"
+    usage: "ps [options]"
+    examples:
+      - "ps aux"
+      - "ps -ef"
+      - "ps aux | grep python"
+      - "ps -u username"
+    options:
+      - "aux: All processes with details"
+      - "-ef: Full format listing"
+      - "-u: Processes by user"
+      - "-C: Processes by command"
+
+  - command: chmod
+    description: "Change file permissions"
+    usage: "chmod [options] mode file..."
+    examples:
+      - "chmod 755 script.sh"
+      - "chmod +x program"
+      - "chmod -R 644 /path/to/files/"
+      - "chmod u+w,g-w file.txt"
+    options:
+      - "755: rwxr-xr-x (executable)"
+      - "644: rw-r--r-- (readable)"
+      - "+x: Add execute permission"
+      - "-R: Recursive"
+      - "u/g/o: user/group/others"

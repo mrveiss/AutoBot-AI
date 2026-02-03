@@ -1,0 +1,554 @@
+---
+# Browser VM Configuration (VM5)
+# Services: Playwright, VNC server, Desktop environment, Browser automation
+
+# ==========================================
+# DESKTOP ENVIRONMENT CONFIGURATION
+# ==========================================
+
+desktop:
+  # Desktop environment selection
+  environment: "xfce4"  # Lightweight and stable
+  
+  # Display configuration
+  display:
+    resolution: "1920x1080"
+    depth: 24
+    virtual_displays: 1
+    
+  # Desktop packages
+  packages:
+    base:
+      - "xfce4"
+      - "xfce4-goodies"
+      - "xfce4-terminal"
+      - "firefox"
+      - "chromium-browser"
+      - "fonts-noto"
+      - "fonts-noto-color-emoji"
+      
+    utilities:
+      - "file-manager"
+      - "text-editor"
+      - "screenshot-tool"
+      - "network-manager-gnome"
+      
+  # Theme and appearance
+  theme:
+    gtk_theme: "Adwaita-dark"
+    icon_theme: "Adwaita"
+    font_family: "Noto Sans"
+    font_size: 11
+
+# ==========================================
+# VNC SERVER CONFIGURATION
+# ==========================================
+
+vnc:
+  # VNC server selection
+  server: "tightvncserver"  # Reliable and lightweight
+  
+  # Connection settings
+  connection:
+    display: ":1"
+    port: 5901
+    geometry: "1920x1080"
+    depth: 24
+    
+  # Security settings
+  security:
+    password_enabled: true
+    password_file: "/home/{{ autobot.user }}/.vnc/passwd"
+    view_only_password: false
+    
+  # Performance settings
+  performance:
+    compression_level: 6  # Balance between quality and speed
+    jpeg_quality: 8       # Good quality for screenshots
+    
+  # Startup configuration
+  startup:
+    desktop_environment: "xfce4-session"
+    startup_script: "/home/{{ autobot.user }}/.vnc/xstartup"
+
+# ==========================================
+# PLAYWRIGHT CONFIGURATION
+# ==========================================
+
+playwright:
+  # Service configuration
+  service:
+    name: "autobot-playwright"
+    host: "0.0.0.0"
+    port: 3000
+    workers: 2
+    
+  # Browser configuration
+  browsers:
+    # Chromium configuration
+    chromium:
+      enabled: true
+      version: "latest"
+      headless: false
+      args:
+        - "--no-sandbox"
+        - "--disable-dev-shm-usage"
+        - "--disable-background-timer-throttling"
+        - "--disable-backgrounding-occluded-windows"
+        - "--disable-renderer-backgrounding"
+        
+    # Firefox configuration  
+    firefox:
+      enabled: true
+      version: "latest"
+      headless: false
+      preferences:
+        "media.navigator.streams.fake": true
+        "media.navigator.permission.disabled": true
+        
+    # WebKit configuration
+    webkit:
+      enabled: false  # Optional, can be enabled if needed
+      
+  # Automation settings
+  automation:
+    default_timeout: 30000  # 30 seconds
+    navigation_timeout: 60000  # 60 seconds
+    screenshot_format: "png"
+    video_recording: true
+    trace_collection: true
+    
+  # Environment variables
+  environment:
+    PLAYWRIGHT_BROWSERS_PATH: "/opt/playwright/browsers"
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "false"
+    DISPLAY: ":1"  # Use VNC display
+    
+# ==========================================
+# BROWSER AUTOMATION SERVICE
+# ==========================================
+
+browser_automation:
+  # Service configuration
+  service:
+    name: "autobot-browser-service"
+    working_directory: "{{ autobot.base_dir }}/browser"
+    log_level: "INFO"
+    
+  # Automation capabilities
+  capabilities:
+    # Web scraping
+    scraping:
+      enabled: true
+      max_concurrent_sessions: 5
+      session_timeout: 300  # seconds
+      
+    # Form automation
+    form_automation:
+      enabled: true
+      auto_fill: true
+      captcha_solving: false  # Can be enabled with third-party service
+      
+    # File downloads
+    downloads:
+      enabled: true
+      download_directory: "/tmp/autobot/downloads"
+      max_file_size: "100mb"
+      allowed_extensions: [".pdf", ".txt", ".csv", ".xlsx", ".docx"]
+      
+    # Screenshot and recording
+    media:
+      screenshots: true
+      video_recording: true
+      audio_recording: false
+      
+  # API endpoints
+  api:
+    health_check: "/health"
+    browser_status: "/browser/status"
+    session_create: "/session/create"
+    session_close: "/session/close"
+    navigate: "/navigate"
+    screenshot: "/screenshot"
+    
+# ==========================================
+# SYSTEM PACKAGES
+# ==========================================
+
+packages:
+  system:
+    # Desktop environment
+    - "xfce4"
+    - "xfce4-goodies"
+    - "lightdm"
+    - "lightdm-gtk-greeter"
+    
+    # VNC server
+    - "tightvncserver"
+    - "x11vnc"
+    - "xvfb"
+    
+    # Browsers
+    - "firefox"
+    - "chromium-browser"
+    - "wget"
+    - "curl"
+    
+    # Multimedia support
+    - "pulseaudio"
+    - "alsa-utils"
+    - "ffmpeg"
+    - "imagemagick"
+    
+    # Development tools
+    - "git"
+    - "nodejs"
+    - "npm"
+    - "python3"
+    - "python3-pip"
+    
+    # System utilities
+    - "htop"
+    - "tree"
+    - "unzip"
+    - "software-properties-common"
+    
+  python:
+    # Playwright and dependencies
+    - "playwright>=1.40.0"
+    - "playwright-pytest>=0.4.0"
+    
+    # Web automation
+    - "selenium>=4.15.0"
+    - "beautifulsoup4>=4.12.0"
+    - "requests>=2.32.4"
+    
+    # Image and media processing
+    - "pillow>=10.0.0"
+    - "opencv-python>=4.8.0"
+    
+    # API framework
+    - "fastapi>=0.115.0"
+    - "uvicorn>=0.30.0"
+    
+  nodejs:
+    # Playwright Node.js packages
+    - "@playwright/test"
+    - "playwright-chromium"
+    - "playwright-firefox"
+
+# ==========================================
+# SYSTEMD SERVICE CONFIGURATION
+# ==========================================
+
+systemd_services:
+  # VNC Server Service
+  - name: "autobot-vnc-server"
+    description: "AutoBot VNC Server"
+    type: "forking"
+    user: "{{ autobot.user }}"
+    group: "{{ autobot.group }}"
+    exec_start: "/usr/bin/vncserver {{ vnc.connection.display }} -geometry {{ vnc.connection.geometry }} -depth {{ vnc.connection.depth }}"
+    exec_stop: "/usr/bin/vncserver -kill {{ vnc.connection.display }}"
+    restart: "always"
+    restart_sec: 10
+    
+    # Service dependencies
+    wants:
+      - "network-online.target"
+    after:
+      - "network-online.target"
+    requires:
+      - "network-online.target"
+      
+  # Playwright Service
+  - name: "autobot-playwright"
+    description: "AutoBot Playwright Automation Service"
+    type: "simple"
+    user: "{{ autobot.user }}"
+    group: "{{ autobot.group }}"
+    working_directory: "{{ browser_automation.service.working_directory }}"
+    exec_start: "{{ autobot.base_dir }}/venv/bin/uvicorn browser_service:app --host {{ playwright.service.host }} --port {{ playwright.service.port }} --workers {{ playwright.service.workers }}"
+    restart: "always"
+    restart_sec: 15
+    environment_file: "/etc/autobot/browser.env"
+    
+    # Service dependencies
+    wants:
+      - "network-online.target"
+      - "autobot-vnc-server.service"
+    after:
+      - "network-online.target"
+      - "autobot-vnc-server.service"
+    requires:
+      - "autobot-vnc-server.service"
+      
+    # Resource limits
+    limit_nofile: 4096
+    limit_nproc: 2048
+    
+  # Display Manager Service
+  - name: "autobot-display-manager"
+    description: "AutoBot Display Manager"
+    type: "simple"
+    exec_start: "/usr/bin/Xvfb {{ vnc.connection.display }} -screen 0 {{ vnc.connection.geometry }}x{{ vnc.connection.depth }}"
+    restart: "always"
+    restart_sec: 5
+    
+    # Service dependencies
+    wants:
+      - "network-online.target"
+    after:
+      - "network-online.target"
+
+# ==========================================
+# FIREWALL CONFIGURATION
+# ==========================================
+
+ufw_rules:
+  # VNC server port
+  - rule: allow
+    port: 5901
+    protocol: tcp
+    src: "192.168.100.0/24"
+    comment: "VNC server"
+    
+  # Web VNC (if enabled)
+  - rule: allow
+    port: 6080
+    protocol: tcp
+    src: "192.168.100.0/24"
+    comment: "Web VNC interface"
+    
+  # Playwright API
+  - rule: allow
+    port: 3000
+    protocol: tcp
+    src: "192.168.100.0/24"
+    comment: "Playwright automation API"
+    
+  # Browser debugging ports (development)
+  - rule: allow
+    port: "9222:9223"
+    protocol: tcp
+    src: "192.168.100.0/24"
+    comment: "Browser debugging ports"
+
+# ==========================================
+# MONITORING CONFIGURATION
+# ==========================================
+
+monitoring:
+  # Service monitoring
+  service_monitoring:
+    # VNC health check
+    - name: "vnc-health"
+      command: "netstat -an | grep :5901"
+      expected_pattern: "LISTEN"
+      interval: 60
+      
+    # Playwright health check  
+    - name: "playwright-health"
+      url: "http://127.0.0.1:3000/health"
+      expected_status: 200
+      interval: 30
+      
+    # Desktop environment check
+    - name: "desktop-health"
+      command: "pgrep xfce4-session"
+      expected_return_code: 0
+      interval: 120
+      
+  # Resource monitoring
+  resource_monitoring:
+    # Browser process monitoring
+    browser_processes:
+      - "firefox"
+      - "chromium"
+      - "chrome"
+      
+    # Memory thresholds (browsers can be memory-intensive)
+    thresholds:
+      memory_usage: 80  # percent
+      cpu_usage: 70     # percent
+      disk_usage: 85    # percent
+      
+  # Performance metrics
+  performance_metrics:
+    - "browser_session_count"
+    - "automation_task_queue_depth"
+    - "screenshot_generation_time"
+    - "navigation_success_rate"
+
+# ==========================================
+# SECURITY CONFIGURATION
+# ==========================================
+
+security:
+  # VNC security
+  vnc_security:
+    # Authentication
+    password_required: true
+    password_length: 8
+    
+    # Access control
+    allowed_hosts:
+      - "192.168.100.0/24"
+      
+    # Encryption (if supported)
+    encryption_enabled: false  # TightVNC doesn't support encryption
+    
+  # Browser security
+  browser_security:
+    # Sandbox configuration
+    sandbox_enabled: true
+    
+    # Content security
+    block_malicious_sites: true
+    disable_plugins: true
+    disable_extensions: true
+    
+    # Download security
+    scan_downloads: false  # Can be enabled with antivirus
+    quarantine_suspicious: true
+    
+  # Network security
+  network_security:
+    # Proxy configuration (if needed)
+    proxy_enabled: false
+    
+    # DNS filtering
+    dns_filtering: false
+
+# ==========================================
+# BACKUP CONFIGURATION
+# ==========================================
+
+backup_paths:
+  # VNC configuration
+  - path: "/home/{{ autobot.user }}/.vnc"
+    type: "directory"
+    compress: true
+    
+  # Desktop configuration
+  - path: "/home/{{ autobot.user }}/.config"
+    type: "directory"
+    compress: true
+    exclude:
+      - "chromium/Default/History*"
+      - "firefox/*/places.sqlite*"
+      - "cache"
+      - "Cache"
+      
+  # Playwright configuration and scripts
+  - path: "{{ autobot.base_dir }}/browser"
+    type: "directory"
+    compress: true
+    exclude:
+      - "node_modules"
+      - "*.log"
+      - "downloads"
+      
+  # Browser profiles (if needed)
+  - path: "/home/{{ autobot.user }}/.mozilla/firefox"
+    type: "directory"
+    compress: true
+    exclude:
+      - "*/Cache*"
+      - "*/cache2*"
+      - "*/sessionstore*"
+      - "*/places.sqlite-wal"
+
+# ==========================================
+# PERFORMANCE OPTIMIZATION
+# ==========================================
+
+performance:
+  # Desktop performance
+  desktop:
+    # Compositor settings
+    compositor_enabled: false  # Disable for better VNC performance
+    
+    # Theme optimization
+    use_lightweight_theme: true
+    disable_animations: true
+    
+  # Browser performance
+  browser:
+    # Chrome/Chromium flags
+    chromium_flags:
+      - "--memory-pressure-off"
+      - "--max_old_space_size=2048"
+      - "--disable-background-timer-throttling"
+      
+    # Firefox preferences
+    firefox_prefs:
+      "browser.sessionhistory.max_total_viewers": 0
+      "browser.cache.disk.enable": false
+      "browser.cache.memory.enable": true
+      
+  # VNC performance
+  vnc:
+    # Encoding optimization
+    preferred_encoding: "tight"
+    compression_level: 6
+    
+    # Update optimization
+    frame_rate: 15  # FPS
+    update_threshold: 10  # pixel change threshold
+
+# ==========================================
+# TROUBLESHOOTING CONFIGURATION
+# ==========================================
+
+troubleshooting:
+  # Debug tools
+  debug_tools:
+    - "xrandr"      # Display configuration
+    - "xwininfo"    # Window information
+    - "xprop"       # X property viewer
+    - "ps aux"      # Process list
+    - "netstat -an" # Network connections
+    
+  # Common fixes
+  common_fixes:
+    # VNC display issues
+    fix_display: "export DISPLAY=:1"
+    
+    # Browser launch issues
+    fix_browser_sandbox: "--no-sandbox --disable-dev-shm-usage"
+    
+    # Playwright issues
+    fix_playwright: "playwright install --with-deps"
+    
+  # Log locations
+  log_locations:
+    vnc_log: "/home/{{ autobot.user }}/.vnc/*.log"
+    xorg_log: "/var/log/Xorg.*.log"
+    playwright_log: "/var/log/autobot/browser/playwright.log"
+    browser_console: "/var/log/autobot/browser/console.log"
+
+# ==========================================
+# DEVELOPMENT CONFIGURATION
+# ==========================================
+
+development:
+  # Development mode settings
+  dev_mode:
+    enabled: false  # Set to true for development
+    
+    # Additional debugging
+    verbose_logging: false
+    browser_dev_tools: false
+    
+    # Development packages
+    dev_packages:
+      - "code"  # VS Code
+      - "gitk"  # Git GUI
+      - "meld"  # Diff tool
+      
+  # Testing configuration
+  testing:
+    test_browser_profiles: true
+    automated_testing: true
+    test_timeout: 60  # seconds

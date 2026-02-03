@@ -1,0 +1,473 @@
+---
+# Data Migration Playbook
+# Migrates data from Docker containers to Hyper-V VMs
+
+- name: "AutoBot Data Migration - Docker to Hyper-V"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    migration_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    migration_backup_dir: "/tmp/autobot-migration-{{ migration_timestamp }}"
+    docker_compose_file: "{{ playbook_dir }}/../docker-compose.yml"
+    
+  pre_tasks:
+    - name: Display migration information
+      debug:
+        msg:
+          - "📦 AutoBot Data Migration Starting"
+          - "Source: Docker Containers"
+          - "Target: 5 Hyper-V VMs"
+          - "Migration ID: {{ migration_timestamp }}"
+          - "Backup Directory: {{ migration_backup_dir }}"
+
+    - name: Create migration backup directory
+      file:
+        path: "{{ migration_backup_dir }}"
+        state: directory
+        mode: '0755'
+
+  tasks:
+    # ==========================================
+    # DOCKER DATA EXPORT
+    # ==========================================
+    
+    - name: Check if Docker containers are running
+      command: docker ps --format "table {{.Names}}\t{{.Status}}"
+      register: docker_containers
+      changed_when: false
+      failed_when: false
+
+    - name: Display Docker container status
+      debug:
+        msg: "{{ docker_containers.stdout_lines }}"
+      when: docker_containers.rc == 0
+
+    - name: Export Redis data from Docker
+      block:
+        - name: Check if autobot-redis container exists
+          command: docker inspect autobot-redis
+          register: redis_container_check
+          changed_when: false
+          failed_when: false
+
+        - name: Create Redis dump if container exists
+          command: docker exec autobot-redis redis-cli BGSAVE
+          when: redis_container_check.rc == 0
+          register: redis_dump_result
+
+        - name: Wait for Redis dump to complete
+          pause:
+            seconds: 5
+          when: redis_dump_result is succeeded
+
+        - name: Copy Redis dump from container
+          command: docker cp autobot-redis:/data/dump.rdb "{{ migration_backup_dir }}/redis-dump.rdb"
+          when: redis_container_check.rc == 0
+
+        - name: Copy Redis AOF from container
+          command: docker cp autobot-redis:/data/appendonly.aof "{{ migration_backup_dir }}/redis-appendonly.aof"
+          when: redis_container_check.rc == 0
+          failed_when: false  # AOF may not exist
+
+        - name: Export all Redis databases
+          shell: |
+            for db in {0..15}; do
+              docker exec autobot-redis redis-cli -n $db --rdb "{{ migration_backup_dir }}/redis-db-${db}.rdb" || true
+            done
+          when: redis_container_check.rc == 0
+
+      rescue:
+        - name: Redis export failed
+          debug:
+            msg: "Redis data export failed or container not found. Proceeding with other data."
+
+    - name: Export model files from Docker
+      block:
+        - name: Check if AI stack containers exist
+          command: docker inspect autobot-ai-stack
+          register: ai_container_check
+          changed_when: false
+          failed_when: false
+
+        - name: Create models backup directory
+          file:
+            path: "{{ migration_backup_dir }}/models"
+            state: directory
+            mode: '0755'
+
+        - name: Copy models from AI stack container
+          command: docker cp autobot-ai-stack:/app/models/. "{{ migration_backup_dir }}/models/"
+          when: ai_container_check.rc == 0
+          failed_when: false
+
+        - name: Copy models from NPU worker container
+          command: docker cp autobot-npu-worker:/app/models/. "{{ migration_backup_dir }}/models/"
+          when: ai_container_check.rc == 0
+          failed_when: false
+
+        - name: Copy models from Docker volume
+          shell: |
+            docker run --rm -v autobot_models:/models -v "{{ migration_backup_dir }}:/backup" \
+            alpine tar czf /backup/models-volume.tar.gz -C /models .
+          failed_when: false
+
+      rescue:
+        - name: Model export failed
+          debug:
+            msg: "Model data export failed or containers not found. Proceeding with other data."
+
+    - name: Export configuration files
+      block:
+        - name: Create config backup directory
+          file:
+            path: "{{ migration_backup_dir }}/config"
+            state: directory
+            mode: '0755'
+
+        - name: Copy backend configuration
+          command: docker cp autobot-backend:/app/config/. "{{ migration_backup_dir }}/config/"
+          failed_when: false
+
+        - name: Copy environment files
+          copy:
+            src: "{{ playbook_dir }}/../.env.localhost"
+            dest: "{{ migration_backup_dir }}/config/env.localhost"
+          failed_when: false
+
+        - name: Copy docker-compose configuration
+          copy:
+            src: "{{ docker_compose_file }}"
+            dest: "{{ migration_backup_dir }}/config/docker-compose.yml"
+          when: docker_compose_file is file
+
+      rescue:
+        - name: Configuration export failed
+          debug:
+            msg: "Configuration export failed. Using defaults."
+
+    - name: Export application data
+      block:
+        - name: Create data backup directory
+          file:
+            path: "{{ migration_backup_dir }}/data"
+            state: directory
+            mode: '0755'
+
+        - name: Copy knowledge base data
+          command: docker cp autobot-backend:/app/data/. "{{ migration_backup_dir }}/data/"
+          failed_when: false
+
+        - name: Copy logs
+          shell: |
+            mkdir -p "{{ migration_backup_dir }}/logs"
+            docker cp autobot-backend:/app/logs/. "{{ migration_backup_dir }}/logs/" || true
+            docker cp autobot-ai-stack:/app/logs/. "{{ migration_backup_dir }}/logs/ai-stack/" || true
+            docker cp autobot-npu-worker:/app/logs/. "{{ migration_backup_dir }}/logs/npu-worker/" || true
+
+      rescue:
+        - name: Application data export failed
+          debug:
+            msg: "Application data export failed. Proceeding with migration."
+
+# ==========================================
+# DATA TRANSFER TO VMS
+# ==========================================
+
+- name: "Transfer Data to Database VM"
+  hosts: database
+  become: true
+  vars:
+    migration_backup_dir: "/tmp/autobot-migration-{{ hostvars['localhost']['migration_timestamp'] }}"
+    
+  tasks:
+    - name: Create temporary migration directory on database VM
+      file:
+        path: "/tmp/autobot-migration"
+        state: directory
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+
+    - name: Transfer Redis data to database VM
+      synchronize:
+        src: "{{ hostvars['localhost']['migration_backup_dir'] }}/redis-dump.rdb"
+        dest: "/tmp/autobot-migration/"
+        owner: false
+        group: false
+      delegate_to: localhost
+      failed_when: false
+
+    - name: Transfer Redis AOF to database VM
+      synchronize:
+        src: "{{ hostvars['localhost']['migration_backup_dir'] }}/redis-appendonly.aof"
+        dest: "/tmp/autobot-migration/"
+        owner: false
+        group: false
+      delegate_to: localhost
+      failed_when: false
+
+    - name: Stop Redis service for data import
+      systemd:
+        name: redis-stack-server
+        state: stopped
+
+    - name: Backup existing Redis data
+      command: >
+        mv /var/lib/redis-stack/dump.rdb /var/lib/redis-stack/dump.rdb.backup-{{ ansible_date_time.epoch }}
+      failed_when: false
+
+    - name: Import Redis dump
+      copy:
+        src: "/tmp/autobot-migration/redis-dump.rdb"
+        dest: "/var/lib/redis-stack/dump.rdb"
+        owner: autobot
+        group: autobot
+        mode: '0640'
+        remote_src: true
+      failed_when: false
+
+    - name: Import Redis AOF
+      copy:
+        src: "/tmp/autobot-migration/redis-appendonly.aof"
+        dest: "/var/lib/redis-stack/appendonly.aof"
+        owner: autobot
+        group: autobot
+        mode: '0640'
+        remote_src: true
+      failed_when: false
+
+    - name: Start Redis service
+      systemd:
+        name: redis-stack-server
+        state: started
+
+    - name: Wait for Redis to be ready
+      wait_for:
+        host: "0.0.0.0"
+        port: 6379
+        timeout: 60
+
+    - name: Verify Redis data import
+      command: redis-cli -h localhost -p 6379 dbsize
+      register: redis_dbsize
+      changed_when: false
+
+    - name: Display Redis import results
+      debug:
+        msg: "Redis data imported successfully. Total keys: {{ redis_dbsize.stdout }}"
+
+- name: "Transfer Models to AI/ML VM"
+  hosts: aiml
+  become: true
+  vars:
+    migration_backup_dir: "/tmp/autobot-migration-{{ hostvars['localhost']['migration_timestamp'] }}"
+    
+  tasks:
+    - name: Create model directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+      loop:
+        - "/var/lib/autobot/models"
+        - "/var/lib/autobot/models/cache"
+        - "/var/lib/autobot/models/embeddings"
+        - "/var/lib/autobot/models/llm"
+        - "/var/lib/autobot/models/vision"
+
+    - name: Transfer model files to AI/ML VM
+      synchronize:
+        src: "{{ hostvars['localhost']['migration_backup_dir'] }}/models/"
+        dest: "/var/lib/autobot/models/"
+        delete: false
+        owner: false
+        group: false
+      delegate_to: localhost
+      failed_when: false
+
+    - name: Set correct permissions for model files
+      file:
+        path: "/var/lib/autobot/models"
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+        recurse: true
+
+    - name: Count migrated model files
+      find:
+        paths: "/var/lib/autobot/models"
+        recurse: true
+        file_type: file
+      register: model_files
+
+    - name: Display model migration results
+      debug:
+        msg: "Model migration completed. {{ model_files.matched }} files transferred."
+
+- name: "Transfer Configuration and Data"
+  hosts: backend
+  become: true
+  vars:
+    migration_backup_dir: "/tmp/autobot-migration-{{ hostvars['localhost']['migration_timestamp'] }}"
+    
+  tasks:
+    - name: Create configuration directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+      loop:
+        - "/etc/autobot"
+        - "/var/lib/autobot/data"
+        - "/var/log/autobot"
+
+    - name: Transfer configuration files
+      synchronize:
+        src: "{{ hostvars['localhost']['migration_backup_dir'] }}/config/"
+        dest: "/etc/autobot/"
+        delete: false
+        owner: false
+        group: false
+      delegate_to: localhost
+      failed_when: false
+
+    - name: Transfer application data
+      synchronize:
+        src: "{{ hostvars['localhost']['migration_backup_dir'] }}/data/"
+        dest: "/var/lib/autobot/data/"
+        delete: false
+        owner: false
+        group: false
+      delegate_to: localhost
+      failed_when: false
+
+    - name: Transfer logs
+      synchronize:
+        src: "{{ hostvars['localhost']['migration_backup_dir'] }}/logs/"
+        dest: "/var/log/autobot/"
+        delete: false
+        owner: false
+        group: false
+      delegate_to: localhost
+      failed_when: false
+
+    - name: Set correct permissions
+      file:
+        path: "{{ item }}"
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        recurse: true
+      loop:
+        - "/etc/autobot"
+        - "/var/lib/autobot/data"
+        - "/var/log/autobot"
+
+# ==========================================
+# MIGRATION VALIDATION
+# ==========================================
+
+- name: "Validate Migration"
+  hosts: all
+  gather_facts: false
+  
+  tasks:
+    - name: Check migrated data on database VM
+      command: redis-cli -h {{ ansible_default_ipv4.address }} -p 6379 info keyspace
+      register: redis_keyspace
+      changed_when: false
+      when: inventory_hostname in groups['database']
+
+    - name: Display database migration status
+      debug:
+        msg: "{{ redis_keyspace.stdout_lines }}"
+      when: inventory_hostname in groups['database'] and redis_keyspace is defined
+
+    - name: Check model files on AI/ML VM
+      find:
+        paths: "/var/lib/autobot/models"
+        patterns: "*"
+        file_type: file
+      register: migrated_models
+      when: inventory_hostname in groups['aiml']
+
+    - name: Display model migration status
+      debug:
+        msg: "Migrated {{ migrated_models.matched }} model files"
+      when: inventory_hostname in groups['aiml'] and migrated_models is defined
+
+    - name: Check configuration files on backend VM
+      find:
+        paths: "/etc/autobot"
+        patterns: "*"
+        file_type: file
+      register: config_files
+      when: inventory_hostname in groups['backend']
+
+    - name: Display configuration migration status
+      debug:
+        msg: "Migrated {{ config_files.matched }} configuration files"
+      when: inventory_hostname in groups['backend'] and config_files is defined
+
+# ==========================================
+# CLEANUP AND SUMMARY
+# ==========================================
+
+- name: "Migration Cleanup and Summary"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    migration_backup_dir: "/tmp/autobot-migration-{{ migration_timestamp }}"
+    
+  tasks:
+    - name: Create migration summary
+      copy:
+        content: |
+          AutoBot Data Migration Summary
+          =============================
+          Migration ID: {{ migration_timestamp }}
+          Date: {{ ansible_date_time.iso8601 }}
+          
+          Source: Docker Containers
+          Target: 5 Hyper-V VMs
+          
+          Migrated Components:
+          - Redis Database: {{ 'Yes' if hostvars[groups['database'][0]]['redis_dbsize'] is defined else 'No' }}
+          - Model Files: {{ 'Yes' if hostvars[groups['aiml'][0]]['migrated_models'] is defined else 'No' }}
+          - Configuration: {{ 'Yes' if hostvars[groups['backend'][0]]['config_files'] is defined else 'No' }}
+          - Application Data: Yes
+          - Logs: Yes
+          
+          Next Steps:
+          1. Start services: ./deploy.sh --start
+          2. Validate functionality: ./deploy.sh --health-check
+          3. Update DNS entries if needed
+          4. Remove old Docker containers if desired
+          
+          Backup Location: {{ migration_backup_dir }}
+        dest: "{{ migration_backup_dir }}/migration-summary.txt"
+
+    - name: Display migration completion
+      debug:
+        msg:
+          - "🎉 AutoBot Data Migration Completed!"
+          - "=================================="
+          - ""
+          - "✅ Migration successful from Docker containers to 5 Hyper-V VMs"
+          - "📁 Backup preserved at: {{ migration_backup_dir }}"
+          - "📝 Summary available at: {{ migration_backup_dir }}/migration-summary.txt"
+          - ""
+          - "🔧 Next Steps:"
+          - "  1. Start services: ./deploy.sh --start"
+          - "  2. Health check: ./deploy.sh --health-check"
+          - "  3. Access AutoBot: http://192.168.100.10"
+          - ""
+          - "⚠️  Keep backup data until system is validated!"
+          - "   Backup location: {{ migration_backup_dir }}"
+
+    - name: Preserve migration backup
+      debug:
+        msg: "Migration backup preserved at {{ migration_backup_dir }} for 30 days"

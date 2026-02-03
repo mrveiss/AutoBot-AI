@@ -1,0 +1,336 @@
+{
+  "summary": {
+    "total_tests": 25,
+    "passed": 22,
+    "failed": 3,
+    "success_rate": 88.0,
+    "avg_response_time": 0.5548174814744429,
+    "max_response_time": 6.05503249168396,
+    "min_response_time": 0.0016787052154541016
+  },
+  "categories": {
+    "Frontend Health": 1,
+    "API Connectivity": 7,
+    "WebSocket": 0,
+    "UI Components": 3,
+    "Knowledge Base": 3,
+    "Chat System": 2,
+    "Terminal": 1,
+    "Desktop": 0,
+    "Performance": 3,
+    "Error Handling": 2
+  },
+  "category_totals": {
+    "Frontend Health": 1,
+    "API Connectivity": 7,
+    "WebSocket": 1,
+    "UI Components": 4,
+    "Knowledge Base": 3,
+    "Chat System": 3,
+    "Terminal": 1,
+    "Desktop": 1,
+    "Performance": 3,
+    "Error Handling": 2
+  },
+  "results": [
+    {
+      "name": "Frontend Health & Accessibility",
+      "success": true,
+      "message": "Frontend accessible on port 5173, AutoBot app detected",
+      "details": {
+        "has_autobot_title": true,
+        "has_vue_app": true,
+        "content_length": 623
+      },
+      "response_time": 0.0028340816497802734
+    },
+    {
+      "name": "API Connectivity: Backend Health",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "status",
+          "mode",
+          "redis",
+          "ollama",
+          "details"
+        ]
+      },
+      "response_time": 0.0037856101989746094
+    },
+    {
+      "name": "API Connectivity: System Status",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "status",
+          "current_llm",
+          "default_llm",
+          "task_llm",
+          "ollama_models",
+          "background_tasks",
+          "timestamp"
+        ]
+      },
+      "response_time": 0.0019304752349853516
+    },
+    {
+      "name": "API Connectivity: KB Stats",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "total_documents",
+          "total_chunks",
+          "total_facts",
+          "categories",
+          "status",
+          "message",
+          "last_updated"
+        ]
+      },
+      "response_time": 0.0016787052154541016
+    },
+    {
+      "name": "API Connectivity: Validation Dashboard",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "status",
+          "service",
+          "output_directory",
+          "refresh_interval",
+          "data_retention_days",
+          "timestamp"
+        ]
+      },
+      "response_time": 0.0017120838165283203
+    },
+    {
+      "name": "API Connectivity: Infrastructure Monitor",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "status",
+          "overall_status",
+          "summary",
+          "machines",
+          "timestamp"
+        ]
+      },
+      "response_time": 6.05503249168396
+    },
+    {
+      "name": "API Connectivity: Settings API",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "message_display",
+          "chat",
+          "backend",
+          "ui",
+          "security",
+          "logging",
+          "knowledge_base",
+          "voice_interface",
+          "memory",
+          "developer"
+        ]
+      },
+      "response_time": 0.0030007362365722656
+    },
+    {
+      "name": "API Connectivity: Service Monitor",
+      "success": true,
+      "message": "Endpoint working, returned JSON data",
+      "details": {
+        "status": 200,
+        "keys": [
+          "timestamp",
+          "services",
+          "total_services",
+          "online_count",
+          "status"
+        ]
+      },
+      "response_time": 0.008214473724365234
+    },
+    {
+      "name": "WebSocket Real-time Communication",
+      "success": false,
+      "message": "WebSocket connection failed: BaseEventLoop.create_connection() got an unexpected keyword argument 'timeout'",
+      "details": null,
+      "response_time": null
+    },
+    {
+      "name": "Chat Interface Component",
+      "success": true,
+      "message": "Chat API accessible for UI component",
+      "details": {
+        "chat_count": "dict_response"
+      },
+      "response_time": null
+    },
+    {
+      "name": "System Monitor Component",
+      "success": true,
+      "message": "Service monitoring API accessible",
+      "details": {
+        "service_data_available": true
+      },
+      "response_time": null
+    },
+    {
+      "name": "Knowledge Base UI Component",
+      "success": true,
+      "message": "KB categories API working",
+      "details": {
+        "categories_available": true
+      },
+      "response_time": null
+    },
+    {
+      "name": "KB Interface: Stats Display",
+      "success": true,
+      "message": "Stats loaded: 1000 docs, 5000 chunks",
+      "details": {
+        "stats_data": {
+          "total_documents": 1000,
+          "total_chunks": 5000,
+          "total_facts": 100,
+          "categories": [
+            "documentation",
+            "code",
+            "config"
+          ],
+          "status": "online",
+          "message": "Knowledge base statistics retrieved successfully",
+          "last_updated": null
+        }
+      },
+      "response_time": null
+    },
+    {
+      "name": "KB Interface: Search Function",
+      "success": true,
+      "message": "Search working, 10 results",
+      "details": {
+        "results_count": 10
+      },
+      "response_time": null
+    },
+    {
+      "name": "KB Interface: Categories Browsing",
+      "success": true,
+      "message": "Categories API working",
+      "details": {
+        "has_categories": true
+      },
+      "response_time": null
+    },
+    {
+      "name": "Terminal Integration",
+      "success": true,
+      "message": "Terminal integration present (WebSocket-based)",
+      "details": {
+        "note": "Terminal likely uses WebSocket connection"
+      },
+      "response_time": null
+    },
+    {
+      "name": "Chat: Creation Function",
+      "success": true,
+      "message": "Chat creation working, ID: cb5c2fdb-e8a1-4400-9c83-8739540d17f0",
+      "details": {
+        "chat_id": "cb5c2fdb-e8a1-4400-9c83-8739540d17f0",
+        "response": {
+          "chat_id": "cb5c2fdb-e8a1-4400-9c83-8739540d17f0",
+          "created": true,
+          "timestamp": "2025-09-01T13:45:00.000Z"
+        }
+      },
+      "response_time": null
+    },
+    {
+      "name": "Chat: Message Sending",
+      "success": false,
+      "message": "Message API returned 422",
+      "details": null,
+      "response_time": null
+    },
+    {
+      "name": "Chat: List/History Function",
+      "success": true,
+      "message": "Chat list accessible",
+      "details": {
+        "chat_count": "dict_response"
+      },
+      "response_time": null
+    },
+    {
+      "name": "Desktop Viewer Component",
+      "success": false,
+      "message": "Desktop API returned 404",
+      "details": null,
+      "response_time": null
+    },
+    {
+      "name": "Performance: Concurrent API Calls",
+      "success": true,
+      "message": "Concurrent API performance: 4/4 successful in 0.02s",
+      "details": {
+        "concurrent_requests": 4,
+        "successful": 4
+      },
+      "response_time": 0.01783013343811035
+    },
+    {
+      "name": "Performance: /api/health Response Time",
+      "success": true,
+      "message": "Response time: 0.004s (Fast)",
+      "details": null,
+      "response_time": 0.004038572311401367
+    },
+    {
+      "name": "Performance: /api/system/status Response Time",
+      "success": true,
+      "message": "Response time: 0.003s (Fast)",
+      "details": null,
+      "response_time": 0.0029349327087402344
+    },
+    {
+      "name": "Error Handling: Invalid Endpoint",
+      "success": true,
+      "message": "Invalid endpoint properly returns 404 (expected 404)",
+      "details": {
+        "status_code": 404
+      },
+      "response_time": null
+    },
+    {
+      "name": "Error Handling: Malformed Request",
+      "success": true,
+      "message": "Malformed request properly handled with status 422",
+      "details": {
+        "status_code": 422
+      },
+      "response_time": null
+    }
+  ],
+  "recommendations": [
+    "\ud83d\udfe1 WebSocket connectivity issues - real-time features may be limited",
+    "\ud83d\udcac Chat system issues - check LLM integration and chat workflow",
+    "\ud83d\udfe2 VERY GOOD: AutoBot frontend is working well with minor issues to address"
+  ]
+}

@@ -1,0 +1,65 @@
+---
+# Provision Host Playbook
+# Initial setup of a new host with common role + service-specific role
+
+- name: "Provision AutoBot Host"
+  hosts: "{{ target_host | default('all') }}"
+  gather_facts: yes
+  become: yes
+
+  vars:
+    provision_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+  pre_tasks:
+    - name: "Display provisioning information"
+      debug:
+        msg:
+          - "========================================"
+          - "AutoBot Host Provisioning"
+          - "========================================"
+          - "Target Host: {{ inventory_hostname }}"
+          - "Host Role: {{ vm_role | default('undefined') }}"
+          - "IP Address: {{ ansible_default_ipv4.address | default('N/A') }}"
+          - "Timestamp: {{ provision_timestamp }}"
+      tags: ['always']
+
+  roles:
+    - role: common
+      tags: ['common', 'base']
+
+    - role: frontend
+      when: "'frontend' in group_names"
+      tags: ['frontend']
+
+    - role: redis
+      when: "'database' in group_names"
+      tags: ['redis', 'database']
+
+    - role: npu_worker
+      when: "'npu' in group_names"
+      tags: ['npu_worker', 'npu']
+
+    - role: ai_stack
+      when: "'aiml' in group_names"
+      tags: ['ai_stack', 'aiml']
+
+    - role: browser
+      when: "'browser' in group_names"
+      tags: ['browser']
+
+  post_tasks:
+    - name: "Display provisioning summary"
+      debug:
+        msg:
+          - "========================================"
+          - "Provisioning Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "Roles Applied: {{ ansible_play_role_names | join(', ') }}"
+          - "Status: Ready for deployment"
+          - ""
+          - "Next Steps:"
+          - "1. Sync application code to host"
+          - "2. Start services: ansible-playbook manage_services.yml -e 'target_host={{ inventory_hostname }} service_action=start'"
+          - "3. Verify: ansible-playbook health-check.yml -e 'target_host={{ inventory_hostname }}'"
+      tags: ['always']

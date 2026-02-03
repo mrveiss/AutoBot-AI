@@ -1,0 +1,51 @@
+paramiko>=4.0.0
+
+# Retry logic for resilient operations
+tenacity>=8.5.0
+
+# Async SSH for PKI certificate distribution (Issue #166)
+asyncssh>=2.22.0
+
+# TensorFlow compatibility - protobuf 4.x required for TensorFlow 2.19.1
+# Protobuf 5.x/6.x causes MessageFactory.GetPrototype AttributeError
+protobuf>=4.23.0,<5.0.0
+
+# vLLM - High-performance LLM inference with prefix caching (Optional)
+# Provides 3-4x throughput improvement with 98.7% cache efficiency
+# Requires: CUDA-compatible GPU, Enable in config: llm.vllm.enabled = true
+# Installation: pip install vllm (or pip install -r requirements.txt)
+vllm>=0.6.0
+
+# Document parsing libraries for knowledge base
+# Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
+pypdf>=6.4.0              # PDF parsing - SECURITY UPDATE (4 CVE fixes)
+python-docx>=1.1.2        # Microsoft Word (.docx)
+openpyxl>=3.1.5           # Microsoft Excel (.xlsx)
+python-pptx>=1.0.2        # Microsoft PowerPoint (.pptx)
+odfpy>=1.4.1              # OpenDocument formats (.odt, .ods, .odp, .odg)
+
+# OpenTelemetry - Distributed Tracing (Issue #57, #697)
+# Provides request tracing across the 5-VM AutoBot infrastructure
+opentelemetry-api>=1.34.0
+opentelemetry-sdk>=1.34.0
+opentelemetry-exporter-otlp>=1.34.0
+opentelemetry-instrumentation-fastapi>=0.55b0
+opentelemetry-propagator-b3>=1.34.0
+# Issue #697: Additional instrumentation for comprehensive tracing
+opentelemetry-instrumentation-redis>=0.55b0
+opentelemetry-instrumentation-aiohttp-client>=0.55b0
+
+# FAISS - GPU-Accelerated Vector Similarity Search (Issue #387)
+# Provides 10-100x speedup for vector similarity search operations
+# Use faiss-gpu for CUDA support, faiss-cpu for CPU-only fallback
+# Note: faiss-gpu requires CUDA toolkit installation
+faiss-gpu>=1.7.4          # GPU version with CUDA support
+aiosqlite>=0.21.0
+
+# Security - XML parsing protection (Issue #67)
+# Prevents XXE (XML External Entity) attacks in threat intelligence parsing
+defusedxml>=0.7.1
+
+# MinHash LSH - Locality-Sensitive Hashing for duplicate detection (Issue #659)
+# Provides 10-100x speedup for similarity search via O(n) expected complexity
+datasketch>=1.6.0

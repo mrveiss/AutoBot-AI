@@ -1,0 +1,193 @@
+{
+  "assessment_overview": {
+    "date": "2025-09-27T21:28:58.157052",
+    "duration_seconds": 5.611312,
+    "infrastructure": "AutoBot Distributed 5-VM System"
+  },
+  "key_metrics": {
+    "overall_health_score": 81.7,
+    "health_status": "HEALTHY",
+    "health_grade": "B",
+    "vm_connectivity": "5/6 (83.3%)",
+    "service_health": "4/6 (66.7%)",
+    "api_functionality": "3/3 (100.0%)"
+  },
+  "critical_issues": [
+    {
+      "type": "connectivity",
+      "component": "vm1_frontend",
+      "issue": "VM connectivity failure"
+    },
+    {
+      "type": "service",
+      "component": "vm1_frontend",
+      "issue": "Service not responding"
+    },
+    {
+      "type": "service",
+      "component": "vm3_redis",
+      "issue": "Service not responding"
+    }
+  ],
+  "working_features": [
+    "main_machine connectivity",
+    "vm2_npu connectivity",
+    "vm3_redis connectivity",
+    "vm4_ai connectivity",
+    "vm5_browser connectivity",
+    "main_backend service",
+    "vm2_npu service",
+    "vm4_ai service",
+    "vm5_browser service",
+    "/api/health API",
+    "/api/knowledge_base/stats/basic API",
+    "/api/knowledge_base/categories API"
+  ],
+  "week_1_assessment": {
+    "status": "ON_TRACK",
+    "completion_percentage": 75.0,
+    "criteria_met": {
+      "infrastructure_operational": true,
+      "core_services_working": true,
+      "no_critical_blockers": false,
+      "basic_functionality": true
+    }
+  },
+  "immediate_actions": [
+    "Fix VM connectivity issues: vm1_frontend",
+    "Restart failed services: vm1_frontend, vm3_redis"
+  ],
+  "detailed_results": {
+    "connectivity": {
+      "connectivity_summary": {
+        "total_vms": 6,
+        "working_vms": 5,
+        "connectivity_health_percentage": 83.33333333333334,
+        "status": "HEALTHY"
+      },
+      "ping_results": {
+        "vm1_frontend": true,
+        "main_machine": true,
+        "vm3_redis": true,
+        "vm4_ai": true,
+        "vm2_npu": true,
+        "vm5_browser": true
+      },
+      "port_results": {
+        "main_machine": {
+          "8001": true,
+          "6080": false
+        },
+        "vm1_frontend": {
+          "5173": false
+        },
+        "vm2_npu": {
+          "8081": true
+        },
+        "vm3_redis": {
+          "6379": true
+        },
+        "vm5_browser": {
+          "3000": true
+        },
+        "vm4_ai": {
+          "8080": true
+        }
+      },
+      "latency_results": {
+        "vm1_frontend": 0.67,
+        "vm2_npu": 0.8184000000000001,
+        "vm3_redis": 0.6714,
+        "vm4_ai": 0.6712,
+        "vm5_browser": 0.624
+      },
+      "ssh_results": {
+        "vm3_redis": true,
+        "vm2_npu": true,
+        "vm4_ai": true,
+        "vm5_browser": true,
+        "vm1_frontend": true
+      },
+      "overall_vm_status": {
+        "main_machine": true,
+        "vm1_frontend": false,
+        "vm2_npu": true,
+        "vm3_redis": true,
+        "vm4_ai": true,
+        "vm5_browser": true
+      },
+      "critical_issues": [
+        {
+          "vm": "vm1_frontend",
+          "ip": "172.16.168.21",
+          "issue": "VM connectivity failure",
+          "ping": true,
+          "ports": {
+            "5173": false
+          },
+          "ssh": true
+        }
+      ]
+    },
+    "services": {
+      "individual_services": {
+        "main_backend": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 0.003968
+        },
+        "vm1_frontend": {
+          "working": false,
+          "error": "HTTPConnectionPool(host='172.16.168.21', port=5173): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7e69049aeda0>: Failed to establish a new connection: [Errno 111] Connection refused'))"
+        },
+        "vm2_npu": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 0.002299
+        },
+        "vm3_redis": {
+          "working": false,
+          "error": "MISCONF Redis is configured to save RDB snapshots, but it's currently unable to persist to disk. Commands that may modify the data set are disabled, because this instance is configured to report errors during writes if RDB snapshotting fails (stop-writes-on-bgsave-error option). Please check the Redis logs for details about the RDB error."
+        },
+        "vm4_ai": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 0.002451
+        },
+        "vm5_browser": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 0.002023
+        }
+      },
+      "working_services": 4,
+      "total_services": 6,
+      "health_percentage": 66.66666666666666
+    },
+    "apis": {
+      "endpoints": {
+        "/api/health": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 0.002829,
+          "has_data": true
+        },
+        "/api/knowledge_base/stats/basic": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 3.032721,
+          "has_data": true
+        },
+        "/api/knowledge_base/categories": {
+          "working": true,
+          "status_code": 200,
+          "response_time": 0.002526,
+          "has_data": true
+        }
+      },
+      "working_apis": 3,
+      "total_apis": 3,
+      "health_percentage": 100.0
+    }
+  }
+}

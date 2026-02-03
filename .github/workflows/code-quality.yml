@@ -1,0 +1,103 @@
+# GitHub Actions workflow for code quality enforcement
+# Runs on every push and pull request
+# Uses self-hosted runner to avoid GitHub Actions quota limits
+#
+# NOTE: Code quality checks are set to warn-only mode while Issue #173
+# (2,576 Flake8 violations) is being addressed. Once fixed, change
+# continue-on-error to false for strict enforcement.
+
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, Dev_new_gui, develop ]
+  pull_request:
+    branches: [ main, Dev_new_gui, develop ]
+
+jobs:
+  code-quality:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python virtual environment
+      run: |
+        python3 -m venv .venv
+        source .venv/bin/activate
+        echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
+        echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        source .venv/bin/activate
+        python3 -m pip install --upgrade pip
+        python3 -m pip install black isort flake8 autoflake bandit[toml]
+
+    - name: Check code formatting with Black
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        python3 -m black --check --line-length=88 backend/ src/ || {
+          echo "⚠️ Black formatting check failed"
+          echo "Run 'python3 -m black --line-length=88 backend/ src/' to fix"
+          echo "See Issue #173 for tracking"
+        }
+
+    - name: Check import sorting with isort
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        python3 -m isort --check --profile=black --line-length=88 backend/ src/ || {
+          echo "⚠️ isort check failed"
+          echo "Run 'python3 -m isort --profile=black --line-length=88 backend/ src/' to fix"
+          echo "See Issue #173 for tracking"
+        }
+
+    - name: Lint with flake8
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        python3 -m flake8 backend/ src/ \
+          --max-line-length=100 \
+          --extend-ignore=E203,W503 \
+          --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive \
+          --statistics \
+          --count || {
+          echo "⚠️ flake8 linting issues found"
+          echo "See Issue #173 for tracking"
+        }
+
+    - name: Check for unused imports with autoflake
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        python3 -m autoflake --check --recursive \
+          --remove-all-unused-imports \
+          --remove-unused-variables \
+          backend/ src/ || {
+          echo "⚠️ Unused imports/variables detected"
+          echo "See Issue #173 for tracking"
+        }
+
+    - name: Security check with bandit
+      continue-on-error: true
+      run: |
+        source .venv/bin/activate
+        python3 -m bandit -c .bandit -r backend/ src/ || {
+          echo "⚠️ Security issues detected - review bandit output"
+        }
+
+    - name: Code quality summary
+      if: always()
+      run: |
+        echo "📊 Code Quality Check Complete"
+        echo ""
+        echo "Note: Checks are in warn-only mode while Issue #173 is being addressed."
+        echo "Once violations are fixed, strict enforcement will be enabled."
+
+    - name: Cleanup virtual environment
+      if: always()
+      run: |
+        rm -rf .venv || true

@@ -1,0 +1,67 @@
+---
+# Backend Services Role
+- name: Create AutoBot user
+  user:
+    name: autobot
+    home: /opt/autobot
+    shell: /bin/bash
+    system: yes
+
+- name: Create AutoBot directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0755'
+  loop:
+    - /opt/autobot/app
+    - /opt/autobot/logs
+    - /opt/autobot/data
+    - /opt/autobot/config
+    - /opt/autobot/venv
+
+- name: Install Python dependencies
+  pip:
+    requirements: /opt/autobot/app/requirements.txt
+    virtualenv: /opt/autobot/venv
+    virtualenv_python: python3.10
+  become_user: autobot
+
+- name: Copy AutoBot application files
+  synchronize:
+    src: "{{ playbook_dir }}/../"
+    dest: /opt/autobot/app/
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=venv"
+      - "--exclude=docker"
+  become_user: autobot
+  notify: restart backend services
+
+- name: Generate environment configuration
+  template:
+    src: backend.env.j2
+    dest: /opt/autobot/config/backend.env
+    owner: autobot
+    group: autobot
+    mode: '0640'
+  notify: restart backend services
+
+- name: Create systemd service files
+  template:
+    src: autobot-backend.service.j2
+    dest: /etc/systemd/system/autobot-backend.service
+    mode: '0644'
+  notify: 
+    - reload systemd
+    - restart backend services
+
+- name: Enable and start backend services
+  systemd:
+    name: autobot-backend
+    enabled: yes
+    state: started
+    daemon_reload: yes

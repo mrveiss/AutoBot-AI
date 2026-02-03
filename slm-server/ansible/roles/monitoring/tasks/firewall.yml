@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Monitoring Role - Firewall Configuration
+---
+
+- name: Check if UFW is installed
+  ansible.builtin.command: which ufw
+  register: ufw_installed
+  changed_when: false
+  failed_when: false
+
+- name: Configure UFW for Prometheus
+  community.general.ufw:
+    rule: allow
+    port: "{{ prometheus_port }}"
+    proto: tcp
+    comment: "Prometheus"
+  when:
+    - ufw_installed.rc == 0
+    - monitoring_install_prometheus | bool
+
+- name: Configure UFW for Grafana
+  community.general.ufw:
+    rule: allow
+    port: "{{ grafana_port }}"
+    proto: tcp
+    comment: "Grafana"
+  when:
+    - ufw_installed.rc == 0
+    - monitoring_install_grafana | bool
+
+- name: Configure UFW for Node Exporter
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_exporter_port }}"
+    proto: tcp
+    comment: "Node Exporter"
+  when:
+    - ufw_installed.rc == 0
+    - monitoring_install_node_exporter | bool

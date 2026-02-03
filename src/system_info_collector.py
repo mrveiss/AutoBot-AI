@@ -1,9 +1,17 @@
-import platform
-import os
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 import json
+import os
+import platform
 import subprocess
 
+# Performance optimization: O(1) lookup for sensitive env var keywords (Issue #326)
+SENSITIVE_ENV_KEYWORDS = {"key", "token", "secret", "password"}
+
+
 def get_os_info():
+    """Collect OS and environment info with sensitive data redaction."""
     info = {
         "system": platform.system(),
         "node": platform.node(),
@@ -12,8 +20,14 @@ def get_os_info():
         "machine": platform.machine(),
         "processor": platform.processor(),
         # Filter out sensitive environment variables
-        "env": {k: ("REDACTED" if any(s in k.lower() for s in ["key", "token", "secret", "password"]) else v)
-                for k, v in os.environ.items()},
+        "env": {
+            k: (
+                "REDACTED"
+                if any(s in k.lower() for s in SENSITIVE_ENV_KEYWORDS)
+                else v
+            )
+            for k, v in os.environ.items()
+        },
     }
     if platform.system() == "Linux":
         try:
@@ -25,6 +39,7 @@ def get_os_info():
         except FileNotFoundError:
             info["os_release"] = "/etc/os-release not found"
     return info
+
 
 if __name__ == "__main__":
     os_info = get_os_info()

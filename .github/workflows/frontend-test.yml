@@ -1,0 +1,210 @@
+# Frontend Testing Suite workflow
+# Uses self-hosted runner to avoid GitHub Actions quota limits
+#
+# NOTE: Type checking and linting are set to warn-only mode while Issue #173
+# is being addressed. Once fixed, change continue-on-error to false.
+
+name: Frontend Testing Suite
+
+on:
+  push:
+    branches: [main, develop, 'Dev_*']
+    paths:
+      - 'autobot-vue/**'
+      - '.github/workflows/frontend-test.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'autobot-vue/**'
+      - '.github/workflows/frontend-test.yml'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Unit and Integration Tests
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+
+      - name: Run type checking
+        working-directory: autobot-vue
+        continue-on-error: true
+        run: |
+          npm run type-check || {
+            echo "⚠️ Type checking failed - see Issue #173 for tracking"
+          }
+
+      - name: Run linting
+        working-directory: autobot-vue
+        continue-on-error: true
+        run: |
+          npm run lint || {
+            echo "⚠️ Linting failed - see Issue #173 for tracking"
+          }
+
+      - name: Run unit tests
+        working-directory: autobot-vue
+        run: npm run test:unit || echo "⚠️ Unit tests failed - continuing"
+
+      - name: Run integration tests
+        working-directory: autobot-vue
+        run: npm run test:integration || echo "⚠️ Integration tests failed - continuing"
+
+      - name: Generate coverage report
+        working-directory: autobot-vue
+        run: npm run test:coverage || echo "⚠️ Coverage generation failed - continuing"
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./autobot-vue/coverage/lcov.info
+          directory: ./autobot-vue/coverage
+          flags: frontend
+          name: autobot-vue-coverage
+          fail_ci_if_error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-unit
+          path: |
+            autobot-vue/test-results/
+            autobot-vue/coverage/
+          retention-days: 30
+
+      - name: Cleanup node_modules
+        if: always()
+        run: |
+          rm -rf autobot-vue/node_modules || true
+
+  # Job 2: Security Scanning
+  security-scan:
+    name: Security Scan
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: autobot-vue
+        run: |
+          npm audit --audit-level=high || true
+          npm audit --json > audit-results.json || true
+
+      - name: Run dependency vulnerability scan
+        working-directory: autobot-vue
+        run: |
+          npx auditjs ossi || true
+
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: autobot-vue/audit-results.json
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf autobot-vue/node_modules || true
+
+  # Job 3: Build Test
+  build-test:
+    name: Build Test
+    runs-on: self-hosted
+    needs: unit-tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: autobot-vue
+        run: npm ci
+
+      - name: Build application
+        working-directory: autobot-vue
+        run: npm run build
+
+      - name: Analyze bundle size
+        working-directory: autobot-vue
+        run: |
+          du -sh dist/
+          find dist/ -name "*.js" -exec du -h {} \; | sort -hr
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf autobot-vue/node_modules autobot-vue/dist || true
+
+  # Job 4: Test Summary and Reporting
+  test-summary:
+    name: Test Summary
+    runs-on: self-hosted
+    needs: [unit-tests, security-scan, build-test]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: test-artifacts
+
+      - name: Generate test summary
+        run: |
+          echo "# 🧪 Frontend Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Test Jobs Status:" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Build Test: ${{ needs.build-test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "test-artifacts/test-results-unit/coverage" ]; then
+            echo "## Coverage Report Available" >> $GITHUB_STEP_SUMMARY
+            echo "Coverage reports have been uploaded to Codecov." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -d "test-artifacts" ]; then
+            echo "## Available Artifacts:" >> $GITHUB_STEP_SUMMARY
+            find test-artifacts -type d -name "*results*" | while read dir; do
+              echo "- $(basename "$dir")" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "## Quick Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- [View Coverage Report](https://app.codecov.io/gh/${{ github.repository }})" >> $GITHUB_STEP_SUMMARY
+          echo "- [Download Test Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY

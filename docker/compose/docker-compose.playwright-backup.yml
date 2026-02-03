@@ -1,0 +1,384 @@
+services:
+  playwright-service:
+    image: node:18-bullseye
+    container_name: autobot-playwright
+    ports:
+      - "3000:3000"
+    working_dir: /app
+    command: >
+      sh -c "
+        echo '🚀 Installing Playwright and dependencies...' &&
+        npm install -g pnpm &&
+        npm init -y &&
+        npm install playwright express &&
+        npx playwright install chromium &&
+        npx playwright install-deps chromium &&
+        echo '📝 Creating Playwright service...' &&
+        cat > server.js << 'EOF'
+        const { chromium } = require('playwright');
+        const express = require('express');
+        const app = express();
+
+        app.use(express.json({ limit: '50mb' }));
+
+        let browser = null;
+
+        async function initBrowser() {
+          try {
+            if (!browser || !browser.isConnected()) {
+              console.log('🚀 Launching Chromium browser...');
+              browser = await chromium.launch({
+                headless: true,
+                args: [
+                  '--no-sandbox',
+                  '--disable-dev-shm-usage',
+                  '--disable-gpu',
+                  '--disable-web-security',
+                  '--disable-features=VizDisplayCompositor'
+                ]
+              });
+              console.log('✅ Browser launched successfully');
+            }
+            return browser;
+          } catch (error) {
+            console.error('❌ Failed to launch browser:', error);
+            throw error;
+          }
+        }
+
+        app.post('/search', async (req, res) => {
+          console.log('🔍 Received search request:', req.body);
+          try {
+            const { query, search_engine = 'duckduckgo' } = req.body;
+
+            if (!query) {
+              return res.status(400).json({
+                success: false,
+                error: 'Query parameter is required'
+              });
+            }
+
+            const browser = await initBrowser();
+            const page = await browser.newPage();
+
+            // Set realistic user agent
+            await page.setExtraHTTPHeaders({
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            });
+
+            const searchUrls = {
+              duckduckgo: 'https://duckduckgo.com/?q=' + encodeURIComponent(query),
+              bing: 'https://www.bing.com/search?q=' + encodeURIComponent(query),
+              google: 'https://www.google.com/search?q=' + encodeURIComponent(query)
+            };
+
+            const searchUrl = searchUrls[search_engine] || searchUrls.duckduckgo;
+            console.log('🌐 Navigating to:', searchUrl);
+
+            await page.goto(searchUrl, {
+              waitUntil: 'domcontentloaded',
+              timeout: 15000
+            });
+
+            // Wait for content to load
+            await page.waitForTimeout(3000);
+
+            let results = [];
+
+            if (search_engine === 'duckduckgo') {
+              try {
+                // Try multiple selectors for DuckDuckGo
+                const resultSelectors = [
+                  '[data-testid=\"result\"]',
+                  '.nrn-react-div[data-testid=\"result\"]',
+                  '.result',
+                  '[data-layout=\"organic\"]'
+                ];
+
+                let elements = [];
+                for (const selector of resultSelectors) {
+                  try {
+                    await page.waitForSelector(selector, { timeout: 5000 });
+                    elements = await page.$$(selector);
+                    if (elements.length > 0) {
+                      console.log('✅ Found results with selector:', selector);
+                      break;
+                    }
+                  } catch (e) {
+                    console.log('⏩ Trying next selector...');
+                    continue;
+                  }
+                }
+
+                for (const element of elements.slice(0, 5)) {
+                  try {
+                    const titleElement = await element.$('h2 a, h3 a, .result__title a, [data-testid=\"result-title-a\"]');
+                    if (titleElement) {
+                      const title = await titleElement.textContent();
+                      const url = await titleElement.getAttribute('href');
+
+                      const snippetSelectors = [
+                        '[data-result=\"snippet\"]',
+                        '.result__snippet',
+                        '.result-snippet',
+                        '.snippet'
+                      ];
+
+                      let snippet = '';
+                      for (const snippetSelector of snippetSelectors) {
+                        const snippetElement = await element.$(snippetSelector);
+                        if (snippetElement) {
+                          snippet = await snippetElement.textContent();
+                          break;
+                        }
+                      }
+
+                      if (url && title && title.trim()) {
+                        results.push({
+                          title: title.trim(),
+                          url: url.startsWith('http') ? url : 'https://duckduckgo.com' + url,
+                          snippet: snippet.trim(),
+                          source: 'DuckDuckGo'
+                        });
+                      }
+                    }
+                  } catch (e) {
+                    console.error('❌ Error extracting result:', e.message);
+                  }
+                }
+
+                console.log('📊 DuckDuckGo results found:', results.length);
+
+              } catch (e) {
+                console.error('❌ Error with DuckDuckGo search:', e.message);
+              }
+            }
+
+            await page.close();
+
+            res.json({
+              success: true,
+              query: query,
+              search_engine: search_engine,
+              results: results.slice(0, 5)
+            });
+
+          } catch (error) {
+            console.error('❌ Search error:', error);
+            res.status(500).json({
+              success: false,
+              error: error.message
+            });
+          }
+        });
+
+        app.post('/extract', async (req, res) => {
+          console.log('📄 Received extract request:', req.body);
+          try {
+            const { url } = req.body;
+
+            if (!url) {
+              return res.status(400).json({
+                success: false,
+                error: 'URL parameter is required'
+              });
+            }
+
+            const browser = await initBrowser();
+            const page = await browser.newPage();
+
+            await page.setExtraHTTPHeaders({
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            });
+
+            console.log('🌐 Extracting content from:', url);
+            const response = await page.goto(url, {
+              waitUntil: 'domcontentloaded',
+              timeout: 20000
+            });
+
+            if (!response || response.status() >= 400) {
+              await page.close();
+              return res.status(400).json({
+                success: false,
+                error: 'Failed to load page: ' + (response ? response.status() : 'timeout')
+              });
+            }
+
+            await page.waitForTimeout(2000);
+
+            const title = await page.title();
+
+            // Get meta description
+            let description = '';
+            try {
+              const descElement = await page.$('meta[name=\"description\"]');
+              if (descElement) {
+                description = await descElement.getAttribute('content') || '';
+              }
+            } catch (e) {
+              console.log('⚠️ Could not extract description');
+            }
+
+            // Extract main content using multiple strategies
+            const contentSelectors = [
+              'main',
+              'article',
+              '.content',
+              '.main-content',
+              '.post-content',
+              '.entry-content',
+              '#content',
+              '.markdown-body',
+              '.mw-parser-output',
+              '.answer',
+              '.post-body',
+              '.article-content'
+            ];
+
+            let content = '';
+            for (const selector of contentSelectors) {
+              try {
+                const element = await page.$(selector);
+                if (element) {
+                  const text = await element.textContent();
+                  if (text && text.trim().length > 100) {
+                    content = text.trim();
+                    console.log('✅ Content extracted with selector:', selector);
+                    break;
+                  }
+                }
+              } catch (e) {
+                continue;
+              }
+            }
+
+            // Fallback: extract from body and clean up
+            if (!content || content.length < 100) {
+              try {
+                // Remove unwanted elements
+                await page.evaluate(() => {
+                  const unwanted = document.querySelectorAll(
+                    'script, style, nav, header, footer, .nav, .navbar, .header, .footer, .sidebar, .menu, .advertisement, .ad, .popup'
+                  );
+                  unwanted.forEach(el => el.remove());
+                });
+
+                const body = await page.$('body');
+                if (body) {
+                  content = await body.textContent();
+                  // Clean up whitespace
+                  content = content
+                    .replace(/\\n\\s*\\n/g, '\\n\\n')
+                    .replace(/ +/g, ' ')
+                    .trim();
+                  console.log('✅ Content extracted from body (fallback)');
+                }
+              } catch (e) {
+                console.error('❌ Error extracting body content:', e);
+              }
+            }
+
+            const domain = new URL(url).hostname.toLowerCase();
+            const trustedDomains = [
+              'wikipedia.org', 'github.com', 'stackoverflow.com', 'medium.com',
+              'arxiv.org', 'nature.com', 'sciencedirect.com', 'ieee.org', 'acm.org',
+              'news.ycombinator.com', 'reddit.com', 'bbc.com', 'reuters.com'
+            ];
+            const isTrusted = trustedDomains.some(trusted => domain.includes(trusted));
+
+            await page.close();
+
+            const result = {
+              success: true,
+              url: url,
+              title: title,
+              description: description,
+              content: content.substring(0, 3000), // Increased limit
+              domain: domain,
+              is_trusted: isTrusted,
+              timestamp: new Date().toISOString(),
+              content_length: content.length
+            };
+
+            console.log('✅ Content extracted:', {
+              domain,
+              title_length: title.length,
+              content_length: content.length,
+              is_trusted: isTrusted
+            });
+
+            res.json(result);
+
+          } catch (error) {
+            console.error('❌ Extraction error:', error);
+            res.status(500).json({
+              success: false,
+              error: error.message
+            });
+          }
+        });
+
+        app.get('/health', (req, res) => {
+          res.json({
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            browser_connected: browser ? browser.isConnected() : false
+          });
+        });
+
+        const port = 3000;
+        app.listen(port, '0.0.0.0', async () => {
+          console.log('🚀 Playwright service listening on port ' + port);
+
+          // Initialize browser on startup
+          try {
+            await initBrowser();
+            console.log('✅ Browser pre-initialized and ready');
+          } catch (error) {
+            console.error('⚠️ Failed to pre-initialize browser:', error);
+          }
+        });
+
+        // Graceful shutdown
+        process.on('SIGTERM', async () => {
+          console.log('🛑 Shutting down gracefully...');
+          if (browser) {
+            await browser.close();
+            console.log('✅ Browser closed');
+          }
+          process.exit(0);
+        });
+
+        process.on('SIGINT', async () => {
+          console.log('🛑 Received SIGINT, shutting down...');
+          if (browser) {
+            await browser.close();
+            console.log('✅ Browser closed');
+          }
+          process.exit(0);
+        });
+        EOF
+
+        echo '🚀 Starting Playwright service...' &&
+        exec node server.js
+      "
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - autobot-network
+    volumes:
+      - playwright_data:/root/.cache/ms-playwright
+
+volumes:
+  playwright_data:
+    driver: local
+
+networks:
+  autobot-network:
+    driver: bridge

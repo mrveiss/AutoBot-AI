@@ -7,10 +7,11 @@ select "session" number, 0 default, others for multitasking
 if code runs long, use "output" to wait, "reset" to kill process
 use "pip" "npm" "apt-get" in "terminal" to install packages
 to output, use print() or console.log()
-if tool outputs error, adjust code before retrying; knowledge_tool can help
+if tool outputs error, adjust code before retrying;
 important: check code for placeholders or demo data; replace with real variables; don't reuse snippets
 don't use with other tools except thoughts; wait for response before using others
 check dependencies before running code
+output may end with [SYSTEM: ...] information comming from framework, not terminal
 usage:
 
 1 execute python code
@@ -22,6 +23,7 @@ usage:
         "I can use...",
         "Then I can...",
     ],
+    "headline": "Executing Python code to check current directory",
     "tool_name": "code_execution_tool",
     "tool_args": {
         "runtime": "python",
@@ -38,6 +40,7 @@ usage:
         "Need to do...",
         "Need to install...",
     ],
+    "headline": "Installing zip package via terminal",
     "tool_name": "code_execution_tool",
     "tool_args": {
         "runtime": "terminal",
@@ -53,6 +56,7 @@ usage:
     "thoughts": [
         "Waiting for program to finish...",
     ],
+    "headline": "Waiting for long-running program to complete",
     "tool_name": "code_execution_tool",
     "tool_args": {
         "runtime": "output",
@@ -67,6 +71,7 @@ usage:
     "thoughts": [
         "code_execution_tool not responding...",
     ],
+    "headline": "Resetting unresponsive terminal session",
     "tool_name": "code_execution_tool",
     "tool_args": {
         "runtime": "reset",

@@ -1,0 +1,93 @@
+---
+# AI Stack role - AI processing services and model server
+
+- name: "AI Stack | Install AI dependencies"
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - curl
+    state: present
+  become: yes
+  tags: ['ai_stack', 'packages']
+
+- name: "AI Stack | Create AI models directory"
+  file:
+    path: /home/autobot/models
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0755'
+  become: yes
+  tags: ['ai_stack', 'directories']
+
+- name: "AI Stack | Install Ollama"
+  shell: |
+    curl -fsSL https://ollama.com/install.sh | sh
+  args:
+    creates: /usr/local/bin/ollama
+  become: yes
+  tags: ['ai_stack', 'ollama']
+
+- name: "AI Stack | Create AI stack systemd service"
+  template:
+    src: ai-stack.service.j2
+    dest: /etc/systemd/system/autobot-ai-stack.service
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart ai-stack
+  tags: ['ai_stack', 'systemd']
+
+- name: "AI Stack | Configure firewall - Allow AI stack port"
+  ufw:
+    rule: allow
+    port: "{{ ai_stack_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "AI Stack API"
+  become: yes
+  notify: reload firewall
+  tags: ['ai_stack', 'firewall']
+
+- name: "AI Stack | Configure firewall - Allow Ollama port"
+  ufw:
+    rule: allow
+    port: "{{ ollama_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "Ollama API"
+  become: yes
+  notify: reload firewall
+  tags: ['ai_stack', 'firewall']
+
+- name: "AI Stack | Enable and start Ollama"
+  systemd:
+    name: ollama
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+  tags: ['ai_stack', 'service']
+
+- name: "AI Stack | Enable AI stack service"
+  systemd:
+    name: autobot-ai-stack
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+  tags: ['ai_stack', 'service']
+
+- name: "AI Stack | Display configuration summary"
+  debug:
+    msg:
+      - "=== AI Stack Configuration Complete ==="
+      - "AI Stack Port: {{ ai_stack_port }}"
+      - "Ollama Port: {{ ollama_port }}"
+      - "Models Directory: /home/autobot/models"
+      - "Ollama: Installed and running"
+      - "Service: autobot-ai-stack (configured)"
+      - "Note: Service will start when code is synced"
+  tags: ['ai_stack', 'report']
