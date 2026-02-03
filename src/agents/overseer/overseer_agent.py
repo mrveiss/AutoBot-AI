@@ -342,6 +342,97 @@ Examples:
 
         return True, None
 
+    def _build_step_start_update(
+        self,
+        task: AgentTask,
+        plan_id: str,
+        previous_context: Dict[str, Dict[str, Any]],
+    ) -> OverseerUpdate:
+        """
+        Build an OverseerUpdate for step start notification.
+
+        Issue #620: Extracted from _execute_single_step to reduce function length. Issue #620.
+
+        Args:
+            task: The task being started
+            plan_id: The plan ID
+            previous_context: Context from previous steps
+
+        Returns:
+            OverseerUpdate for step start
+        """
+        return OverseerUpdate(
+            update_type="step_start",
+            plan_id=plan_id,
+            task_id=task.task_id,
+            step_number=task.step_number,
+            total_steps=task.total_steps,
+            status="executing",
+            content={
+                "description": task.description,
+                "command": task.command,
+                "previous_context": previous_context if previous_context else None,
+            },
+        )
+
+    def _build_step_complete_update(
+        self,
+        task: AgentTask,
+        plan_id: str,
+        result: StepResult,
+    ) -> OverseerUpdate:
+        """
+        Build an OverseerUpdate for step completion.
+
+        Issue #620: Extracted from _execute_single_step to reduce function length. Issue #620.
+
+        Args:
+            task: The completed task
+            plan_id: The plan ID
+            result: The step execution result
+
+        Returns:
+            OverseerUpdate for step completion
+        """
+        return OverseerUpdate(
+            update_type="step_complete",
+            plan_id=plan_id,
+            task_id=task.task_id,
+            step_number=task.step_number,
+            total_steps=task.total_steps,
+            status=result.status.value,
+            content=result.to_dict(),
+        )
+
+    def _build_stream_update(
+        self,
+        task: AgentTask,
+        plan_id: str,
+        update: Any,
+    ) -> OverseerUpdate:
+        """
+        Build an OverseerUpdate for streaming content.
+
+        Issue #620: Extracted from _execute_single_step to reduce function length. Issue #620.
+
+        Args:
+            task: The task being streamed
+            plan_id: The plan ID
+            update: The streaming update data
+
+        Returns:
+            OverseerUpdate for streaming content
+        """
+        return OverseerUpdate(
+            update_type="stream",
+            plan_id=plan_id,
+            task_id=task.task_id,
+            step_number=task.step_number,
+            total_steps=task.total_steps,
+            status="streaming",
+            content=update.to_dict() if hasattr(update, "to_dict") else update,
+        )
+
     async def _execute_single_step(
         self,
         task: AgentTask,
@@ -363,58 +454,22 @@ Examples:
         Yields:
             Tuples of ("update", OverseerUpdate) or ("result", StepResult)
         """
-        # Yield step start
-        yield (
-            "update",
-            OverseerUpdate(
-                update_type="step_start",
-                plan_id=plan_id,
-                task_id=task.task_id,
-                step_number=task.step_number,
-                total_steps=task.total_steps,
-                status="executing",
-                content={
-                    "description": task.description,
-                    "command": task.command,
-                    "previous_context": previous_context if previous_context else None,
-                },
-            ),
-        )
+        # Yield step start (Issue #620: uses helper method)
+        yield ("update", self._build_step_start_update(task, plan_id, previous_context))
 
         try:
             # Execute the step through the executor
             async for update in executor.execute_step(task):
                 if isinstance(update, StepResult):
-                    # Step completed - yield result for storage
+                    # Step completed - yield result for storage (Issue #620: uses helper)
                     yield (
                         "update",
-                        OverseerUpdate(
-                            update_type="step_complete",
-                            plan_id=plan_id,
-                            task_id=task.task_id,
-                            step_number=task.step_number,
-                            total_steps=task.total_steps,
-                            status=update.status.value,
-                            content=update.to_dict(),
-                        ),
+                        self._build_step_complete_update(task, plan_id, update),
                     )
                     yield ("result", update)
                 else:
-                    # Streaming update
-                    yield (
-                        "update",
-                        OverseerUpdate(
-                            update_type="stream",
-                            plan_id=plan_id,
-                            task_id=task.task_id,
-                            step_number=task.step_number,
-                            total_steps=task.total_steps,
-                            status="streaming",
-                            content=update.to_dict()
-                            if hasattr(update, "to_dict")
-                            else update,
-                        ),
-                    )
+                    # Streaming update (Issue #620: uses helper)
+                    yield ("update", self._build_stream_update(task, plan_id, update))
 
         except Exception as e:
             logger.error("[OverseerAgent] Step %d failed: %s", task.step_number, e)

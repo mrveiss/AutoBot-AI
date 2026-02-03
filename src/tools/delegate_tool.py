@@ -70,7 +70,8 @@ class DelegateTool:
 
     Example:
         Delegate the database setup to a subordinate while I work on API endpoints.
-        <TOOL_CALL name="delegate" params='{"task":"Set up PostgreSQL database with migrations","reason":"Independent infrastructure task"}'>
+        <TOOL_CALL name="delegate"
+            params='{"task":"Set up PostgreSQL database","reason":"Independent task"}'>
             Delegate database setup
         </TOOL_CALL>
     """
@@ -83,6 +84,90 @@ class DelegateTool:
             hierarchical_agent: HierarchicalAgent instance for delegation
         """
         self.hierarchical_agent = hierarchical_agent
+
+    def _build_success_response(self, result) -> DelegateToolResponse:
+        """
+        Build response for successful subordinate delegation.
+
+        Args:
+            result: Delegation result from hierarchical agent
+
+        Returns:
+            DelegateToolResponse with success data. Issue #620.
+        """
+        truncated_result = result.result[:500] if result.result else "No output"
+        return DelegateToolResponse(
+            success=True,
+            message=f"Subordinate completed: {truncated_result}",
+            subordinate_id=result.agent_id,
+            result=result.result,
+            break_loop=False,
+            metadata={
+                "execution_time": result.execution_time,
+                "subordinate_level": result.metadata.get("level", 1),
+            },
+        )
+
+    def _build_failure_response(self, result) -> DelegateToolResponse:
+        """
+        Build response for failed subordinate delegation.
+
+        Args:
+            result: Delegation result from hierarchical agent
+
+        Returns:
+            DelegateToolResponse with failure data. Issue #620.
+        """
+        return DelegateToolResponse(
+            success=False,
+            message=f"Subordinate failed: {result.error or 'Unknown error'}",
+            subordinate_id=result.agent_id,
+            break_loop=False,
+            metadata={"error": result.error},
+        )
+
+    def _build_error_response(
+        self, error: Exception, is_repairable: bool = False
+    ) -> DelegateToolResponse:
+        """
+        Build response for delegation exceptions.
+
+        Args:
+            error: The exception that occurred
+            is_repairable: Whether the error is a RepairableException
+
+        Returns:
+            DelegateToolResponse with error details. Issue #620.
+        """
+        if is_repairable:
+            return DelegateToolResponse(
+                success=False,
+                message=error.message,
+                metadata={"suggestion": error.suggestion},
+            )
+        return DelegateToolResponse(
+            success=False,
+            message=f"Delegation failed: {str(error)}",
+            metadata={"error_type": type(error).__name__},
+        )
+
+    def _validate_agent(self) -> Optional[DelegateToolResponse]:
+        """
+        Validate hierarchical agent is available for delegation.
+
+        Returns:
+            DelegateToolResponse if validation fails, None if valid. Issue #620.
+        """
+        if not self.hierarchical_agent:
+            logger.warning(
+                "[Issue #657] Delegate tool called without hierarchical agent"
+            )
+            return DelegateToolResponse(
+                success=False,
+                message="Delegation not available in current context",
+                metadata={"error": "no_hierarchical_agent"},
+            )
+        return None
 
     async def execute(
         self,
@@ -109,58 +194,27 @@ class DelegateTool:
             reason,
         )
 
-        if not self.hierarchical_agent:
-            logger.warning("[Issue #657] Delegate tool called without hierarchical agent")
-            return DelegateToolResponse(
-                success=False,
-                message="Delegation not available in current context",
-                metadata={"error": "no_hierarchical_agent"},
-            )
+        validation_error = self._validate_agent()
+        if validation_error:
+            return validation_error
 
         try:
-            # Delegate to subordinate agent
             result = await self.hierarchical_agent.delegate(
                 task=task,
                 reason=reason,
                 wait_for_result=wait_for_result,
             )
-
             if result.success:
-                return DelegateToolResponse(
-                    success=True,
-                    message=f"Subordinate completed: {result.result[:500] if result.result else 'No output'}",
-                    subordinate_id=result.agent_id,
-                    result=result.result,
-                    break_loop=False,  # Continue with next steps
-                    metadata={
-                        "execution_time": result.execution_time,
-                        "subordinate_level": result.metadata.get("level", 1),
-                    },
-                )
-            else:
-                return DelegateToolResponse(
-                    success=False,
-                    message=f"Subordinate failed: {result.error or 'Unknown error'}",
-                    subordinate_id=result.agent_id,
-                    break_loop=False,
-                    metadata={"error": result.error},
-                )
+                return self._build_success_response(result)
+            return self._build_failure_response(result)
 
         except RepairableException as e:
             logger.warning("[Issue #657] Delegation failed (repairable): %s", e.message)
-            return DelegateToolResponse(
-                success=False,
-                message=e.message,
-                metadata={"suggestion": e.suggestion},
-            )
+            return self._build_error_response(e, is_repairable=True)
 
         except Exception as e:
             logger.error("[Issue #657] Delegation failed: %s", str(e))
-            return DelegateToolResponse(
-                success=False,
-                message=f"Delegation failed: {str(e)}",
-                metadata={"error_type": type(e).__name__},
-            )
+            return self._build_error_response(e)
 
     def get_tool_definition(self) -> Dict[str, Any]:
         """
@@ -205,6 +259,7 @@ class DelegateTool:
 
 Syntax:
 ```
-<TOOL_CALL name="delegate" params='{{"task":"<subtask_description>","reason":"<why_delegate>"}}'>Brief description</TOOL_CALL>
+<TOOL_CALL name="delegate"
+    params='{{"task":"<subtask>","reason":"<why>"}}'>Brief description</TOOL_CALL>
 ```
 """
