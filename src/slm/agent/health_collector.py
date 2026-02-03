@@ -122,76 +122,25 @@ class HealthCollector:
         """
         Discover all systemd services on the node.
 
+        Issue #620: Refactored to use helper functions.
+        Issue #728: Related implementation.
+
         Returns list of service info dicts with status, enabled state, etc.
-        Related to Issue #728.
         """
         services = []
         try:
-            # List all loaded service units with their states
-            result = (
-                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
-                    [
-                        "systemctl",
-                        "list-units",
-                        "--type=service",
-                        "--all",
-                        "--no-pager",
-                        "--no-legend",
-                        "--plain",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-            )
-
-            if result.returncode != 0:
-                logger.warning("Failed to list services: %s", result.stderr)
+            output = self._run_systemctl_list_units()
+            if output is None:
                 return services
 
-            # Parse output: UNIT LOAD ACTIVE SUB DESCRIPTION
-            for line in result.stdout.strip().split("\n"):
-                if not line.strip():
-                    continue
-
-                parts = line.split(None, 4)
-                if len(parts) < 4:
-                    continue
-
-                unit_name = parts[0]
-                # Skip template units and non-.service units
-                if "@" in unit_name or not unit_name.endswith(".service"):
-                    continue
-
-                service_name = unit_name.replace(".service", "")
-                load_state = parts[1]  # loaded, not-found, masked
-                active_state = parts[2]  # active, inactive, failed
-                sub_state = parts[3]  # running, dead, exited, failed
-
-                # Map to our status enum
-                if active_state == "active" and sub_state == "running":
-                    status = "running"
-                elif active_state == "failed" or sub_state == "failed":
-                    status = "failed"
-                elif active_state == "inactive":
-                    status = "stopped"
-                else:
-                    status = "unknown"
-
-                service_info = {
-                    "name": service_name,
-                    "status": status,
-                    "active_state": active_state,
-                    "sub_state": sub_state,
-                    "load_state": load_state,
-                }
-
-                # Get additional details for running services
-                if status == "running":
-                    details = self._get_service_details(service_name)
-                    service_info.update(details)
-
-                services.append(service_info)
+            for line in output.strip().split("\n"):
+                service_info = self._parse_service_line(line)
+                if service_info:
+                    if service_info["status"] == "running":
+                        service_info.update(
+                            self._get_service_details(service_info["name"])
+                        )
+                    services.append(service_info)
 
         except subprocess.TimeoutExpired:
             logger.warning("Timeout discovering services")
@@ -201,6 +150,60 @@ class HealthCollector:
             logger.warning("Error discovering services: %s", e)
 
         return services
+
+    def _run_systemctl_list_units(self) -> Optional[str]:
+        """Run systemctl list-units command. Issue #620."""
+        result = subprocess.run(  # nosec B607 - systemctl is trusted
+            [
+                "systemctl",
+                "list-units",
+                "--type=service",
+                "--all",
+                "--no-pager",
+                "--no-legend",
+                "--plain",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logger.warning("Failed to list services: %s", result.stderr)
+            return None
+        return result.stdout
+
+    def _parse_service_line(self, line: str) -> Optional[Dict]:
+        """Parse a single line of systemctl output. Issue #620."""
+        if not line.strip():
+            return None
+        parts = line.split(None, 4)
+        if len(parts) < 4:
+            return None
+        unit_name = parts[0]
+        if "@" in unit_name or not unit_name.endswith(".service"):
+            return None
+
+        service_name = unit_name.replace(".service", "")
+        active_state, sub_state, load_state = parts[2], parts[3], parts[1]
+        status = self._map_status_from_states(active_state, sub_state)
+
+        return {
+            "name": service_name,
+            "status": status,
+            "active_state": active_state,
+            "sub_state": sub_state,
+            "load_state": load_state,
+        }
+
+    def _map_status_from_states(self, active_state: str, sub_state: str) -> str:
+        """Map systemd active/sub states to our status enum. Issue #620."""
+        if active_state == "active" and sub_state == "running":
+            return "running"
+        elif active_state == "failed" or sub_state == "failed":
+            return "failed"
+        elif active_state == "inactive":
+            return "stopped"
+        return "unknown"
 
     def _get_service_details(self, service_name: str) -> Dict:
         """Get detailed info for a specific service."""

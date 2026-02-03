@@ -557,6 +557,58 @@ async def get_llm_status(
     return await get_quick_llm_status()
 
 
+def _get_model_from_llm_config(llm_config: dict) -> tuple[str, str]:
+    """
+    Extract model and provider type from LLM config with fallbacks.
+
+    Issue #620: Extracted from get_quick_llm_status for readability.
+
+    Returns:
+        Tuple of (model, provider_type)
+    """
+    # First, try direct ollama config path (most common)
+    ollama_config = llm_config.get("ollama", {})
+    if ollama_config.get("selected_model"):
+        return ollama_config.get("selected_model", ""), "local"
+
+    # Fall back to unified config structure
+    unified_config = llm_config.get("unified", {})
+    provider_type = unified_config.get("provider_type", "local")
+
+    if provider_type == "local":
+        model = _get_model_from_local_config(unified_config)
+    else:
+        model = _get_model_from_cloud_config(unified_config)
+
+    return model, provider_type
+
+
+def _get_model_from_local_config(unified_config: dict) -> str:
+    """Extract model from local/ollama config paths. Issue #620."""
+    local_config = unified_config.get("local", {})
+    model = (
+        local_config.get("providers", {}).get("ollama", {}).get("selected_model", "")
+    )
+    if not model:
+        nested_local = unified_config.get("unified", {}).get("local", {})
+        model = (
+            nested_local.get("providers", {})
+            .get("ollama", {})
+            .get("selected_model", "")
+        )
+    return model
+
+
+def _get_model_from_cloud_config(unified_config: dict) -> str:
+    """Extract model from cloud provider config. Issue #620."""
+    cloud_config = unified_config.get("cloud", {})
+    provider = cloud_config.get("provider", "openai")
+    provider_config = cloud_config.get("providers", {}).get(provider, {})
+    api_key = provider_config.get("api_key", "")
+    model = provider_config.get("selected_model", "")
+    return model if (api_key and model) else ""
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_quick_llm_status",
@@ -569,65 +621,14 @@ async def get_quick_llm_status(
 ):
     """Get quick LLM status check for dashboard.
 
+    Issue #620: Refactored to use helper functions.
     Issue #744: Requires authenticated user.
     """
     from datetime import datetime, timezone
 
     try:
-        # Issue #Fix: Use ConfigService.get_llm_config() which reads from backend.llm
-        # This is the same method used by /api/llm/config endpoint
         llm_config = ConfigService.get_llm_config()
-
-        # Get model from the config returned by get_llm_config
-        # Priority: direct ollama.selected_model > unified paths
-        model = ""
-        provider_type = "local"
-
-        # First, try direct ollama config path (most common - this is what get_llm_config returns)
-        ollama_config = llm_config.get("ollama", {})
-        if ollama_config.get("selected_model"):
-            model = ollama_config.get("selected_model", "")
-            provider_type = "local"
-
-        # Fall back to unified config structure if direct path didn't work
-        if not model:
-            unified_config = llm_config.get("unified", {})
-            provider_type = unified_config.get("provider_type", "local")
-
-            if provider_type == "local":
-                # Check unified.local.providers.ollama path
-                local_config = unified_config.get("local", {})
-                model = (
-                    local_config.get("providers", {})
-                    .get("ollama", {})
-                    .get("selected_model", "")
-                )
-                # Also check nested unified path if not found
-                if not model:
-                    nested_local = unified_config.get("unified", {}).get("local", {})
-                    model = (
-                        nested_local.get("providers", {})
-                        .get("ollama", {})
-                        .get("selected_model", "")
-                    )
-            else:
-                # Cloud provider path
-                cloud_config = unified_config.get("cloud", {})
-                provider = cloud_config.get("provider", "openai")
-                api_key = (
-                    cloud_config.get("providers", {})
-                    .get(provider, {})
-                    .get("api_key", "")
-                )
-                model = (
-                    cloud_config.get("providers", {})
-                    .get(provider, {})
-                    .get("selected_model", "")
-                )
-                if not (api_key and model):
-                    model = ""
-
-        # Determine connection status based on model availability
+        model, provider_type = _get_model_from_llm_config(llm_config)
         status = "connected" if model else "disconnected"
 
         return JSONResponse(

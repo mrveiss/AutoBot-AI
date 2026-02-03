@@ -16,7 +16,7 @@ import re
 from typing import Any, Dict, List
 
 from src.async_chat_workflow import WorkflowMessage
-from src.utils.errors import RepairableException, wrap_as_repairable
+from src.utils.errors import RepairableException
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
 _TOOL_CALL_PATTERN = re.compile(
     r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool_call>',
-    re.IGNORECASE | re.DOTALL
+    re.IGNORECASE | re.DOTALL,
 )
 
 # Issue #665: Error classification patterns for _classify_command_error
@@ -162,101 +162,123 @@ class ToolHandlerMixin:
         """
         Parse tool calls from LLM response using XML-style markers.
 
-        Supports both uppercase and lowercase tags, and handles HTML entities.
+        Issue #620: Refactored to use helper functions.
         Issue #650: Fixed regex to handle nested JSON in params.
-        Issue #716: Enforces single tool call per iteration - only returns FIRST valid tool call.
-                    This prevents executing multiple steps before seeing results from each.
-        Issue #716: Plan-first execution - if this is the first iteration AND the response
-                    contains a [PLANNING] block, return empty list to show plan first.
-                    Tool calls will be extracted on the next continuation iteration.
+        Issue #716: Enforces single tool call per iteration and plan-first execution.
 
         Args:
             text: LLM response text
-            is_first_iteration: Whether this is the first iteration (no execution history yet)
+            is_first_iteration: Whether this is the first iteration
 
         Returns:
             List containing at most ONE tool call dictionary (single-step execution)
         """
         logger.debug(
-            "[_parse_tool_calls] Searching for TOOL_CALL markers in text of length %d", len(text)
+            "[_parse_tool_calls] Searching for TOOL_CALL markers in text of length %d",
+            len(text),
         )
-
-        # Decode HTML entities (e.g., &quot; -> ")
         text = html.unescape(text)
+        has_tool_call, has_planning = self._detect_tool_call_markers(text)
 
-        has_tool_call = ('<TOOL_CALL' in text) or ('<tool_call' in text)
-        has_planning = '[PLANNING]' in text or '[planning]' in text.lower()
+        if self._should_defer_for_planning(
+            is_first_iteration, has_planning, has_tool_call
+        ):
+            return []
 
-        logger.debug(
-            "[_parse_tool_calls] has_tool_call=%s, has_planning=%s, is_first_iteration=%s",
-            has_tool_call, has_planning, is_first_iteration
+        tool_calls, match_count = self._extract_tool_calls_from_text(text)
+        self._log_parsing_result(
+            tool_calls,
+            match_count,
+            has_tool_call,
+            is_first_iteration,
+            has_planning,
+            text,
         )
+        return tool_calls
 
-        # Issue #716: Plan-first execution - show plan before executing
-        # If this is the first iteration and LLM generated a plan, defer tool execution
-        # so the user sees the plan first. Execution will happen on next iteration.
+    def _detect_tool_call_markers(self, text: str) -> tuple[bool, bool]:
+        """Detect presence of tool call and planning markers. Issue #620."""
+        has_tool_call = ("<TOOL_CALL" in text) or ("<tool_call" in text)
+        has_planning = "[PLANNING]" in text or "[planning]" in text.lower()
+        logger.debug(
+            "[_parse_tool_calls] has_tool_call=%s, has_planning=%s",
+            has_tool_call,
+            has_planning,
+        )
+        return has_tool_call, has_planning
+
+    def _should_defer_for_planning(
+        self, is_first_iteration: bool, has_planning: bool, has_tool_call: bool
+    ) -> bool:
+        """Check if execution should be deferred to show plan first. Issue #716, #620."""
         if is_first_iteration and has_planning and has_tool_call:
             logger.info(
                 "[Issue #716] Plan-first execution: First iteration with planning block detected. "
-                "Deferring tool execution to show plan first. Tool calls will execute on next iteration."
+                "Deferring tool execution to show plan first."
             )
-            return []
+            return True
+        return False
 
+    def _extract_tool_calls_from_text(
+        self, text: str
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """Extract tool calls using regex pattern. Issue #650, #620."""
         tool_calls = []
-
-        # Issue #650: Use pre-compiled regex pattern for performance
-        # Pattern handles nested JSON in params with non-greedy matching
-        logger.debug("[_parse_tool_calls] Using pre-compiled _TOOL_CALL_PATTERN")
-
-        matches = _TOOL_CALL_PATTERN.finditer(text)
         match_count = 0
-        for match in matches:
+        for match in _TOOL_CALL_PATTERN.finditer(text):
             match_count += 1
             tool_name = match.group(1)
-            params_str = match.group(3)  # Group 2 is the quote character, group 3 is the JSON
+            params_str = match.group(3)
             description = match.group(4).strip()
-
             try:
                 params = json.loads(params_str)
                 tool_calls.append(
                     {"name": tool_name, "params": params, "description": description}
                 )
                 logger.debug(
-                    "[_parse_tool_calls] Found TOOL_CALL #%d: name=%s, params=%s",
-                    match_count, tool_name, params
+                    "[_parse_tool_calls] Found TOOL_CALL #%d: name=%s",
+                    match_count,
+                    tool_name,
                 )
-                # Issue #716: CRITICAL - Only process ONE tool call per iteration
-                # Multi-step tasks require seeing results before deciding next step
-                # This enforces: plan → execute step 1 → see results → decide step 2
+                # Issue #716: Only process ONE execute_command per iteration
                 if tool_name == "execute_command":
                     logger.info(
-                        "[Issue #716] Single-step execution enforced: returning first "
-                        "execute_command tool call only (found %d total so far)",
-                        match_count
+                        "[Issue #716] Single-step execution enforced: returning first execute_command"
                     )
-                    break  # Stop after first execute_command
+                    break
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse tool call params: %s", e)
-                # Issue #650: Include total length for debugging truncated params
                 logger.error(
                     "Params string (first 200 of %d chars): %s",
-                    len(params_str), params_str[:200]
+                    len(params_str),
+                    params_str[:200],
                 )
-                continue
+        return tool_calls, match_count
 
+    def _log_parsing_result(
+        self,
+        tool_calls: List,
+        match_count: int,
+        has_tool_call: bool,
+        is_first_iteration: bool,
+        has_planning: bool,
+        text: str,
+    ) -> None:
+        """Log parsing results and warnings. Issue #650, #620."""
         logger.info(
-            "[_parse_tool_calls] Total matches found: %d, returning: %d (single-step enforced)",
-            match_count, len(tool_calls)
+            "[_parse_tool_calls] Total matches: %d, returning: %d",
+            match_count,
+            len(tool_calls),
         )
-
-        # Issue #650: Add warning when TOOL_CALL tags found but parsing failed
-        if not tool_calls and has_tool_call and not (is_first_iteration and has_planning):
+        if (
+            not tool_calls
+            and has_tool_call
+            and not (is_first_iteration and has_planning)
+        ):
             logger.warning(
-                "[Issue #650] TOOL_CALL tag found but regex didn't match! "
-                "Response snippet: %s", text[:500]
+                "[Issue #650] TOOL_CALL tag found but regex didn't match! Snippet: %s",
+                text[:500],
             )
-
-        return tool_calls
 
     async def _execute_terminal_command(
         self, session_id: str, command: str, host: str = "main", description: str = ""
@@ -313,7 +335,8 @@ class ToolHandlerMixin:
             )
             logger.info(
                 "✅ Persisted approval request immediately: session=%s, terminal=%s",
-                session_id, terminal_session_id
+                session_id,
+                terminal_session_id,
             )
         except Exception as persist_error:
             logger.error(
@@ -364,7 +387,9 @@ class ToolHandlerMixin:
         )
 
         approval_status = "approved" if last_command.get("approved_by") else "denied"
-        comment = last_command.get("approval_comment") or last_command.get("denial_reason")
+        comment = last_command.get("approval_comment") or last_command.get(
+            "denial_reason"
+        )
         status_msg = {
             "approval_status": approval_status,
             "approval_comment": comment,
@@ -436,10 +461,15 @@ class ToolHandlerMixin:
                 )
 
                 if poll_count % 20 == 0:
-                    pending = session_info.get('pending_approval') is not None if session_info else 'NO SESSION'
+                    pending = (
+                        session_info.get("pending_approval") is not None
+                        if session_info
+                        else "NO SESSION"
+                    )
                     logger.info(
                         "🔍 [APPROVAL POLLING] Still waiting... (elapsed: %.1fs, pending: %s)",
-                        elapsed_time, pending
+                        elapsed_time,
+                        pending,
                     )
 
                 result_data, status_msg, should_break = self._check_approval_completion(
@@ -476,13 +506,16 @@ class ToolHandlerMixin:
         )
         yield approval_msg
 
-        await self._persist_approval_request(approval_msg, session_id, terminal_session_id)
+        await self._persist_approval_request(
+            approval_msg, session_id, terminal_session_id
+        )
         yield self._build_waiting_message(command, result)
 
         logger.info("🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command)
         logger.info(
             "🔍 [APPROVAL POLLING] Chat session: %s, Terminal session: %s",
-            session_id, terminal_session_id
+            session_id,
+            terminal_session_id,
         )
 
         async for poll_result in self._poll_for_approval(terminal_session_id, command):
@@ -516,7 +549,9 @@ class ToolHandlerMixin:
             WorkflowMessage for execution status
             Tuple of (exec_result, additional_text) as final item
         """
-        exec_result = _create_execution_result(command, host, approval_result, approved=True)
+        exec_result = _create_execution_result(
+            command, host, approval_result, approved=True
+        )
         additional_text = ""
 
         yield WorkflowMessage(
@@ -607,7 +642,9 @@ class ToolHandlerMixin:
             ):
                 yield msg
         else:
-            error_msg, additional_text = self._handle_approval_failure(command, approval_result)
+            error_msg, additional_text = self._handle_approval_failure(
+                command, approval_result
+            )
             yield error_msg
             yield (None, additional_text)
 
@@ -698,7 +735,9 @@ class ToolHandlerMixin:
 
         if result.get("status") == "pending_approval":
             if not terminal_session_id:
-                logger.error("No terminal session found for conversation %s", session_id)
+                logger.error(
+                    "No terminal session found for conversation %s", session_id
+                )
                 yield WorkflowMessage(
                     type="error",
                     content="Terminal session error - cannot request approval",
@@ -707,8 +746,14 @@ class ToolHandlerMixin:
                 return
 
             workflow_gen = self._handle_approval_workflow(
-                session_id, command, host, result, terminal_session_id,
-                description, ollama_endpoint, selected_model
+                session_id,
+                command,
+                host,
+                result,
+                terminal_session_id,
+                description,
+                ollama_endpoint,
+                selected_model,
             )
             async for msg in self._collect_workflow_results(
                 workflow_gen, execution_results, additional_response_parts
@@ -755,7 +800,8 @@ class ToolHandlerMixin:
         if repairable_error:
             logger.info(
                 "[Issue #655] Repairable error for command '%s': %s",
-                command, repairable_error.message
+                command,
+                repairable_error.message,
             )
             additional_response_parts.append(f"\n\n{repairable_error.to_llm_context()}")
             yield WorkflowMessage(
@@ -831,7 +877,8 @@ class ToolHandlerMixin:
 
         logger.info(
             "[Issue #654] Respond tool invoked: break_loop=%s, content_len=%d",
-            break_loop_requested, len(respond_content)
+            break_loop_requested,
+            len(respond_content),
         )
 
         message = WorkflowMessage(
@@ -864,18 +911,19 @@ class ToolHandlerMixin:
         wait_for_result = params.get("wait_for_result", True)
 
         logger.info(
-            "[Issue #657] Delegate tool invoked: task=%s, reason=%s",
-            task[:100], reason
+            "[Issue #657] Delegate tool invoked: task=%s, reason=%s", task[:100], reason
         )
 
         # Record delegation for manager to process
-        execution_results.append({
-            "tool": "delegate",
-            "task": task,
-            "reason": reason,
-            "wait_for_result": wait_for_result,
-            "status": "pending_delegation",
-        })
+        execution_results.append(
+            {
+                "tool": "delegate",
+                "task": task,
+                "reason": reason,
+                "wait_for_result": wait_for_result,
+                "status": "pending_delegation",
+            }
+        )
 
         return WorkflowMessage(
             type="delegation",
@@ -926,13 +974,19 @@ class ToolHandlerMixin:
                 continue
 
             if tool_name != "execute_command":
-                logger.debug("[_process_tool_calls] Skipping unknown tool: %s", tool_name)
+                logger.debug(
+                    "[_process_tool_calls] Skipping unknown tool: %s", tool_name
+                )
                 continue
 
             async for msg in self._process_single_command(
-                tool_call, session_id, terminal_session_id,
-                ollama_endpoint, selected_model,
-                execution_results, additional_response_parts
+                tool_call,
+                session_id,
+                terminal_session_id,
+                ollama_endpoint,
+                selected_model,
+                execution_results,
+                additional_response_parts,
             ):
                 yield msg
 
