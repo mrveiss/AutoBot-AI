@@ -240,6 +240,75 @@ class SecureCommandExecutor:
 
         return self._approval_memory
 
+    def _build_rule_info(
+        self,
+        action: str,
+        rule: Any,
+        default_description: str,
+        from_memory: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Build a rule_info dictionary for permission rule results.
+
+        Issue #620.
+
+        Args:
+            action: The permission action (allow, ask, deny)
+            rule: The matched permission rule object (may be None)
+            default_description: Default description if rule has none
+            from_memory: Whether approval came from memory
+
+        Returns:
+            Dictionary with action, pattern, description, and optionally from_memory
+        """
+        rule_info = {
+            "action": action,
+            "pattern": rule.pattern if rule else None,
+            "description": rule.description if rule else default_description,
+        }
+        if from_memory:
+            rule_info["from_memory"] = True
+        return rule_info
+
+    async def _process_permission_match(
+        self, result: Any, rule: Any, command: str, tool: str
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Process a permission match result and return action/rule_info.
+
+        Issue #620.
+
+        Args:
+            result: MatchResult enum value
+            rule: Matched permission rule
+            command: The command being checked
+            tool: Tool name for memory check
+
+        Returns:
+            Tuple of (action, rule_info)
+        """
+        from backend.services.permission_matcher import MatchResult
+
+        if result == MatchResult.DENY:
+            return "deny", self._build_rule_info(
+                "deny", rule, "Denied by permission rule"
+            )
+
+        if result == MatchResult.ASK:
+            return "ask", self._build_rule_info("ask", rule, "Requires approval")
+
+        if result == MatchResult.ALLOW:
+            from_memory = await self._check_approval_memory(command, tool)
+            return "allow", self._build_rule_info(
+                "allow", rule, "Allowed by rule", from_memory
+            )
+
+        # DEFAULT - fall through to risk-based assessment
+        if await self._check_approval_memory(command, tool):
+            return "allow", {"action": "allow", "from_memory": True}
+
+        return None, None
+
     async def check_permission_rules(
         self, command: str, tool: str = "Bash"
     ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
@@ -262,52 +331,8 @@ class SecureCommandExecutor:
             return None, None
 
         try:
-            from backend.services.permission_matcher import MatchResult
-
             result, rule = matcher.match(tool, command)
-
-            if result == MatchResult.DENY:
-                rule_info = {
-                    "action": "deny",
-                    "pattern": rule.pattern if rule else None,
-                    "description": rule.description
-                    if rule
-                    else "Denied by permission rule",
-                }
-                return "deny", rule_info
-
-            if result == MatchResult.ASK:
-                rule_info = {
-                    "action": "ask",
-                    "pattern": rule.pattern if rule else None,
-                    "description": rule.description if rule else "Requires approval",
-                }
-                return "ask", rule_info
-
-            if result == MatchResult.ALLOW:
-                # Check approval memory for project-specific overrides
-                if await self._check_approval_memory(command, tool):
-                    rule_info = {
-                        "action": "allow",
-                        "pattern": rule.pattern if rule else None,
-                        "description": rule.description if rule else "Allowed by rule",
-                        "from_memory": True,
-                    }
-                    return "allow", rule_info
-
-                rule_info = {
-                    "action": "allow",
-                    "pattern": rule.pattern if rule else None,
-                    "description": rule.description if rule else "Allowed by rule",
-                }
-                return "allow", rule_info
-
-            # DEFAULT - fall through to risk-based assessment
-            # But still check approval memory
-            if await self._check_approval_memory(command, tool):
-                return "allow", {"action": "allow", "from_memory": True}
-
-            return None, None
+            return await self._process_permission_match(result, rule, command, tool)
 
         except Exception as e:
             logger.error(f"Permission rule check failed: {e}")
@@ -387,62 +412,90 @@ class SecureCommandExecutor:
             logger.error(f"Failed to store approval memory: {e}")
             return False
 
-    def assess_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
+    def _assess_safe_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
         """
-        Assess the risk level of a command.
+        Assess risk for commands in the safe category with edge case checks.
 
-        Issue #765: Uses centralized patterns from src.security.command_patterns.
+        Issue #620.
+
+        Args:
+            command: The full command string
 
         Returns:
             (risk_level, list_of_reasons)
         """
-        reasons = []
-        base_command = self._extract_command_name(command)
+        # Even safe commands can be risky with certain arguments
+        if "sudo" in command or command.startswith("sudo"):
+            return CommandRisk.HIGH, ["Uses sudo elevation"]
 
-        # Check for empty or malformed commands
-        if not base_command:
-            return CommandRisk.FORBIDDEN, ["Empty or malformed command"]
+        # Check for output redirection to sensitive files (Issue #765)
+        if ">" in command or ">>" in command:
+            if any(sensitive in command for sensitive in SENSITIVE_REDIRECT_PATHS):
+                return CommandRisk.HIGH, ["Redirects to sensitive location"]
 
-        # Check dangerous patterns first (Issue #765: uses centralized function)
-        dangerous_patterns = self._check_dangerous_patterns(command)
-        if dangerous_patterns:
-            reasons.extend([f"Dangerous pattern: {p}" for p in dangerous_patterns])
-            return CommandRisk.FORBIDDEN, reasons
+        return CommandRisk.SAFE, ["Safe command"]
 
-        # Check command categories
+    def _check_command_category(
+        self, base_command: str, command: str
+    ) -> Optional[tuple[CommandRisk, List[str]]]:
+        """
+        Check command against policy categories and return risk if matched.
+
+        Issue #620.
+
+        Args:
+            base_command: The extracted base command name
+            command: The full command string
+
+        Returns:
+            (risk_level, list_of_reasons) if matched, None otherwise
+        """
         if base_command in self.policy.forbidden_commands:
-            reasons.append(f"Forbidden command: {base_command}")
-            return CommandRisk.FORBIDDEN, reasons
+            return CommandRisk.FORBIDDEN, [f"Forbidden command: {base_command}"]
 
         if base_command in self.policy.high_risk_commands:
-            reasons.append(f"High-risk command: {base_command}")
-            return CommandRisk.HIGH, reasons
+            return CommandRisk.HIGH, [f"High-risk command: {base_command}"]
 
         if base_command in self.policy.moderate_commands:
-            reasons.append(f"Moderate-risk command: {base_command}")
-            # Check if it involves system paths (Issue #765: uses centralized constant)
+            reasons = [f"Moderate-risk command: {base_command}"]
             if any(path in command for path in SYSTEM_PATHS):
                 reasons.append("Operates on system paths")
                 return CommandRisk.HIGH, reasons
             return CommandRisk.MODERATE, reasons
 
         if base_command in self.policy.safe_commands:
-            # Even safe commands can be risky with certain arguments
-            if "sudo" in command or command.startswith("sudo"):
-                reasons.append("Uses sudo elevation")
-                return CommandRisk.HIGH, reasons
+            return self._assess_safe_command_risk(command)
 
-            # Check for output redirection to sensitive files (Issue #765)
-            if ">" in command or ">>" in command:
-                if any(sensitive in command for sensitive in SENSITIVE_REDIRECT_PATHS):
-                    reasons.append("Redirects to sensitive location")
-                    return CommandRisk.HIGH, reasons
+        return None
 
-            return CommandRisk.SAFE, ["Safe command"]
+    def assess_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
+        """
+        Assess the risk level of a command.
+
+        Issue #765: Uses centralized patterns from src.security.command_patterns.
+        Issue #620: Refactored using extracted helper methods.
+
+        Returns:
+            (risk_level, list_of_reasons)
+        """
+        base_command = self._extract_command_name(command)
+
+        if not base_command:
+            return CommandRisk.FORBIDDEN, ["Empty or malformed command"]
+
+        # Check dangerous patterns first (Issue #765: uses centralized function)
+        dangerous_patterns = self._check_dangerous_patterns(command)
+        if dangerous_patterns:
+            reasons = [f"Dangerous pattern: {p}" for p in dangerous_patterns]
+            return CommandRisk.FORBIDDEN, reasons
+
+        # Check command categories
+        category_result = self._check_command_category(base_command, command)
+        if category_result:
+            return category_result
 
         # Unknown command - treat as moderate risk
-        reasons.append(f"Unknown command: {base_command}")
-        return CommandRisk.MODERATE, reasons
+        return CommandRisk.MODERATE, [f"Unknown command: {base_command}"]
 
     async def _request_approval(
         self, command: str, risk: CommandRisk, reasons: List[str]
@@ -712,6 +765,99 @@ class SecureCommandExecutor:
 
         return None
 
+    def _build_execution_security_info(
+        self,
+        risk: CommandRisk,
+        reasons: List[str],
+        log_entry: Dict[str, Any],
+        rule_info: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build security info dictionary for successful command execution.
+
+        Issue #620.
+
+        Args:
+            risk: Risk level of command
+            reasons: Risk assessment reasons
+            log_entry: Log entry dict
+            rule_info: Optional permission rule info
+
+        Returns:
+            Security info dictionary
+        """
+        security_info = {
+            "risk": risk.value,
+            "reasons": reasons,
+            "sandboxed": self.use_docker_sandbox and risk != CommandRisk.SAFE,
+            "approved": log_entry.get("approved", False),
+        }
+
+        if rule_info:
+            security_info["permission_rule"] = rule_info
+            if rule_info.get("from_memory"):
+                security_info["auto_approved_by"] = "approval_memory"
+            else:
+                security_info["auto_approved_by"] = "permission_rule"
+
+        return security_info
+
+    def _prepare_command_for_execution(self, command: str, risk: CommandRisk) -> str:
+        """
+        Prepare command for execution, optionally wrapping in Docker sandbox.
+
+        Issue #620.
+
+        Args:
+            command: The shell command
+            risk: Risk level of command
+
+        Returns:
+            The command to execute (possibly wrapped in Docker)
+        """
+        if self.use_docker_sandbox and risk != CommandRisk.SAFE:
+            logger.info("Executing in Docker sandbox: %s", command)
+            return self._build_docker_command(command)
+        return command
+
+    def _handle_execution_error(
+        self,
+        command: str,
+        risk: CommandRisk,
+        reasons: List[str],
+        log_entry: Dict[str, Any],
+        error: Exception,
+    ) -> Dict[str, Any]:
+        """
+        Handle command execution errors and build error result.
+
+        Issue #620.
+
+        Args:
+            command: The command that failed
+            risk: Risk level of command
+            reasons: Risk assessment reasons
+            log_entry: Log entry dict to update
+            error: The exception that occurred
+
+        Returns:
+            Error result dictionary
+        """
+        if isinstance(error, asyncio.TimeoutError):
+            logger.error("Command timed out: %s", command)
+            log_entry["error"] = "Command timed out"
+            self.command_history.append(log_entry)
+            return self._build_error_result(
+                risk, reasons, "timeout", "Command execution timed out after 5 minutes"
+            )
+
+        logger.error("Command execution error: %s", error)
+        log_entry["error"] = str(error)
+        self.command_history.append(log_entry)
+        return self._build_error_result(
+            risk, reasons, "error", f"Error executing command: {error}"
+        )
+
     async def _execute_command(
         self,
         command: str,
@@ -723,7 +869,7 @@ class SecureCommandExecutor:
         """
         Execute a command after permission/risk checks.
 
-        Internal helper used by run_shell_command for actual execution.
+        Issue #620: Refactored using extracted helper methods.
 
         Args:
             command: The shell command to execute
@@ -735,53 +881,19 @@ class SecureCommandExecutor:
         Returns:
             Execution result dictionary
         """
-        # Prepare command for execution
-        if self.use_docker_sandbox and risk != CommandRisk.SAFE:
-            actual_command = self._build_docker_command(command)
-            logger.info("Executing in Docker sandbox: %s", command)
-        else:
-            actual_command = command
+        actual_command = self._prepare_command_for_execution(command, risk)
 
-        # Execute command
         try:
             result = await execute_shell_command(actual_command)
-
             log_entry["executed"] = True
             log_entry["return_code"] = result["return_code"]
             self.command_history.append(log_entry)
-
-            security_info = {
-                "risk": risk.value,
-                "reasons": reasons,
-                "sandboxed": self.use_docker_sandbox and risk != CommandRisk.SAFE,
-                "approved": log_entry.get("approved", False),
-            }
-
-            # Add permission rule info if present
-            if rule_info:
-                security_info["permission_rule"] = rule_info
-                if rule_info.get("from_memory"):
-                    security_info["auto_approved_by"] = "approval_memory"
-                else:
-                    security_info["auto_approved_by"] = "permission_rule"
-
-            result["security"] = security_info
+            result["security"] = self._build_execution_security_info(
+                risk, reasons, log_entry, rule_info
+            )
             return result
-
-        except asyncio.TimeoutError:
-            logger.error("Command timed out: %s", command)
-            log_entry["error"] = "Command timed out"
-            self.command_history.append(log_entry)
-            return self._build_error_result(
-                risk, reasons, "timeout", "Command execution timed out after 5 minutes"
-            )
         except Exception as e:
-            logger.error("Command execution error: %s", e)
-            log_entry["error"] = str(e)
-            self.command_history.append(log_entry)
-            return self._build_error_result(
-                risk, reasons, "error", f"Error executing command: {e}"
-            )
+            return self._handle_execution_error(command, risk, reasons, log_entry, e)
 
     async def run_shell_command(
         self, command: str, force_approval: bool = False, tool: str = "Bash"

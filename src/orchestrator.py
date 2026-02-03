@@ -194,31 +194,28 @@ class ConsolidatedOrchestrator:
     Integrates all orchestrator features into a single, comprehensive system
     """
 
-    def __init__(self, config_mgr=None):
-        """Initialize consolidated orchestrator with all core components."""
-        # Use provided config_manager or fall back to global config_manager
+    def _init_core_components(self, config_mgr) -> None:
+        """Initialize core orchestrator components. Issue #620."""
         from src.config import config_manager as global_config_manager
 
         self.config_manager = config_mgr or global_config_manager
         self.config = OrchestratorConfig(self.config_manager)
 
-        # Core components
         self.llm_interface = LLMInterface()
         self.memory_manager = LongTermMemoryManager()
         self.conversation_manager = ConversationManager()
         self.agent_manager = AgentManager()
 
-        # Task management
+    def _init_task_state(self) -> None:
+        """Initialize task and state management attributes. Issue #620."""
         self.active_tasks = {}
         self.task_queue = []
         self.completed_tasks = {}
 
-        # State management
         self.is_running = False
         self.session_id = str(uuid.uuid4())
         self.start_time = None
 
-        # Performance tracking
         self.metrics = {
             "tasks_completed": 0,
             "tasks_failed": 0,
@@ -226,25 +223,18 @@ class ConsolidatedOrchestrator:
             "average_response_time": 0,
         }
 
-        # Enhanced orchestrator components (from enhanced_orchestrator)
+    def _init_enhanced_components(self) -> None:
+        """Initialize enhanced orchestrator components. Issue #620."""
         self.agent_registry: Dict[str, AgentProfile] = {}
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
         self.agent_interactions: List[AgentInteraction] = []
 
-        # Initialize knowledge base if available
-        if KNOWLEDGE_BASE_AVAILABLE:
-            self.knowledge_base = KnowledgeBase()
-        else:
-            self.knowledge_base = None
+        self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
 
-        # Auto-documentation settings
         self.auto_doc_enabled = True
-        self.doc_generation_threshold = (
-            0.8  # Generate docs for workflows with >80% completion
-        )
+        self.doc_generation_threshold = 0.8
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
 
-        # Enhanced workflow metrics
         self.workflow_metrics = {
             "total_workflows": 0,
             "successful_workflows": 0,
@@ -254,7 +244,8 @@ class ConsolidatedOrchestrator:
             "knowledge_extracted": 0,
         }
 
-        # Classification agent
+    def _init_classification_agent(self) -> None:
+        """Initialize classification agent if available. Issue #620."""
         self.classification_agent = None
         if CLASSIFICATION_AVAILABLE:
             try:
@@ -263,73 +254,90 @@ class ConsolidatedOrchestrator:
             except Exception as e:
                 logger.warning("Failed to initialize classification agent: %s", e)
 
-        # Initialize default agent profiles
+    def __init__(self, config_mgr=None):
+        """Initialize consolidated orchestrator with all core components."""
+        self._init_core_components(config_mgr)
+        self._init_task_state()
+        self._init_enhanced_components()
+        self._init_classification_agent()
         self._initialize_default_agents()
 
         logger.info(
             "Consolidated Orchestrator initialized with session: %s", self.session_id
         )
 
+    def _create_research_agent_profile(self) -> AgentProfile:
+        """Create the research agent profile. Issue #620."""
+        return AgentProfile(
+            agent_id="research_agent",
+            agent_type="research",
+            capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
+            specializations=["web_search", "data_analysis", "information_synthesis"],
+            max_concurrent_tasks=5,
+            preferred_task_types=["research", "information_gathering", "analysis"],
+        )
+
+    def _create_documentation_agent_profile(self) -> AgentProfile:
+        """Create the documentation agent profile. Issue #620."""
+        return AgentProfile(
+            agent_id="documentation_agent",
+            agent_type="librarian",
+            capabilities={
+                AgentCapability.DOCUMENTATION,
+                AgentCapability.KNOWLEDGE_MANAGEMENT,
+            },
+            specializations=[
+                "auto_documentation",
+                "knowledge_extraction",
+                "content_organization",
+            ],
+            max_concurrent_tasks=3,
+            preferred_task_types=["documentation", "knowledge_management"],
+        )
+
+    def _create_system_agent_profile(self) -> AgentProfile:
+        """Create the system agent profile. Issue #620."""
+        return AgentProfile(
+            agent_id="system_agent",
+            agent_type="system_commands",
+            capabilities={
+                AgentCapability.SYSTEM_OPERATIONS,
+                AgentCapability.CODE_GENERATION,
+            },
+            specializations=[
+                "command_execution",
+                "system_administration",
+                "automation",
+            ],
+            max_concurrent_tasks=2,
+            preferred_task_types=["system_operations", "command_execution"],
+        )
+
+    def _create_coordination_agent_profile(self) -> AgentProfile:
+        """Create the coordination agent profile. Issue #620."""
+        return AgentProfile(
+            agent_id="coordination_agent",
+            agent_type="orchestrator",
+            capabilities={
+                AgentCapability.WORKFLOW_COORDINATION,
+                AgentCapability.ANALYSIS,
+            },
+            specializations=[
+                "workflow_management",
+                "resource_allocation",
+                "decision_making",
+            ],
+            max_concurrent_tasks=10,
+            preferred_task_types=["coordination", "planning", "optimization"],
+        )
+
     def _initialize_default_agents(self):
-        """Initialize default agent profiles"""
+        """Initialize default agent profiles."""
         default_agents = [
-            AgentProfile(
-                agent_id="research_agent",
-                agent_type="research",
-                capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-                specializations=[
-                    "web_search",
-                    "data_analysis",
-                    "information_synthesis",
-                ],
-                max_concurrent_tasks=5,
-                preferred_task_types=["research", "information_gathering", "analysis"],
-            ),
-            AgentProfile(
-                agent_id="documentation_agent",
-                agent_type="librarian",
-                capabilities={
-                    AgentCapability.DOCUMENTATION,
-                    AgentCapability.KNOWLEDGE_MANAGEMENT,
-                },
-                specializations=[
-                    "auto_documentation",
-                    "knowledge_extraction",
-                    "content_organization",
-                ],
-                max_concurrent_tasks=3,
-                preferred_task_types=["documentation", "knowledge_management"],
-            ),
-            AgentProfile(
-                agent_id="system_agent",
-                agent_type="system_commands",
-                capabilities={
-                    AgentCapability.SYSTEM_OPERATIONS,
-                    AgentCapability.CODE_GENERATION,
-                },
-                specializations=[
-                    "command_execution",
-                    "system_administration",
-                    "automation",
-                ],
-                max_concurrent_tasks=2,
-                preferred_task_types=["system_operations", "command_execution"],
-            ),
-            AgentProfile(
-                agent_id="coordination_agent",
-                agent_type="orchestrator",
-                capabilities={
-                    AgentCapability.WORKFLOW_COORDINATION,
-                    AgentCapability.ANALYSIS,
-                },
-                specializations=[
-                    "workflow_management",
-                    "resource_allocation",
-                    "decision_making",
-                ],
-                max_concurrent_tasks=10,
-                preferred_task_types=["coordination", "planning", "optimization"],
-            ),
+            self._create_research_agent_profile(),
+            self._create_documentation_agent_profile(),
+            self._create_system_agent_profile(),
+            self._create_coordination_agent_profile(),
         ]
 
         for agent in default_agents:
@@ -728,6 +736,63 @@ class ConsolidatedOrchestrator:
             "execution_method": "sequential",
         }
 
+    async def _execute_agents_sequentially(
+        self,
+        user_message: str,
+        agent_names: List[str],
+        context: Optional[Dict],
+    ) -> tuple[Dict[str, Any], List[str]]:
+        """Execute agents sequentially for complex tasks. Issue #620."""
+        agent_results = {}
+        execution_order = []
+
+        for agent_name in agent_names:
+            try:
+                result = await self.agent_manager.execute_agent_task(
+                    agent_name=agent_name,
+                    task=user_message,
+                    context={**(context or {}), "previous_results": agent_results},
+                )
+                agent_results[agent_name] = result
+                execution_order.append(agent_name)
+            except Exception as e:
+                logger.warning("Agent %s failed: %s", agent_name, e)
+                agent_results[agent_name] = {"error": str(e)}
+
+        return agent_results, execution_order
+
+    async def _execute_agents_in_parallel(
+        self,
+        user_message: str,
+        agent_names: List[str],
+        context: Optional[Dict],
+    ) -> tuple[Dict[str, Any], List[str]]:
+        """Execute agents in parallel for simpler tasks. Issue #620."""
+        tasks = [
+            (
+                agent_name,
+                self.agent_manager.execute_agent_task(
+                    agent_name=agent_name, task=user_message, context=context
+                ),
+            )
+            for agent_name in agent_names
+        ]
+
+        results = await asyncio.gather(
+            *[task for _, task in tasks], return_exceptions=True
+        )
+
+        agent_results = {}
+        execution_order = []
+        for i, (agent_name, _) in enumerate(tasks):
+            if isinstance(results[i], Exception):
+                agent_results[agent_name] = {"error": str(results[i])}
+            else:
+                agent_results[agent_name] = results[i]
+            execution_order.append(agent_name)
+
+        return agent_results, execution_order
+
     async def _coordinate_multiple_agents(
         self,
         user_message: str,
@@ -735,48 +800,20 @@ class ConsolidatedOrchestrator:
         context: Optional[Dict],
         classification: Optional[Any],
     ) -> Dict[str, Any]:
-        """Coordinate execution across multiple agents"""
+        """Coordinate execution across multiple agents."""
+        is_complex = (
+            classification and classification.complexity == TaskComplexity.COMPLEX
+        )
 
-        agent_results = {}
-        execution_order = []
-
-        # Execute agents based on complexity
-        if classification and classification.complexity == TaskComplexity.COMPLEX:
-            # Sequential execution for complex tasks
-            for agent_name in agent_names:
-                try:
-                    result = await self.agent_manager.execute_agent_task(
-                        agent_name=agent_name,
-                        task=user_message,
-                        context={**(context or {}), "previous_results": agent_results},
-                    )
-                    agent_results[agent_name] = result
-                    execution_order.append(agent_name)
-                except Exception as e:
-                    logger.warning("Agent %s failed: %s", agent_name, e)
-                    agent_results[agent_name] = {"error": str(e)}
+        if is_complex:
+            agent_results, execution_order = await self._execute_agents_sequentially(
+                user_message, agent_names, context
+            )
         else:
-            # Parallel execution for simpler tasks
-            tasks = []
-            for agent_name in agent_names:
-                task = self.agent_manager.execute_agent_task(
-                    agent_name=agent_name, task=user_message, context=context
-                )
-                tasks.append((agent_name, task))
-
-            # Execute in parallel
-            results = await asyncio.gather(
-                *[task for _, task in tasks], return_exceptions=True
+            agent_results, execution_order = await self._execute_agents_in_parallel(
+                user_message, agent_names, context
             )
 
-            for i, (agent_name, _) in enumerate(tasks):
-                if isinstance(results[i], Exception):
-                    agent_results[agent_name] = {"error": str(results[i])}
-                else:
-                    agent_results[agent_name] = results[i]
-                execution_order.append(agent_name)
-
-        # Synthesize results
         synthesis = await self._synthesize_agent_results(user_message, agent_results)
 
         return {
@@ -986,6 +1023,54 @@ class ConsolidatedOrchestrator:
             logger.error("Classification failed: %s, defaulting to COMPLEX", e)
             return TaskComplexity.COMPLEX
 
+    def _create_simple_workflow_step(self, user_request: str) -> WorkflowStep:
+        """Create a single workflow step for simple requests. Issue #620."""
+        return WorkflowStep(
+            id="step_1",
+            agent_type="llm",
+            action="generate_response",
+            description="Generate direct response to user query",
+            requires_approval=False,
+            dependencies=[],
+            inputs={"query": user_request},
+            expected_duration_ms=2000,
+        )
+
+    def _create_complex_workflow_steps(self, user_request: str) -> List[WorkflowStep]:
+        """Create multi-step workflow for complex requests. Issue #620."""
+        return [
+            WorkflowStep(
+                id="step_1",
+                agent_type="analyzer",
+                action="analyze_request",
+                description="Analyze user request and determine requirements",
+                requires_approval=False,
+                dependencies=[],
+                inputs={"query": user_request},
+                expected_duration_ms=3000,
+            ),
+            WorkflowStep(
+                id="step_2",
+                agent_type="executor",
+                action="execute_plan",
+                description="Execute the planned actions",
+                requires_approval=True,
+                dependencies=["step_1"],
+                inputs={"query": user_request},
+                expected_duration_ms=10000,
+            ),
+            WorkflowStep(
+                id="step_3",
+                agent_type="synthesizer",
+                action="synthesize_results",
+                description="Synthesize results and generate final response",
+                requires_approval=False,
+                dependencies=["step_2"],
+                inputs={"query": user_request},
+                expected_duration_ms=2000,
+            ),
+        ]
+
     async def plan_workflow_steps(
         self, user_request: str, complexity: TaskComplexity
     ) -> List[WorkflowStep]:
@@ -1000,59 +1085,10 @@ class ConsolidatedOrchestrator:
             return []
 
         try:
-            # Create a basic workflow plan based on complexity
-            steps = []
-
             if complexity == TaskComplexity.SIMPLE:
-                # Simple request: single LLM response step
-                steps.append(
-                    WorkflowStep(
-                        id="step_1",
-                        agent_type="llm",
-                        action="generate_response",
-                        description="Generate direct response to user query",
-                        requires_approval=False,
-                        dependencies=[],
-                        inputs={"query": user_request},
-                        expected_duration_ms=2000,
-                    )
-                )
-            else:  # COMPLEX
-                # Complex request: multi-step workflow
-                steps.extend(
-                    [
-                        WorkflowStep(
-                            id="step_1",
-                            agent_type="analyzer",
-                            action="analyze_request",
-                            description="Analyze user request and determine requirements",
-                            requires_approval=False,
-                            dependencies=[],
-                            inputs={"query": user_request},
-                            expected_duration_ms=3000,
-                        ),
-                        WorkflowStep(
-                            id="step_2",
-                            agent_type="executor",
-                            action="execute_plan",
-                            description="Execute the planned actions",
-                            requires_approval=True,
-                            dependencies=["step_1"],
-                            inputs={"query": user_request},
-                            expected_duration_ms=10000,
-                        ),
-                        WorkflowStep(
-                            id="step_3",
-                            agent_type="synthesizer",
-                            action="synthesize_results",
-                            description="Synthesize results and generate final response",
-                            requires_approval=False,
-                            dependencies=["step_2"],
-                            inputs={"query": user_request},
-                            expected_duration_ms=2000,
-                        ),
-                    ]
-                )
+                steps = [self._create_simple_workflow_step(user_request)]
+            else:
+                steps = self._create_complex_workflow_steps(user_request)
 
             logger.info(
                 "Generated %d workflow steps for %s task", len(steps), complexity.value
