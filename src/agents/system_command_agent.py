@@ -11,25 +11,28 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.agents.interactive_terminal_agent import InteractiveTerminalAgent
 from src.constants.threshold_constants import TimingConstants
 from src.event_manager import event_manager
+from src.security.command_patterns import (
+    SENSITIVE_REDIRECT_PATHS,
+    UNRESTRICTED_ROOT_COMMANDS,
+    is_dangerous_command,
+    is_persistent_session_command,
+)
 from src.security_layer import SecurityLayer
 
 logger = logging.getLogger(__name__)
 
-# Issue #380: Module-level frozenset for unrestricted root access commands
-_UNRESTRICTED_ROOT_COMMANDS: FrozenSet[str] = frozenset({"sudo su", "sudo -i"})
-
-# Issue #380: Module-level tuple for persistent session commands
-_PERSISTENT_COMMANDS = ("ssh", "screen", "tmux", "docker exec", "kubectl exec")
-
 
 class SystemCommandAgent:
     """Agent capable of running any system command with safety checks and
-    terminal streaming"""
+    terminal streaming.
+
+    Issue #765: Uses centralized command patterns from src.security.command_patterns
+    """
 
     # List of package managers and their install commands
     PACKAGE_MANAGERS = {
@@ -84,24 +87,6 @@ class SystemCommandAgent:
         },
     }
 
-    # Dangerous commands that require confirmation
-    DANGEROUS_PATTERNS = [
-        "rm -rf /",
-        "rm -rf /*",
-        "dd if=/dev/zero",
-        "mkfs",
-        "format",
-        "> /dev/sda",
-        "fork bomb",
-        ":(){ :|:& };:",
-        "chmod -R 777 /",
-        "chown -R",
-        "shutdown",
-        "reboot",
-        "init 0",
-        "systemctl poweroff",
-    ]
-
     def __init__(self):
         """Initialize system command agent with security layer and session tracking."""
         self.security_layer = SecurityLayer()
@@ -148,14 +133,12 @@ class SystemCommandAgent:
                 if result["exit_code"] == 0:
                     logger.info("Detected package manager: %s", pm_name)
                     return pm_name
-            except Exception:
+            except Exception:  # nosec B112 - intentional: skip failing PMs
                 continue
 
         return None
 
-    async def _determine_install_command(
-        self, tool_info: dict, chat_id: str
-    ) -> tuple:
+    async def _determine_install_command(self, tool_info: dict, chat_id: str) -> tuple:
         """Determine installation command (Issue #398: extracted)."""
         package_name = tool_info.get("package_name", tool_info.get("name", ""))
         install_method = tool_info.get("install_method", "auto")
@@ -167,53 +150,83 @@ class SystemCommandAgent:
         if install_method == "auto":
             pm = await self.detect_package_manager()
             if not pm:
-                return None, {"status": "error", "message": "Could not detect package manager"}
+                return None, {
+                    "status": "error",
+                    "message": "Could not detect package manager",
+                }
             pm_info = self.PACKAGE_MANAGERS[pm]
             if tool_info.get("update_first", True):
                 await self.execute_interactive_command(
-                    pm_info["update"], chat_id, description=f"Updating {pm} package lists"
+                    pm_info["update"],
+                    chat_id,
+                    description=f"Updating {pm} package lists",
                 )
             return pm_info["install"].format(package=package_name), None
 
         pm_info = self.PACKAGE_MANAGERS.get(install_method)
         if not pm_info:
-            return None, {"status": "error", "message": f"Unknown install method: {install_method}"}
+            return None, {
+                "status": "error",
+                "message": f"Unknown install method: {install_method}",
+            }
         return pm_info["install"].format(package=package_name), None
 
-    async def _verify_installation(self, tool_name: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def _verify_installation(
+        self, tool_name: str, result: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Verify tool installation success (Issue #398: extracted)."""
         if result["status"] != "success":
             return result
         verify_result = await self.check_tool_installed(tool_name)
         if verify_result["installed"]:
-            return {"status": "success", "message": f"{tool_name} installed successfully",
-                    "exit_code": result.get("exit_code", 0)}
-        return {"status": "warning", "exit_code": result.get("exit_code", 0),
-                "message": f"Installation completed but {tool_name} not found in PATH"}
+            return {
+                "status": "success",
+                "message": f"{tool_name} installed successfully",
+                "exit_code": result.get("exit_code", 0),
+            }
+        return {
+            "status": "warning",
+            "exit_code": result.get("exit_code", 0),
+            "message": f"Installation completed but {tool_name} not found in PATH",
+        }
 
     async def install_tool(self, tool_info: dict, chat_id: str) -> Dict[str, Any]:
         """Install a tool based on instructions (Issue #398: refactored)."""
         tool_name = tool_info.get("name", "")
         check_result = await self.check_tool_installed(tool_name)
         if check_result["installed"]:
-            return {"status": "already_installed", "message": f"{tool_name} is already installed"}
+            return {
+                "status": "already_installed",
+                "message": f"{tool_name} is already installed",
+            }
 
-        install_command, error = await self._determine_install_command(tool_info, chat_id)
+        install_command, error = await self._determine_install_command(
+            tool_info, chat_id
+        )
         if error:
             return error
 
         result = await self.execute_interactive_command(
-            install_command, chat_id, description=f"Installing {tool_name}",
-            require_confirmation=False
+            install_command,
+            chat_id,
+            description=f"Installing {tool_name}",
+            require_confirmation=False,
         )
         return await self._verify_installation(tool_name, result)
 
     async def _publish_execution_event(
-        self, chat_id: str, command: str, status: str, description: str = None, result: dict = None
+        self,
+        chat_id: str,
+        command: str,
+        status: str,
+        description: str = None,
+        result: dict = None,
     ) -> None:
         """Publish command execution event (Issue #398: extracted)."""
         event_data = {
-            "chat_id": chat_id, "command": command, "status": status,
+            "chat_id": chat_id,
+            "command": command,
+            "status": status,
             "timestamp": datetime.now().isoformat(),
         }
         if status == "started":
@@ -231,7 +244,9 @@ class SystemCommandAgent:
             "exit_code": exit_code,
             "duration": result["duration"],
             "output_lines": result["line_count"],
-            "message": "Command completed successfully" if exit_code == 0 else f"Command failed with exit code {exit_code}",
+            "message": "Command completed successfully"
+            if exit_code == 0
+            else f"Command failed with exit code {exit_code}",
         }
 
     def _get_or_create_terminal(self, chat_id: str) -> tuple:
@@ -244,9 +259,14 @@ class SystemCommandAgent:
         return terminal, session_id
 
     async def execute_interactive_command(
-        self, command: str, chat_id: str, description: str = None,
-        require_confirmation: bool = True, env: Dict[str, str] = None,
-        cwd: str = None, timeout: Optional[float] = None,
+        self,
+        command: str,
+        chat_id: str,
+        description: str = None,
+        require_confirmation: bool = True,
+        env: Dict[str, str] = None,
+        cwd: str = None,
+        timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Execute command with terminal interaction (Issue #398: refactored)."""
         if require_confirmation and self._is_dangerous_command(command):
@@ -257,37 +277,54 @@ class SystemCommandAgent:
         terminal, session_id = self._get_or_create_terminal(chat_id)
 
         try:
-            await self._publish_execution_event(chat_id, command, "started", description)
+            await self._publish_execution_event(
+                chat_id, command, "started", description
+            )
             await terminal.start_session(command, env=env, cwd=cwd)
             result = await terminal.wait_for_completion(timeout=timeout)
-            await self._publish_execution_event(chat_id, command, "completed", result=result)
+            await self._publish_execution_event(
+                chat_id, command, "completed", result=result
+            )
             return self._build_execution_result(result)
         except Exception as e:
             logger.error("Error executing command: %s", e)
-            return {"status": "error", "error": str(e), "message": f"Command execution failed: {e}"}
+            return {
+                "status": "error",
+                "error": str(e),
+                "message": f"Command execution failed: {e}",
+            }
         finally:
-            if session_id in self.active_sessions and not self._is_persistent_session(command):
+            if session_id in self.active_sessions and not self._is_persistent_session(
+                command
+            ):
                 del self.active_sessions[session_id]
 
     async def execute_command_with_output(
         self, command: str, chat_id: str, stream_output: bool = True
     ) -> Dict[str, Any]:
         """Execute command and return output (simpler non-interactive version)"""
+        # 5 minute timeout for non-interactive commands
         return await self.execute_interactive_command(
             command,
             chat_id,
             require_confirmation=False,
-            timeout=TimingConstants.VERY_LONG_TIMEOUT,  # 5 minute timeout for non-interactive commands
+            timeout=TimingConstants.VERY_LONG_TIMEOUT,
         )
 
     def _is_dangerous_command(self, command: str) -> bool:
-        """Check if command is potentially dangerous"""
-        command_lower = command.lower()
-        return any(pattern in command_lower for pattern in self.DANGEROUS_PATTERNS)
+        """Check if command is potentially dangerous.
+
+        Issue #765: Delegates to centralized is_dangerous_command function.
+        """
+        is_dangerous, _ = is_dangerous_command(command)
+        return is_dangerous
 
     def _is_persistent_session(self, command: str) -> bool:
-        """Check if command starts a persistent session (Issue #380: use module constant)"""
-        return any(command.startswith(cmd) for cmd in _PERSISTENT_COMMANDS)
+        """Check if command starts a persistent session.
+
+        Issue #765: Delegates to centralized is_persistent_session_command function.
+        """
+        return is_persistent_session_command(command)
 
     async def _request_user_confirmation(self, command: str, chat_id: str) -> bool:
         """Request user confirmation for dangerous commands"""
@@ -310,7 +347,9 @@ class SystemCommandAgent:
 
         try:
             # Wait for confirmation with timeout
-            confirmed = await asyncio.wait_for(confirmation_future, timeout=TimingConstants.SHORT_TIMEOUT)
+            confirmed = await asyncio.wait_for(
+                confirmation_future, timeout=TimingConstants.SHORT_TIMEOUT
+            )
             return confirmed
         except asyncio.TimeoutError:
             return False  # Default to not executing dangerous commands
@@ -334,23 +373,26 @@ class SystemCommandAgent:
         )
 
     async def validate_command_safety(self, command: str) -> Dict[str, Any]:
-        """Validate command safety before execution"""
+        """Validate command safety before execution.
+
+        Issue #765: Uses centralized patterns from src.security.command_patterns.
+        """
         issues = []
         risk_level = "low"
 
-        # Check for dangerous patterns
-        if self._is_dangerous_command(command):
-            issues.append("Command contains potentially dangerous operations")
+        # Check for dangerous patterns using centralized function
+        is_dangerous, reason = is_dangerous_command(command)
+        if is_dangerous:
+            issues.append(reason or "Command contains potentially dangerous operations")
             risk_level = "high"
 
-        # Check for sudo without specific command
-        if command.strip() in _UNRESTRICTED_ROOT_COMMANDS:
+        # Check for sudo without specific command (Issue #765: use centralized constant)
+        if command.strip() in UNRESTRICTED_ROOT_COMMANDS:
             issues.append("Unrestricted root access requested")
             risk_level = "high"
 
-        # Check for output redirection that might overwrite important files
-        dangerous_paths = ["/etc/", "/boot/", "/usr/", "/bin/"]
-        if ">" in command and any(path in command for path in dangerous_paths):
+        # Check for output redirection using centralized paths (Issue #765)
+        if ">" in command and any(path in command for path in SENSITIVE_REDIRECT_PATHS):
             issues.append("Output redirection to system directory detected")
             risk_level = "high"
 

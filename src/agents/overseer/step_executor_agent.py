@@ -20,10 +20,11 @@ Execution: Uses PTY integration for commands to appear in user's terminal.
 
 import asyncio
 import logging
-import re
 import time
 from datetime import datetime
-from typing import AsyncGenerator, List, Optional, Set, Tuple, Union
+from typing import AsyncGenerator, Optional, Tuple, Union
+
+from src.security.command_patterns import check_dangerous_patterns, is_safe_command
 
 from .command_explanation_service import (
     CommandExplanationService,
@@ -41,6 +42,7 @@ from .types import (
 # Import PTY manager for terminal integration
 try:
     from backend.services.simple_pty import simple_pty_manager
+
     PTY_AVAILABLE = True
 except ImportError:
     simple_pty_manager = None
@@ -48,34 +50,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Security: Dangerous command patterns that should be blocked or require confirmation
-DANGEROUS_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    (re.compile(r"\brm\s+(-[rf]+\s+)*(/|~|\$HOME)", re.IGNORECASE), "Recursive delete on root/home"),
-    (re.compile(r"\brm\s+-rf\s+\*", re.IGNORECASE), "Recursive delete all files"),
-    (re.compile(r":\s*\(\s*\)\s*\{\s*:\s*\|"), "Fork bomb pattern"),
-    (re.compile(r"\bmkfs\b", re.IGNORECASE), "Filesystem format"),
-    (re.compile(r"\bdd\s+.*of=/dev/", re.IGNORECASE), "Direct disk write"),
-    (re.compile(r"\bchmod\s+-R\s+777\s+/", re.IGNORECASE), "Recursive chmod on root"),
-    (re.compile(r"\bchown\s+-R\s+.*\s+/\s*$", re.IGNORECASE), "Recursive chown on root"),
-    (re.compile(r">\s*/dev/sd[a-z]", re.IGNORECASE), "Write to disk device"),
-    (re.compile(r"\bshutdown\b|\breboot\b|\bpoweroff\b", re.IGNORECASE), "System shutdown/reboot"),
-    (re.compile(r"\bsystemctl\s+(stop|disable)\s+", re.IGNORECASE), "Stop/disable system service"),
-    (re.compile(r"\bkill\s+-9\s+-1\b", re.IGNORECASE), "Kill all processes"),
-    (re.compile(r"\biptables\s+-F\b", re.IGNORECASE), "Flush firewall rules"),
-]
-
-# Commands that are always safe to execute
-SAFE_COMMANDS: Set[str] = {
-    "ls", "pwd", "whoami", "hostname", "date", "uptime", "uname",
-    "cat", "head", "tail", "less", "more", "wc", "sort", "uniq",
-    "grep", "awk", "sed", "cut", "tr", "find", "locate",
-    "df", "du", "free", "top", "htop", "ps", "pgrep",
-    "ip", "ifconfig", "netstat", "ss", "ping", "traceroute", "dig", "nslookup", "host",
-    "nmap", "arp", "route",
-    "file", "stat", "which", "whereis", "type",
-    "echo", "printf", "env", "printenv",
-    "id", "groups", "w", "who", "last",
-}
+# Issue #765: DANGEROUS_PATTERNS and SAFE_COMMANDS now imported from
+# src.security.command_patterns for centralized security pattern management
 
 
 def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepResult:
@@ -186,6 +162,8 @@ class StepExecutorAgent:
         """
         Validate a command for safety before execution.
 
+        Issue #765: Uses centralized patterns from src.security.command_patterns.
+
         Args:
             command: The shell command to validate
 
@@ -202,18 +180,20 @@ class StepExecutorAgent:
 
         base_cmd = parts[0].split("/")[-1]  # Handle full paths like /usr/bin/ls
 
-        # Check against dangerous patterns
-        for pattern, reason in DANGEROUS_PATTERNS:
-            if pattern.search(command):
-                logger.warning(
-                    "[StepExecutor] BLOCKED dangerous command: %s (reason: %s)",
-                    command[:50],
-                    reason,
-                )
-                return False, f"Blocked for security: {reason}"
+        # Check against dangerous patterns using centralized function (Issue #765)
+        dangerous_matches = check_dangerous_patterns(command)
+        if dangerous_matches:
+            # Return the first match's description
+            reason = dangerous_matches[0][0]
+            logger.warning(
+                "[StepExecutor] BLOCKED dangerous command: %s (reason: %s)",
+                command[:50],
+                reason,
+            )
+            return False, f"Blocked for security: {reason}"
 
-        # Check if base command is in safe list
-        if base_cmd not in SAFE_COMMANDS:
+        # Check if base command is in safe list using centralized function (Issue #765)
+        if not is_safe_command(base_cmd):
             # Log but allow - user can decide
             logger.info(
                 "[StepExecutor] Command '%s' not in safe list, proceeding with caution",
@@ -232,7 +212,9 @@ class StepExecutorAgent:
 
                 self._command_executor = CommandExecutor()
             except ImportError:
-                logger.warning("CommandExecutor not available, using subprocess fallback")
+                logger.warning(
+                    "CommandExecutor not available, using subprocess fallback"
+                )
                 self._command_executor = None
         return self._command_executor
 
@@ -289,7 +271,9 @@ class StepExecutorAgent:
 
         return command_explanation, output_explanation
 
-    def _extract_return_code_from_chunk(self, chunk: StreamChunk, current_code: int) -> int:
+    def _extract_return_code_from_chunk(
+        self, chunk: StreamChunk, current_code: int
+    ) -> int:
         """
         Extract return code from a final chunk if available.
 
@@ -403,7 +387,9 @@ class StepExecutorAgent:
         if not is_safe:
             task.status = StepStatus.FAILED
             task.error = safety_reason
-            yield _build_blocked_command_result(task, safety_reason, time.time() - start_time)
+            yield _build_blocked_command_result(
+                task, safety_reason, time.time() - start_time
+            )
             return
 
         # Phase 1: Execute command in terminal with streaming output
@@ -431,13 +417,19 @@ class StepExecutorAgent:
         # Phase 2: Generate explanations (Issue #665: uses helpers)
         yield self._create_explaining_notification(task)
 
-        command_explanation, output_explanation = await self._generate_explanations_for_result(
-            task, full_output, return_code
-        )
+        (
+            command_explanation,
+            output_explanation,
+        ) = await self._generate_explanations_for_result(task, full_output, return_code)
 
         # Build and yield final result (Issue #665: uses helper)
         result = await self._build_final_step_result(
-            task, full_output, return_code, command_explanation, output_explanation, start_time
+            task,
+            full_output,
+            return_code,
+            command_explanation,
+            output_explanation,
+            start_time,
         )
         yield result
 
@@ -448,9 +440,7 @@ class StepExecutorAgent:
             time.time() - start_time,
         )
 
-    async def _generate_command_explanation(
-        self, command: str
-    ) -> CommandExplanation:
+    async def _generate_command_explanation(self, command: str) -> CommandExplanation:
         """Generate Part 1: Command explanation."""
         try:
             return await self.explanation_service.explain_command(command)
@@ -490,6 +480,7 @@ class StepExecutorAgent:
         if self._chat_history_manager is None:
             try:
                 from src.chat_history import ChatHistoryManager
+
                 self._chat_history_manager = ChatHistoryManager()
             except ImportError:
                 logger.warning("ChatHistoryManager not available")
@@ -519,14 +510,16 @@ class StepExecutorAgent:
                 )
                 # Try to create a new PTY session
                 from src.constants.path_constants import PATH
+
                 pty = simple_pty_manager.create_session(
-                    self.pty_session_id,
-                    initial_cwd=str(PATH.PROJECT_ROOT)
+                    self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
                 )
                 if not pty:
                     logger.error("[StepExecutor] Failed to create PTY session")
                     return False
-                logger.info("[StepExecutor] Created new PTY session %s", self.pty_session_id)
+                logger.info(
+                    "[StepExecutor] Created new PTY session %s", self.pty_session_id
+                )
 
             success = pty.write_input(text)
             if success:
@@ -553,7 +546,9 @@ class StepExecutorAgent:
         if PTY_AVAILABLE and simple_pty_manager:
             # Write command to PTY
             if not self._write_to_pty(f"{command}\n"):
-                logger.warning("[StepExecutor] PTY write failed, falling back to subprocess")
+                logger.warning(
+                    "[StepExecutor] PTY write failed, falling back to subprocess"
+                )
             else:
                 # Poll for output from chat history
                 # The terminal WebSocket handler saves output to chat
@@ -728,18 +723,14 @@ class StepExecutorAgent:
                 is_final=True,
             )
 
-    async def _collect_stream(
-        self, stream: AsyncGenerator[StreamChunk, None]
-    ) -> list:
+    async def _collect_stream(self, stream: AsyncGenerator[StreamChunk, None]) -> list:
         """Collect all chunks from a stream into a list."""
         chunks = []
         async for chunk in stream:
             chunks.append(chunk)
         return chunks
 
-    async def execute_simple(
-        self, command: str
-    ) -> StepResult:
+    async def execute_simple(self, command: str) -> StepResult:
         """
         Execute a single command directly (non-streaming, for simple commands).
 

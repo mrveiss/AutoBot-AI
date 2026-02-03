@@ -9,25 +9,31 @@ Implements security measures to prevent arbitrary command execution
 import asyncio
 import logging
 import os
-import re
 import shlex
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from src.constants.network_constants import NetworkConstants
+from src.security.command_patterns import (
+    FORBIDDEN_COMMANDS,
+    HIGH_RISK_COMMANDS,
+    MODERATE_RISK_COMMANDS,
+    SAFE_COMMANDS,
+    SENSITIVE_REDIRECT_PATHS,
+    SYSTEM_PATHS,
+    check_dangerous_patterns,
+)
 from src.utils.command_utils import execute_shell_command
 
 # Permission system imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
-    from backend.services.permission_matcher import PermissionMatcher, MatchResult
     from backend.services.approval_memory import ApprovalMemoryManager
+    from backend.services.permission_matcher import PermissionMatcher
 
 logger = logging.getLogger(__name__)
 
-# Issue #380: Module-level frozensets for path checking
-_SYSTEM_PATHS = frozenset({"/etc", "/usr", "/bin", "/sbin", "/lib"})
-_SENSITIVE_REDIRECT_PATHS = frozenset({"/etc/", "/boot/", "/sys/"})
+# Issue #765: Path constants now imported from src.security.command_patterns
 
 
 class CommandRisk(Enum):
@@ -41,89 +47,64 @@ class CommandRisk(Enum):
 
 
 class SecurityPolicy:
-    """Security policy for command execution"""
+    """Security policy for command execution.
+
+    Issue #765: Now uses centralized patterns from src.security.command_patterns.
+    """
 
     def __init__(self):
         """
         Initialize security policy with command classifications and path restrictions.
 
         Issue #281: Refactored from 148 lines to use extracted helper methods.
+        Issue #765: Command sets now delegate to centralized command_patterns module.
         """
-        self.safe_commands = self._get_safe_commands()
-        self.moderate_commands = self._get_moderate_commands()
-        self.high_risk_commands = self._get_high_risk_commands()
-        self.forbidden_commands = self._get_forbidden_commands()
-        self.dangerous_patterns = self._get_dangerous_patterns()
+        # Issue #765: Use centralized command sets from src.security.command_patterns
+        self.safe_commands = SAFE_COMMANDS
+        self.moderate_commands = MODERATE_RISK_COMMANDS
+        self.high_risk_commands = HIGH_RISK_COMMANDS
+        self.forbidden_commands = FORBIDDEN_COMMANDS
         self.allowed_paths = self._get_allowed_paths()
         self.allowed_extensions = self._get_allowed_extensions()
-
-    def _get_safe_commands(self) -> set:
-        """Safe commands that can run without approval. Issue #281: Extracted helper."""
-        return {
-            "echo", "date", "pwd", "whoami", "hostname", "uname",
-            "cat", "head", "tail", "wc", "sort", "uniq", "grep", "find",
-            "ls", "tree", "which", "env", "printenv",
-            "ps", "top", "htop", "d", "du", "free", "uptime",
-            "ping", "curl", "wget", "git", "npm", "python", "pip",
-        }
-
-    def _get_moderate_commands(self) -> set:
-        """Commands that need approval for certain arguments. Issue #281: Extracted helper."""
-        return {
-            "cp", "mv", "mkdir", "touch", "chmod", "chown",
-            "tar", "zip", "unzip", "gzip", "gunzip",
-            "sed", "awk", "cut", "paste", "join",
-        }
-
-    def _get_high_risk_commands(self) -> set:
-        """High-risk commands that always need approval. Issue #281: Extracted helper."""
-        return {
-            "rm", "rmdir", "dd", "mkfs", "fdisk", "parted",
-            "mount", "umount", "chroot", "sudo", "su",
-            "systemctl", "service", "apt", "apt-get", "dpkg",
-            "yum", "dn", "zypper", "pacman",
-        }
-
-    def _get_forbidden_commands(self) -> set:
-        """Forbidden commands that should never run. Issue #281: Extracted helper."""
-        return {
-            "shutdown", "reboot", "halt", "powerof",
-            "init", "telinit", "kill", "killall", "pkill",
-        }
-
-    def _get_dangerous_patterns(self) -> list:
-        """Dangerous patterns in arguments. Issue #281: Extracted helper."""
-        return [
-            r"rm\s+-rf\s+/",  # rm -rf /
-            r">\s*/dev/sd[a-z]",  # Overwrite disk
-            r"dd\s+.*of=/dev/",  # dd to device
-            r"/etc/passwd",  # Password file
-            r"/etc/shadow",  # Shadow file
-            r":(){ :|:& };:",  # Fork bomb
-            r"\$\(.*\)",  # Command substitution
-            r"`.*`",  # Backtick substitution
-            r";\s*rm\s+-r",  # Command chaining with rm
-            r"&&\s*rm\s+-r",  # Conditional rm
-            r"\|\s*rm\s+-r",  # Piped to rm
-        ]
 
     def _get_allowed_paths(self) -> list:
         """Allowed directories for file operations. Issue #281: Extracted helper."""
         return [
             Path.home(),  # User home directory
-            Path("/tmp"),  # Temporary directory
-            Path("/var/tmp"),  # Var temporary
+            Path("/tmp"),  # Temporary directory  # nosec B108
+            Path("/var/tmp"),  # Var temporary  # nosec B108
             Path.cwd(),  # Current working directory
         ]
 
     def _get_allowed_extensions(self) -> set:
         """File extensions that can be modified. Issue #281: Extracted helper."""
         return {
-            ".txt", ".log", ".json", ".yaml", ".yml", ".md",
-            ".py", ".js", ".ts", ".jsx", ".tsx", ".vue",
-            ".html", ".css", ".scss", ".sass",
-            ".sh", ".bash", ".zsh", ".con", ".cfg", ".ini", ".env",
-            ".csv", ".tsv", ".xml",
+            ".txt",
+            ".log",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".md",
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".vue",
+            ".html",
+            ".css",
+            ".scss",
+            ".sass",
+            ".sh",
+            ".bash",
+            ".zsh",
+            ".con",
+            ".cfg",
+            ".ini",
+            ".env",
+            ".csv",
+            ".tsv",
+            ".xml",
         }
 
 
@@ -193,12 +174,13 @@ class SecureCommandExecutor:
         return ""
 
     def _check_dangerous_patterns(self, command: str) -> List[str]:
-        """Check command for dangerous patterns"""
-        found_patterns = []
-        for pattern in self.policy.dangerous_patterns:
-            if re.search(pattern, command, re.IGNORECASE):
-                found_patterns.append(pattern)
-        return found_patterns
+        """Check command for dangerous patterns.
+
+        Issue #765: Delegates to centralized check_dangerous_patterns function.
+        """
+        matches = check_dangerous_patterns(command)
+        # Return descriptions of matched patterns for backward compatibility
+        return [match[0] for match in matches]
 
     def _check_path_access(self, command: str) -> bool:
         """Check if file operations are within allowed paths"""
@@ -224,6 +206,7 @@ class SecureCommandExecutor:
         if self._permission_matcher is None:
             try:
                 from backend.services.permission_matcher import PermissionMatcher
+
                 self._permission_matcher = PermissionMatcher(is_admin=self.is_admin)
             except ImportError as e:
                 logger.warning(f"Permission matcher not available: {e}")
@@ -240,12 +223,16 @@ class SecureCommandExecutor:
         """
         from src.config.ssot_config import config
 
-        if not config.permission.enabled or not config.permission.approval_memory_enabled:
+        if (
+            not config.permission.enabled
+            or not config.permission.approval_memory_enabled
+        ):
             return None
 
         if self._approval_memory is None:
             try:
                 from backend.services.approval_memory import ApprovalMemoryManager
+
                 self._approval_memory = ApprovalMemoryManager()
             except ImportError as e:
                 logger.warning(f"Approval memory not available: {e}")
@@ -283,7 +270,9 @@ class SecureCommandExecutor:
                 rule_info = {
                     "action": "deny",
                     "pattern": rule.pattern if rule else None,
-                    "description": rule.description if rule else "Denied by permission rule",
+                    "description": rule.description
+                    if rule
+                    else "Denied by permission rule",
                 }
                 return "deny", rule_info
 
@@ -400,7 +389,9 @@ class SecureCommandExecutor:
 
     def assess_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
         """
-        Assess the risk level of a command
+        Assess the risk level of a command.
+
+        Issue #765: Uses centralized patterns from src.security.command_patterns.
 
         Returns:
             (risk_level, list_of_reasons)
@@ -412,7 +403,7 @@ class SecureCommandExecutor:
         if not base_command:
             return CommandRisk.FORBIDDEN, ["Empty or malformed command"]
 
-        # Check dangerous patterns first
+        # Check dangerous patterns first (Issue #765: uses centralized function)
         dangerous_patterns = self._check_dangerous_patterns(command)
         if dangerous_patterns:
             reasons.extend([f"Dangerous pattern: {p}" for p in dangerous_patterns])
@@ -429,8 +420,8 @@ class SecureCommandExecutor:
 
         if base_command in self.policy.moderate_commands:
             reasons.append(f"Moderate-risk command: {base_command}")
-            # Check if it involves system paths - Issue #380: Use module-level frozenset
-            if any(path in command for path in _SYSTEM_PATHS):
+            # Check if it involves system paths (Issue #765: uses centralized constant)
+            if any(path in command for path in SYSTEM_PATHS):
                 reasons.append("Operates on system paths")
                 return CommandRisk.HIGH, reasons
             return CommandRisk.MODERATE, reasons
@@ -441,9 +432,9 @@ class SecureCommandExecutor:
                 reasons.append("Uses sudo elevation")
                 return CommandRisk.HIGH, reasons
 
-            # Check for output redirection to sensitive files - Issue #380
+            # Check for output redirection to sensitive files (Issue #765)
             if ">" in command or ">>" in command:
-                if any(sensitive in command for sensitive in _SENSITIVE_REDIRECT_PATHS):
+                if any(sensitive in command for sensitive in SENSITIVE_REDIRECT_PATHS):
                     reasons.append("Redirects to sensitive location")
                     return CommandRisk.HIGH, reasons
 
@@ -574,9 +565,10 @@ class SecureCommandExecutor:
             Result dict with error status and permission info
         """
         logger.warning(f"Command denied by permission rule: {command}")
+        description = rule_info.get("description", "Denied")
         return {
             "stdout": "",
-            "stderr": f"Command denied by permission rule: {rule_info.get('description', 'Denied')}",
+            "stderr": f"Command denied by permission rule: {description}",
             "return_code": 1,
             "status": "error",
             "security": {
@@ -648,7 +640,11 @@ class SecureCommandExecutor:
         }
 
     async def _handle_forbidden_command(
-        self, command: str, risk: CommandRisk, reasons: List[str], log_entry: Dict[str, Any]
+        self,
+        command: str,
+        risk: CommandRisk,
+        reasons: List[str],
+        log_entry: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
@@ -812,15 +808,21 @@ class SecureCommandExecutor:
         if permission_action == "allow":
             logger.info(f"Command auto-approved by permission rule: {command[:50]}...")
             risk, reasons = self.assess_command_risk(command)
-            log_entry = self._build_auto_approved_log_entry(command, risk, reasons, rule_info)
-            return await self._execute_command(command, risk, reasons, log_entry, rule_info)
+            log_entry = self._build_auto_approved_log_entry(
+                command, risk, reasons, rule_info
+            )
+            return await self._execute_command(
+                command, risk, reasons, log_entry, rule_info
+            )
 
         # Risk-based assessment fallback
         risk, reasons = self.assess_command_risk(command)
         log_entry = self._build_standard_log_entry(command, risk, reasons)
 
         if risk == CommandRisk.FORBIDDEN:
-            return await self._handle_forbidden_command(command, risk, reasons, log_entry)
+            return await self._handle_forbidden_command(
+                command, risk, reasons, log_entry
+            )
 
         denial_result = await self._handle_approval_flow(
             command, risk, reasons, log_entry, force_approval, permission_action
