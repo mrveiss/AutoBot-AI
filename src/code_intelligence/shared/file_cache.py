@@ -117,6 +117,7 @@ class FileListCache:
     Thread-safe file list cache with TTL-based expiration.
 
     Issue #607: Eliminates redundant rglob() calls across analyzers.
+    Issue #743: Implements CacheProtocol for CacheCoordinator integration.
 
     Attributes:
         ttl: Cache time-to-live in seconds (default: 300)
@@ -129,6 +130,23 @@ class FileListCache:
 
     _instance: Optional["FileListCache"] = None
     _lock = threading.Lock()
+
+    # CacheProtocol properties - Issue #743
+    @property
+    def name(self) -> str:
+        """Unique cache identifier."""
+        return "file_list_cache"
+
+    @property
+    def size(self) -> int:
+        """Current number of cached file lists."""
+        with self._cache_lock:
+            return len(self._cache)
+
+    @property
+    def max_size(self) -> int:
+        """Maximum capacity (0 = unlimited, TTL-based expiration)."""
+        return 0  # TTL-based, not size-based
 
     def __new__(cls) -> "FileListCache":
         """Singleton pattern for global cache instance."""
@@ -278,9 +296,50 @@ class FileListCache:
                     "FileListCache: Invalidated %d entries", len(keys_to_remove)
                 )
 
-    def get_stats(self) -> CacheStats:
-        """Get cache statistics."""
-        return self._stats
+    def get_stats(self) -> Dict:
+        """
+        Return cache statistics as dict (CacheProtocol).
+
+        Issue #743: Returns Dict for CacheProtocol compliance.
+        """
+        stats = self._stats.to_dict()
+        stats["name"] = self.name
+        stats["size"] = self.size
+        stats["max_size"] = self.max_size
+        return stats
+
+    def evict(self, count: int) -> int:
+        """
+        Evict oldest N cache entries (CacheProtocol).
+
+        Issue #743: CacheProtocol method for coordinated eviction.
+        Note: For TTL-based caches, eviction removes oldest entries.
+
+        Args:
+            count: Number of entries to evict
+
+        Returns:
+            Actual number of entries evicted
+        """
+        evicted = 0
+        with self._cache_lock:
+            # Sort by timestamp (oldest first)
+            sorted_keys = sorted(
+                self._cache.keys(), key=lambda k: self._cache[k].timestamp
+            )
+            for key in sorted_keys[:count]:
+                del self._cache[key]
+                evicted += 1
+                self._stats.invalidations += 1
+        return evicted
+
+    def clear(self) -> None:
+        """
+        Clear all items from cache (CacheProtocol).
+
+        Issue #743: CacheProtocol method for cache clearing.
+        """
+        self.invalidate(None)
 
     @classmethod
     def reset_instance(cls) -> None:

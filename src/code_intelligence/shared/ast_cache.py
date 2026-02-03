@@ -52,6 +52,7 @@ DEFAULT_CONTENT_CACHE_SIZE = int(os.getenv("CONTENT_CACHE_MAX_SIZE", "500"))
 @dataclass
 class ASTCacheEntry:
     """Single AST cache entry with metadata."""
+
     tree: ast.AST
     mtime: float
     file_size: int
@@ -66,6 +67,7 @@ class ASTCacheEntry:
 @dataclass
 class ContentCacheEntry:
     """Single file content cache entry."""
+
     content: str
     mtime: float
     file_size: int
@@ -74,6 +76,7 @@ class ContentCacheEntry:
 @dataclass
 class ASTCacheStats:
     """Statistics for cache monitoring."""
+
     hits: int = 0
     misses: int = 0
     parse_errors: int = 0
@@ -88,8 +91,7 @@ class ASTCacheStats:
         total = self.hits + self.misses
         hit_rate = (self.hits / total * 100) if total > 0 else 0
         avg_parse_time = (
-            self.total_parse_time_ms / self.misses
-            if self.misses > 0 else 0
+            self.total_parse_time_ms / self.misses if self.misses > 0 else 0
         )
         return {
             "hits": self.hits,
@@ -110,12 +112,14 @@ class ASTCache:
     Thread-safe AST cache with LRU eviction and mtime-based invalidation.
 
     Issue #607: Eliminates redundant ast.parse() calls across analyzers.
+    Issue #743: Implements CacheProtocol for CacheCoordinator integration.
 
     Features:
         - LRU eviction when cache is full
         - Automatic invalidation when file mtime changes
         - Thread-safe access
         - Optional content caching for file reads
+        - CacheProtocol compliance for coordinated eviction
 
     Thread Safety:
         Uses threading.Lock for thread-safe cache access.
@@ -124,6 +128,23 @@ class ASTCache:
 
     _instance: Optional["ASTCache"] = None
     _lock = threading.Lock()
+
+    # CacheProtocol properties - Issue #743
+    @property
+    def name(self) -> str:
+        """Unique cache identifier."""
+        return "ast_cache"
+
+    @property
+    def size(self) -> int:
+        """Current number of items in cache."""
+        with self._cache_lock:
+            return len(self._ast_cache)
+
+    @property
+    def max_size(self) -> int:
+        """Maximum capacity."""
+        return self._max_size
 
     def __new__(cls) -> "ASTCache":
         """Singleton pattern for global cache instance."""
@@ -156,7 +177,8 @@ class ASTCache:
 
         logger.info(
             "ASTCache initialized: max_size=%d, content_cache_size=%d",
-            self._max_size, self._content_cache_size
+            self._max_size,
+            self._content_cache_size,
         )
 
     def _get_file_mtime(self, file_path: str) -> float:
@@ -278,10 +300,7 @@ class ASTCache:
                 self._stats.total_parse_time_ms += parse_time_ms
                 self._stats.current_size = len(self._ast_cache)
 
-            logger.debug(
-                "ASTCache: Parsed %s in %.1fms",
-                path_str, parse_time_ms
-            )
+            logger.debug("ASTCache: Parsed %s in %.1fms", path_str, parse_time_ms)
             return tree
 
         except SyntaxError as e:
@@ -358,11 +377,42 @@ class ASTCache:
                     del self._content_cache[path_str]
                 logger.debug("ASTCache: Invalidated %s", path_str)
 
-    def get_stats(self) -> ASTCacheStats:
-        """Get cache statistics."""
+    def get_stats(self) -> Dict:
+        """
+        Return cache statistics as dict (CacheProtocol).
+
+        Issue #743: Returns Dict for CacheProtocol compliance.
+        """
         with self._cache_lock:
             self._stats.current_size = len(self._ast_cache)
-        return self._stats
+        return self._stats.to_dict()
+
+    def evict(self, count: int) -> int:
+        """
+        Evict oldest N items from cache (CacheProtocol).
+
+        Issue #743: CacheProtocol method for coordinated eviction.
+
+        Args:
+            count: Number of items to evict
+
+        Returns:
+            Actual number of items evicted
+        """
+        evicted = 0
+        with self._cache_lock:
+            while evicted < count and self._ast_cache:
+                self._evict_lru()
+                evicted += 1
+        return evicted
+
+    def clear(self) -> None:
+        """
+        Clear all items from cache (CacheProtocol).
+
+        Issue #743: CacheProtocol method for cache clearing.
+        """
+        self.invalidate(None)
 
     def get_cached_files(self) -> list:
         """Get list of currently cached file paths."""
@@ -443,9 +493,7 @@ def get_ast_safe(file_path: Union[str, Path]) -> Optional[ast.AST]:
     return _get_cache().get_safe(file_path)
 
 
-def get_ast_with_content(
-    file_path: Union[str, Path]
-) -> Tuple[Optional[ast.AST], str]:
+def get_ast_with_content(file_path: Union[str, Path]) -> Tuple[Optional[ast.AST], str]:
     """
     Get AST and file content together.
 

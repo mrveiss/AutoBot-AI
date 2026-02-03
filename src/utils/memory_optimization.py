@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, TypeVar, Union
 
 import psutil
 
-
 logger = logging.getLogger(__name__)
 
 # Type variable for generic caching
@@ -189,13 +188,46 @@ class MemoryPool:
 
 
 class WeakCache:
-    """Cache using weak references to prevent memory leaks"""
+    """
+    Cache using weak references to prevent memory leaks.
 
-    def __init__(self, maxsize: int = int(os.getenv("AUTOBOT_WEAK_CACHE_SIZE", "128"))):
-        """Initialize weak reference cache with maximum size limit."""
+    Issue #743: Implements CacheProtocol for CacheCoordinator integration.
+    """
+
+    def __init__(
+        self,
+        maxsize: int = int(os.getenv("AUTOBOT_WEAK_CACHE_SIZE", "128")),
+        cache_name: str = "weak_cache",
+    ):
+        """
+        Initialize weak reference cache with maximum size limit.
+
+        Args:
+            maxsize: Maximum cache size
+            cache_name: Unique cache identifier for CacheProtocol
+        """
         self.maxsize = maxsize
+        self._name = cache_name
         self._cache: Dict[Any, Any] = {}
         self._weak_refs: Dict[Any, weakref.ReferenceType] = {}
+        self._hits = 0
+        self._misses = 0
+
+    # CacheProtocol properties - Issue #743
+    @property
+    def name(self) -> str:
+        """Unique cache identifier."""
+        return self._name
+
+    @property
+    def size(self) -> int:
+        """Current number of items in cache."""
+        return len(self._cache)
+
+    @property
+    def max_size(self) -> int:
+        """Maximum capacity."""
+        return self.maxsize
 
     def get(self, key: Any) -> Optional[Any]:
         """Get value from cache"""
@@ -203,12 +235,14 @@ class WeakCache:
             ref = self._weak_refs[key]
             value = ref()
             if value is not None:
+                self._hits += 1
                 return value
             else:
                 # Reference died, clean up
                 del self._weak_refs[key]
                 if key in self._cache:
                     del self._cache[key]
+        self._misses += 1
         return None
 
     def set(self, key: Any, value: Any) -> None:
@@ -236,9 +270,47 @@ class WeakCache:
             del self._cache[key]
 
     def clear(self) -> None:
-        """Clear all cache entries"""
+        """Clear all cache entries (CacheProtocol)."""
         self._cache.clear()
         self._weak_refs.clear()
+        self._hits = 0
+        self._misses = 0
+
+    def evict(self, count: int) -> int:
+        """
+        Evict oldest N items from cache (CacheProtocol).
+
+        Issue #743: CacheProtocol method for coordinated eviction.
+
+        Args:
+            count: Number of items to evict
+
+        Returns:
+            Actual number of items evicted
+        """
+        evicted = 0
+        keys = list(self._cache.keys())
+        for key in keys[:count]:
+            self.remove(key)
+            evicted += 1
+        return evicted
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Return cache statistics (CacheProtocol).
+
+        Issue #743: CacheProtocol method for statistics.
+        """
+        total = self._hits + self._misses
+        hit_rate = self._hits / total if total > 0 else 0.0
+        return {
+            "name": self.name,
+            "size": self.size,
+            "max_size": self.max_size,
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": hit_rate,
+        }
 
 
 def memory_efficient_cache(

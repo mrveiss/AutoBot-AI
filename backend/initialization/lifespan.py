@@ -196,6 +196,19 @@ async def initialize_critical_services(app: FastAPI):
         await _init_conversation_file_manager(app)
         await _init_chat_workflow_manager(app)
 
+        # Issue #743: Register caches with CacheCoordinator for memory optimization
+        logger.info("✅ [ 55%] Cache: Registering caches with CacheCoordinator...")
+        try:
+            from src.cache import register_all_caches
+
+            cache_count = register_all_caches()
+            logger.info(
+                "✅ [ 55%] Cache: %d caches registered for coordinated management",
+                cache_count,
+            )
+        except Exception as cache_error:
+            logger.warning("Cache registration failed (non-critical): %s", cache_error)
+
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 
     except Exception as critical_error:
