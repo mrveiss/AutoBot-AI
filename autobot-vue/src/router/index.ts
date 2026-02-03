@@ -271,6 +271,17 @@ const routes: RouteRecordRaw[] = [
           description: 'Security audit logging and monitoring (Issue #578)',
           requiresAuth: true
         }
+      },
+      {
+        path: 'code-intelligence',
+        name: 'analytics-code-intelligence',
+        component: () => import('@/components/analytics/CodeIntelligenceDashboard.vue'),
+        meta: {
+          title: 'Code Intelligence',
+          parent: 'analytics',
+          icon: 'fas fa-brain',
+          description: 'Code quality, security, and performance analysis (Issue #772)'
+        }
       }
     ]
   },

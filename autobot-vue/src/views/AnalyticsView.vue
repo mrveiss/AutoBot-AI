@@ -25,6 +25,13 @@
           >
             <i class="fas fa-shield-alt mr-2"></i>Security
           </router-link>
+          <router-link
+            to="/analytics/code-intelligence"
+            class="px-3 py-2 text-sm font-medium border-b-2 transition-colors"
+            :class="isCodeIntelligenceActive ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-blueGray-500 hover:text-blueGray-700 hover:border-blueGray-300'"
+          >
+            <i class="fas fa-brain mr-2"></i>Code Intelligence
+          </router-link>
         </nav>
       </div>
 
@@ -50,6 +57,10 @@ const isBIActive = computed(() => {
 
 const isSecurityActive = computed(() => {
   return route.path === '/analytics/security' || route.path.startsWith('/analytics/security/')
+})
+
+const isCodeIntelligenceActive = computed(() => {
+  return route.path === '/analytics/code-intelligence' || route.path.startsWith('/analytics/code-intelligence/')
 })
 </script>
 
