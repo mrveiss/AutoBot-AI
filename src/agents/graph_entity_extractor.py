@@ -210,6 +210,45 @@ class GraphEntityExtractor:
             f"relationship_inference={enable_relationship_inference})"
         )
 
+    async def _perform_extraction_pipeline(
+        self,
+        conversation_id: str,
+        messages: List[Dict[str, str]],
+        session_metadata: Optional[Dict[str, Any]],
+        result: ExtractionResult,
+    ) -> None:
+        """
+        Execute the main extraction pipeline steps.
+
+        Issue #620.
+        """
+        # Step 1: Combine messages into text for extraction
+        combined_text = self._combine_messages(messages)
+
+        if not combined_text.strip():
+            logger.warning(
+                "No content to extract from conversation %s", conversation_id
+            )
+            return
+
+        # Step 2: Extract and filter facts
+        high_confidence_facts = await self._extract_facts_from_messages(
+            combined_text, conversation_id, result
+        )
+
+        # Step 3: Process entity candidates
+        entity_candidates = self._facts_to_entity_candidates(
+            high_confidence_facts, conversation_id, session_metadata
+        )
+        created_entities = await self._process_entity_candidates(
+            high_confidence_facts, conversation_id, session_metadata, result
+        )
+
+        # Step 4: Process relationships
+        await self._process_relationships(
+            entity_candidates, high_confidence_facts, created_entities, result
+        )
+
     @error_boundary(
         component="graph_entity_extractor",
         function="extract_and_populate",
@@ -223,9 +262,7 @@ class GraphEntityExtractor:
         """
         Extract entities from conversation and populate graph.
 
-        This method processes conversation messages, extracts facts using
-        KnowledgeExtractionAgent, maps facts to entities, and creates them
-        in AutoBotMemoryGraph.
+        Issue #620: Refactored with extracted pipeline helper.
 
         Args:
             conversation_id: Unique conversation identifier
@@ -234,8 +271,6 @@ class GraphEntityExtractor:
 
         Returns:
             ExtractionResult with statistics and errors
-
-        Issue #281: Refactored to use extracted helpers.
         """
         start_time = time.perf_counter()
         result = ExtractionResult(conversation_id=conversation_id)
@@ -246,39 +281,15 @@ class GraphEntityExtractor:
                 f"({len(messages)} messages)"
             )
 
-            # Step 1: Combine messages into text for extraction
-            combined_text = self._combine_messages(messages)
-
-            if not combined_text.strip():
-                logger.warning("No content to extract from conversation %s", conversation_id)
-                return result
-
-            # Step 2: Extract and filter facts (Issue #281 - uses helper)
-            high_confidence_facts = await self._extract_facts_from_messages(
-                combined_text, conversation_id, result
-            )
-
-            # Step 3: Process entity candidates (Issue #281 - uses helper)
-            entity_candidates = self._facts_to_entity_candidates(
-                high_confidence_facts, conversation_id, session_metadata
-            )
-            created_entities = await self._process_entity_candidates(
-                high_confidence_facts, conversation_id, session_metadata, result
-            )
-
-            # Step 4: Process relationships (Issue #281 - uses helper)
-            await self._process_relationships(
-                entity_candidates, high_confidence_facts, created_entities, result
+            await self._perform_extraction_pipeline(
+                conversation_id, messages, session_metadata, result
             )
 
             result.processing_time = time.perf_counter() - start_time
-
             logger.info(
                 f"Entity extraction complete: {result.entities_created} entities, "
                 f"{result.relations_created} relations in {result.processing_time:.2f}s"
             )
-
-            return result
 
         except Exception as e:
             logger.error(
@@ -287,7 +298,8 @@ class GraphEntityExtractor:
             )
             result.errors.append(str(e))
             result.processing_time = time.perf_counter() - start_time
-            return result
+
+        return result
 
     def _combine_messages(self, messages: List[Dict[str, str]]) -> str:
         """
@@ -457,7 +469,9 @@ class GraphEntityExtractor:
         # Add conversation reference
         conv_suffix = conversation_id[:8]
 
-        return f"{entity_type.replace('_', ' ').title()}: {truncated}... ({conv_suffix})"
+        return (
+            f"{entity_type.replace('_', ' ').title()}: {truncated}... ({conv_suffix})"
+        )
 
     async def _create_entities_in_graph(
         self, candidates: List[EntityCandidate]
@@ -546,7 +560,9 @@ class GraphEntityExtractor:
         # Strategy 2: Keyword-based relationships
         for entity in entity_candidates:
             for fact in entity.facts:
-                keyword_relations = self._extract_keyword_relations(entity, fact, entity_candidates)
+                keyword_relations = self._extract_keyword_relations(
+                    entity, fact, entity_candidates
+                )
                 relation_candidates.extend(keyword_relations)
 
         # Deduplicate relationships
@@ -555,7 +571,10 @@ class GraphEntityExtractor:
         return unique_relations
 
     def _check_co_occurrence(
-        self, entity_a: EntityCandidate, entity_b: EntityCandidate, facts: List[AtomicFact]
+        self,
+        entity_a: EntityCandidate,
+        entity_b: EntityCandidate,
+        facts: List[AtomicFact],
     ) -> List[str]:
         """
         Check if two entities co-occur in the same facts.
@@ -591,7 +610,10 @@ class GraphEntityExtractor:
         return evidence[:3]  # Limit evidence
 
     def _extract_keyword_relations(
-        self, entity: EntityCandidate, fact: AtomicFact, all_candidates: List[EntityCandidate]
+        self,
+        entity: EntityCandidate,
+        fact: AtomicFact,
+        all_candidates: List[EntityCandidate],
     ) -> List[RelationCandidate]:
         """
         Extract relationships based on keyword matching.
@@ -646,7 +668,10 @@ class GraphEntityExtractor:
         for relation in relations:
             key = (relation.from_entity, relation.to_entity, relation.relation_type)
 
-            if key not in unique_map or relation.confidence > unique_map[key].confidence:
+            if (
+                key not in unique_map
+                or relation.confidence > unique_map[key].confidence
+            ):
                 unique_map[key] = relation
 
         return list(unique_map.values())
@@ -736,8 +761,11 @@ class GraphEntityExtractor:
         return high_confidence_facts
 
     async def _process_entity_candidates(
-        self, high_confidence_facts: List[AtomicFact], conversation_id: str,
-        session_metadata: Optional[Dict[str, Any]], result: ExtractionResult,
+        self,
+        high_confidence_facts: List[AtomicFact],
+        conversation_id: str,
+        session_metadata: Optional[Dict[str, Any]],
+        result: ExtractionResult,
     ) -> List[Dict[str, Any]]:
         """
         Process facts into entity candidates and create in graph (Issue #281 - extracted helper).
@@ -763,8 +791,11 @@ class GraphEntityExtractor:
         return created_entities
 
     async def _process_relationships(
-        self, entity_candidates: List[EntityCandidate], high_confidence_facts: List[AtomicFact],
-        created_entities: List[Dict[str, Any]], result: ExtractionResult,
+        self,
+        entity_candidates: List[EntityCandidate],
+        high_confidence_facts: List[AtomicFact],
+        created_entities: List[Dict[str, Any]],
+        result: ExtractionResult,
     ) -> None:
         """
         Infer and create relationships between entities (Issue #281 - extracted helper).
@@ -802,7 +833,9 @@ class GraphEntityExtractor:
             EntityCandidate object
         """
         primary_fact = fact_group[0]
-        entity_name = self._generate_entity_name(primary_fact, entity_type, conversation_id)
+        entity_name = self._generate_entity_name(
+            primary_fact, entity_type, conversation_id
+        )
 
         # Collect observations from all facts in group
         observations = [fact.original_text for fact in fact_group]

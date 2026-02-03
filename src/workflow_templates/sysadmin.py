@@ -15,6 +15,73 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
+def _create_system_health_check_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for system health check template.
+
+    Returns a list of WorkflowStep objects defining the health check workflow
+    from system overview through recommendations and result storage. Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="system_overview",
+            agent_type="system_commands",
+            action="Collect basic system information and status",
+            description="System_Commands: System Overview",
+            expected_duration_ms=10000,
+        ),
+        WorkflowStep(
+            id="resource_check",
+            agent_type="system_commands",
+            action="Check CPU, memory, disk, and network utilization",
+            description="System_Commands: Resource Utilization",
+            dependencies=["system_overview"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="service_status",
+            agent_type="system_commands",
+            action="Check status of critical services and processes",
+            description="System_Commands: Service Status Check",
+            dependencies=["resource_check"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="security_status",
+            agent_type="system_commands",
+            action="Check system security status and updates",
+            description="System_Commands: Security Status",
+            dependencies=["service_status"],
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="health_report",
+            agent_type="orchestrator",
+            action="Generate comprehensive system health report",
+            description="Orchestrator: Generate Health Report",
+            dependencies=["security_status"],
+            expected_duration_ms=10000,
+        ),
+        WorkflowStep(
+            id="recommendations",
+            agent_type="orchestrator",
+            action="Provide system optimization recommendations",
+            description="Orchestrator: Optimization Recommendations (requires your approval)",
+            requires_approval=True,
+            dependencies=["health_report"],
+            expected_duration_ms=8000,
+        ),
+        WorkflowStep(
+            id="store_results",
+            agent_type="knowledge_manager",
+            action="Store health check results and recommendations",
+            description="Knowledge_Manager: Store Health Check",
+            dependencies=["recommendations"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
 def create_system_health_check_template() -> WorkflowTemplate:
     """Create system health check workflow template."""
     return WorkflowTemplate(
@@ -30,64 +97,7 @@ def create_system_health_check_template() -> WorkflowTemplate:
             "system_type": "Type of system (server, workstation, container)",
             "check_scope": "Scope of health check (basic, comprehensive)",
         },
-        steps=[
-            WorkflowStep(
-                id="system_overview",
-                agent_type="system_commands",
-                action="Collect basic system information and status",
-                description="System_Commands: System Overview",
-                expected_duration_ms=10000,
-            ),
-            WorkflowStep(
-                id="resource_check",
-                agent_type="system_commands",
-                action="Check CPU, memory, disk, and network utilization",
-                description="System_Commands: Resource Utilization",
-                dependencies=["system_overview"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="service_status",
-                agent_type="system_commands",
-                action="Check status of critical services and processes",
-                description="System_Commands: Service Status Check",
-                dependencies=["resource_check"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="security_status",
-                agent_type="system_commands",
-                action="Check system security status and updates",
-                description="System_Commands: Security Status",
-                dependencies=["service_status"],
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="health_report",
-                agent_type="orchestrator",
-                action="Generate comprehensive system health report",
-                description="Orchestrator: Generate Health Report",
-                dependencies=["security_status"],
-                expected_duration_ms=10000,
-            ),
-            WorkflowStep(
-                id="recommendations",
-                agent_type="orchestrator",
-                action="Provide system optimization recommendations",
-                description="Orchestrator: Optimization Recommendations (requires your approval)",
-                requires_approval=True,
-                dependencies=["health_report"],
-                expected_duration_ms=8000,
-            ),
-            WorkflowStep(
-                id="store_results",
-                agent_type="knowledge_manager",
-                action="Store health check results and recommendations",
-                description="Knowledge_Manager: Store Health Check",
-                dependencies=["recommendations"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_system_health_check_steps(),
     )
 
 

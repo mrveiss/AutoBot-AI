@@ -49,10 +49,14 @@ def _calculate_agent_suitability_score(
     # Calculate workload and performance factors
     current_workload = getattr(agent, current_workload_attr, 0)
     max_concurrent = getattr(agent, max_concurrent_tasks_attr, 3)
-    workload_factor = 1.0 - (current_workload / max_concurrent) if max_concurrent > 0 else 1.0
+    workload_factor = (
+        1.0 - (current_workload / max_concurrent) if max_concurrent > 0 else 1.0
+    )
     performance_factor = getattr(agent, success_rate_attr, 1.0)
 
-    return (task_match_score * 0.4) + (workload_factor * 0.3) + (performance_factor * 0.3)
+    return (
+        (task_match_score * 0.4) + (workload_factor * 0.3) + (performance_factor * 0.3)
+    )
 
 
 def _is_agent_eligible(
@@ -86,6 +90,38 @@ def _is_agent_eligible(
             return False
 
     return True
+
+
+def _select_best_agent_from_candidates(
+    suitable_agents: List[Tuple[str, float]],
+    task_type: str,
+) -> Optional[str]:
+    """
+    Select the best agent from a list of scored candidates.
+
+    Sorts candidates by suitability score and returns the agent with the
+    highest score, logging the selection. Issue #620.
+
+    Args:
+        suitable_agents: List of (agent_id, score) tuples
+        task_type: Type of task for logging context
+
+    Returns:
+        Agent ID of the best suitable agent, or None if list is empty
+    """
+    if not suitable_agents:
+        logger.warning("No suitable agent found for task type: %s", task_type)
+        return None
+
+    # Return agent with highest suitability score
+    suitable_agents.sort(key=lambda x: x[1], reverse=True)
+    best_agent_id = suitable_agents[0][0]
+
+    logger.debug(
+        f"Selected agent {best_agent_id} for task {task_type} "
+        f"(score: {suitable_agents[0][1]:.2f})"
+    )
+    return best_agent_id
 
 
 def find_best_agent_for_task(
@@ -138,30 +174,27 @@ def find_best_agent_for_task(
 
     for agent_id, agent in agent_registry.items():
         if not _is_agent_eligible(
-            agent, required_capabilities, availability_status_attr,
-            current_workload_attr, max_concurrent_tasks_attr, capabilities_attr
+            agent,
+            required_capabilities,
+            availability_status_attr,
+            current_workload_attr,
+            max_concurrent_tasks_attr,
+            capabilities_attr,
         ):
             continue
 
         suitability_score = _calculate_agent_suitability_score(
-            agent, task_type, current_workload_attr, max_concurrent_tasks_attr,
-            preferred_task_types_attr, specializations_attr, success_rate_attr
+            agent,
+            task_type,
+            current_workload_attr,
+            max_concurrent_tasks_attr,
+            preferred_task_types_attr,
+            specializations_attr,
+            success_rate_attr,
         )
         suitable_agents.append((agent_id, suitability_score))
 
-    if not suitable_agents:
-        logger.warning("No suitable agent found for task type: %s", task_type)
-        return None
-
-    # Return agent with highest suitability score
-    suitable_agents.sort(key=lambda x: x[1], reverse=True)
-    best_agent_id = suitable_agents[0][0]
-
-    logger.debug(
-        f"Selected agent {best_agent_id} for task {task_type} "
-        f"(score: {suitable_agents[0][1]:.2f})"
-    )
-    return best_agent_id
+    return _select_best_agent_from_candidates(suitable_agents, task_type)
 
 
 def update_agent_performance(

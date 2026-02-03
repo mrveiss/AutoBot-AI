@@ -22,9 +22,10 @@ from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
     from src.code_intelligence.analytics_infrastructure import (
-        SemanticAnalysisMixin,
         SIMILARITY_MEDIUM,
+        SemanticAnalysisMixin,
     )
+
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
@@ -33,6 +34,7 @@ except ImportError:
 # Issue #607: Import shared caches for performance optimization
 try:
     from src.code_intelligence.shared.ast_cache import get_ast_with_content
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -80,7 +82,9 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         ]
         self.results: List[PerformanceIssue] = []
         self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
-        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        self.use_semantic_analysis = (
+            use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
+        )
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
         # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
@@ -134,14 +138,17 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _regex_analysis(
+    def _check_list_lookup_pattern(
         self, file_path: str, content: str, lines: List[str]
     ) -> List[PerformanceIssue]:
-        """Perform regex-based performance analysis."""
-        findings: List[PerformanceIssue] = []
+        """
+        Check for list used as lookup (should be set).
 
-        # Check for list used as lookup (should be set)
+        Issue #620.
+        """
+        findings: List[PerformanceIssue] = []
         list_lookup_pattern = r"if\s+\w+\s+in\s+\[.*\]:"
+
         for match in re.finditer(list_lookup_pattern, content):
             line_num = content[: match.start()].count("\n") + 1
             code = lines[line_num - 1] if line_num <= len(lines) else ""
@@ -161,10 +168,20 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                     confidence=0.9,
                 )
             )
+        return findings
 
-        # Check for repeated file opens
+    def _check_repeated_file_opens(
+        self, file_path: str, content: str, lines: List[str]
+    ) -> List[PerformanceIssue]:
+        """
+        Check for repeated file opens in same file.
+
+        Issue #620.
+        """
+        findings: List[PerformanceIssue] = []
         file_open_pattern = r"open\s*\([^)]+\)"
         open_calls = list(re.finditer(file_open_pattern, content))
+
         if len(open_calls) >= 3:
             findings.append(
                 PerformanceIssue(
@@ -181,14 +198,25 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                     metrics={"open_count": len(open_calls)},
                 )
             )
+        return findings
 
-        # Check for += with strings in loop-like context
+    def _check_string_concat_in_loop(
+        self, file_path: str, content: str, lines: List[str]
+    ) -> List[PerformanceIssue]:
+        """
+        Check for += with strings in loop-like context.
+
+        Issue #620.
+        """
+        findings: List[PerformanceIssue] = []
         string_append_pattern = r"\w+\s*\+=\s*['\"]"
+
         for match in re.finditer(string_append_pattern, content):
             line_num = content[: match.start()].count("\n") + 1
             # Check if in a loop context (simple heuristic)
             context_start = max(0, line_num - 5)
             context = "\n".join(lines[context_start:line_num])
+
             if "for " in context or "while " in context:
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
                 findings.append(
@@ -206,6 +234,26 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                         confidence=0.75,
                     )
                 )
+        return findings
+
+    def _regex_analysis(
+        self, file_path: str, content: str, lines: List[str]
+    ) -> List[PerformanceIssue]:
+        """
+        Perform regex-based performance analysis.
+
+        Issue #620: Refactored with extracted helper methods.
+        """
+        findings: List[PerformanceIssue] = []
+
+        # Check for list used as lookup (Issue #620: uses helper)
+        findings.extend(self._check_list_lookup_pattern(file_path, content, lines))
+
+        # Check for repeated file opens (Issue #620: uses helper)
+        findings.extend(self._check_repeated_file_opens(file_path, content, lines))
+
+        # Check for string concat in loops (Issue #620: uses helper)
+        findings.extend(self._check_string_concat_in_loop(file_path, content, lines))
 
         return findings
 
@@ -270,8 +318,10 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         high = by_severity.get("high", 0)
 
         # Issue #686: Use total_files_scanned instead of files with issues
-        files_analyzed = self.total_files_scanned if self.total_files_scanned > 0 else len(
-            set(f.file_path for f in self.results)
+        files_analyzed = (
+            self.total_files_scanned
+            if self.total_files_scanned > 0
+            else len(set(f.file_path for f in self.results))
         )
 
         return {
@@ -370,7 +420,9 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             for finding in report["findings"][:20]:
                 md.append(f"### {finding['issue_type']}\n")
                 md.append(f"- **Severity**: {finding['severity']}\n")
-                md.append(f"- **File**: {finding['file_path']}:{finding['line_start']}\n")
+                md.append(
+                    f"- **File**: {finding['file_path']}:{finding['line_start']}\n"
+                )
                 md.append(f"- **Complexity**: {finding['estimated_complexity']}\n")
                 md.append(f"- **Description**: {finding['description']}\n")
                 md.append(f"- **Fix**: {finding['recommendation']}\n\n")
@@ -445,7 +497,9 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7,
+                min_similarity=SIMILARITY_MEDIUM
+                if HAS_ANALYTICS_INFRASTRUCTURE
+                else 0.7,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

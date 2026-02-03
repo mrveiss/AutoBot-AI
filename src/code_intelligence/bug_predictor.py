@@ -28,7 +28,7 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404 - required for git operations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -47,6 +47,7 @@ try:
     from src.code_intelligence.analytics_infrastructure import (
         SemanticAnalysisMixin as _SemanticAnalysisMixin,
     )
+
     SemanticAnalysisMixin = _SemanticAnalysisMixin
     SEMANTIC_ANALYSIS_AVAILABLE = True
 except ImportError:
@@ -60,7 +61,9 @@ _IMPORT_PATTERN_RE = re.compile(r"^(?:from\s+\S+\s+)?import\s+", re.MULTILINE)
 
 
 # Issue #315 - Threshold-based score calculation to reduce nesting
-def _calculate_threshold_score(value: int, thresholds: list[tuple[int, int]], default: int = 10) -> int:
+def _calculate_threshold_score(
+    value: int, thresholds: list[tuple[int, int]], default: int = 10
+) -> int:
     """Calculate score based on value thresholds (Issue #315 - extracted helper).
 
     Args:
@@ -188,7 +191,9 @@ class PredictionResult:
             "high_risk_count": self.high_risk_count,
             "predicted_bugs": self.predicted_bugs,
             # Issue #468: Return None if no historical accuracy data, otherwise round
-            "accuracy_score": round(self.accuracy_score, 1) if self.accuracy_score is not None else None,
+            "accuracy_score": round(self.accuracy_score, 1)
+            if self.accuracy_score is not None
+            else None,
             "accuracy_available": self.accuracy_score is not None,
             "risk_distribution": self.risk_distribution,
             "files": [fa.to_dict() for fa in self.file_assessments],
@@ -314,7 +319,9 @@ class BugPredictor(_BaseClass):
             use_semantic_analysis: Enable LLM-based pattern analysis (Issue #554)
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
-        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+        self.use_semantic_analysis = (
+            use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+        )
 
         if self.use_semantic_analysis:
             super().__init__()
@@ -655,13 +662,20 @@ class BugPredictor(_BaseClass):
     _FUNC_COUNT_THRESHOLDS: list[tuple[int, int]] = [
         (20, 25),  # > 20 functions = +25
         (10, 15),  # > 10 functions = +15
-        (5, 5),    # > 5 functions = +5
+        (5, 5),  # > 5 functions = +5
     ]
 
     # Keywords for cyclomatic complexity approximation
     _CONTROL_FLOW_KEYWORDS: tuple[str, ...] = (
-        "if ", "elif ", "else:", "for ", "while ",
-        "try:", "except:", "and ", "or ",
+        "if ",
+        "elif ",
+        "else:",
+        "for ",
+        "while ",
+        "try:",
+        "except:",
+        "and ",
+        "or ",
     )
 
     def _get_default_complexity_result(self) -> dict[str, Any]:
@@ -688,8 +702,7 @@ class BugPredictor(_BaseClass):
                 max_depth = max(max_depth, indent // 4)
 
         conditionals = sum(
-            1 for line in lines
-            if any(kw in line for kw in self._CONTROL_FLOW_KEYWORDS)
+            1 for line in lines if any(kw in line for kw in self._CONTROL_FLOW_KEYWORDS)
         )
 
         return {
@@ -702,9 +715,10 @@ class BugPredictor(_BaseClass):
         self, line_count: int, metrics: dict[str, int]
     ) -> dict[str, float]:
         """Calculate complexity scores from metrics (Issue #281 - extracted helper)."""
-        complexity_score = (
-            _calculate_threshold_score(line_count, self._LINE_COUNT_THRESHOLDS, 0)
-            + _calculate_threshold_score(metrics["func_count"], self._FUNC_COUNT_THRESHOLDS, 0)
+        complexity_score = _calculate_threshold_score(
+            line_count, self._LINE_COUNT_THRESHOLDS, 0
+        ) + _calculate_threshold_score(
+            metrics["func_count"], self._FUNC_COUNT_THRESHOLDS, 0
         )
 
         nesting_score = min(100, metrics["max_depth"] * 15)
@@ -755,8 +769,14 @@ class BugPredictor(_BaseClass):
         """Build cache of change frequency from git."""
         self._change_freq_cache = {}
         try:
-            result = subprocess.run(
-                ["git", "log", "--since=90 days ago", "--name-only", "--pretty=format:"],
+            result = subprocess.run(  # nosec B607 - git is safe
+                [
+                    "git",
+                    "log",
+                    "--since=90 days ago",
+                    "--name-only",
+                    "--pretty=format:",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=TimingConstants.SHORT_TIMEOUT,
@@ -788,7 +808,7 @@ class BugPredictor(_BaseClass):
             try:
                 last_date = datetime.fromisoformat(bugs[0].get("date", ""))
             except Exception:
-                pass  # Invalid date format, last_date remains None
+                pass  # nosec B110 - intentional fallback for invalid dates
 
         return {"count": count, "score": score, "last_date": last_date}
 
@@ -818,7 +838,7 @@ class BugPredictor(_BaseClass):
             for kw in self.bug_keywords:
                 grep_args.extend(["--grep", kw])
 
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - git is safe
                 [
                     "git",
                     "log",
@@ -853,9 +873,9 @@ class BugPredictor(_BaseClass):
     # Issue #315 - File size thresholds for risk scoring
     _FILE_SIZE_THRESHOLDS: list[tuple[int, int]] = [
         (1000, 100),  # > 1000 lines = score 100
-        (500, 75),    # > 500 lines = score 75
-        (300, 50),    # > 300 lines = score 50
-        (100, 25),    # > 100 lines = score 25
+        (500, 75),  # > 500 lines = score 75
+        (300, 50),  # > 300 lines = score 50
+        (100, 25),  # > 100 lines = score 25
     ]
 
     def _calculate_file_size_score(self, path: Path) -> dict[str, Any]:
@@ -876,9 +896,9 @@ class BugPredictor(_BaseClass):
     # Issue #315 - Import count thresholds for coupling risk
     _DEPENDENCY_THRESHOLDS: list[tuple[int, int]] = [
         (30, 100),  # > 30 imports = score 100
-        (20, 75),   # > 20 imports = score 75
-        (10, 50),   # > 10 imports = score 50
-        (5, 25),    # > 5 imports = score 25
+        (20, 75),  # > 20 imports = score 75
+        (10, 50),  # > 10 imports = score 50
+        (5, 25),  # > 5 imports = score 25
     ]
 
     def _analyze_dependencies(self, path: Path) -> dict[str, Any]:
@@ -939,9 +959,7 @@ class BugPredictor(_BaseClass):
             suggestions.append(f"Test error handling paths in {basename}")
 
         if factors.get(RiskFactor.CHANGE_FREQUENCY, 0) > 50:
-            suggestions.append(
-                f"Add regression tests for recent changes in {basename}"
-            )
+            suggestions.append(f"Add regression tests for recent changes in {basename}")
 
         if factors.get(RiskFactor.BUG_HISTORY, 0) > 50:
             suggestions.append(
@@ -1020,11 +1038,13 @@ class BugPredictor(_BaseClass):
             for bug in bugs[:5]:  # Limit per file for performance
                 pattern_id = f"{file_path}:{bug.get('hash', 'unknown')}"
                 message = bug.get("message", "")
-                bug_patterns.append({
-                    "id": pattern_id,
-                    "file": file_path,
-                    "message": message,
-                })
+                bug_patterns.append(
+                    {
+                        "id": pattern_id,
+                        "file": file_path,
+                        "message": message,
+                    }
+                )
 
         if not bug_patterns:
             logger.debug("No bug patterns found to learn from")
@@ -1053,7 +1073,62 @@ class BugPredictor(_BaseClass):
                 documents=valid_texts,
                 metadatas=valid_metadata,
             )
-        logger.info("Learned %d bug patterns for semantic analysis", len(valid_embeddings))
+        logger.info(
+            "Learned %d bug patterns for semantic analysis", len(valid_embeddings)
+        )
+
+    def _create_semantic_disabled_score(self) -> RiskFactorScore:
+        """
+        Create a RiskFactorScore when semantic analysis is disabled.
+
+        Returns a zero-weighted score indicating semantic analysis is not
+        enabled for this predictor instance. Issue #620.
+        """
+        return RiskFactorScore(
+            factor=RiskFactor.BUG_HISTORY,
+            score=0.0,
+            weight=0.0,
+            details="Semantic analysis not enabled",
+        )
+
+    def _create_semantic_error_score(
+        self, details: str, score: float = 30.0
+    ) -> RiskFactorScore:
+        """
+        Create a RiskFactorScore for semantic analysis errors or fallback cases.
+
+        Args:
+            details: Description of the error or condition
+            score: Risk score to assign (default 30.0 for errors)
+
+        Returns a low-weighted score with the error details. Issue #620.
+        """
+        return RiskFactorScore(
+            factor=RiskFactor.BUG_HISTORY,
+            score=score,
+            weight=0.05,
+            details=details,
+        )
+
+    def _create_semantic_success_score(
+        self, similar_count: int, avg_similarity: float
+    ) -> RiskFactorScore:
+        """
+        Create a RiskFactorScore from successful semantic similarity analysis.
+
+        Args:
+            similar_count: Number of similar bug patterns found
+            avg_similarity: Average similarity score (0.0-1.0)
+
+        Returns a weighted score based on similarity to bug patterns. Issue #620.
+        """
+        score = avg_similarity * 100  # Convert to 0-100 scale
+        return RiskFactorScore(
+            factor=RiskFactor.BUG_HISTORY,
+            score=score,
+            weight=0.10,
+            details=f"Similar to {similar_count} historical bug patterns ({avg_similarity:.1%} avg)",
+        )
 
     async def _analyze_file_semantic_async(
         self,
@@ -1072,34 +1147,21 @@ class BugPredictor(_BaseClass):
             RiskFactorScore for semantic bug pattern similarity
         """
         if not self.use_semantic_analysis:
-            return RiskFactorScore(
-                factor=RiskFactor.BUG_HISTORY,
-                score=0.0,
-                weight=0.0,
-                details="Semantic analysis not enabled",
-            )
+            return self._create_semantic_disabled_score()
 
         path = Path(file_path)
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")
-            # Use first 1000 chars of content for efficiency
             content_sample = content[:1000]
 
-            # Generate embedding for the content sample
             embedding = await self._get_embedding(content_sample)
             if not embedding:
-                return RiskFactorScore(
-                    factor=RiskFactor.BUG_HISTORY,
-                    score=10.0,
-                    weight=0.05,
-                    details="Could not generate embedding for file",
+                return self._create_semantic_error_score(
+                    "Could not generate embedding for file", score=10.0
                 )
 
-            # Find similar bug patterns using the embedding
             similar = await self._query_similar(
-                embedding,
-                n_results=5,
-                min_similarity=0.6,
+                embedding, n_results=5, min_similarity=0.6
             )
 
             if not similar:
@@ -1110,25 +1172,12 @@ class BugPredictor(_BaseClass):
                     details="No similar bug patterns found",
                 )
 
-            # Higher similarity to bug patterns = higher risk
             avg_similarity = sum(s["similarity"] for s in similar) / len(similar)
-            score = avg_similarity * 100  # Convert to 0-100 scale
-
-            return RiskFactorScore(
-                factor=RiskFactor.BUG_HISTORY,
-                score=score,
-                weight=0.10,  # Additional weight for semantic factor
-                details=f"Similar to {len(similar)} historical bug patterns ({avg_similarity:.1%} avg)",
-            )
+            return self._create_semantic_success_score(len(similar), avg_similarity)
 
         except Exception as e:
             logger.warning("Semantic analysis failed for %s: %s", file_path, e)
-            return RiskFactorScore(
-                factor=RiskFactor.BUG_HISTORY,
-                score=30.0,
-                weight=0.05,
-                details=f"Semantic analysis error: {e}",
-            )
+            return self._create_semantic_error_score(f"Semantic analysis error: {e}")
 
     async def analyze_file_async(self, file_path: str) -> FileRiskAssessment:
         """

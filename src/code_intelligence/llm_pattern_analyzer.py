@@ -28,22 +28,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Import all types, data models, and classes from the package (Issue #381 refactoring)
-from src.code_intelligence.llm_pattern_analysis.types import (
-    CacheOpportunityType,
-    EXCESSIVE_CONTEXT_PATTERNS,
-    FORMAT_INEFFICIENCY_PATTERNS,
-    HIGH_PRIORITY_LEVELS,
-    OptimizationCategory,
-    OptimizationPriority,
-    PromptIssueType,
-    REDUNDANT_PATTERNS,
-    RETRY_COUNT_PATTERNS,
-    RETRY_LOGIC_PATTERNS,
-    SIMPLE_LLM_MODELS,
-    TEMPLATE_VAR_PATTERNS,
-    UsagePatternType,
-    VALID_BACKOFF_STRATEGIES,
+from src.code_intelligence.llm_pattern_analysis.calculators import (
+    CostCalculator,
+    TokenTracker,
 )
 from src.code_intelligence.llm_pattern_analysis.data_models import (
     AnalysisResult,
@@ -58,17 +45,31 @@ from src.code_intelligence.llm_pattern_analysis.data_models import (
     UsagePattern,
 )
 from src.code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
+from src.code_intelligence.llm_pattern_analysis.recommendation_engine import (
+    RecommendationEngine,
+)
 from src.code_intelligence.llm_pattern_analysis.scanners import (
     BatchingAnalyzer,
     CacheOpportunityDetector,
     CodePatternScanner,
 )
-from src.code_intelligence.llm_pattern_analysis.calculators import (
-    CostCalculator,
-    TokenTracker,
-)
-from src.code_intelligence.llm_pattern_analysis.recommendation_engine import (
-    RecommendationEngine,
+
+# Import all types, data models, and classes from the package (Issue #381 refactoring)
+from src.code_intelligence.llm_pattern_analysis.types import (
+    EXCESSIVE_CONTEXT_PATTERNS,
+    FORMAT_INEFFICIENCY_PATTERNS,
+    HIGH_PRIORITY_LEVELS,
+    REDUNDANT_PATTERNS,
+    RETRY_COUNT_PATTERNS,
+    RETRY_LOGIC_PATTERNS,
+    SIMPLE_LLM_MODELS,
+    TEMPLATE_VAR_PATTERNS,
+    VALID_BACKOFF_STRATEGIES,
+    CacheOpportunityType,
+    OptimizationCategory,
+    OptimizationPriority,
+    PromptIssueType,
+    UsagePatternType,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,9 @@ class LLMPatternAnalyzer:
         self, all_patterns: List[UsagePattern]
     ) -> tuple[List[CacheOpportunity], List[BatchingOpportunity], List[CostEstimate]]:
         """Detect optimization opportunities and calculate costs (Issue #665: extracted helper)."""
-        cache_opportunities = CacheOpportunityDetector.detect_opportunities(all_patterns)
+        cache_opportunities = CacheOpportunityDetector.detect_opportunities(
+            all_patterns
+        )
         batching_opportunities = BatchingAnalyzer.find_opportunities(all_patterns)
         cost_estimates = CostCalculator.estimate_costs(all_patterns)
         return cache_opportunities, batching_opportunities, cost_estimates
@@ -185,7 +188,8 @@ class LLMPatternAnalyzer:
         return {
             "analysis_time_seconds": time.time() - start_time,
             "total_patterns": len(all_patterns),
-            "total_opportunities": len(cache_opportunities) + len(batching_opportunities),
+            "total_opportunities": len(cache_opportunities)
+            + len(batching_opportunities),
             "total_recommendations": len(recommendations),
             "estimated_monthly_cost": sum(c.monthly_cost_usd for c in cost_estimates),
             "estimated_optimized_cost": sum(
@@ -193,56 +197,44 @@ class LLMPatternAnalyzer:
             ),
         }
 
-    def analyze(
+    def _get_default_directories_and_exclusions(
         self,
-        directories: Optional[List[Path]] = None,
-        exclude_patterns: Optional[List[str]] = None,
-    ) -> AnalysisResult:
+        directories: Optional[List[Path]],
+        exclude_patterns: Optional[List[str]],
+    ) -> tuple[List[Path], List[str]]:
         """
-        Analyze the codebase for LLM patterns.
+        Get default directories and exclusion patterns.
 
-        Issue #665: Refactored with extracted helper methods.
-
-        Args:
-            directories: Specific directories to analyze (default: src/)
-            exclude_patterns: Glob patterns to exclude
-
-        Returns:
-            Complete analysis result
+        Issue #620.
         """
-        start_time = time.time()
-        analysis_id = f"analysis_{int(start_time)}"
-
-        # Default directories and exclusions
         if directories is None:
             directories = [self.project_root / "src"]
         if exclude_patterns is None:
             exclude_patterns = ["**/test*", "**/__pycache__", "**/venv"]
+        return directories, exclude_patterns
 
-        # Collect and scan files (Issue #665: uses helper)
-        python_files = self._collect_files(directories, exclude_patterns)
-        all_patterns, all_retry_patterns = self._scan_files_for_patterns(python_files)
+    def _build_analysis_result(
+        self,
+        analysis_id: str,
+        start_time: float,
+        python_files: List[Path],
+        all_patterns: List[UsagePattern],
+        all_retry_patterns: List[RetryPattern],
+        cache_opportunities: List[CacheOpportunity],
+        batching_opportunities: List[BatchingOpportunity],
+        cost_estimates: List[CostEstimate],
+        recommendations: List[OptimizationRecommendation],
+    ) -> AnalysisResult:
+        """
+        Build the final AnalysisResult object from collected data.
 
-        # Detect opportunities and costs (Issue #665: uses helper)
-        cache_opportunities, batching_opportunities, cost_estimates = (
-            self._detect_opportunities_and_costs(all_patterns)
-        )
-
-        # Generate recommendations
-        recommendations = RecommendationEngine.generate_recommendations(
-            patterns=all_patterns,
-            cache_opportunities=cache_opportunities,
-            batching_opportunities=batching_opportunities,
-            retry_patterns=all_retry_patterns,
-            cost_estimates=cost_estimates,
-        )
-
-        # Calculate savings and build result
+        Issue #620.
+        """
         total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(
             len(recommendations), 1
         )
 
-        result = AnalysisResult(
+        return AnalysisResult(
             analysis_id=analysis_id,
             analysis_timestamp=datetime.now(),
             files_analyzed=len(python_files),
@@ -255,9 +247,71 @@ class LLMPatternAnalyzer:
             recommendations=recommendations,
             total_estimated_savings_percent=total_savings,
             summary=self._build_analysis_summary(
-                start_time, all_patterns, cache_opportunities,
-                batching_opportunities, recommendations, cost_estimates
+                start_time,
+                all_patterns,
+                cache_opportunities,
+                batching_opportunities,
+                recommendations,
+                cost_estimates,
             ),
+        )
+
+    def analyze(
+        self,
+        directories: Optional[List[Path]] = None,
+        exclude_patterns: Optional[List[str]] = None,
+    ) -> AnalysisResult:
+        """
+        Analyze the codebase for LLM patterns.
+
+        Issue #620: Refactored with extracted helper methods.
+
+        Args:
+            directories: Specific directories to analyze (default: src/)
+            exclude_patterns: Glob patterns to exclude
+
+        Returns:
+            Complete analysis result
+        """
+        start_time = time.time()
+        analysis_id = f"analysis_{int(start_time)}"
+
+        # Get defaults (Issue #620: uses helper)
+        directories, exclude_patterns = self._get_default_directories_and_exclusions(
+            directories, exclude_patterns
+        )
+
+        # Collect and scan files
+        python_files = self._collect_files(directories, exclude_patterns)
+        all_patterns, all_retry_patterns = self._scan_files_for_patterns(python_files)
+
+        # Detect opportunities and costs
+        (
+            cache_opportunities,
+            batching_opportunities,
+            cost_estimates,
+        ) = self._detect_opportunities_and_costs(all_patterns)
+
+        # Generate recommendations
+        recommendations = RecommendationEngine.generate_recommendations(
+            patterns=all_patterns,
+            cache_opportunities=cache_opportunities,
+            batching_opportunities=batching_opportunities,
+            retry_patterns=all_retry_patterns,
+            cost_estimates=cost_estimates,
+        )
+
+        # Build result (Issue #620: uses helper)
+        result = self._build_analysis_result(
+            analysis_id,
+            start_time,
+            python_files,
+            all_patterns,
+            all_retry_patterns,
+            cache_opportunities,
+            batching_opportunities,
+            cost_estimates,
+            recommendations,
         )
 
         self.analysis_history.append(result)
@@ -326,7 +380,9 @@ class LLMPatternAnalyzer:
             lines.append(f"  Model: {estimate.model}")
             lines.append(f"    Daily Calls: {estimate.daily_calls}")
             lines.append(f"    Monthly Cost: ${estimate.monthly_cost_usd:.2f}")
-            lines.append(f"    Optimized Cost: ${estimate.optimized_monthly_cost_usd:.2f}")
+            lines.append(
+                f"    Optimized Cost: ${estimate.optimized_monthly_cost_usd:.2f}"
+            )
             lines.append("")
 
         lines.extend(
