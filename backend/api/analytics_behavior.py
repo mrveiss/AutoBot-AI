@@ -20,9 +20,10 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission, get_current_user
 from backend.services.user_behavior_analytics import (
     get_behavior_analytics,
     UserEvent,
@@ -86,11 +87,16 @@ class EngagementMetricsResponse(BaseModel):
     error_code_prefix="BEHAVIOR",
 )
 @router.post("/track")
-async def track_user_event(request: TrackEventRequest):
+async def track_user_event(
+    request: TrackEventRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Track a user behavior event.
 
     Records user interactions for analytics purposes.
+
+    Issue #744: Requires authenticated user.
     """
     analytics = get_behavior_analytics()
 
@@ -122,11 +128,14 @@ async def track_user_event(request: TrackEventRequest):
 @router.get("/events/recent")
 async def get_recent_events(
     limit: int = Query(default=100, ge=1, le=1000, description="Number of events to return"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get recent user events.
 
     Returns the most recent tracked events.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     events = await analytics.get_recent_events(limit)
@@ -150,11 +159,14 @@ async def get_recent_events(
 @router.get("/features")
 async def get_feature_metrics(
     feature: Optional[str] = Query(None, description="Specific feature to get metrics for"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get feature usage metrics.
 
     Returns aggregated metrics for all features or a specific feature.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     metrics = await analytics.get_feature_metrics(feature)
@@ -168,11 +180,15 @@ async def get_feature_metrics(
     error_code_prefix="BEHAVIOR",
 )
 @router.get("/features/comparison")
-async def get_feature_comparison():
+async def get_feature_comparison(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Compare usage across all features.
 
     Returns a side-by-side comparison of feature metrics.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     metrics = await analytics.get_feature_metrics()
@@ -214,11 +230,16 @@ async def get_feature_comparison():
     error_code_prefix="BEHAVIOR",
 )
 @router.get("/journey/{session_id}", response_model=UserJourneyResponse)
-async def get_user_journey(session_id: str):
+async def get_user_journey(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get the user journey for a specific session.
 
     Returns the sequence of features and events for a session.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     journey = await analytics.get_user_journey(session_id)
@@ -242,12 +263,16 @@ async def get_user_journey(session_id: str):
     error_code_prefix="BEHAVIOR",
 )
 @router.get("/engagement")
-async def get_engagement_metrics():
+async def get_engagement_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get user engagement metrics.
 
     Returns overall engagement statistics including session duration,
     pages per session, and feature popularity.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     metrics = await analytics.get_engagement_metrics()
@@ -268,11 +293,14 @@ async def get_engagement_metrics():
 @router.get("/stats/daily")
 async def get_daily_stats(
     days: int = Query(default=30, ge=1, le=90, description="Number of days to retrieve"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get daily usage statistics.
 
     Returns daily breakdown of feature usage.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     stats = await analytics.get_daily_stats(days)
@@ -288,11 +316,14 @@ async def get_daily_stats(
 @router.get("/stats/heatmap")
 async def get_usage_heatmap(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to include"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get hourly usage heatmap.
 
     Returns usage patterns by hour of day across features.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     heatmap = await analytics.get_usage_heatmap(days)
@@ -308,11 +339,14 @@ async def get_usage_heatmap(
 @router.get("/stats/peak")
 async def get_peak_usage(
     days: int = Query(default=7, ge=1, le=30, description="Number of days to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get peak usage times.
 
     Returns information about when the platform is most actively used.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
     heatmap_data = await analytics.get_usage_heatmap(days)
@@ -358,11 +392,15 @@ async def get_peak_usage(
     error_code_prefix="BEHAVIOR",
 )
 @router.get("/summary")
-async def get_behavior_summary():
+async def get_behavior_summary(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get comprehensive behavior analytics summary.
 
     Returns a high-level overview of user behavior patterns.
+
+    Issue #744: Requires admin authentication.
     """
     analytics = get_behavior_analytics()
 

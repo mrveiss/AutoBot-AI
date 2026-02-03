@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_knowledge_base
+from src.auth_middleware import get_current_user
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from backend.utils.response_helpers import (
@@ -272,11 +273,13 @@ async def enhanced_search(
     request_data: EnhancedSearchRequest,
     req: Request,
     knowledge_base=Depends(get_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Enhanced search combining local knowledge base with AI Stack RAG capabilities.
 
     Issue #281: Refactored from 144 lines to use extracted helper methods.
+    Issue #744: Requires authenticated user.
 
     This endpoint provides superior search results by combining:
     - Local knowledge base semantic search
@@ -345,13 +348,17 @@ async def enhanced_search(
 )
 @router.post("/search/rag")
 async def rag_search(
-    request_data: RAGQueryRequest, knowledge_base=Depends(get_knowledge_base)
+    request_data: RAGQueryRequest,
+    knowledge_base=Depends(get_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Pure RAG search using AI Stack for document synthesis and generation.
 
     This endpoint uses the AI Stack's RAG agent for advanced document
     understanding and context-aware response generation.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -464,12 +471,18 @@ async def _store_extracted_facts(
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
 @router.post("/extract")
-async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Request):
+async def extract_knowledge(
+    request_data: KnowledgeExtractionRequest,
+    req: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Extract structured knowledge from content using AI Stack capabilities.
 
     This endpoint uses AI Stack's knowledge extraction agent to identify
     and structure knowledge from various content types.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -510,12 +523,17 @@ async def extract_knowledge(request_data: KnowledgeExtractionRequest, req: Reque
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
 @router.post("/analyze/documents")
-async def analyze_documents(request_data: DocumentAnalysisRequest):
+async def analyze_documents(
+    request_data: DocumentAnalysisRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Analyze multiple documents using AI Stack capabilities.
 
     This endpoint provides comprehensive document analysis including
     entity extraction, summarization, and cross-document insights.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -550,12 +568,18 @@ async def analyze_documents(request_data: DocumentAnalysisRequest):
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
 @router.post("/query/reformulate")
-async def reformulate_query(query: str, context: Optional[str] = None):
+async def reformulate_query(
+    query: str,
+    context: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Reformulate query for better search results using AI Stack.
 
     This endpoint uses AI Stack's RAG agent to suggest improved
     query formulations for better retrieval performance.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -587,12 +611,17 @@ async def reformulate_query(query: str, context: Optional[str] = None):
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
 @router.get("/system/insights")
-async def get_system_knowledge_insights(knowledge_category: Optional[str] = None):
+async def get_system_knowledge_insights(
+    knowledge_category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get system-wide knowledge insights and analytics.
 
     This endpoint provides insights about the knowledge base
     using AI Stack's system knowledge manager.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -620,9 +649,14 @@ async def get_system_knowledge_insights(knowledge_category: Optional[str] = None
     error_code_prefix="KNOWLEDGE_ENHANCED",
 )
 @router.get("/stats/enhanced")
-async def get_enhanced_stats(req: Request):
+async def get_enhanced_stats(
+    req: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get enhanced knowledge base statistics including AI Stack metrics.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         # Get local KB stats

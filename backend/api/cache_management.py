@@ -10,9 +10,10 @@ import asyncio
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from src.auth_middleware import check_admin_permission, get_current_user
 from src.utils.advanced_cache_manager import advanced_cache
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -59,8 +60,14 @@ def _process_data_type_stats_results(
     error_code_prefix="CACHE_MANAGEMENT",
 )
 @router.get("/stats", response_model=CacheStatsResponse)
-async def get_cache_stats(data_type: Optional[str] = Query(None)):
-    """Get cache statistics - global or for specific data type"""
+async def get_cache_stats(
+    data_type: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get cache statistics - global or for specific data type.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         if data_type:
             stats = await advanced_cache.get_stats(data_type)
@@ -100,8 +107,14 @@ async def get_cache_stats(data_type: Optional[str] = Query(None)):
     error_code_prefix="CACHE_MANAGEMENT",
 )
 @router.post("/warm")
-async def warm_cache(request: CacheWarmingRequest):
-    """Warm up cache with commonly accessed data"""
+async def warm_cache(
+    request: CacheWarmingRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Warm up cache with commonly accessed data.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Issue #614: Fix N+1 pattern - warm all data types in parallel
         results = await asyncio.gather(
@@ -142,8 +155,12 @@ async def invalidate_cache(
     data_type: str,
     key: str = Query("*", description="Key pattern to invalidate (* for all)"),
     user_id: Optional[str] = Query(None, description="User ID for user-scoped data"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Invalidate cache entries"""
+    """Invalidate cache entries.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         deleted_count = await advanced_cache.invalidate(data_type, key, user_id)
 
@@ -168,8 +185,13 @@ async def invalidate_cache(
     error_code_prefix="CACHE_MANAGEMENT",
 )
 @router.post("/clear-all")
-async def clear_all_cache():
-    """Clear all cache data (use with caution)"""
+async def clear_all_cache(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Clear all cache data (use with caution).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Get all configured data types
         stats = await advanced_cache.get_stats()

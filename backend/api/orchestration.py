@@ -10,10 +10,11 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.auth_middleware import get_current_user
 from src.enhanced_multi_agent_orchestrator import (
     create_and_execute_workflow,
     enhanced_orchestrator,
@@ -42,7 +43,10 @@ class AgentRecommendationRequest(BaseModel):
     error_code_prefix="ORCHESTRATION",
 )
 @router.post("/workflow/execute")
-async def execute_workflow(request: WorkflowRequest):
+async def execute_workflow(
+    request: WorkflowRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Execute a workflow with enhanced multi-agent orchestration.
 
@@ -51,6 +55,8 @@ async def execute_workflow(request: WorkflowRequest):
     - Multiple execution strategies (parallel, sequential, pipeline, collaborative, adaptive)
     - Real-time progress tracking
     - Automatic failover and retry logic
+
+    Issue #744: Requires authenticated user.
     """
     try:
         logger.info("Executing workflow for goal: %s", request.goal)
@@ -123,11 +129,16 @@ async def execute_workflow(request: WorkflowRequest):
     error_code_prefix="ORCHESTRATION",
 )
 @router.post("/workflow/plan")
-async def create_workflow_plan(request: WorkflowRequest):
+async def create_workflow_plan(
+    request: WorkflowRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Create a workflow plan without executing it.
 
     Useful for previewing what actions will be taken before execution.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         logger.info("Creating workflow plan for: %s", request.goal)
@@ -181,11 +192,15 @@ async def create_workflow_plan(request: WorkflowRequest):
     error_code_prefix="ORCHESTRATION",
 )
 @router.get("/agents/performance")
-async def get_agent_performance():
+async def get_agent_performance(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get performance metrics for all agents.
 
     Includes success rates, average execution times, and reliability scores.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         report = enhanced_orchestrator.get_performance_report()
@@ -207,11 +222,16 @@ async def get_agent_performance():
     error_code_prefix="ORCHESTRATION",
 )
 @router.post("/agents/recommend")
-async def recommend_agents(request: AgentRecommendationRequest):
+async def recommend_agents(
+    request: AgentRecommendationRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get agent recommendations for a specific task type and capabilities.
 
     Returns a ranked list of suitable agents based on capabilities and performance.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         from src.enhanced_multi_agent_orchestrator import AgentCapability
@@ -258,9 +278,13 @@ async def recommend_agents(request: AgentRecommendationRequest):
     error_code_prefix="ORCHESTRATION",
 )
 @router.get("/workflow/active")
-async def get_active_workflows():
+async def get_active_workflows(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get list of currently active workflows.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         active_workflows = []
@@ -341,9 +365,13 @@ async def get_execution_strategies():
     error_code_prefix="ORCHESTRATION",
 )
 @router.get("/capabilities")
-async def get_agent_capabilities():
+async def get_agent_capabilities(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get all available agent capabilities and coverage.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         # Get capability coverage
