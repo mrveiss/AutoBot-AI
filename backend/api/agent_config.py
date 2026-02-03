@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
+from backend.services.slm_client import get_slm_client
 from backend.utils.connection_utils import ModelManager
 from src.constants.model_constants import ModelConstants
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -42,6 +43,37 @@ TIER_3_MODEL = os.getenv("AUTOBOT_TIER3_MODEL", DEFAULT_LLM_MODEL)  # Specialize
 TIER_4_MODEL = os.getenv("AUTOBOT_TIER4_MODEL", DEFAULT_LLM_MODEL)  # Advanced
 
 router = APIRouter()
+
+
+async def _get_agent_config_from_slm(agent_id: str) -> Optional[dict]:
+    """
+    Fetch agent config from SLM.
+
+    Args:
+        agent_id: Agent identifier
+
+    Returns:
+        Config dict or None if not found
+    """
+    client = get_slm_client()
+    if not client:
+        return None
+
+    try:
+        config = await client.get_agent_config(agent_id)
+        if config:
+            return {
+                "model": config.get("llm_model"),
+                "provider": config.get("llm_provider"),
+                "endpoint": config.get("llm_endpoint"),
+                "timeout": config.get("llm_timeout"),
+                "temperature": config.get("llm_temperature"),
+                "enabled": config.get("is_active", True),
+            }
+    except Exception as e:
+        logger.warning("Failed to get agent %s from SLM: %s", agent_id, e)
+
+    return None
 
 
 async def _get_available_models() -> list:
@@ -520,16 +552,26 @@ async def list_agents():
 
     agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        # Get current model from config or use default
-        current_model = unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", config["default_model"]
-        )
-        current_provider = unified_config_manager.get_nested(
-            f"agents.{agent_id}.provider", config["provider"]
-        )
-        enabled = unified_config_manager.get_nested(
-            f"agents.{agent_id}.enabled", config["enabled"]
-        )
+        # Try SLM first, fallback to local config
+        slm_config = await _get_agent_config_from_slm(agent_id)
+
+        if slm_config:
+            current_model = slm_config.get("model", config["default_model"])
+            current_provider = slm_config.get("provider", config["provider"])
+            enabled = slm_config.get("enabled", True)
+            config_source = "slm"
+        else:
+            # Fallback to local unified_config_manager
+            current_model = unified_config_manager.get_nested(
+                f"agents.{agent_id}.model", config["default_model"]
+            )
+            current_provider = unified_config_manager.get_nested(
+                f"agents.{agent_id}.provider", config["provider"]
+            )
+            enabled = unified_config_manager.get_nested(
+                f"agents.{agent_id}.enabled", config["enabled"]
+            )
+            config_source = "local"
 
         # Determine status based on configuration
         status = "connected" if enabled and current_model else "disconnected"
@@ -545,6 +587,7 @@ async def list_agents():
             "priority": config["priority"],
             "tasks": config["tasks"],
             "mcp_tools": config.get("mcp_tools", []),
+            "config_source": config_source,
             # Usage tracking requires Redis-based agent metrics service
             # See: backend/services/agent_metrics_service.py (to be implemented)
             "last_used": "N/A",
@@ -583,12 +626,21 @@ async def get_all_agents():
 
     backend_agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        current_model = unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", config["default_model"]
-        )
-        enabled = unified_config_manager.get_nested(
-            f"agents.{agent_id}.enabled", config["enabled"]
-        )
+        # Try SLM first, fallback to local config
+        slm_config = await _get_agent_config_from_slm(agent_id)
+
+        if slm_config:
+            current_model = slm_config.get("model", config["default_model"])
+            enabled = slm_config.get("enabled", True)
+            config_source = "slm"
+        else:
+            current_model = unified_config_manager.get_nested(
+                f"agents.{agent_id}.model", config["default_model"]
+            )
+            enabled = unified_config_manager.get_nested(
+                f"agents.{agent_id}.enabled", config["enabled"]
+            )
+            config_source = "local"
 
         backend_agents.append(
             {
@@ -604,6 +656,7 @@ async def get_all_agents():
                 "mcp_tools": config.get("mcp_tools", []),
                 "invoked_by": config.get("invoked_by", ""),
                 "source_file": config.get("source_file", ""),
+                "config_source": config_source,
             }
         )
 
@@ -638,16 +691,25 @@ async def get_agent_config(agent_id: str):
 
     base_config = DEFAULT_AGENT_CONFIGS[agent_id]
 
-    # Get current configuration
-    current_model = unified_config_manager.get_nested(
-        f"agents.{agent_id}.model", base_config["default_model"]
-    )
-    current_provider = unified_config_manager.get_nested(
-        f"agents.{agent_id}.provider", base_config["provider"]
-    )
-    enabled = unified_config_manager.get_nested(
-        f"agents.{agent_id}.enabled", base_config["enabled"]
-    )
+    # Try SLM first, fallback to local config
+    slm_config = await _get_agent_config_from_slm(agent_id)
+
+    if slm_config:
+        current_model = slm_config.get("model", base_config["default_model"])
+        current_provider = slm_config.get("provider", base_config["provider"])
+        enabled = slm_config.get("enabled", True)
+        config_source = "slm"
+    else:
+        current_model = unified_config_manager.get_nested(
+            f"agents.{agent_id}.model", base_config["default_model"]
+        )
+        current_provider = unified_config_manager.get_nested(
+            f"agents.{agent_id}.provider", base_config["provider"]
+        )
+        enabled = unified_config_manager.get_nested(
+            f"agents.{agent_id}.enabled", base_config["enabled"]
+        )
+        config_source = "local"
 
     # Build detailed response
     agent_config = {
@@ -662,6 +724,7 @@ async def get_agent_config(agent_id: str):
         "mcp_tools": base_config.get("mcp_tools", []),
         "default_model": base_config["default_model"],
         "status": "connected" if enabled and current_model else "disconnected",
+        "config_source": config_source,
         "configuration_options": {
             "available_models": await _get_available_models(),
             "available_providers": ["ollama", "openai", "anthropic"],

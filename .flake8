@@ -39,6 +39,11 @@ exclude =
     dist,
     *.egg-info
 
+# Per-file ignores for intentional patterns
+per-file-ignores =
+    # Agent config contains long documentation strings for each agent
+    backend/api/agent_config.py:E501
+
 # Statistics and verbosity
 statistics = True
 count = True

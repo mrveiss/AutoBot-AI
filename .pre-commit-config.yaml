@@ -19,14 +19,12 @@ repos:
         args: [--profile=black, --line-length=88]
 
   # Python linting with flake8
+  # Uses .flake8 config file for consistent settings across local dev and CI
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0
     hooks:
       - id: flake8
-        args:
-          - "--max-line-length=100"
-          - "--extend-ignore=E203,W503"
-          - "--exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive"
+        # No args - uses .flake8 config file in repo root
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
