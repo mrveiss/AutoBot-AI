@@ -56,6 +56,7 @@ class SystemMetricsCollector:
         # Phase 5 (Issue #348): Prometheus is now the primary metrics store
         try:
             from src.monitoring.prometheus_metrics import get_metrics_manager
+
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:
             self.logger.warning("Prometheus metrics not available: %s", e)
@@ -297,9 +298,10 @@ class SystemMetricsCollector:
                 if service_name == "redis":
                     health_value = await self._check_redis_health()
                 else:
-                    health_value, response_time_ms = await self._check_http_service_health(
-                        http_client, url, timeout
-                    )
+                    (
+                        health_value,
+                        response_time_ms,
+                    ) = await self._check_http_service_health(http_client, url, timeout)
                     # Add response time metric for HTTP services
                     metrics[f"{service_name}_response_time"] = SystemMetric(
                         timestamp=timestamp,
@@ -320,21 +322,126 @@ class SystemMetricsCollector:
 
             # Update Prometheus
             response_time_sec = response_time_ms / 1000 if response_time_ms else None
-            self._update_prometheus_health(service_name, health_value, response_time_sec)
+            self._update_prometheus_health(
+                service_name, health_value, response_time_sec
+            )
 
         return metrics
 
+    async def _get_kb_redis_client(self):
+        """
+        Get async Redis client for knowledge base database.
+
+        Issue #620: Extracted from collect_knowledge_base_metrics.
+
+        Returns:
+            Async Redis client or None if unavailable
+        """
+        kb_redis_client = get_redis_client(database="knowledge", async_client=True)
+        if asyncio.iscoroutine(kb_redis_client):
+            kb_redis_client = await kb_redis_client
+        return kb_redis_client
+
+    async def _collect_kb_vector_metrics(
+        self, redis_client, timestamp: float, metrics: Dict[str, "SystemMetric"]
+    ) -> None:
+        """
+        Collect knowledge base vector count metrics.
+
+        Issue #620: Extracted from collect_knowledge_base_metrics.
+
+        Args:
+            redis_client: Async Redis client
+            timestamp: Metric timestamp
+            metrics: Dictionary to add metrics to
+        """
+        vector_count = 0
+        async for key in redis_client.scan_iter(match="doc:*"):
+            vector_count += 1
+
+        metrics["kb_vector_count"] = SystemMetric(
+            timestamp=timestamp,
+            name="kb_vector_count",
+            value=vector_count,
+            unit="count",
+            category="knowledge_base",
+        )
+
+    async def _collect_kb_cache_metrics(
+        self, redis_client, timestamp: float, metrics: Dict[str, "SystemMetric"]
+    ) -> None:
+        """
+        Collect knowledge base cache metrics including hit rate.
+
+        Issue #620: Extracted from collect_knowledge_base_metrics.
+
+        Args:
+            redis_client: Async Redis client
+            timestamp: Metric timestamp
+            metrics: Dictionary to add metrics to
+        """
+        # Count cache entries
+        cache_count = 0
+        async for key in redis_client.scan_iter(match="kb_cache:*"):
+            cache_count += 1
+
+        metrics["kb_cache_entries"] = SystemMetric(
+            timestamp=timestamp,
+            name="kb_cache_entries",
+            value=cache_count,
+            unit="count",
+            category="knowledge_base",
+        )
+
+        # Calculate cache hit rate if stats available
+        cache_stats = await redis_client.hgetall("kb_cache_stats")
+        if cache_stats:
+            hits = int(cache_stats.get(b"hits") or cache_stats.get("hits", 0))
+            misses = int(cache_stats.get(b"misses") or cache_stats.get("misses", 0))
+            total_requests = hits + misses
+
+            if total_requests > 0:
+                hit_rate = (hits / total_requests) * 100
+                metrics["kb_cache_hit_rate"] = SystemMetric(
+                    timestamp=timestamp,
+                    name="kb_cache_hit_rate",
+                    value=hit_rate,
+                    unit="percent",
+                    category="knowledge_base",
+                )
+
+    def _handle_kb_metrics_error(self, error: Exception) -> None:
+        """
+        Handle knowledge base metrics collection errors.
+
+        Issue #620: Extracted from collect_knowledge_base_metrics.
+
+        Args:
+            error: Exception that occurred
+        """
+        error_msg = str(error)
+        if "Authentication required" in error_msg or "NOAUTH" in error_msg:
+            if not self._auth_error_logged:
+                self.logger.warning(
+                    "Knowledge base metrics collection skipped: Redis authentication required. "
+                    "Configure Redis credentials in get_redis_client() to enable KB metrics."
+                )
+                self._auth_error_logged = True
+        else:
+            self.logger.error("Error collecting knowledge base metrics: %s", error)
+
     async def collect_knowledge_base_metrics(self) -> Dict[str, SystemMetric]:
-        """Collect knowledge base performance metrics"""
+        """
+        Collect knowledge base performance metrics.
+
+        Issue #620: Refactored to use helper methods.
+        """
         metrics = {}
         timestamp = time.time()
 
         try:
-            # Phase 5 (Issue #348): Use centralized client directly
-            # Knowledge base data (doc:*, kb_cache:*) is stored in the "knowledge" Redis database
-            kb_redis_client = get_redis_client(database="knowledge", async_client=True)
-            if asyncio.iscoroutine(kb_redis_client):
-                kb_redis_client = await kb_redis_client
+            # Issue #620: Use helper to get Redis client
+            kb_redis_client = await self._get_kb_redis_client()
 
             if not kb_redis_client:
                 self.logger.debug(
@@ -342,63 +449,13 @@ class SystemMetricsCollector:
                 )
                 return metrics
 
-            # Get knowledge base statistics from Redis
-            # Count vector entries
-            vector_count = 0
-            async for key in kb_redis_client.scan_iter(match="doc:*"):
-                vector_count += 1
-
-            metrics["kb_vector_count"] = SystemMetric(
-                timestamp=timestamp,
-                name="kb_vector_count",
-                value=vector_count,
-                unit="count",
-                category="knowledge_base",
-            )
-
-            # Get cache statistics
-            cache_count = 0
-            async for key in kb_redis_client.scan_iter(match="kb_cache:*"):
-                cache_count += 1
-
-            metrics["kb_cache_entries"] = SystemMetric(
-                timestamp=timestamp,
-                name="kb_cache_entries",
-                value=cache_count,
-                unit="count",
-                category="knowledge_base",
-            )
-
-            # Estimate cache hit rate (if available)
-            cache_stats_key = "kb_cache_stats"
-            cache_stats = await kb_redis_client.hgetall(cache_stats_key)
-            if cache_stats:
-                hits = int(cache_stats.get(b"hits") or cache_stats.get("hits", 0))
-                misses = int(cache_stats.get(b"misses") or cache_stats.get("misses", 0))
-                total_requests = hits + misses
-
-                if total_requests > 0:
-                    hit_rate = (hits / total_requests) * 100
-                    metrics["kb_cache_hit_rate"] = SystemMetric(
-                        timestamp=timestamp,
-                        name="kb_cache_hit_rate",
-                        value=hit_rate,
-                        unit="percent",
-                        category="knowledge_base",
-                    )
+            # Issue #620: Use helpers for metric collection
+            await self._collect_kb_vector_metrics(kb_redis_client, timestamp, metrics)
+            await self._collect_kb_cache_metrics(kb_redis_client, timestamp, metrics)
 
         except Exception as e:
-            # CRITICAL FIX: Don't spam logs with authentication errors - log once and skip
-            error_msg = str(e)
-            if "Authentication required" in error_msg or "NOAUTH" in error_msg:
-                if not self._auth_error_logged:
-                    self.logger.warning(
-                        "Knowledge base metrics collection skipped: Redis authentication required. "
-                        "Configure Redis credentials in get_redis_client() to enable KB metrics."
-                    )
-                    self._auth_error_logged = True
-            else:
-                self.logger.error("Error collecting knowledge base metrics: %s", e)
+            # Issue #620: Use helper for error handling
+            self._handle_kb_metrics_error(e)
 
         return metrics
 
@@ -462,7 +519,9 @@ class SystemMetricsCollector:
                     "status": (
                         "healthy"
                         if overall_health > 0.8
-                        else "degraded" if overall_health > 0.5 else "critical"
+                        else "degraded"
+                        if overall_health > 0.5
+                        else "critical"
                     ),
                 }
 
@@ -490,7 +549,9 @@ class SystemMetricsCollector:
                 metrics = await self.collect_all_metrics()
 
                 if metrics:
-                    self.logger.debug("Collected %s metrics (pushed to Prometheus)", len(metrics))
+                    self.logger.debug(
+                        "Collected %s metrics (pushed to Prometheus)", len(metrics)
+                    )
 
                 # Wait for next collection
                 await asyncio.sleep(self._collection_interval)

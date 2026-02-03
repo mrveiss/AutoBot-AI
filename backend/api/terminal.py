@@ -795,6 +795,90 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
 # This endpoint now returns a deprecation message and redirects to SLM
 
 
+async def _init_ssh_redis_client():
+    """
+    Initialize Redis client for SSH terminal logging.
+
+    Issue #620: Extracted from ssh_terminal_websocket to reduce function length.
+
+    Returns:
+        Redis client or None if unavailable
+    """
+    try:
+        from backend.dependencies import get_async_redis_client
+
+        return await get_async_redis_client(database="main")
+    except Exception as e:
+        logger.warning("Could not get Redis client for SSH terminal logging: %s", e)
+        return None
+
+
+async def _setup_ssh_terminal(
+    websocket: WebSocket,
+    session_id: str,
+    host_id: str,
+    conversation_id: str,
+    redis_client,
+) -> "SSHTerminalWebSocket":
+    """
+    Create and register SSH terminal handler.
+
+    Issue #620: Extracted from ssh_terminal_websocket to reduce function length.
+
+    Args:
+        websocket: WebSocket connection
+        session_id: Unique session identifier
+        host_id: Target host ID
+        conversation_id: Optional conversation ID
+        redis_client: Redis client for logging
+
+    Returns:
+        SSHTerminalWebSocket instance
+    """
+    terminal = SSHTerminalWebSocket(
+        websocket=websocket,
+        session_id=session_id,
+        host_id=host_id,
+        conversation_id=conversation_id,
+        redis_client=redis_client,
+    )
+    await ssh_terminal_manager.add_session(session_id, terminal)
+    return terminal
+
+
+async def _run_ssh_message_loop(
+    websocket: WebSocket, terminal: "SSHTerminalWebSocket", session_id: str
+) -> None:
+    """
+    Run SSH WebSocket message handling loop.
+
+    Issue #620: Extracted from ssh_terminal_websocket to reduce function length.
+
+    Args:
+        websocket: WebSocket connection
+        terminal: SSH terminal handler
+        session_id: Session identifier for logging
+    """
+    try:
+        while terminal.active:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            await terminal.handle_message(message)
+    except WebSocketDisconnect:
+        logger.info("SSH WebSocket disconnected: %s", session_id)
+    except Exception as e:
+        logger.error("Error in SSH WebSocket handling: %s", e)
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "error",
+                    "content": f"SSH terminal error: {str(e)}",
+                    "timestamp": time.time(),
+                }
+            )
+        )
+
+
 @router.websocket("/ws/ssh/{host_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -810,6 +894,8 @@ async def ssh_terminal_websocket(
     DEPRECATED: SSH terminal connections to infrastructure hosts.
 
     Issue #729: This endpoint has been deprecated as part of layer separation.
+    Issue #620: Refactored to use helper functions.
+
     SSH connections to infrastructure hosts are now handled by slm-server.
 
     Use slm-admin → Tools → Terminal or the SLM API directly:
@@ -820,31 +906,16 @@ async def ssh_terminal_websocket(
     message directing clients to use SLM for infrastructure connections.
     """
     await websocket.accept()
-
-    # Generate unique session ID
     session_id = f"ssh-{host_id}-{uuid.uuid4().hex[:8]}"
 
     try:
-        # Get Redis client for logging
-        redis_client = None
-        try:
-            from backend.dependencies import get_async_redis_client
+        # Issue #620: Use helper for Redis client initialization
+        redis_client = await _init_ssh_redis_client()
 
-            redis_client = await get_async_redis_client(database="main")
-        except Exception as e:
-            logger.warning("Could not get Redis client for SSH terminal logging: %s", e)
-
-        # Create SSH terminal handler
-        terminal = SSHTerminalWebSocket(
-            websocket=websocket,
-            session_id=session_id,
-            host_id=host_id,
-            conversation_id=conversation_id,
-            redis_client=redis_client,
+        # Issue #620: Use helper for terminal setup
+        terminal = await _setup_ssh_terminal(
+            websocket, session_id, host_id, conversation_id, redis_client
         )
-
-        # Register with SSH terminal manager
-        await ssh_terminal_manager.add_session(session_id, terminal)
 
         # Start SSH session
         if not await terminal.start():
@@ -855,31 +926,12 @@ async def ssh_terminal_websocket(
             "SSH WebSocket connection established: %s -> host %s", session_id, host_id
         )
 
-        # Handle WebSocket communication
-        try:
-            while terminal.active:
-                data = await websocket.receive_text()
-                message = json.loads(data)
-                await terminal.handle_message(message)
-
-        except WebSocketDisconnect:
-            logger.info("SSH WebSocket disconnected: %s", session_id)
-        except Exception as e:
-            logger.error("Error in SSH WebSocket handling: %s", e)
-            await websocket.send_text(
-                json.dumps(
-                    {
-                        "type": "error",
-                        "content": f"SSH terminal error: {str(e)}",
-                        "timestamp": time.time(),
-                    }
-                )
-            )
+        # Issue #620: Use helper for message loop
+        await _run_ssh_message_loop(websocket, terminal, session_id)
 
     except Exception as e:
         logger.error("Error establishing SSH WebSocket connection: %s", e)
     finally:
-        # Clean up
         await ssh_terminal_manager.close_session(session_id)
 
 
