@@ -68,6 +68,21 @@ class CodeStatus(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+class RoleStatus(str, enum.Enum):
+    """Role detection status (Issue #779)."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    NOT_INSTALLED = "not_installed"
+
+
+class SyncType(str, enum.Enum):
+    """Code sync type (Issue #779)."""
+
+    COMPONENT = "component"
+    PACKAGE = "package"
+
+
 class Node(Base):
     """Node model representing a managed machine."""
 
@@ -841,4 +856,30 @@ class UpdateSchedule(Base):
     # Metadata
     created_by = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# Role-Based Code Sync Models (Issue #779)
+# =============================================================================
+
+
+class Role(Base):
+    """Role definition for code distribution (Issue #779)."""
+
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)
+    display_name = Column(String(100), nullable=True)
+    sync_type = Column(String(20), default=SyncType.COMPONENT.value)
+    source_paths = Column(JSON, nullable=False, default=list)
+    target_path = Column(String(255), nullable=False)
+    systemd_service = Column(String(100), nullable=True)
+    auto_restart = Column(Boolean, default=False)
+    health_check_port = Column(Integer, nullable=True)
+    health_check_path = Column(String(255), nullable=True)
+    pre_sync_cmd = Column(Text, nullable=True)
+    post_sync_cmd = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
