@@ -57,6 +57,61 @@ class UserResponse(BaseModel):
 
 
 # =============================================================================
+# Role Detection Schemas (Issue #779)
+# =============================================================================
+
+
+class PortInfo(BaseModel):
+    """Listening port info from agent."""
+
+    port: int
+    process: Optional[str] = None
+    pid: Optional[int] = None
+
+
+class RoleReportItem(BaseModel):
+    """Single role detection report from agent."""
+
+    path_exists: bool = False
+    path: Optional[str] = None
+    service_running: bool = False
+    service_name: Optional[str] = None
+    ports: List[int] = Field(default_factory=list)
+    version: Optional[str] = None
+    status: str = "not_installed"
+
+
+class NodeRoleResponse(BaseModel):
+    """Node role assignment with status (Issue #779)."""
+
+    role_name: str
+    assignment_type: str = "auto"  # auto | manual
+    status: str = "not_installed"  # active | inactive | not_installed
+    current_version: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class NodeRolesResponse(BaseModel):
+    """All roles for a node (Issue #779)."""
+
+    node_id: str
+    detected_roles: List[str] = Field(default_factory=list)
+    role_versions: Dict[str, str] = Field(default_factory=dict)
+    listening_ports: List[PortInfo] = Field(default_factory=list)
+    roles: List[NodeRoleResponse] = Field(default_factory=list)
+
+
+class NodeRoleAssignRequest(BaseModel):
+    """Request to assign role to a node (Issue #779)."""
+
+    role_name: str
+    assignment_type: str = "manual"
+
+
+# =============================================================================
 # Node Schemas
 # =============================================================================
 
@@ -127,6 +182,9 @@ class HeartbeatRequest(BaseModel):
     os_info: Optional[str] = None
     code_version: Optional[str] = None  # Issue #741: Git commit hash
     extra_data: Dict = Field(default_factory=dict)
+    # Role detection (Issue #779)
+    role_report: Dict[str, RoleReportItem] = Field(default_factory=dict)
+    listening_ports: List[PortInfo] = Field(default_factory=list)
 
 
 class HeartbeatResponse(BaseModel):

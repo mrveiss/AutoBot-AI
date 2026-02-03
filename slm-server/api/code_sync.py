@@ -20,7 +20,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from models.database import CodeStatus, Node, Setting, UpdateSchedule
+from models.database import (
+    CodeSource,
+    CodeStatus,
+    Node,
+    NodeRole,
+    Setting,
+    UpdateSchedule,
+)
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -43,6 +50,7 @@ from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
 from services.git_tracker import get_git_tracker
+from services.sync_orchestrator import get_sync_orchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -925,3 +933,113 @@ async def run_schedule(
         schedule_id=schedule_id,
         job_id=job_id,
     )
+
+
+# =============================================================================
+# Role-Based Code Sync API Endpoints (Issue #779)
+# =============================================================================
+
+
+@router.post("/pull")
+async def pull_from_source(
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Pull code from code-source to SLM cache (Issue #779).
+
+    Fetches the latest code from the designated code-source node
+    and caches it locally for distribution to fleet nodes.
+    """
+    orchestrator = get_sync_orchestrator()
+    success, message, commit = await orchestrator.pull_from_source()
+
+    return {
+        "success": success,
+        "message": message,
+        "commit": commit,
+    }
+
+
+@router.post("/roles/{role_name}/sync")
+async def sync_role(
+    role_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    node_ids: Optional[List[str]] = None,
+    restart: bool = True,
+) -> dict:
+    """
+    Sync a role to all nodes that have it (Issue #779).
+
+    Args:
+        role_name: Role to sync
+        node_ids: Optional filter - only sync to these nodes
+        restart: Whether to restart services after sync
+    """
+    # Get latest commit from code source
+    result = await db.execute(
+        select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
+    )
+    source = result.scalar_one_or_none()
+
+    if not source or not source.last_known_commit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No code version available. Pull from source first.",
+        )
+
+    commit = source.last_known_commit
+
+    # Get nodes with this role detected or assigned
+    if node_ids:
+        role_result = await db.execute(
+            select(NodeRole).where(
+                NodeRole.role_name == role_name,
+                NodeRole.node_id.in_(node_ids),
+            )
+        )
+    else:
+        role_result = await db.execute(
+            select(NodeRole).where(NodeRole.role_name == role_name)
+        )
+
+    node_roles = role_result.scalars().all()
+
+    if not node_roles:
+        return {
+            "success": True,
+            "message": f"No nodes have role '{role_name}' assigned",
+            "nodes_synced": 0,
+        }
+
+    # Sync each node
+    orchestrator = get_sync_orchestrator()
+    results = []
+    success_count = 0
+
+    for nr in node_roles:
+        ok, msg = await orchestrator.sync_node_role(
+            node_id=nr.node_id,
+            role_name=role_name,
+            commit=commit,
+            restart=restart,
+        )
+        results.append({"node_id": nr.node_id, "success": ok, "message": msg})
+        if ok:
+            success_count += 1
+
+    logger.info(
+        "Role sync complete: %s - %d/%d successful",
+        role_name,
+        success_count,
+        len(node_roles),
+    )
+
+    return {
+        "success": success_count > 0,
+        "message": f"Synced {success_count}/{len(node_roles)} nodes",
+        "role_name": role_name,
+        "commit": commit,
+        "nodes_synced": success_count,
+        "results": results,
+    }

@@ -68,6 +68,21 @@ class CodeStatus(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+class RoleStatus(str, enum.Enum):
+    """Role detection status (Issue #779)."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    NOT_INSTALLED = "not_installed"
+
+
+class SyncType(str, enum.Enum):
+    """Code sync type (Issue #779)."""
+
+    COMPONENT = "component"
+    PACKAGE = "package"
+
+
 class Node(Base):
     """Node model representing a managed machine."""
 
@@ -99,6 +114,11 @@ class Node(Base):
     # Code version tracking (Issue #741)
     code_version = Column(String(64), nullable=True)
     code_status = Column(String(20), default=CodeStatus.UNKNOWN.value)
+
+    # Role-based tracking (Issue #779)
+    detected_roles = Column(JSON, default=list)
+    listening_ports = Column(JSON, default=list)
+    role_versions = Column(JSON, default=dict)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -841,4 +861,65 @@ class UpdateSchedule(Base):
     # Metadata
     created_by = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# Role-Based Code Sync Models (Issue #779)
+# =============================================================================
+
+
+class Role(Base):
+    """Role definition for code distribution (Issue #779)."""
+
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False, index=True)
+    display_name = Column(String(100), nullable=True)
+    sync_type = Column(String(20), default=SyncType.COMPONENT.value)
+    source_paths = Column(JSON, nullable=False, default=list)
+    target_path = Column(String(255), nullable=False)
+    systemd_service = Column(String(100), nullable=True)
+    auto_restart = Column(Boolean, default=False)
+    health_check_port = Column(Integer, nullable=True)
+    health_check_path = Column(String(255), nullable=True)
+    pre_sync_cmd = Column(Text, nullable=True)
+    post_sync_cmd = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class NodeRole(Base):
+    """Node-role assignment with version tracking (Issue #779)."""
+
+    __tablename__ = "node_roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    role_name = Column(String(50), nullable=False, index=True)
+    assignment_type = Column(String(20), default="auto")  # auto | manual
+    status = Column(String(20), default=RoleStatus.NOT_INSTALLED.value)
+    current_version = Column(String(64), nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_role"),)
+
+
+class CodeSource(Base):
+    """Code source node configuration (Issue #779)."""
+
+    __tablename__ = "code_sources"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    is_active = Column(Boolean, default=False)
+    repo_path = Column(String(255), nullable=False)
+    branch = Column(String(100), default="main")
+    last_known_commit = Column(String(64), nullable=True)
+    last_notified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

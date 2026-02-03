@@ -25,6 +25,7 @@ from models.database import (
     EventType,
     Node,
     NodeEvent,
+    NodeRole,
     NodeStatus,
     Setting,
 )
@@ -41,7 +42,11 @@ from models.schemas import (
     NodeEventResponse,
     NodeListResponse,
     NodeResponse,
+    NodeRoleAssignRequest,
+    NodeRoleResponse,
+    NodeRolesResponse,
     NodeUpdate,
+    PortInfo,
 )
 from services.auth import get_current_user
 from services.database import get_db
@@ -84,6 +89,47 @@ async def _create_node_event(
     db.add(event)
     await db.flush()  # Flush but don't commit - let caller handle transaction
     return event
+
+
+async def _process_role_report(
+    db: AsyncSession, node_id: str, role_report: dict
+) -> None:
+    """
+    Process role report from agent heartbeat (Issue #779).
+
+    Updates NodeRole entries based on detected roles.
+    """
+    from models.schemas import RoleReportItem
+
+    for role_name, report_data in role_report.items():
+        # Handle both dict and RoleReportItem
+        if isinstance(report_data, dict):
+            report = RoleReportItem(**report_data)
+        else:
+            report = report_data
+
+        # Find or create NodeRole entry
+        result = await db.execute(
+            select(NodeRole).where(
+                NodeRole.node_id == node_id, NodeRole.role_name == role_name
+            )
+        )
+        node_role = result.scalar_one_or_none()
+
+        if not node_role:
+            # Create new NodeRole with auto assignment type
+            node_role = NodeRole(
+                node_id=node_id,
+                role_name=role_name,
+                assignment_type="auto",
+            )
+            db.add(node_role)
+
+        # Update role status
+        node_role.status = report.status
+        node_role.current_version = report.version
+
+    await db.flush()
 
 
 @router.get("", response_model=NodeListResponse)
@@ -290,6 +336,142 @@ async def update_node_roles(
     return NodeResponse.model_validate(node)
 
 
+@router.get("/{node_id}/detected-roles", response_model=NodeRolesResponse)
+async def get_node_detected_roles(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeRolesResponse:
+    """
+    Get detected roles for a node (Issue #779).
+
+    Returns all roles detected by the agent, including their status,
+    version, and sync history.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    # Get all NodeRole entries for this node
+    role_result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
+    node_roles = list(role_result.scalars().all())
+
+    # Convert listening_ports from dict back to PortInfo
+    listening_ports = []
+    if node.listening_ports:
+        for p in node.listening_ports:
+            if isinstance(p, dict):
+                listening_ports.append(PortInfo(**p))
+
+    return NodeRolesResponse(
+        node_id=node_id,
+        detected_roles=node.detected_roles or [],
+        role_versions=node.role_versions or {},
+        listening_ports=listening_ports,
+        roles=[NodeRoleResponse.model_validate(r) for r in node_roles],
+    )
+
+
+@router.post("/{node_id}/detected-roles", response_model=NodeRoleResponse)
+async def assign_role_to_node(
+    node_id: str,
+    role_request: NodeRoleAssignRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeRoleResponse:
+    """
+    Manually assign a role to a node (Issue #779).
+
+    Used for manual role assignment when auto-detection doesn't apply.
+    """
+    # Verify node exists
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    # Check if role assignment already exists
+    role_result = await db.execute(
+        select(NodeRole).where(
+            NodeRole.node_id == node_id, NodeRole.role_name == role_request.role_name
+        )
+    )
+    existing = role_result.scalar_one_or_none()
+
+    if existing:
+        # Update assignment type to manual
+        existing.assignment_type = role_request.assignment_type
+        await db.commit()
+        await db.refresh(existing)
+        logger.info(
+            "Updated role assignment: %s -> %s (%s)",
+            node_id,
+            role_request.role_name,
+            role_request.assignment_type,
+        )
+        return NodeRoleResponse.model_validate(existing)
+
+    # Create new role assignment
+    node_role = NodeRole(
+        node_id=node_id,
+        role_name=role_request.role_name,
+        assignment_type=role_request.assignment_type,
+        status="not_installed",
+    )
+    db.add(node_role)
+    await db.commit()
+    await db.refresh(node_role)
+
+    logger.info(
+        "Assigned role to node: %s -> %s (%s)",
+        node_id,
+        role_request.role_name,
+        role_request.assignment_type,
+    )
+    return NodeRoleResponse.model_validate(node_role)
+
+
+@router.delete("/{node_id}/detected-roles/{role_name}")
+async def remove_role_from_node(
+    node_id: str,
+    role_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Remove a role assignment from a node (Issue #779).
+
+    Only removes the assignment, not the actual role installation.
+    """
+    result = await db.execute(
+        select(NodeRole).where(
+            NodeRole.node_id == node_id, NodeRole.role_name == role_name
+        )
+    )
+    node_role = result.scalar_one_or_none()
+
+    if not node_role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role assignment not found: {role_name}",
+        )
+
+    await db.delete(node_role)
+    await db.commit()
+
+    logger.info("Removed role from node: %s -> %s", node_id, role_name)
+    return {"success": True, "message": f"Role '{role_name}' removed from node"}
+
+
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_node(
     node_id: str,
@@ -434,6 +616,21 @@ async def node_heartbeat(
     # Store code_version if provided (Issue #741)
     if heartbeat.code_version:
         node.code_version = heartbeat.code_version
+
+    # Process role report (Issue #779)
+    if heartbeat.role_report:
+        await _process_role_report(db, node_id, heartbeat.role_report)
+        # Update node's detected_roles and role_versions
+        node.detected_roles = list(heartbeat.role_report.keys())
+        node.role_versions = {
+            name: report.version
+            for name, report in heartbeat.role_report.items()
+            if report.version
+        }
+
+    # Store listening ports (Issue #779)
+    if heartbeat.listening_ports:
+        node.listening_ports = [p.model_dump() for p in heartbeat.listening_ports]
 
     # Get latest agent code version from settings (Issue #741)
     latest_result = await db.execute(
