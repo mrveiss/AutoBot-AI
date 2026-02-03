@@ -7,7 +7,7 @@ Updated to use improved TerminalWebSocketManager for race condition fixes
 import asyncio
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - required for PTY terminal operations
 import threading
 from abc import ABC, abstractmethod
 from typing import Optional

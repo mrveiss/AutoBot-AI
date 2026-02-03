@@ -342,67 +342,81 @@ class ConsolidatedTerminalWebSocket:
                 {"type": "error", "content": "Terminal initialization failed"}
             )
 
+    async def _cleanup_flush_buffer(self) -> None:
+        """Flush remaining output buffer to chat on cleanup. Issue #620."""
+        if not (self.chat_history_manager and self.conversation_id):
+            return
+
+        try:
+            async with self._output_lock:
+                await _flush_cleanup_buffer(
+                    self.chat_history_manager,
+                    self.conversation_id,
+                    self._output_buffer,
+                )
+                self._output_buffer = ""
+        except Exception as e:
+            logger.error("Failed to flush output buffer: %s", e)
+
+    def _cleanup_signal_output_sender(self) -> None:
+        """Signal output sender to stop. Issue #620."""
+        if not hasattr(self, "output_queue"):
+            return
+
+        try:
+            import queue
+
+            self.output_queue.put_nowait({"type": "stop"})
+        except queue.Full:
+            logger.debug(
+                "Output queue full during shutdown, sender will stop via active flag"
+            )
+        except Exception as e:
+            logger.error("Error signaling output sender to stop: %s", e)
+
+    async def _cleanup_cancel_task(self, task, task_name: str) -> None:
+        """Cancel an async task with timeout. Issue #620."""
+        if not task:
+            return
+
+        try:
+            task.cancel()
+            await asyncio.wait_for(task, timeout=1.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            logger.debug("%s cancelled during normal shutdown", task_name)
+        except Exception as e:
+            logger.error("Error cancelling %s: %s", task_name, e)
+
+    async def _cleanup_pty_session(self) -> None:
+        """Close PTY session using manager. Issue #620."""
+        if not self.pty_process:
+            return
+
+        try:
+            from backend.services.simple_pty import simple_pty_manager
+
+            simple_pty_manager.close_session(self.session_id)
+            self.pty_process = None
+            logger.info("PTY session %s closed", self.session_id)
+        except Exception as e:
+            logger.error("Error closing PTY session: %s", e)
+
     async def cleanup(self):
-        """Clean up terminal resources"""
+        """Clean up terminal resources."""
         self.active = False
 
-        # CRITICAL FIX: Flush any remaining buffered output to chat before cleanup
-        # Use lock to prevent race condition with concurrent buffer access
-        if self.chat_history_manager and self.conversation_id:
-            try:
-                async with self._output_lock:
-                    await _flush_cleanup_buffer(
-                        self.chat_history_manager,
-                        self.conversation_id,
-                        self._output_buffer,
-                    )
-                    self._output_buffer = ""
-            except Exception as e:
-                logger.error("Failed to flush output buffer: %s", e)
-
-        # Phase 3: Signal async output sender to stop
-        if hasattr(self, "output_queue"):
-            try:
-                import queue
-
-                self.output_queue.put_nowait({"type": "stop"})
-            except queue.Full:
-                logger.debug(
-                    "Output queue full during shutdown, sender will stop via active flag"
-                )
-            except Exception as e:
-                logger.error("Error signaling output sender to stop: %s", e)
+        await self._cleanup_flush_buffer()
+        self._cleanup_signal_output_sender()
 
         # Cancel output reader task if running
-        if hasattr(self, "pty_output_task") and self.pty_output_task:
-            try:
-                self.pty_output_task.cancel()
-                await asyncio.wait_for(self.pty_output_task, timeout=1.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                logger.debug("Output task cancelled during normal shutdown")
-            except Exception as e:
-                logger.error("Error cancelling output task: %s", e)
+        pty_task = getattr(self, "pty_output_task", None)
+        await self._cleanup_cancel_task(pty_task, "Output task")
 
         # Cancel async output sender task if running
-        if hasattr(self, "_output_sender_task") and self._output_sender_task:
-            try:
-                self._output_sender_task.cancel()
-                await asyncio.wait_for(self._output_sender_task, timeout=1.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                logger.debug("Output sender task cancelled during normal shutdown")
-            except Exception as e:
-                logger.error("Error cancelling output sender task: %s", e)
+        sender_task = getattr(self, "_output_sender_task", None)
+        await self._cleanup_cancel_task(sender_task, "Output sender task")
 
-        # Close PTY session using manager
-        if self.pty_process:
-            try:
-                from backend.services.simple_pty import simple_pty_manager
-
-                simple_pty_manager.close_session(self.session_id)
-                self.pty_process = None
-                logger.info("PTY session %s closed", self.session_id)
-            except Exception as e:
-                logger.error("Error closing PTY session: %s", e)
+        await self._cleanup_pty_session()
 
     def _get_message_handlers(self) -> Dict[str, Callable[[dict], Awaitable[None]]]:
         """Get dispatch table for message type handlers (Issue #336 - extracted helper)."""
@@ -497,62 +511,79 @@ class ConsolidatedTerminalWebSocket:
 
         return prefix
 
-    async def _get_path_completions(self, prefix: str, max_results: int = 20) -> list:
-        """
-        Get file/directory completions for a path prefix.
-
-        Issue #756: Simple directory listing for tab completion.
+    def _parse_completion_path(self, prefix: str) -> tuple:
+        """Parse prefix into directory and partial name. Issue #620.
 
         Args:
             prefix: Path prefix to complete
-            max_results: Maximum number of completions to return
 
         Returns:
-            List of matching paths with directory indicator (/)
+            Tuple of (directory, partial_name, success)
         """
+        # Normalize path
+        if prefix.startswith("~"):
+            prefix = os.path.expanduser(prefix)
 
+        # Get directory and partial name
+        if os.path.isdir(prefix):
+            return prefix, "", True
+
+        directory = os.path.dirname(prefix) or "."
+        partial = os.path.basename(prefix)
+
+        if not os.path.isdir(directory):
+            return "", "", False
+
+        return directory, partial, True
+
+    def _filter_entries_for_completion(
+        self, entries: list, directory: str, partial: str, max_results: int
+    ) -> list:
+        """Filter directory entries by partial match. Issue #620.
+
+        Args:
+            entries: List of directory entries
+            directory: Directory path
+            partial: Partial name to match
+            max_results: Maximum number of results
+
+        Returns:
+            Sorted list of matching entries with directory indicator
+        """
+        matching = []
+        for entry in entries:
+            if partial and not entry.lower().startswith(partial.lower()):
+                continue
+
+            full_path = os.path.join(directory, entry)
+            if os.path.isdir(full_path):
+                matching.append(entry + "/")
+            else:
+                matching.append(entry)
+
+            if len(matching) >= max_results:
+                break
+
+        return sorted(matching)
+
+    async def _get_path_completions(self, prefix: str, max_results: int = 20) -> list:
+        """Get file/directory completions for a path prefix. Issue #756."""
         if not prefix:
             return []
 
         try:
-            # Normalize path
-            if prefix.startswith("~"):
-                prefix = os.path.expanduser(prefix)
-
-            # Get directory and partial name
-            if os.path.isdir(prefix):
-                directory = prefix
-                partial = ""
-            else:
-                directory = os.path.dirname(prefix) or "."
-                partial = os.path.basename(prefix)
-
-            # Check directory exists
-            if not os.path.isdir(directory):
+            directory, partial, success = self._parse_completion_path(prefix)
+            if not success:
                 return []
 
-            # List directory contents
             try:
                 entries = os.listdir(directory)
             except PermissionError:
                 return []
 
-            # Filter by prefix
-            matching = []
-            for entry in entries:
-                if partial and not entry.lower().startswith(partial.lower()):
-                    continue
-
-                full_path = os.path.join(directory, entry)
-                if os.path.isdir(full_path):
-                    matching.append(entry + "/")
-                else:
-                    matching.append(entry)
-
-                if len(matching) >= max_results:
-                    break
-
-            return sorted(matching)
+            return self._filter_entries_for_completion(
+                entries, directory, partial, max_results
+            )
 
         except Exception as e:
             logger.debug("Path completion error for '%s': %s", prefix, e)
@@ -728,46 +759,41 @@ class ConsolidatedTerminalWebSocket:
 
         return False  # Command was not blocked
 
-    async def _handle_input_message(self, message: dict):
-        """
-        Handle terminal input with security assessment.
-
-        Issue #281: Refactored from 169 lines to use extracted helper methods.
-        """
-        logger.info(
-            f"[_handle_input_message] CALLED for session {self.session_id}, message: {str(message)[:100]}"
-        )
-
-        # Support both 'text' and 'content' fields for compatibility
+    def _extract_input_text(self, message: dict) -> str:
+        """Extract input text from message with logging. Issue #620."""
         text = message.get("text") or message.get("content", "")
         logger.info(
             f"[_handle_input_message] Extracted text: {repr(text[:50]) if text else 'EMPTY'}"
         )
+        return text
 
+    def _extract_command_from_buffer(self, text: str) -> str:
+        """Extract complete command from buffer and text. Issue #620."""
+        command = (self._command_buffer + text).split("\r")[0].split("\n")[0].strip()
+        self._command_buffer = ""  # Reset buffer
+        return command
+
+    async def _handle_input_message(self, message: dict):
+        """Handle terminal input with security assessment. Issue #281."""
+        logger.info(
+            f"[_handle_input_message] CALLED for session {self.session_id}, "
+            f"message: {str(message)[:100]}"
+        )
+
+        text = self._extract_input_text(message)
         if not text:
-            logger.warning(
-                "[_handle_input_message] No text found in message, returning"
-            )
+            logger.warning("[_handle_input_message] No text found in message")
             return
 
-        # Check if command is complete (Enter pressed)
-        is_command_complete = "\r" in text or "\n" in text
-
-        # Build command buffer for this session
+        # Initialize command buffer if needed
         if not hasattr(self, "_command_buffer"):
             self._command_buffer = ""
 
-        # Log ALL input to transcript (Issue #281: uses helper)
         await self._write_to_transcript(text)
 
-        if is_command_complete:
-            # Extract command before the newline
-            command = (
-                (self._command_buffer + text).split("\r")[0].split("\n")[0].strip()
-            )
-            self._command_buffer = ""  # Reset buffer
-
-            # Only process non-empty commands
+        # Check if command is complete (Enter pressed)
+        if "\r" in text or "\n" in text:
+            command = self._extract_command_from_buffer(text)
             if not command:
                 await self.send_to_terminal(text)
                 return
@@ -775,11 +801,8 @@ class ConsolidatedTerminalWebSocket:
             logger.info(
                 f"[COMPLETE COMMAND] Session {self.session_id}: {repr(command)}"
             )
-
-            # Handle complete command with security (Issue #281: uses helper)
             await self._handle_complete_command(command, text)
         else:
-            # Accumulate characters until Enter is pressed
             self._command_buffer += text
             await self.send_to_terminal(text)
 
