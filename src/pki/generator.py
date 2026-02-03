@@ -95,6 +95,118 @@ subjectAltName = {san_string}
     conf_path.write_text(conf_content, encoding="utf-8")
 
 
+def _generate_service_key(key_path: Path, key_size: int, vm_name: str) -> bool:
+    """
+    Generate private key for a service certificate.
+
+    Extracted from _generate_service_cert to reduce function complexity. Issue #620.
+
+    Args:
+        key_path: Path to write the private key
+        key_size: RSA key size in bits
+        vm_name: VM name for logging context
+
+    Returns:
+        True if key generation succeeded
+    """
+    key_cmd = [
+        "openssl",
+        "genrsa",
+        "-out",
+        str(key_path),
+        str(key_size),
+    ]
+    success, _ = _run_openssl_command(key_cmd, "generate key", vm_name)
+    if success:
+        os.chmod(key_path, 0o600)
+    return success
+
+
+def _generate_csr(
+    key_path: Path, csr_path: Path, conf_path: Path, vm_name: str
+) -> bool:
+    """
+    Generate Certificate Signing Request for a service.
+
+    Extracted from _generate_service_cert to reduce function complexity. Issue #620.
+
+    Args:
+        key_path: Path to the private key
+        csr_path: Path to write the CSR
+        conf_path: Path to the OpenSSL config file
+        vm_name: VM name for logging context
+
+    Returns:
+        True if CSR generation succeeded
+    """
+    csr_cmd = [
+        "openssl",
+        "req",
+        "-new",
+        "-key",
+        str(key_path),
+        "-out",
+        str(csr_path),
+        "-config",
+        str(conf_path),
+    ]
+    success, _ = _run_openssl_command(csr_cmd, "generate CSR", vm_name)
+    return success
+
+
+def _sign_certificate(
+    csr_path: Path,
+    cert_path: Path,
+    ca_cert_path: Path,
+    ca_key_path: Path,
+    conf_path: Path,
+    validity_days: int,
+    vm_name: str,
+) -> bool:
+    """
+    Sign a certificate with the CA.
+
+    Extracted from _generate_service_cert to reduce function complexity. Issue #620.
+
+    Args:
+        csr_path: Path to the CSR file
+        cert_path: Path to write the signed certificate
+        ca_cert_path: Path to the CA certificate
+        ca_key_path: Path to the CA private key
+        conf_path: Path to the OpenSSL config file
+        validity_days: Certificate validity in days
+        vm_name: VM name for logging context
+
+    Returns:
+        True if signing succeeded
+    """
+    sign_cmd = [
+        "openssl",
+        "x509",
+        "-req",
+        "-in",
+        str(csr_path),
+        "-CA",
+        str(ca_cert_path),
+        "-CAkey",
+        str(ca_key_path),
+        "-CAcreateserial",
+        "-out",
+        str(cert_path),
+        "-days",
+        str(validity_days),
+        "-sha256",
+        "-extfile",
+        str(conf_path),
+        "-extensions",
+        "v3_ext",
+    ]
+    success, _ = _run_openssl_command(sign_cmd, "sign certificate", vm_name)
+    if success:
+        os.chmod(cert_path, 0o644)
+    return success
+
+
 class CertificateGenerator:
     """
     Generates TLS certificates for AutoBot VMs.
@@ -201,8 +313,8 @@ class CertificateGenerator:
         """
         Generate service certificate for a VM.
 
-        Issue #665: Refactored to use extracted helpers for OpenSSL operations
-        and config file generation.
+        Issue #620: Refactored using Extract Method pattern to use helper
+        functions for key generation, CSR creation, and certificate signing.
         """
         cert_path = vm_info.cert_path
         key_path = vm_info.key_path
@@ -213,68 +325,32 @@ class CertificateGenerator:
 
         logger.info(f"Generating certificate for {vm_info.name}")
 
-        # Create directory and write OpenSSL config (Issue #665: uses helper)
+        # Create directory and write OpenSSL config
         cert_path.parent.mkdir(parents=True, exist_ok=True)
         conf_path = cert_path.parent / "server.conf"
         _write_openssl_config(conf_path, self.config, vm_info)
 
-        # Generate private key (Issue #665: uses helper)
-        key_cmd = [
-            "openssl",
-            "genrsa",
-            "-out",
-            str(key_path),
-            str(self.config.key_size),
-        ]
-        success, _ = _run_openssl_command(key_cmd, "generate key", vm_info.name)
-        if not success:
+        # Generate private key (Issue #620: extracted to helper)
+        if not _generate_service_key(key_path, self.config.key_size, vm_info.name):
             return False
-        os.chmod(key_path, 0o600)
 
-        # Generate CSR (Issue #665: uses helper)
+        # Generate CSR (Issue #620: extracted to helper)
         csr_path = cert_path.parent / "server.csr"
-        csr_cmd = [
-            "openssl",
-            "req",
-            "-new",
-            "-key",
-            str(key_path),
-            "-out",
-            str(csr_path),
-            "-config",
-            str(conf_path),
-        ]
-        success, _ = _run_openssl_command(csr_cmd, "generate CSR", vm_info.name)
-        if not success:
+        if not _generate_csr(key_path, csr_path, conf_path, vm_info.name):
             return False
 
-        # Sign with CA (Issue #665: uses helper)
-        sign_cmd = [
-            "openssl",
-            "x509",
-            "-req",
-            "-in",
-            str(csr_path),
-            "-CA",
-            str(self.config.ca_cert_path),
-            "-CAkey",
-            str(self.config.ca_key_path),
-            "-CAcreateserial",
-            "-out",
-            str(cert_path),
-            "-days",
-            str(self.config.cert_validity_days),
-            "-sha256",
-            "-extfile",
-            str(conf_path),
-            "-extensions",
-            "v3_ext",
-        ]
-        success, _ = _run_openssl_command(sign_cmd, "sign certificate", vm_info.name)
-        if not success:
+        # Sign with CA (Issue #620: extracted to helper)
+        if not _sign_certificate(
+            csr_path,
+            cert_path,
+            self.config.ca_cert_path,
+            self.config.ca_key_path,
+            conf_path,
+            self.config.cert_validity_days,
+            vm_info.name,
+        ):
             return False
 
-        os.chmod(cert_path, 0o644)
         csr_path.unlink()  # Clean up CSR
         logger.info(f"Certificate generated for {vm_info.name}: {cert_path}")
         return True

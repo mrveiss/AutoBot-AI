@@ -314,6 +314,101 @@ class StepExecutorAgent:
             is_final=False,
         )
 
+    def _initialize_step_execution(self, task: AgentTask) -> float:
+        """
+        Initialize step execution by setting status and logging.
+
+        Issue #620: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The task to initialize
+
+        Returns:
+            Start time for execution timing
+        """
+        start_time = time.time()
+        task.status = StepStatus.RUNNING
+        task.started_at = datetime.now()
+
+        logger.info(
+            "[StepExecutor] Starting step %d/%d: %s",
+            task.step_number,
+            task.total_steps,
+            task.description,
+        )
+        return start_time
+
+    async def _handle_command_validation(
+        self, task: AgentTask, start_time: float
+    ) -> Optional[StepResult]:
+        """
+        Validate command safety and return error result if unsafe.
+
+        Issue #620: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The task containing the command to validate
+            start_time: Execution start time for timing
+
+        Returns:
+            StepResult if command is blocked, None if safe to proceed
+        """
+        is_safe, safety_reason = self._validate_command(task.command)
+        if not is_safe:
+            task.status = StepStatus.FAILED
+            task.error = safety_reason
+            return _build_blocked_command_result(
+                task, safety_reason, time.time() - start_time
+            )
+        return None
+
+    async def _execute_command_phase(
+        self, task: AgentTask
+    ) -> tuple[list[str], int, Optional[Exception]]:
+        """
+        Execute command phase and collect streaming output.
+
+        Issue #620: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The task containing the command to execute
+
+        Returns:
+            Tuple of (output_buffer, return_code, error_if_any)
+        """
+        task.status = StepStatus.STREAMING
+        output_buffer = []
+        return_code = 0
+
+        try:
+            async for chunk in self._execute_and_stream_command(task):
+                output_buffer.append(chunk.content)
+                return_code = self._extract_return_code_from_chunk(chunk, return_code)
+        except Exception as e:
+            logger.error("[StepExecutor] Command execution failed: %s", e)
+            task.status = StepStatus.FAILED
+            task.error = str(e)
+            return output_buffer, return_code, e
+
+        return output_buffer, return_code, None
+
+    def _log_step_completion(self, task: AgentTask, start_time: float) -> None:
+        """
+        Log step completion with timing information.
+
+        Issue #620: Extracted from execute_step to reduce function length.
+
+        Args:
+            task: The completed task
+            start_time: Execution start time for calculating duration
+        """
+        logger.info(
+            "[StepExecutor] Completed step %d/%d in %.2fs",
+            task.step_number,
+            task.total_steps,
+            time.time() - start_time,
+        )
+
     async def _build_final_step_result(
         self,
         task: AgentTask,
@@ -363,59 +458,33 @@ class StepExecutorAgent:
         """
         Execute a single step with streaming output and explanations.
 
+        Issue #620: Refactored using Extract Method pattern to reduce from 83 to 47 lines.
+
         Yields:
             StreamChunk objects during command execution
             StepResult when complete (with explanations)
         """
-        start_time = time.time()
-        task.status = StepStatus.RUNNING
-        task.started_at = datetime.now()
+        start_time = self._initialize_step_execution(task)
 
-        logger.info(
-            "[StepExecutor] Starting step %d/%d: %s",
-            task.step_number,
-            task.total_steps,
-            task.description,
-        )
-
-        # If no command, just return a completed status (Issue #665: uses helper)
+        # Handle no-command case (Issue #620: uses helper)
         if not task.command:
             yield _build_no_command_result(task, time.time() - start_time)
             return
 
-        # Security: Validate command before execution (Issue #665: uses helper)
-        is_safe, safety_reason = self._validate_command(task.command)
-        if not is_safe:
-            task.status = StepStatus.FAILED
-            task.error = safety_reason
-            yield _build_blocked_command_result(
-                task, safety_reason, time.time() - start_time
-            )
+        # Security validation (Issue #620: uses helper)
+        blocked_result = await self._handle_command_validation(task, start_time)
+        if blocked_result:
+            yield blocked_result
             return
 
-        # Phase 1: Execute command in terminal with streaming output
-        task.status = StepStatus.STREAMING
-        output_buffer = []
-        return_code = 0
-
-        try:
-            # Issue #665: Uses helpers for command execution
-            async for chunk in self._execute_and_stream_command(task):
-                output_buffer.append(chunk.content)
-                yield chunk
-                return_code = self._extract_return_code_from_chunk(chunk, return_code)
-
-        except Exception as e:
-            # Issue #665: Uses helper for error result
-            logger.error("[StepExecutor] Command execution failed: %s", e)
-            task.status = StepStatus.FAILED
-            task.error = str(e)
-            yield _build_execution_error_result(task, e, time.time() - start_time)
+        # Phase 1: Execute command with streaming (Issue #620: uses helper)
+        output_buffer, return_code, error = await self._execute_command_phase(task)
+        if error:
+            yield _build_execution_error_result(task, error, time.time() - start_time)
             return
 
+        # Phase 2: Generate explanations (Issue #620: uses helpers)
         full_output = "".join(output_buffer)
-
-        # Phase 2: Generate explanations (Issue #665: uses helpers)
         yield self._create_explaining_notification(task)
 
         (
@@ -423,7 +492,7 @@ class StepExecutorAgent:
             output_explanation,
         ) = await self._generate_explanations_for_result(task, full_output, return_code)
 
-        # Build and yield final result (Issue #665: uses helper)
+        # Build and yield final result (Issue #620: uses helper)
         result = await self._build_final_step_result(
             task,
             full_output,
@@ -434,12 +503,7 @@ class StepExecutorAgent:
         )
         yield result
 
-        logger.info(
-            "[StepExecutor] Completed step %d/%d in %.2fs",
-            task.step_number,
-            task.total_steps,
-            time.time() - start_time,
-        )
+        self._log_step_completion(task, start_time)
 
     async def _generate_command_explanation(self, command: str) -> CommandExplanation:
         """Generate Part 1: Command explanation."""
@@ -470,9 +534,11 @@ class StepExecutorAgent:
         except Exception as e:
             logger.error("Failed to generate output explanation: %s", e)
             return OutputExplanation(
-                summary="Command completed."
-                if return_code == 0
-                else f"Command exited with code {return_code}.",
+                summary=(
+                    "Command completed."
+                    if return_code == 0
+                    else f"Command exited with code {return_code}."
+                ),
                 key_findings=["See output above for details."],
             )
 
