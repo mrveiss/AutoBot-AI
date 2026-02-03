@@ -250,20 +250,17 @@ class LLMInterface:
         self.streaming_failure_threshold = self._streaming_manager.failure_threshold
         self.streaming_reset_time = self._streaming_manager.reset_time
 
-    def _init_optimization(self) -> None:
+    def _create_optimization_router(self, opt_config: dict) -> OptimizationRouter:
         """
-        Issue #717: Initialize optimization components for efficient inference.
+        Create optimization router with config. Issue #620.
 
-        Sets up provider-aware optimizations:
-        - Prompt compression (local + cloud)
-        - Rate limit handling (cloud)
-        - Connection pooling (cloud)
+        Args:
+            opt_config: Optimization configuration dictionary
+
+        Returns:
+            Configured OptimizationRouter instance
         """
-        # Load optimization config from unified config
-        opt_config = config.get("optimization", {})
-
-        # Create optimization router
-        self._optimization_router = OptimizationRouter(
+        return OptimizationRouter(
             OptimizationConfig(
                 speculation_enabled=opt_config.get("local", {}).get(
                     "speculation_enabled", False
@@ -279,9 +276,17 @@ class LLMInterface:
             )
         )
 
-        # Create prompt compressor
-        compression_config = opt_config.get("prompt_compression", {})
-        self._prompt_compressor = PromptCompressor(
+    def _create_prompt_compressor(self, compression_config: dict) -> PromptCompressor:
+        """
+        Create prompt compressor with config. Issue #620.
+
+        Args:
+            compression_config: Prompt compression configuration dictionary
+
+        Returns:
+            Configured PromptCompressor instance
+        """
+        return PromptCompressor(
             CompressionConfig(
                 enabled=compression_config.get("enabled", True),
                 target_ratio=compression_config.get("target_ratio", 0.7),
@@ -292,24 +297,50 @@ class LLMInterface:
             )
         )
 
-        # Create rate limit handler for cloud providers
-        cloud_config = opt_config.get("cloud", {})
-        self._rate_limiter = RateLimitHandler(
+    def _create_cloud_handlers(self, cloud_config: dict) -> tuple:
+        """
+        Create rate limiter and connection pool for cloud providers. Issue #620.
+
+        Args:
+            cloud_config: Cloud provider configuration dictionary
+
+        Returns:
+            Tuple of (RateLimitHandler, ConnectionPoolManager)
+        """
+        rate_limiter = RateLimitHandler(
             RateLimitConfig(
                 max_retries=cloud_config.get("retry_max_attempts", 3),
                 base_delay=cloud_config.get("retry_base_delay", 1.0),
                 max_delay=cloud_config.get("retry_max_delay", 60.0),
             )
         )
-
-        # Create connection pool manager for cloud providers
-        self._connection_pool = ConnectionPoolManager(
+        connection_pool = ConnectionPoolManager(
             PoolConfig(
                 max_connections_per_host=cloud_config.get("connection_pool_size", 100),
             )
         )
+        return rate_limiter, connection_pool
 
-        # Optimization metrics
+    def _init_optimization(self) -> None:
+        """
+        Issue #717: Initialize optimization components for efficient inference.
+        Issue #620: Refactored to use helper methods for reduced complexity.
+
+        Sets up provider-aware optimizations:
+        - Prompt compression (local + cloud)
+        - Rate limit handling (cloud)
+        - Connection pooling (cloud)
+        """
+        opt_config = config.get("optimization", {})
+        compression_config = opt_config.get("prompt_compression", {})
+        cloud_config = opt_config.get("cloud", {})
+
+        self._optimization_router = self._create_optimization_router(opt_config)
+        self._prompt_compressor = self._create_prompt_compressor(compression_config)
+        self._rate_limiter, self._connection_pool = self._create_cloud_handlers(
+            cloud_config
+        )
+
         self._optimization_metrics = {
             "prompts_compressed": 0,
             "tokens_saved": 0,
@@ -462,57 +493,56 @@ class LLMInterface:
         )
         return self.ollama_host
 
+    def _load_prompt_with_fallback(
+        self, config_key: str, default_key: str, default_value: str, prompt_name: str
+    ) -> str:
+        """
+        Load a prompt from config with fallback to default value. Issue #620.
+
+        Args:
+            config_key: Configuration key for the prompt
+            default_key: Default prompt key if config not found
+            default_value: Fallback default value if prompt manager unavailable
+            prompt_name: Name of the prompt for logging
+
+        Returns:
+            Loaded prompt string or default value
+        """
+        try:
+            prompt_key = config.get(config_key, default_key)
+            if prompt_manager:
+                return prompt_manager.get(prompt_key)
+            return default_value
+        except (KeyError, AttributeError):
+            logger.warning("%s prompt not found, using default", prompt_name)
+            return default_value
+
     def _initialize_prompts(self):
-        """Initialize system prompts using centralized prompt manager."""
-        try:
-            orchestrator_prompt_key = config.get(
-                "prompts.orchestrator_key", "default.agent.system.main"
-            )
-            if prompt_manager:
-                self.orchestrator_system_prompt = prompt_manager.get(
-                    orchestrator_prompt_key
-                )
-            else:
-                self.orchestrator_system_prompt = (
-                    "You are AutoBot, an autonomous Linux administration assistant."
-                )
-        except (KeyError, AttributeError):
-            logger.warning("Orchestrator prompt not found, using default")
-            self.orchestrator_system_prompt = (
-                "You are AutoBot, an autonomous Linux administration assistant."
-            )
+        """
+        Initialize system prompts using centralized prompt manager.
 
-        try:
-            task_prompt_key = config.get(
-                "prompts.task_key", "reflection.agent.system.main.role"
-            )
-            if prompt_manager:
-                self.task_system_prompt = prompt_manager.get(task_prompt_key)
-            else:
-                self.task_system_prompt = (
-                    "You are AutoBot, completing specific tasks efficiently."
-                )
-        except (KeyError, AttributeError):
-            logger.warning("Task prompt not found, using default")
-            self.task_system_prompt = (
-                "You are AutoBot, completing specific tasks efficiently."
-            )
+        Issue #620: Refactored to use helper method for reduced complexity.
+        """
+        self.orchestrator_system_prompt = self._load_prompt_with_fallback(
+            "prompts.orchestrator_key",
+            "default.agent.system.main",
+            "You are AutoBot, an autonomous Linux administration assistant.",
+            "Orchestrator",
+        )
 
-        try:
-            tool_interpreter_prompt_key = config.get(
-                "prompts.tool_interpreter_key", "tool_interpreter_system_prompt"
-            )
-            if prompt_manager:
-                self.tool_interpreter_system_prompt = prompt_manager.get(
-                    tool_interpreter_prompt_key
-                )
-            else:
-                self.tool_interpreter_system_prompt = (
-                    "You are AutoBot's tool interpreter."
-                )
-        except (KeyError, AttributeError):
-            logger.warning("Tool interpreter prompt not found, using default")
-            self.tool_interpreter_system_prompt = "You are AutoBot's tool interpreter."
+        self.task_system_prompt = self._load_prompt_with_fallback(
+            "prompts.task_key",
+            "reflection.agent.system.main.role",
+            "You are AutoBot, completing specific tasks efficiently.",
+            "Task",
+        )
+
+        self.tool_interpreter_system_prompt = self._load_prompt_with_fallback(
+            "prompts.tool_interpreter_key",
+            "tool_interpreter_system_prompt",
+            "You are AutoBot's tool interpreter.",
+            "Tool interpreter",
+        )
 
     @property
     def base_url(self) -> str:
@@ -686,6 +716,79 @@ class LLMInterface:
             ),
         )
 
+    async def _prepare_request_context(
+        self,
+        messages: list,
+        llm_type: str,
+        **kwargs,
+    ) -> tuple:
+        """
+        Prepare request context with provider, model, and optimizations. Issue #620.
+
+        Args:
+            messages: List of message dicts
+            llm_type: Type of LLM
+            **kwargs: Additional parameters
+
+        Returns:
+            Tuple of (provider, model_name, messages, provider_type)
+        """
+        provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
+        messages = self._setup_system_prompt(messages, llm_type)
+        model_name = self._apply_tiered_routing(messages, provider, model_name)
+
+        provider_type = self._get_provider_type_enum(provider)
+        messages, _ = await self._apply_prompt_compression(messages, provider_type)
+
+        return provider, model_name, messages, provider_type
+
+    async def _finalize_response(
+        self,
+        response: LLMResponse,
+        messages: list,
+        model_name: str,
+        provider: str,
+        cache_key: Optional[str],
+        request_id: str,
+        start_time: float,
+        session_id: Optional[str],
+    ) -> LLMResponse:
+        """
+        Finalize response with metrics, caching, and usage tracking. Issue #620.
+
+        Args:
+            response: LLM response object
+            messages: List of message dicts
+            model_name: Model name used
+            provider: Provider name
+            cache_key: Cache key if applicable
+            request_id: Request identifier
+            start_time: Request start time
+            session_id: Session identifier
+
+        Returns:
+            Finalized LLMResponse object
+        """
+        processing_time = time.time() - start_time
+        self._update_metrics(
+            response.provider if response.provider else provider,
+            processing_time,
+            success=not response.error,
+        )
+
+        if cache_key and not response.error and response.content:
+            await self._store_in_cache(cache_key, response, request_id)
+
+        await self._track_llm_usage(
+            messages=messages,
+            model=model_name,
+            response=response,
+            processing_time=processing_time,
+            session_id=session_id,
+        )
+
+        return response
+
     async def _execute_chat_request(
         self,
         messages: list,
@@ -698,6 +801,7 @@ class LLMInterface:
         """
         Issue #665: Extracted from chat_completion to reduce function length.
         Issue #717: Added optimization layer for prompt compression and rate limiting.
+        Issue #620: Refactored to use helper methods for reduced complexity.
 
         Execute the chat request with caching, fallback, and metrics.
 
@@ -712,19 +816,10 @@ class LLMInterface:
         Returns:
             LLMResponse object
         """
-        provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
-        messages = self._setup_system_prompt(messages, llm_type)
-
-        # Issue #748: Apply tiered model routing for local providers
-        model_name = self._apply_tiered_routing(messages, provider, model_name)
-
-        # Issue #717: Apply prompt compression optimization
-        provider_type = self._get_provider_type_enum(provider)
-        messages, tokens_saved = await self._apply_prompt_compression(
-            messages, provider_type
+        provider, model_name, messages, _ = await self._prepare_request_context(
+            messages, llm_type, **kwargs
         )
 
-        # Check L1/L2 cache first (unless skip_cache=True)
         cache_key = None
         if not skip_cache and not kwargs.get("stream", False):
             cached_response, cache_key = await self._check_cache(
@@ -733,7 +828,6 @@ class LLMInterface:
             if cached_response:
                 return cached_response
 
-        # Create standardized request and execute with fallback
         request = LLMRequest(
             messages=messages,
             llm_type=llm_type,
@@ -744,27 +838,16 @@ class LLMInterface:
         )
         response = await self._execute_with_fallback(request, provider)
 
-        # Update metrics and cache
-        processing_time = time.time() - start_time
-        self._update_metrics(
-            response.provider if response.provider else provider,
-            processing_time,
-            success=not response.error,
+        return await self._finalize_response(
+            response,
+            messages,
+            model_name,
+            provider,
+            cache_key,
+            request_id,
+            start_time,
+            kwargs.get("session_id"),
         )
-
-        if cache_key and not response.error and response.content:
-            await self._store_in_cache(cache_key, response, request_id)
-
-        # Track usage for cost optimization (Issue #229)
-        await self._track_llm_usage(
-            messages=messages,
-            model=model_name,
-            response=response,
-            processing_time=processing_time,
-            session_id=kwargs.get("session_id"),
-        )
-
-        return response
 
     # Main chat completion method
     async def chat_completion(

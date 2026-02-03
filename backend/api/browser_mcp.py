@@ -315,85 +315,121 @@ def _get_browser_navigation_tools() -> List[MCPTool]:
     ]
 
 
+def _create_click_tool() -> MCPTool:
+    """
+    Create MCP tool definition for clicking elements.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="click",
+        description="Click on an element identified by CSS selector",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for element",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in milliseconds",
+                    "default": 5000,
+                },
+            },
+            "required": ["selector"],
+        },
+    )
+
+
+def _create_fill_tool() -> MCPTool:
+    """
+    Create MCP tool definition for filling input fields.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="fill",
+        description="Fill input field with specified value",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for input field",
+                },
+                "value": {"type": "string", "description": "Value to fill"},
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in milliseconds",
+                    "default": 5000,
+                },
+            },
+            "required": ["selector", "value"],
+        },
+    )
+
+
+def _create_select_tool() -> MCPTool:
+    """
+    Create MCP tool definition for selecting dropdown options.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="select",
+        description="Select option from dropdown/select element",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for select element",
+                },
+                "value": {"type": "string", "description": "Value to select"},
+            },
+            "required": ["selector", "value"],
+        },
+    )
+
+
+def _create_hover_tool() -> MCPTool:
+    """
+    Create MCP tool definition for hovering over elements.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="hover",
+        description="Hover mouse over element",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for element",
+                }
+            },
+            "required": ["selector"],
+        },
+    )
+
+
 def _get_browser_interaction_tools() -> List[MCPTool]:
     """
     Get MCP tools for browser interaction operations (click, fill, select, hover).
 
-    Issue #281: Extracted from get_browser_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
+    Issue #281: Extracted from get_browser_mcp_tools to reduce function length.
+    Issue #620: Further refactored to use individual tool creation helpers.
 
     Returns:
         List of interaction-related browser MCP tools
     """
     return [
-        MCPTool(
-            name="click",
-            description="Click on an element identified by CSS selector",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for element",
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Timeout in milliseconds",
-                        "default": 5000,
-                    },
-                },
-                "required": ["selector"],
-            },
-        ),
-        MCPTool(
-            name="fill",
-            description="Fill input field with specified value",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for input field",
-                    },
-                    "value": {"type": "string", "description": "Value to fill"},
-                    "timeout": {
-                        "type": "integer",
-                        "description": "Timeout in milliseconds",
-                        "default": 5000,
-                    },
-                },
-                "required": ["selector", "value"],
-            },
-        ),
-        MCPTool(
-            name="select",
-            description="Select option from dropdown/select element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for select element",
-                    },
-                    "value": {"type": "string", "description": "Value to select"},
-                },
-                "required": ["selector", "value"],
-            },
-        ),
-        MCPTool(
-            name="hover",
-            description="Hover mouse over element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for element",
-                    }
-                },
-                "required": ["selector"],
-            },
-        ),
+        _create_click_tool(),
+        _create_fill_tool(),
+        _create_select_tool(),
+        _create_hover_tool(),
     ]
 
 

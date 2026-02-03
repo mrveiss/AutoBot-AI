@@ -443,6 +443,40 @@ class OllamaProvider:
                 result = await response.json()
                 return result
 
+    def _prepare_chat_request(self, request: LLMRequest) -> tuple:
+        """
+        Prepare chat completion request parameters. Issue #620.
+
+        Args:
+            request: LLM request object
+
+        Returns:
+            Tuple of (url, headers, model, use_streaming, data, span_attrs)
+        """
+        self.ollama_host = self.get_host_from_env()
+        url = f"{self.ollama_host}/api/chat"
+        headers = {"Content-Type": "application/json"}
+
+        model = request.model_name or self.settings.default_model
+        use_streaming = self.streaming_manager.should_use_streaming(model)
+        data = self.build_request_data(request, model, use_streaming)
+        span_attrs = self._build_span_attributes(model, use_streaming, request)
+
+        return url, headers, model, use_streaming, data, span_attrs
+
+    def _record_error_span_attributes(self, span, error: Exception) -> None:
+        """
+        Record error attributes on OpenTelemetry span. Issue #620.
+
+        Args:
+            span: OpenTelemetry span
+            error: Exception that occurred
+        """
+        if span.is_recording():
+            span.set_status(Status(StatusCode.ERROR, str(error)))
+            span.record_exception(error)
+            span.set_attribute("llm.error", True)
+
     @circuit_breaker_async(
         "ollama_service",
         failure_threshold=config.get("circuit_breaker.ollama.failure_threshold", 3),
@@ -454,6 +488,7 @@ class OllamaProvider:
         Enhanced Ollama chat completion with improved streaming.
 
         Issue #697: Added OpenTelemetry tracing for LLM inference monitoring.
+        Issue #620: Refactored to use helper methods for reduced complexity.
 
         Args:
             request: LLM request object
@@ -461,33 +496,26 @@ class OllamaProvider:
         Returns:
             LLMResponse object
         """
-        self.ollama_host = self.get_host_from_env()
+        (
+            url,
+            headers,
+            model,
+            use_streaming,
+            data,
+            span_attrs,
+        ) = self._prepare_chat_request(request)
 
-        url = f"{self.ollama_host}/api/chat"
-        headers = {"Content-Type": "application/json"}
-
-        model = request.model_name or self.settings.default_model
-        use_streaming = self.streaming_manager.should_use_streaming(model)
-        data = self.build_request_data(request, model, use_streaming)
-
-        # Issue #697: Create span for LLM inference with model attributes
-        # Issue #620: Extracted span attributes to helper method
-        span_attrs = self._build_span_attributes(model, use_streaming, request)
         with _tracer.start_as_current_span(
             "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
         ) as span:
             start_time = time.time()
 
             try:
-                # Issue #620: Extracted request execution to helper method
                 response = await self._execute_request(
                     url, headers, data, request.request_id, model, use_streaming
                 )
                 processing_time = time.time() - start_time
                 content = self.extract_content(response)
-
-                # Issue #697: Record response attributes on span
-                # Issue #620: Extracted to helper method
                 self._record_success_span_attributes(span, processing_time, content)
 
                 return self.build_response(
@@ -495,18 +523,11 @@ class OllamaProvider:
                 )
 
             except Exception as e:
-                # Issue #697: Record error on span
-                if span.is_recording():
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
-                    span.record_exception(e)
-                    span.set_attribute("llm.error", True)
-
+                self._record_error_span_attributes(span, e)
                 if use_streaming:
-                    # Issue #620: Extracted streaming error handling
                     return self._handle_streaming_error(
                         span, model, start_time, request.request_id, e
                     )
-
                 raise e
 
 

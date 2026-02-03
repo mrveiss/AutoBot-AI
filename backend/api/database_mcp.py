@@ -441,168 +441,223 @@ class TableListRequest(BaseModel):
 # MCP Tool Definitions
 
 
+def _create_database_query_tool() -> MCPTool:
+    """
+    Create MCP tool definition for database SELECT queries.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="database_query",
+        description=(
+            "Execute SELECT query on SQLite database. Returns rows as JSON. Rate limited to 60"
+            "queries/minute. Only whitelisted databases accessible."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": (
+                        "Database name (conversation_files, agent_memory, "
+                        "knowledge_base, project_state, autobot)"
+                    ),
+                    "enum": list(DATABASE_WHITELIST.keys()),
+                },
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "SQL SELECT query. Use ? for parameters to prevent injection."
+                    ),
+                },
+                "params": {
+                    "type": "array",
+                    "description": "Parameters for ? placeholders in query",
+                    "items": {},
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": (
+                        f"Max rows to return (default: 100, max: {MAX_RESULT_ROWS})"
+                    ),
+                    "minimum": 1,
+                    "maximum": MAX_RESULT_ROWS,
+                },
+            },
+            "required": ["database", "query"],
+        },
+    )
+
+
+def _create_database_execute_tool() -> MCPTool:
+    """
+    Create MCP tool definition for database DML operations.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="database_execute",
+        description=(
+            "Execute INSERT/UPDATE/DELETE on SQLite database. Only works on non-read-only"
+            "databases. Use parameterized queries."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": "Database name (must not be read-only)",
+                    "enum": list(DATABASE_WHITELIST.keys()),
+                },
+                "statement": {
+                    "type": "string",
+                    "description": (
+                        "SQL INSERT/UPDATE/DELETE statement. Use ? for parameters."
+                    ),
+                },
+                "params": {
+                    "type": "array",
+                    "description": "Parameters for ? placeholders",
+                    "items": {},
+                },
+            },
+            "required": ["database", "statement"],
+        },
+    )
+
+
 def _get_database_query_tools() -> List[MCPTool]:
     """
     Get MCP tools for database query and execute operations.
 
-    Issue #281: Extracted from get_database_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
+    Issue #281: Extracted from get_database_mcp_tools to reduce function length.
+    Issue #620: Further refactored to use individual tool creation helpers.
 
     Returns:
         List of MCPTool definitions for query/execute operations
     """
     return [
-        MCPTool(
-            name="database_query",
-            description=(
-                "Execute SELECT query on SQLite database. Returns rows as JSON. Rate limited to 60"
-                "queries/minute. Only whitelisted databases accessible."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "database": {
-                        "type": "string",
-                        "description": (
-                            "Database name (conversation_files, agent_memory, knowledge_base, project_state, autobot)"
-                        ),
-                        "enum": list(DATABASE_WHITELIST.keys()),
-                    },
-                    "query": {
-                        "type": "string",
-                        "description": (
-                            "SQL SELECT query. Use ? for parameters to prevent injection."
-                        ),
-                    },
-                    "params": {
-                        "type": "array",
-                        "description": "Parameters for ? placeholders in query",
-                        "items": {},
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": (
-                            f"Max rows to return (default: 100, max: {MAX_RESULT_ROWS})"
-                        ),
-                        "minimum": 1,
-                        "maximum": MAX_RESULT_ROWS,
-                    },
-                },
-                "required": ["database", "query"],
-            },
-        ),
-        MCPTool(
-            name="database_execute",
-            description=(
-                "Execute INSERT/UPDATE/DELETE on SQLite database. Only works on non-read-only"
-                "databases. Use parameterized queries."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "database": {
-                        "type": "string",
-                        "description": "Database name (must not be read-only)",
-                        "enum": list(DATABASE_WHITELIST.keys()),
-                    },
-                    "statement": {
-                        "type": "string",
-                        "description": (
-                            "SQL INSERT/UPDATE/DELETE statement. Use ? for parameters."
-                        ),
-                    },
-                    "params": {
-                        "type": "array",
-                        "description": "Parameters for ? placeholders",
-                        "items": {},
-                    },
-                },
-                "required": ["database", "statement"],
-            },
-        ),
+        _create_database_query_tool(),
+        _create_database_execute_tool(),
     ]
+
+
+def _create_list_tables_tool() -> MCPTool:
+    """
+    Create MCP tool definition for listing database tables.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="database_list_tables",
+        description="List all tables in a SQLite database with row counts and basic info.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": "Database name to list tables from",
+                    "enum": list(DATABASE_WHITELIST.keys()),
+                },
+            },
+            "required": ["database"],
+        },
+    )
+
+
+def _create_describe_schema_tool() -> MCPTool:
+    """
+    Create MCP tool definition for describing database schema.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="database_describe_schema",
+        description=(
+            "Get schema information for database tables including columns, types,"
+            "and constraints."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": "Database name",
+                    "enum": list(DATABASE_WHITELIST.keys()),
+                },
+                "table": {
+                    "type": "string",
+                    "description": (
+                        "Specific table to describe (optional, omit for all tables)"
+                    ),
+                },
+            },
+            "required": ["database"],
+        },
+    )
+
+
+def _create_list_databases_tool() -> MCPTool:
+    """
+    Create MCP tool definition for listing available databases.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="database_list_databases",
+        description=(
+            "List all available whitelisted databases with their access permissions and"
+            "descriptions."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    )
+
+
+def _create_statistics_tool() -> MCPTool:
+    """
+    Create MCP tool definition for getting database statistics.
+
+    Issue #620.
+    """
+    return MCPTool(
+        name="database_statistics",
+        description=(
+            "Get statistics for a database including size, table count,"
+            "and last modified time."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": "Database name",
+                    "enum": list(DATABASE_WHITELIST.keys()),
+                },
+            },
+            "required": ["database"],
+        },
+    )
 
 
 def _get_database_schema_tools() -> List[MCPTool]:
     """
     Get MCP tools for database schema and metadata operations.
 
-    Issue #281: Extracted from get_database_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
+    Issue #281: Extracted from get_database_mcp_tools to reduce function length.
+    Issue #620: Further refactored to use individual tool creation helpers.
 
     Returns:
         List of MCPTool definitions for schema/metadata operations
     """
     return [
-        MCPTool(
-            name="database_list_tables",
-            description="List all tables in a SQLite database with row counts and basic info.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "database": {
-                        "type": "string",
-                        "description": "Database name to list tables from",
-                        "enum": list(DATABASE_WHITELIST.keys()),
-                    },
-                },
-                "required": ["database"],
-            },
-        ),
-        MCPTool(
-            name="database_describe_schema",
-            description=(
-                "Get schema information for database tables including columns, types,"
-                "and constraints."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "database": {
-                        "type": "string",
-                        "description": "Database name",
-                        "enum": list(DATABASE_WHITELIST.keys()),
-                    },
-                    "table": {
-                        "type": "string",
-                        "description": (
-                            "Specific table to describe (optional, omit for all tables)"
-                        ),
-                    },
-                },
-                "required": ["database"],
-            },
-        ),
-        MCPTool(
-            name="database_list_databases",
-            description=(
-                "List all available whitelisted databases with their access permissions and"
-                "descriptions."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        ),
-        MCPTool(
-            name="database_statistics",
-            description=(
-                "Get statistics for a database including size, table count,"
-                "and last modified time."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "database": {
-                        "type": "string",
-                        "description": "Database name",
-                        "enum": list(DATABASE_WHITELIST.keys()),
-                    },
-                },
-                "required": ["database"],
-            },
-        ),
+        _create_list_tables_tool(),
+        _create_describe_schema_tool(),
+        _create_list_databases_tool(),
+        _create_statistics_tool(),
     ]
 
 

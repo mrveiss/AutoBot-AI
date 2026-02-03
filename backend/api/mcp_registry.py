@@ -594,6 +594,90 @@ async def get_mcp_cache_stats() -> Metadata:
     }
 
 
+def _find_bridge_by_name(bridge_name: str) -> tuple:
+    """
+    Find a bridge configuration by name.
+
+    Issue #620.
+
+    Args:
+        bridge_name: Name of the MCP bridge to find
+
+    Returns:
+        Bridge tuple (name, description, endpoint, features)
+
+    Raises:
+        HTTPException: If bridge not found
+    """
+    bridge = next(
+        (b for b in MCP_BRIDGES if b[0] == bridge_name),
+        None,
+    )
+    if not bridge:
+        raise HTTPException(
+            status_code=404, detail=f"MCP bridge '{bridge_name}' not found"
+        )
+    return bridge
+
+
+async def _fetch_tools_from_bridge(backend_url: str, endpoint: str) -> list:
+    """
+    Fetch tools list from a specific bridge endpoint.
+
+    Issue #620.
+
+    Args:
+        backend_url: Backend base URL
+        endpoint: Bridge endpoint path
+
+    Returns:
+        List of tools from the bridge
+
+    Raises:
+        HTTPException: If bridge returns non-200 status
+    """
+    http_client = get_http_client()
+    async with await http_client.get(
+        f"{backend_url}{endpoint}",
+        timeout=aiohttp.ClientTimeout(total=3),
+    ) as response:
+        if response.status != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"MCP bridge returned status {response.status}",
+            )
+        return await response.json()
+
+
+def _find_tool_in_list(tools: list, tool_name: str, bridge_name: str) -> dict:
+    """
+    Find a specific tool in the tools list.
+
+    Issue #620.
+
+    Args:
+        tools: List of tool definitions
+        tool_name: Name of tool to find
+        bridge_name: Bridge name (for error message)
+
+    Returns:
+        Tool definition dict
+
+    Raises:
+        HTTPException: If tool not found
+    """
+    tool = next(
+        (t for t in tools if t["name"] == tool_name),
+        None,
+    )
+    if not tool:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tool '{tool_name}' not found in bridge '{bridge_name}'",
+        )
+    return tool
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_mcp_tool_details",
@@ -602,71 +686,41 @@ async def get_mcp_cache_stats() -> Metadata:
 @router.get("/tools/{bridge_name}/{tool_name}")
 async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     """
-    Get detailed information about a specific MCP tool
+    Get detailed information about a specific MCP tool.
+
+    Issue #620: Refactored to use extracted helpers.
 
     Args:
         bridge_name: Name of the MCP bridge (e.g., "knowledge_mcp")
         tool_name: Name of the tool (e.g., "search_knowledge_base")
 
     Returns:
-        Detailed tool information including:
-        - Full schema
-        - Usage examples
-        - Bridge information
+        Detailed tool information including full schema and bridge info
     """
     backend_url = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     )
 
-    # Find the bridge
-    bridge = next(
-        (b for b in MCP_BRIDGES if b[0] == bridge_name),
-        None,
-    )
-
-    if not bridge:
-        raise HTTPException(
-            status_code=404, detail=f"MCP bridge '{bridge_name}' not found"
-        )
-
-    bridge_name_found, bridge_desc, endpoint, _ = bridge  # Issue #382: features unused
+    # Find the bridge (Issue #620: uses helper)
+    bridge = _find_bridge_by_name(bridge_name)
+    _, bridge_desc, endpoint, _ = bridge  # Issue #382: features unused
 
     try:
-        # Fetch all tools from the bridge
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{backend_url}{endpoint}",
-            timeout=aiohttp.ClientTimeout(total=3),
-        ) as response:
-            if response.status != 200:
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"MCP bridge returned status {response.status}",
-                )
+        # Fetch tools from bridge (Issue #620: uses helper)
+        tools = await _fetch_tools_from_bridge(backend_url, endpoint)
 
-            tools = await response.json()
+        # Find the specific tool (Issue #620: uses helper)
+        tool = _find_tool_in_list(tools, tool_name, bridge_name)
 
-            # Find the specific tool
-            tool = next(
-                (t for t in tools if t["name"] == tool_name),
-                None,
-            )
-
-            if not tool:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Tool '{tool_name}' not found in bridge '{bridge_name}'",
-                )
-
-            return {
-                "status": "success",
-                "tool": {
-                    **tool,
-                    "bridge": bridge_name,
-                    "bridge_description": bridge_desc,
-                    "endpoint": f"{endpoint.replace('/tools', '')}/{tool_name}",
-                },
-            }
+        return {
+            "status": "success",
+            "tool": {
+                **tool,
+                "bridge": bridge_name,
+                "bridge_description": bridge_desc,
+                "endpoint": f"{endpoint.replace('/tools', '')}/{tool_name}",
+            },
+        }
 
     except HTTPException:
         raise
