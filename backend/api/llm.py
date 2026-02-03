@@ -4,11 +4,12 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester, ModelManager
+from src.auth_middleware import check_admin_permission, get_current_user
 from src.config import UnifiedConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
@@ -36,8 +37,13 @@ TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
     error_code_prefix="LLM",
 )
 @router.get("/config")
-async def get_llm_config():
-    """Get current LLM configuration"""
+async def get_llm_config(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current LLM configuration.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         return ConfigService.get_llm_config()
     except Exception as e:
@@ -53,8 +59,14 @@ async def get_llm_config():
     error_code_prefix="LLM",
 )
 @router.post("/config")
-async def update_llm_config(config_data: dict):
-    """Update LLM configuration"""
+async def update_llm_config(
+    config_data: dict,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Update LLM configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         result = ConfigService.update_llm_config(config_data)
         return result
@@ -71,8 +83,13 @@ async def update_llm_config(config_data: dict):
     error_code_prefix="LLM",
 )
 @router.post("/test_connection")
-async def test_llm_connection():
-    """Test LLM connection with current configuration"""
+async def test_llm_connection(
+    current_user: dict = Depends(get_current_user),
+):
+    """Test LLM connection with current configuration.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         result = await ConnectionTester.test_ollama_connection()
         return result
@@ -91,8 +108,13 @@ async def test_llm_connection():
 )
 @router.get("/models")
 @cache_response(cache_key="llm_models", ttl=180)  # Cache for 3 minutes - RESTORED
-async def get_available_llm_models():
-    """Get list of available LLM models"""
+async def get_available_llm_models(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get list of available LLM models.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         result = await ModelManager.get_available_models()
         if result["status"] == "error":
@@ -115,8 +137,13 @@ async def get_available_llm_models():
 )
 @router.get("/current")
 @cache_response(cache_key="current_llm", ttl=60)  # Cache for 1 minute
-async def get_current_llm():
-    """Get current LLM model and configuration"""
+async def get_current_llm(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current LLM model and configuration.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         config = ConfigService.get_llm_config()
         current_model = config.get("model", ModelConstants.DEFAULT_OLLAMA_MODEL)
@@ -139,8 +166,14 @@ async def get_current_llm():
     error_code_prefix="LLM",
 )
 @router.post("/provider")
-async def update_llm_provider(provider_data: dict):
-    """Update LLM provider configuration using unified config system"""
+async def update_llm_provider(
+    provider_data: dict,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Update LLM provider configuration using unified config system.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         logger.info("UNIFIED CONFIG: Received LLM provider update: %s", provider_data)
 
@@ -224,8 +257,13 @@ async def update_llm_provider(provider_data: dict):
 )
 @router.get("/embedding/models")
 @cache_response(cache_key="embedding_models", ttl=300)  # Cache for 5 minutes
-async def get_available_embedding_models():
-    """Get list of available embedding models"""
+async def get_available_embedding_models(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get list of available embedding models.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         # For now, return Ollama models (embedding models are typically the same as LLM models)
         result = await ModelManager.get_available_models()
@@ -272,8 +310,14 @@ async def get_available_embedding_models():
     error_code_prefix="LLM",
 )
 @router.post("/embedding")
-async def update_embedding_model(embedding_data: dict):
-    """Update embedding model configuration"""
+async def update_embedding_model(
+    embedding_data: dict,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Update embedding model configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         logger.info(
             f"UNIFIED CONFIG: Received embedding model update: {embedding_data}"
@@ -452,11 +496,14 @@ def _build_active_provider_info(
 )
 @router.get("/status/comprehensive")
 @cache_response(cache_key="llm_status_comprehensive", ttl=30)  # Cache for 30 seconds
-async def get_comprehensive_llm_status():
+async def get_comprehensive_llm_status(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get comprehensive LLM status for GUI settings panel.
 
     Issue #281: Refactored from 142 lines to use extracted helper methods.
+    Issue #744: Requires authenticated user.
     """
     try:
         # Use unified configuration system for all values
@@ -500,8 +547,13 @@ async def get_comprehensive_llm_status():
     error_code_prefix="LLM",
 )
 @router.get("/status")
-async def get_llm_status():
-    """Get current LLM status (alias for quick status)"""
+async def get_llm_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current LLM status (alias for quick status).
+
+    Issue #744: Requires authenticated user.
+    """
     return await get_quick_llm_status()
 
 
@@ -512,8 +564,13 @@ async def get_llm_status():
 )
 @router.get("/status/quick")
 @cache_response(cache_key="llm_status_quick", ttl=15)  # Cache for 15 seconds
-async def get_quick_llm_status():
-    """Get quick LLM status check for dashboard"""
+async def get_quick_llm_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get quick LLM status check for dashboard.
+
+    Issue #744: Requires authenticated user.
+    """
     from datetime import datetime, timezone
 
     try:
@@ -757,11 +814,15 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
     error_code_prefix="LLM",
 )
 @router.post("/health/providers/clear-cache")
-async def clear_provider_health_cache(provider_name: str = None):
+async def clear_provider_health_cache(
+    provider_name: str = None,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Clear provider health cache.
 
     Issue #746: Allows forcing fresh health checks.
+    Issue #744: Requires admin authentication.
 
     Args:
         provider_name: Specific provider to clear, or None to clear all

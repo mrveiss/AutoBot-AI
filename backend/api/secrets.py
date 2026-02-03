@@ -28,15 +28,15 @@ from enum import Enum
 from time import time
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
-
 from cryptography.fernet import Fernet
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import Metadata
+from src.auth_middleware import check_admin_permission
 from src.autobot_memory_graph import AutoBotMemoryGraph
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,9 @@ class RateLimiter:
     """Simple in-memory rate limiter for secrets API"""
 
     def __init__(
-        self, window: int = RATE_LIMIT_WINDOW, max_requests: int = RATE_LIMIT_MAX_REQUESTS
+        self,
+        window: int = RATE_LIMIT_WINDOW,
+        max_requests: int = RATE_LIMIT_MAX_REQUESTS,
     ):
         """Initialize rate limiter with window size and request limit."""
         self.window = window
@@ -301,7 +303,9 @@ class SecretsManager:
                     self._cache_mtime = current_mtime
                     return deepcopy(self._secrets_cache)
             except (json.JSONDecodeError, FileNotFoundError) as e:
-                logger.warning("Secrets file corrupted or missing: %s, initializing empty", e)
+                logger.warning(
+                    "Secrets file corrupted or missing: %s, initializing empty", e
+                )
                 self._secrets_cache = {}
                 self._cache_mtime = None
                 return deepcopy(self._secrets_cache)
@@ -459,7 +463,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret '%s' (ID: %s)", secret_data['name'], secret_id)
+        logger.info("Updated secret '%s' (ID: %s)", secret_data["name"], secret_id)
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -485,7 +489,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret '%s' (ID: %s)", secret_data['name'], secret_id)
+        logger.info("Deleted secret '%s' (ID: %s)", secret_data["name"], secret_id)
         return True
 
     def transfer_secrets(
@@ -653,8 +657,12 @@ def audit_log(
     error_code_prefix="SECRETS",
 )
 @router.post("/")
-async def create_secret(request: SecretCreateRequest, http_request: Request):
-    """Create a new secret"""
+async def create_secret(
+    request: SecretCreateRequest,
+    http_request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Create a new secret (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -698,8 +706,9 @@ async def list_secrets(
     http_request: Request,
     chat_id: Optional[str] = Query(None),
     scope: Optional[SecretScope] = Query(None),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """List secrets with optional filtering"""
+    """List secrets with optional filtering (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -726,8 +735,10 @@ async def list_secrets(
     error_code_prefix="SECRETS",
 )
 @router.get("/types")
-async def get_secret_types():
-    """Get available secret types"""
+async def get_secret_types(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get available secret types (Issue #744: requires admin authentication)"""
     return JSONResponse(
         status_code=200,
         content={
@@ -748,8 +759,10 @@ async def get_secret_types():
     error_code_prefix="SECRETS",
 )
 @router.get("/status")
-async def get_secrets_status():
-    """Get secrets service status"""
+async def get_secrets_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get secrets service status (Issue #744: requires admin authentication)"""
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager._load_secrets)
@@ -778,8 +791,10 @@ async def get_secrets_status():
     error_code_prefix="SECRETS",
 )
 @router.get("/stats")
-async def get_secrets_stats():
-    """Get secrets statistics"""
+async def get_secrets_stats(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get secrets statistics (Issue #744: requires admin authentication)"""
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager._load_secrets)
@@ -826,9 +841,12 @@ async def get_secrets_stats():
 )
 @router.get("/{secret_id}")
 async def get_secret(
-    secret_id: str, http_request: Request, chat_id: Optional[str] = Query(None)
+    secret_id: str,
+    http_request: Request,
+    chat_id: Optional[str] = Query(None),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Get a specific secret with its value"""
+    """Get a specific secret with its value (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -836,7 +854,9 @@ async def get_secret(
             secrets_manager.get_secret, secret_id, chat_id=chat_id
         )
         if not secret:
-            audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
+            audit_log(
+                "ACCESS", secret_id, http_request, success=False, details="not_found"
+            )
             raise HTTPException(status_code=404, detail="Secret not found")
 
         # Issue #608: Track secret usage in memory graph when accessed within a chat
@@ -871,7 +891,13 @@ async def get_secret(
         audit_log("ACCESS", secret_id, http_request, details="value_retrieved")
         return JSONResponse(status_code=200, content=secret)
     except PermissionError as e:
-        audit_log("ACCESS", secret_id, http_request, success=False, details="permission_denied")
+        audit_log(
+            "ACCESS",
+            secret_id,
+            http_request,
+            success=False,
+            details="permission_denied",
+        )
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
         raise
@@ -892,8 +918,9 @@ async def update_secret(
     request: SecretUpdateRequest,
     http_request: Request,
     chat_id: Optional[str] = Query(None),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Update a secret's metadata"""
+    """Update a secret's metadata (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -901,7 +928,9 @@ async def update_secret(
             secrets_manager.update_secret, secret_id, request, chat_id=chat_id
         )
         if not secret:
-            audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
+            audit_log(
+                "UPDATE", secret_id, http_request, success=False, details="not_found"
+            )
             raise HTTPException(status_code=404, detail="Secret not found")
 
         # Convert datetime objects to strings for JSON serialization
@@ -923,7 +952,13 @@ async def update_secret(
             },
         )
     except PermissionError as e:
-        audit_log("UPDATE", secret_id, http_request, success=False, details="permission_denied")
+        audit_log(
+            "UPDATE",
+            secret_id,
+            http_request,
+            success=False,
+            details="permission_denied",
+        )
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
         raise
@@ -942,9 +977,12 @@ async def update_secret(
 )
 @router.delete("/{secret_id}")
 async def delete_secret(
-    secret_id: str, http_request: Request, chat_id: Optional[str] = Query(None)
+    secret_id: str,
+    http_request: Request,
+    chat_id: Optional[str] = Query(None),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Delete a secret"""
+    """Delete a secret (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -952,7 +990,9 @@ async def delete_secret(
             secrets_manager.delete_secret, secret_id, chat_id=chat_id
         )
         if not success:
-            audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
+            audit_log(
+                "DELETE", secret_id, http_request, success=False, details="not_found"
+            )
             raise HTTPException(status_code=404, detail="Secret not found")
 
         audit_log("DELETE", secret_id, http_request)
@@ -961,7 +1001,13 @@ async def delete_secret(
             content={"status": "success", "message": "Secret deleted successfully"},
         )
     except PermissionError as e:
-        audit_log("DELETE", secret_id, http_request, success=False, details="permission_denied")
+        audit_log(
+            "DELETE",
+            secret_id,
+            http_request,
+            success=False,
+            details="permission_denied",
+        )
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
         raise
@@ -983,8 +1029,9 @@ async def transfer_secrets(
     request: SecretTransferRequest,
     http_request: Request,
     chat_id: Optional[str] = Query(None),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Transfer secrets between scopes"""
+    """Transfer secrets between scopes (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
@@ -1022,8 +1069,11 @@ async def transfer_secrets(
     error_code_prefix="SECRETS",
 )
 @router.get("/chat/{chat_id}/cleanup")
-async def get_chat_cleanup_info(chat_id: str):
-    """Get information about secrets that would be affected by chat deletion"""
+async def get_chat_cleanup_info(
+    chat_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get information about secrets affected by chat deletion (Issue #744: requires admin auth)"""
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         info = await asyncio.to_thread(secrets_manager.cleanup_chat_secrets, chat_id)
@@ -1042,16 +1092,21 @@ async def get_chat_cleanup_info(chat_id: str):
 )
 @router.delete("/chat/{chat_id}")
 async def delete_chat_secrets(
-    chat_id: str, http_request: Request, secret_ids: Optional[List[str]] = Query(None)
+    chat_id: str,
+    http_request: Request,
+    secret_ids: Optional[List[str]] = Query(None),
+    admin_check: bool = Depends(check_admin_permission),
 ):
-    """Delete secrets for a specific chat (used during chat cleanup)"""
+    """Delete secrets for a specific chat (Issue #744: requires admin authentication)"""
     check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(
             secrets_manager.delete_chat_secrets, chat_id, secret_ids
         )
-        deleted_ids = [s.get("id", "unknown") for s in result.get("deleted_secrets", [])]
+        deleted_ids = [
+            s.get("id", "unknown") for s in result.get("deleted_secrets", [])
+        ]
         audit_log(
             "BULK_DELETE",
             ",".join(deleted_ids),

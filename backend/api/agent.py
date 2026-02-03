@@ -23,17 +23,15 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from backend.type_defs.common import Metadata
 from backend.dependencies import get_config, get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
-from backend.utils.chat_exceptions import (
-    InternalError,
-    SubprocessError,
-)
+from backend.type_defs.common import Metadata
+from backend.utils.chat_exceptions import InternalError, SubprocessError
 from backend.utils.response_helpers import (
     create_success_response,
     handle_ai_stack_error,
 )
+from src.auth_middleware import check_admin_permission, get_current_user
 from src.constants.threshold_constants import TimingConstants
 from src.monitoring.prometheus_metrics import get_metrics_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -80,11 +78,19 @@ AGENT_CAPABILITIES = {
     },
     "knowledge_extraction": {
         "description": "Structured knowledge extraction from content",
-        "capabilities": ["entity_extraction", "fact_identification", "content_structuring"],
+        "capabilities": [
+            "entity_extraction",
+            "fact_identification",
+            "content_structuring",
+        ],
     },
     "classification": {
         "description": "Content and data classification",
-        "capabilities": ["content_categorization", "sentiment_analysis", "topic_classification"],
+        "capabilities": [
+            "content_categorization",
+            "sentiment_analysis",
+            "topic_classification",
+        ],
     },
     "npu_code_search": {
         "description": "NPU-accelerated code search and analysis",
@@ -92,11 +98,19 @@ AGENT_CAPABILITIES = {
     },
     "development_speedup": {
         "description": "Development optimization and speedup analysis",
-        "capabilities": ["performance_analysis", "optimization_suggestions", "code_quality_assessment"],
+        "capabilities": [
+            "performance_analysis",
+            "optimization_suggestions",
+            "code_quality_assessment",
+        ],
     },
     "system_knowledge_manager": {
         "description": "System-wide knowledge management",
-        "capabilities": ["knowledge_coordination", "system_insights", "knowledge_synthesis"],
+        "capabilities": [
+            "knowledge_coordination",
+            "system_insights",
+            "knowledge_synthesis",
+        ],
     },
 }
 
@@ -145,9 +159,7 @@ class MultiAgentTaskPayload(BaseModel):
     task: str = Field(..., min_length=1, description="Task description")
     agents: List[str] = Field(..., min_items=1, description="Agents to coordinate")
     coordination_strategy: str = Field("adaptive", description="Coordination strategy")
-    subtasks: Optional[List[Metadata]] = Field(
-        None, description="Predefined subtasks"
-    )
+    subtasks: Optional[List[Metadata]] = Field(None, description="Predefined subtasks")
     dependencies: Optional[List[Dict[str, str]]] = Field(
         None, description="Task dependencies"
     )
@@ -248,9 +260,7 @@ async def _publish_event_safe(event_manager, event_name: str, data: dict) -> Non
         logger.warning("Failed to publish %s event: %s", event_name, e)
 
 
-async def _run_subprocess(
-    command: str, security_layer, user_role: str
-) -> tuple:
+async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple:
     """
     Execute subprocess with timeout and error handling.
 
@@ -299,7 +309,11 @@ async def _run_subprocess(
             "execute_command",
             user_role,
             "failure",
-            {"command": command, "reason": "subprocess_creation_failed", "error": str(e)},
+            {
+                "command": command,
+                "reason": "subprocess_creation_failed",
+                "error": str(e),
+            },
         )
         raise SubprocessError(
             message=f"Failed to execute command: {e}",
@@ -336,7 +350,12 @@ def _build_success_response(
 
 
 def _build_error_response(
-    command: str, output: str, error: str, returncode: int, security_layer, user_role: str
+    command: str,
+    output: str,
+    error: str,
+    returncode: int,
+    security_layer,
+    user_role: str,
 ) -> JSONResponse:
     """
     Build error response and audit log.
@@ -509,10 +528,14 @@ async def _execute_goal_with_error_handling(
     error_code_prefix="AGENT",
 )
 @router.post("/goal")
-async def receive_goal(request: Request, payload: GoalPayload):
+async def receive_goal(
+    request: Request,
+    payload: GoalPayload,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Receives a goal from the user to be executed by the orchestrator.
-
+    Issue #744: Requires authenticated user.
     Issue #281: Refactored from 130 lines to use extracted helper methods.
 
     Args:
@@ -550,19 +573,25 @@ async def receive_goal(request: Request, payload: GoalPayload):
 
     # Publish events (Issue #281: uses helper)
     await _publish_event_safe(event_manager, "user_message", {"message": goal})
-    await _publish_event_safe(event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2})
+    await _publish_event_safe(
+        event_manager, "goal_received", {"goal": goal, "use_phi2": use_phi2}
+    )
 
     # Track task execution start time for Prometheus metrics
     task_start_time = time.time()
 
     # Execute goal (Issue #281: uses helper)
-    result_dict = await _execute_goal_with_error_handling(orchestrator, goal, task_start_time)
+    result_dict = await _execute_goal_with_error_handling(
+        orchestrator, goal, task_start_time
+    )
 
     # Process tool result using helper (Issue #315: reduced nesting)
     response_message, tool_output_content, tool_name = _process_tool_result(result_dict)
 
     if tool_output_content and tool_name != "respond_conversationally":
-        await _publish_event_safe(event_manager, "tool_output", {"output": tool_output_content})
+        await _publish_event_safe(
+            event_manager, "tool_output", {"output": tool_output_content}
+        )
 
     security_layer.audit_log(
         "submit_goal",
@@ -587,9 +616,13 @@ async def receive_goal(request: Request, payload: GoalPayload):
     error_code_prefix="AGENT",
 )
 @router.post("/pause")
-async def pause_agent_api(request: Request, user_role: str = Form("user")):
+async def pause_agent_api(
+    request: Request,
+    user_role: str = Form("user"),
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
-    Pauses the agent's current operation.
+    Pauses the agent's current operation (Issue #744: requires admin authentication).
     Note: This is currently a placeholder and returns a success status
     without actual functionality. Full implementation will be added with
     backend integration.
@@ -610,9 +643,7 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
         await orchestrator.pause_agent()
     except Exception as e:
         logger.error("Failed to pause agent: %s", e, exc_info=True)
-        security_layer.audit_log(
-            "agent_pause", user_role, "failure", {"error": str(e)}
-        )
+        security_layer.audit_log("agent_pause", user_role, "failure", {"error": str(e)})
         raise InternalError(
             message=f"Failed to pause agent: {str(e)}",
             details={"error_type": type(e).__name__},
@@ -621,7 +652,9 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
     security_layer.audit_log("agent_pause", user_role, "success", {})
     # Publish event (non-critical)
     try:
-        await event_manager.publish("agent_paused", {"message": "Agent operation paused."})
+        await event_manager.publish(
+            "agent_paused", {"message": "Agent operation paused."}
+        )
     except Exception as e:
         logger.warning("Failed to publish agent_paused event: %s", e)
     return {"message": "Agent paused successfully."}
@@ -633,9 +666,13 @@ async def pause_agent_api(request: Request, user_role: str = Form("user")):
     error_code_prefix="AGENT",
 )
 @router.post("/resume")
-async def resume_agent_api(request: Request, user_role: str = Form("user")):
+async def resume_agent_api(
+    request: Request,
+    user_role: str = Form("user"),
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
-    Resumes the agent's operation if paused.
+    Resumes the agent's operation if paused (Issue #744: requires admin authentication).
     Note: This is currently a placeholder and returns a success status without
     actual functionality.
     Full implementation will be added with backend integration.
@@ -681,9 +718,14 @@ async def resume_agent_api(request: Request, user_role: str = Form("user")):
     error_code_prefix="AGENT",
 )
 @router.post("/command_approval")
-async def command_approval(request: Request, payload: CommandApprovalPayload):
+async def command_approval(
+    request: Request,
+    payload: CommandApprovalPayload,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Receives user approval/denial for a command execution.
+    Issue #744: Requires admin authentication.
     """
     security_layer = request.app.state.security_layer
     main_redis_client = request.app.state.main_redis_client
@@ -746,11 +788,14 @@ async def command_approval(request: Request, payload: CommandApprovalPayload):
 )
 @router.post("/execute_command")
 async def execute_command(
-    request: Request, command_data: dict, user_role: str = Form("user")
+    request: Request,
+    command_data: dict,
+    user_role: str = Form("user"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Executes a shell command and returns its output.
-
+    Issue #744: Requires admin authentication (CRITICAL: command execution).
     Issue #281: Refactored from 151 lines to use extracted helper methods.
 
     Args:
@@ -775,7 +820,9 @@ async def execute_command(
     if validation_error:
         if not command:
             await _publish_event_safe(
-                event_manager, "error", {"message": "No command provided for execution."}
+                event_manager,
+                "error",
+                {"message": "No command provided for execution."},
             )
         return validation_error
 
@@ -915,7 +962,9 @@ async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
     try:
         kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
         if kb_results:
-            kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
+            kb_context = "\n".join(
+                [f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]]
+            )
             return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
     except Exception as e:
         logger.warning("Knowledge base context enhancement failed: %s", e)
@@ -950,8 +999,13 @@ async def execute_enhanced_goal(
     request: Request,
     config=Depends(get_config),
     knowledge_base=Depends(get_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Execute goal using enhanced AI Stack multi-agent coordination (Issue #398: refactored)."""
+    """Execute goal using enhanced AI Stack multi-agent coordination.
+
+    Issue #398: refactored.
+    Issue #744: Requires authenticated user.
+    """
     ai_client = await get_ai_stack_client()
 
     # Get available agents
@@ -963,7 +1017,9 @@ async def execute_enhanced_goal(
         available_agents = list(_FALLBACK_AGENTS)
 
     # Issue #398: Use extracted helpers
-    selected_agents = await _select_agents_for_goal(ai_client, payload, available_agents)
+    selected_agents = await _select_agents_for_goal(
+        ai_client, payload, available_agents
+    )
     enhanced_context = await _enhance_context_with_kb(payload, knowledge_base)
     coordination_mode = _determine_coordination_mode(payload, selected_agents)
 
@@ -978,17 +1034,19 @@ async def execute_enhanced_goal(
 
         execution_time = (datetime.utcnow() - execution_start).total_seconds()
 
-        return create_success_response({
-            "goal": payload.goal,
-            "agents_used": selected_agents,
-            "coordination_mode": coordination_mode,
-            "execution_time": execution_time,
-            "priority": payload.priority,
-            "result": result,
-            "enhanced_context_used": enhanced_context is not None,
-            "knowledge_base_integrated": payload.use_knowledge_base,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        return create_success_response(
+            {
+                "goal": payload.goal,
+                "agents_used": selected_agents,
+                "coordination_mode": coordination_mode,
+                "execution_time": execution_time,
+                "priority": payload.priority,
+                "result": result,
+                "enhanced_context_used": enhanced_context is not None,
+                "knowledge_base_integrated": payload.use_knowledge_base,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
     except AIStackError as e:
         await handle_ai_stack_error(e, "Enhanced goal execution")
@@ -1000,12 +1058,18 @@ async def execute_enhanced_goal(
     error_code_prefix="AGENT",
 )
 @router.post("/multi-agent/coordinate")
-async def coordinate_multi_agent_task(payload: MultiAgentTaskPayload, request: Request):
+async def coordinate_multi_agent_task(
+    payload: MultiAgentTaskPayload,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Coordinate complex multi-agent tasks with dependency management.
 
     This endpoint enables sophisticated multi-agent coordination with
     task dependencies, subtask management, and adaptive strategies.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -1062,10 +1126,14 @@ async def coordinate_multi_agent_task(payload: MultiAgentTaskPayload, request: R
 )
 @router.post("/research/comprehensive")
 async def comprehensive_research_task(
-    request_data: ResearchTaskRequest, knowledge_base=Depends(get_knowledge_base)
+    request_data: ResearchTaskRequest,
+    knowledge_base=Depends(get_knowledge_base),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Execute comprehensive research using multiple specialized agents.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -1122,9 +1190,14 @@ async def comprehensive_research_task(
     error_code_prefix="AGENT",
 )
 @router.post("/development/analyze")
-async def analyze_development_task(request_data: AgentAnalysisRequest):
+async def analyze_development_task(
+    request_data: AgentAnalysisRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Analyze codebase using development-focused AI agents.
+
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -1156,11 +1229,14 @@ async def analyze_development_task(request_data: AgentAnalysisRequest):
     error_code_prefix="AGENT",
 )
 @router.get("/agents/available")
-async def list_available_agents():
+async def list_available_agents(
+    current_user: dict = Depends(get_current_user),
+):
     """
     List all available AI Stack agents with their capabilities.
 
     Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
+    Issue #744: Requires authenticated user.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -1203,8 +1279,13 @@ async def list_available_agents():
     error_code_prefix="AGENT",
 )
 @router.get("/agents/status")
-async def get_agents_status():
-    """Get comprehensive status of all AI Stack agents."""
+async def get_agents_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get comprehensive status of all AI Stack agents.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         ai_client = await get_ai_stack_client()
 

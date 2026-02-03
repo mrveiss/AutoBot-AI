@@ -12,11 +12,12 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
+from src.auth_middleware import check_admin_permission, get_current_user
 from src.config import unified_config_manager
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -55,8 +56,13 @@ class EmbeddingUpdate(BaseModel):
     error_code_prefix="EMBEDDINGS",
 )
 @router.get("/settings")
-async def get_embedding_settings():
-    """Get current embedding configuration settings"""
+async def get_embedding_settings(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current embedding configuration settings.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         # Get embedding configuration from unified config manager
         embedding_config = unified_config_manager.get_nested(
@@ -100,8 +106,14 @@ async def get_embedding_settings():
     error_code_prefix="EMBEDDINGS",
 )
 @router.put("/settings")
-async def update_embedding_settings(update: EmbeddingUpdate):
-    """Update embedding configuration settings"""
+async def update_embedding_settings(
+    update: EmbeddingUpdate,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Update embedding configuration settings.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Update the embedding configuration
         unified_config_manager.set_nested(
@@ -153,8 +165,13 @@ async def update_embedding_settings(update: EmbeddingUpdate):
     error_code_prefix="EMBEDDINGS",
 )
 @router.get("/models")
-async def get_available_embedding_models():
-    """Get available embedding models from all providers"""
+async def get_available_embedding_models(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get available embedding models from all providers.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         embedding_config = unified_config_manager.get_nested(
             "backend.llm.unified.embedding", {}
@@ -198,8 +215,14 @@ async def get_available_embedding_models():
     error_code_prefix="EMBEDDINGS",
 )
 @router.post("/providers/{provider_name}/refresh-models")
-async def refresh_embedding_models(provider_name: str):
-    """Refresh available models for a specific embedding provider"""
+async def refresh_embedding_models(
+    provider_name: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Refresh available models for a specific embedding provider.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         if provider_name == "ollama":
             # For Ollama, we can check available embedding models
@@ -253,8 +276,13 @@ async def refresh_embedding_models(provider_name: str):
     error_code_prefix="EMBEDDINGS",
 )
 @router.get("/status")
-async def get_embedding_status():
-    """Get current embedding system status"""
+async def get_embedding_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current embedding system status.
+
+    Issue #744: Requires authenticated user.
+    """
     try:
         embedding_config = unified_config_manager.get_nested(
             "backend.llm.unified.embedding", {}
