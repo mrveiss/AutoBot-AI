@@ -25,11 +25,11 @@ from ..types import (
     INTERACTION_COMMAND_WORDS,
     LAUNCH_COMMAND_WORDS,
     MEDIA_CONTROL_COMMAND_WORDS,
-    ModalityType,
     NAVIGATION_COMMAND_WORDS,
     QUERY_COMMAND_WORDS,
     SEARCH_COMMAND_WORDS,
     TEXT_INPUT_COMMAND_WORDS,
+    ModalityType,
 )
 
 # Import models for audio processing
@@ -112,7 +112,9 @@ class VoiceProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.error("Failed to load audio models: %s", e)
             # Issue #466: Will raise error on process() - no placeholder fallback
-            self.logger.warning("VoiceProcessor will raise errors when processing - models unavailable")
+            self.logger.warning(
+                "VoiceProcessor will raise errors when processing - models unavailable"
+            )
 
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
@@ -163,7 +165,9 @@ class VoiceProcessor(BaseModalProcessor):
                 error_message=str(e),
             )
 
-    def _prepare_audio_data(self, input_data: MultiModalInput) -> Tuple[np.ndarray, int]:
+    def _prepare_audio_data(
+        self, input_data: MultiModalInput
+    ) -> Tuple[np.ndarray, int]:
         """Prepare and normalize audio data (Issue #315 - extracted method)"""
         audio_array = None
         sampling_rate = 16000  # Standard sampling rate for speech models
@@ -249,20 +253,8 @@ class VoiceProcessor(BaseModalProcessor):
             return audio_embedding, wav2vec_transcription
 
     async def _process_audio(self, input_data: MultiModalInput) -> Dict[str, Any]:
-        """Process audio input with GPU-accelerated Whisper and Wav2Vec2 models"""
-
-        # Guard clause: Check if models are available (Issue #315 - early return)
-        # Issue #466: Raise error instead of returning placeholder data
-        if (
-            not AUDIO_MODELS_AVAILABLE
-            or self.whisper_model is None
-            or self.wav2vec_model is None
-        ):
-            self.logger.error("Audio models not available - cannot process voice")
-            raise RuntimeError(
-                "Voice processing unavailable: Required models (Whisper, Wav2Vec2) are not loaded. "
-                "Ensure audio models are installed and GPU/NPU resources are available."
-            )
+        """Process audio input with GPU-accelerated Whisper and Wav2Vec2 models. Issue #620."""
+        self._validate_audio_models_available()
 
         try:
             # Prepare audio data (Issue #315 - extracted method)
@@ -283,48 +275,80 @@ class VoiceProcessor(BaseModalProcessor):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            # Prepare result
-            result = {
-                "type": "voice_command",
-                "transcribed_text": transcribed_text,
-                "wav2vec_transcription": wav2vec_transcription,
-                "command_type": command_type,
-                "confidence": 0.9 if transcribed_text else 0.0,
-                "processing_device": str(self.device),
-                "audio_duration_seconds": len(audio_array) / sampling_rate,
-            }
-
-            # Add audio embeddings if available
-            if audio_embedding is not None:
-                result["audio_embedding"] = audio_embedding.tolist()
-                result["audio_embedding_shape"] = list(audio_embedding.shape)
-
-            # Add GPU memory usage if CUDA is available
-            if torch.cuda.is_available():
-                result["gpu_memory_used_mb"] = (
-                    torch.cuda.memory_allocated() / 1024 / 1024
-                )
-                result["gpu_memory_cached_mb"] = (
-                    torch.cuda.memory_reserved() / 1024 / 1024
-                )
-
-            return result
+            # Build and return result (Issue #620 - extracted method)
+            return self._build_voice_result(
+                transcribed_text,
+                wav2vec_transcription,
+                command_type,
+                audio_array,
+                sampling_rate,
+                audio_embedding,
+            )
 
         except Exception as e:
             self.logger.error("Error during GPU-accelerated audio processing: %s", e)
             # Clear GPU cache on error
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+            # Return error result (Issue #620 - extracted method)
+            return self._build_error_result(e)
 
-            # Return error result
-            return {
-                "type": "voice_command",
-                "error": str(e),
-                "transcribed_text": f"Processing failed: {str(e)}",
-                "command_type": "error",
-                "confidence": 0.0,
-                "processing_device": str(self.device),
-            }
+    def _validate_audio_models_available(self) -> None:
+        """Validate that audio models are loaded and available. Issue #620."""
+        if (
+            not AUDIO_MODELS_AVAILABLE
+            or self.whisper_model is None
+            or self.wav2vec_model is None
+        ):
+            self.logger.error("Audio models not available - cannot process voice")
+            raise RuntimeError(
+                "Voice processing unavailable: Required models (Whisper, Wav2Vec2) "
+                "are not loaded. Ensure audio models are installed and GPU/NPU "
+                "resources are available."
+            )
+
+    def _build_voice_result(
+        self,
+        transcribed_text: str,
+        wav2vec_transcription: str,
+        command_type: str,
+        audio_array: np.ndarray,
+        sampling_rate: int,
+        audio_embedding: Any,
+    ) -> Dict[str, Any]:
+        """Build the voice processing result dictionary. Issue #620."""
+        result = {
+            "type": "voice_command",
+            "transcribed_text": transcribed_text,
+            "wav2vec_transcription": wav2vec_transcription,
+            "command_type": command_type,
+            "confidence": 0.9 if transcribed_text else 0.0,
+            "processing_device": str(self.device),
+            "audio_duration_seconds": len(audio_array) / sampling_rate,
+        }
+
+        # Add audio embeddings if available
+        if audio_embedding is not None:
+            result["audio_embedding"] = audio_embedding.tolist()
+            result["audio_embedding_shape"] = list(audio_embedding.shape)
+
+        # Add GPU memory usage if CUDA is available
+        if torch.cuda.is_available():
+            result["gpu_memory_used_mb"] = torch.cuda.memory_allocated() / 1024 / 1024
+            result["gpu_memory_cached_mb"] = torch.cuda.memory_reserved() / 1024 / 1024
+
+        return result
+
+    def _build_error_result(self, error: Exception) -> Dict[str, Any]:
+        """Build error result dictionary for failed voice processing. Issue #620."""
+        return {
+            "type": "voice_command",
+            "error": str(error),
+            "transcribed_text": f"Processing failed: {str(error)}",
+            "command_type": "error",
+            "confidence": 0.0,
+            "processing_device": str(self.device),
+        }
 
     def _get_command_classification_map(self) -> list:
         """Get command word sets to classification mapping (Issue #315)."""
