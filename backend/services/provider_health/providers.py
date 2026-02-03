@@ -419,3 +419,151 @@ class GoogleHealth(BaseProviderHealth):
                 response_time=response_time,
                 details={"error": str(e)},
             )
+
+
+class LMStudioHealth(BaseProviderHealth):
+    """Health checker for LM Studio (local LLM provider, Issue #746)"""
+
+    def __init__(self):
+        """Initialize LM Studio health checker with host configuration."""
+        super().__init__("lmstudio")
+        # LM Studio default port is 1234
+        self.lmstudio_host = os.getenv("LMSTUDIO_HOST", "http://127.0.0.1:1234")
+
+    async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
+        """Check LM Studio service health"""
+        start_time = time.time()
+
+        try:
+            # LM Studio uses OpenAI-compatible API at /v1/models
+            models_url = f"{self.lmstudio_host}/v1/models"
+
+            http_client = get_http_client()
+            async with await http_client.get(
+                models_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
+                response_time = time.time() - start_time
+
+                if response.status == 200:
+                    data = await response.json()
+                    models = data.get("data", [])
+                    model_count = len(models)
+
+                    return self._create_result(
+                        status=ProviderStatus.HEALTHY,
+                        available=True,
+                        message=f"LM Studio connected with {model_count} models loaded",
+                        response_time=response_time,
+                        details={
+                            "endpoint": self.lmstudio_host,
+                            "model_count": model_count,
+                            "models": [m.get("id") for m in models[:5]],
+                        },
+                    )
+                else:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message=f"LM Studio returned status {response.status}",
+                        response_time=response_time,
+                        details={
+                            "endpoint": self.lmstudio_host,
+                            "status_code": response.status,
+                        },
+                    )
+
+        except aiohttp.ClientError as e:
+            response_time = time.time() - start_time
+            # LM Studio might not be running - this is expected
+            logger.debug("LM Studio health check failed: %s", str(e))
+            return self._create_result(
+                status=ProviderStatus.UNAVAILABLE,
+                available=False,
+                message="LM Studio not running or unreachable",
+                response_time=response_time,
+                details={"endpoint": self.lmstudio_host, "error": str(e)},
+            )
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error("LM Studio health check error: %s", str(e))
+            return self._create_result(
+                status=ProviderStatus.UNKNOWN,
+                available=False,
+                message=f"Health check error: {str(e)}",
+                response_time=response_time,
+                details={"error": str(e)},
+            )
+
+
+class VLLMHealth(BaseProviderHealth):
+    """Health checker for vLLM (high-performance inference server, Issue #746)"""
+
+    def __init__(self):
+        """Initialize vLLM health checker with host configuration."""
+        super().__init__("vllm")
+        # vLLM default port is 8000
+        self.vllm_host = os.getenv("VLLM_HOST", "http://127.0.0.1:8000")
+
+    async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
+        """Check vLLM service health"""
+        start_time = time.time()
+
+        try:
+            # vLLM uses OpenAI-compatible API at /v1/models
+            models_url = f"{self.vllm_host}/v1/models"
+
+            http_client = get_http_client()
+            async with await http_client.get(
+                models_url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
+                response_time = time.time() - start_time
+
+                if response.status == 200:
+                    data = await response.json()
+                    models = data.get("data", [])
+                    model_count = len(models)
+
+                    return self._create_result(
+                        status=ProviderStatus.HEALTHY,
+                        available=True,
+                        message=f"vLLM connected with {model_count} models available",
+                        response_time=response_time,
+                        details={
+                            "endpoint": self.vllm_host,
+                            "model_count": model_count,
+                            "models": [m.get("id") for m in models[:5]],
+                        },
+                    )
+                else:
+                    return self._create_result(
+                        status=ProviderStatus.UNAVAILABLE,
+                        available=False,
+                        message=f"vLLM returned status {response.status}",
+                        response_time=response_time,
+                        details={
+                            "endpoint": self.vllm_host,
+                            "status_code": response.status,
+                        },
+                    )
+
+        except aiohttp.ClientError as e:
+            response_time = time.time() - start_time
+            # vLLM might not be running - this is expected
+            logger.debug("vLLM health check failed: %s", str(e))
+            return self._create_result(
+                status=ProviderStatus.UNAVAILABLE,
+                available=False,
+                message="vLLM not running or unreachable",
+                response_time=response_time,
+                details={"endpoint": self.vllm_host, "error": str(e)},
+            )
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error("vLLM health check error: %s", str(e))
+            return self._create_result(
+                status=ProviderStatus.UNKNOWN,
+                available=False,
+                message=f"Health check error: {str(e)}",
+                response_time=response_time,
+                details={"error": str(e)},
+            )

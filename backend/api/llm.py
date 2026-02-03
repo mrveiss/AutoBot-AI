@@ -601,3 +601,194 @@ async def get_quick_llm_status():
                 .replace("+00:00", "Z"),
             },
         )
+
+
+# =============================================================================
+# Provider Health Endpoints (Issue #746)
+# =============================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_all_providers_health",
+    error_code_prefix="LLM",
+)
+@router.get("/health/providers")
+@cache_response(cache_key="llm_providers_health", ttl=30)
+async def get_all_providers_health():
+    """
+    Get health status of all configured LLM providers.
+
+    Issue #746: Unified endpoint for frontend to check provider availability.
+    Frontend cannot directly contact Ollama (localhost-only), so this backend
+    endpoint proxies the health check.
+
+    Returns:
+        JSON with health status for all providers (ollama, openai, anthropic, google)
+    """
+    from datetime import datetime, timezone
+
+    from backend.services.provider_health import ProviderHealthManager
+
+    try:
+        # Check all providers in parallel (uses 30s cache internally)
+        results = await ProviderHealthManager.check_all_providers(
+            timeout=5.0, use_cache=True
+        )
+
+        # Convert results to JSON-serializable format
+        providers_health = {}
+        available_count = 0
+        total_count = len(results)
+
+        for provider_name, result in results.items():
+            is_available = result.available
+            if is_available:
+                available_count += 1
+
+            providers_health[provider_name] = {
+                "status": result.status.value,
+                "available": is_available,
+                "message": result.message,
+                "response_time_ms": round(result.response_time * 1000, 2),
+                "details": result.details or {},
+            }
+
+        # Determine overall status
+        if available_count == total_count:
+            overall_status = "healthy"
+        elif available_count > 0:
+            overall_status = "degraded"
+        else:
+            overall_status = "unavailable"
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "overall_status": overall_status,
+                "available_providers": available_count,
+                "total_providers": total_count,
+                "providers": providers_health,
+                "cache_stats": ProviderHealthManager.get_cache_stats(),
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        )
+
+    except Exception as e:
+        logger.error("Failed to check providers health: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "overall_status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_provider_health",
+    error_code_prefix="LLM",
+)
+@router.get("/health/providers/{provider_name}")
+async def get_provider_health(provider_name: str, use_cache: bool = True):
+    """
+    Get health status of a specific LLM provider.
+
+    Issue #746: Per-provider health check endpoint.
+
+    Args:
+        provider_name: Provider to check (ollama, openai, anthropic, google)
+        use_cache: Whether to use cached result (default True)
+
+    Returns:
+        JSON with health status for the specific provider
+    """
+    from datetime import datetime, timezone
+
+    from backend.services.provider_health import ProviderHealthManager
+
+    try:
+        result = await ProviderHealthManager.check_provider_health(
+            provider=provider_name.lower(),
+            timeout=5.0,
+            use_cache=use_cache,
+        )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "provider": provider_name,
+                "status": result.status.value,
+                "available": result.available,
+                "message": result.message,
+                "response_time_ms": round(result.response_time * 1000, 2),
+                "details": result.details or {},
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        )
+
+    except Exception as e:
+        logger.error("Failed to check %s health: %s", provider_name, e)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "provider": provider_name,
+                "status": "error",
+                "available": False,
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="clear_provider_health_cache",
+    error_code_prefix="LLM",
+)
+@router.post("/health/providers/clear-cache")
+async def clear_provider_health_cache(provider_name: str = None):
+    """
+    Clear provider health cache.
+
+    Issue #746: Allows forcing fresh health checks.
+
+    Args:
+        provider_name: Specific provider to clear, or None to clear all
+
+    Returns:
+        Confirmation of cache clear operation
+    """
+    from backend.services.provider_health import ProviderHealthManager
+
+    try:
+        await ProviderHealthManager.clear_cache(provider_name)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": f"Cache cleared for: {provider_name or 'all providers'}",
+                "cache_stats": ProviderHealthManager.get_cache_stats(),
+            },
+        )
+
+    except Exception as e:
+        logger.error("Failed to clear provider health cache: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+            },
+        )

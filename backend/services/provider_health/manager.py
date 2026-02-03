@@ -10,22 +10,36 @@ import logging
 import time
 from typing import Dict, Optional
 
-
 from .base import ProviderHealthResult, ProviderStatus
-from .providers import AnthropicHealth, GoogleHealth, OllamaHealth, OpenAIHealth
+from .providers import (
+    AnthropicHealth,
+    GoogleHealth,
+    LMStudioHealth,
+    OllamaHealth,
+    OpenAIHealth,
+    VLLMHealth,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ProviderHealthManager:
     """
-    Manages health checking for all LLM providers
+    Manages health checking for all LLM providers (Issue #746)
 
     Features:
     - Parallel health checking for all providers
     - 30-second in-memory cache to avoid excessive checks
     - Automatic provider registry
     - Thread-safe caching with asyncio.Lock
+
+    Supported Providers:
+    - ollama: Local Ollama service
+    - openai: OpenAI API
+    - anthropic: Anthropic Claude API
+    - google: Google Gemini API
+    - lmstudio: LM Studio local server
+    - vllm: vLLM inference server
     """
 
     # Cache structure: {provider_name: {"result": ProviderHealthResult, "timestamp": float}}
@@ -47,6 +61,8 @@ class ProviderHealthManager:
                 "openai": OpenAIHealth(),
                 "anthropic": AnthropicHealth(),
                 "google": GoogleHealth(),
+                "lmstudio": LMStudioHealth(),
+                "vllm": VLLMHealth(),
             }
         return cls._providers
 
