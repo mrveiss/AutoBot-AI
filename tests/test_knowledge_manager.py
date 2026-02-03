@@ -247,7 +247,7 @@ async def test_3_system_knowledge_features():
 
     # Get knowledge categories
     categories = manager.get_knowledge_categories()
-    assert categories["success"] == True
+    assert categories["success"] is True
     assert "documentation" in categories["categories"]
     assert "system" in categories["categories"]
 
@@ -320,14 +320,14 @@ async def test_5_unified_operations():
 
         assert result["imported_count"] == 1
         assert result["tracked_count"] == 1
-        assert result["temporal_tracking_enabled"] == True
+        assert result["temporal_tracking_enabled"] is True
     finally:
         Path(temp_file).unlink()
 
     # Get comprehensive status
     status = await manager.get_knowledge_status()
     assert "initialized" in status
-    assert status["temporal_enabled"] == True
+    assert status["temporal_enabled"] is True
     assert "system_knowledge" in status
     assert "temporal_analytics" in status
 
@@ -353,7 +353,7 @@ async def test_6_optional_components():
     assert metadata is None, "Should return None when temporal disabled"
 
     analytics = await manager_no_temporal.get_temporal_analytics()
-    assert analytics["temporal_tracking_enabled"] == False
+    assert analytics["temporal_tracking_enabled"] is False
 
     # Test with machine-aware disabled
     machine_info = await manager_no_temporal.get_machine_info()
@@ -500,7 +500,7 @@ async def test_10_thread_safety():
     await asyncio.gather(*tasks)
 
     # Should only initialize once
-    assert manager._initialized == True
+    assert manager._initialized is True
 
     print("✅ PASSED: Thread safety works correctly")
 
@@ -531,8 +531,8 @@ async def test_11_integration():
 
     # Get comprehensive status (all components)
     status = await manager.get_knowledge_status()
-    assert status["temporal_enabled"] == True
-    assert status["machine_aware_enabled"] == True
+    assert status["temporal_enabled"] is True
+    assert status["machine_aware_enabled"] is True
     assert "temporal_analytics" in status
     assert "machine_profile" in status
     assert "system_knowledge" in status
@@ -561,7 +561,7 @@ async def test_12_analytics():
 
     # Get temporal analytics
     analytics = await manager.get_temporal_analytics()
-    assert analytics["temporal_tracking_enabled"] == True
+    assert analytics["temporal_tracking_enabled"] is True
     assert analytics["total_content"] == 5
     assert "status_distribution" in analytics
     assert "priority_distribution" in analytics
@@ -714,13 +714,13 @@ async def test_15_feature_completeness():
     # Test a few key methods to ensure they work
     await manager.initialize()
     categories = manager.get_knowledge_categories()
-    assert categories["success"] == True
+    assert categories["success"] is True
 
     machine_info = await manager.get_machine_info()
     assert machine_info is not None
 
     analytics = await manager.get_temporal_analytics()
-    assert analytics["temporal_tracking_enabled"] == True
+    assert analytics["temporal_tracking_enabled"] is True
 
     status = await manager.get_knowledge_status()
     assert "initialized" in status
@@ -783,7 +783,7 @@ def run_all_tests():
         print("\n" + "=" * 80)
         print("ALL TESTS PASSED! ✅")
         print("=" * 80)
-        print(f"\nResults: 15/15 tests passed")
+        print("\nResults: 15/15 tests passed")
         print("- Import verification: ✅")
         print("- Temporal manager features: ✅")
         print("- System knowledge features: ✅")

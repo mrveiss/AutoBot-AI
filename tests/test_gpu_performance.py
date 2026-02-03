@@ -72,7 +72,7 @@ async def measure_gpu_utilization():
                 "temperature": float(values[3].strip()),
                 "power": float(values[4].strip()),
             }
-    except:
+    except Exception:
         pass
 
     return None
@@ -98,7 +98,7 @@ async def performance_test():
     # Initial GPU status
     gpu_before = await measure_gpu_utilization()
     if gpu_before:
-        print(f"GPU Status (Before):")
+        print("GPU Status (Before):")
         print(f"- Utilization: {gpu_before['gpu_util']}%")
         print(
             f"- Memory Used: {gpu_before['memory_used']}/{gpu_before['memory_total']} MB"

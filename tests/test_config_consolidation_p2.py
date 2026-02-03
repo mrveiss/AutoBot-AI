@@ -78,12 +78,20 @@ async def test_config_consolidation():
         filtered = unified_config_manager._filter_sensitive_data(test_data)
 
         # Check that sensitive fields are redacted
-        assert filtered["redis"]["password"] == "***REDACTED***", "Password should be redacted"
-        assert filtered["api"]["api_key"] == "***REDACTED***", "API key should be redacted"
+        assert (
+            filtered["redis"]["password"] == "***REDACTED***"
+        ), "Password should be redacted"
+        assert (
+            filtered["api"]["api_key"] == "***REDACTED***"
+        ), "API key should be redacted"
 
         # Check that non-sensitive fields are preserved
-        assert filtered["redis"]["host"] == "localhost", "Non-sensitive host should be preserved"
-        assert filtered["redis"]["port"] == 6379, "Non-sensitive port should be preserved"
+        assert (
+            filtered["redis"]["host"] == "localhost"
+        ), "Non-sensitive host should be preserved"
+        assert (
+            filtered["redis"]["port"] == 6379
+        ), "Non-sensitive port should be preserved"
 
         print("✅ PASSED: Sensitive data filtering works correctly")
     except Exception as e:
@@ -94,7 +102,9 @@ async def test_config_consolidation():
     print("\n[TEST 4] Async config operations...")
     try:
         # Test async load
-        test_config = await unified_config_manager.load_config_async("test", use_cache=False)
+        test_config = await unified_config_manager.load_config_async(
+            "test", use_cache=False
+        )
         assert isinstance(test_config, dict), "Async load should return dictionary"
 
         # Test async save
@@ -102,8 +112,12 @@ async def test_config_consolidation():
         await unified_config_manager.save_config_async("test", test_data)
 
         # Verify saved data
-        reloaded = await unified_config_manager.load_config_async("test", use_cache=False)
-        assert reloaded.get("test_key") == "test_value", "Saved data should be retrievable"
+        reloaded = await unified_config_manager.load_config_async(
+            "test", use_cache=False
+        )
+        assert (
+            reloaded.get("test_key") == "test_value"
+        ), "Saved data should be retrievable"
 
         print("✅ PASSED: Async config operations work")
     except Exception as e:
@@ -184,7 +198,7 @@ async def test_config_consolidation():
     try:
         default_config = unified_config_manager._get_default_config()
         npu = default_config.get("npu", {})
-        assert npu["enabled"] == False, "NPU should be disabled by default"
+        assert npu["enabled"] is False, "NPU should be disabled by default"
         assert npu["device"] == "CPU", "Default device should be CPU"
         assert npu["optimization_level"] == "PERFORMANCE"
 
@@ -198,7 +212,7 @@ async def test_config_consolidation():
     try:
         default_config = unified_config_manager._get_default_config()
         security = default_config.get("security", {})
-        assert security["enable_sandboxing"] == True
+        assert security["enable_sandboxing"] is True
         assert "rm -rf" in security["blocked_commands"]
 
         print("✅ PASSED: Security config properly consolidated")

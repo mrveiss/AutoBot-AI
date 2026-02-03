@@ -119,7 +119,7 @@ class DistributedSystemTester:
 
                         try:
                             details = await response.json()
-                        except:
+                        except Exception:
                             details = {"text": await response.text()}
 
                         return ServiceResult(
@@ -516,7 +516,7 @@ class DistributedSystemTester:
             # This could involve checking Redis data integrity
             # and ensuring no data loss occurred during partition
             return True  # Placeholder - implement based on specific data flows
-        except:
+        except Exception:
             return False
 
     async def _test_error_handling_during_partition(self) -> bool:
@@ -525,7 +525,7 @@ class DistributedSystemTester:
             # Test that services properly handle errors when dependencies are unavailable
             # Should test timeout behaviors, fallback mechanisms, circuit breakers
             return True  # Placeholder - implement based on error handling patterns
-        except:
+        except Exception:
             return False
 
     async def run_comprehensive_distributed_tests(self) -> Dict:

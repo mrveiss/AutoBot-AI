@@ -35,14 +35,14 @@ async def test_direct_optimization():
         Real-time system monitoring ensures optimal performance across all hardware components.
         """
 
-        print(f"\n⚡ Testing optimized chunking...")
+        print("\n⚡ Testing optimized chunking...")
         print(f"Text length: {len(test_text)} characters")
 
         start_time = time.time()
         chunks = await chunker.chunk_text_optimized(test_text)
         processing_time = time.time() - start_time
 
-        print(f"\n📊 Results:")
+        print("\n📊 Results:")
         print(f"  ⏱️  Processing time: {processing_time:.3f}s")
         print(f"  📦 Chunks created: {len(chunks)}")
 
@@ -72,7 +72,7 @@ async def test_direct_optimization():
 
 async def test_performance_stats():
     """Test chunker performance statistics."""
-    print(f"\n📊 Testing Performance Statistics...")
+    print("\n📊 Testing Performance Statistics...")
 
     try:
         from src.utils.semantic_chunker_gpu_optimized import (
@@ -84,7 +84,7 @@ async def test_performance_stats():
         # Check if performance stats are available
         if hasattr(chunker, "get_performance_stats"):
             stats = chunker.get_performance_stats()
-            print(f"  ✅ Performance stats available:")
+            print("  ✅ Performance stats available:")
             print(
                 f"    - Total sentences processed: {stats.get('total_sentences_processed', 0)}"
             )
@@ -102,7 +102,7 @@ async def test_performance_stats():
             )
             return True
         else:
-            print(f"  ⚠️  Performance stats not available")
+            print("  ⚠️  Performance stats not available")
             return False
 
     except Exception as e:
@@ -122,7 +122,7 @@ if __name__ == "__main__":
         # Test performance stats
         stats_success = await test_performance_stats()
 
-        print(f"\n" + "=" * 60)
+        print("\n" + "=" * 60)
         print("📋 SIMPLE TEST SUMMARY")
         print("=" * 60)
 
@@ -139,12 +139,12 @@ if __name__ == "__main__":
         overall_success = optimization_success
 
         if overall_success:
-            print(f"\n🎉 SUCCESS: GPU optimization is functional!")
+            print("\n🎉 SUCCESS: GPU optimization is functional!")
             print("  - 5x performance improvement available")
             print("  - RTX 4070 GPU acceleration active")
             print("  - Hardware optimization deployed")
         else:
-            print(f"\n⚠️  ISSUE: GPU optimization needs attention")
+            print("\n⚠️  ISSUE: GPU optimization needs attention")
 
         return overall_success
 

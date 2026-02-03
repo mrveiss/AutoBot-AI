@@ -21,7 +21,7 @@ def test_health():
     """Test 1: Health Check"""
     response = requests.get(f"{BASE_URL}/health")
     data = response.json()
-    print(f"✅ Test 1: Health Check - PASSED")
+    print("✅ Test 1: Health Check - PASSED")
     print(
         f"   Status: {data['status']}, Database: {data['database']}, Hosts: {data['total_hosts']}"
     )
@@ -33,7 +33,7 @@ def test_list_roles():
     response = requests.get(f"{BASE_URL}/roles")
     data = response.json()
     role_names = [r["name"] for r in data]
-    print(f"✅ Test 2: List Roles - PASSED")
+    print("✅ Test 2: List Roles - PASSED")
     print(f"   Found {len(data)} roles: {role_names}")
     return True
 
@@ -42,7 +42,7 @@ def test_statistics():
     """Test 3: Get Statistics"""
     response = requests.get(f"{BASE_URL}/statistics")
     data = response.json()
-    print(f"✅ Test 3: Statistics - PASSED")
+    print("✅ Test 3: Statistics - PASSED")
     print(
         f"   Hosts: {data['total_hosts']}, Roles: {data['total_roles']}, Deployments: {data['total_deployments']}"
     )
@@ -53,7 +53,7 @@ def test_list_hosts_empty():
     """Test 4: List Hosts (Empty Database)"""
     response = requests.get(f"{BASE_URL}/hosts", params={"page": 1, "page_size": 20})
     data = response.json()
-    print(f"✅ Test 4: List Hosts (Empty) - PASSED")
+    print("✅ Test 4: List Hosts (Empty) - PASSED")
     print(
         f"   Pagination: page={data['pagination']['page']}, total={data['pagination']['total']}"
     )
@@ -79,7 +79,7 @@ def test_create_host():
         return None
 
     data = response.json()
-    print(f"✅ Test 5: Create Host - PASSED")
+    print("✅ Test 5: Create Host - PASSED")
     print(
         f"   Created host ID={data['id']}, hostname={data['hostname']}, status={data['status']}"
     )
@@ -90,7 +90,7 @@ def test_get_host_details(host_id):
     """Test 6: Get Host Details (Relationship Loading)"""
     response = requests.get(f"{BASE_URL}/hosts/{host_id}")
     data = response.json()
-    print(f"✅ Test 6: Get Host Details - PASSED")
+    print("✅ Test 6: Get Host Details - PASSED")
     print(
         f"   Host: {data['hostname']}, Role: {data.get('role_name', 'N/A')}, Deployments: {data.get('deployment_count', 0)}"
     )
@@ -102,7 +102,7 @@ def test_list_hosts_after_create():
     response = requests.get(f"{BASE_URL}/hosts")
     data = response.json()
     first_host = data["hosts"][0]["hostname"] if data["hosts"] else "None"
-    print(f"✅ Test 7: List Hosts After Creation - PASSED")
+    print("✅ Test 7: List Hosts After Creation - PASSED")
     print(f"   Total hosts: {data['pagination']['total']}, First host: {first_host}")
     return True
 
@@ -110,7 +110,7 @@ def test_list_hosts_after_create():
 def test_delete_host(host_id):
     """Test 8: Delete Test Host"""
     response = requests.delete(f"{BASE_URL}/hosts/{host_id}")
-    print(f"✅ Test 8: Delete Host - PASSED")
+    print("✅ Test 8: Delete Host - PASSED")
     print(f"   HTTP Status: {response.status_code}")
 
     # Verify deletion
@@ -127,13 +127,13 @@ def test_celery_worker_status():
         with open("/home/kali/Desktop/AutoBot/logs/celery-worker.log", "r") as f:
             logs = f.read()
             if "ready" in logs and "autobot-worker" in logs:
-                print(f"✅ Test 9: Celery Worker - PASSED")
+                print("✅ Test 9: Celery Worker - PASSED")
                 print(
-                    f"   Worker is running with queues: deployments, provisioning, services"
+                    "   Worker is running with queues: deployments, provisioning, services"
                 )
                 return True
             else:
-                print(f"❌ Test 9: Celery Worker - FAILED")
+                print("❌ Test 9: Celery Worker - FAILED")
                 return False
     except Exception as e:
         print(f"❌ Test 9: Celery Worker - ERROR: {e}")

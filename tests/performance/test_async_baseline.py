@@ -618,16 +618,16 @@ class AsyncBaselineTest:
         print()
 
         if chat_test:
-            print(f"Chat Performance (50 concurrent users):")
+            print("Chat Performance (50 concurrent users):")
             print(f"  P95 Latency: {chat_test.p95_latency_ms:.0f}ms")
-            print(f"  Target After Async: <2000ms")
+            print("  Target After Async: <2000ms")
             print(
                 f"  Status: {'✅ MEETS TARGET' if chat_test.p95_latency_ms < 2000 else '❌ NEEDS ASYNC OPTIMIZATION'}"
             )
             print()
 
         if redis_test:
-            print(f"Redis Performance (100 concurrent ops):")
+            print("Redis Performance (100 concurrent ops):")
             print(f"  Throughput: {redis_test.requests_per_second:.0f} ops/sec")
             print(f"  P95 Latency: {redis_test.p95_latency_ms:.0f}ms")
             print(
@@ -636,9 +636,9 @@ class AsyncBaselineTest:
             print()
 
         if cross_vm_test:
-            print(f"Cross-VM Latency:")
+            print("Cross-VM Latency:")
             print(f"  P95 Latency: {cross_vm_test.p95_latency_ms:.0f}ms")
-            print(f"  Target: <100ms")
+            print("  Target: <100ms")
             print(
                 f"  Status: {'✅ MEETS TARGET' if cross_vm_test.p95_latency_ms < 100 else '❌ HIGH LATENCY'}"
             )

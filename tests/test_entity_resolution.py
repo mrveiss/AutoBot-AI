@@ -192,7 +192,7 @@ class TestEntityResolution:
 
         # Check quality metrics
         summary = result.get_resolution_summary()
-        print(f"  Quality metrics:")
+        print("  Quality metrics:")
         print(f"    High confidence: {summary['quality_metrics']['high_confidence']}")
         print(f"    Low confidence: {summary['quality_metrics']['low_confidence']}")
         print(f"    Exact matches: {summary['quality_metrics']['exact_matches']}")
@@ -436,7 +436,7 @@ class TestEntityResolution:
             print("\n" + "=" * 70)
             print("✅ All Entity Resolution Tests Passed!")
             print("=" * 70)
-            print(f"Summary:")
+            print("Summary:")
             print(
                 f"  - Basic resolution: {basic_result.resolution_rate:.1f}% reduction"
             )

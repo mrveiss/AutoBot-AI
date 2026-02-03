@@ -69,15 +69,13 @@ async def test_queue_integration():
     pending_ids = [c.command_id for c in pending]
     assert cmd.command_id in pending_ids, "Command not in pending approvals"
     print(f"   Found {len(pending)} pending approval(s)")
-    print(f"   Our command is in pending list: True")
+    print("   Our command is in pending list: True")
     print()
 
     # Test 5: Approve command
     print("✅ TEST 5: Approving command...")
     success = await queue.approve_command(
-        command_id=cmd.command_id,
-        user_id="test_user",
-        comment="Approved for testing"
+        command_id=cmd.command_id, user_id="test_user", comment="Approved for testing"
     )
     assert success, "Failed to approve command"
 
@@ -94,7 +92,9 @@ async def test_queue_integration():
     assert success, "Failed to start execution"
 
     executing_cmd = await queue.get_command(cmd.command_id)
-    assert executing_cmd.state == CommandState.EXECUTING, "State not updated to EXECUTING"
+    assert (
+        executing_cmd.state == CommandState.EXECUTING
+    ), "State not updated to EXECUTING"
     print(f"   State: {executing_cmd.state.value}")
     print(f"   Execution started at: {executing_cmd.execution_started_at}")
     print()
@@ -110,7 +110,9 @@ async def test_queue_integration():
     assert success, "Failed to complete command"
 
     completed_cmd = await queue.get_command(cmd.command_id)
-    assert completed_cmd.state == CommandState.COMPLETED, "State not updated to COMPLETED"
+    assert (
+        completed_cmd.state == CommandState.COMPLETED
+    ), "State not updated to COMPLETED"
     assert completed_cmd.output == "kali", "Output mismatch"
     print(f"   State: {completed_cmd.state.value}")
     print(f"   Output: {completed_cmd.output}")
@@ -123,7 +125,7 @@ async def test_queue_integration():
     pending_after = await queue.get_pending_approvals()
     pending_ids_after = [c.command_id for c in pending_after]
     assert cmd.command_id not in pending_ids_after, "Command still in pending list"
-    print(f"   Command removed from pending approvals: True")
+    print("   Command removed from pending approvals: True")
     print()
 
     # Test 9: Test denial flow
@@ -140,9 +142,7 @@ async def test_queue_integration():
 
     await queue.add_command(denied_cmd)
     success = await queue.deny_command(
-        command_id=denied_cmd.command_id,
-        user_id="test_user",
-        comment="Too dangerous!"
+        command_id=denied_cmd.command_id, user_id="test_user", comment="Too dangerous!"
     )
     assert success, "Failed to deny command"
 

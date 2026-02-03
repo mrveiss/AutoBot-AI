@@ -19,10 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.constants.network_constants import NetworkConstants
-from tests.benchmarks.benchmark_base import (
-    BenchmarkRunner,
-    assert_performance,
-)
+from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
 
 # Build URLs from centralized configuration
 BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
@@ -70,7 +67,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/health", "method": "GET"},
         )
 
-        print(f"\nHealth Endpoint Benchmark:")
+        print("\nHealth Endpoint Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
@@ -99,7 +96,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/chat/message", "method": "POST"},
         )
 
-        print(f"\nChat Endpoint Benchmark:")
+        print("\nChat Endpoint Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
@@ -123,7 +120,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/mcp/tools", "method": "GET"},
         )
 
-        print(f"\nMCP Tools List Benchmark:")
+        print("\nMCP Tools List Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
 
@@ -149,7 +146,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/knowledge/query", "method": "POST", "top_k": 5},
         )
 
-        print(f"\nKnowledge Search Benchmark:")
+        print("\nKnowledge Search Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
 
@@ -173,7 +170,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"concurrent_requests": 5, "endpoint": "/api/health"},
         )
 
-        print(f"\nConcurrent Requests Benchmark (5 concurrent):")
+        print("\nConcurrent Requests Benchmark (5 concurrent):")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
 
@@ -184,7 +181,10 @@ class TestAPIEndpointBenchmarks:
         import json
 
         test_data = {
-            "agents": [{"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]} for i in range(100)],
+            "agents": [
+                {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]}
+                for i in range(100)
+            ],
             "metrics": {"cpu": 45.2, "memory": 67.8, "requests": 1000},
             "config": {"debug": False, "log_level": "INFO", "max_workers": 4},
         }
@@ -199,7 +199,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"data_size": "100 agents"},
         )
 
-        print(f"\nJSON Serialization Benchmark:")
+        print("\nJSON Serialization Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -214,7 +214,8 @@ class TestAPIEndpointBenchmarks:
         test_json = json.dumps(
             {
                 "agents": [
-                    {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]} for i in range(100)
+                    {"id": f"agent_{i}", "status": "active", "tasks": [1, 2, 3]}
+                    for i in range(100)
                 ],
                 "metrics": {"cpu": 45.2, "memory": 67.8, "requests": 1000},
             }
@@ -230,7 +231,7 @@ class TestAPIEndpointBenchmarks:
             metadata={"data_size": "100 agents"},
         )
 
-        print(f"\nJSON Deserialization Benchmark:")
+        print("\nJSON Deserialization Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -247,8 +248,9 @@ class TestAPIResponseTimeBenchmarks:
 
     def test_pydantic_validation_benchmark(self, runner):
         """Benchmark Pydantic model validation"""
-        from pydantic import BaseModel
         from typing import List, Optional
+
+        from pydantic import BaseModel
 
         class AgentModel(BaseModel):
             id: str
@@ -275,7 +277,7 @@ class TestAPIResponseTimeBenchmarks:
             metadata={"model": "AgentModel"},
         )
 
-        print(f"\nPydantic Validation Benchmark:")
+        print("\nPydantic Validation Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -297,7 +299,7 @@ class TestAPIResponseTimeBenchmarks:
             metadata={"type": "uuid4"},
         )
 
-        print(f"\nUUID Generation Benchmark:")
+        print("\nUUID Generation Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.6f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 

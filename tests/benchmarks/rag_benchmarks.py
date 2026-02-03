@@ -17,10 +17,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tests.benchmarks.benchmark_base import (
-    BenchmarkRunner,
-    assert_performance,
-)
+from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
 
 
 class TestRAGQueryBenchmarks:
@@ -71,7 +68,7 @@ class TestRAGQueryBenchmarks:
             metadata={"num_documents": 50, "vector_dim": 384},
         )
 
-        print(f"\nVector Similarity Benchmark (50 docs):")
+        print("\nVector Similarity Benchmark (50 docs):")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -92,7 +89,9 @@ class TestRAGQueryBenchmarks:
             scored_docs = []
             for doc in documents:
                 # Simple dot product for speed
-                score = sum(a * b for a, b in zip(query_vector[:10], doc["embedding"][:10]))
+                score = sum(
+                    a * b for a, b in zip(query_vector[:10], doc["embedding"][:10])
+                )
                 scored_docs.append((score, doc))
 
             # Get top k
@@ -106,7 +105,7 @@ class TestRAGQueryBenchmarks:
             metadata={"num_documents": 1000, "top_k": 5},
         )
 
-        print(f"\nTop-K Retrieval Benchmark (1000 docs, k=5):")
+        print("\nTop-K Retrieval Benchmark (1000 docs, k=5):")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
 
@@ -116,7 +115,8 @@ class TestRAGQueryBenchmarks:
         """Benchmark context window assembly from retrieved documents"""
         retrieved_docs = [
             {
-                "content": f"Document {i} contains important information about the topic. " * 10,
+                "content": f"Document {i} contains important information about the topic. "
+                * 10,
                 "metadata": {"source": f"source_{i}", "relevance": 0.9 - i * 0.1},
             }
             for i in range(10)
@@ -144,7 +144,7 @@ class TestRAGQueryBenchmarks:
             metadata={"max_tokens": 2048, "num_docs": 10},
         )
 
-        print(f"\nContext Assembly Benchmark:")
+        print("\nContext Assembly Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -162,7 +162,9 @@ class TestRAGQueryBenchmarks:
             while start < len(long_document):
                 end = min(start + chunk_size, len(long_document))
                 chunks.append(long_document[start:end])
-                start = end - overlap if end < len(long_document) else len(long_document)
+                start = (
+                    end - overlap if end < len(long_document) else len(long_document)
+                )
             return chunks
 
         result = runner.run_benchmark(
@@ -172,7 +174,7 @@ class TestRAGQueryBenchmarks:
             metadata={"doc_size": len(long_document), "chunk_size": 500, "overlap": 50},
         )
 
-        print(f"\nDocument Chunking Benchmark:")
+        print("\nDocument Chunking Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -182,7 +184,11 @@ class TestRAGQueryBenchmarks:
         """Benchmark metadata filtering performance"""
 
         def filter_by_metadata(source_filter="test"):
-            return [doc for doc in mock_documents if doc["metadata"]["source"] == source_filter]
+            return [
+                doc
+                for doc in mock_documents
+                if doc["metadata"]["source"] == source_filter
+            ]
 
         result = runner.run_benchmark(
             name="rag_metadata_filtering_1000_docs",
@@ -191,7 +197,7 @@ class TestRAGQueryBenchmarks:
             metadata={"num_documents": 1000, "filter_type": "source"},
         )
 
-        print(f"\nMetadata Filtering Benchmark:")
+        print("\nMetadata Filtering Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -234,7 +240,7 @@ class TestEmbeddingBenchmarks:
             metadata={"text_length": len(sample_text)},
         )
 
-        print(f"\nText Preprocessing Benchmark:")
+        print("\nText Preprocessing Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 
@@ -260,7 +266,7 @@ class TestEmbeddingBenchmarks:
             metadata={"batch_size": 32, "embedding_dim": 384},
         )
 
-        print(f"\nBatch Embedding Generation Benchmark (batch=32):")
+        print("\nBatch Embedding Generation Benchmark (batch=32):")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
 
@@ -281,7 +287,9 @@ class TestRAGPipelineBenchmarks:
         def simulate_rag_pipeline():
             # 1. Query embedding (simulated)
             query = "What is the best approach for performance optimization?"
-            query_embedding = [hash(query + str(i)) % 1000 / 1000.0 for i in range(384)]
+            _query_embedding = [
+                hash(query + str(i)) % 1000 / 1000.0 for i in range(384)
+            ]
 
             # 2. Vector search (simulated - quick sleep for realism)
             time.sleep(0.001)  # Simulate 1ms DB query
@@ -307,7 +315,7 @@ class TestRAGPipelineBenchmarks:
             metadata={"stages": ["embed", "search", "rerank", "assemble", "prompt"]},
         )
 
-        print(f"\nFull RAG Pipeline Benchmark (simulated):")
+        print("\nFull RAG Pipeline Benchmark (simulated):")
         print(f"  Avg: {result.avg_time_ms:.2f}ms")
         print(f"  P95: {result.p95_time_ms:.2f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
@@ -341,7 +349,7 @@ class TestRAGPipelineBenchmarks:
             metadata={"method": "synonym_based"},
         )
 
-        print(f"\nQuery Expansion Benchmark:")
+        print("\nQuery Expansion Benchmark:")
         print(f"  Avg: {result.avg_time_ms:.4f}ms")
         print(f"  Ops/sec: {result.ops_per_second:.2f}")
 

@@ -140,17 +140,17 @@ class TestOpenVINOModelCompilation:
             # First compilation (cache miss)
             start1 = time.time()
             compiled1 = openvino_core.compile_model(simple_model, "CPU", config)
-            time1 = time.time() - start1
+            time.time() - start1
 
             # Second compilation (cache hit)
             start2 = time.time()
             compiled2 = openvino_core.compile_model(simple_model, "CPU", config)
-            time2 = time.time() - start2
+            time.time() - start2
 
             assert compiled1 is not None
             assert compiled2 is not None
             # Cache should have been created
-            cache_files = list(Path(cache_dir).glob("*"))
+            list(Path(cache_dir).glob("*"))
             # Cache may or may not be created for simple models, just verify no errors
 
     def test_performance_hints_latency(self, openvino_core, simple_model):
@@ -226,7 +226,7 @@ class TestOpenVINOPerformance:
         assert min_latency > 0
         assert max_latency < 500
 
-        print(f"\nInference Latency (ms):")
+        print("\nInference Latency (ms):")
         print(f"  Average: {avg_latency:.2f}")
         print(f"  Min: {min_latency:.2f}")
         print(f"  Max: {max_latency:.2f}")
@@ -453,7 +453,9 @@ class TestOpenVINOProductionReadiness:
 
         models = []
         for i in range(3):
-            param = opset10.parameter(PartialShape([1, 10 + i]), Type.f32, name=f"input_{i}")
+            param = opset10.parameter(
+                PartialShape([1, 10 + i]), Type.f32, name=f"input_{i}"
+            )
             result = opset10.relu(param)
             model = Model([result], [param], f"model_{i}")
             models.append(model)

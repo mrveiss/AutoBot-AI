@@ -271,7 +271,9 @@ class BenchmarkRunner:
         if baseline.avg_time_ms == 0:
             return None
 
-        regression_percent = ((result.avg_time_ms - baseline.avg_time_ms) / baseline.avg_time_ms) * 100
+        regression_percent = (
+            (result.avg_time_ms - baseline.avg_time_ms) / baseline.avg_time_ms
+        ) * 100
 
         is_regression = regression_percent > self.regression_threshold
 
@@ -390,7 +392,9 @@ def assert_performance(
     errors = []
 
     if max_avg_ms and result.avg_time_ms > max_avg_ms:
-        errors.append(f"Average time {result.avg_time_ms:.2f}ms exceeds max {max_avg_ms}ms")
+        errors.append(
+            f"Average time {result.avg_time_ms:.2f}ms exceeds max {max_avg_ms}ms"
+        )
 
     if max_p95_ms and result.p95_time_ms > max_p95_ms:
         errors.append(f"P95 time {result.p95_time_ms:.2f}ms exceeds max {max_p95_ms}ms")
@@ -404,4 +408,4 @@ def assert_performance(
         )
 
     if errors:
-        raise AssertionError(f"Performance requirements not met:\n" + "\n".join(errors))
+        raise AssertionError("Performance requirements not met:\n" + "\n".join(errors))

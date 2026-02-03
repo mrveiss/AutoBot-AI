@@ -41,9 +41,7 @@ async def test_embedding_cache():
     print(f"First search: {time1:.2f}ms (device: {metrics1.device_used})")
     print(f"Second search: {time2:.2f}ms (device: {metrics2.device_used})")
     print(f"Cache hit rate: {cache_stats['hit_rate_percent']}%")
-    print(
-        f"Speed improvement: {((time1 - time2) / time1 * 100):.1f}% faster on cached"
-    )
+    print(f"Speed improvement: {((time1 - time2) / time1 * 100):.1f}% faster on cached")
 
     assert cache_stats["hits"] > 0, "Cache should have hits on repeated query"
     assert time2 < time1, "Cached query should be faster"
@@ -69,9 +67,7 @@ async def test_batch_search():
     batch_time = (time.time() - start) * 1000
 
     print(f"Batch search ({len(queries)} queries): {batch_time:.2f}ms")
-    print(
-        f"Average per query: {batch_time / len(queries):.2f}ms"
-    )
+    print(f"Average per query: {batch_time / len(queries):.2f}ms")
 
     for i, (results, metrics) in enumerate(batch_results):
         print(
@@ -99,7 +95,7 @@ async def test_performance_metrics():
     print(f"Results found: {metrics.total_documents_searched}")
 
     stats = await engine.get_search_statistics()
-    print(f"\nCache stats:")
+    print("\nCache stats:")
     print(f"  Embedding cache: {stats['embedding_cache_stats']}")
     print(f"  Search results cache: {stats['search_results_cache_stats']}")
 

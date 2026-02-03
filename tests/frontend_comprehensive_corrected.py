@@ -54,7 +54,7 @@ class AutoBotComprehensiveFrontendTester:
                     return TestResult(
                         name="Frontend Health & Accessibility",
                         success=True,
-                        message=f"Frontend accessible on port 5173, AutoBot app detected",
+                        message="Frontend accessible on port 5173, AutoBot app detected",
                         details={
                             "has_autobot_title": has_autobot,
                             "has_vue_app": has_vue_app,
@@ -102,7 +102,7 @@ class AutoBotComprehensiveFrontendTester:
                                 TestResult(
                                     name=f"API Connectivity: {name}",
                                     success=True,
-                                    message=f"Endpoint working, returned JSON data",
+                                    message="Endpoint working, returned JSON data",
                                     details={
                                         "status": resp.status,
                                         "keys": list(data.keys())
@@ -112,12 +112,12 @@ class AutoBotComprehensiveFrontendTester:
                                     response_time=response_time,
                                 )
                             )
-                        except:
+                        except Exception:
                             results.append(
                                 TestResult(
                                     name=f"API Connectivity: {name}",
                                     success=True,
-                                    message=f"Endpoint working (non-JSON response)",
+                                    message="Endpoint working (non-JSON response)",
                                     response_time=response_time,
                                 )
                             )
@@ -184,7 +184,7 @@ class AutoBotComprehensiveFrontendTester:
                         message="WebSocket connected on alternative endpoint",
                         details={"endpoint": ws_url_alt},
                     )
-            except:
+            except Exception:
                 return TestResult(
                     name="WebSocket Real-time Communication",
                     success=False,
@@ -952,7 +952,7 @@ class AutoBotComprehensiveFrontendTester:
             )
 
         # Category breakdown
-        print(f"\n📋 CATEGORY BREAKDOWN:")
+        print("\n📋 CATEGORY BREAKDOWN:")
         print("-" * 50)
         for category, passed in report["categories"].items():
             total = report["category_totals"][category]
@@ -970,7 +970,7 @@ class AutoBotComprehensiveFrontendTester:
                 )
 
         # Detailed results
-        print(f"\n📝 DETAILED TEST RESULTS:")
+        print("\n📝 DETAILED TEST RESULTS:")
         print("-" * 50)
 
         current_category = ""
@@ -1010,7 +1010,7 @@ class AutoBotComprehensiveFrontendTester:
             print(f"      {result.message}")
 
         # Recommendations
-        print(f"\n🔧 RECOMMENDATIONS & NEXT STEPS:")
+        print("\n🔧 RECOMMENDATIONS & NEXT STEPS:")
         print("-" * 50)
         for rec in report["recommendations"]:
             print(f"• {rec}")

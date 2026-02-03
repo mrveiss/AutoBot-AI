@@ -375,7 +375,7 @@ class TestOptimizationTypes:
             results = optimizer.analyze_file(f.name)
 
             # Should suggest hash structure
-            hash_results = [
+            _hash_results = [
                 r
                 for r in results
                 if r.optimization_type == OptimizationType.STRING_TO_HASH

@@ -66,7 +66,7 @@ repos:
       - id: debug-statements  # Check for debugger imports
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
-        exclude: ^tests/(results/.*|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py)$
+        exclude: ^tests/(results/.*|benchmarks/.*|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py)$
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit

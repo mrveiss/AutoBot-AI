@@ -605,7 +605,7 @@ class CICDIntegrationTester:
 """
 
         if notification["blocking_failures"]:
-            summary += f"\n### ❌ Blocking Failures\n"
+            summary += "\n### ❌ Blocking Failures\n"
             for failure in notification["blocking_failures"]:
                 summary += f"- {failure}\n"
 

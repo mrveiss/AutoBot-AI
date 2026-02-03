@@ -34,7 +34,7 @@ async def test_workflow_api():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Workflow execution API working")
+                    print("✅ Workflow execution API working")
                     print(f"   Type: {result.get('type', 'unknown')}")
                     print(f"   Success: {result.get('success', False)}")
 
@@ -43,7 +43,7 @@ async def test_workflow_api():
                         print(f"   Workflow ID: {workflow_id}")
 
                         # Test workflow status
-                        print(f"\n2. Testing Workflow Status API")
+                        print("\n2. Testing Workflow Status API")
                         print("-" * 40)
 
                         async with session.get(
@@ -51,7 +51,7 @@ async def test_workflow_api():
                         ) as status_response:
                             if status_response.status == 200:
                                 status = await status_response.json()
-                                print(f"✅ Workflow status API working")
+                                print("✅ Workflow status API working")
                                 print(f"   Status: {status.get('status', 'unknown')}")
                                 print(f"   Progress: {status.get('progress', 0):.1%}")
                                 print(
@@ -98,7 +98,7 @@ async def test_research_agent():
 
         result = await agent.research_specific_tools(request)
 
-        print(f"✅ Research Agent working")
+        print("✅ Research Agent working")
         print(f"   Success: {result.get('success', False)}")
         print(f"   Tools found: {result.get('tools_found', [])}")
         print(f"   Recommendation: {result.get('recommendation', 'N/A')}")

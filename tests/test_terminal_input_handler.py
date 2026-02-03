@@ -41,7 +41,7 @@ class TestTerminalInputHandler:
         # Test with manual configuration
         handler2 = TerminalInputHandler()
         handler2.is_testing = True
-        assert handler2.is_testing == True, "Should accept manual testing configuration"
+        assert handler2.is_testing is True, "Should accept manual testing configuration"
 
         # Test various environment indicators
         test_indicators = {
@@ -115,9 +115,9 @@ class TestTerminalInputHandler:
 
             # Check if response matches expected pattern type
             if "y/n" in prompt.lower():
-                assert result in ["y", "n"], f"Should return y/n for yes/no prompt"
+                assert result in ["y", "n"], "Should return y/n for yes/no prompt"
             elif "choice" in prompt.lower() and any(c.isdigit() for c in prompt):
-                assert result.isdigit(), f"Should return digit for choice prompt"
+                assert result.isdigit(), "Should return digit for choice prompt"
 
         print("✓ Default response patterns working")
         return True

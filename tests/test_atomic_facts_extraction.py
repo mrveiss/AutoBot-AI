@@ -389,7 +389,7 @@ class TestAtomicFactsExtraction:
             print("\n" + "=" * 70)
             print("✅ All Atomic Facts Extraction Tests Passed!")
             print("=" * 70)
-            print(f"Summary:")
+            print("Summary:")
             print(f"  - Basic extraction: {basic_result.total_facts} facts")
             print(
                 f"  - Temporal classification: {len(temporal_result.temporal_type_distribution)} types"
@@ -403,7 +403,7 @@ class TestAtomicFactsExtraction:
             )
             print(f"  - Chunk processing: {chunk_result.total_facts} facts from chunks")
             print(f"  - Filtering capabilities: {filter_stats}")
-            print(f"  - Contradiction detection: Working ✓")
+            print("  - Contradiction detection: Working ✓")
 
             return True
 

@@ -38,7 +38,7 @@ async def test_npu_code_search():
     print("\n1. Checking system status...")
     try:
         status = await npu_code_search.get_index_status()
-        print(f"   ✅ System operational")
+        print("   ✅ System operational")
         print(f"   📊 Files indexed: {status.get('total_files_indexed', 0)}")
         print(f"   🔧 NPU available: {status.get('npu_available', False)}")
         print(f"   📝 Languages: {list(status.get('languages', {}).keys())}")
@@ -142,7 +142,7 @@ async def test_development_speedup():
         # Show examples
         code_duplicates = duplicates.get("code_block_duplicates", [])
         if code_duplicates:
-            print(f"   📝 Example duplicate:")
+            print("   📝 Example duplicate:")
             example = code_duplicates[0]
             print(f"      Size: {example['size_lines']} lines")
             print(f"      Locations: {len(example['locations'])} files")
@@ -184,7 +184,7 @@ async def test_development_speedup():
         most_used = imports.get("most_used_modules", [])
         unused = imports.get("potential_unused_imports", [])
 
-        print(f"   📦 Most used modules:")
+        print("   📦 Most used modules:")
         for module, count in most_used[:5]:
             print(f"      - {module}: {count} imports")
 
@@ -224,7 +224,7 @@ async def test_development_speedup():
             "total_opportunities", 0
         )
 
-        print(f"\n   📊 Summary:")
+        print("\n   📊 Summary:")
         print(f"      🔄 Duplicate code savings: {duplicate_savings} lines")
         print(f"      🔍 Patterns identified: {pattern_issues}")
         print(f"      🔧 Refactoring opportunities: {refactoring_ops}")
@@ -277,10 +277,10 @@ async def test_performance_comparison():
         except Exception as e:
             print(f"   ❌ Query {i} failed: {e}")
 
-    print(f"\n📊 Performance Summary:")
+    print("\n📊 Performance Summary:")
     print(f"   ⏱️  Total search time: {total_time*1000:.1f}ms")
     print(f"   🚀 NPU acceleration used: {npu_used_count}/{len(test_queries)} queries")
-    print(f"   💾 Redis indexing: ✅ Active")
+    print("   💾 Redis indexing: ✅ Active")
 
     return True
 

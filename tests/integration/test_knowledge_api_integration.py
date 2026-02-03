@@ -334,7 +334,7 @@ class TestVectorizationStatusFlow:
                 mock_get.return_value.__aenter__.return_value = mock_response
 
                 async with api_client.get(
-                    f"/api/knowledge_base/vectorization/status"
+                    "/api/knowledge_base/vectorization/status"
                 ) as response:
                     assert response.status == 200
                     data = await response.json()

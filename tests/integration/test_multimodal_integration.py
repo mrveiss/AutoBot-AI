@@ -166,7 +166,7 @@ class TestMultiModalWorkflowIntegration:
         assert decision.confidence > 0.5
         assert decision.chosen_action.get("action") is not None
 
-        print(f"✅ Text-to-multimodal workflow completed successfully")
+        print("✅ Text-to-multimodal workflow completed successfully")
 
     async def test_image_audio_combined_workflow(self):
         """Test workflow combining image and audio inputs"""
@@ -523,7 +523,7 @@ class TestMultiModalWorkflowIntegration:
             assert isinstance(audio_result, dict)
             assert "error" in audio_result or not audio_result.get("success", True)
 
-        print(f"✅ Error recovery workflow completed - system remained stable")
+        print("✅ Error recovery workflow completed - system remained stable")
 
     async def test_performance_under_multimodal_load(self):
         """Test system performance under concurrent multi-modal load"""

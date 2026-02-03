@@ -4,10 +4,12 @@ Test script for Redis listeners in the Orchestrator.
 Creates mock worker messages to test the Redis pub/sub functionality.
 """
 
-import redis
 import json
-import time
 import sys
+import time
+
+import redis
+
 from src.config import config as global_config_manager
 from src.utils.redis_client import get_redis_client
 
@@ -25,7 +27,7 @@ def test_worker_capabilities():
         # Connect to Redis using centralized utility
         client = get_redis_client()
         if client is None:
-            print(f"❌ Could not get Redis client from centralized utility")
+            print("❌ Could not get Redis client from centralized utility")
             return False
         client.ping()
         print(f"✅ Connected to Redis at {redis_host}:{redis_port}")
@@ -65,14 +67,14 @@ def test_command_approval():
 
     # Get Redis configuration
     redis_config = global_config_manager.get_redis_config()
-    redis_host = redis_config.get("host", "localhost")
-    redis_port = redis_config.get("port", 6379)
+    redis_config.get("host", "localhost")
+    redis_config.get("port", 6379)
 
     try:
         # Connect to Redis using centralized utility
         client = get_redis_client()
         if client is None:
-            print(f"❌ Could not get Redis client from centralized utility")
+            print("❌ Could not get Redis client from centralized utility")
             return False
         client.ping()
 
@@ -113,7 +115,7 @@ def test_redis_connection():
     try:
         client = get_redis_client()
         if client is None:
-            print(f"❌ Could not get Redis client from centralized utility")
+            print("❌ Could not get Redis client from centralized utility")
             return False
         client.ping()
         print(f"✅ Redis connection successful at {redis_host}:{redis_port}")
@@ -163,7 +165,7 @@ def main():
     results.append(test_command_approval())
 
     # Summary
-    print(f"\n=== TEST RESULTS SUMMARY ===")
+    print("\n=== TEST RESULTS SUMMARY ===")
     passed = sum(results)
     total = len(results)
     print(f"Tests Passed: {passed}/{total}")

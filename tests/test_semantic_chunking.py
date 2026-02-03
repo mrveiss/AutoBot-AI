@@ -201,7 +201,7 @@ class TestSemanticChunking:
             print("=" * 60)
             print("✅ All Semantic Chunking Tests Passed!")
             print("=" * 60)
-            print(f"Summary:")
+            print("Summary:")
             print(f"  - Basic chunking: {len(basic_chunks)} chunks")
             print(f"  - Document compatibility: {len(documents)} documents")
             print(f"  - Average coherence: {coherence:.3f}")

@@ -23,7 +23,7 @@ async def test_security_layer():
     # Initialize enhanced security layer
     security = EnhancedSecurityLayer()
 
-    print(f"✅ Security layer initialized")
+    print("✅ Security layer initialized")
     print(f"   - Authentication enabled: {security.enable_auth}")
     print(f"   - Command security enabled: {security.enable_command_security}")
     print(f"   - Docker sandbox enabled: {security.use_docker_sandbox}")

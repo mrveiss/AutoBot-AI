@@ -106,11 +106,11 @@ class TestFileWriteAtomicity:
 
             # Verify target file exists and contains correct content
             assert os.path.exists(target_file)
-            with open(target_file, 'r') as f:
+            with open(target_file, "r") as f:
                 assert f.read() == content
 
             # Verify no temp files left behind
-            temp_files = [f for f in os.listdir(tmpdir) if f.startswith('.tmp_chat_')]
+            temp_files = [f for f in os.listdir(tmpdir) if f.startswith(".tmp_chat_")]
             assert len(temp_files) == 0
 
     @pytest.mark.asyncio
@@ -128,7 +128,7 @@ class TestFileWriteAtomicity:
                 await manager._atomic_write(invalid_file, "test")
 
             # Verify no temp files left in tmpdir
-            temp_files = [f for f in os.listdir(tmpdir) if f.startswith('.tmp_chat_')]
+            temp_files = [f for f in os.listdir(tmpdir) if f.startswith(".tmp_chat_")]
             assert len(temp_files) == 0
 
     @pytest.mark.asyncio
@@ -150,7 +150,7 @@ class TestFileWriteAtomicity:
 
             # Verify file is valid JSON (not corrupted)
             assert os.path.exists(target_file)
-            with open(target_file, 'r') as f:
+            with open(target_file, "r") as f:
                 data = json.load(f)  # Should not raise JSONDecodeError
                 assert "write" in data
                 assert "timestamp" in data
@@ -168,13 +168,22 @@ class TestChatSaveRace:
         existing = [
             {"timestamp": "2025-01-01 10:00:00", "sender": "user", "text": "Hello"},
             {"timestamp": "2025-01-01 10:00:01", "sender": "assistant", "text": "Hi"},
-            {"timestamp": "2025-01-01 10:00:02", "sender": "terminal", "text": "ls output", "message_type": "terminal_output"},
+            {
+                "timestamp": "2025-01-01 10:00:02",
+                "sender": "terminal",
+                "text": "ls output",
+                "message_type": "terminal_output",
+            },
         ]
 
         new = [
             {"timestamp": "2025-01-01 10:00:00", "sender": "user", "text": "Hello"},
             {"timestamp": "2025-01-01 10:00:01", "sender": "assistant", "text": "Hi"},
-            {"timestamp": "2025-01-01 10:00:03", "sender": "user", "text": "New message"},
+            {
+                "timestamp": "2025-01-01 10:00:03",
+                "sender": "user",
+                "text": "New message",
+            },
         ]
 
         merged = await merge_messages(existing, new)
@@ -212,7 +221,11 @@ class TestChatSaveRace:
         from backend.api.chat import merge_messages
 
         existing = [
-            {"timestamp": "2025-01-01 10:00:02", "sender": "terminal", "text": "Output"},
+            {
+                "timestamp": "2025-01-01 10:00:02",
+                "sender": "terminal",
+                "text": "Output",
+            },
         ]
 
         new = [
@@ -234,16 +247,28 @@ class TestChatSaveRace:
 
         # Create 1000 existing messages
         existing = [
-            {"timestamp": f"2025-01-01 10:00:{i:02d}", "sender": "user", "text": f"Message {i}"}
+            {
+                "timestamp": f"2025-01-01 10:00:{i:02d}",
+                "sender": "user",
+                "text": f"Message {i}",
+            }
             for i in range(1000)
         ]
 
         # Create 1000 new messages (500 duplicates, 500 new)
         new = [
-            {"timestamp": f"2025-01-01 10:00:{i:02d}", "sender": "user", "text": f"Message {i}"}
+            {
+                "timestamp": f"2025-01-01 10:00:{i:02d}",
+                "sender": "user",
+                "text": f"Message {i}",
+            }
             for i in range(500)
         ] + [
-            {"timestamp": f"2025-01-01 11:00:{i:02d}", "sender": "user", "text": f"New {i}"}
+            {
+                "timestamp": f"2025-01-01 11:00:{i:02d}",
+                "sender": "user",
+                "text": f"New {i}",
+            }
             for i in range(500)
         ]
 
@@ -268,11 +293,14 @@ class TestIntegration:
         from backend.api.chat import merge_messages
 
         # Simulate real scenario: terminal adding messages while frontend saves
-
         # Initial chat state
         existing = [
             {"timestamp": "2025-01-01 10:00:00", "sender": "user", "text": "ls"},
-            {"timestamp": "2025-01-01 10:00:01", "sender": "assistant", "text": "Running ls"},
+            {
+                "timestamp": "2025-01-01 10:00:01",
+                "sender": "assistant",
+                "text": "Running ls",
+            },
         ]
 
         # Frontend save request (doesn't include terminal output yet)
@@ -280,7 +308,11 @@ class TestIntegration:
 
         # Simulate terminal output added during save
         existing.append(
-            {"timestamp": "2025-01-01 10:00:02", "sender": "terminal", "text": "file1.txt\nfile2.txt"}
+            {
+                "timestamp": "2025-01-01 10:00:02",
+                "sender": "terminal",
+                "text": "file1.txt\nfile2.txt",
+            }
         )
 
         # Merge should preserve terminal output

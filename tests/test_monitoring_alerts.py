@@ -38,7 +38,7 @@ async def test_monitoring_alerts():
             )
 
         # Check notification channels
-        logger.info(f"📢 Notification channels:")
+        logger.info("📢 Notification channels:")
         for name, channel in alerts_manager.notification_channels.items():
             status = "enabled" if channel.enabled else "disabled"
             logger.info(f"  - {name} ({channel.__class__.__name__}): {status}")
@@ -148,11 +148,11 @@ async def test_monitoring_alerts():
             # Test acknowledgment
             success = alerts_manager.acknowledge_alert(high_cpu_rule.id, "test_user")
             if success:
-                logger.info(f"👤 Test alert acknowledged successfully")
+                logger.info("👤 Test alert acknowledged successfully")
 
             # Test resolution
             await alerts_manager._resolve_alert(high_cpu_rule.id)
-            logger.info(f"✅ Test alert resolved")
+            logger.info("✅ Test alert resolved")
 
         # Test notification channels individually
         logger.info("📣 Testing notification channels...")
@@ -198,10 +198,10 @@ async def test_monitoring_alerts():
         logger.info(
             f"  ✅ Notification channels: {len(alerts_manager.notification_channels)}"
         )
-        logger.info(f"  ✅ Custom rule creation: Working")
-        logger.info(f"  ✅ Alert acknowledgment: Working")
-        logger.info(f"  ✅ Alert resolution: Working")
-        logger.info(f"  ✅ Notification sending: Working")
+        logger.info("  ✅ Custom rule creation: Working")
+        logger.info("  ✅ Alert acknowledgment: Working")
+        logger.info("  ✅ Alert resolution: Working")
+        logger.info("  ✅ Notification sending: Working")
 
         # Cleanup test rule
         await alerts_manager.remove_alert_rule("test_high_cpu_custom")

@@ -80,7 +80,7 @@ async def test_knowledge_base_optimization():
     print(f"Index Available: {stats.get('index_available', False)}")
 
     # Test document processing with performance measurement
-    print(f"\n⚡ Testing GPU-optimized document processing...")
+    print("\n⚡ Testing GPU-optimized document processing...")
     print(f"Document length: {len(TEST_DOCUMENT_CONTENT)} characters")
 
     start_time = time.time()
@@ -103,7 +103,7 @@ async def test_knowledge_base_optimization():
 
         processing_time = time.time() - start_time
 
-        print(f"\n📊 Processing Results:")
+        print("\n📊 Processing Results:")
         print(f"  ⏱️  Processing Time: {processing_time:.2f}s")
         print(f"  📁 Files Processed: {results['processed_files']}")
         print(f"  📦 Chunks Created: {results['total_chunks']}")
@@ -114,7 +114,7 @@ async def test_knowledge_base_optimization():
             print(f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec")
 
         # Test search functionality
-        print(f"\n🔍 Testing search with processed document...")
+        print("\n🔍 Testing search with processed document...")
         search_start = time.time()
 
         search_results = await kb.search_documents("AutoBot architecture", limit=3)
@@ -130,7 +130,7 @@ async def test_knowledge_base_optimization():
                 print(f"       Content: {result['content'][:100]}...")
 
         # Performance analysis
-        print(f"\n📈 Performance Analysis:")
+        print("\n📈 Performance Analysis:")
 
         # Estimate performance improvement based on previous benchmarks
         estimated_original_time = processing_time * 5.4  # Based on our 5.4x improvement
@@ -142,15 +142,15 @@ async def test_knowledge_base_optimization():
 
         # Memory and resource efficiency
         if processing_time < 5.0:
-            print(f"  ✅ Excellent performance: <5 seconds for document processing")
+            print("  ✅ Excellent performance: <5 seconds for document processing")
         elif processing_time < 10.0:
-            print(f"  👍 Good performance: <10 seconds for document processing")
+            print("  👍 Good performance: <10 seconds for document processing")
         else:
             print(
                 f"  ⚠️  Performance needs optimization: >{processing_time:.1f} seconds"
             )
 
-    print(f"\n🏁 Knowledge Base Optimization Test Complete")
+    print("\n🏁 Knowledge Base Optimization Test Complete")
     return {
         "processing_time": processing_time,
         "chunks_created": results["total_chunks"],
@@ -161,7 +161,7 @@ async def test_knowledge_base_optimization():
 
 async def test_chunker_optimization_status():
     """Test which semantic chunker is being used."""
-    print(f"\n🔧 Testing Semantic Chunker Status...")
+    print("\n🔧 Testing Semantic Chunker Status...")
 
     try:
         # Try to import both chunkers and check which one is active
@@ -174,13 +174,13 @@ async def test_chunker_optimization_status():
 
         # Check if it's the optimized version
         if hasattr(chunker, "get_performance_stats"):
-            print(f"  🚀 GPU optimization: ✅ ACTIVE")
+            print("  🚀 GPU optimization: ✅ ACTIVE")
             if hasattr(chunker, "gpu_batch_size"):
                 print(f"  ⚙️  GPU batch size: {chunker.gpu_batch_size}")
             if hasattr(chunker, "_gpu_optimized"):
                 print(f"  🎮 GPU flag: {chunker._gpu_optimized}")
         else:
-            print(f"  🚀 GPU optimization: ❌ NOT ACTIVE")
+            print("  🚀 GPU optimization: ❌ NOT ACTIVE")
 
         # Check chunker module location
         chunker_module = chunker.__class__.__module__
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         results = await test_knowledge_base_optimization()
 
         # Final summary
-        print(f"\n" + "=" * 70)
+        print("\n" + "=" * 70)
         print("📋 OPTIMIZATION TEST SUMMARY")
         print("=" * 70)
 
@@ -215,7 +215,7 @@ if __name__ == "__main__":
         else:
             print("⚠️  GPU-optimized semantic chunker may not be active")
 
-        print(f"📊 Performance Metrics:")
+        print("📊 Performance Metrics:")
         print(f"  - Document processing: {results['processing_time']:.2f}s")
         print(f"  - Chunks created: {results['chunks_created']}")
         print(f"  - Search performance: {results['search_time']:.3f}s")
@@ -232,9 +232,9 @@ if __name__ == "__main__":
         )
 
         if success:
-            print(f"\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!")
+            print("\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!")
         else:
-            print(f"\n⚠️  ATTENTION: Some optimization issues detected")
+            print("\n⚠️  ATTENTION: Some optimization issues detected")
 
         return results
 

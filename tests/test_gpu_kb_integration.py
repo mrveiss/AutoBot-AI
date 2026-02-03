@@ -39,14 +39,14 @@ async def test_chunker_optimization():
             optimization_features.append("Optimized Chunking Method")
 
         if optimization_features:
-            print(f"  🚀 Optimization features detected:")
+            print("  🚀 Optimization features detected:")
             for feature in optimization_features:
                 print(f"    - {feature}")
         else:
-            print(f"  ⚠️  No optimization features detected")
+            print("  ⚠️  No optimization features detected")
 
         # Test chunking performance
-        print(f"\n⚡ Testing chunking performance...")
+        print("\n⚡ Testing chunking performance...")
         test_text = (
             """
         AutoBot is an advanced Linux administration platform designed for intelligent automation.
@@ -74,7 +74,7 @@ async def test_chunker_optimization():
 
         processing_time = time.time() - start_time
 
-        print(f"  📊 Results:")
+        print("  📊 Results:")
         print(f"    - Method used: {method_used}")
         print(f"    - Processing time: {processing_time:.3f}s")
         print(f"    - Chunks created: {len(chunks)}")
@@ -89,7 +89,7 @@ async def test_chunker_optimization():
 
             # Show first chunk as example
             first_chunk = chunks[0]
-            print(f"  📝 Sample chunk:")
+            print("  📝 Sample chunk:")
             print(f"    - Content: {first_chunk.content[:100]}...")
             if hasattr(first_chunk, "metadata"):
                 optimization_info = first_chunk.metadata.get(
@@ -109,7 +109,7 @@ async def test_chunker_optimization():
 
 async def test_kb_stats():
     """Test knowledge base statistics."""
-    print(f"\n📊 Testing Knowledge Base Statistics...")
+    print("\n📊 Testing Knowledge Base Statistics...")
 
     try:
         from src.knowledge_base import get_knowledge_base
@@ -117,7 +117,7 @@ async def test_kb_stats():
         kb = get_knowledge_base()
         stats = await kb.get_stats()
 
-        print(f"  📈 Knowledge Base Stats:")
+        print("  📈 Knowledge Base Stats:")
         print(f"    - Total Vectors: {stats.get('total_vectors', 0)}")
         print(f"    - Total Chunks: {stats.get('total_chunks', 0)}")
         print(f"    - Total Documents: {stats.get('total_documents', 0)}")
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         stats_success = await test_kb_stats()
 
         # Final results
-        print(f"\n" + "=" * 70)
+        print("\n" + "=" * 70)
         print("📋 TEST RESULTS SUMMARY")
         print("=" * 70)
 
@@ -161,12 +161,12 @@ if __name__ == "__main__":
         overall_success = chunker_success and stats_success
 
         if overall_success:
-            print(f"\n🎉 SUCCESS: GPU optimization integration is working!")
+            print("\n🎉 SUCCESS: GPU optimization integration is working!")
             print("  - GPU-optimized semantic chunker active")
             print("  - Knowledge base connected and functional")
             print("  - Phase 9 hardware optimization deployed")
         else:
-            print(f"\n⚠️  PARTIAL SUCCESS: Some components may need attention")
+            print("\n⚠️  PARTIAL SUCCESS: Some components may need attention")
 
         return overall_success
 

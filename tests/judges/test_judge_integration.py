@@ -268,6 +268,8 @@ class TestJudgeIntegration:
 
     def test_judge_error_handling(self, mock_judges):
         """Test error handling in judge integration"""
+        from backend.api.workflow_automation import WorkflowAutomationManager
+
         # Configure judge to raise exception
         mock_judges[
             "workflow_step_judge"
@@ -407,8 +409,10 @@ class TestJudgeIntegration:
 
     def test_judge_context_preparation(self):
         """Test that judges receive proper context"""
+        from backend.api.workflow_automation import WorkflowAutomationManager
+
         with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True):
-            manager = WorkflowAutomationManager()
+            WorkflowAutomationManager()
 
             # Test context preparation for different scenarios
             contexts = [

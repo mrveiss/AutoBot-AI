@@ -173,7 +173,7 @@ class TestSecurityEdgeCases:
 
         for user, claimed_role in role_confusion_attempts:
             # Should enforce actual user role, not claimed role
-            has_permission = self.security.check_permission(
+            _has_permission = self.security.check_permission(
                 user, "allow_shell_execute", user_role=claimed_role
             )
 
@@ -334,7 +334,7 @@ class TestSecurityEdgeCases:
 
                 # Test that dangerous commands are still properly handled
                 dangerous_command = "rm -rf /tmp/test"
-                result = await new_security.execute_command(
+                _result = await new_security.execute_command(
                     dangerous_command, user="guest", user_role="guest"
                 )
 

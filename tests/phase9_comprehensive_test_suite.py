@@ -179,7 +179,7 @@ class Phase9TestSuite:
                     await client.ping()
                     await client.aclose()
                     status = "PASS"
-                    message = f"Redis connection successful"
+                    message = "Redis connection successful"
                 else:
                     # Test HTTP services
                     url = f"http://{host}:{port}{endpoint or ''}"
@@ -726,7 +726,7 @@ class Phase9TestSuite:
         logger.info("🌐 Testing Frontend-Backend Integration...")
 
         frontend_url = f"http://{self.config.frontend_host}:{self.config.frontend_port}"
-        backend_url = f"http://{self.config.backend_host}:{self.config.backend_port}"
+        _backend_url = f"http://{self.config.backend_host}:{self.config.backend_port}"
 
         # Test frontend accessibility
         start_time = time.time()
@@ -860,7 +860,7 @@ class Phase9TestSuite:
         try:
             # Check if VNC/KeX processes are running
             result = subprocess.run(
-                ["pgrep", "-f", "vnc|kex"], capture_output=True, text=True, timeout=5
+                ["pgrep", "-", "vnc|kex"], capture_output=True, text=True, timeout=5
             )
             duration = time.time() - start_time
 
@@ -1235,12 +1235,12 @@ class Phase9TestSuite:
         # Save human-readable summary
         summary_file = self.results_dir / f"phase9_test_summary_{self.timestamp}.txt"
         with open(summary_file, "w") as f:
-            f.write(f"AutoBot Phase 9 Comprehensive Test Report\n")
+            f.write("AutoBot Phase 9 Comprehensive Test Report\n")
             f.write(f"{'='*50}\n\n")
             f.write(f"Test Execution: {self.timestamp}\n")
             f.write(f"Total Duration: {total_duration:.2f} seconds\n")
             f.write(f"Overall Status: {overall_status}\n\n")
-            f.write(f"Summary:\n")
+            f.write("Summary:\n")
             f.write(f"  Total Tests: {total_tests}\n")
             f.write(f"  Passed: {passed_tests} ({pass_rate:.1f}%)\n")
             f.write(f"  Failed: {failed_tests}\n")
@@ -1249,7 +1249,7 @@ class Phase9TestSuite:
 
             # Failed tests details
             if failed_tests > 0:
-                f.write(f"Failed Tests:\n")
+                f.write("Failed Tests:\n")
                 for r in self.results:
                     if r.status == "FAIL":
                         f.write(f"  ❌ {r.test_name}: {r.message}\n")
@@ -1257,14 +1257,14 @@ class Phase9TestSuite:
 
             # Warning tests details
             if warning_tests > 0:
-                f.write(f"Warning Tests:\n")
+                f.write("Warning Tests:\n")
                 for r in self.results:
                     if r.status == "WARNING":
                         f.write(f"  ⚠️ {r.test_name}: {r.message}\n")
                 f.write("\n")
 
         # Console summary
-        logger.info(f"\n🎯 Test Suite Complete!")
+        logger.info("\n🎯 Test Suite Complete!")
         logger.info(f"Overall Status: {overall_status}")
         logger.info(f"Pass Rate: {pass_rate:.1f}% ({passed_tests}/{total_tests})")
         logger.info(f"Duration: {total_duration:.2f} seconds")

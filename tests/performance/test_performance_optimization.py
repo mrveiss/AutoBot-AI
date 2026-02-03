@@ -321,7 +321,7 @@ class PerformanceOptimizationTester:
         try:
             import requests
 
-            npu_url = f"http://172.16.168.22:8081"
+            npu_url = "http://172.16.168.22:8081"
 
             start_time = time.time()
             response = requests.get(f"{npu_url}/health", timeout=10)
@@ -465,7 +465,7 @@ class PerformanceOptimizationTester:
         )
 
         # Measure CPU usage during concurrent operations
-        start_cpu_percent = psutil.cpu_percent(interval=1)
+        _start_cpu_percent = psutil.cpu_percent(interval=1)
 
         # Test concurrent API requests to measure CPU utilization
         concurrent_requests = min(cpu_count, 20)  # Don't exceed core count
@@ -664,7 +664,7 @@ class PerformanceOptimizationTester:
 
         # Memory stress test
         memory_samples = []
-        test_duration = 30  # seconds
+        _test_duration = 30  # seconds
 
         async def memory_intensive_operations():
             """Perform memory-intensive operations"""
@@ -673,7 +673,7 @@ class PerformanceOptimizationTester:
 
                 # Make multiple API calls that might increase memory usage
                 for i in range(50):
-                    response = requests.post(
+                    _response = requests.post(
                         f"{self.base_url}/api/knowledge_base/search",
                         json={"query": f"test query {i}", "limit": 5},
                         timeout=10,

@@ -117,7 +117,7 @@ async def test_workflow_with_research():
 
         # Monitor workflow progress
         if workflow_id:
-            print(f"\n2. Monitoring Workflow Progress")
+            print("\n2. Monitoring Workflow Progress")
             print("-" * 40)
 
             for i in range(30):  # Monitor for up to 30 seconds

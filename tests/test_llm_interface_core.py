@@ -227,14 +227,14 @@ async def test_consolidation_success():
         model = "test_model"
 
         # Initially should use streaming
-        assert interface._should_use_streaming(model) == True
+        assert interface._should_use_streaming(model) is True
 
         # Record failures
         for i in range(3):
             interface._record_streaming_failure(model)
 
         # Should now avoid streaming
-        assert interface._should_use_streaming(model) == False
+        assert interface._should_use_streaming(model) is False
 
         # Success should reduce failure count
         interface._record_streaming_success(model)

@@ -146,7 +146,7 @@ def test_4_lru_caching():
 
         # Check stats
         stats = manager.cache_stats()
-        assert stats["enabled"] == True
+        assert stats["enabled"] is True
         assert stats["size"] == 3
 
     print("✅ PASSED: LRU caching works correctly")
@@ -313,7 +313,7 @@ async def test_9_statistics():
         assert "cache" in stats
 
         # Verify cache stats
-        assert stats["cache"]["enabled"] == True
+        assert stats["cache"]["enabled"] is True
         assert stats["cache"]["size"] >= 1
 
     print("✅ PASSED: Statistics work correctly")
@@ -393,7 +393,7 @@ def run_all_tests():
         print("\n" + "=" * 80)
         print("ALL TESTS PASSED! ✅")
         print("=" * 80)
-        print(f"\nResults: 10/10 tests passed")
+        print("\nResults: 10/10 tests passed")
         print("- Enhanced memory features: ✅")
         print("- General memory features: ✅")
         print("- Optimized memory features: ✅")

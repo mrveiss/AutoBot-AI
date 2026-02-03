@@ -121,7 +121,7 @@ async def test_workflow_management():
         retrieved_workflow = workflow_scheduler.get_workflow(first_workflow.id)
 
         if retrieved_workflow:
-            print(f"✅ Retrieved workflow details:")
+            print("✅ Retrieved workflow details:")
             print(f"  ID: {retrieved_workflow.id}")
             print(f"  Name: {retrieved_workflow.name}")
             print(f"  Status: {retrieved_workflow.status.name}")

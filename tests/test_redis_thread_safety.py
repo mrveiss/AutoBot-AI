@@ -10,7 +10,7 @@ import asyncio
 import concurrent.futures
 import time
 from datetime import datetime
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -62,6 +62,7 @@ class TestPoolStatisticsThreadSafety:
 
         # Create mock pool with real lock
         from threading import Lock
+
         mock_pool = Mock()
         mock_pool._lock = Lock()
         mock_pool._created_connections = 10
@@ -102,7 +103,9 @@ class TestPoolStatisticsThreadSafety:
         """Verify get_pool_statistics raises ValueError for missing pool"""
         manager = RedisConnectionManager()
 
-        with pytest.raises(ValueError, match="No sync pool found for database 'nonexistent'"):
+        with pytest.raises(
+            ValueError, match="No sync pool found for database 'nonexistent'"
+        ):
             manager.get_pool_statistics("nonexistent")
 
 
@@ -124,8 +127,8 @@ class TestIdleCleanupThreadSafety:
         idle_conn.disconnect = Mock()
 
         # Mock time to make connection appear idle (>300s)
-        old_time = datetime.now()
-        with patch('src.utils.redis_client.datetime') as mock_datetime:
+        _old_time = datetime.now()
+        with patch("src.utils.redis_client.datetime") as mock_datetime:
             # First call: get current time for idle check
             # Second call: return time 400s in the future
             mock_datetime.now.side_effect = [
@@ -151,6 +154,7 @@ class TestIdleCleanupThreadSafety:
 
         # Create mock pool with real lock
         from threading import Lock
+
         mock_pool = Mock()
         mock_pool._lock = Lock()
 
@@ -177,7 +181,7 @@ class TestIdleCleanupThreadSafety:
         manager._max_idle_time_seconds = 300  # 5 minutes
 
         # Mock current time to be 10 minutes after old_time
-        with patch('src.utils.redis_client.datetime') as mock_datetime:
+        with patch("src.utils.redis_client.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 10, 0)
 
             # Run cleanup
@@ -201,6 +205,7 @@ class TestIdleCleanupThreadSafety:
 
         # Create mock pool with real lock
         from threading import Lock
+
         mock_pool = Mock()
         mock_pool._lock = Lock()
 
@@ -222,7 +227,7 @@ class TestIdleCleanupThreadSafety:
         manager._max_idle_time_seconds = 300
 
         # Mock current time
-        with patch('src.utils.redis_client.datetime') as mock_datetime:
+        with patch("src.utils.redis_client.datetime") as mock_datetime:
             mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 10, 0)
 
             # Run cleanup - should not raise exception
@@ -240,13 +245,14 @@ class TestIdleCleanupThreadSafety:
         manager = RedisConnectionManager()
 
         from threading import Lock
+
         mock_pool = Mock()
         mock_pool._lock = Lock()
 
         # Create connections with different idle times
-        very_old = datetime(2025, 1, 1, 11, 0, 0)   # 1 hour ago
-        old = datetime(2025, 1, 1, 11, 54, 0)       # 6 minutes ago (idle)
-        recent = datetime(2025, 1, 1, 11, 59, 30)   # 30 seconds ago (active)
+        very_old = datetime(2025, 1, 1, 11, 0, 0)  # 1 hour ago
+        old = datetime(2025, 1, 1, 11, 54, 0)  # 6 minutes ago (idle)
+        recent = datetime(2025, 1, 1, 11, 59, 30)  # 30 seconds ago (active)
 
         conn_1 = Mock()
         conn_1._last_use = very_old
@@ -271,6 +277,7 @@ class TestIdleCleanupThreadSafety:
         # Use freezegun or manual datetime mocking
         # Mock datetime.now() to return consistent value
         import src.utils.redis_client as redis_client_module
+
         original_datetime = redis_client_module.datetime
 
         class MockDatetime:
@@ -287,8 +294,8 @@ class TestIdleCleanupThreadSafety:
             # Verify only old connections were disconnected
             conn_1.disconnect.assert_called_once()  # 1 hour old - removed
             conn_2.disconnect.assert_called_once()  # 6 minutes old - removed
-            conn_3.disconnect.assert_not_called()   # 30 seconds old - kept
-            conn_4.disconnect.assert_not_called()   # No _last_use - kept
+            conn_3.disconnect.assert_not_called()  # 30 seconds old - kept
+            conn_4.disconnect.assert_not_called()  # No _last_use - kept
 
             # Verify correct connections remain
             assert len(mock_pool._available_connections) == 2
@@ -307,6 +314,7 @@ class TestRaceConditionPrevention:
         manager = RedisConnectionManager()
 
         from threading import Lock
+
         mock_pool = Mock()
         mock_pool._lock = Lock()
         mock_pool._created_connections = 10
@@ -348,6 +356,7 @@ class TestRaceConditionPrevention:
         manager = RedisConnectionManager()
 
         from threading import Lock
+
         mock_pool = Mock()
         mock_pool._lock = Lock()
 
@@ -384,7 +393,7 @@ class TestRaceConditionPrevention:
         async def run_cleanup():
             """Run cleanup once"""
             nonlocal cleanup_done
-            with patch('src.utils.redis_client.datetime') as mock_datetime:
+            with patch("src.utils.redis_client.datetime") as mock_datetime:
                 mock_datetime.now.return_value = datetime(2025, 1, 1, 12, 10, 0)
                 await manager.cleanup_idle_connections()
             cleanup_done = True

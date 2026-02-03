@@ -105,7 +105,7 @@ class AutoBotSystemTester:
 
             try:
                 response_data = response.json() if response.content else {}
-            except:
+            except Exception:
                 response_data = {"raw_response": response.text[:200]}
 
             return success, {
@@ -413,7 +413,7 @@ class AutoBotSystemTester:
         # Check if uvicorn is running
         try:
             result = subprocess.run(
-                ["pgrep", "-f", "uvicorn"], capture_output=True, text=True, timeout=5
+                ["pgrep", "-", "uvicorn"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
                 pids = result.stdout.strip().split("\n")
@@ -443,7 +443,7 @@ class AutoBotSystemTester:
         # Check if Ollama is running
         try:
             result = subprocess.run(
-                ["pgrep", "-f", "ollama"], capture_output=True, text=True, timeout=5
+                ["pgrep", "-", "ollama"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
                 pids = result.stdout.strip().split("\n")
@@ -712,7 +712,7 @@ class AutoBotSystemTester:
         stats = report["overall_statistics"]
         severity = report["severity_breakdown"]
 
-        print(f"📊 Overall Test Results:")
+        print("📊 Overall Test Results:")
         print(f"   Total Tests: {stats['total_tests']}")
         print(f"   Passed: {stats['passed']} ✅")
         print(f"   Failed: {stats['failed']} ❌")
@@ -720,13 +720,13 @@ class AutoBotSystemTester:
         print(f"   Timeouts: {stats['timeouts']} ⏰")
         print(f"   Success Rate: {stats['success_rate']:.1f}%")
 
-        print(f"\n🚨 Issue Severity:")
+        print("\n🚨 Issue Severity:")
         print(f"   Critical: {severity['critical']} 🔴")
         print(f"   High: {severity['high']} 🟠")
         print(f"   Medium: {severity['medium']} 🟡")
         print(f"   Low: {severity['low']} 🟢")
 
-        print(f"\n📋 Results by Category:")
+        print("\n📋 Results by Category:")
         for category, cat_data in report["category_results"].items():
             success_rate = (
                 (cat_data["passed"] / cat_data["total"] * 100)
@@ -757,7 +757,7 @@ class AutoBotSystemTester:
                     print(f"      ... and {len(failures) - 2} more issues")
 
         # Overall assessment
-        print(f"\n🎯 System Health Assessment:")
+        print("\n🎯 System Health Assessment:")
         if stats["success_rate"] >= 95 and severity["critical"] == 0:
             print("   🟢 EXCELLENT - System is in excellent condition")
         elif stats["success_rate"] >= 85 and severity["critical"] == 0:
@@ -770,7 +770,7 @@ class AutoBotSystemTester:
             )
 
         # Recommendations
-        print(f"\n💡 Key Recommendations:")
+        print("\n💡 Key Recommendations:")
         if severity["critical"] > 0:
             print("   • Address critical issues immediately")
         if stats["timeouts"] > stats["total_tests"] * 0.2:
@@ -860,7 +860,7 @@ def main():
                 f.write(f"  Severity: {result['severity']}\n")
             f.write("\n")
 
-    print(f"\n💾 Detailed reports saved:")
+    print("\n💾 Detailed reports saved:")
     print(f"   📊 JSON Report: {json_file}")
     print(f"   📄 Summary Report: {text_file}")
 

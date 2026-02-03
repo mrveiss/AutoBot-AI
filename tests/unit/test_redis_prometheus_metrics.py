@@ -3,11 +3,12 @@ Unit tests for Redis Prometheus Metrics Integration - Issue #65 P1 Optimization
 Tests that Redis operations properly record metrics to Prometheus.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import MagicMock, call, patch
 
-from src.utils.redis_client import RedisConnectionManager
+import pytest
+
 from src.monitoring.prometheus_metrics import get_metrics_manager
+from src.utils.redis_client import RedisConnectionManager
 
 
 @pytest.fixture
@@ -36,21 +37,19 @@ class TestRedisPrometheusIntegration:
 
         # Verify Prometheus metric was recorded
         mock_metrics.record_request.assert_called_once_with(
-            database="main",
-            operation="general",
-            success=True
+            database="main", operation="general", success=True
         )
 
     def test_failed_operation_records_metric(self, pool_manager, mock_metrics):
         """Test that failed operations are recorded to Prometheus"""
         # Trigger stats update with failure
-        pool_manager._update_stats("knowledge", success=False, error="Connection timeout")
+        pool_manager._update_stats(
+            "knowledge", success=False, error="Connection timeout"
+        )
 
         # Verify Prometheus metric was recorded
         mock_metrics.record_request.assert_called_once_with(
-            database="knowledge",
-            operation="general",
-            success=False
+            database="knowledge", operation="general", success=False
         )
 
     def test_multiple_databases_tracked_separately(self, pool_manager, mock_metrics):
@@ -87,9 +86,7 @@ class TestRedisPrometheusIntegration:
 
         # Verify state update was called
         mock_metrics.update_circuit_breaker_state.assert_called_once_with(
-            database="metrics",
-            state="open",
-            failure_count=3
+            database="metrics", state="open", failure_count=3
         )
 
     def test_prometheus_failure_does_not_affect_redis(self, pool_manager):
@@ -162,11 +159,7 @@ class TestPrometheusMetricsManager:
         manager = get_metrics_manager()
 
         # This should not raise and should update internal counters
-        manager.record_request(
-            database="test_db",
-            operation="test_op",
-            success=True
-        )
+        manager.record_request(database="test_db", operation="test_op", success=True)
 
         # Counter should be incremented (we verify it doesn't raise)
         # In a real test, we'd check the actual counter value
@@ -190,7 +183,7 @@ class TestIntegrationWithRealMetrics:
     def test_end_to_end_metrics_recording(self):
         """Test complete flow from Redis operation to Prometheus metrics"""
         manager = RedisConnectionManager()
-        metrics = get_metrics_manager()
+        get_metrics_manager()
 
         # Perform operation
         manager._update_stats("integration_test", success=True)

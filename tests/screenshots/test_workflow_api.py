@@ -5,8 +5,9 @@ Tests all workflow endpoints after backend restart
 """
 
 import asyncio
-import aiohttp
 import time
+
+import aiohttp
 
 
 async def test_workflow_endpoints():
@@ -26,7 +27,7 @@ async def test_workflow_endpoints():
             async with session.get(f"{base_url}/workflows") as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Workflows endpoint working")
+                    print("✅ Workflows endpoint working")
                     print(f"   Active workflows: {result.get('active_workflows', 0)}")
                 else:
                     print(f"❌ Workflows endpoint failed: {response.status}")
@@ -37,7 +38,7 @@ async def test_workflow_endpoints():
             return False
 
         # Test 2: Execute workflow
-        print(f"\n2. Testing POST /execute")
+        print("\n2. Testing POST /execute")
         print("-" * 40)
 
         workflow_request = {
@@ -53,7 +54,7 @@ async def test_workflow_endpoints():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Workflow execute endpoint working")
+                    print("✅ Workflow execute endpoint working")
                     print(f"   Type: {result.get('type', 'unknown')}")
                     print(f"   Success: {result.get('success', False)}")
 
@@ -65,15 +66,15 @@ async def test_workflow_endpoints():
                     workflow_response = result.get("workflow_response", {})
                     if workflow_response:
                         print(
-                            f"   🎯 Classification: "
+                            "   🎯 Classification: "
                             f"{workflow_response.get('message_classification')}"
                         )
                         print(
-                            f"   🤖 Agents: "
+                            "   🤖 Agents: "
                             f"{', '.join(workflow_response.get('agents_involved', []))}"
                         )
                         print(
-                            f"   ⏱️  Duration: "
+                            "   ⏱️  Duration: "
                             f"{workflow_response.get('estimated_duration')}"
                         )
                         print(f"   📋 Steps: {workflow_response.get('planned_steps')}")
@@ -99,7 +100,7 @@ async def test_workflow_endpoints():
                 ) as response:
                     if response.status == 200:
                         status = await response.json()
-                        print(f"✅ Workflow status endpoint working")
+                        print("✅ Workflow status endpoint working")
                         print(f"   Status: {status.get('status', 'unknown')}")
                         print(f"   Progress: {status.get('progress', 0):.1%}")
                         print(
@@ -111,7 +112,7 @@ async def test_workflow_endpoints():
                 print(f"❌ Status endpoint error: {e}")
 
         # Test 4: Test workflow with chat integration
-        print(f"\n4. Testing Chat Integration with Workflows")
+        print("\n4. Testing Chat Integration with Workflows")
         print("-" * 40)
 
         chat_request = {
@@ -125,7 +126,7 @@ async def test_workflow_endpoints():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Chat integration working")
+                    print("✅ Chat integration working")
 
                     response_text = result.get("response", "")
                     if any(
@@ -137,10 +138,10 @@ async def test_workflow_endpoints():
                             "agents",
                         ]
                     ):
-                        print(f"   🎯 Workflow orchestration detected in chat!")
-                        print(f"   Response contains workflow keywords")
+                        print("   🎯 Workflow orchestration detected in chat!")
+                        print("   Response contains workflow keywords")
                     else:
-                        print(f"   💬 Standard chat response")
+                        print("   💬 Standard chat response")
 
                     print(f"   Response preview: {response_text[:150]}...")
 
@@ -157,7 +158,7 @@ async def test_workflow_endpoints():
 async def demonstrate_workflow_orchestration():
     """Demonstrate the complete workflow orchestration capability."""
 
-    print(f"\n" + "=" * 60)
+    print("\n" + "=" * 60)
     print("🚀 AutoBot Workflow Orchestration Demonstration")
     print("=" * 60)
 
@@ -241,7 +242,7 @@ async def main():
     if success:
         await demonstrate_workflow_orchestration()
 
-        print(f"\n" + "=" * 60)
+        print("\n" + "=" * 60)
         print("🎉 AutoBot Workflow API Test Suite Complete!")
         print()
         print("📊 Test Results:")
@@ -260,7 +261,7 @@ async def main():
         print("🚀 AutoBot now has true multi-agent intelligence!")
 
     else:
-        print(f"\n" + "=" * 60)
+        print("\n" + "=" * 60)
         print("❌ Workflow API tests failed")
         print("   Check backend status and restart if needed")
 

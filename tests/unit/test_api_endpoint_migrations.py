@@ -157,7 +157,7 @@ class TestKnowledgeHealthEndpoint:
 
             # Verify unhealthy status
             assert response["status"] == "unhealthy"
-            assert response["initialized"] == False
+            assert response["initialized"] is False
 
 
 class TestKnowledgeSearchEndpoint:
@@ -621,7 +621,7 @@ class TestSessionExportAndManagementEndpoints:
             with patch("backend.api.chat.merge_messages") as mock_merge:
                 mock_merge.return_value = []
 
-                response = await save_chat_by_id(
+                _response = await save_chat_by_id(
                     chat_id="test123",
                     request_data=request_data,
                     request=mock_request,
@@ -649,7 +649,7 @@ class TestSessionExportAndManagementEndpoints:
             mock_manager.delete_session = Mock(return_value=True)
             mock_get_manager.return_value = mock_manager
 
-            response = await delete_chat_by_id(
+            _response = await delete_chat_by_id(
                 chat_id="test123",
                 request=mock_request,
                 ownership=mock_ownership,
@@ -6118,7 +6118,7 @@ class TestBatch35AnalyticsEndpoints:
         from backend.api.analytics import get_analytics_status
 
         source = inspect.getsource(get_analytics_status)
-        lines = source.split("\n")
+        _lines = source.split("\n")
 
         # Should not have outer try-catch for entire function
         # But should preserve nested try-catch for Redis
@@ -14224,7 +14224,7 @@ class TestBatch85CodebaseAnalyticsMigrations(unittest.TestCase):
         self.assertGreater(
             removed_handlers,
             0,
-            f"Batch 85 should have removed exception handlers (expected 9 lines)",
+            "Batch 85 should have removed exception handlers (expected 9 lines)",
         )
 
     def test_batch_85_business_logic_preserved(self):
@@ -14504,7 +14504,7 @@ class TestBatch86AIStackIntegrationMigrations(unittest.TestCase):
         self.assertGreater(
             removed_handlers,
             0,
-            f"Batch 86 should have removed exception handlers (expected ~19 lines)",
+            "Batch 86 should have removed exception handlers (expected ~19 lines)",
         )
 
     def test_batch_86_business_logic_preserved(self):
@@ -14747,7 +14747,7 @@ class TestBatch87AIStackIntegrationMigrations(unittest.TestCase):
         self.assertGreater(
             removed_handlers,
             0,
-            f"Batch 87 should have removed exception handlers (expected ~24 lines)",
+            "Batch 87 should have removed exception handlers (expected ~24 lines)",
         )
 
     def test_batch_87_business_logic_preserved(self):
@@ -15116,7 +15116,7 @@ class TestBatch88AIStackIntegrationMigrations(unittest.TestCase):
 
         for name, endpoint, max_lines in simple_endpoints:
             source = inspect.getsource(endpoint)
-            line_count = len([l for l in source.split("\n") if l.strip()])
+            line_count = len([ln for ln in source.split("\n") if ln.strip()])
             self.assertLessEqual(
                 line_count,
                 max_lines,
@@ -15394,7 +15394,7 @@ class TestBatch89AIStackIntegrationMigrations(unittest.TestCase):
 
         for name, endpoint, max_lines in simple_endpoints:
             source = inspect.getsource(endpoint)
-            line_count = len([l for l in source.split("\n") if l.strip()])
+            line_count = len([ln for ln in source.split("\n") if ln.strip()])
             self.assertLessEqual(
                 line_count,
                 max_lines,
@@ -15709,7 +15709,7 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
 
         for name, endpoint, max_lines in legacy_endpoints:
             source = inspect.getsource(endpoint)
-            line_count = len([l for l in source.split("\n") if l.strip()])
+            line_count = len([ln for ln in source.split("\n") if ln.strip()])
             self.assertLessEqual(
                 line_count,
                 max_lines,
@@ -18779,7 +18779,7 @@ class TestBatch107KnowledgeCOMPLETE(unittest.TestCase):
                 source = inspect.getsource(func)
                 if "@router." in source:
                     endpoint_functions.append(func)
-            except:
+            except Exception:
                 continue
 
         # Count those with @with_error_handling

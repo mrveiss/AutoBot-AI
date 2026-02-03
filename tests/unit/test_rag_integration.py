@@ -10,12 +10,14 @@ Tests cover:
 - API endpoints
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 from backend.services.knowledge_base_adapter import KnowledgeBaseAdapter
 from backend.services.rag_config import RAGConfig, get_rag_config, update_rag_config
 from backend.services.rag_service import RAGService
-from src.advanced_rag_optimizer import SearchResult, RAGMetrics
+from src.advanced_rag_optimizer import RAGMetrics, SearchResult
 
 
 class TestKnowledgeBaseAdapter:
@@ -81,7 +83,10 @@ class TestKnowledgeBaseAdapter:
         """Test getting all facts through adapter."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
-        mock_kb.get_all_facts.return_value = [{"content": "fact1"}, {"content": "fact2"}]
+        mock_kb.get_all_facts.return_value = [
+            {"content": "fact1"},
+            {"content": "fact2"},
+        ]
 
         adapter = KnowledgeBaseAdapter(mock_kb)
         facts = await adapter.get_all_facts()
@@ -115,15 +120,22 @@ class TestRAGConfig:
         assert config.enable_reranking is True
         assert config.max_results_per_stage == 20
 
-    def test_weight_validation(self):
+    def test_weight_validation(self, caplog):
         """Test weight normalization."""
-        config = RAGConfig(
-            hybrid_weight_semantic=0.8,
-            hybrid_weight_keyword=0.3,  # Sum > 1.0
-        )
+        import logging
+
+        # Suppress expected warning during intentional validation test
+        with caplog.at_level(logging.ERROR, logger="rag_config"):
+            config = RAGConfig(
+                hybrid_weight_semantic=0.8,
+                hybrid_weight_keyword=0.3,  # Sum > 1.0 - intentionally tests normalization
+            )
 
         # Weights should be normalized
-        assert abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0) < 0.01
+        assert (
+            abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0)
+            < 0.01
+        )
 
     def test_invalid_weights(self):
         """Test invalid weight values raise errors."""
@@ -160,6 +172,7 @@ class TestRAGConfig:
         """Test runtime configuration updates."""
         # Reset singleton
         import backend.services.rag_config as rag_config_module
+
         rag_config_module._rag_config_instance = None
 
         # Create initial config
@@ -252,7 +265,9 @@ class TestRAGService:
             ),
         ]
 
-        service.optimizer._rerank_with_cross_encoder.return_value = reranked_search_results
+        service.optimizer._rerank_with_cross_encoder.return_value = (
+            reranked_search_results
+        )
 
         reranked = await service.rerank_results("test query", test_results)
 

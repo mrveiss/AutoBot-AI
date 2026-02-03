@@ -59,7 +59,7 @@ async def test_tool_research_workflow():
             for cmd in install_guide.get("install_commands", []):
                 print(f"  $ {cmd}")
 
-            print(f"\nInstallation guide excerpt:")
+            print("\nInstallation guide excerpt:")
             guide = install_guide.get("installation_guide", "")[:200]
             print(f"  {guide}...")
 

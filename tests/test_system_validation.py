@@ -65,11 +65,11 @@ async def test_system_validation():
         success = comprehensive_result.passed_tests > comprehensive_result.failed_tests
 
         if success:
-            logger.info(f"🎉 COMPREHENSIVE VALIDATION PASSED!")
+            logger.info("🎉 COMPREHENSIVE VALIDATION PASSED!")
         else:
-            logger.info(f"⚠️ COMPREHENSIVE VALIDATION NEEDS ATTENTION")
+            logger.info("⚠️ COMPREHENSIVE VALIDATION NEEDS ATTENTION")
 
-        logger.info(f"Overall Results:")
+        logger.info("Overall Results:")
         logger.info(f"  - Total Tests: {comprehensive_result.total_tests}")
         logger.info(f"  - Passed: {comprehensive_result.passed_tests}")
         logger.info(f"  - Failed: {comprehensive_result.failed_tests}")
@@ -82,7 +82,7 @@ async def test_system_validation():
             hasattr(comprehensive_result, "recommendations")
             and comprehensive_result.recommendations
         ):
-            logger.info(f"Top Recommendations:")
+            logger.info("Top Recommendations:")
             for rec in comprehensive_result.recommendations[:3]:
                 logger.info(f"  - {rec}")
 

@@ -121,7 +121,7 @@ async def main():
             print(f"❌ {test_name} test crashed: {e}")
             results.append((test_name, False))
 
-    print(f"\n📊 SUMMARY")
+    print("\n📊 SUMMARY")
     print("=" * 50)
 
     for test_name, result in results:

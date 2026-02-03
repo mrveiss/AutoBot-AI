@@ -190,13 +190,13 @@ class MonitoringAndAlertingTester:
         logger.info("🏥 Testing Health Monitoring Endpoints...")
 
         health_endpoints = [
-            ("backend", f"http://172.16.168.20:8001/api/health"),
-            ("backend_system", f"http://172.16.168.20:8001/api/system/status"),
+            ("backend", "http://172.16.168.20:8001/api/health"),
+            ("backend_system", "http://172.16.168.20:8001/api/system/status"),
             (
                 "backend_monitoring",
-                f"http://172.16.168.20:8001/api/monitoring/services",
+                "http://172.16.168.20:8001/api/monitoring/services",
             ),
-            ("ollama", f"http://127.0.0.1:11434/api/tags"),
+            ("ollama", "http://127.0.0.1:11434/api/tags"),
         ]
 
         for service_name, endpoint in health_endpoints:
@@ -209,7 +209,7 @@ class MonitoringAndAlertingTester:
                     try:
                         data = response.json()
                         status = "PASS"
-                        message = f"Health endpoint accessible with valid JSON"
+                        message = "Health endpoint accessible with valid JSON"
                         details = {
                             "response_keys": list(data.keys())
                             if isinstance(data, dict)
@@ -217,7 +217,7 @@ class MonitoringAndAlertingTester:
                         }
                     except json.JSONDecodeError:
                         status = "WARNING"
-                        message = f"Health endpoint accessible but returned non-JSON"
+                        message = "Health endpoint accessible but returned non-JSON"
                         details = {"content_length": len(response.text)}
                 else:
                     status = "FAIL"
@@ -606,7 +606,7 @@ class MonitoringAndAlertingTester:
                     severity = "info"
                 elif accessibility:
                     status = "WARNING"
-                    message = f"Dashboard accessible but data validation failed"
+                    message = "Dashboard accessible but data validation failed"
                     severity = "warning"
                 else:
                     status = "FAIL"
@@ -759,11 +759,11 @@ class MonitoringAndAlertingTester:
                             severity = "warning"
                         else:
                             status = "PASS"
-                            message = f"Container logs analysis successful"
+                            message = "Container logs analysis successful"
                             severity = "info"
                     else:
                         status = "WARNING"
-                        message = f"Failed to collect container logs"
+                        message = "Failed to collect container logs"
                         severity = "warning"
                         log_analysis_results[log_source["name"]] = {
                             "accessible": False,
@@ -842,7 +842,7 @@ class MonitoringAndAlertingTester:
                         severity = "info"
                     else:
                         status = "WARNING"
-                        message = f"Incident detected but response not verified"
+                        message = "Incident detected but response not verified"
                         severity = "warning"
                 else:
                     status = "SKIP"

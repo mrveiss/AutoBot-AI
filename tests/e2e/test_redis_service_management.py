@@ -49,7 +49,7 @@ async def browser_context():
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
             viewport={"width": 1280, "height": 720},
-            record_video_dir="tests/results/videos/"  # Record videos for debugging
+            record_video_dir="tests/results/videos/",  # Record videos for debugging
         )
         yield context
         await context.close()
@@ -70,8 +70,8 @@ async def authenticated_admin_page(page, frontend_url):
     await page.goto(f"{frontend_url}/login")
 
     # Login as admin
-    await page.fill('[data-testid="email-input"]', 'admin@autobot.local')
-    await page.fill('[data-testid="password-input"]', 'admin-password')
+    await page.fill('[data-testid="email-input"]', "admin@autobot.local")
+    await page.fill('[data-testid="password-input"]', "admin-password")
     await page.click('[data-testid="login-button"]')
 
     # Wait for authentication
@@ -86,8 +86,8 @@ async def authenticated_operator_page(page, frontend_url):
     await page.goto(f"{frontend_url}/login")
 
     # Login as operator
-    await page.fill('[data-testid="email-input"]', 'operator@autobot.local')
-    await page.fill('[data-testid="password-input"]', 'operator-password')
+    await page.fill('[data-testid="email-input"]', "operator@autobot.local")
+    await page.fill('[data-testid="password-input"]', "operator-password")
     await page.click('[data-testid="login-button"]')
 
     # Wait for authentication
@@ -102,7 +102,9 @@ class TestServiceControlWorkflows:
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_admin_restart_redis_service(self, authenticated_admin_page, frontend_url):
+    async def test_admin_restart_redis_service(
+        self, authenticated_admin_page, frontend_url
+    ):
         """
         Test Case 1.1: Admin restarts Redis service via UI
 
@@ -128,11 +130,13 @@ class TestServiceControlWorkflows:
         await page.click('[data-testid="redis-service-link"]')
 
         # Wait for service control component
-        await page.wait_for_selector('[data-testid="redis-service-control"]', timeout=10000)
+        await page.wait_for_selector(
+            '[data-testid="redis-service-control"]', timeout=10000
+        )
 
         # Verify service is running
         status_badge = page.locator('[data-testid="service-status-badge"]')
-        await expect(status_badge).to_contain_text('running', timeout=5000)
+        await expect(status_badge).to_contain_text("running", timeout=5000)
         logger.info("✓ Service confirmed running")
 
         # Click restart button
@@ -143,26 +147,30 @@ class TestServiceControlWorkflows:
         # Confirm in dialog
         await page.wait_for_selector('[data-testid="confirm-dialog"]', timeout=3000)
         confirm_dialog = page.locator('[data-testid="confirm-dialog"]')
-        await expect(confirm_dialog).to_contain_text('Restart Redis Service')
+        await expect(confirm_dialog).to_contain_text("Restart Redis Service")
         logger.info("✓ Confirmation dialog appeared")
 
         await page.click('[data-testid="confirm-button"]')
 
         # Wait for operation to complete
-        await page.wait_for_selector('[data-testid="success-notification"]', timeout=30000)
+        await page.wait_for_selector(
+            '[data-testid="success-notification"]', timeout=30000
+        )
         notification = page.locator('[data-testid="success-notification"]')
-        await expect(notification).to_contain_text('restarted successfully')
+        await expect(notification).to_contain_text("restarted successfully")
         logger.info("✓ Success notification displayed")
 
         # Verify service status still running after restart
-        await expect(status_badge).to_contain_text('running', timeout=10000)
+        await expect(status_badge).to_contain_text("running", timeout=10000)
         logger.info("✓ Service running after restart")
 
         logger.info("=== Test 1.1: PASSED ===\n")
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_operator_start_stopped_service(self, authenticated_operator_page, frontend_url):
+    async def test_operator_start_stopped_service(
+        self, authenticated_operator_page, frontend_url
+    ):
         """
         Test Case 1.2: Operator starts stopped service
 
@@ -191,7 +199,7 @@ class TestServiceControlWorkflows:
         status_badge = page.locator('[data-testid="service-status-badge"]')
         current_status = await status_badge.text_content()
 
-        if 'running' in current_status.lower():
+        if "running" in current_status.lower():
             logger.info("Service already running - skipping test")
             return
 
@@ -201,13 +209,15 @@ class TestServiceControlWorkflows:
         await start_button.click()
 
         # Wait for operation to complete
-        await page.wait_for_selector('[data-testid="success-notification"]', timeout=30000)
+        await page.wait_for_selector(
+            '[data-testid="success-notification"]', timeout=30000
+        )
         notification = page.locator('[data-testid="success-notification"]')
-        await expect(notification).to_contain_text('started successfully')
+        await expect(notification).to_contain_text("started successfully")
         logger.info("✓ Service started by operator")
 
         # Verify service running
-        await expect(status_badge).to_contain_text('running', timeout=10000)
+        await expect(status_badge).to_contain_text("running", timeout=10000)
 
         logger.info("=== Test 1.2: PASSED ===\n")
 
@@ -249,7 +259,9 @@ class TestServiceControlWorkflows:
         logger.info("✓ Loading indicator shown")
 
         # Wait for refresh to complete
-        await page.wait_for_selector('[data-testid="loading-indicator"]', state='hidden', timeout=5000)
+        await page.wait_for_selector(
+            '[data-testid="loading-indicator"]', state="hidden", timeout=5000
+        )
 
         # Status should be updated
         updated_uptime = await uptime_element.text_content()
@@ -302,7 +314,7 @@ class TestRBACRestrictions:
         # Should show permission message (if tooltip exists)
         tooltip = page.locator('[data-testid="permission-tooltip"]')
         if await tooltip.is_visible():
-            await expect(tooltip).to_contain_text('admin')
+            await expect(tooltip).to_contain_text("admin")
             logger.info("✓ Permission tooltip shown")
 
         logger.info("=== Test 2.1: PASSED ===\n")
@@ -332,7 +344,7 @@ class TestRBACRestrictions:
         await page.wait_for_selector('[data-testid="redis-service-control"]')
 
         # Check all buttons available
-        start_button = page.locator('[data-testid="start-button"]')
+        _start_button = page.locator('[data-testid="start-button"]')
         restart_button = page.locator('[data-testid="restart-button"]')
         stop_button = page.locator('[data-testid="stop-button"]')
 
@@ -384,17 +396,23 @@ class TestRealTimeUpdates:
 
             # Watch for status changes via WebSocket
             # Status should update to restarting/stopping, then running
-            await page.wait_for_timeout(2000)  # Give time for status to potentially change
+            await page.wait_for_timeout(
+                2000
+            )  # Give time for status to potentially change
 
             # Should see notification (via WebSocket event)
-            await page.wait_for_selector('[data-testid="success-notification"]', timeout=30000)
+            await page.wait_for_selector(
+                '[data-testid="success-notification"]', timeout=30000
+            )
             logger.info("✓ Real-time notification received")
 
         logger.info("=== Test 3.1: PASSED ===\n")
 
     @pytest.mark.e2e
     @pytest.mark.asyncio
-    async def test_auto_recovery_notification(self, authenticated_admin_page, backend_url):
+    async def test_auto_recovery_notification(
+        self, authenticated_admin_page, backend_url
+    ):
         """
         Test Case 3.2: Auto-recovery notification via WebSocket
 
@@ -424,7 +442,7 @@ class TestRealTimeUpdates:
         # Verify WebSocket connection indicator
         ws_indicator = page.locator('[data-testid="websocket-status"]')
         if await ws_indicator.is_visible():
-            await expect(ws_indicator).to_contain_text('connected')
+            await expect(ws_indicator).to_contain_text("connected")
             logger.info("✓ WebSocket connected")
 
         # Verify auto-recovery section exists
@@ -501,7 +519,7 @@ class TestErrorScenarios:
         # Verify VM info is displayed
         vm_info = page.locator('[data-testid="vm-info"]')
         if await vm_info.is_visible():
-            await expect(vm_info).to_contain_text('172.16.168.23')
+            await expect(vm_info).to_contain_text("172.16.168.23")
             logger.info("✓ VM connection details displayed")
 
         logger.info("=== Test 4.2: PASSED ===\n")
@@ -544,13 +562,13 @@ class TestHealthMonitoring:
         health_indicator = page.locator('[data-testid="health-indicator"]')
         await expect(health_indicator).to_be_visible()
         indicator_text = await health_indicator.text_content()
-        assert indicator_text in ['HEALTHY', 'DEGRADED', 'CRITICAL']
+        assert indicator_text in ["HEALTHY", "DEGRADED", "CRITICAL"]
         logger.info(f"✓ Health status: {indicator_text}")
 
         # Check individual health checks
         connectivity_check = page.locator('[data-testid="health-check-connectivity"]')
         if await connectivity_check.is_visible():
-            await expect(connectivity_check).to_contain_text('pass', timeout=5000)
+            await expect(connectivity_check).to_contain_text("pass", timeout=5000)
             logger.info("✓ Connectivity check displayed")
 
         logger.info("=== Test 5.1: PASSED ===\n")
@@ -562,12 +580,15 @@ class TestHealthMonitoring:
 
 if __name__ == "__main__":
     """Run all E2E tests with pytest"""
-    pytest.main([
-        __file__,
-        '-v',  # Verbose output
-        '--tb=short',  # Short traceback format
-        '-m', 'e2e',  # Run only E2E tests
-        '--log-cli-level=INFO',  # Show INFO logs
-        '--html=tests/results/e2e_report.html',  # HTML report
-        '--self-contained-html'  # Standalone HTML report
-    ])
+    pytest.main(
+        [
+            __file__,
+            "-v",  # Verbose output
+            "--tb=short",  # Short traceback format
+            "-m",
+            "e2e",  # Run only E2E tests
+            "--log-cli-level=INFO",  # Show INFO logs
+            "--html=tests/results/e2e_report.html",  # HTML report
+            "--self-contained-html",  # Standalone HTML report
+        ]
+    )

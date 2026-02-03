@@ -104,7 +104,7 @@ async def test_simple_terminal():
                 ]:
                     print(f"⚠️ No clear output received for: {cmd}")
 
-            print(f"\n🎉 Simple terminal test completed!")
+            print("\n🎉 Simple terminal test completed!")
             return True
 
     except Exception as e:
@@ -114,7 +114,7 @@ async def test_simple_terminal():
 
 async def test_sessions_api():
     """Test the simple sessions API"""
-    print(f"\n🧪 Testing Simple Sessions API")
+    print("\n🧪 Testing Simple Sessions API")
     print("=" * 40)
 
     import requests
@@ -146,7 +146,7 @@ async def main():
     # Test the sessions API
     api_success = await test_sessions_api()
 
-    print(f"\n📊 TEST RESULTS:")
+    print("\n📊 TEST RESULTS:")
     print("=" * 50)
 
     if terminal_success:
@@ -162,12 +162,12 @@ async def main():
         print("❌ SESSIONS API: Not working")
 
     if terminal_success and api_success:
-        print(f"\n🎉 SUCCESS: Simple terminal is a working replacement!")
+        print("\n🎉 SUCCESS: Simple terminal is a working replacement!")
         print("User can now use the simple terminal endpoint:")
         print("  WebSocket: ws://localhost:8001/api/terminal/ws/simple/{session_id}")
         print("  Sessions:  http://localhost:8001/api/terminal/simple/sessions")
     else:
-        print(f"\n💥 Some tests failed - simple terminal needs fixes")
+        print("\n💥 Some tests failed - simple terminal needs fixes")
 
 
 if __name__ == "__main__":

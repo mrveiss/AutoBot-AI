@@ -36,7 +36,7 @@ async def test_live_workflow_system():
             return False
 
         # Step 2: Test workflow endpoints
-        print(f"\n2. Testing Workflow Endpoints")
+        print("\n2. Testing Workflow Endpoints")
         print("-" * 40)
 
         # Test workflow list
@@ -44,7 +44,7 @@ async def test_live_workflow_system():
             async with session.get(f"{base_url}/api/workflow/workflows") as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Workflows endpoint working")
+                    print("✅ Workflows endpoint working")
                     print(f"   Active workflows: {result.get('active_workflows', 0)}")
                 else:
                     print(f"❌ Workflows endpoint failed: {response.status}")
@@ -54,7 +54,7 @@ async def test_live_workflow_system():
             return False
 
         # Step 3: Execute a workflow
-        print(f"\n3. Executing Network Scanning Workflow")
+        print("\n3. Executing Network Scanning Workflow")
         print("-" * 40)
 
         workflow_request = {
@@ -68,7 +68,7 @@ async def test_live_workflow_system():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Workflow execution started")
+                    print("✅ Workflow execution started")
                     print(f"   Type: {result.get('type', 'unknown')}")
                     print(f"   Success: {result.get('success', False)}")
 
@@ -80,7 +80,7 @@ async def test_live_workflow_system():
                         await monitor_workflow_progress(session, base_url, workflow_id)
 
                     elif result.get("type") == "workflow_orchestration":
-                        print(f"   🎯 Workflow Response Generated:")
+                        print("   🎯 Workflow Response Generated:")
                         workflow_response = result.get("workflow_response", {})
                         print(
                             f"      Classification: {workflow_response.get('message_classification', 'unknown')}"
@@ -104,7 +104,7 @@ async def test_live_workflow_system():
             print(f"❌ Workflow execution error: {e}")
 
         # Step 4: Test research agent integration
-        print(f"\n4. Testing Research Agent Integration")
+        print("\n4. Testing Research Agent Integration")
         print("-" * 40)
 
         try:
@@ -129,7 +129,7 @@ async def test_live_workflow_system():
             request = ResearchRequest(**research_request)
             result = await research_agent.research_specific_tools(request)
 
-            print(f"✅ Research agent working")
+            print("✅ Research agent working")
             print(f"   Tools found: {result.get('tools_found', [])}")
             print(f"   Recommendation: {result.get('recommendation', 'N/A')}")
 
@@ -142,7 +142,7 @@ async def test_live_workflow_system():
 
 async def monitor_workflow_progress(session, base_url, workflow_id):
     """Monitor workflow execution progress."""
-    print(f"\n   📊 Monitoring Workflow Progress:")
+    print("\n   📊 Monitoring Workflow Progress:")
     print("   " + "-" * 35)
 
     max_checks = 10
@@ -182,7 +182,7 @@ async def monitor_workflow_progress(session, base_url, workflow_id):
 
 async def test_chat_integration():
     """Test workflow integration with chat endpoint."""
-    print(f"\n5. Testing Chat Integration")
+    print("\n5. Testing Chat Integration")
     print("-" * 40)
 
     base_url = "http://localhost:8001"
@@ -199,7 +199,7 @@ async def test_chat_integration():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print(f"✅ Chat endpoint integration working")
+                    print("✅ Chat endpoint integration working")
 
                     # Check if the response indicates workflow orchestration
                     response_text = result.get("response", "")
@@ -207,10 +207,10 @@ async def test_chat_integration():
                         "workflow" in response_text.lower()
                         or "orchestration" in response_text.lower()
                     ):
-                        print(f"   🎯 Workflow orchestration detected in chat response")
+                        print("   🎯 Workflow orchestration detected in chat response")
                         print(f"   Response preview: {response_text[:100]}...")
                     else:
-                        print(f"   💬 Standard chat response received")
+                        print("   💬 Standard chat response received")
                         print(f"   Response: {response_text[:100]}...")
 
                 else:
@@ -230,7 +230,7 @@ async def main():
     if success:
         await test_chat_integration()
 
-        print(f"\n" + "=" * 60)
+        print("\n" + "=" * 60)
         print("🎉 Live AutoBot Workflow System Test Complete!")
         print()
         print("📊 System Verification:")
@@ -253,7 +253,7 @@ async def main():
         print("   instead of giving generic responses!")
 
     else:
-        print(f"\n" + "=" * 60)
+        print("\n" + "=" * 60)
         print("❌ System test failed - check backend status")
 
 

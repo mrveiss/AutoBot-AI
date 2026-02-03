@@ -53,7 +53,7 @@ async def test_workflow_metrics():
 
         # End step timing
         workflow_metrics.end_step_timing(workflow_id, step_id, success=True)
-        print(f"    ✅ Completed in ~500ms")
+        print("    ✅ Completed in ~500ms")
 
     # Test 3: Resource usage recording
     print("\n📝 Test 3: Resource Usage Recording...")

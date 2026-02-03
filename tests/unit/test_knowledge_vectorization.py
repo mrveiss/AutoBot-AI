@@ -492,7 +492,7 @@ class TestCacheIntegration:
 
         # Simulate batch get
         for fact_id in fact_ids:
-            cache_key = f"vectorization:status:{fact_id}"
+            _cache_key = f"vectorization:status:{fact_id}"
             # In real implementation, would use pipeline or hmget
 
         assert len(fact_ids) == 3

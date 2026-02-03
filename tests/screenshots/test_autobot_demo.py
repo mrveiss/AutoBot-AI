@@ -116,7 +116,7 @@ async def demo_research_workflow():
             workflow_id = result.get("workflow_id")
             workflow_response = result.get("workflow_response", {})
 
-            print(f"\n✅ Workflow initiated!")
+            print("\n✅ Workflow initiated!")
             print(
                 f"   Classification: {workflow_response.get('message_classification')}"
             )
@@ -160,7 +160,7 @@ async def demo_complex_workflow():
             workflow_id = result.get("workflow_id")
             workflow_response = result.get("workflow_response", {})
 
-            print(f"\n✅ Complex workflow initiated!")
+            print("\n✅ Complex workflow initiated!")
             print(
                 f"   Classification: {workflow_response.get('message_classification')}"
             )

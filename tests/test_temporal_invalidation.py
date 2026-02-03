@@ -260,7 +260,7 @@ class TestTemporalInvalidation:
 
         # Validate results
         assert result["status"] == "success", "Dry run should succeed"
-        assert result["dry_run"] == True, "Should indicate dry run mode"
+        assert result["dry_run"] is True, "Should indicate dry run mode"
         assert result["facts_processed"] > 0, "Should process some facts"
         assert (
             result["facts_invalidated"] == 0
@@ -268,7 +268,7 @@ class TestTemporalInvalidation:
 
         # Check if facts that should be invalidated were identified
         if result["facts_identified_for_invalidation"] > 0:
-            print(f"  Sample facts to invalidate:")
+            print("  Sample facts to invalidate:")
             for sample_fact in result.get("sample_facts_to_invalidate", [])[:3]:
                 print(
                     f"    - {sample_fact['statement']} (age: {sample_fact['age_days']} days)"
@@ -298,7 +298,7 @@ class TestTemporalInvalidation:
 
         # Validate results
         assert result["status"] == "success", "Actual sweep should succeed"
-        assert result["dry_run"] == False, "Should indicate actual run mode"
+        assert result["dry_run"] is False, "Should indicate actual run mode"
 
         # Note: In our mock implementation, we don't actually modify facts
         # In a real implementation, we would verify facts were marked as inactive
@@ -328,7 +328,7 @@ class TestTemporalInvalidation:
             confidence=0.9,  # Higher confidence
         )
 
-        print(f"  Created contradictory facts:")
+        print("  Created contradictory facts:")
         print(
             f"    Fact 1: {fact1.subject} {fact1.predicate} {fact1.object} (confidence: {fact1.confidence})"
         )
@@ -363,7 +363,7 @@ class TestTemporalInvalidation:
         # Get statistics
         stats = await self.invalidation_service.get_invalidation_statistics()
 
-        print(f"✓ Statistics retrieved successfully")
+        print("✓ Statistics retrieved successfully")
         print(f"  Total invalidated facts: {stats.get('total_invalidated_facts', 0)}")
         print(f"  Recent sweeps: {stats.get('recent_sweeps', 0)}")
         print(f"  Total rules: {stats.get('total_rules', 0)}")
@@ -505,7 +505,7 @@ class TestTemporalInvalidation:
             print("\n" + "=" * 70)
             print("✅ All Temporal Invalidation Tests Passed!")
             print("=" * 70)
-            print(f"Summary:")
+            print("Summary:")
             print(f"  - Rules initialized: {rules_result['total_rules']} total")
             print(f"  - Rule matches found: {matches_found}")
             print(

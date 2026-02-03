@@ -217,7 +217,7 @@ class SessionTakeoverTestSuite:
         await self.workflow_manager.handle_workflow_control(pause_request)
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
-        assert workflow.is_paused == True, "Workflow should be paused"
+        assert workflow.is_paused is True, "Workflow should be paused"
 
         # Record manual intervention
         assert (
@@ -234,7 +234,7 @@ class SessionTakeoverTestSuite:
         await self.workflow_manager.handle_workflow_control(resume_request)
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
-        assert workflow.is_paused == False, "Workflow should be resumed"
+        assert workflow.is_paused is False, "Workflow should be resumed"
 
         logger.info("✅ Manual takeover functionality working correctly")
 
@@ -252,7 +252,7 @@ class SessionTakeoverTestSuite:
         terminal_session.active = True
 
         # Simulate running processes
-        mock_processes = [
+        _mock_processes = [
             {"pid": 1001, "command": "long_running_task", "startTime": time.time()},
             {"pid": 1002, "command": "background_process &", "startTime": time.time()},
         ]
@@ -301,14 +301,14 @@ class SessionTakeoverTestSuite:
 
         pause_request = WorkflowControlRequest(workflow_id=workflow_id, action="pause")
         result = await self.workflow_manager.handle_workflow_control(pause_request)
-        assert result == True, "Pause should succeed"
+        assert result is True, "Pause should succeed"
 
         # Test resume
         resume_request = WorkflowControlRequest(
             workflow_id=workflow_id, action="resume"
         )
         result = await self.workflow_manager.handle_workflow_control(resume_request)
-        assert result == True, "Resume should succeed"
+        assert result is True, "Resume should succeed"
 
         workflow = self.workflow_manager.active_workflows[workflow_id]
         assert (
@@ -525,7 +525,7 @@ class SessionTakeoverTestSuite:
             result = await self.workflow_manager.handle_workflow_control(
                 invalid_request
             )
-            assert result == False, "Invalid workflow control should return False"
+            assert result is False, "Invalid workflow control should return False"
 
         except Exception as e:
             logger.info(f"✅ Properly handled error: {e}")
@@ -570,7 +570,7 @@ class SessionTakeoverTestSuite:
                 logger.info(f"   Error: {result['error']}")
 
         # Component availability check
-        logger.info(f"\n🔧 COMPONENT AVAILABILITY:")
+        logger.info("\n🔧 COMPONENT AVAILABILITY:")
         logger.info(
             f"   Workflow Automation Components: {'✅ Available' if COMPONENTS_AVAILABLE else '❌ Not Available'}"
         )

@@ -226,7 +226,7 @@ class TestErrorBoundaryIntegration(unittest.TestCase):
                 self.manager = ErrorBoundaryManager(redis_client=redis_client)
             else:
                 raise Exception("Redis not available")
-        except:
+        except Exception:
             # Fall back to mocked Redis
             mock_redis = Mock()
             mock_redis.keys.return_value = []
@@ -379,7 +379,7 @@ class TestErrorBoundaryPerformance(unittest.TestCase):
                 try:
                     result = error_generator(should_fail=(i % 10 == 0))
                     results.append(result)
-                except:
+                except Exception:
                     results.append("error_handled")
             return results
 

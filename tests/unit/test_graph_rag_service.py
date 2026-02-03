@@ -20,16 +20,12 @@ Test Strategy:
 - Test edge cases and error handling
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
 
-from src.advanced_rag_optimizer import SearchResult, RAGMetrics
-from src.services.graph_rag_service import (
-    GraphRAGService,
-    GraphRAGMetrics,
-    EntityMatch,
-)
+import pytest
 
+from src.advanced_rag_optimizer import RAGMetrics, SearchResult
+from src.services.graph_rag_service import EntityMatch, GraphRAGMetrics, GraphRAGService
 
 # ============================================================================
 # Fixtures
@@ -230,9 +226,7 @@ async def test_graph_aware_search_no_expansion_without_entities(
 
 
 @pytest.mark.asyncio
-async def test_graph_aware_search_timeout_handling(
-    graph_rag_service, mock_rag_service
-):
+async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_service):
     """Test timeout handling delegates to RAGService."""
     # Mock timeout in RAG service
     import asyncio
@@ -270,9 +264,7 @@ async def test_extract_entities_from_results(graph_rag_service, mock_memory_grap
         )
     ]
 
-    entity_matches = await graph_rag_service._extract_entities_from_results(
-        rag_results
-    )
+    entity_matches = await graph_rag_service._extract_entities_from_results(rag_results)
 
     # Verify graph was queried
     assert mock_memory_graph.get_entity.call_count >= 1
@@ -304,9 +296,7 @@ async def test_extract_entities_handles_missing_entities(
         )
     ]
 
-    entity_matches = await graph_rag_service._extract_entities_from_results(
-        rag_results
-    )
+    entity_matches = await graph_rag_service._extract_entities_from_results(rag_results)
 
     # Verify no matches for missing entity
     assert len(entity_matches) == 0
@@ -368,7 +358,7 @@ async def test_expand_via_graph_multiple_starting_points(
         ),
     ]
 
-    expanded = await graph_rag_service._expand_via_graph(
+    _expanded = await graph_rag_service._expand_via_graph(
         query="test",
         start_entity=None,
         entity_matches=entity_matches,
@@ -455,9 +445,7 @@ async def test_deduplicate_and_rank_respects_max_results(graph_rag_service):
         for i in range(10)
     ]
 
-    deduplicated = await graph_rag_service._deduplicate_and_rank(
-        results, max_results=3
-    )
+    deduplicated = await graph_rag_service._deduplicate_and_rank(results, max_results=3)
 
     # Verify max_results respected
     assert len(deduplicated) == 3
@@ -475,7 +463,9 @@ async def test_deduplicate_and_rank_respects_max_results(graph_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_memory_graph):
+async def test_end_to_end_composition(
+    graph_rag_service, mock_rag_service, mock_memory_graph
+):
     """Test end-to-end flow verifies proper composition."""
     # Execute full search
     results, metrics = await graph_rag_service.graph_aware_search(
@@ -489,7 +479,10 @@ async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_
     assert mock_rag_service.advanced_search.called
 
     # Verify AutoBotMemoryGraph called (composition)
-    assert mock_memory_graph.get_entity.called or mock_memory_graph.get_related_entities.called
+    assert (
+        mock_memory_graph.get_entity.called
+        or mock_memory_graph.get_related_entities.called
+    )
 
     # Verify results structure
     assert isinstance(results, list)

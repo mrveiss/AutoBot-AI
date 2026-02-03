@@ -311,7 +311,7 @@ if __name__ == "__main__":
                     failed_tests.append((test_class.__name__, method_name, str(e)))
 
     # Run module-level tests
-    print(f"\nModule Tests:")
+    print("\nModule Tests:")
     print("-" * 80)
     for func in [test_module_imports, test_documentation_completeness]:
         total_tests += 1

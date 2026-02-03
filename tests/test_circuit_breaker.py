@@ -395,8 +395,8 @@ class TestCircuitBreakerManager:
         """Test getting states of all circuit breakers"""
         manager = CircuitBreakerManager()
 
-        cb1 = manager.get_circuit_breaker("service1")
-        cb2 = manager.get_circuit_breaker("service2")
+        _cb1 = manager.get_circuit_breaker("service1")
+        _cb2 = manager.get_circuit_breaker("service2")
 
         states = manager.get_all_states()
 

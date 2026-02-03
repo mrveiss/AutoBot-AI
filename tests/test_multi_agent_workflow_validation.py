@@ -347,7 +347,7 @@ class MultiAgentWorkflowValidator:
                 self.log_result(
                     "Inter-Agent Communication Workflow",
                     "pass",
-                    f"Multi-agent chat workflow completed successfully",
+                    "Multi-agent chat workflow completed successfully",
                     agents_involved=agents_involved or ["Chat Agent", "LLM Agent"],
                     performance_metrics={
                         "processing_time": f"{processing_time:.3f}s",
@@ -445,7 +445,7 @@ class MultiAgentWorkflowValidator:
                 time_str = result.performance_metrics["response_time"].replace("s", "")
                 try:
                     response_times.append(float(time_str))
-                except:
+                except Exception:
                     pass
 
         avg_response_time = (
@@ -514,13 +514,13 @@ class MultiAgentWorkflowValidator:
         print(f"⏭️ Skipped: {report['test_summary']['skipped']}")
         print(f"Success Rate: {report['test_summary']['success_rate']}")
 
-        print(f"\n🤖 AGENT ANALYSIS:")
+        print("\n🤖 AGENT ANALYSIS:")
         print(f"Agents Tested: {report['agent_analysis']['agent_count']}")
         print(
             f"Coordination Capable: {'✅ Yes' if report['agent_analysis']['coordination_capable'] else '⚠️ Limited'}"
         )
 
-        print(f"\n⚡ PERFORMANCE:")
+        print("\n⚡ PERFORMANCE:")
         print(
             f"Average Response Time: {report['performance_metrics']['average_response_time']}"
         )
@@ -528,7 +528,7 @@ class MultiAgentWorkflowValidator:
             f"Range: {report['performance_metrics']['fastest_response']} - {report['performance_metrics']['slowest_response']}"
         )
 
-        print(f"\n🏭 PRODUCTION READINESS:")
+        print("\n🏭 PRODUCTION READINESS:")
         for key, value in report["production_readiness"].items():
             status = "✅ Ready" if value else "⚠️ Needs Review"
             print(f"{key.replace('_', ' ').title()}: {status}")
@@ -583,17 +583,17 @@ def main():
         production_ready = all(report["production_readiness"].values())
 
         if production_ready and report["test_summary"]["failed"] == 0:
-            print(f"\n✅ Multi-agent system is production ready!")
+            print("\n✅ Multi-agent system is production ready!")
             sys.exit(0)
         elif report["test_summary"]["failed"] > 0:
-            print(f"\n❌ Multi-agent validation failed with critical issues")
+            print("\n❌ Multi-agent validation failed with critical issues")
             sys.exit(1)
         else:
-            print(f"\n⚠️ Multi-agent system needs review before production")
+            print("\n⚠️ Multi-agent system needs review before production")
             sys.exit(2)
 
     except KeyboardInterrupt:
-        print(f"\n⚠️ Multi-agent validation interrupted")
+        print("\n⚠️ Multi-agent validation interrupted")
         sys.exit(130)
     except Exception as e:
         print(f"\n❌ Multi-agent validation failed: {str(e)}")

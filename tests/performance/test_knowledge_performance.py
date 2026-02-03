@@ -20,23 +20,23 @@ Test Scenarios:
 """
 
 import asyncio
-import aiohttp
-import time
-import statistics
 import json
-import sys
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
 import logging
+import statistics
+import sys
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 from src.constants.network_constants import ServiceURLs
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PerformanceMetrics:
     """Performance test results"""
+
     test_name: str
     total_requests: int
     successful_requests: int
@@ -86,7 +87,7 @@ class KnowledgePerformanceTest:
         duration: float,
         target_ms: float,
         cache_hit_ratio: Optional[float] = None,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
     ) -> PerformanceMetrics:
         """Calculate performance metrics from latency measurements"""
         total = success_count + fail_count
@@ -95,9 +96,21 @@ class KnowledgePerformanceTest:
             mean = statistics.mean(latencies)
             median = statistics.median(latencies)
             sorted_latencies = sorted(latencies)
-            p50 = sorted_latencies[int(len(latencies) * 0.50)] if len(latencies) > 1 else mean
-            p95 = sorted_latencies[int(len(latencies) * 0.95)] if len(latencies) > 1 else mean
-            p99 = sorted_latencies[int(len(latencies) * 0.99)] if len(latencies) > 1 else mean
+            p50 = (
+                sorted_latencies[int(len(latencies) * 0.50)]
+                if len(latencies) > 1
+                else mean
+            )
+            p95 = (
+                sorted_latencies[int(len(latencies) * 0.95)]
+                if len(latencies) > 1
+                else mean
+            )
+            p99 = (
+                sorted_latencies[int(len(latencies) * 0.99)]
+                if len(latencies) > 1
+                else mean
+            )
             min_lat = min(latencies)
             max_lat = max(latencies)
             std_dev = statistics.stdev(latencies) if len(latencies) > 1 else 0.0
@@ -126,7 +139,7 @@ class KnowledgePerformanceTest:
             timestamp=datetime.now().isoformat(),
             passed=passed,
             target_ms=target_ms,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
     async def get_knowledge_stats(self) -> Dict[str, Any]:
@@ -134,7 +147,9 @@ class KnowledgePerformanceTest:
         async with aiohttp.ClientSession() as session:
             url = f"{self.backend_url}/api/knowledge_base/stats"
             try:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10.0)) as response:
+                async with session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=10.0)
+                ) as response:
                     if response.status == 200:
                         return await response.json()
                     else:
@@ -152,7 +167,7 @@ class KnowledgePerformanceTest:
         logger.info(f"📊 Checking knowledge base for at least {target_facts} facts...")
 
         stats = await self.get_knowledge_stats()
-        current_facts = stats.get('total_facts', 0)
+        current_facts = stats.get("total_facts", 0)
 
         logger.info(f"Current facts in knowledge base: {current_facts}")
 
@@ -160,13 +175,23 @@ class KnowledgePerformanceTest:
             logger.info(f"✅ Sufficient test data exists ({current_facts} facts)")
             return True
         else:
-            logger.warning(f"⚠️  Insufficient test data: {current_facts}/{target_facts} facts")
-            logger.warning("Please populate knowledge base with system commands and man pages:")
-            logger.warning(f"  curl -X POST {self.backend_url}/api/knowledge_base/populate_system_commands")
-            logger.warning(f"  curl -X POST {self.backend_url}/api/knowledge_base/populate_man_pages")
+            logger.warning(
+                f"⚠️  Insufficient test data: {current_facts}/{target_facts} facts"
+            )
+            logger.warning(
+                "Please populate knowledge base with system commands and man pages:"
+            )
+            logger.warning(
+                f"  curl -X POST {self.backend_url}/api/knowledge_base/populate_system_commands"
+            )
+            logger.warning(
+                f"  curl -X POST {self.backend_url}/api/knowledge_base/populate_man_pages"
+            )
             return False
 
-    async def test_category_filter_performance(self, iterations: int = 50) -> PerformanceMetrics:
+    async def test_category_filter_performance(
+        self, iterations: int = 50
+    ) -> PerformanceMetrics:
         """
         Test Scenario 1: Category Filter Performance
         Target: < 200ms per filter operation
@@ -180,7 +205,7 @@ class KnowledgePerformanceTest:
 
         # Get list of available categories
         stats = await self.get_knowledge_stats()
-        categories = stats.get('categories', [])
+        categories = stats.get("categories", [])
 
         if not categories:
             logger.error("No categories found in knowledge base")
@@ -191,7 +216,7 @@ class KnowledgePerformanceTest:
                 fail_count=iterations,
                 duration=0.0,
                 target_ms=self.CATEGORY_FILTER_TARGET_MS,
-                metadata={"error": "No categories found"}
+                metadata={"error": "No categories found"},
             )
 
         logger.info(f"Testing with {len(categories)} categories: {categories[:5]}...")
@@ -211,8 +236,10 @@ class KnowledgePerformanceTest:
                     params["category"] = category
 
                 start = time.perf_counter()
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5.0)) as response:
-                    data = await response.json()
+                async with session.get(
+                    url, params=params, timeout=aiohttp.ClientTimeout(total=5.0)
+                ) as response:
+                    _data = await response.json()
                     end = time.perf_counter()
 
                     latency = (end - start) * 1000  # ms
@@ -258,9 +285,15 @@ class KnowledgePerformanceTest:
 
         # Count successes and failures
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
+        fail_count = sum(
+            1 for r in results if r == "failed" or isinstance(r, Exception)
+        )
 
-        cache_hit_ratio = cache_hits / (cache_hits + cache_misses) if (cache_hits + cache_misses) > 0 else 0.0
+        cache_hit_ratio = (
+            cache_hits / (cache_hits + cache_misses)
+            if (cache_hits + cache_misses) > 0
+            else 0.0
+        )
 
         metrics = self.calculate_metrics(
             test_name="category_filter_performance",
@@ -275,8 +308,8 @@ class KnowledgePerformanceTest:
                 "categories_tested": len(categories),
                 "cache_hits": cache_hits,
                 "cache_misses": cache_misses,
-                "total_facts": stats.get('total_facts', 0)
-            }
+                "total_facts": stats.get("total_facts", 0),
+            },
         )
 
         self.results.append(metrics)
@@ -290,21 +323,29 @@ class KnowledgePerformanceTest:
 
         return metrics
 
-    async def test_vectorization_status_load(self, fact_count: int = 1000) -> PerformanceMetrics:
+    async def test_vectorization_status_load(
+        self, fact_count: int = 1000
+    ) -> PerformanceMetrics:
         """
         Test Scenario 2: Vectorization Status Load Performance
         Target: < 500ms for 1000 facts
 
         Tests batch status check for multiple facts
         """
-        logger.info(f"🔢 Starting vectorization status test (checking {fact_count} facts)...")
+        logger.info(
+            f"🔢 Starting vectorization status test (checking {fact_count} facts)..."
+        )
 
         # First, get list of fact IDs from knowledge base
         async with aiohttp.ClientSession() as session:
             # Get all entries
             url = f"{self.backend_url}/api/knowledge_base/entries"
             try:
-                async with session.get(url, params={"limit": fact_count}, timeout=aiohttp.ClientTimeout(total=10.0)) as response:
+                async with session.get(
+                    url,
+                    params={"limit": fact_count},
+                    timeout=aiohttp.ClientTimeout(total=10.0),
+                ) as response:
                     if response.status != 200:
                         logger.error(f"Failed to get entries: {response.status}")
                         return self.calculate_metrics(
@@ -314,11 +355,11 @@ class KnowledgePerformanceTest:
                             fail_count=1,
                             duration=0.0,
                             target_ms=self.STATUS_LOAD_TARGET_MS,
-                            metadata={"error": "Could not fetch fact entries"}
+                            metadata={"error": "Could not fetch fact entries"},
                         )
 
                     entries_data = await response.json()
-                    entries = entries_data.get('entries', [])
+                    entries = entries_data.get("entries", [])
 
                     if not entries:
                         logger.error("No facts found in knowledge base")
@@ -329,17 +370,19 @@ class KnowledgePerformanceTest:
                             fail_count=1,
                             duration=0.0,
                             target_ms=self.STATUS_LOAD_TARGET_MS,
-                            metadata={"error": "No facts found"}
+                            metadata={"error": "No facts found"},
                         )
 
                     # Extract fact IDs
                     fact_ids = []
                     for entry in entries[:fact_count]:
                         # Try to get ID from various possible fields
-                        fact_id = entry.get('id') or entry.get('key') or entry.get('fact_id')
+                        fact_id = (
+                            entry.get("id") or entry.get("key") or entry.get("fact_id")
+                        )
                         if fact_id:
                             # Clean up fact ID if it has "fact:" prefix
-                            if isinstance(fact_id, str) and fact_id.startswith('fact:'):
+                            if isinstance(fact_id, str) and fact_id.startswith("fact:"):
                                 fact_id = fact_id[5:]  # Remove "fact:" prefix
                             fact_ids.append(str(fact_id))
 
@@ -354,7 +397,7 @@ class KnowledgePerformanceTest:
                     fail_count=1,
                     duration=0.0,
                     target_ms=self.STATUS_LOAD_TARGET_MS,
-                    metadata={"error": str(e)}
+                    metadata={"error": str(e)},
                 )
 
         if not fact_ids:
@@ -366,7 +409,7 @@ class KnowledgePerformanceTest:
                 fail_count=1,
                 duration=0.0,
                 target_ms=self.STATUS_LOAD_TARGET_MS,
-                metadata={"error": "No valid fact IDs"}
+                metadata={"error": "No valid fact IDs"},
             )
 
         # Now test vectorization status check
@@ -374,18 +417,19 @@ class KnowledgePerformanceTest:
         success_count = 0
         fail_count = 0
 
-        async def check_vectorization_status(session, batch_ids: List[str], batch_num: int):
+        async def check_vectorization_status(
+            session, batch_ids: List[str], batch_num: int
+        ):
             """Check vectorization status for a batch of facts"""
             try:
                 url = f"{self.backend_url}/api/knowledge_base/bulk/vectorization_status"
-                payload = {
-                    "fact_ids": batch_ids,
-                    "include_dimensions": True
-                }
+                payload = {"fact_ids": batch_ids, "include_dimensions": True}
 
                 start = time.perf_counter()
-                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10.0)) as response:
-                    data = await response.json()
+                async with session.post(
+                    url, json=payload, timeout=aiohttp.ClientTimeout(total=10.0)
+                ) as response:
+                    _data = await response.json()
                     end = time.perf_counter()
 
                     latency = (end - start) * 1000  # ms
@@ -394,11 +438,15 @@ class KnowledgePerformanceTest:
                     if response.status == 200:
                         return "success"
                     else:
-                        logger.debug(f"Status check failed (batch {batch_num}): {response.status}")
+                        logger.debug(
+                            f"Status check failed (batch {batch_num}): {response.status}"
+                        )
                         return "failed"
 
             except Exception as e:
-                logger.debug(f"Vectorization status request failed (batch {batch_num}): {e}")
+                logger.debug(
+                    f"Vectorization status request failed (batch {batch_num}): {e}"
+                )
                 return "failed"
 
         start_time = time.perf_counter()
@@ -411,7 +459,7 @@ class KnowledgePerformanceTest:
 
             for i, batch_size in enumerate(batch_sizes):
                 # Get up to batch_size IDs
-                batch_ids = fact_ids[:min(batch_size, len(fact_ids))]
+                batch_ids = fact_ids[: min(batch_size, len(fact_ids))]
                 if batch_ids:
                     tasks.append(check_vectorization_status(session, batch_ids, i))
 
@@ -422,7 +470,9 @@ class KnowledgePerformanceTest:
 
         # Count successes and failures
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
+        fail_count = sum(
+            1 for r in results if r == "failed" or isinstance(r, Exception)
+        )
 
         metrics = self.calculate_metrics(
             test_name="vectorization_status_load",
@@ -434,8 +484,8 @@ class KnowledgePerformanceTest:
             metadata={
                 "fact_count": len(fact_ids),
                 "batch_sizes_tested": batch_sizes,
-                "batches_tested": len(batch_sizes)
-            }
+                "batches_tested": len(batch_sizes),
+            },
         )
 
         self.results.append(metrics)
@@ -448,17 +498,21 @@ class KnowledgePerformanceTest:
 
         return metrics
 
-    async def test_rapid_sequential_filtering(self, operations: int = 100) -> PerformanceMetrics:
+    async def test_rapid_sequential_filtering(
+        self, operations: int = 100
+    ) -> PerformanceMetrics:
         """
         Test Scenario 3: Rapid Sequential Filtering
         Target: No UI blocking, < 200ms per operation
 
         Tests rapid filter changes like user quickly switching categories
         """
-        logger.info(f"⚡ Starting rapid sequential filtering test ({operations} operations)...")
+        logger.info(
+            f"⚡ Starting rapid sequential filtering test ({operations} operations)..."
+        )
 
         stats = await self.get_knowledge_stats()
-        categories = stats.get('categories', [])
+        categories = stats.get("categories", [])
 
         if not categories:
             logger.error("No categories found")
@@ -469,7 +523,7 @@ class KnowledgePerformanceTest:
                 fail_count=operations,
                 duration=0.0,
                 target_ms=self.RAPID_FILTER_TARGET_MS,
-                metadata={"error": "No categories"}
+                metadata={"error": "No categories"},
             )
 
         latencies = []
@@ -488,7 +542,9 @@ class KnowledgePerformanceTest:
                     params = {"category": category, "limit": 50}
 
                     req_start = time.perf_counter()
-                    async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=2.0)) as response:
+                    async with session.get(
+                        url, params=params, timeout=aiohttp.ClientTimeout(total=2.0)
+                    ) as response:
                         await response.json()
                         req_end = time.perf_counter()
 
@@ -520,8 +576,8 @@ class KnowledgePerformanceTest:
             metadata={
                 "operations": operations,
                 "categories_count": len(categories),
-                "user_think_time_ms": 100
-            }
+                "user_think_time_ms": 100,
+            },
         )
 
         self.results.append(metrics)
@@ -534,15 +590,19 @@ class KnowledgePerformanceTest:
 
         return metrics
 
-    async def test_concurrent_mixed_operations(self, concurrent: int = 20) -> PerformanceMetrics:
+    async def test_concurrent_mixed_operations(
+        self, concurrent: int = 20
+    ) -> PerformanceMetrics:
         """
         Test Scenario 4: Concurrent Mixed Operations
         Simulates multiple users accessing different features simultaneously
         """
-        logger.info(f"🔄 Starting concurrent mixed operations test ({concurrent} concurrent ops)...")
+        logger.info(
+            f"🔄 Starting concurrent mixed operations test ({concurrent} concurrent ops)..."
+        )
 
         stats = await self.get_knowledge_stats()
-        categories = stats.get('categories', [])
+        categories = stats.get("categories", [])
 
         latencies = []
         success_count = 0
@@ -557,9 +617,16 @@ class KnowledgePerformanceTest:
                 if op_type == 0:
                     # Category filter
                     url = f"{self.backend_url}/api/knowledge_base/facts/by_category"
-                    params = {"category": categories[op_id % len(categories)] if categories else None, "limit": 50}
+                    params = {
+                        "category": categories[op_id % len(categories)]
+                        if categories
+                        else None,
+                        "limit": 50,
+                    }
                     start = time.perf_counter()
-                    async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5.0)) as response:
+                    async with session.get(
+                        url, params=params, timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as response:
                         await response.json()
                         end = time.perf_counter()
 
@@ -567,7 +634,9 @@ class KnowledgePerformanceTest:
                     # Get stats
                     url = f"{self.backend_url}/api/knowledge_base/stats"
                     start = time.perf_counter()
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=5.0)) as response:
+                    async with session.get(
+                        url, timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as response:
                         await response.json()
                         end = time.perf_counter()
 
@@ -576,7 +645,9 @@ class KnowledgePerformanceTest:
                     url = f"{self.backend_url}/api/knowledge_base/entries"
                     params = {"limit": 20}
                     start = time.perf_counter()
-                    async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=5.0)) as response:
+                    async with session.get(
+                        url, params=params, timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as response:
                         await response.json()
                         end = time.perf_counter()
 
@@ -602,7 +673,9 @@ class KnowledgePerformanceTest:
         duration = end_time - start_time
 
         success_count = sum(1 for r in results if r == "success")
-        fail_count = sum(1 for r in results if r == "failed" or isinstance(r, Exception))
+        fail_count = sum(
+            1 for r in results if r == "failed" or isinstance(r, Exception)
+        )
 
         metrics = self.calculate_metrics(
             test_name="concurrent_mixed_operations",
@@ -613,8 +686,8 @@ class KnowledgePerformanceTest:
             target_ms=500,  # General responsiveness target
             metadata={
                 "concurrent_operations": concurrent,
-                "operation_types": ["category_filter", "stats", "entries"]
-            }
+                "operation_types": ["category_filter", "stats", "entries"],
+            },
         )
 
         self.results.append(metrics)
@@ -629,36 +702,38 @@ class KnowledgePerformanceTest:
 
     async def run_comprehensive_test_suite(self) -> Dict[str, Any]:
         """Run all performance tests"""
-        logger.info("="*80)
+        logger.info("=" * 80)
         logger.info("🚀 Knowledge Manager Performance Testing")
         logger.info("GitHub Issue #163 - Task 4.3")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         # Check test data availability
         has_data = await self.populate_test_data_if_needed(target_facts=1000)
         if not has_data:
-            logger.error("❌ Insufficient test data - cannot proceed with performance testing")
+            logger.error(
+                "❌ Insufficient test data - cannot proceed with performance testing"
+            )
             return {
                 "error": "Insufficient test data",
-                "message": "Please populate knowledge base before running performance tests"
+                "message": "Please populate knowledge base before running performance tests",
             }
 
         start_time = time.perf_counter()
 
         # Run all test scenarios
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         await self.test_category_filter_performance(iterations=50)
         await asyncio.sleep(1)
 
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         await self.test_vectorization_status_load(fact_count=1000)
         await asyncio.sleep(1)
 
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         await self.test_rapid_sequential_filtering(operations=100)
         await asyncio.sleep(1)
 
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         await self.test_concurrent_mixed_operations(concurrent=20)
 
         total_duration = time.perf_counter() - start_time
@@ -666,9 +741,9 @@ class KnowledgePerformanceTest:
         # Generate summary report
         summary = self.generate_performance_report(total_duration)
 
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("✅ Performance Testing Complete")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         return summary
 
@@ -684,7 +759,7 @@ class KnowledgePerformanceTest:
             "test_results": [asdict(r) for r in self.results],
             "summary": {},
             "performance_analysis": {},
-            "pass_fail_summary": {}
+            "pass_fail_summary": {},
         }
 
         # Calculate summary statistics
@@ -696,10 +771,14 @@ class KnowledgePerformanceTest:
         report["summary"] = {
             "total_requests": total_requests,
             "total_successful": total_successful,
-            "overall_success_rate": (total_successful / total_requests * 100) if total_requests > 0 else 0,
+            "overall_success_rate": (total_successful / total_requests * 100)
+            if total_requests > 0
+            else 0,
             "tests_passed": tests_passed,
             "tests_failed": tests_failed,
-            "pass_rate": (tests_passed / len(self.results) * 100) if self.results else 0
+            "pass_rate": (tests_passed / len(self.results) * 100)
+            if self.results
+            else 0,
         }
 
         # Performance analysis for each test
@@ -709,17 +788,41 @@ class KnowledgePerformanceTest:
                 "target_ms": result.target_ms,
                 "passed": result.passed,
                 "margin_ms": result.target_ms - result.p95_latency_ms,
-                "margin_percentage": ((result.target_ms - result.p95_latency_ms) / result.target_ms * 100) if result.target_ms > 0 else 0,
-                "success_rate": (result.successful_requests / result.total_requests * 100) if result.total_requests > 0 else 0
+                "margin_percentage": (
+                    (result.target_ms - result.p95_latency_ms) / result.target_ms * 100
+                )
+                if result.target_ms > 0
+                else 0,
+                "success_rate": (
+                    result.successful_requests / result.total_requests * 100
+                )
+                if result.total_requests > 0
+                else 0,
             }
 
         # Pass/Fail summary
         report["pass_fail_summary"] = {
-            "category_filter": next((r.passed for r in self.results if "category_filter" in r.test_name), None),
-            "vectorization_status": next((r.passed for r in self.results if "vectorization_status" in r.test_name), None),
-            "rapid_filtering": next((r.passed for r in self.results if "rapid_sequential" in r.test_name), None),
-            "concurrent_mixed": next((r.passed for r in self.results if "concurrent_mixed" in r.test_name), None),
-            "overall_passed": tests_failed == 0
+            "category_filter": next(
+                (r.passed for r in self.results if "category_filter" in r.test_name),
+                None,
+            ),
+            "vectorization_status": next(
+                (
+                    r.passed
+                    for r in self.results
+                    if "vectorization_status" in r.test_name
+                ),
+                None,
+            ),
+            "rapid_filtering": next(
+                (r.passed for r in self.results if "rapid_sequential" in r.test_name),
+                None,
+            ),
+            "concurrent_mixed": next(
+                (r.passed for r in self.results if "concurrent_mixed" in r.test_name),
+                None,
+            ),
+            "overall_passed": tests_failed == 0,
         }
 
         # Save report to proper directory (NOT root!)
@@ -729,7 +832,7 @@ class KnowledgePerformanceTest:
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = output_dir / f"knowledge_performance_{timestamp_str}.json"
 
-        with open(report_file, 'w', encoding='utf-8') as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
         logger.info(f"📊 Performance report saved: {report_file}")
@@ -741,72 +844,90 @@ class KnowledgePerformanceTest:
 
     def print_summary_report(self, report: Dict[str, Any], report_file: Path):
         """Print human-readable summary"""
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("📊 KNOWLEDGE MANAGER PERFORMANCE SUMMARY")
-        print("="*80)
-        print(f"GitHub Issue: #163 - Task 4.3")
+        print("=" * 80)
+        print("GitHub Issue: #163 - Task 4.3")
         print(f"Total Tests: {report['total_tests']}")
         print(f"Total Requests: {report['summary']['total_requests']}")
         print(f"Success Rate: {report['summary']['overall_success_rate']:.1f}%")
-        print(f"Tests Passed: {report['summary']['tests_passed']}/{report['total_tests']}")
+        print(
+            f"Tests Passed: {report['summary']['tests_passed']}/{report['total_tests']}"
+        )
         print()
 
         # Category Filter Performance
-        cat_result = next((r for r in self.results if "category_filter" in r.test_name), None)
+        cat_result = next(
+            (r for r in self.results if "category_filter" in r.test_name), None
+        )
         if cat_result:
             status = "✅ PASS" if cat_result.passed else "❌ FAIL"
             print(f"1. Category Filter Performance: {status}")
             print(f"   Target: <{self.CATEGORY_FILTER_TARGET_MS}ms (p95)")
             print(f"   Actual: {cat_result.p95_latency_ms:.0f}ms (p95)")
-            print(f"   Margin: {self.CATEGORY_FILTER_TARGET_MS - cat_result.p95_latency_ms:+.0f}ms")
+            print(
+                f"   Margin: {self.CATEGORY_FILTER_TARGET_MS - cat_result.p95_latency_ms:+.0f}ms"
+            )
             if cat_result.cache_hit_ratio:
                 print(f"   Cache Hit Ratio: {cat_result.cache_hit_ratio:.1%}")
             print()
 
         # Vectorization Status Load
-        vec_result = next((r for r in self.results if "vectorization_status" in r.test_name), None)
+        vec_result = next(
+            (r for r in self.results if "vectorization_status" in r.test_name), None
+        )
         if vec_result:
             status = "✅ PASS" if vec_result.passed else "❌ FAIL"
             print(f"2. Vectorization Status Load: {status}")
             print(f"   Target: <{self.STATUS_LOAD_TARGET_MS}ms (p95) for 1000 facts")
             print(f"   Actual: {vec_result.p95_latency_ms:.0f}ms (p95)")
-            print(f"   Margin: {self.STATUS_LOAD_TARGET_MS - vec_result.p95_latency_ms:+.0f}ms")
+            print(
+                f"   Margin: {self.STATUS_LOAD_TARGET_MS - vec_result.p95_latency_ms:+.0f}ms"
+            )
             print()
 
         # Rapid Sequential Filtering
-        rapid_result = next((r for r in self.results if "rapid_sequential" in r.test_name), None)
+        rapid_result = next(
+            (r for r in self.results if "rapid_sequential" in r.test_name), None
+        )
         if rapid_result:
             status = "✅ PASS" if rapid_result.passed else "❌ FAIL"
             print(f"3. Rapid Sequential Filtering: {status}")
             print(f"   Target: <{self.RAPID_FILTER_TARGET_MS}ms (p95)")
             print(f"   Actual: {rapid_result.p95_latency_ms:.0f}ms (p95)")
-            print(f"   Margin: {self.RAPID_FILTER_TARGET_MS - rapid_result.p95_latency_ms:+.0f}ms")
+            print(
+                f"   Margin: {self.RAPID_FILTER_TARGET_MS - rapid_result.p95_latency_ms:+.0f}ms"
+            )
             print()
 
         # Concurrent Mixed Operations
-        mixed_result = next((r for r in self.results if "concurrent_mixed" in r.test_name), None)
+        mixed_result = next(
+            (r for r in self.results if "concurrent_mixed" in r.test_name), None
+        )
         if mixed_result:
             status = "✅ PASS" if mixed_result.passed else "❌ FAIL"
             print(f"4. Concurrent Mixed Operations: {status}")
-            print(f"   Target: <500ms (p95)")
+            print("   Target: <500ms (p95)")
             print(f"   Actual: {mixed_result.p95_latency_ms:.0f}ms (p95)")
             print(f"   Throughput: {mixed_result.requests_per_second:.1f} req/sec")
             print()
 
         # Overall verdict
-        print("="*80)
-        if report['pass_fail_summary']['overall_passed']:
+        print("=" * 80)
+        if report["pass_fail_summary"]["overall_passed"]:
             print("🎉 OVERALL RESULT: ALL PERFORMANCE TARGETS MET ✅")
         else:
             print("⚠️  OVERALL RESULT: SOME PERFORMANCE TARGETS NOT MET ❌")
             print("\nFailed Tests:")
             for result in self.results:
                 if not result.passed:
-                    print(f"  - {result.test_name}: {result.p95_latency_ms:.0f}ms vs {result.target_ms}ms target")
+                    print(
+                        f"  - {result.test_name}: {result.p95_latency_ms:.0f}ms vs {result.target_ms}ms target"
+                    )
 
-        print("="*80)
+        print("=" * 80)
         print(f"📄 Full report: {report_file}")
-        print("="*80)
+        print("=" * 80)
 
 
 async def main():

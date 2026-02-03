@@ -342,7 +342,7 @@ class AutoBotSystemValidator:
                 self.log_result(
                     "Knowledge Base Stats",
                     "pass",
-                    f"Retrieved knowledge base statistics",
+                    "Retrieved knowledge base statistics",
                     {
                         "total_documents": stats.get("total_documents", 0),
                         "total_chunks": stats.get("total_chunks", 0),
@@ -701,12 +701,12 @@ class AutoBotSystemValidator:
         print(f"Duration: {summary['execution_info']['total_duration']}")
 
         if summary["critical_issues"]:
-            print(f"\n❌ CRITICAL ISSUES:")
+            print("\n❌ CRITICAL ISSUES:")
             for issue in summary["critical_issues"]:
                 print(f"  - {issue}")
 
         if summary["warnings"]:
-            print(f"\n⚠️ WARNINGS:")
+            print("\n⚠️ WARNINGS:")
             for warning in summary["warnings"]:
                 print(f"  - {warning}")
 
@@ -794,11 +794,11 @@ def main():
             )
             sys.exit(2)
         else:
-            print(f"\n✅ All validation tests passed successfully!")
+            print("\n✅ All validation tests passed successfully!")
             sys.exit(0)
 
     except KeyboardInterrupt:
-        print(f"\n⚠️ Validation interrupted by user")
+        print("\n⚠️ Validation interrupted by user")
         sys.exit(130)
     except Exception as e:
         print(f"\n❌ Validation failed with error: {str(e)}")
