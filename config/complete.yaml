@@ -7,13 +7,13 @@ infrastructure:
   # Host IP addresses for all services
   hosts:
     backend: "172.16.168.20"
-    frontend: "172.16.168.21" 
+    frontend: "172.16.168.21"
     npu_worker: "172.16.168.22"
     redis: "172.16.168.23"
     ai_stack: "172.16.168.24"
     browser_service: "172.16.168.25"
     ollama: "127.0.0.1"  # Ollama runs on backend host (localhost)
-    
+
   # Service ports
   ports:
     backend: 8001
@@ -27,13 +27,13 @@ infrastructure:
     websocket: 8001
     nginx: 80  # Production mode only - serves static files on frontend VM
     vscode: 8080
-    
+
   # Default addresses
   defaults:
     localhost: "127.0.0.1"
     any_interface: "0.0.0.0"
     docker_internal: "host.docker.internal"
-    
+
   # Local host aliases
   local_hosts:
     - "localhost"
@@ -183,7 +183,7 @@ paths:
     error: "logs/error.log"
     debug: "logs/debug.log"
     audit: "logs/audit.log"
-    
+
   # Configuration files
   config:
     directory: "config"
@@ -191,7 +191,7 @@ paths:
     agents: "config/agents.yaml"
     logging: "config/logging.yaml"
     security: "config/security"
-    
+
   # Data directories
   data:
     directory: "data"
@@ -200,7 +200,7 @@ paths:
     cache: "data/cache"
     temp: "data/temp"
     chromadb: "data/chromadb"
-    
+
   # Static assets
   static:
     directory: "static"
@@ -246,14 +246,14 @@ services:
     base_url: "${services.backend.protocol}://${services.backend.host}:${services.backend.port}"
     health_url: "${services.backend.base_url}/api/health"
     knowledge_stats_url: "${services.backend.base_url}/api/knowledge_base/stats"
-    
+
   # Frontend service
   frontend:
     protocol: "http"
     host: "${infrastructure.hosts.frontend}"
     port: "${infrastructure.ports.frontend}"
     base_url: "${services.frontend.protocol}://${services.frontend.host}:${services.frontend.port}"
-    
+
   # Ollama LLM service
   ollama:
     protocol: "http"
@@ -266,14 +266,14 @@ services:
     models_url: "${services.ollama.base_url}/api/tags"
     tags_endpoint: "/api/tags"
     model_info_endpoint: "/api/show"
-    
+
   # Redis service
   redis:
     protocol: "redis"
     host: "${infrastructure.hosts.redis}"
     port: "${infrastructure.ports.redis}"
     url: "${services.redis.protocol}://${services.redis.host}:${services.redis.port}"
-    
+
   # AI Stack service
   ai_stack:
     protocol: "http"
@@ -281,7 +281,7 @@ services:
     port: "${infrastructure.ports.ai_stack}"
     base_url: "${services.ai_stack.protocol}://${services.ai_stack.host}:${services.ai_stack.port}"
     health_url: "${services.ai_stack.base_url}/health"
-    
+
   # NPU Worker service
   npu_worker:
     protocol: "http"
@@ -289,7 +289,7 @@ services:
     port: "${infrastructure.ports.npu_worker}"
     base_url: "${services.npu_worker.protocol}://${services.npu_worker.host}:${services.npu_worker.port}"
     health_url: "${services.npu_worker.base_url}/health"
-    
+
   # Browser service
   browser_service:
     protocol: "http"
@@ -304,7 +304,7 @@ redis:
   host: "${infrastructure.hosts.redis}"
   port: "${infrastructure.ports.redis}"
   password: null  # No password configured
-  
+
   # Connection settings (tuned for higher load)
   connection:
     max_connections: 50  # Increased for higher concurrent load
@@ -313,7 +313,7 @@ redis:
     socket_timeout: 5    # Increased for slower operations
     socket_connect_timeout: 2
     retry_on_timeout: true
-    
+
   # Database allocation
   databases:
     main: 0
@@ -331,7 +331,7 @@ redis:
 
   # Knowledge base specific - RediSearch requirement
   kb_db: 0
-  
+
   # Pub/Sub channels
   channels:
     command_approval_request: "command_approval_request"
@@ -339,18 +339,18 @@ redis:
     worker_capabilities: "worker_capabilities"
     events: "events"
     notifications: "notifications"
-    
+
   # Vector store configuration
   vector_prefix: "doc"
   vector_overwrite: true
   vector_key_pattern: "llama_index/vector_*"
-  
+
   # Scan operation settings
   scan_batch_size: 100
   scan_max_iterations: 50
   category_sample_size: 5
   category_analysis_limit: 3
-  
+
   # Index names
   indexes:
     knowledge_base: "llama_index"
@@ -363,16 +363,16 @@ retry:
   exponential_backoff: true
   backoff_factor: 2
   max_delay: 60
-  
+
   # Service-specific retry settings
   redis:
     attempts: 3
     delay: 1
-    
+
   http:
     attempts: 3
     delay: 2
-    
+
   llm:
     attempts: 2
     delay: 5
@@ -384,19 +384,19 @@ limits:
     max_connections: 20
     command_timeout: 5
     max_memory: "512MB"
-    
+
   # API limits
   api:
     max_request_size: "10MB"
     rate_limit: 100
     concurrent_requests: 50
-    
+
   # Process limits
   process:
     max_concurrent: 10
     max_memory: "1GB"
     max_cpu_percent: 80
-    
+
   # File limits
   file:
     max_upload_size: "100MB"
@@ -408,7 +408,7 @@ runtime:
   docker_indicator_file: "/.dockerenv"
   docker_env_var: "DOCKER_CONTAINER"
   wsl_indicator: "/proc/sys/fs/binfmt_misc/WSLInterop"
-  
+
 # Security Configuration
 security:
   # Private network ranges
@@ -419,7 +419,7 @@ security:
       - "192.168.0.0/16"
     link_local: "169.254.0.0/16"
     loopback: "127.0.0.0/8"
-    
+
   # Allowed origins for CORS
   cors_origins:
     - "http://localhost:5173"
@@ -428,12 +428,12 @@ security:
     - "http://127.0.0.1:3000"
     - "http://172.16.168.20:8001"
     - "http://172.16.168.21:5173"
-    
+
   # Session settings
   session:
     timeout_minutes: 30
     max_sessions: 100
-    
+
   # Encryption
   encryption:
     enabled: false
@@ -446,24 +446,24 @@ performance:
     min_workers: 2
     max_workers: 10
     queue_size: 100
-    
+
   # Caching
   cache:
     enabled: true
     ttl: 3600
     max_size: 1000
-    
+
   # Batching
   batch:
     size: 50
     timeout: 5
-    
+
 # Health Check Settings
 health:
   interval: 30
   timeout: 5
   retries: 3
-  
+
   # Service-specific health checks
   checks:
     redis: true
@@ -495,7 +495,7 @@ monitoring:
   enabled: true
   metrics_interval: 60
   log_level: "INFO"
-  
+
   # What to monitor
   track:
     cpu: true
@@ -512,12 +512,12 @@ knowledge_base:
     enabled: true
     model: "nomic-embed-text:latest"
     percentile_threshold: 95.0
-  
+
   # Query settings
   similarity_top_k: 10
   response_mode: "compact"
   avg_chunks_per_document: 5
-  
+
   # Cache settings
   cache:
     enabled: true
@@ -536,7 +536,7 @@ search:
     keyword_boost_factor: 1.5  # Boost factor for multiple keyword matches
     semantic_top_k: 15    # Number of semantic results to retrieve for hybrid processing
     final_top_k: 10       # Maximum number of final results to return
-    
+
     # Keyword extraction settings
     min_keyword_length: 3
     stop_words:
@@ -587,7 +587,7 @@ monitoring:
     collection_interval: 5  # Seconds between metric collections
     retention_hours: 24     # How long to keep metrics data
     buffer_size: 1000       # Maximum metrics in memory buffer
-    
+
   # Alert thresholds
   alerts:
     cpu_warning: 80         # CPU usage percentage warning threshold
@@ -596,7 +596,7 @@ monitoring:
     memory_critical: 95     # Memory usage percentage critical threshold
     disk_warning: 85        # Disk usage percentage warning threshold
     disk_critical: 95       # Disk usage percentage critical threshold
-    
+
   # Dashboard settings
   dashboard:
     refresh_interval: 10    # Seconds between dashboard refreshes
@@ -618,7 +618,20 @@ llm:
     cache_ttl: 3600            # Cache TTL for performance data (seconds)
     min_samples: 5             # Minimum samples needed for reliable performance metrics
     auto_selection: true       # Enable automatic model selection based on task
-    
+
+  # Issue #748: Tiered Model Routing - routes requests to appropriate model size
+  # based on task complexity scoring (50-75% resource reduction for simple tasks)
+  tiered_routing:
+    enabled: true                    # Enable/disable tiered model routing
+    complexity_threshold: 3.0        # Score threshold (0-10): < threshold uses simple tier
+    models:
+      simple: "gemma2:2b"            # Model for simple requests (score < 3)
+      complex: "mistral:7b-instruct" # Model for complex requests (score >= 3)
+    fallback_to_complex: true        # Fallback to complex tier if simple fails
+    logging:
+      log_scores: true               # Log complexity scores for debugging
+      log_routing_decisions: true    # Log routing decisions
+
   # Model fallback strategy
   fallback:
     strategy: "performance"    # "performance", "size", "speed"
@@ -627,7 +640,7 @@ llm:
       - "llama3.2:3b-instruct-q4_K_M"
       - "llama3.2:1b-instruct-q4_K_M"
       - "gemma2:2b"
-  
+
   # Performance targets
   targets:
     max_response_time: 30.0   # Maximum acceptable response time (seconds)
@@ -640,7 +653,7 @@ llm:
     - "llama3.2:3b"
     - "nomic-embed-text:latest"
   emergency_fallback_model: "phi:2.7b"
-  
+
   # Embedding settings
   embedding:
     model: "nomic-embed-text:latest"
@@ -655,11 +668,11 @@ circuit_breaker:
     failure_threshold: 3
   openai:
     failure_threshold: 2
-  
+
   # Recovery timeouts
   recovery: 30
   openai_recovery: 60
-  
+
   # Service registry circuit breaker
   service_registry:
     failure_threshold: 5
@@ -671,12 +684,12 @@ http:
     limit_per_host: 10
   dns_cache_ttl: 300
 
-# Hardware Configuration  
+# Hardware Configuration
 hardware:
   acceleration:
     priority:
       - "openvino_npu"
-      - "openvino" 
+      - "openvino"
       - "cuda"
       - "cpu"
 
@@ -687,11 +700,11 @@ deployment:
   distributed: false
   default_scheme: "http"
   default_health_endpoint: "/health"
-  
+
   # Kubernetes configuration
   kubernetes:
     service_host: false
-    
+
   # Distributed deployment hosts
   distributed:
     default_host: "autobot.local"
@@ -703,7 +716,7 @@ deployment:
     browser_host: "browser.autobot.local"
     ollama_host: "llm.autobot.local"
     lmstudio_host: "lmstudio.autobot.local"
-    
+
   # Docker deployment service names
   docker:
     network: "autobot-network"
@@ -715,7 +728,7 @@ deployment:
     browser_service: "autobot-playwright"
     ollama_service: "autobot-ollama"
     lmstudio_service: "autobot-lmstudio"
-    
+
   # Kubernetes DNS names
   k8s:
     default_dns: "autobot.default.svc.cluster.local"

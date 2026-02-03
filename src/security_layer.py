@@ -34,11 +34,18 @@ class SecurityLayer:
         )
 
         # If single-user mode is enabled, disable all authentication
+        # Issue #745: Added security warning for production awareness
         if self.single_user_mode:
             self.enable_auth = False
-            logger.info("Single-user mode enabled - authentication disabled")
+            logger.warning(
+                "SECURITY: Single-user mode enabled - authentication disabled. "
+                "Set AUTOBOT_SINGLE_USER_MODE=false for production deployments."
+            )
         else:
-            self.enable_auth = self.security_config.get("enable_auth", False)
+            # Issue #745: Default to True for production security
+            # Authentication should be enabled unless explicitly disabled
+            self.enable_auth = self.security_config.get("enable_auth", True)
+            logger.info("Multi-user mode - authentication enabled by default")
 
         self.audit_log_file = self.security_config.get(
             "audit_log_file", os.getenv("AUTOBOT_AUDIT_LOG_FILE", "data/audit.log")
@@ -53,6 +60,82 @@ class SecurityLayer:
             f"SecurityLayer initialized. Authentication enabled: {self.enable_auth}"
         )
         logger.debug("Audit log file: %s", self.audit_log_file)
+
+    def _handle_deprecated_role(
+        self, user_role: str, action_type: str, resource: Optional[str]
+    ) -> str:
+        """
+        Handle deprecated privileged roles by logging and downgrading to admin.
+
+        Deprecated roles (god, superuser, root) are security vulnerabilities and
+        are downgraded to admin with proper RBAC permissions. Issue #620.
+
+        Args:
+            user_role: The role to check for deprecation.
+            action_type: The action being attempted.
+            resource: The resource being accessed.
+
+        Returns:
+            The effective role to use (admin if deprecated, original otherwise).
+        """
+        if user_role.lower() not in DEPRECATED_PRIVILEGED_ROLES:
+            return user_role
+
+        self.audit_log(
+            action="deprecated_role_usage",
+            user=user_role,
+            outcome="warning",
+            details={
+                "deprecated_role": user_role,
+                "action_attempted": action_type,
+                "resource": resource,
+                "message": (
+                    "God/superuser/root roles deprecated for security. "
+                    "Downgrading to admin with granular permissions."
+                ),
+            },
+        )
+        return "admin"
+
+    def _check_wildcard_permissions(
+        self, action_type: str, permissions: List[str]
+    ) -> bool:
+        """
+        Check if action matches any wildcard permissions in the list.
+
+        Wildcard permissions end with '.*' and match any action with the
+        same prefix. Issue #620.
+
+        Args:
+            action_type: The action to check.
+            permissions: List of permissions to check against.
+
+        Returns:
+            True if action matches a wildcard permission, False otherwise.
+        """
+        for permission in permissions:
+            if permission.endswith(".*"):
+                permission_prefix = permission[:-1]  # Remove the '*'
+                if action_type.startswith(permission_prefix):
+                    return True
+        return False
+
+    def _check_permission_match(self, action_type: str, permissions: List[str]) -> bool:
+        """
+        Check if action matches permissions list (direct or wildcard).
+
+        First checks for exact match, then checks wildcard patterns. Issue #620.
+
+        Args:
+            action_type: The action to check.
+            permissions: List of permissions to check against.
+
+        Returns:
+            True if action matches any permission, False otherwise.
+        """
+        if action_type in permissions:
+            return True
+        return self._check_wildcard_permissions(action_type, permissions)
 
     def check_permission(
         self, user_role: str, action_type: str, resource: Optional[str] = None
@@ -75,48 +158,20 @@ class SecurityLayer:
 
         # SECURITY: Removed god mode - all access must go through proper RBAC
         # Former god/superuser roles now use admin permissions with audit logging
-        if user_role.lower() in DEPRECATED_PRIVILEGED_ROLES:
-            # Log the deprecated role usage for security audit
-            self.audit_log(
-                action="deprecated_role_usage",
-                user=user_role,
-                outcome="warning",
-                details={
-                    "deprecated_role": user_role,
-                    "action_attempted": action_type,
-                    "resource": resource,
-                    "message": (
-                        "God/superuser/root roles deprecated for security. "
-                        "Downgrading to admin with granular permissions."
-                    ),
-                },
-            ),
-            user_role = "admin"  # Downgrade to admin with proper permissions
+        user_role = self._handle_deprecated_role(user_role, action_type, resource)
 
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
 
         # SECURITY FIX: Removed "allow_all" bypass - use granular permissions only
         # All roles must have explicit permissions for each action type
-
-        if action_type in role_permissions:
+        if self._check_permission_match(action_type, role_permissions):
             return True
-
-        # Check for wildcard permissions
-        # (e.g., 'files.*' matches 'files.view', 'files.delete', etc.)
-        for permission in role_permissions:
-            if permission.endswith(".*"):
-                permission_prefix = permission[:-1]  # Remove the '*'
-                if action_type.startswith(permission_prefix):
-                    return True
 
         # Check default role permissions for common roles
+        # Issue #745: Apply wildcard matching to default permissions too
         default_permissions = self._get_default_role_permissions(user_role)
-        if action_type in default_permissions:
+        if self._check_permission_match(action_type, default_permissions):
             return True
-
-        # More granular checks could be added here based on resource
-        # e.g., if action_type is 'files.view' and resource contains 'sensitive'
-        # then check for 'files.view_sensitive' permission
 
         logger.warning(
             f"Permission DENIED for role '{user_role}' to perform action "

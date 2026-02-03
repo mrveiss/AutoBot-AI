@@ -64,16 +64,17 @@ class BaseTerminalWebSocket(ABC):
                 }
             )
 
-    def _read_pty_output(self):
-        """Read output from PTY in separate thread with queue-based delivery"""
+    def _initialize_output_sender(self):
+        """Initialize async output sender task. Issue #620.
+
+        Sets up the output queue and schedules the async sender coroutine.
+        """
         import queue
-        import select
-        import time
 
         # Create output queue for thread-safe message passing
         self.output_queue = queue.Queue()
 
-        # Start async message sender task
+        # Cancel existing sender task if any
         if hasattr(self, "_output_sender_task"):
             self._output_sender_task.cancel()
 
@@ -87,41 +88,70 @@ class BaseTerminalWebSocket(ABC):
             # No loop available - will handle synchronously
             self._output_sender_task = None
 
+    def _process_and_queue_pty_data(self, data: bytes) -> bool:
+        """Process PTY data and queue message for delivery. Issue #620.
+
+        Args:
+            data: Raw bytes from PTY
+
+        Returns:
+            True if processing succeeded, False if PTY closed
+        """
+        import queue
+        import time
+
+        if not data:
+            return False
+
+        try:
+            output = data.decode("utf-8", errors="replace")
+            processed_output = self.process_output(output)
+
+            message = {
+                "type": "output",
+                "content": processed_output,
+                "timestamp": time.time(),
+            }
+
+            try:
+                self.output_queue.put_nowait(message)
+            except queue.Full:
+                # Queue is full, drop oldest message to prevent blocking
+                try:
+                    self.output_queue.get_nowait()
+                    self.output_queue.put_nowait(message)
+                except queue.Empty:
+                    pass
+
+        except Exception as e:
+            logger.error(f"Error processing PTY data: {e}")
+
+        return True
+
+    def _signal_output_sender_stop(self):
+        """Signal async output sender to stop. Issue #620."""
+        import queue
+
+        if hasattr(self, "output_queue"):
+            try:
+                self.output_queue.put_nowait({"type": "stop"})
+            except queue.Full:
+                pass
+
+    def _read_pty_output(self):
+        """Read output from PTY in separate thread with queue-based delivery."""
+        import select
+
+        self._initialize_output_sender()
+
         try:
             while self.active and self.pty_fd:
                 try:
-                    # Read with timeout
                     ready, _, _ = select.select([self.pty_fd], [], [], 0.1)
 
                     if ready:
                         data = os.read(self.pty_fd, 1024)
-                        if data:
-                            try:
-                                output = data.decode("utf-8", errors="replace")
-                                # Call hook for processing output
-                                processed_output = self.process_output(output)
-
-                                # Queue message for async delivery
-                                message = {
-                                    "type": "output",
-                                    "content": processed_output,  # Standardized field name
-                                    "timestamp": time.time(),
-                                }
-
-                                try:
-                                    self.output_queue.put_nowait(message)
-                                except queue.Full:
-                                    # Queue is full, drop oldest message to prevent blocking
-                                    try:
-                                        self.output_queue.get_nowait()
-                                        self.output_queue.put_nowait(message)
-                                    except queue.Empty:
-                                        pass
-
-                            except Exception as e:
-                                logger.error(f"Error processing PTY data: {e}")
-                        else:
-                            # PTY closed
+                        if not self._process_and_queue_pty_data(data):
                             break
                 except OSError:
                     break
@@ -131,12 +161,7 @@ class BaseTerminalWebSocket(ABC):
         except Exception as e:
             logger.error(f"PTY reader thread error: {e}")
         finally:
-            # Signal async sender to stop
-            if hasattr(self, "output_queue"):
-                try:
-                    self.output_queue.put_nowait({"type": "stop"})
-                except queue.Full:
-                    pass
+            self._signal_output_sender_stop()
 
     async def _async_output_sender(self):
         """Async task to send queued output messages to WebSocket"""

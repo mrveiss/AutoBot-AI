@@ -44,6 +44,7 @@ from .providers.openai_provider import OpenAIProvider
 from .providers.transformers_provider import TransformersProvider
 from .providers.vllm_provider import VLLMProviderHandler
 from .streaming import StreamingManager
+from .tiered_routing import TierConfig, TieredModelRouter
 from .types import ProviderType
 
 # Issue #756: Import provider health checking to prevent stalls
@@ -132,6 +133,9 @@ class LLMInterface:
 
         # Issue #717: Initialize optimization components
         self._init_optimization()
+
+        # Issue #748: Initialize tiered model routing
+        self._init_tiered_routing()
 
         logger.info("LLM Interface initialized with all provider support")
 
@@ -317,6 +321,74 @@ class LLMInterface:
             compression_config.get("enabled", True),
             cloud_config.get("connection_pool_size", 100),
         )
+
+    def _init_tiered_routing(self) -> None:
+        """
+        Issue #748: Initialize tiered model routing for resource optimization.
+
+        Routes simple requests to lightweight models (gemma2:2b) and
+        complex requests to capable models (mistral:7b-instruct).
+        """
+        try:
+            tier_config = TierConfig.from_config()
+            self._tier_router = TieredModelRouter(tier_config)
+
+            logger.info(
+                "Tiered routing initialized: enabled=%s, threshold=%.1f, "
+                "simple=%s, complex=%s",
+                tier_config.enabled,
+                tier_config.complexity_threshold,
+                tier_config.models.simple,
+                tier_config.models.complex,
+            )
+        except Exception as e:
+            logger.warning("Failed to initialize tiered routing, disabled: %s", e)
+            self._tier_router = None
+
+    def _apply_tiered_routing(
+        self, messages: list, provider: str, current_model: str
+    ) -> str:
+        """
+        Issue #748: Apply tiered model routing based on request complexity.
+
+        Only applies to local providers (ollama). Routes simple requests to
+        lightweight models and complex requests to capable models.
+
+        Args:
+            messages: List of message dicts to analyze
+            provider: Current provider name
+            current_model: Currently selected model name
+
+        Returns:
+            Model name to use (may be changed by tier routing)
+        """
+        # Only apply to local providers
+        if provider not in ("ollama", "vllm", "local"):
+            return current_model
+
+        # Skip if tier router not initialized or disabled
+        if not self._tier_router or not self._tier_router.enabled:
+            return current_model
+
+        try:
+            routed_model, complexity_result = self._tier_router.route(
+                messages, current_model
+            )
+
+            if routed_model != current_model:
+                logger.info(
+                    "Tiered routing applied: %s -> %s (score=%.1f, tier=%s)",
+                    current_model,
+                    routed_model,
+                    complexity_result.score,
+                    complexity_result.tier,
+                )
+
+            return routed_model
+
+        except Exception as e:
+            logger.warning("Tiered routing failed, using default model: %s", e)
+            return current_model
 
     def _get_provider_type_enum(self, provider: str) -> ProviderType:
         """Convert provider string to ProviderType enum."""
@@ -642,6 +714,9 @@ class LLMInterface:
         """
         provider, model_name = self._determine_provider_and_model(llm_type, **kwargs)
         messages = self._setup_system_prompt(messages, llm_type)
+
+        # Issue #748: Apply tiered model routing for local providers
+        model_name = self._apply_tiered_routing(messages, provider, model_name)
 
         # Issue #717: Apply prompt compression optimization
         provider_type = self._get_provider_type_enum(provider)
@@ -1029,6 +1104,9 @@ class LLMInterface:
                 ProviderType.OLLAMA
             ),
         }
+        # Issue #748: Include tiered routing metrics
+        if self._tier_router:
+            metrics["tiered_routing"] = self._tier_router.get_metrics()
         return metrics
 
     def get_cache_metrics(self) -> Dict[str, Any]:
