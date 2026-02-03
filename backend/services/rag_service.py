@@ -13,14 +13,10 @@ import asyncio
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from backend.type_defs.common import Metadata
 from backend.services.knowledge_base_adapter import KnowledgeBaseAdapter
 from backend.services.rag_config import RAGConfig, get_rag_config
-from src.advanced_rag_optimizer import (
-    AdvancedRAGOptimizer,
-    RAGMetrics,
-    SearchResult,
-)
+from backend.type_defs.common import Metadata
+from src.advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
 from src.utils.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_service")
@@ -99,7 +95,11 @@ class RAGService:
             return False
 
     def _build_cache_key(
-        self, query: str, max_results: int, enable_reranking: bool, categories: Optional[List[str]]
+        self,
+        query: str,
+        max_results: int,
+        enable_reranking: bool,
+        categories: Optional[List[str]],
     ) -> str:
         """Build cache key for search (Issue #665: extracted helper)."""
         categories_key = ",".join(sorted(categories)) if categories else "all"
@@ -151,7 +151,9 @@ class RAGService:
             return await self._fallback_basic_search(query, max_results, categories)
 
         # Check cache (Issue #665: uses helper)
-        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
+        cache_key = self._build_cache_key(
+            query, max_results, enable_reranking, categories
+        )
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
             logger.debug("Cache hit for query: '%s...'", query[:50])
@@ -175,14 +177,20 @@ class RAGService:
             if categories:
                 results = self._filter_by_categories(results, categories)[:max_results]
                 metrics.final_results_count = len(results)
-                logger.info("Category filter applied: %s, results: %d", categories, len(results))
+                logger.info(
+                    "Category filter applied: %s, results: %d", categories, len(results)
+                )
 
             await self._add_to_cache(cache_key, (results, metrics))
-            logger.info(f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s")
+            logger.info(
+                f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
+            )
             return results, metrics
 
         except asyncio.TimeoutError:
-            logger.error(f"Advanced search timed out after {timeout_seconds}s, using fallback")
+            logger.error(
+                f"Advanced search timed out after {timeout_seconds}s, using fallback"
+            )
             if self.config.fallback_to_basic_search:
                 return await self._fallback_basic_search(query, max_results)
             raise
@@ -335,7 +343,9 @@ class RAGService:
 
         logger.debug(
             "Category filter: %d/%d results matched categories %s",
-            len(filtered), len(results), categories
+            len(filtered),
+            len(results),
+            categories,
         )
         return filtered
 
@@ -405,9 +415,9 @@ class RAGService:
         # CRITICAL: Protect cache access with lock to prevent race conditions
         async with self._cache_lock:
             if cache_key in self._cache:
-                results, timestamp = self._cache[cache_key]
+                cached_results, timestamp = self._cache[cache_key]
                 if time.time() - timestamp < self.config.cache_ttl_seconds:
-                    return results, RAGMetrics()  # Return cached results
+                    return cached_results, RAGMetrics()  # Return cached results
                 else:
                     # Remove expired entry
                     del self._cache[cache_key]
@@ -416,10 +426,17 @@ class RAGService:
     async def _add_to_cache(
         self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]
     ):
-        """Add results to cache with timestamp."""
+        """Add results to cache with timestamp.
+
+        Args:
+            cache_key: Cache key string
+            results: Tuple of (search_results_list, metrics)
+        """
         # CRITICAL: Protect cache modifications with lock to prevent race conditions
+        # Store only the search results list, not the full tuple
+        search_results, _ = results
         async with self._cache_lock:
-            self._cache[cache_key] = (results, time.time())
+            self._cache[cache_key] = (search_results, time.time())
 
             # Simple cache size management (LRU-like)
             if len(self._cache) > 100:
