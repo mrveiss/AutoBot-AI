@@ -147,69 +147,76 @@ def _separate_by_category(problems: List[Dict]) -> Dict[str, List[Dict]]:
     return by_category
 
 
+def _format_issue_type_subsection(issue_type: str, issues: List[Dict]) -> List[str]:
+    """
+    Format a single issue type subsection with sorted issues.
+
+    Issue #620: Extracted from _generate_category_section.
+    """
+    display_type = issue_type.replace("_", " ").title()
+    lines = [f"#### {display_type} ({len(issues)})", ""]
+
+    sorted_issues = sorted(
+        issues,
+        key=lambda x: (
+            x.get("file_path", ""),
+            int(x.get("line_number") or x.get("line") or 0),
+        ),
+    )
+
+    for problem in sorted_issues:
+        lines.append(_format_problem_entry(problem))
+    lines.append("")
+    return lines
+
+
+def _format_severity_subsection(
+    severity: str, severity_issues: Dict[str, List[Dict]]
+) -> List[str]:
+    """
+    Format a severity subsection with all its issue types.
+
+    Issue #620: Extracted from _generate_category_section.
+    """
+    emoji = _get_severity_emoji(severity)
+    severity_total = sum(len(issues) for issues in severity_issues.values())
+
+    lines = [
+        f"### {emoji} {severity.capitalize()} Severity ({severity_total} issues)",
+        "",
+    ]
+
+    for issue_type in sorted(severity_issues.keys()):
+        lines.extend(
+            _format_issue_type_subsection(issue_type, severity_issues[issue_type])
+        )
+
+    return lines
+
+
 def _generate_category_section(
     problems: List[Dict],
     category: str,
     section_title: str,
     note: Optional[str] = None,
 ) -> List[str]:
-    """Generate markdown section for a category of problems."""
+    """
+    Generate markdown section for a category of problems.
+
+    Issue #620: Refactored to use extracted helpers.
+    """
     if not problems:
         return []
 
-    lines = [
-        f"## {section_title}",
-        "",
-    ]
-
+    lines = [f"## {section_title}", ""]
     if note:
-        lines.extend(
-            [
-                f"> {note}",
-                "",
-            ]
-        )
+        lines.extend([f"> {note}", ""])
 
     grouped = _group_problems(problems)
 
     for severity in ["high", "medium", "low", "info", "hint"]:
-        if severity not in grouped:
-            continue
-
-        emoji = _get_severity_emoji(severity)
-        severity_issues = grouped[severity]
-        severity_total = sum(len(issues) for issues in severity_issues.values())
-
-        lines.extend(
-            [
-                f"### {emoji} {severity.capitalize()} Severity ({severity_total} issues)",
-                "",
-            ]
-        )
-
-        for issue_type in sorted(severity_issues.keys()):
-            issues = severity_issues[issue_type]
-            display_type = issue_type.replace("_", " ").title()
-
-            lines.extend(
-                [
-                    f"#### {display_type} ({len(issues)})",
-                    "",
-                ]
-            )
-
-            sorted_issues = sorted(
-                issues,
-                key=lambda x: (
-                    x.get("file_path", ""),
-                    int(x.get("line_number") or x.get("line") or 0),
-                ),
-            )
-
-            for problem in sorted_issues:
-                lines.append(_format_problem_entry(problem))
-
-            lines.append("")
+        if severity in grouped:
+            lines.extend(_format_severity_subsection(severity, grouped[severity]))
 
     return lines
 
@@ -1294,6 +1301,48 @@ def _fetch_problems_from_chromadb() -> List[Dict]:
     return problems
 
 
+def _build_analysis_task_list(
+    include_bug_prediction: bool,
+    include_api_analysis: bool,
+    include_duplicate_analysis: bool,
+    include_cross_language_analysis: bool,
+    include_pattern_analysis: bool,
+    use_semantic: bool,
+) -> List[Tuple[str, Any]]:
+    """
+    Build list of analysis tasks to run based on flags.
+
+    Issue #620: Extracted from _run_parallel_analyses.
+    """
+    tasks = []
+    if include_bug_prediction:
+        tasks.append(("bug_prediction", _get_bug_prediction(use_semantic=use_semantic)))
+    if include_api_analysis:
+        tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
+    if include_duplicate_analysis:
+        tasks.append(("duplicate", _get_duplicate_analysis()))
+    if include_cross_language_analysis:
+        tasks.append(("cross_language", _get_cross_language_analysis()))
+    if include_pattern_analysis:
+        tasks.append(("pattern_analysis", _get_pattern_analysis()))
+    return tasks
+
+
+def _get_empty_analysis_result() -> Dict[str, Optional[object]]:
+    """
+    Return empty analysis result dictionary.
+
+    Issue #620: Extracted from _run_parallel_analyses.
+    """
+    return {
+        "bug_prediction": None,
+        "api_endpoint": None,
+        "duplicate": None,
+        "cross_language": None,
+        "pattern_analysis": None,
+    }
+
+
 async def _run_parallel_analyses(
     include_bug_prediction: bool,
     include_api_analysis: bool,
@@ -1305,48 +1354,24 @@ async def _run_parallel_analyses(
     """
     Run multiple code analyses in parallel.
 
-    Args:
-        include_bug_prediction: Whether to run bug prediction
-        include_api_analysis: Whether to run API endpoint analysis
-        include_duplicate_analysis: Whether to run duplicate code analysis
-        include_cross_language_analysis: Whether to run cross-language analysis
-        include_pattern_analysis: Whether to run pattern analysis
-        use_semantic: Enable LLM-based semantic analysis for bug prediction
-
-    Returns:
-        Dict with keys: bug_prediction, api_endpoint, duplicate, cross_language, pattern_analysis
+    Issue #620: Refactored to use extracted helpers.
     """
-    analysis_tasks = []
-
-    if include_bug_prediction:
-        analysis_tasks.append(
-            ("bug_prediction", _get_bug_prediction(use_semantic=use_semantic))
-        )
-    if include_api_analysis:
-        analysis_tasks.append(("api_endpoint", _get_api_endpoint_analysis()))
-    if include_duplicate_analysis:
-        analysis_tasks.append(("duplicate", _get_duplicate_analysis()))
-    if include_cross_language_analysis:
-        analysis_tasks.append(("cross_language", _get_cross_language_analysis()))
-    if include_pattern_analysis:
-        analysis_tasks.append(("pattern_analysis", _get_pattern_analysis()))
-
-    # Initialize results
-    result = {
-        "bug_prediction": None,
-        "api_endpoint": None,
-        "duplicate": None,
-        "cross_language": None,
-        "pattern_analysis": None,
-    }
+    analysis_tasks = _build_analysis_task_list(
+        include_bug_prediction,
+        include_api_analysis,
+        include_duplicate_analysis,
+        include_cross_language_analysis,
+        include_pattern_analysis,
+        use_semantic,
+    )
+    result = _get_empty_analysis_result()
 
     if not analysis_tasks:
         return result
 
     # Run all analyses in parallel with individual error handling
     results = await asyncio.gather(
-        *[task for _, task in analysis_tasks],
-        return_exceptions=True,
+        *[task for _, task in analysis_tasks], return_exceptions=True
     )
 
     # Map results back to dict
@@ -1360,28 +1385,14 @@ async def _run_parallel_analyses(
     return result
 
 
-def _generate_empty_report_with_analyses(
-    api_endpoint_analysis: Optional[APIEndpointAnalysis],
-    duplicate_analysis: Optional[DuplicateAnalysis],
-    cross_language_analysis: Optional[CrossLanguageAnalysis],
-    pattern_analysis: Optional[PatternAnalysisReport],
-    bug_prediction: Optional[PredictionResult],
-) -> str:
+def _build_empty_report_header() -> List[str]:
     """
-    Generate report when no code issues are detected but analyses are available.
+    Build header for empty report (no code issues detected).
 
-    Args:
-        api_endpoint_analysis: API endpoint analysis result
-        duplicate_analysis: Duplicate code analysis result
-        cross_language_analysis: Cross-language pattern analysis result
-        pattern_analysis: Code pattern analysis result
-        bug_prediction: Bug prediction analysis result
-
-    Returns:
-        Markdown formatted report string
+    Issue #620: Extracted from _generate_empty_report_with_analyses.
     """
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    lines = [
+    return [
         "# Code Analysis Report",
         "",
         f"**Generated:** {now}",
@@ -1393,34 +1404,61 @@ def _generate_empty_report_with_analyses(
         "",
     ]
 
-    # Add API endpoint analysis (Issue #527)
-    if api_endpoint_analysis:
-        lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
 
-    # Add duplicate code analysis (Issue #528)
-    if duplicate_analysis and duplicate_analysis.total_duplicates > 0:
-        lines.extend(_generate_duplicate_code_section(duplicate_analysis))
+def _check_has_analyses(
+    api_endpoint_analysis: Optional[APIEndpointAnalysis],
+    duplicate_analysis: Optional[DuplicateAnalysis],
+    cross_language_analysis: Optional[CrossLanguageAnalysis],
+    pattern_analysis: Optional[PatternAnalysisReport],
+    bug_prediction: Optional[PredictionResult],
+) -> bool:
+    """
+    Check if any analyses have meaningful results.
 
-    # Add cross-language pattern analysis (Issue #244)
-    if cross_language_analysis and cross_language_analysis.total_patterns > 0:
-        lines.extend(_generate_cross_language_section(cross_language_analysis))
-
-    # Add code pattern analysis (Issue #208)
-    if pattern_analysis and pattern_analysis.total_patterns > 0:
-        lines.extend(_generate_pattern_analysis_section(pattern_analysis))
-
-    # Add bug prediction (Issue #505)
-    if bug_prediction and bug_prediction.analyzed_files > 0:
-        lines.extend(_generate_bug_risk_section(bug_prediction))
-
-    has_analyses = (
+    Issue #620: Extracted from _generate_empty_report_with_analyses.
+    """
+    return bool(
         api_endpoint_analysis
         or (duplicate_analysis and duplicate_analysis.total_duplicates > 0)
         or (cross_language_analysis and cross_language_analysis.total_patterns > 0)
         or (pattern_analysis and pattern_analysis.total_patterns > 0)
         or (bug_prediction and bug_prediction.analyzed_files > 0)
     )
-    if not has_analyses:
+
+
+def _generate_empty_report_with_analyses(
+    api_endpoint_analysis: Optional[APIEndpointAnalysis],
+    duplicate_analysis: Optional[DuplicateAnalysis],
+    cross_language_analysis: Optional[CrossLanguageAnalysis],
+    pattern_analysis: Optional[PatternAnalysisReport],
+    bug_prediction: Optional[PredictionResult],
+) -> str:
+    """
+    Generate report when no code issues are detected but analyses are available.
+
+    Issue #620: Refactored to use extracted helpers.
+    """
+    lines = _build_empty_report_header()
+
+    # Add analysis sections (Issue #620: use extracted helper with condition checks)
+    if api_endpoint_analysis:
+        lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
+    if duplicate_analysis and duplicate_analysis.total_duplicates > 0:
+        lines.extend(_generate_duplicate_code_section(duplicate_analysis))
+    if cross_language_analysis and cross_language_analysis.total_patterns > 0:
+        lines.extend(_generate_cross_language_section(cross_language_analysis))
+    if pattern_analysis and pattern_analysis.total_patterns > 0:
+        lines.extend(_generate_pattern_analysis_section(pattern_analysis))
+    if bug_prediction and bug_prediction.analyzed_files > 0:
+        lines.extend(_generate_bug_risk_section(bug_prediction))
+
+    if not _check_has_analyses(
+        api_endpoint_analysis,
+        duplicate_analysis,
+        cross_language_analysis,
+        pattern_analysis,
+        bug_prediction,
+    ):
         lines.append('Run "Index Codebase" first to analyze the code.')
         lines.append("")
 
@@ -1893,39 +1931,13 @@ def _generate_markdown_report(
     pattern_analysis: Optional[PatternAnalysisReport] = None,
 ) -> str:
     """
-    Generate a Markdown report from problems list (Issue #398: refactored, Issue #505: bug prediction).
+    Generate a Markdown report from problems list.
 
-    Problems are separated by file category:
-    - Code/Config issues are shown first (priority - need to fix)
-    - Backup/Archive issues shown separately (informational - may not need to fix)
-    - Docs/Logs issues shown at the end (usually not critical)
+    Issue #398: Initial refactoring. Issue #505: Bug prediction.
+    Issue #620: Refactored to use _build_analysis_sections helper.
 
-    Bug prediction section added (Issue #505):
-    - High-risk files summary
-    - Risk distribution
-    - Correlation with detected issues
-
-    API endpoint analysis added (Issue #527):
-    - Endpoint coverage
-    - Orphaned endpoints
-    - Missing endpoints
-
-    Duplicate code analysis added (Issue #528):
-    - Duplicate code detection
-    - Similarity grouping
-    - Recommendations
-
-    Cross-language pattern analysis added (Issue #244):
-    - DTO/type mismatches
-    - API contract mismatches
-    - Validation duplications
-    - Semantic pattern matches
-
-    Code pattern analysis added (Issue #208):
-    - Duplicate patterns
-    - Regex optimization opportunities
-    - Complexity hotspots
-    - Refactoring suggestions
+    Problems are separated by file category (code, backup, archive, docs/logs).
+    Includes: API endpoint, duplicate code, cross-language, pattern, and bug prediction analyses.
     """
     path_info = analyzed_path or "Unknown"
     by_category = _separate_by_category(problems)
@@ -1934,29 +1946,18 @@ def _generate_markdown_report(
     counts = _calculate_category_counts(by_category)
     severity_counts, type_counts = _calculate_severity_and_type_counts(problems)
 
-    # Build report sections
+    # Build report sections using extracted helpers (Issue #620)
     lines = _build_report_header(path_info, len(problems), counts)
     lines.extend(_build_summary_section(severity_counts, type_counts))
-
-    # Add API endpoint analysis section (Issue #527)
-    if api_endpoint_analysis:
-        lines.extend(_generate_api_endpoint_section(api_endpoint_analysis))
-
-    # Add duplicate code analysis section (Issue #528)
-    if duplicate_analysis:
-        lines.extend(_generate_duplicate_code_section(duplicate_analysis))
-
-    # Add cross-language pattern analysis section (Issue #244)
-    if cross_language_analysis:
-        lines.extend(_generate_cross_language_section(cross_language_analysis))
-
-    # Add code pattern analysis section (Issue #208)
-    if pattern_analysis:
-        lines.extend(_generate_pattern_analysis_section(pattern_analysis))
-
-    # Add bug risk section if prediction available (Issue #505, #665: uses extracted helper)
+    lines.extend(
+        _build_analysis_sections(
+            api_endpoint_analysis,
+            duplicate_analysis,
+            cross_language_analysis,
+            pattern_analysis,
+        )
+    )
     lines.extend(_build_bug_prediction_section(bug_prediction, problems))
-
     lines.extend(_build_issue_sections(by_category))
     lines.append("*Report generated by AutoBot Code Analysis*")
 

@@ -227,6 +227,74 @@ class SystemValidator:
                 f"Knowledge base integration error: {str(e)}",
             )
 
+    def _validate_cache_initialization(
+        self, component: str, cache, init_time: float
+    ) -> bool:
+        """
+        Validate cache system initialization (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            cache: Cache instance or None
+            init_time: Initialization time in milliseconds
+
+        Returns:
+            True if cache initialized successfully, False otherwise
+        """
+        if not cache:
+            self._add_result(
+                component,
+                "Cache Initialization",
+                ValidationSeverity.CRITICAL,
+                False,
+                "Failed to initialize cache system",
+            )
+            return False
+
+        self._add_result(
+            component,
+            "Cache Initialization",
+            ValidationSeverity.SUCCESS,
+            True,
+            "Cache system initialized successfully",
+            {"init_time_ms": init_time},
+            init_time,
+        )
+        return True
+
+    async def _validate_cache_operations(self, component: str, cache) -> None:
+        """
+        Validate cache store/retrieve operations (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            cache: Cache instance to test
+        """
+        start_time = time.time()
+        test_results = [{"test": "data", "score": 0.95}]
+        cache_success = await cache.cache_results("validation_test", 5, test_results)
+        retrieved_results = await cache.get_cached_results("validation_test", 5)
+        cache_time = (time.time() - start_time) * 1000
+
+        if cache_success and retrieved_results:
+            self._add_result(
+                component,
+                "Cache Operations",
+                ValidationSeverity.SUCCESS,
+                True,
+                "Cache store/retrieve operations working",
+                {"cache_time_ms": cache_time},
+                cache_time,
+            )
+        else:
+            self._add_result(
+                component,
+                "Cache Operations",
+                ValidationSeverity.CRITICAL,
+                False,
+                "Cache operations failed",
+            )
+
     async def validate_knowledge_base_caching(self) -> List[ValidationResult]:
         """Validate knowledge base caching system"""
         component = "Knowledge Base Cache"
@@ -234,58 +302,16 @@ class SystemValidator:
         try:
             from src.utils.advanced_cache_manager import get_knowledge_cache
 
-            # Test 1: Cache system initialization
+            # Test 1: Cache system initialization (Issue #620: uses helper)
             start_time = time.time()
             cache = get_knowledge_cache()
             init_time = (time.time() - start_time) * 1000
 
-            if not cache:
-                self._add_result(
-                    component,
-                    "Cache Initialization",
-                    ValidationSeverity.CRITICAL,
-                    False,
-                    "Failed to initialize cache system",
-                )
+            if not self._validate_cache_initialization(component, cache, init_time):
                 return self._get_component_results(component)
 
-            self._add_result(
-                component,
-                "Cache Initialization",
-                ValidationSeverity.SUCCESS,
-                True,
-                "Cache system initialized successfully",
-                {"init_time_ms": init_time},
-                init_time,
-            )
-
-            # Test 2: Cache functionality
-            start_time = time.time()
-            test_results = [{"test": "data", "score": 0.95}]
-            cache_success = await cache.cache_results(
-                "validation_test", 5, test_results
-            )
-            retrieved_results = await cache.get_cached_results("validation_test", 5)
-            cache_time = (time.time() - start_time) * 1000
-
-            if cache_success and retrieved_results:
-                self._add_result(
-                    component,
-                    "Cache Operations",
-                    ValidationSeverity.SUCCESS,
-                    True,
-                    "Cache store/retrieve operations working",
-                    {"cache_time_ms": cache_time},
-                    cache_time,
-                )
-            else:
-                self._add_result(
-                    component,
-                    "Cache Operations",
-                    ValidationSeverity.CRITICAL,
-                    False,
-                    "Cache operations failed",
-                )
+            # Test 2: Cache functionality (Issue #620: uses helper)
+            await self._validate_cache_operations(component, cache)
 
             # Test 3: Cache statistics (uses helper)
             await self._validate_cache_stats(component, cache)
@@ -680,10 +706,59 @@ class SystemValidator:
                 f"Optimization suggestions error: {str(e)}",
             )
 
+    def _record_endpoint_error_response(
+        self, component: str, name: str, status: int, response_time: float
+    ) -> None:
+        """
+        Record an API endpoint error response (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            name: Endpoint name
+            status: HTTP status code
+            response_time: Response time in milliseconds
+        """
+        self._add_result(
+            component,
+            name,
+            ValidationSeverity.WARNING,
+            False,
+            f"API endpoint error: HTTP {status}",
+            {"response_time_ms": response_time, "status_code": status},
+        )
+
+    async def _record_endpoint_success(
+        self, component: str, name: str, response, response_time: float
+    ) -> None:
+        """
+        Record a successful API endpoint response (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            name: Endpoint name
+            response: aiohttp response object
+            response_time: Response time in milliseconds
+        """
+        data = await response.json()
+        severity = self._get_severity_for_response_time(response_time)
+        self._add_result(
+            component,
+            name,
+            severity,
+            True,
+            f"API endpoint responding: {response.status}",
+            {
+                "response_time_ms": response_time,
+                "status_code": response.status,
+                "response_size": len(str(data)),
+            },
+            response_time,
+        )
+
     async def _validate_single_endpoint(
         self, component: str, http_client, method: str, url: str, name: str
     ) -> None:
-        """Validate a single API endpoint (Issue #333 - extracted helper)."""
+        """Validate a single API endpoint (Issue #333, #620 - uses extracted helpers)."""
         start_time = time.time()
         try:
             if method != "GET":
@@ -695,33 +770,13 @@ class SystemValidator:
                 response_time = (time.time() - start_time) * 1000
 
                 if response.status != 200:
-                    self._add_result(
-                        component,
-                        name,
-                        ValidationSeverity.WARNING,
-                        False,
-                        f"API endpoint error: HTTP {response.status}",
-                        {
-                            "response_time_ms": response_time,
-                            "status_code": response.status,
-                        },
+                    self._record_endpoint_error_response(
+                        component, name, response.status, response_time
                     )
                     return
 
-                data = await response.json()
-                severity = self._get_severity_for_response_time(response_time)
-                self._add_result(
-                    component,
-                    name,
-                    severity,
-                    True,
-                    f"API endpoint responding: {response.status}",
-                    {
-                        "response_time_ms": response_time,
-                        "status_code": response.status,
-                        "response_size": len(str(data)),
-                    },
-                    response_time,
+                await self._record_endpoint_success(
+                    component, name, response, response_time
                 )
 
         except asyncio.TimeoutError:
@@ -891,69 +946,94 @@ class SystemValidator:
                     f"{service_name} service port inaccessible: {host}:{port}",
                 )
 
+    async def _init_hybrid_search_engine(self, component: str):
+        """
+        Initialize KB and hybrid search engine (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+
+        Returns:
+            Tuple of (hybrid_engine, init_time_ms) or (None, 0) if failed
+        """
+        from src.knowledge_base import KnowledgeBase
+        from src.utils.hybrid_search import get_hybrid_search_engine
+
+        start_time = time.time()
+        kb = KnowledgeBase()
+        await kb.ainit()
+
+        if not kb.index:
+            self._add_result(
+                component,
+                "Prerequisites",
+                ValidationSeverity.WARNING,
+                False,
+                "Knowledge base not available for hybrid search testing",
+            )
+            return None, 0
+
+        hybrid_engine = get_hybrid_search_engine(kb)
+        init_time = (time.time() - start_time) * 1000
+
+        self._add_result(
+            component,
+            "Engine Initialization",
+            ValidationSeverity.SUCCESS,
+            True,
+            "Hybrid search engine initialized",
+            {"init_time_ms": init_time},
+            init_time,
+        )
+        return hybrid_engine, init_time
+
+    def _validate_keyword_extraction(self, component: str, hybrid_engine) -> None:
+        """
+        Validate keyword extraction for test queries (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            hybrid_engine: Hybrid search engine instance
+        """
+        test_queries = [
+            "How to implement machine learning algorithms in Python?",
+            "Database design best practices for web applications",
+            "Docker container orchestration with Kubernetes",
+        ]
+
+        for query in test_queries:
+            keywords = hybrid_engine.extract_keywords(query)
+            if keywords and len(keywords) >= 2:
+                self._add_result(
+                    component,
+                    "Keyword Extraction",
+                    ValidationSeverity.SUCCESS,
+                    True,
+                    f"Keywords extracted: {len(keywords)} from query",
+                    {"query": query[:50] + "...", "keywords": keywords},
+                )
+            else:
+                self._add_result(
+                    component,
+                    "Keyword Extraction",
+                    ValidationSeverity.WARNING,
+                    False,
+                    f"Poor keyword extraction: {len(keywords) if keywords else 0} keywords",
+                    {"query": query[:50] + "...", "keywords": keywords},
+                )
+
     async def validate_hybrid_search(self) -> List[ValidationResult]:
         """Validate hybrid search functionality"""
         component = "Hybrid Search"
 
         try:
-            from src.knowledge_base import KnowledgeBase
-            from src.utils.hybrid_search import get_hybrid_search_engine
-
-            # Test 1: Hybrid search engine initialization
-            start_time = time.time()
-            kb = KnowledgeBase()
-            await kb.ainit()
-
-            if not kb.index:
-                self._add_result(
-                    component,
-                    "Prerequisites",
-                    ValidationSeverity.WARNING,
-                    False,
-                    "Knowledge base not available for hybrid search testing",
-                )
+            # Test 1: Hybrid search engine initialization (Issue #620: uses helper)
+            hybrid_engine, _ = await self._init_hybrid_search_engine(component)
+            if not hybrid_engine:
                 return self._get_component_results(component)
 
-            hybrid_engine = get_hybrid_search_engine(kb)
-            init_time = (time.time() - start_time) * 1000
-
-            self._add_result(
-                component,
-                "Engine Initialization",
-                ValidationSeverity.SUCCESS,
-                True,
-                "Hybrid search engine initialized",
-                {"init_time_ms": init_time},
-                init_time,
-            )
-
-            # Test 2: Keyword extraction
-            test_queries = [
-                "How to implement machine learning algorithms in Python?",
-                "Database design best practices for web applications",
-                "Docker container orchestration with Kubernetes",
-            ]
-
-            for query in test_queries:
-                keywords = hybrid_engine.extract_keywords(query)
-                if keywords and len(keywords) >= 2:
-                    self._add_result(
-                        component,
-                        "Keyword Extraction",
-                        ValidationSeverity.SUCCESS,
-                        True,
-                        f"Keywords extracted: {len(keywords)} from query",
-                        {"query": query[:50] + "...", "keywords": keywords},
-                    )
-                else:
-                    self._add_result(
-                        component,
-                        "Keyword Extraction",
-                        ValidationSeverity.WARNING,
-                        False,
-                        f"Poor keyword extraction: {len(keywords) if keywords else 0} keywords",
-                        {"query": query[:50] + "...", "keywords": keywords},
-                    )
+            # Test 2: Keyword extraction (Issue #620: uses helper)
+            self._validate_keyword_extraction(component, hybrid_engine)
 
             # Test 3: Hybrid search execution (uses helper)
             start_time = time.time()
@@ -1036,6 +1116,44 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
+    def _validate_optimizer_init(
+        self, component: str, optimizer, init_time: float
+    ) -> None:
+        """
+        Record optimizer initialization result (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            optimizer: Model optimizer instance
+            init_time: Initialization time in milliseconds
+        """
+        self._add_result(
+            component,
+            "Optimizer Initialization",
+            ValidationSeverity.SUCCESS,
+            True,
+            "Model optimizer initialized",
+            {"init_time_ms": init_time},
+            init_time,
+        )
+
+    async def _validate_model_discovery(self, component: str, optimizer) -> bool:
+        """
+        Validate model discovery and return availability (Issue #620: extracted helper).
+
+        Args:
+            component: Component name for result logging
+            optimizer: Model optimizer instance
+
+        Returns:
+            True if models are available, False otherwise
+        """
+        start_time = time.time()
+        models = await optimizer.refresh_available_models()
+        discovery_time = (time.time() - start_time) * 1000
+
+        return self._validate_model_discovery_result(component, models, discovery_time)
+
     async def validate_model_optimization(self) -> List[ValidationResult]:
         """Validate model optimization system"""
         component = "Model Optimization"
@@ -1047,30 +1165,14 @@ class SystemValidator:
                 get_model_optimizer,
             )
 
-            # Test 1: Model optimizer initialization
+            # Test 1: Model optimizer initialization (Issue #620: uses helper)
             start_time = time.time()
             optimizer = get_model_optimizer()
             init_time = (time.time() - start_time) * 1000
+            self._validate_optimizer_init(component, optimizer, init_time)
 
-            self._add_result(
-                component,
-                "Optimizer Initialization",
-                ValidationSeverity.SUCCESS,
-                True,
-                "Model optimizer initialized",
-                {"init_time_ms": init_time},
-                init_time,
-            )
-
-            # Test 2: Model discovery (uses helper)
-            start_time = time.time()
-            models = await optimizer.refresh_available_models()
-            discovery_time = (time.time() - start_time) * 1000
-
-            models_available = self._validate_model_discovery_result(
-                component, models, discovery_time
-            )
-            if not models_available:
+            # Test 2: Model discovery (Issue #620: uses helper)
+            if not await self._validate_model_discovery(component, optimizer):
                 return self._get_component_results(component)
 
             # Test 3: Task complexity analysis (uses helper)

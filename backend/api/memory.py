@@ -243,6 +243,128 @@ def _parse_tag_list(tags: Optional[str]) -> Optional[List[str]]:
     return [tag.strip() for tag in tags.split(",") if tag.strip()]
 
 
+def _build_delete_entity_response(
+    request_id: str,
+    entity_id: str,
+    entity_name: str,
+    cascade_relations: bool,
+) -> JSONResponse:
+    """
+    Build success response for entity deletion.
+
+    Issue #620: Extracted from delete_entity to reduce function length.
+
+    Args:
+        request_id: Request tracking ID
+        entity_id: Deleted entity UUID
+        entity_name: Deleted entity name
+        cascade_relations: Whether relations were cascaded
+
+    Returns:
+        JSONResponse with deletion confirmation
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "entity_id": entity_id,
+                "entity_name": entity_name,
+                "deleted": True,
+                "cascade_relations": cascade_relations,
+            },
+            "message": "Entity deleted successfully",
+            "request_id": request_id,
+        },
+    )
+
+
+def _build_delete_relation_response(
+    request_id: str,
+    from_entity: str,
+    to_entity: str,
+    relation_type: str,
+) -> JSONResponse:
+    """
+    Build success response for relation deletion.
+
+    Issue #620: Extracted from delete_relation to reduce function length.
+
+    Args:
+        request_id: Request tracking ID
+        from_entity: Source entity name
+        to_entity: Target entity name
+        relation_type: Type of deleted relation
+
+    Returns:
+        JSONResponse with deletion confirmation
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "from_entity": from_entity,
+                "to_entity": to_entity,
+                "relation_type": relation_type,
+                "deleted": True,
+            },
+            "message": "Relation deleted successfully",
+            "request_id": request_id,
+        },
+    )
+
+
+async def _get_entity_graph_for_id(
+    memory_graph: AutoBotMemoryGraph,
+    entity_id: str,
+    max_depth: int,
+) -> Dict:
+    """
+    Get graph data for a specific entity.
+
+    Issue #620: Extracted from get_entity_graph to reduce function length.
+
+    Args:
+        memory_graph: Memory graph instance
+        entity_id: Root entity UUID
+        max_depth: Graph traversal depth
+
+    Returns:
+        Dict with entity graph data
+
+    Raises:
+        HTTPException: If entity not found
+    """
+    entity = await memory_graph.get_entity(entity_id=entity_id, include_relations=True)
+
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity not found: {entity_id}")
+
+    return {"root_entity": entity, "max_depth": max_depth}
+
+
+async def _get_entity_graph_sample(memory_graph: AutoBotMemoryGraph) -> Dict:
+    """
+    Get a sample of entities for graph visualization.
+
+    Issue #620: Extracted from get_entity_graph to reduce function length.
+
+    Args:
+        memory_graph: Memory graph instance
+
+    Returns:
+        Dict with sample entity graph data
+    """
+    entities = await memory_graph.search_entities(query="*", limit=50)
+
+    return {
+        "entities": entities[:20],  # Limit to 20 for graph visualization
+        "total_available": len(entities),
+        "note": "Showing sample of entities. Provide entity_id for specific graph.",
+    }
+
+
 # ====================================================================
 # Entity Management Endpoints
 # ====================================================================
@@ -923,8 +1045,9 @@ async def delete_entity(
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
-    Delete entity and optionally its relations
+    Delete entity and optionally its relations.
 
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
 
     Args:
@@ -954,20 +1077,8 @@ async def delete_entity(
             )
 
         logger.info("[%s] Entity deleted: %s", request_id, entity_name)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "entity_id": entity_id,
-                    "entity_name": entity_name,
-                    "deleted": True,
-                    "cascade_relations": cascade_relations,
-                },
-                "message": "Entity deleted successfully",
-                "request_id": request_id,
-            },
+        return _build_delete_entity_response(
+            request_id, entity_id, entity_name, cascade_relations
         )
 
     except HTTPException:
@@ -1148,8 +1259,9 @@ async def delete_relation(
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
-    Delete specific relation between entities
+    Delete specific relation between entities.
 
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
 
     Args:
@@ -1169,7 +1281,11 @@ async def delete_relation(
 
     try:
         logger.info(
-            f"[{request_id}] Deleting relation: {from_entity} --[{relation_type}]--> {to_entity}"
+            "[%s] Deleting relation: %s --[%s]--> %s",
+            request_id,
+            from_entity,
+            relation_type,
+            to_entity,
         )
 
         deleted = await memory_graph.delete_relation(
@@ -1183,20 +1299,8 @@ async def delete_relation(
             )
 
         logger.info("[%s] Relation deleted successfully", request_id)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "from_entity": from_entity,
-                    "to_entity": to_entity,
-                    "relation_type": relation_type,
-                    "deleted": True,
-                },
-                "message": "Relation deleted successfully",
-                "request_id": request_id,
-            },
+        return _build_delete_relation_response(
+            request_id, from_entity, to_entity, relation_type
         )
 
     except HTTPException:
@@ -1299,8 +1403,9 @@ async def get_entity_graph(
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:
     """
-    Get entity graph with relations
+    Get entity graph with relations.
 
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
 
     Args:
@@ -1316,32 +1421,18 @@ async def get_entity_graph(
 
     try:
         logger.info(
-            f"[{request_id}] Building entity graph: root={entity_id}, depth={max_depth}"
+            "[%s] Building entity graph: root=%s, depth=%s",
+            request_id,
+            entity_id,
+            max_depth,
         )
 
         if entity_id:
-            # Get specific entity's graph
-            entity = await memory_graph.get_entity(
-                entity_id=entity_id, include_relations=True
+            graph_data = await _get_entity_graph_for_id(
+                memory_graph, entity_id, max_depth
             )
-
-            if entity is None:
-                raise HTTPException(
-                    status_code=404, detail=f"Entity not found: {entity_id}"
-                )
-
-            graph_data = {"root_entity": entity, "max_depth": max_depth}
         else:
-            # Return sample of recent entities
-            entities = await memory_graph.search_entities(query="*", limit=50)
-
-            graph_data = {
-                "entities": entities[:20],  # Limit to 20 for graph visualization
-                "total_available": len(entities),
-                "note": (
-                    "Showing sample of entities. Provide entity_id for specific graph."
-                ),
-            }
+            graph_data = await _get_entity_graph_sample(memory_graph)
 
         logger.info("[%s] Graph data prepared", request_id)
 

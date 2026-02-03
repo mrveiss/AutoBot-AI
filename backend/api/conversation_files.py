@@ -114,13 +114,14 @@ class FileTransferRequest(BaseModel):
     """Request model for file transfer operation"""
 
     file_ids: List[str] = Field(
-        ..., min_items=1, description="List of file IDs to transfer"
+        ..., min_length=1, description="List of file IDs to transfer"
     )
     destination: FileDestination = Field(
         ..., description="Transfer destination (kb or shared)"
     )
     target_path: Optional[str] = Field(None, description="Target path in destination")
-    copy: bool = Field(False, description="Copy instead of move")
+    # Renamed from 'copy' to avoid shadowing BaseModel.copy() method
+    copy_files: bool = Field(False, alias="copy", description="Copy instead of move")
     tags: Optional[List[str]] = Field(None, description="Tags for KB indexing")
 
     @field_validator("file_ids")
@@ -217,11 +218,102 @@ def get_chat_history_manager(request: Request):
     return request.app.state.chat_history_manager
 
 
+def _validate_user_role(user_data: Dict) -> str:
+    """
+    Validate user has an assigned role.
+
+    Issue #620: Extracted from validate_session_ownership for function length reduction.
+
+    Args:
+        user_data: Authenticated user data from auth middleware
+
+    Returns:
+        str: The user's role
+
+    Raises:
+        HTTPException: 403 if no role assigned
+    """
+    user_role = user_data.get("role")
+    if not user_role:
+        raise HTTPException(
+            status_code=403, detail="User role not assigned - access denied"
+        )
+    return user_role
+
+
+def _check_admin_access(user_data: Dict, session_id: str) -> bool:
+    """
+    Check if user has admin access to bypass ownership validation.
+
+    Issue #620: Extracted from validate_session_ownership for function length reduction.
+
+    Args:
+        user_data: Authenticated user data from auth middleware
+        session_id: Conversation session ID
+
+    Returns:
+        bool: True if admin access granted, False otherwise
+    """
+    user_role = user_data.get("role")
+    if user_role == "admin":
+        logger.debug(
+            "Admin user %s accessing session %s", user_data.get("username"), session_id
+        )
+        return True
+    return False
+
+
+async def _verify_session_owner(
+    chat_history_manager, session_id: str, current_user: str
+) -> bool:
+    """
+    Verify current user matches session owner.
+
+    Issue #620: Extracted from validate_session_ownership for function length reduction.
+
+    Args:
+        chat_history_manager: Chat history manager instance
+        session_id: Conversation session ID
+        current_user: Username of current user
+
+    Returns:
+        bool: True if ownership verified
+
+    Raises:
+        HTTPException: 403 if user doesn't own session
+    """
+    session_owner = await chat_history_manager.get_session_owner(session_id)
+
+    # If session has no owner set, allow access (legacy sessions)
+    if session_owner is None:
+        logger.info(
+            "Session %s has no owner - allowing access (legacy session)", session_id
+        )
+        return True
+
+    # Verify current user matches session owner
+    if session_owner != current_user:
+        logger.warning(
+            "Access denied: User %s attempted to access session %s owned by %s",
+            current_user,
+            session_id,
+            session_owner,
+        )
+        raise HTTPException(
+            status_code=403, detail="Access denied: You do not own this session"
+        )
+
+    logger.debug("User %s validated as owner of session %s", current_user, session_id)
+    return True
+
+
 async def validate_session_ownership(
     request: Request, session_id: str, user_data: Dict
 ) -> bool:
     """
-    Validate that the authenticated user owns the conversation session
+    Validate that the authenticated user owns the conversation session.
+
+    Issue #620: Refactored using Extract Method pattern.
 
     Args:
         request: FastAPI request object
@@ -232,49 +324,18 @@ async def validate_session_ownership(
         bool: True if user owns session, raises HTTPException otherwise
     """
     try:
+        _validate_user_role(user_data)
+
+        if _check_admin_access(user_data, session_id):
+            return True
+
         chat_history_manager = get_chat_history_manager(request)
-
-        # Admin users can access all sessions
-        # Issue #744: Require explicit role - no guest fallback for security
-        user_role = user_data.get("role")
-        if not user_role:
-            raise HTTPException(
-                status_code=403, detail="User role not assigned - access denied"
-            )
-        if user_role == "admin":
-            logger.debug(
-                f"Admin user {user_data.get('username')} accessing session {session_id}"
-            )
-            return True
-
-        # Validate session ownership
-        session_owner = await chat_history_manager.get_session_owner(session_id)
         current_user = user_data.get("username")
-
-        # If session has no owner set, allow access (legacy sessions)
-        if session_owner is None:
-            logger.info(
-                f"Session {session_id} has no owner - allowing access (legacy session)"
-            )
-            return True
-
-        # Verify current user matches session owner
-        if session_owner != current_user:
-            logger.warning(
-                f"Access denied: User {current_user} attempted to access "
-                f"session {session_id} owned by {session_owner}"
-            )
-            raise HTTPException(
-                status_code=403, detail="Access denied: You do not own this session"
-            )
-
-        logger.debug(
-            "User %s validated as owner of session %s", current_user, session_id
+        return await _verify_session_owner(
+            chat_history_manager, session_id, current_user
         )
-        return True
 
     except HTTPException:
-        # Re-raise HTTP exceptions (403 Forbidden)
         raise
     except Exception as e:
         logger.error("Session ownership validation error: %s", e)
@@ -423,6 +484,34 @@ async def upload_conversation_file(
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
 
+def _build_file_list_response(
+    session_id: str, result: Dict, page: int, page_size: int
+) -> ConversationFileListResponse:
+    """
+    Build file list response from manager result.
+
+    Issue #620: Extracted from list_conversation_files for function length reduction.
+
+    Args:
+        session_id: Conversation session ID
+        result: Result dict from file manager
+        page: Current page number
+        page_size: Page size
+
+    Returns:
+        ConversationFileListResponse with file list
+    """
+    files = [ConversationFileInfo(**f) for f in result["files"]]
+    return ConversationFileListResponse(
+        session_id=session_id,
+        files=files,
+        total_files=result["total_files"],
+        total_size=result["total_size"],
+        page=page,
+        page_size=page_size,
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_conversation_files",
@@ -435,7 +524,9 @@ async def list_conversation_files(
     request: Request, session_id: str, page: int = 1, page_size: int = 50
 ):
     """
-    List all files in a conversation session
+    List all files in a conversation session.
+
+    Issue #620: Refactored using Extract Method pattern.
 
     Args:
         session_id: Conversation session ID
@@ -444,56 +535,73 @@ async def list_conversation_files(
 
     Returns:
         ConversationFileListResponse with file list
-
-    Raises:
-        403: Insufficient permissions or not session owner
-        404: Session not found
-        500: Server error
     """
-    # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(request, "view")
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file listing"
-        )
-
-    request.state.user = user_data
-
     try:
-        # Validate session ownership
-        await validate_session_ownership(request, session_id, user_data)
+        await _authorize_file_operation(request, session_id, "view")
+        file_manager = _get_required_file_manager(request)
 
-        # Get conversation file manager
-        file_manager = get_conversation_file_manager(request)
-        if not file_manager:
-            logger.error("ConversationFileManager not available")
-            raise HTTPException(
-                status_code=503,
-                detail="File management service temporarily unavailable",
-            )
-
-        # Get file list
         result = await file_manager.list_files(
             session_id=session_id, page=page, page_size=page_size
         )
 
-        # Convert to Pydantic models
-        files = [ConversationFileInfo(**f) for f in result["files"]]
-
-        return ConversationFileListResponse(
-            session_id=session_id,
-            files=files,
-            total_files=result["total_files"],
-            total_size=result["total_size"],
-            page=page,
-            page_size=page_size,
-        )
+        return _build_file_list_response(session_id, result, page, page_size)
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Error listing conversation files: %s", e)
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+
+
+async def _get_validated_file_info(
+    file_manager, session_id: str, file_id: str
+) -> tuple[Dict, Path]:
+    """
+    Get and validate file info, ensuring file exists on disk.
+
+    Issue #620: Extracted from download_conversation_file for function length reduction.
+
+    Args:
+        file_manager: Conversation file manager instance
+        session_id: Conversation session ID
+        file_id: File ID to retrieve
+
+    Returns:
+        Tuple of (file_info_dict, file_path)
+
+    Raises:
+        HTTPException: 404 if file not found in metadata or on disk
+    """
+    file_info_dict = await file_manager.get_file_info(session_id, file_id)
+    if not file_info_dict:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = Path(file_info_dict["file_path"])
+    # Issue #358: Use asyncio.to_thread for blocking file I/O
+    if not await asyncio.to_thread(file_path.exists):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    return file_info_dict, file_path
+
+
+def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileResponse:
+    """
+    Build FileResponse for download.
+
+    Issue #620: Extracted from download_conversation_file for function length reduction.
+
+    Args:
+        file_info_dict: File metadata dictionary
+        file_path: Path to file on disk
+
+    Returns:
+        FileResponse configured for download
+    """
+    return FileResponse(
+        path=str(file_path),
+        filename=file_info_dict["original_filename"],
+        media_type=file_info_dict.get("mime_type", "application/octet-stream"),
+    )
 
 
 @with_error_handling(
@@ -504,7 +612,9 @@ async def list_conversation_files(
 @router.get("/conversation/{session_id}/download/{file_id}")
 async def download_conversation_file(request: Request, session_id: str, file_id: str):
     """
-    Download a specific file from a conversation
+    Download a specific file from a conversation.
+
+    Issue #620: Refactored using Extract Method pattern.
 
     Args:
         session_id: Conversation session ID
@@ -512,66 +622,28 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
 
     Returns:
         FileResponse with file content
-
-    Raises:
-        403: Insufficient permissions or not session owner
-        404: File not found
-        500: Server error
     """
-    # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(
-        request, "download"
-    )
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file download"
+    try:
+        user_data = await _authorize_file_operation(request, session_id, "download")
+        file_manager = _get_required_file_manager(request)
+
+        file_info_dict, file_path = await _get_validated_file_info(
+            file_manager, session_id, file_id
         )
 
-    request.state.user = user_data
-
-    try:
-        # Validate session ownership
-        await validate_session_ownership(request, session_id, user_data)
-
-        # Get conversation file manager
-        file_manager = get_conversation_file_manager(request)
-        if not file_manager:
-            logger.error("ConversationFileManager not available")
-            raise HTTPException(
-                status_code=503,
-                detail="File management service temporarily unavailable",
-            )
-
-        # Get file info and path
-        file_info_dict = await file_manager.get_file_info(session_id, file_id)
-        if not file_info_dict:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        file_path = Path(file_info_dict["file_path"])
-        # Issue #358: Use asyncio.to_thread for blocking file I/O
-        if not await asyncio.to_thread(file_path.exists):
-            raise HTTPException(status_code=404, detail="File not found on disk")
-
-        # Audit log
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            action="conversation_file_download",
-            user=user_data.get("username", "unknown"),
-            outcome="success",
-            details={
-                "session_id": session_id,
+        _audit_file_operation(
+            request,
+            "conversation_file_download",
+            user_data,
+            session_id,
+            {
                 "file_id": file_id,
                 "filename": file_info_dict["filename"],
                 "size": file_info_dict["size"],
-                "ip": request.client.host if request.client else "unknown",
             },
         )
 
-        return FileResponse(
-            path=str(file_path),
-            filename=file_info_dict["original_filename"],
-            media_type=file_info_dict.get("mime_type", "application/octet-stream"),
-        )
+        return _build_download_response(file_info_dict, file_path)
 
     except HTTPException:
         raise
@@ -695,6 +767,29 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         raise HTTPException(status_code=500, detail=f"Error previewing file: {str(e)}")
 
 
+def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
+    """
+    Build success response for file deletion.
+
+    Issue #620: Extracted from delete_conversation_file for function length reduction.
+
+    Args:
+        session_id: Conversation session ID
+        file_id: Deleted file ID
+
+    Returns:
+        JSONResponse with deletion confirmation
+    """
+    return JSONResponse(
+        content={
+            "success": True,
+            "message": "File deleted successfully",
+            "session_id": session_id,
+            "file_id": file_id,
+        }
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation_file",
@@ -703,7 +798,9 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
 @router.delete("/conversation/{session_id}/files/{file_id}")
 async def delete_conversation_file(request: Request, session_id: str, file_id: str):
     """
-    Delete a specific file from a conversation
+    Delete a specific file from a conversation.
+
+    Issue #620: Refactored using Extract Method pattern.
 
     Args:
         session_id: Conversation session ID
@@ -711,63 +808,24 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
 
     Returns:
         Success message with deleted file info
-
-    Raises:
-        403: Insufficient permissions or not session owner
-        404: File not found
-        500: Server error
     """
-    # Authenticate and authorize
-    has_permission, user_data = auth_middleware.check_file_permissions(
-        request, "delete"
-    )
-    if not has_permission:
-        raise HTTPException(
-            status_code=403, detail="Insufficient permissions for file deletion"
-        )
-
-    request.state.user = user_data
-
     try:
-        # Validate session ownership
-        await validate_session_ownership(request, session_id, user_data)
+        user_data = await _authorize_file_operation(request, session_id, "delete")
+        file_manager = _get_required_file_manager(request)
 
-        # Get conversation file manager
-        file_manager = get_conversation_file_manager(request)
-        if not file_manager:
-            logger.error("ConversationFileManager not available")
-            raise HTTPException(
-                status_code=503,
-                detail="File management service temporarily unavailable",
-            )
-
-        # Delete file
         deleted = await file_manager.delete_file(session_id, file_id)
-
         if not deleted:
             raise HTTPException(status_code=404, detail="File not found")
 
-        # Audit log
-        security_layer = get_security_layer(request)
-        security_layer.audit_log(
-            action="conversation_file_delete",
-            user=user_data.get("username", "unknown"),
-            outcome="success",
-            details={
-                "session_id": session_id,
-                "file_id": file_id,
-                "ip": request.client.host if request.client else "unknown",
-            },
+        _audit_file_operation(
+            request,
+            "conversation_file_delete",
+            user_data,
+            session_id,
+            {"file_id": file_id},
         )
 
-        return JSONResponse(
-            content={
-                "success": True,
-                "message": "File deleted successfully",
-                "session_id": session_id,
-                "file_id": file_id,
-            }
-        )
+        return _build_delete_response(session_id, file_id)
 
     except HTTPException:
         raise
@@ -795,7 +853,7 @@ async def transfer_conversation_files(
             file_ids=transfer_request.file_ids,
             destination=transfer_request.destination.value,
             target_path=transfer_request.target_path,
-            copy=transfer_request.copy,
+            copy=transfer_request.copy_files,
             tags=transfer_request.tags,
             user_id=user_data.get("username"),
         )
@@ -810,7 +868,7 @@ async def transfer_conversation_files(
                 "file_count": len(transfer_request.file_ids),
                 "transferred": result["total_transferred"],
                 "failed": result["total_failed"],
-                "copy": transfer_request.copy,
+                "copy": transfer_request.copy_files,
             },
         )
 
