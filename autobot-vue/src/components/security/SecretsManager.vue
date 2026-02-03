@@ -727,8 +727,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 // @ts-ignore - JavaScript API client without type declarations
-import { secretsApiClient } from '../utils/SecretsApiClient';
-import { useAppStore } from '../stores/useAppStore';
+import { secretsApiClient } from '@/utils/SecretsApiClient';
+import { useAppStore } from '@/stores/useAppStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';

@@ -11,7 +11,12 @@ User={{ frontend_user }}
 Group={{ frontend_group }}
 WorkingDirectory={{ frontend_install_dir }}/autobot-vue
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+{% if frontend_tls_enabled | default(false) %}
+# Issue #768: TLS-enabled mode
+ExecStart=/usr/bin/npm run dev -- --host {{ frontend_host }} --port {{ frontend_tls_port }} --https --cert {{ frontend_tls_cert }} --key {{ frontend_tls_key }}
+{% else %}
 ExecStart=/usr/bin/npm run dev -- --host {{ frontend_host }} --port {{ frontend_port }}
+{% endif %}
 Restart=always
 RestartSec=5
 StandardOutput=append:{{ frontend_log_dir }}/frontend.log

@@ -775,6 +775,41 @@ export function useSlmApi() {
     return response.data
   }
 
+  // TLS Service Enablement (Issue #768)
+  interface TLSEnableResponse {
+    success: boolean
+    message: string
+    services: string[]
+    results: {
+      deploy_certs: {
+        success: boolean
+        returncode: number
+        stdout: string
+        stderr: string
+      } | null
+      enable_tls: {
+        success: boolean
+        returncode: number
+        stdout: string
+        stderr: string
+      } | null
+      services_enabled: string[]
+    }
+  }
+
+  async function enableTlsOnServices(
+    services: string[] = ['frontend', 'backend', 'redis'],
+    deployCertsFirst = true
+  ): Promise<TLSEnableResponse> {
+    const params = new URLSearchParams()
+    services.forEach(s => params.append('services', s))
+    params.append('deploy_certs_first', deployCertsFirst.toString())
+    const response = await client.post<TLSEnableResponse>(
+      `/tls/enable?${params.toString()}`
+    )
+    return response.data
+  }
+
   // Maintenance Windows
   async function getMaintenanceWindows(options?: {
     node_id?: string
@@ -1195,6 +1230,7 @@ export function useSlmApi() {
     renewTlsCertificate,
     rotateTlsCertificate,
     bulkRenewExpiringCertificates,
+    enableTlsOnServices,  // Issue #768
     // Maintenance Windows
     getMaintenanceWindows,
     getActiveMaintenanceWindows,

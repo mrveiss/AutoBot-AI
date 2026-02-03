@@ -1,15 +1,78 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+"""
+Command Utilities - Centralized Command Execution
+==================================================
+
+Provides consistent command execution patterns for all agents.
+Eliminates duplicate subprocess handling code across the codebase.
+
+Issue #751: Consolidate Common Utilities
+
+Usage:
+    from src.utils.command_utils import execute_command, execute_shell_command
+
+    # Simple exec-style (for specific commands like 'man')
+    result = await execute_command(["man", "-w", "ls"], timeout=5.0)
+
+    # Shell command (for complex shell expressions)
+    result = await execute_shell_command("ls -la | grep .py")
+
+    # Streaming output
+    async for chunk in execute_shell_command_streaming("long_running_cmd"):
+        print(chunk["content"])
+"""
 import asyncio
+import logging
+from asyncio import Queue as AsyncQueue
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from src.utils.encoding_utils import strip_ansi_codes
 
+logger = logging.getLogger(__name__)
+
 # Re-export for backward compatibility
-__all__ = ["strip_ansi_codes", "get_timestamp", "execute_shell_command"]
+__all__ = [
+    "strip_ansi_codes",
+    "get_timestamp",
+    "execute_shell_command",
+    "execute_command",
+    "execute_shell_command_streaming",
+    "CommandResult",
+    "StreamChunk",
+]
+
+
+@dataclass
+class CommandResult:
+    """Result of a command execution."""
+
+    stdout: str
+    stderr: str
+    return_code: int
+    status: str  # "success", "error", "timeout"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for backward compatibility."""
+        return {
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "return_code": self.return_code,
+            "status": self.status,
+        }
+
+
+@dataclass
+class StreamChunk:
+    """A chunk of streaming command output."""
+
+    content: str
+    chunk_type: str  # "stdout", "stderr"
+    is_final: bool = False
 
 
 def get_timestamp() -> str:
@@ -61,3 +124,189 @@ async def execute_shell_command(command: str) -> Dict[str, Any]:
             "return_code": 1,  # Generic error code
             "status": "error",
         }
+
+
+async def execute_command(
+    args: List[str],
+    timeout: Optional[float] = None,
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> CommandResult:
+    """
+    Execute a command with arguments (exec-style, not shell).
+
+    Safer than shell execution as it doesn't invoke a shell interpreter.
+    Use this for specific commands with known arguments.
+
+    Args:
+        args: Command and arguments as a list (e.g., ["man", "-w", "ls"])
+        timeout: Optional timeout in seconds
+        cwd: Optional working directory
+        env: Optional environment variables (merged with current env)
+
+    Returns:
+        CommandResult with stdout, stderr, return_code, and status
+
+    Example:
+        result = await execute_command(["man", "-w", "ls"], timeout=5.0)
+        if result.status == "success":
+            print(result.stdout)
+    """
+    import os
+
+    try:
+        # Merge environment if provided
+        process_env = None
+        if env:
+            process_env = os.environ.copy()
+            process_env.update(env)
+
+        process = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd,
+            env=process_env,
+        )
+
+        try:
+            if timeout:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(), timeout=timeout
+                )
+            else:
+                stdout, stderr = await process.communicate()
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return CommandResult(
+                stdout="",
+                stderr=f"Command timed out after {timeout}s: {' '.join(args)}",
+                return_code=-1,
+                status="timeout",
+            )
+
+        stdout_str = strip_ansi_codes(stdout.decode("utf-8", errors="replace")).strip()
+        stderr_str = strip_ansi_codes(stderr.decode("utf-8", errors="replace")).strip()
+        return_code = process.returncode
+
+        status = "success" if return_code == 0 else "error"
+
+        return CommandResult(
+            stdout=stdout_str,
+            stderr=stderr_str,
+            return_code=return_code,
+            status=status,
+        )
+
+    except FileNotFoundError:
+        cmd_str = args[0] if args else "unknown"
+        return CommandResult(
+            stdout="",
+            stderr=f"Command not found: {cmd_str}",
+            return_code=127,
+            status="error",
+        )
+    except Exception as e:
+        logger.error("Error executing command %s: %s", args, e)
+        return CommandResult(
+            stdout="",
+            stderr=f"Error executing command: {e}",
+            return_code=1,
+            status="error",
+        )
+
+
+async def execute_shell_command_streaming(
+    command: str,
+    on_output: Optional[Callable[[StreamChunk], None]] = None,
+) -> AsyncGenerator[StreamChunk, None]:
+    """
+    Execute a shell command with streaming output.
+
+    Yields output chunks as they become available, useful for long-running
+    commands where real-time output is needed.
+
+    Args:
+        command: Shell command to execute
+        on_output: Optional callback for each output chunk
+
+    Yields:
+        StreamChunk objects with content and type (stdout/stderr)
+
+    Example:
+        async for chunk in execute_shell_command_streaming("apt update"):
+            print(f"[{chunk.chunk_type}] {chunk.content}", end="")
+    """
+    try:
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        output_queue: AsyncQueue[StreamChunk] = AsyncQueue()
+        done_event = asyncio.Event()
+
+        async def read_stream(stream, chunk_type: str):
+            """Read from stream and queue chunks."""
+            try:
+                while True:
+                    line = await stream.readline()
+                    if not line:
+                        break
+                    content = line.decode("utf-8", errors="replace")
+                    chunk = StreamChunk(
+                        content=content,
+                        chunk_type=chunk_type,
+                        is_final=False,
+                    )
+                    await output_queue.put(chunk)
+                    if on_output:
+                        on_output(chunk)
+            except Exception as e:
+                logger.error("Error reading %s: %s", chunk_type, e)
+
+        # Start reading both streams concurrently
+        stdout_task = asyncio.create_task(read_stream(process.stdout, "stdout"))
+        stderr_task = asyncio.create_task(read_stream(process.stderr, "stderr"))
+
+        async def wait_for_completion():
+            """Wait for both streams to complete."""
+            await asyncio.gather(stdout_task, stderr_task)
+            done_event.set()
+
+        completion_task = asyncio.create_task(wait_for_completion())
+
+        # Yield chunks as they arrive
+        while not done_event.is_set() or not output_queue.empty():
+            try:
+                chunk = await asyncio.wait_for(output_queue.get(), timeout=0.1)
+                yield chunk
+            except asyncio.TimeoutError:
+                continue
+
+        # Wait for process to finish
+        await process.wait()
+        await completion_task
+
+        # Yield final chunk with return code info
+        final_chunk = StreamChunk(
+            content=f"[Process exited with code {process.returncode}]",
+            chunk_type="status",
+            is_final=True,
+        )
+        if on_output:
+            on_output(final_chunk)
+        yield final_chunk
+
+    except Exception as e:
+        logger.error("Error in streaming command execution: %s", e)
+        error_chunk = StreamChunk(
+            content=f"Error: {e}",
+            chunk_type="error",
+            is_final=True,
+        )
+        if on_output:
+            on_output(error_chunk)
+        yield error_chunk

@@ -14,7 +14,7 @@ Issue: #751 - Consolidate Common Utilities
 
 from typing import Optional
 
-# VM IP addresses (6-VM distributed architecture)
+# VM IP addresses (6-VM distributed architecture + SLM admin)
 REGISTRY_DEFAULTS = {
     # VM IPs
     "vm.main": "172.16.168.20",
@@ -23,6 +23,7 @@ REGISTRY_DEFAULTS = {
     "vm.redis": "172.16.168.23",
     "vm.aistack": "172.16.168.24",
     "vm.browser": "172.16.168.25",
+    "vm.slm": "172.16.168.19",  # Issue #768: SLM admin server
     "vm.ollama": "127.0.0.1",
     # Provider-agnostic LLM service (defaults to Ollama endpoint)
     "vm.llm": "172.16.168.24",  # AI stack host
@@ -39,6 +40,8 @@ REGISTRY_DEFAULTS = {
     "aistack.port": "8080",
     "browser.host": "172.16.168.25",
     "browser.port": "3000",
+    "slm.host": "172.16.168.19",  # Issue #768
+    "slm.port": "8000",  # Issue #768
     # Ports (for port.X access pattern)
     "port.backend": "8001",
     "port.frontend": "5173",
@@ -50,6 +53,7 @@ REGISTRY_DEFAULTS = {
     "port.aistack": "8080",
     "port.npu": "8081",
     "port.npu_windows": "8081",
+    "port.slm": "8000",  # Issue #768: SLM admin server
     "port.prometheus": "9090",
     "port.grafana": "3000",
     # LLM defaults
@@ -59,6 +63,16 @@ REGISTRY_DEFAULTS = {
     "timeout.http": "30",
     "timeout.redis": "5",
     "timeout.llm": "120",
+    # TLS Configuration (Issue #768)
+    "tls.redis_enabled": "false",
+    "tls.backend_enabled": "false",
+    "tls.frontend_enabled": "false",
+    "tls.slm_enabled": "false",
+    "tls.frontend_port": "443",
+    "tls.backend_port": "8443",
+    "tls.slm_port": "443",
+    "tls.cert_path": "/etc/ssl/autobot",
+    "tls.ca_cert": "/etc/ssl/autobot/ca.crt",
 }
 
 

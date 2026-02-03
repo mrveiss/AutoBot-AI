@@ -79,15 +79,15 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('SettingsPanel')
 
 // Import error handling composables
-import { useAsyncHandler } from '../composables/useErrorHandler'
-import { useToast } from '../composables/useToast'
+import { useAsyncHandler } from '@/composables/useErrorHandler'
+import { useToast } from '@/composables/useToast'
 
 // Import sub-components
 import ErrorBoundary from './ErrorBoundary.vue'
 import SettingsTabNavigation from './settings/SettingsTabNavigation.vue'
 
 // Import services and types
-import cacheService from '../services/CacheService'
+import cacheService from '@/services/CacheService'
 import {
   createDefaultSettings,
   createDefaultCacheConfig,

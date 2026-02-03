@@ -22,6 +22,7 @@ from models.schemas import (
     TLSCredentialListResponse,
     TLSCredentialResponse,
     TLSCredentialUpdate,
+    TLSEndpointResponse,
     TLSEndpointsResponse,
 )
 from services.auth import get_current_user
@@ -627,6 +628,154 @@ async def bulk_renew_expiring_certificates(
         "failed": failed,
         "results": results,
     }
+
+
+@tls_router.post(
+    "/enable",
+)
+async def enable_tls_on_services(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    services: list[str] = Query(
+        ["frontend", "backend", "redis"],
+        description="Services to enable TLS for",
+    ),
+    deploy_certs_first: bool = Query(
+        True, description="Deploy certificates before enabling TLS"
+    ),
+):
+    """
+    Enable TLS/HTTPS on AutoBot services.
+
+    This endpoint orchestrates the full TLS enablement workflow:
+    1. (Optional) Deploy TLS certificates to target nodes
+    2. Run the enable-tls.yml Ansible playbook
+    3. Restart affected services with TLS enabled
+
+    Issue #768: Full TLS deployment via SLM.
+    """
+    import asyncio
+    import os
+    import shutil
+
+    # Check for ansible-playbook
+    ansible_path = shutil.which("ansible-playbook")
+    if not ansible_path:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ansible-playbook not found on SLM server",
+        )
+
+    # Path to playbooks directory
+    playbook_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ansible_dir = os.path.join(playbook_dir, "ansible")
+    inventory_path = os.path.join(ansible_dir, "inventory.yml")
+    enable_tls_playbook = os.path.join(ansible_dir, "enable-tls.yml")
+    distribute_certs_playbook = os.path.join(ansible_dir, "distribute-tls-certs.yml")
+
+    # Verify playbooks exist
+    if not os.path.exists(enable_tls_playbook):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="enable-tls.yml playbook not found",
+        )
+
+    results = {"deploy_certs": None, "enable_tls": None, "services_enabled": services}
+
+    try:
+        # Step 1: Deploy certificates if requested
+        if deploy_certs_first and os.path.exists(distribute_certs_playbook):
+            limit_hosts = ",".join(services)
+            deploy_cmd = [
+                ansible_path,
+                "-i",
+                inventory_path,
+                distribute_certs_playbook,
+                "--limit",
+                limit_hosts,
+            ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *deploy_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=ansible_dir,
+            )
+
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+
+            results["deploy_certs"] = {
+                "success": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout": stdout.decode("utf-8", errors="replace")[-2000:],
+                "stderr": stderr.decode("utf-8", errors="replace")[-1000:],
+            }
+
+            if proc.returncode != 0:
+                logger.warning(
+                    "Certificate deployment had issues: %s",
+                    stderr.decode("utf-8", errors="replace")[:500],
+                )
+
+        # Step 2: Run enable-tls playbook
+        limit_hosts = ",".join(services)
+        enable_cmd = [
+            ansible_path,
+            "-i",
+            inventory_path,
+            enable_tls_playbook,
+            "--limit",
+            limit_hosts,
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *enable_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=ansible_dir,
+        )
+
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600.0)
+
+        results["enable_tls"] = {
+            "success": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "stdout": stdout.decode("utf-8", errors="replace")[-3000:],
+            "stderr": stderr.decode("utf-8", errors="replace")[-1000:],
+        }
+
+        success = proc.returncode == 0
+        message = (
+            "TLS enabled successfully"
+            if success
+            else f"TLS enablement failed with code {proc.returncode}"
+        )
+
+        logger.info(
+            "TLS enablement for %s: %s (code %d)",
+            services,
+            "success" if success else "failed",
+            proc.returncode,
+        )
+
+        return {
+            "success": success,
+            "message": message,
+            "services": services,
+            "results": results,
+        }
+
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="TLS enablement timed out",
+        )
+    except Exception as e:
+        logger.exception("TLS enablement failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"TLS enablement failed: {str(e)}",
+        )
 
 
 async def _deploy_certificate_to_node(node, credential, db) -> dict:

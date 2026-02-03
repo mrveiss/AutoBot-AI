@@ -136,16 +136,16 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('ChatInterface')
 
 // Components
-import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
 import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
-import KnowledgePersistenceDialog from '@/components/KnowledgePersistenceDialog.vue'
-import CommandPermissionDialog from '@/components/CommandPermissionDialog.vue'
-import WorkflowProgressWidget from '@/components/WorkflowProgressWidget.vue'
+import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
+import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
+import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
 
 // Stores and controller
 const store = useChatStore()

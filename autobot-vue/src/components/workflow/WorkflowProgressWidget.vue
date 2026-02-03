@@ -78,7 +78,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { apiService } from '../services/api.js'
+import { apiService } from '@/services/api.js'
 
 const logger = createLogger('WorkflowProgressWidget')
 

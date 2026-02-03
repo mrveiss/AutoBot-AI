@@ -23,7 +23,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
-import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 
 // Import sub-components
 import KnowledgeSearch from './KnowledgeSearch.vue'

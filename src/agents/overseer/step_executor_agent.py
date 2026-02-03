@@ -25,6 +25,10 @@ from datetime import datetime
 from typing import AsyncGenerator, Optional, Tuple, Union
 
 from src.security.command_patterns import check_dangerous_patterns, is_safe_command
+from src.utils.command_utils import (
+    execute_shell_command_streaming,
+    StreamChunk as BaseStreamChunk,
+)
 
 from .command_explanation_service import (
     CommandExplanationService,
@@ -658,60 +662,19 @@ class StepExecutorAgent:
     ) -> AsyncGenerator[StreamChunk, None]:
         """
         Fallback: Execute command via subprocess (output won't appear in terminal UI).
+
+        Issue #751: Uses centralized execute_shell_command_streaming from command_utils.
         """
         try:
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            output_queue: asyncio.Queue[StreamChunk] = asyncio.Queue()
-            done_event = asyncio.Event()
-
-            async def read_stream(stream, chunk_type: str):
-                try:
-                    while True:
-                        line = await stream.readline()
-                        if not line:
-                            break
-                        chunk = StreamChunk(
-                            task_id=task_id,
-                            step_number=0,
-                            chunk_type=chunk_type,
-                            content=line.decode("utf-8", errors="replace"),
-                            is_final=False,
-                        )
-                        await output_queue.put(chunk)
-                except Exception as e:
-                    logger.error("Error reading %s: %s", chunk_type, e)
-
-            stdout_task = asyncio.create_task(read_stream(process.stdout, "stdout"))
-            stderr_task = asyncio.create_task(read_stream(process.stderr, "stderr"))
-
-            async def wait_for_completion():
-                await asyncio.gather(stdout_task, stderr_task)
-                done_event.set()
-
-            completion_task = asyncio.create_task(wait_for_completion())
-
-            while not done_event.is_set() or not output_queue.empty():
-                try:
-                    chunk = await asyncio.wait_for(output_queue.get(), timeout=0.1)
-                    yield chunk
-                except asyncio.TimeoutError:
-                    continue
-
-            await completion_task
-            return_code = await process.wait()
-
-            yield StreamChunk(
-                task_id=task_id,
-                step_number=0,
-                chunk_type="return_code",
-                content=str(return_code),
-                is_final=True,
-            )
+            async for base_chunk in execute_shell_command_streaming(command):
+                # Convert BaseStreamChunk to local StreamChunk with task context
+                yield StreamChunk(
+                    task_id=task_id,
+                    step_number=0,
+                    chunk_type=base_chunk.chunk_type,
+                    content=base_chunk.content,
+                    is_final=base_chunk.is_final,
+                )
 
         except Exception as e:
             logger.error("[StepExecutor] Subprocess error: %s", e)

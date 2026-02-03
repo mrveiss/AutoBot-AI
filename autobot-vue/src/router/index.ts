@@ -227,7 +227,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'codebase',
         name: 'analytics-codebase',
-        component: () => import('@/components/CodebaseAnalytics.vue'),
+        component: () => import('@/components/analytics/CodebaseAnalytics.vue'),
         meta: {
           title: 'Codebase Analytics',
           parent: 'analytics'
@@ -348,7 +348,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'secrets-manager',
-        component: () => import('@/components/SecretsManager.vue'),
+        component: () => import('@/components/security/SecretsManager.vue'),
         meta: {
           title: 'Secrets Manager',
           hideInNav: true

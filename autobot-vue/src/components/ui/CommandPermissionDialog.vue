@@ -128,7 +128,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { apiService } from '../services/api';
+import { apiService } from '@/services/api';
 import appConfig from '@/config/AppConfig.js';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
 import BaseButton from '@/components/base/BaseButton.vue';

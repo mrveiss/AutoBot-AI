@@ -94,11 +94,11 @@ import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger
 const { logFileActivity } = useSessionActivityLogger()
 
 // Import components
-import FileBrowserHeader from './file-browser/FileBrowserHeader.vue'
-import FileUpload from './file-browser/FileUpload.vue'
-import FilePreview from './file-browser/FilePreview.vue'
-import FileTreeView from './file-browser/FileTreeView.vue'
-import FileListTable from './file-browser/FileListTable.vue'
+import FileBrowserHeader from './FileBrowserHeader.vue'
+import FileUpload from './FileUpload.vue'
+import FilePreview from './FilePreview.vue'
+import FileTreeView from './FileTreeView.vue'
+import FileListTable from './FileListTable.vue'
 
 // Component props
 interface Props {

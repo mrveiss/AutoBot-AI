@@ -144,11 +144,35 @@ const eventSeverityFilter = ref('')
 
 const tabs = [
   { id: 'overview', name: 'Security Overview' },
+  { id: 'tls-settings', name: 'TLS Settings' },  // Issue #768
   { id: 'certificates', name: 'TLS Certificates' },
   { id: 'audit', name: 'Audit Logs' },
   { id: 'threats', name: 'Threat Detection' },
   { id: 'policies', name: 'Security Policies' },
 ]
+
+// TLS Settings State (Issue #768)
+interface TLSServiceStatus {
+  name: string
+  displayName: string
+  enabled: boolean
+  port: number
+  description: string
+}
+
+const tlsServices = ref<TLSServiceStatus[]>([
+  { name: 'frontend', displayName: 'Frontend (Vue)', enabled: false, port: 443, description: 'Web interface on 172.16.168.21' },
+  { name: 'backend', displayName: 'Backend API', enabled: false, port: 8443, description: 'FastAPI backend on 172.16.168.20' },
+  { name: 'redis', displayName: 'Redis', enabled: false, port: 6380, description: 'Redis data store on 172.16.168.23' },
+])
+const selectedTlsServices = ref<string[]>(['frontend', 'backend', 'redis'])
+const deployCertsFirst = ref(true)
+const tlsEnabling = ref(false)
+const tlsEnableResult = ref<{
+  success: boolean
+  message: string
+  details?: string
+} | null>(null)
 
 const severityColors: Record<string, string> = {
   low: 'bg-blue-500',
@@ -435,6 +459,63 @@ async function togglePolicyEnforcement(policyId: string, currentlyEnforced: bool
   }
 }
 
+// TLS Settings functions (Issue #768)
+function toggleTlsService(serviceName: string) {
+  const index = selectedTlsServices.value.indexOf(serviceName)
+  if (index === -1) {
+    selectedTlsServices.value.push(serviceName)
+  } else {
+    selectedTlsServices.value.splice(index, 1)
+  }
+}
+
+async function enableTlsOnSelectedServices() {
+  if (selectedTlsServices.value.length === 0) {
+    alert('Please select at least one service to enable TLS')
+    return
+  }
+
+  if (!confirm(`Enable TLS on ${selectedTlsServices.value.join(', ')}?\n\nThis will:\n1. Deploy TLS certificates to the nodes\n2. Configure services for HTTPS\n3. Restart affected services\n\nContinue?`)) {
+    return
+  }
+
+  tlsEnabling.value = true
+  tlsEnableResult.value = null
+
+  try {
+    const result = await slmApi.enableTlsOnServices(
+      selectedTlsServices.value,
+      deployCertsFirst.value
+    )
+
+    tlsEnableResult.value = {
+      success: result.success,
+      message: result.message,
+      details: result.results.enable_tls?.stdout || ''
+    }
+
+    if (result.success) {
+      // Update local state to reflect enabled services
+      selectedTlsServices.value.forEach(serviceName => {
+        const service = tlsServices.value.find(s => s.name === serviceName)
+        if (service) {
+          service.enabled = true
+        }
+      })
+    }
+
+    logger.info('TLS enablement result:', result)
+  } catch (err) {
+    logger.error('Failed to enable TLS:', err)
+    tlsEnableResult.value = {
+      success: false,
+      message: err instanceof Error ? err.message : 'Failed to enable TLS'
+    }
+  } finally {
+    tlsEnabling.value = false
+  }
+}
+
 // Watch tab changes
 function onTabChange(tabId: string) {
   activeTab.value = tabId
@@ -444,6 +525,9 @@ function onTabChange(tabId: string) {
   switch (tabId) {
     case 'overview':
       fetchOverview()
+      break
+    case 'tls-settings':
+      // TLS Settings tab - no API call needed, state is local
       break
     case 'certificates':
       fetchTlsEndpoints()
@@ -573,6 +657,151 @@ const scoreColor = computed(() => {
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- TLS Settings (Issue #768) -->
+    <div v-else-if="activeTab === 'tls-settings'">
+      <!-- Header -->
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold text-gray-900">TLS/HTTPS Configuration</h2>
+        <p class="text-sm text-gray-500 mt-1">
+          Enable TLS encryption for AutoBot services. This will configure HTTPS for web services and TLS for Redis.
+        </p>
+      </div>
+
+      <!-- Result Alert -->
+      <div v-if="tlsEnableResult" :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-success-50 border-success-200' : 'bg-error-50 border-error-200']">
+        <div class="flex items-start gap-3">
+          <svg v-if="tlsEnableResult.success" class="w-5 h-5 text-success-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <svg v-else class="w-5 h-5 text-error-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p :class="tlsEnableResult.success ? 'text-success-700' : 'text-error-700'">
+              {{ tlsEnableResult.message }}
+            </p>
+            <details v-if="tlsEnableResult.details" class="mt-2">
+              <summary class="text-sm text-gray-600 cursor-pointer">Show details</summary>
+              <pre class="mt-2 text-xs bg-white p-3 rounded border overflow-x-auto max-h-48">{{ tlsEnableResult.details }}</pre>
+            </details>
+          </div>
+          <button @click="tlsEnableResult = null" class="ml-auto text-gray-400 hover:text-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Services Selection -->
+      <div class="card mb-6">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-base font-semibold">Select Services to Enable TLS</h3>
+        </div>
+        <div class="p-6">
+          <div class="space-y-4">
+            <div
+              v-for="service in tlsServices"
+              :key="service.name"
+              class="flex items-center justify-between p-4 rounded-lg border hover:bg-gray-50 cursor-pointer"
+              :class="selectedTlsServices.includes(service.name) ? 'border-primary-300 bg-primary-50' : 'border-gray-200'"
+              @click="toggleTlsService(service.name)"
+            >
+              <div class="flex items-center gap-4">
+                <input
+                  type="checkbox"
+                  :checked="selectedTlsServices.includes(service.name)"
+                  class="h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                  @click.stop
+                  @change="toggleTlsService(service.name)"
+                />
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-gray-900">{{ service.displayName }}</span>
+                    <span
+                      :class="[
+                        'px-2 py-0.5 rounded-full text-xs',
+                        service.enabled ? 'bg-success-100 text-success-700' : 'bg-gray-100 text-gray-600'
+                      ]"
+                    >
+                      {{ service.enabled ? 'TLS Enabled' : 'HTTP' }}
+                    </span>
+                  </div>
+                  <p class="text-sm text-gray-500 mt-0.5">{{ service.description }}</p>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-sm font-mono text-gray-600">Port {{ service.port }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div class="card mb-6">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h3 class="text-base font-semibold">Options</h3>
+        </div>
+        <div class="p-6">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              v-model="deployCertsFirst"
+              type="checkbox"
+              class="h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+            />
+            <div>
+              <span class="font-medium text-gray-900">Deploy certificates first</span>
+              <p class="text-sm text-gray-500">Distribute TLS certificates to nodes before enabling TLS. Recommended for first-time setup.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="flex justify-end">
+        <button
+          @click="enableTlsOnSelectedServices"
+          :disabled="tlsEnabling || selectedTlsServices.length === 0"
+          :class="[
+            'px-6 py-3 rounded-lg font-medium text-white transition-colors flex items-center gap-2',
+            tlsEnabling || selectedTlsServices.length === 0
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-primary-600 hover:bg-primary-700'
+          ]"
+        >
+          <svg v-if="tlsEnabling" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          {{ tlsEnabling ? 'Enabling TLS...' : `Enable TLS on ${selectedTlsServices.length} Service${selectedTlsServices.length !== 1 ? 's' : ''}` }}
+        </button>
+      </div>
+
+      <!-- Help Section -->
+      <div class="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="text-sm text-blue-800">
+            <p class="font-medium mb-1">What happens when you enable TLS?</p>
+            <ul class="list-disc list-inside space-y-1 text-blue-700">
+              <li>TLS certificates are deployed to the selected nodes</li>
+              <li>Service configurations are updated to use HTTPS/TLS</li>
+              <li>Services are restarted to apply the changes</li>
+              <li>Frontend will be accessible at https://172.16.168.21:443</li>
+              <li>Backend API will be accessible at https://172.16.168.20:8443</li>
+              <li>Redis will accept TLS connections on port 6380</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- TLS Certificates (Issue #725) -->

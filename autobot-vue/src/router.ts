@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
-import TerminalWindow from './components/TerminalWindow.vue'
+import TerminalWindow from './components/terminal/TerminalWindow.vue'
 
 // Since this is a single page application, we just need basic routing
 // for components that expect route parameters

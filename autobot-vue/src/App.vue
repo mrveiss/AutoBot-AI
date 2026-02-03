@@ -485,10 +485,10 @@ const logger = createLogger('App');
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
-import SystemStatusNotification from '@/components/SystemStatusNotification.vue';
+import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
 import ToastContainer from '@/components/ui/ToastContainer.vue';
-import HostSelectionDialog from '@/components/HostSelectionDialog.vue';
+import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import { useHostSelection } from '@/composables/useHostSelection';
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';

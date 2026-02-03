@@ -19,6 +19,7 @@ import aiofiles
 import yaml
 
 from src.intelligence.os_detector import get_os_detector
+from src.utils.command_utils import execute_command
 
 logger = logging.getLogger(__name__)
 
@@ -267,55 +268,35 @@ class ManPageKnowledgeIntegrator:
         return os_info.capabilities
 
     async def check_man_page_exists(self, command: str) -> bool:
-        """Check if man page exists for command"""
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "man",
-                "-w",
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            try:
-                await asyncio.wait_for(proc.communicate(), timeout=5)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
-                return False
-            return proc.returncode == 0
-        except FileNotFoundError:
-            return False
+        """Check if man page exists for command.
+
+        Issue #751: Uses centralized execute_command from command_utils.
+        """
+        result = await execute_command(["man", "-w", command], timeout=5.0)
+        return result.return_code == 0
 
     async def extract_man_page(
         self, command: str, section: int = 1
     ) -> Optional[ManPageInfo]:
-        """Extract and parse man page for a command"""
+        """Extract and parse man page for a command.
+
+        Issue #751: Uses centralized execute_command from command_utils.
+        """
         try:
-            # Get raw man page content using async subprocess
-            proc = await asyncio.create_subprocess_exec(
-                "man",
-                str(section),
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            result = await execute_command(
+                ["man", str(section), command], timeout=10.0
             )
 
-            try:
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
+            if result.status == "timeout":
                 logger.warning("Timeout extracting man page for %s", command)
                 return None
 
-            if proc.returncode != 0:
+            if result.return_code != 0:
                 logger.debug("Man page not found for %s(%s)", command, section)
                 return None
 
             # Parse the content
-            man_info = self.parser.parse_man_page(
-                stdout.decode("utf-8"), command, section
-            )
+            man_info = self.parser.parse_man_page(result.stdout, command, section)
 
             # Add machine context
             detector = await get_os_detector()

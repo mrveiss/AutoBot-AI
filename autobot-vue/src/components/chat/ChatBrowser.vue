@@ -73,7 +73,7 @@
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import PopoutChromiumBrowser from '@/components/PopoutChromiumBrowser.vue'
+import PopoutChromiumBrowser from '@/components/desktop/PopoutChromiumBrowser.vue'
 import apiClient from '@/utils/ApiClient.js'
 
 const logger = createLogger('ChatBrowser')

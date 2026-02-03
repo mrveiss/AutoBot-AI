@@ -133,10 +133,10 @@ const logger = createLogger('ChatTabContent')
 // Component imports
 import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
-import FileBrowser from '@/components/FileBrowser.vue'
-import ChatBrowser from '@/components/ChatBrowser.vue'  // Issue #73: Browser sessions tied to chat
-import HostSelector from '@/components/HostSelector.vue'  // Issue #715: Dynamic host selection
-import SSHTerminal from '@/components/SSHTerminal.vue'    // Issue #715: SSH terminal component
+import FileBrowser from '@/components/file-browser/FileBrowser.vue'
+import ChatBrowser from '@/components/chat/ChatBrowser.vue'  // Issue #73: Browser sessions tied to chat
+import HostSelector from '@/components/ui/HostSelector.vue'  // Issue #715: Dynamic host selection
+import SSHTerminal from '@/components/terminal/SSHTerminal.vue'    // Issue #715: SSH terminal component
 
 /**
  * Infrastructure host type for SSH/VNC connections.

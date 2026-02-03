@@ -407,9 +407,9 @@ import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import KnowledgeUpload from './KnowledgeUpload.vue'
 // @ts-ignore - Component lacks TypeScript declaration file
-import SystemKnowledgeManager from '@/components/SystemKnowledgeManager.vue'
+import SystemKnowledgeManager from '@/components/knowledge/SystemKnowledgeManager.vue'
 // @ts-ignore - Component lacks TypeScript declaration file
-import ManPageManager from '@/components/ManPageManager.vue'
+import ManPageManager from '@/components/manpage/ManPageManager.vue'
 import FailedVectorizationsManager from '@/components/knowledge/FailedVectorizationsManager.vue'
 import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vue'
 import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vue'

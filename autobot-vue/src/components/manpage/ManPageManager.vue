@@ -317,7 +317,7 @@
 
 <script>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import ApiClient from '../utils/ApiClient'
+import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ManPageManager
