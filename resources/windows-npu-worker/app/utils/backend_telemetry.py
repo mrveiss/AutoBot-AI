@@ -8,13 +8,17 @@ Sends heartbeat and telemetry data to the main AutoBot backend.
 Enables active registration and status reporting.
 
 Issue #68: NPU worker telemetry implementation
+Issue #255: Service Authentication Enforcement - HMAC-SHA256 signing
 """
 
 import asyncio
+import hashlib
+import hmac
 import logging
+import os
 import socket
 import time
-from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -31,6 +35,7 @@ class BackendTelemetryClient:
     - Auto-registration with backend
     - Prometheus/OpenTelemetry integration support
     - Graceful reconnection on failures
+    - HMAC-SHA256 service authentication (Issue #255)
     """
 
     def __init__(
@@ -41,6 +46,8 @@ class BackendTelemetryClient:
         worker_url: str,
         platform: str = "windows",
         heartbeat_interval: int = 30,
+        service_id: Optional[str] = None,
+        service_key: Optional[str] = None,
     ):
         """
         Initialize telemetry client.
@@ -52,6 +59,8 @@ class BackendTelemetryClient:
             worker_url: This worker's accessible URL
             platform: Platform type (windows, linux, macos)
             heartbeat_interval: Seconds between heartbeats
+            service_id: Service identifier for authentication (Issue #255)
+            service_key: Service secret key for HMAC signing (Issue #255)
         """
         self.backend_host = backend_host
         self.backend_port = backend_port
@@ -59,6 +68,11 @@ class BackendTelemetryClient:
         self.worker_url = worker_url
         self.platform = platform
         self.heartbeat_interval = heartbeat_interval
+
+        # Issue #255: Service authentication credentials
+        self.service_id = service_id
+        self.service_key = service_key
+        self._auth_enabled = bool(service_id and service_key)
 
         self.backend_url = f"http://{backend_host}:{backend_port}"
         self._session: Optional[aiohttp.ClientSession] = None
@@ -78,6 +92,16 @@ class BackendTelemetryClient:
         self._retry_delay = 5
         self._max_retry_delay = 60
         self._consecutive_failures = 0
+
+        if self._auth_enabled:
+            logger.info(
+                "Service authentication enabled for telemetry (service_id=%s)",
+                self.service_id,
+            )
+        else:
+            logger.warning(
+                "Service authentication DISABLED - telemetry may be rejected by backend"
+            )
 
     async def start(self) -> None:
         """Start the telemetry client and heartbeat loop."""
@@ -149,6 +173,37 @@ class BackendTelemetryClient:
         if metrics is not None:
             self._metrics = metrics
 
+    def _generate_auth_headers(self, method: str, path: str) -> Dict[str, str]:
+        """
+        Generate HMAC-SHA256 authentication headers for request.
+
+        Issue #255: Service Authentication Enforcement
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            path: Request path (e.g., /api/npu/workers/heartbeat)
+
+        Returns:
+            Dict of authentication headers or empty dict if auth disabled
+        """
+        if not self._auth_enabled:
+            return {}
+
+        timestamp = int(time.time())
+
+        # Generate HMAC-SHA256 signature
+        # Format: HMAC-SHA256(service_key, "service_id:method:path:timestamp")
+        message = f"{self.service_id}:{method}:{path}:{timestamp}"
+        signature = hmac.new(
+            self.service_key.encode(), message.encode(), hashlib.sha256
+        ).hexdigest()
+
+        return {
+            "X-Service-ID": self.service_id,
+            "X-Service-Signature": signature,
+            "X-Service-Timestamp": str(timestamp),
+        }
+
     async def _heartbeat_loop(self) -> None:
         """Background loop that sends periodic heartbeats."""
         # Initial delay to let worker initialize
@@ -204,8 +259,12 @@ class BackendTelemetryClient:
         }
 
         try:
-            url = f"{self.backend_url}/api/npu/workers/heartbeat"
-            async with self._session.post(url, json=heartbeat_data) as response:
+            path = "/api/npu/workers/heartbeat"
+            url = f"{self.backend_url}{path}"
+            auth_headers = self._generate_auth_headers("POST", path)
+            async with self._session.post(
+                url, json=heartbeat_data, headers=auth_headers
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     logger.debug(
@@ -260,8 +319,12 @@ class BackendTelemetryClient:
         }
 
         try:
-            url = f"{self.backend_url}/api/npu/workers"
-            async with self._session.post(url, json=registration_data) as response:
+            path = "/api/npu/workers"
+            url = f"{self.backend_url}{path}"
+            auth_headers = self._generate_auth_headers("POST", path)
+            async with self._session.post(
+                url, json=registration_data, headers=auth_headers
+            ) as response:
                 if response.status in (200, 201):
                     logger.info("Successfully registered with backend")
                     return True
@@ -291,12 +354,102 @@ DEFAULT_WORKER_PORT = 8082
 DEFAULT_HEARTBEAT_INTERVAL = 30
 LOCAL_IP_FALLBACK = "127.0.0.1"
 
+# Issue #255: Service authentication defaults
+DEFAULT_SERVICE_ID = "npu-worker"
+SERVICE_KEY_FILE_PATHS = [
+    "/etc/autobot/service-keys/npu-worker.env",  # Linux/WSL
+    "C:\\ProgramData\\AutoBot\\service-keys\\npu-worker.env",  # Windows
+]
+
 # =============================================================================
 # Thread-safe global state (Issue #68 - Race condition fix)
 # =============================================================================
 _telemetry_lock = asyncio.Lock()
 _telemetry_client: Optional[BackendTelemetryClient] = None
 _local_ip_cache: Optional[str] = None  # Cache to avoid repeated socket calls
+
+
+def _load_service_credentials(config: dict) -> tuple[Optional[str], Optional[str]]:
+    """
+    Load service authentication credentials.
+
+    Issue #255: Service Authentication Enforcement
+
+    Credential sources (in priority order):
+    1. Environment variables: SERVICE_ID, SERVICE_KEY
+    2. Environment variable: SERVICE_KEY_FILE (path to key file)
+    3. Config file: backend.service_id, backend.service_key_file
+    4. Default paths: /etc/autobot/service-keys/npu-worker.env
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        Tuple of (service_id, service_key) or (None, None) if not found
+    """
+    # Try environment variables first
+    service_id = os.environ.get("SERVICE_ID")
+    service_key = os.environ.get("SERVICE_KEY")
+
+    if service_id and service_key:
+        logger.info("Loaded service credentials from environment variables")
+        return service_id, service_key
+
+    # Try SERVICE_KEY_FILE environment variable
+    key_file = os.environ.get("SERVICE_KEY_FILE")
+    if not key_file:
+        # Try config file
+        backend_config = config.get("backend", {})
+        service_id = service_id or backend_config.get("service_id", DEFAULT_SERVICE_ID)
+        key_file = backend_config.get("service_key_file")
+
+    if not key_file:
+        # Try default paths
+        for default_path in SERVICE_KEY_FILE_PATHS:
+            if Path(default_path).exists():
+                key_file = default_path
+                logger.info("Found service key file at default path: %s", key_file)
+                break
+
+    if key_file and Path(key_file).exists():
+        service_key = _read_key_from_file(key_file)
+        if service_key:
+            service_id = service_id or DEFAULT_SERVICE_ID
+            logger.info(
+                "Loaded service credentials from file: %s (service_id=%s)",
+                key_file,
+                service_id,
+            )
+            return service_id, service_key
+
+    logger.warning(
+        "Service credentials not found - authentication will be disabled. "
+        "Set SERVICE_ID and SERVICE_KEY environment variables or deploy key file."
+    )
+    return None, None
+
+
+def _read_key_from_file(key_file: str) -> Optional[str]:
+    """
+    Read service key from .env-style file.
+
+    Expected format: SERVICE_KEY=<hex-encoded-key>
+
+    Args:
+        key_file: Path to key file
+
+    Returns:
+        Service key string or None if not found
+    """
+    try:
+        with open(key_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("SERVICE_KEY="):
+                    return line.split("=", 1)[1].strip()
+    except Exception as e:
+        logger.error("Failed to read service key file %s: %s", key_file, e)
+    return None
 
 
 def _get_local_ip(backend_host: str) -> str:
@@ -378,11 +531,15 @@ async def get_telemetry_client(config: dict) -> Optional[BackendTelemetryClient]
 
         # Generate worker ID
         import uuid
+
         worker_id = f"{worker_id_prefix}_{uuid.uuid4().hex[:8]}"
 
         # Determine this worker's accessible URL using cached local IP
         local_ip = _get_local_ip(backend_host)
         worker_url = f"http://{local_ip}:{port}"
+
+        # Issue #255: Load service authentication credentials
+        service_id, service_key = _load_service_credentials(config)
 
         _telemetry_client = BackendTelemetryClient(
             backend_host=backend_host,
@@ -390,7 +547,11 @@ async def get_telemetry_client(config: dict) -> Optional[BackendTelemetryClient]
             worker_id=worker_id,
             worker_url=worker_url,
             platform="windows",
-            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_HEARTBEAT_INTERVAL),
+            heartbeat_interval=backend_config.get(
+                "health_check_interval", DEFAULT_HEARTBEAT_INTERVAL
+            ),
+            service_id=service_id,
+            service_key=service_key,
         )
 
         return _telemetry_client
