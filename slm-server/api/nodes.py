@@ -25,6 +25,7 @@ from models.database import (
     EventType,
     Node,
     NodeEvent,
+    NodeRole,
     NodeStatus,
     Setting,
 )
@@ -84,6 +85,47 @@ async def _create_node_event(
     db.add(event)
     await db.flush()  # Flush but don't commit - let caller handle transaction
     return event
+
+
+async def _process_role_report(
+    db: AsyncSession, node_id: str, role_report: dict
+) -> None:
+    """
+    Process role report from agent heartbeat (Issue #779).
+
+    Updates NodeRole entries based on detected roles.
+    """
+    from models.schemas import RoleReportItem
+
+    for role_name, report_data in role_report.items():
+        # Handle both dict and RoleReportItem
+        if isinstance(report_data, dict):
+            report = RoleReportItem(**report_data)
+        else:
+            report = report_data
+
+        # Find or create NodeRole entry
+        result = await db.execute(
+            select(NodeRole).where(
+                NodeRole.node_id == node_id, NodeRole.role_name == role_name
+            )
+        )
+        node_role = result.scalar_one_or_none()
+
+        if not node_role:
+            # Create new NodeRole with auto assignment type
+            node_role = NodeRole(
+                node_id=node_id,
+                role_name=role_name,
+                assignment_type="auto",
+            )
+            db.add(node_role)
+
+        # Update role status
+        node_role.status = report.status
+        node_role.current_version = report.version
+
+    await db.flush()
 
 
 @router.get("", response_model=NodeListResponse)
@@ -434,6 +476,21 @@ async def node_heartbeat(
     # Store code_version if provided (Issue #741)
     if heartbeat.code_version:
         node.code_version = heartbeat.code_version
+
+    # Process role report (Issue #779)
+    if heartbeat.role_report:
+        await _process_role_report(db, node_id, heartbeat.role_report)
+        # Update node's detected_roles and role_versions
+        node.detected_roles = list(heartbeat.role_report.keys())
+        node.role_versions = {
+            name: report.version
+            for name, report in heartbeat.role_report.items()
+            if report.version
+        }
+
+    # Store listening ports (Issue #779)
+    if heartbeat.listening_ports:
+        node.listening_ports = [p.model_dump() for p in heartbeat.listening_ports]
 
     # Get latest agent code version from settings (Issue #741)
     latest_result = await db.execute(
