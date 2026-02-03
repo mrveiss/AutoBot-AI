@@ -526,7 +526,7 @@ async def find_orphaned_conversation_entities(
 
     Issue #547: Detects memory entities of type 'conversation' that have
     session_id metadata pointing to sessions that no longer exist.
-    Issue #665: Refactored to use extracted helpers.
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
     """
     request_id = generate_request_id()
@@ -539,52 +539,23 @@ async def find_orphaned_conversation_entities(
         )
 
         if not all_entities:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "success": True,
-                    "data": {
-                        "total_conversation_entities": 0,
-                        "orphaned_count": 0,
-                        "orphaned_entities": [],
-                    },
-                    "message": "No conversation entities found",
-                    "request_id": request_id,
-                },
+            return _build_empty_orphan_response(
+                request_id, "No conversation entities found"
             )
 
-        # Issue #665: Use extracted helpers
         existing_session_ids = await _get_existing_session_ids(request)
         orphaned_raw = _find_orphaned_entities(all_entities, existing_session_ids)
-
-        logger.info(
-            "[%s] Found %d conversation entities, %d active sessions",
-            request_id,
-            len(all_entities),
-            len(existing_session_ids),
-        )
-
-        # Issue #665: Format orphaned entities for response
         orphaned_entities = _format_orphaned_for_response(orphaned_raw)
 
         logger.info(
-            "[%s] Found %d orphaned conversation entities",
+            "[%s] Found %d orphaned of %d entities",
             request_id,
             len(orphaned_entities),
+            len(all_entities),
         )
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "success": True,
-                "data": {
-                    "total_conversation_entities": len(all_entities),
-                    "active_sessions": len(existing_session_ids),
-                    "orphaned_count": len(orphaned_entities),
-                    "orphaned_entities": orphaned_entities,
-                },
-                "request_id": request_id,
-            },
+        return _build_orphan_scan_response(
+            request_id, all_entities, existing_session_ids, orphaned_entities
         )
 
     except HTTPException:
@@ -674,6 +645,69 @@ def _format_orphaned_for_response(orphaned_entities: List[Dict]) -> List[Dict]:
     ]
 
 
+def _build_orphan_scan_response(
+    request_id: str,
+    all_entities: List[Dict],
+    existing_session_ids: set,
+    orphaned_entities: List[Dict],
+) -> JSONResponse:
+    """
+    Build response for orphan scan operation.
+
+    Issue #620: Extracted from find_orphaned_conversation_entities.
+
+    Args:
+        request_id: Request tracking ID
+        all_entities: All conversation entities found
+        existing_session_ids: Set of valid session IDs
+        orphaned_entities: Formatted orphaned entities
+
+    Returns:
+        JSONResponse with scan results
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "total_conversation_entities": len(all_entities),
+                "active_sessions": len(existing_session_ids),
+                "orphaned_count": len(orphaned_entities),
+                "orphaned_entities": orphaned_entities,
+            },
+            "request_id": request_id,
+        },
+    )
+
+
+def _build_empty_orphan_response(request_id: str, message: str) -> JSONResponse:
+    """
+    Build response when no conversation entities found.
+
+    Issue #620: Extracted from find_orphaned_conversation_entities.
+
+    Args:
+        request_id: Request tracking ID
+        message: Response message
+
+    Returns:
+        JSONResponse with empty results
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "total_conversation_entities": 0,
+                "orphaned_count": 0,
+                "orphaned_entities": [],
+            },
+            "message": message,
+            "request_id": request_id,
+        },
+    )
+
+
 async def _delete_entities(
     memory_graph: AutoBotMemoryGraph,
     entities: List[Dict],
@@ -736,7 +770,11 @@ def _build_orphan_cleanup_response(
     failed_deletions: List[Dict] = None,
     message: str = None,
 ) -> JSONResponse:
-    """Build response for orphan cleanup operation."""
+    """
+    Build response for orphan cleanup operation.
+
+    Issue #620: Extracted from cleanup_orphaned_conversation_entities.
+    """
     if message is None:
         message = (
             f"Would delete {orphaned_count} orphaned entities"
@@ -761,6 +799,32 @@ def _build_orphan_cleanup_response(
     )
 
 
+async def _detect_orphaned_entities(
+    memory_graph: AutoBotMemoryGraph, request: Request
+) -> List[Dict]:
+    """
+    Detect orphaned conversation entities that reference deleted sessions.
+
+    Issue #620: Extracted from cleanup_orphaned_conversation_entities.
+
+    Args:
+        memory_graph: Memory graph instance
+        request: FastAPI request for accessing chat manager
+
+    Returns:
+        List of orphaned entities, empty list if none found
+    """
+    all_entities = await memory_graph.search_entities(
+        query="*", entity_type="conversation", limit=1000
+    )
+
+    if not all_entities:
+        return []
+
+    existing_session_ids = await _get_existing_session_ids(request)
+    return _find_orphaned_entities(all_entities, existing_session_ids)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_orphaned_conversation_entities",
@@ -777,65 +841,29 @@ async def cleanup_orphaned_conversation_entities(
     Delete conversation entities that reference deleted sessions.
 
     Issue #547: Cleans up orphaned memory entities from deleted conversations.
+    Issue #620: Refactored using Extract Method pattern.
     Issue #744: Requires admin authentication.
-
-    Args:
-        admin_check: Admin permission verification
-        request: FastAPI request object
-        dry_run: If True, only report orphans without deleting (default: True)
-        memory_graph: Memory graph instance
-
-    Returns:
-        Report of orphans found and removed
     """
     request_id = generate_request_id()
 
     try:
-        logger.info(
-            "[%s] Finding orphaned conversation entities (dry_run=%s)",
-            request_id,
-            dry_run,
-        )
+        logger.info("[%s] Cleanup orphans (dry_run=%s)", request_id, dry_run)
 
-        # Get all conversation entities
-        all_entities = await memory_graph.search_entities(
-            query="*",
-            entity_type="conversation",
-            limit=1000,
-        )
-
-        if not all_entities:
-            return _build_orphan_cleanup_response(
-                request_id, dry_run, 0, message="No conversation entities found"
-            )
-
-        # Find orphaned entities
-        existing_session_ids = await _get_existing_session_ids(request)
-        orphaned_entities = _find_orphaned_entities(all_entities, existing_session_ids)
+        orphaned_entities = await _detect_orphaned_entities(memory_graph, request)
 
         if not orphaned_entities:
             return _build_orphan_cleanup_response(
-                request_id,
-                dry_run,
-                0,
-                message="No orphaned conversation entities found",
+                request_id, dry_run, 0, message="No orphaned entities found"
             )
 
-        # Delete if not dry run
-        deleted_count = 0
-        failed_deletions = []
-
+        deleted_count, failed_deletions = 0, []
         if not dry_run:
             deleted_count, failed_deletions = await _delete_entities(
                 memory_graph, orphaned_entities, request_id
             )
 
         return _build_orphan_cleanup_response(
-            request_id,
-            dry_run,
-            len(orphaned_entities),
-            deleted_count,
-            failed_deletions,
+            request_id, dry_run, len(orphaned_entities), deleted_count, failed_deletions
         )
 
     except HTTPException:

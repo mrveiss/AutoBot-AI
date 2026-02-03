@@ -250,50 +250,68 @@ class ConversationAnalyzer:
 
         return "unknown", "Unknown Intent"
 
+    def _process_message_for_extraction(
+        self,
+        msg: Dict[str, Any],
+        intents: List[str],
+        timestamps: List[datetime],
+    ) -> Tuple[int, int]:
+        """
+        Process a single message and extract intent/sentiment data.
+
+        Returns tuple of (success_count, frustration_count).
+        Issue #620.
+        """
+        content = msg.get("content", "")
+        role = msg.get("role", "")
+        timestamp = msg.get("timestamp")
+        success_count = 0
+        frustration_count = 0
+
+        # Parse timestamp
+        if timestamp:
+            ts = _parse_timestamp(timestamp)
+            if ts:
+                timestamps.append(ts)
+
+        # Process user messages for intent and sentiment
+        if role == "user":
+            intent_id, _ = self.detect_intent(content)
+            intents.append(intent_id)
+
+            content_lower = content.lower()
+            if any(word in content_lower for word in SUCCESS_INDICATORS):
+                success_count = 1
+            if any(word in content_lower for word in FRUSTRATION_INDICATORS):
+                frustration_count = 1
+
+        return success_count, frustration_count
+
     def extract_conversation_data(
         self, messages: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Extract structured data from a conversation"""
+        """
+        Extract structured data from a conversation.
+
+        Issue #620: Refactored using Extract Method pattern.
+        """
         if not messages:
             return {
-                "turns": 0,
-                "intents": [],
-                "duration_seconds": 0,
-                "success_indicators": 0,
-                "frustration_indicators": 0,
+                "turns": 0, "intents": [], "duration_seconds": 0,
+                "success_indicators": 0, "frustration_indicators": 0,
             }
 
-        intents = []
+        intents: List[str] = []
+        timestamps: List[datetime] = []
         success_indicators = 0
         frustration_indicators = 0
-        timestamps = []
 
         for msg in messages:
-            content = msg.get("content", "")
-            role = msg.get("role", "")
-            timestamp = msg.get("timestamp")
-
-            if timestamp:
-                try:
-                    if isinstance(timestamp, str):
-                        ts = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    else:
-                        ts = timestamp
-                    timestamps.append(ts)
-                except (ValueError, TypeError) as e:
-                    # Invalid timestamp format - skip for timing analysis
-                    logger.debug("Invalid timestamp format, skipping: %s", e)
-
-            if role == "user":
-                intent_id, _ = self.detect_intent(content)
-                intents.append(intent_id)
-
-                # Check for success/frustration indicators (Issue #326: O(1) lookups)
-                content_lower = content.lower()
-                if any(word in content_lower for word in SUCCESS_INDICATORS):
-                    success_indicators += 1
-                if any(word in content_lower for word in FRUSTRATION_INDICATORS):
-                    frustration_indicators += 1
+            success, frustration = self._process_message_for_extraction(
+                msg, intents, timestamps
+            )
+            success_indicators += success
+            frustration_indicators += frustration
 
         duration = 0
         if len(timestamps) >= 2:
@@ -307,39 +325,43 @@ class ConversationAnalyzer:
             "frustration_indicators": frustration_indicators,
         }
 
-    def identify_bottlenecks(
-        self, conversations: List[Dict[str, Any]]
+    def _track_conversation_intents(
+        self,
+        conv: Dict[str, Any],
+        intent_transitions: Dict[str, Dict[str, int]],
+        intent_failures: Dict[str, int],
+        intent_repetitions: Dict[str, int],
+    ) -> None:
+        """
+        Track intent transitions, repetitions and failures for a conversation.
+
+        Issue #620.
+        """
+        intents = conv.get("intents", [])
+        frustration = conv.get("frustration_indicators", 0)
+
+        # Track transitions and repetitions
+        for i in range(len(intents) - 1):
+            intent_transitions[intents[i]][intents[i + 1]] += 1
+            if intents[i] == intents[i + 1]:
+                intent_repetitions[intents[i]] += 1
+
+        # Track failures
+        if frustration > 0 and intents:
+            intent_failures[intents[-1]] += frustration
+
+    def _build_repetition_bottlenecks(
+        self,
+        intent_repetitions: Dict[str, int],
     ) -> List[FlowBottleneck]:
-        """Identify bottlenecks in conversation flows"""
+        """
+        Build bottleneck objects for repeated intent patterns.
+
+        Issue #620.
+        """
         bottlenecks = []
-
-        # Analyze intent transitions
-        intent_transitions: Dict[str, Dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
-        intent_failures: Dict[str, int] = defaultdict(int)
-        intent_repetitions: Dict[str, int] = defaultdict(int)
-
-        for conv in conversations:
-            intents = conv.get("intents", [])
-            frustration = conv.get("frustration_indicators", 0)
-
-            # Track transitions
-            for i in range(len(intents) - 1):
-                intent_transitions[intents[i]][intents[i + 1]] += 1
-
-            # Track intent repetitions (user repeating same intent)
-            for i in range(len(intents) - 1):
-                if intents[i] == intents[i + 1]:
-                    intent_repetitions[intents[i]] += 1
-
-            # Track failures
-            if frustration > 0 and intents:
-                intent_failures[intents[-1]] += frustration
-
-        # Identify repetition bottlenecks
         for intent_id, count in intent_repetitions.items():
-            if count >= 3:  # Repeated 3+ times
+            if count >= 3:
                 bottlenecks.append(
                     FlowBottleneck(
                         bottleneck_id=f"repetition_{intent_id}",
@@ -354,8 +376,18 @@ class ConversationAnalyzer:
                         ],
                     )
                 )
+        return bottlenecks
 
-        # Identify failure bottlenecks
+    def _build_failure_bottlenecks(
+        self,
+        intent_failures: Dict[str, int],
+    ) -> List[FlowBottleneck]:
+        """
+        Build bottleneck objects for high-frustration intent patterns.
+
+        Issue #620.
+        """
+        bottlenecks = []
         for intent_id, failure_count in intent_failures.items():
             if failure_count >= 2:
                 bottlenecks.append(
@@ -372,8 +404,33 @@ class ConversationAnalyzer:
                         ],
                     )
                 )
+        return bottlenecks
 
-        # Sort by impact score
+    def identify_bottlenecks(
+        self, conversations: List[Dict[str, Any]]
+    ) -> List[FlowBottleneck]:
+        """
+        Identify bottlenecks in conversation flows.
+
+        Issue #620: Refactored using Extract Method pattern.
+        """
+        intent_transitions: Dict[str, Dict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
+        intent_failures: Dict[str, int] = defaultdict(int)
+        intent_repetitions: Dict[str, int] = defaultdict(int)
+
+        # Track intent data for all conversations
+        for conv in conversations:
+            self._track_conversation_intents(
+                conv, intent_transitions, intent_failures, intent_repetitions
+            )
+
+        # Build bottleneck lists
+        bottlenecks = self._build_repetition_bottlenecks(intent_repetitions)
+        bottlenecks.extend(self._build_failure_bottlenecks(intent_failures))
+
+        # Sort by impact score and return top 10
         bottlenecks.sort(key=lambda b: b.impact_score, reverse=True)
         return bottlenecks[:10]
 
@@ -440,66 +497,40 @@ class ConversationAnalyzer:
     def _process_conversation_data(
         self,
         conversations: List[Dict[str, Any]],
-    ) -> Tuple[
-        List[Dict],
-        Counter,
-        Dict[str, List[float]],
-        Counter,
-        Counter,
-        int,
-        int,
-        int,
-        int,
-    ]:
+    ) -> Tuple[List[Dict], Counter, Dict[str, List[float]], Counter, Counter,
+               int, int, int, int]:
         """
         Process all conversations and extract aggregated data.
 
         Issue #281: Extracted helper for conversation processing.
         Issue #620: Further refactored with helper methods.
-
-        Args:
-            conversations: List of conversation dictionaries
-
-        Returns:
-            Tuple of (processed_convs, intent_counts, intent_success, flow_counts,
-                     hourly_dist, total_messages, total_duration, total_success, total_frustration)
         """
         processed_convs = []
         intent_counts: Counter = Counter()
         intent_success: Dict[str, List[float]] = defaultdict(list)
         flow_counts: Counter = Counter()
         hourly_dist: Counter = Counter()
-        total_messages = 0
-        total_duration = 0
-        total_success = 0
-        total_frustration = 0
+        totals = {"messages": 0, "duration": 0, "success": 0, "frustration": 0}
 
         for conv in conversations:
             messages = conv.get("messages", [])
             conv_data = self.extract_conversation_data(messages)
             processed_convs.append(conv_data)
 
-            total_messages += conv_data["turns"]
-            total_duration += conv_data["duration_seconds"]
-            total_success += conv_data["success_indicators"]
-            total_frustration += conv_data["frustration_indicators"]
+            totals["messages"] += conv_data["turns"]
+            totals["duration"] += conv_data["duration_seconds"]
+            totals["success"] += conv_data["success_indicators"]
+            totals["frustration"] += conv_data["frustration_indicators"]
 
-            # Issue #620: Use helper methods
             self._update_intent_tracking(
                 conv_data, intent_counts, intent_success, flow_counts
             )
             self._update_hourly_distribution(messages, hourly_dist)
 
         return (
-            processed_convs,
-            intent_counts,
-            intent_success,
-            flow_counts,
-            hourly_dist,
-            total_messages,
-            total_duration,
-            total_success,
-            total_frustration,
+            processed_convs, intent_counts, intent_success, flow_counts,
+            hourly_dist, totals["messages"], totals["duration"],
+            totals["success"], totals["frustration"],
         )
 
     def _build_intent_patterns(
@@ -572,49 +603,44 @@ class ConversationAnalyzer:
             )
         return common_flows
 
-    async def analyze_conversations(
+    def _create_empty_analysis_result(self) -> ConversationAnalysisResult:
+        """
+        Create an empty analysis result for when no conversations exist.
+
+        Issue #620.
+        """
+        return ConversationAnalysisResult(
+            metrics=ConversationMetrics(
+                total_conversations=0,
+                total_messages=0,
+                avg_messages_per_conversation=0,
+                avg_conversation_duration_seconds=0,
+                user_satisfaction_estimate=0,
+                resolution_rate=0,
+                escalation_rate=0,
+            ),
+            intent_patterns=[],
+            common_flows=[],
+            bottlenecks=[],
+            hourly_distribution={},
+            analysis_period="N/A",
+            conversations_analyzed=0,
+        )
+
+    def _calculate_metrics(
         self,
-        conversations: List[Dict[str, Any]],
-    ) -> ConversationAnalysisResult:
+        n_convs: int,
+        processed_convs: List[Dict],
+        total_messages: int,
+        total_duration: int,
+        total_success: int,
+        total_frustration: int,
+    ) -> ConversationMetrics:
         """
-        Perform full conversation analysis.
+        Calculate conversation metrics from aggregated data.
 
-        Issue #281: Refactored from 136 lines to use extracted helper methods.
+        Issue #620.
         """
-        if not conversations:
-            return ConversationAnalysisResult(
-                metrics=ConversationMetrics(
-                    total_conversations=0,
-                    total_messages=0,
-                    avg_messages_per_conversation=0,
-                    avg_conversation_duration_seconds=0,
-                    user_satisfaction_estimate=0,
-                    resolution_rate=0,
-                    escalation_rate=0,
-                ),
-                intent_patterns=[],
-                common_flows=[],
-                bottlenecks=[],
-                hourly_distribution={},
-                analysis_period="N/A",
-                conversations_analyzed=0,
-            )
-
-        # Process all conversations (Issue #281: uses helper)
-        (
-            processed_convs,
-            intent_counts,
-            intent_success,
-            flow_counts,
-            hourly_dist,
-            total_messages,
-            total_duration,
-            total_success,
-            total_frustration,
-        ) = self._process_conversation_data(conversations)
-
-        # Calculate metrics
-        n_convs = len(conversations)
         satisfaction = (total_success / max(1, total_success + total_frustration)) * 100
         resolution_rate = (
             sum(1 for c in processed_convs if c["success_indicators"] > 0)
@@ -622,7 +648,7 @@ class ConversationAnalyzer:
             * 100
         )
 
-        metrics = ConversationMetrics(
+        return ConversationMetrics(
             total_conversations=n_convs,
             total_messages=total_messages,
             avg_messages_per_conversation=round(total_messages / max(1, n_convs), 1),
@@ -634,15 +660,39 @@ class ConversationAnalyzer:
             escalation_rate=round(total_frustration / max(1, n_convs) * 100, 1),
         )
 
-        # Build intent patterns (Issue #281: uses helper)
+    async def analyze_conversations(
+        self,
+        conversations: List[Dict[str, Any]],
+    ) -> ConversationAnalysisResult:
+        """
+        Perform full conversation analysis.
+
+        Issue #281: Refactored from 136 lines to use extracted helper methods.
+        Issue #620: Further refactored with Extract Method pattern.
+        """
+        if not conversations:
+            return self._create_empty_analysis_result()
+
+        # Process all conversations
+        (
+            processed_convs, intent_counts, intent_success, flow_counts,
+            hourly_dist, total_messages, total_duration, total_success,
+            total_frustration,
+        ) = self._process_conversation_data(conversations)
+
+        n_convs = len(conversations)
+
+        # Calculate metrics using helper
+        metrics = self._calculate_metrics(
+            n_convs, processed_convs, total_messages, total_duration,
+            total_success, total_frustration,
+        )
+
+        # Build result components
         intent_patterns = self._build_intent_patterns(
             intent_counts, intent_success, total_messages
         )
-
-        # Build common flows (Issue #281: uses helper)
         common_flows = self._build_common_flows(flow_counts)
-
-        # Identify bottlenecks
         bottlenecks = self.identify_bottlenecks(processed_convs)
 
         return ConversationAnalysisResult(
