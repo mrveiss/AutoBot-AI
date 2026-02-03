@@ -34,11 +34,7 @@ class OllamaHealth(BaseProviderHealth):
         """Initialize Ollama health checker with host configuration."""
         super().__init__("ollama")
         # Get Ollama configuration from environment
-        from src.config import (
-            HTTP_PROTOCOL,
-            OLLAMA_HOST_IP,
-            OLLAMA_PORT,
-        )
+        from src.config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
 
         self.ollama_host = os.getenv(
             "AUTOBOT_OLLAMA_HOST", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
@@ -117,7 +113,8 @@ class OpenAIHealth(BaseProviderHealth):
         """Initialize OpenAI health checker with API key configuration."""
         super().__init__("openai")
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.base_url = "https://api.openai.com/v1"
+        # Use env var for base URL, fallback to standard OpenAI API
+        self.base_url = os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
 
     def _build_response_result(
         self, response_status: int, data: dict, response_time: float
@@ -138,15 +135,23 @@ class OpenAIHealth(BaseProviderHealth):
                 },
             )
         # Handle error status codes using dispatch table
-        error_messages = {401: "OpenAI API key is invalid", 429: "OpenAI rate limit exceeded"}
+        error_messages = {
+            401: "OpenAI API key is invalid",
+            429: "OpenAI rate limit exceeded",
+        }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(response_status, f"OpenAI returned status {response_status}")
+        msg = error_messages.get(
+            response_status, f"OpenAI returned status {response_status}"
+        )
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
         return self._create_result(
-            status=status, available=False, message=msg,
-            response_time=response_time, details=details,
+            status=status,
+            available=False,
+            message=msg,
+            response_time=response_time,
+            details=details,
         )
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
@@ -211,7 +216,10 @@ class AnthropicHealth(BaseProviderHealth):
         """Initialize Anthropic health checker with API key configuration."""
         super().__init__("anthropic")
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
-        self.base_url = "https://api.anthropic.com/v1"
+        # Use env var for base URL, fallback to standard Anthropic API
+        self.base_url = os.getenv(
+            "ANTHROPIC_API_BASE_URL", "https://api.anthropic.com/v1"
+        )
 
     def _build_anthropic_result(
         self, response_status: int, response_time: float
@@ -226,15 +234,23 @@ class AnthropicHealth(BaseProviderHealth):
                 details={"api_key_set": True, "validation_method": "count_tokens"},
             )
         # Handle error status codes using dispatch table
-        error_messages = {401: "Anthropic API key is invalid", 429: "Anthropic rate limit exceeded"}
+        error_messages = {
+            401: "Anthropic API key is invalid",
+            429: "Anthropic rate limit exceeded",
+        }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(response_status, f"Anthropic returned status {response_status}")
+        msg = error_messages.get(
+            response_status, f"Anthropic returned status {response_status}"
+        )
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
         return self._create_result(
-            status=status, available=False, message=msg,
-            response_time=response_time, details=details,
+            status=status,
+            available=False,
+            message=msg,
+            response_time=response_time,
+            details=details,
         )
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
@@ -335,13 +351,18 @@ class GoogleHealth(BaseProviderHealth):
             429: "Google rate limit exceeded",
         }
         status = _API_STATUS_RESPONSES.get(response_status, ProviderStatus.UNAVAILABLE)
-        msg = error_messages.get(response_status, f"Google returned status {response_status}")
+        msg = error_messages.get(
+            response_status, f"Google returned status {response_status}"
+        )
         details = {"api_key_set": True, "status_code": response_status}
         if response_status == 429:
             details["rate_limited"] = True
         return self._create_result(
-            status=status, available=False, message=msg,
-            response_time=response_time, details=details,
+            status=status,
+            available=False,
+            message=msg,
+            response_time=response_time,
+            details=details,
         )
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
