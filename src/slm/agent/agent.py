@@ -26,6 +26,8 @@ import aiohttp
 from aiohttp import web
 
 from .health_collector import HealthCollector
+from .port_scanner import get_listening_ports
+from .role_detector import RoleDetector
 from .version import get_agent_version
 
 logger = logging.getLogger(__name__)
@@ -86,6 +88,10 @@ class SLMAgent:
         self.collector = HealthCollector(services=services or [])
         self._init_buffer_db()
 
+        # Role detection (Issue #779)
+        self.role_detector = RoleDetector()
+        self._role_definitions_loaded = False
+
     def _init_buffer_db(self):
         """Initialize SQLite buffer database."""
         Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
@@ -135,15 +141,63 @@ class SLMAgent:
             self._pending_update = True
             self._latest_version = latest
 
+    async def _fetch_role_definitions(self) -> bool:
+        """Fetch role definitions from SLM server (Issue #779)."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.admin_url}/api/roles/definitions"
+                async with session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    ssl=False,
+                ) as response:
+                    if response.status == 200:
+                        definitions = await response.json()
+                        self.role_detector.load_definitions(definitions)
+                        self._role_definitions_loaded = True
+                        logger.info("Loaded %d role definitions", len(definitions))
+                        return True
+        except Exception as e:
+            logger.debug("Failed to fetch role definitions: %s", e)
+        return False
+
     async def send_heartbeat(self) -> bool:
         """Send heartbeat with health data to admin."""
         import platform
+
+        # Fetch role definitions if not loaded (Issue #779)
+        if not self._role_definitions_loaded:
+            await self._fetch_role_definitions()
 
         health = self.collector.collect()
         # Payload matches HeartbeatRequest schema
         os_info = f"{platform.system()} {platform.release()}"
         # Issue #741: Get code version for heartbeat
         code_version = self.version_manager.get_version()
+
+        # Detect roles (Issue #779)
+        role_report = {}
+        if self._role_definitions_loaded:
+            role_statuses = self.role_detector.detect_all()
+            role_report = {
+                name: {
+                    "path_exists": status.path_exists,
+                    "path": status.path,
+                    "service_running": status.service_running,
+                    "service_name": status.service_name,
+                    "ports": status.ports,
+                    "version": status.version,
+                    "status": status.status,
+                }
+                for name, status in role_statuses.items()
+            }
+
+        # Get listening ports (Issue #779)
+        listening_ports = [
+            {"port": p.port, "process": p.process, "pid": p.pid}
+            for p in get_listening_ports()
+        ]
+
         payload = {
             "cpu_percent": health.get("cpu_percent", 0.0),
             "memory_percent": health.get("memory_percent", 0.0),
@@ -151,6 +205,8 @@ class SLMAgent:
             "agent_version": "1.0.0",
             "os_info": os_info,
             "code_version": code_version,  # Issue #741: Add code version
+            "role_report": role_report,  # Issue #779: Add role detection
+            "listening_ports": listening_ports,  # Issue #779: Add listening ports
             "extra_data": {
                 "services": health.get("services", {}),
                 "discovered_services": health.get("discovered_services", []),
