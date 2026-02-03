@@ -97,7 +97,7 @@ async def _build_warmup_success_result(
                 is_gpu=device_info.is_gpu,
             )
     except Exception:
-        pass  # Non-critical device info
+        pass  # nosec B110 - Non-critical device info, intentional no-op
     logger.info(
         "NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time
     )
@@ -265,19 +265,38 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     return embedding
 
 
-async def _generate_embeddings_batch_with_npu_fallback(
-    texts: List[str],
-) -> List[List[float]]:
+async def _try_npu_batch_embeddings(
+    texts: List[str], client: Any
+) -> Optional[List[List[float]]]:
+    """Try to generate batch embeddings via NPU worker. Issue #620.
+
+    Args:
+        texts: List of text contents to embed
+        client: NPU client instance
+
+    Returns:
+        List of embeddings if successful, None otherwise
     """
-    Generate embeddings for multiple texts using NPU worker with fallback.
+    global _npu_embedding_count
 
-    Issue #165: Uses NPU worker batch endpoint for efficient bulk embedding
-    generation. Falls back to bounded-parallel LlamaIndex calls if unavailable.
+    try:
+        result = await client.generate_embeddings(texts)
+        if result and len(result.embeddings) == len(texts):
+            _npu_embedding_count += len(texts)
+            logger.info(
+                "Generated %d embeddings via NPU worker in %.2fms",
+                len(texts),
+                result.processing_time_ms,
+            )
+            return result.embeddings
+        logger.warning("NPU batch returned incomplete results, falling back")
+    except Exception as e:
+        logger.debug("NPU batch failed, falling back: %s", e)
+    return None
 
-    Optimizations:
-    - Caches NPU client to avoid repeated lookups
-    - Uses bounded concurrency for fallback to prevent overwhelming Ollama
-    - Tracks metrics for observability
+
+async def _generate_embeddings_fallback(texts: List[str]) -> List[List[float]]:
+    """Generate embeddings via LlamaIndex fallback. Issue #620.
 
     Args:
         texts: List of text contents to embed
@@ -285,29 +304,7 @@ async def _generate_embeddings_batch_with_npu_fallback(
     Returns:
         List of embedding vectors
     """
-    global _npu_embedding_count, _fallback_embedding_count
-
-    if not texts:
-        return []
-
-    client, is_available = await _get_npu_client_cached()
-
-    if is_available and client:
-        try:
-            result = await client.generate_embeddings(texts)
-            if result and len(result.embeddings) == len(texts):
-                _npu_embedding_count += len(texts)
-                logger.info(
-                    "Generated %d embeddings via NPU worker in %.2fms",
-                    len(texts),
-                    result.processing_time_ms,
-                )
-                return result.embeddings
-            logger.warning("NPU batch returned incomplete results, falling back")
-        except Exception as e:
-            logger.debug("NPU batch failed, falling back: %s", e)
-
-    # Fallback to bounded-parallel LlamaIndex calls
+    global _fallback_embedding_count
     from llama_index.core import Settings
 
     semaphore = asyncio.Semaphore(_FALLBACK_MAX_CONCURRENT)
@@ -322,6 +319,30 @@ async def _generate_embeddings_batch_with_npu_fallback(
     _fallback_embedding_count += len(texts)
     logger.debug("Generated %d embeddings via LlamaIndex fallback", len(texts))
     return list(embeddings)
+
+
+async def _generate_embeddings_batch_with_npu_fallback(
+    texts: List[str],
+) -> List[List[float]]:
+    """Generate batch embeddings with NPU worker and fallback. Issue #620.
+
+    Args:
+        texts: List of text contents to embed
+
+    Returns:
+        List of embedding vectors
+    """
+    if not texts:
+        return []
+
+    client, is_available = await _get_npu_client_cached()
+
+    if is_available and client:
+        embeddings = await _try_npu_batch_embeddings(texts, client)
+        if embeddings:
+            return embeddings
+
+    return await _generate_embeddings_fallback(texts)
 
 
 def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
@@ -885,12 +906,49 @@ class FactsMixin:
             logger.error("Failed to update fact %s: %s", fact_id, e)
             return {"status": "error", "message": str(e)}
 
-    async def delete_fact(self, fact_id: str) -> dict:
-        """
-        Delete a fact from Redis and ChromaDB.
+    async def _cleanup_fact_mappings(
+        self, fact_id: str, content: str, metadata: Dict[str, Any]
+    ) -> None:
+        """Clean up Redis mappings for a deleted fact. Issue #620.
 
-        Issue #547 code review: Also cleans up content_hash, unique_key,
-        and session tracking mappings to prevent memory leaks.
+        Removes content hash, unique key, and session tracking mappings
+        to prevent memory leaks.
+
+        Args:
+            fact_id: ID of the fact being deleted
+            content: Fact content for hash cleanup
+            metadata: Fact metadata for unique key cleanup
+        """
+        if content:
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+            await asyncio.to_thread(
+                self.redis_client.delete, "content_hash:%s" % content_hash
+            )
+
+        unique_key = metadata.get("unique_key")
+        if unique_key:
+            await asyncio.to_thread(
+                self.redis_client.delete, "unique_key:man_page:%s" % unique_key
+            )
+
+        await asyncio.to_thread(
+            self.redis_client.delete, "fact:origin:session:%s" % fact_id
+        )
+
+    async def _delete_fact_from_vector_store(self, fact_id: str) -> None:
+        """Delete fact from ChromaDB vector store. Issue #620.
+
+        Args:
+            fact_id: ID of the fact to delete from vector store
+        """
+        if self.vector_store:
+            try:
+                await asyncio.to_thread(self.vector_store.delete, fact_id)
+            except Exception as e:
+                logger.warning("Could not delete vector for fact %s: %s", fact_id, e)
+
+    async def delete_fact(self, fact_id: str) -> dict:
+        """Delete a fact from Redis and ChromaDB. Issue #620.
 
         Args:
             fact_id: ID of the fact to delete
@@ -902,49 +960,18 @@ class FactsMixin:
 
         try:
             fact_key = "fact:%s" % fact_id
-
-            # Check if fact exists and get its data for cleanup
             fact_data = await asyncio.to_thread(self.redis_client.hgetall, fact_key)
             if not fact_data:
                 return {"status": "error", "message": "Fact not found"}
 
-            # Issue #547 code review: Get content and metadata for cleanup
             decoded = _decode_redis_hash(fact_data)
             content = decoded.get("content", "")
             metadata = decoded.get("_parsed_metadata", {})
 
-            # Delete from Redis - main fact key
             await asyncio.to_thread(self.redis_client.delete, fact_key)
+            await self._cleanup_fact_mappings(fact_id, content, metadata)
+            await self._delete_fact_from_vector_store(fact_id)
 
-            # Issue #547 code review: Clean up content hash mapping
-            if content:
-                content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-                await asyncio.to_thread(
-                    self.redis_client.delete, "content_hash:%s" % content_hash
-                )
-
-            # Issue #547 code review: Clean up unique_key mapping if exists
-            unique_key = metadata.get("unique_key")
-            if unique_key:
-                await asyncio.to_thread(
-                    self.redis_client.delete, "unique_key:man_page:%s" % unique_key
-                )
-
-            # Issue #547 code review: Clean up session tracking key
-            await asyncio.to_thread(
-                self.redis_client.delete, "fact:origin:session:%s" % fact_id
-            )
-
-            # Delete from ChromaDB
-            if self.vector_store:
-                try:
-                    await asyncio.to_thread(self.vector_store.delete, fact_id)
-                except Exception as e:
-                    logger.warning(
-                        "Could not delete vector for fact %s: %s", fact_id, e
-                    )
-
-            # Issue #379: Decrement stats counters in parallel (Issue #71)
             await asyncio.gather(
                 self._decrement_stat("total_facts"),
                 self._decrement_stat("total_vectors"),
@@ -1156,18 +1183,40 @@ class FactsMixin:
         except Exception as e:
             result["errors"].append({"fact_id": fact_id, "error": str(e)})
 
+    async def _process_session_facts_deletion(
+        self,
+        session_id: str,
+        fact_ids: List[str],
+        preserve_important: bool,
+        result: Dict[str, Any],
+    ) -> None:
+        """Process deletion of all facts in a session. Issue #620.
+
+        Args:
+            session_id: Session ID being cleaned up
+            fact_ids: List of fact IDs to process
+            preserve_important: Whether to preserve important facts
+            result: Result dict to update with counts
+        """
+        important_ids = set()
+        if preserve_important:
+            important_ids = await self._batch_check_important_facts(fact_ids)
+
+        for fact_id in fact_ids:
+            await self._delete_single_fact_for_session(
+                fact_id, session_id, important_ids, preserve_important, result
+            )
+
+        await self._cleanup_session_tracking(session_id, fact_ids)
+
     async def delete_facts_by_session(
         self, session_id: str, preserve_important: bool = True
     ) -> Dict[str, Any]:
-        """
-        Delete all facts created during a specific session.
-
-        Issue #547: Called during session deletion for orphan cleanup.
-        Issue #665: Refactored to use _delete_single_fact_for_session helper.
+        """Delete all facts created during a specific session. Issue #620.
 
         Args:
             session_id: Chat session ID to cleanup
-            preserve_important: If True, preserve facts marked as 'important' in metadata
+            preserve_important: If True, preserve facts marked as 'important'
 
         Returns:
             Dict with deletion statistics
@@ -1182,7 +1231,6 @@ class FactsMixin:
 
         try:
             fact_ids = await self.get_facts_by_session(session_id)
-
             if not fact_ids:
                 logger.info("No facts found for session %s", session_id)
                 return result
@@ -1194,19 +1242,9 @@ class FactsMixin:
                 preserve_important,
             )
 
-            # Batch check important facts
-            important_ids = set()
-            if preserve_important:
-                important_ids = await self._batch_check_important_facts(fact_ids)
-
-            # Process each fact (Issue #665: uses helper)
-            for fact_id in fact_ids:
-                await self._delete_single_fact_for_session(
-                    fact_id, session_id, important_ids, preserve_important, result
-                )
-
-            # Clean up session tracking keys
-            await self._cleanup_session_tracking(session_id, fact_ids)
+            await self._process_session_facts_deletion(
+                session_id, fact_ids, preserve_important, result
+            )
 
             logger.info(
                 "Session %s cleanup complete: deleted=%d, preserved=%d, errors=%d",
@@ -1215,7 +1253,6 @@ class FactsMixin:
                 result["preserved_count"],
                 len(result["errors"]),
             )
-
             return result
 
         except Exception as e:

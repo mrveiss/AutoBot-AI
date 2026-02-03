@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .core import AutoBotMemoryGraphCore, VALID_ACTIVITY_TYPES
+from .core import VALID_ACTIVITY_TYPES, AutoBotMemoryGraphCore
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +69,14 @@ class UserSessionMixin:
                 return existing[0]
 
             user_metadata = metadata or {}
-            user_metadata.update({
-                "user_id": user_id,
-                "username": username,
-                "status": "active",
-                "created_at": datetime.utcnow().isoformat(),
-            })
+            user_metadata.update(
+                {
+                    "user_id": user_id,
+                    "username": username,
+                    "status": "active",
+                    "created_at": datetime.utcnow().isoformat(),
+                }
+            )
 
             entity = await self.create_entity(
                 entity_type="user",
@@ -100,14 +102,16 @@ class UserSessionMixin:
     ) -> Dict[str, Any]:
         """Issue #665: Build metadata dictionary for a chat session entity."""
         session_metadata = metadata or {}
-        session_metadata.update({
-            "session_id": session_id,
-            "owner_id": owner_id,
-            "mode": "collaborative" if collaborators else "single_user",
-            "collaborators": collaborators or [],
-            "status": "active",
-            "created_at": datetime.utcnow().isoformat(),
-        })
+        session_metadata.update(
+            {
+                "session_id": session_id,
+                "owner_id": owner_id,
+                "mode": "collaborative" if collaborators else "single_user",
+                "collaborators": collaborators or [],
+                "status": "active",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        )
         return session_metadata
 
     async def _create_session_owner_relations(
@@ -208,12 +212,14 @@ class UserSessionMixin:
     ) -> Dict[str, Any]:
         """Issue #665: Build metadata dictionary for an activity entity."""
         activity_metadata = metadata or {}
-        activity_metadata.update({
-            "session_id": session_id,
-            "user_id": user_id,
-            "secrets_used": secrets_used or [],
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        activity_metadata.update(
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "secrets_used": secrets_used or [],
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
         return activity_metadata
 
     async def _create_activity_relations(
@@ -356,6 +362,73 @@ class UserSessionMixin:
             logger.error("Failed to get user sessions: %s", e)
             return []
 
+    def _activity_matches_filters(
+        self: AutoBotMemoryGraphCore,
+        activity: Dict[str, Any],
+        activity_types: Optional[List[str]],
+        user_id: Optional[str],
+    ) -> bool:
+        """
+        Check if an activity matches the provided filters.
+
+        Issue #620.
+
+        Args:
+            activity: Activity entity to check
+            activity_types: Filter by activity types (None = any type)
+            user_id: Filter by user who performed the activity (None = any user)
+
+        Returns:
+            True if activity matches all filters
+        """
+        if activity_types and activity.get("type") not in activity_types:
+            return False
+
+        if user_id and activity.get("metadata", {}).get("user_id") != user_id:
+            return False
+
+        return True
+
+    async def _fetch_and_filter_activities(
+        self: AutoBotMemoryGraphCore,
+        session_id: str,
+        activity_types: Optional[List[str]],
+        user_id: Optional[str],
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch activities from relations and filter them.
+
+        Issue #620.
+
+        Args:
+            session_id: Session ID to query
+            activity_types: Filter by activity types
+            user_id: Filter by user
+            limit: Maximum activities to return
+
+        Returns:
+            List of filtered activity entities
+        """
+        relations = await self.get_relations(
+            entity_id=session_id,
+            relation_types=["has_activity"],
+            direction="outgoing",
+        )
+
+        activities = []
+        for rel in relations.get("relations", []):
+            activity = await self.get_entity(entity_id=rel["to"])
+            if not activity:
+                continue
+
+            if self._activity_matches_filters(activity, activity_types, user_id):
+                activities.append(activity)
+                if len(activities) >= limit:
+                    break
+
+        return activities
+
     async def get_session_activities(
         self: AutoBotMemoryGraphCore,
         session_id: str,
@@ -367,6 +440,7 @@ class UserSessionMixin:
         Get activities for a session.
 
         Issue #608: Returns all activities within a session, optionally filtered.
+        Issue #620: Refactored using Extract Method pattern.
 
         Args:
             session_id: Session ID to query
@@ -375,34 +449,14 @@ class UserSessionMixin:
             limit: Maximum number of activities to return
 
         Returns:
-            List of activity entities
+            List of activity entities sorted by timestamp (newest first)
         """
         self.ensure_initialized()
 
         try:
-            relations = await self.get_relations(
-                entity_id=session_id,
-                relation_types=["has_activity"],
-                direction="outgoing",
+            activities = await self._fetch_and_filter_activities(
+                session_id, activity_types, user_id, limit
             )
-
-            activities = []
-            for rel in relations.get("relations", []):
-                activity = await self.get_entity(entity_id=rel["to"])
-                if not activity:
-                    continue
-
-                if activity_types and activity.get("type") not in activity_types:
-                    continue
-
-                if user_id:
-                    if activity.get("metadata", {}).get("user_id") != user_id:
-                        continue
-
-                activities.append(activity)
-
-                if len(activities) >= limit:
-                    break
 
             activities.sort(
                 key=lambda x: x.get("metadata", {}).get("timestamp", ""),

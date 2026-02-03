@@ -100,6 +100,105 @@ class ConfigManager:
         "orchestrator": {"temperature": 0.5, "num_predict": 400, "top_p": 0.8},
     }
 
+    # Issue #620: Environment variable mappings extracted as class constant
+    # to reduce _apply_env_overrides function length
+    ENV_VAR_MAPPINGS = {
+        # Backend configuration
+        "AUTOBOT_BACKEND_HOST": ["backend", "server_host"],
+        "AUTOBOT_BACKEND_PORT": ["backend", "server_port"],
+        "AUTOBOT_BACKEND_API_ENDPOINT": ["backend", "api_endpoint"],
+        "AUTOBOT_BACKEND_TIMEOUT": ["backend", "timeout"],
+        "AUTOBOT_BACKEND_MAX_RETRIES": ["backend", "max_retries"],
+        "AUTOBOT_BACKEND_STREAMING": ["backend", "streaming"],
+        # LLM configuration
+        "AUTOBOT_OLLAMA_HOST": ["backend", "ollama_endpoint"],
+        "AUTOBOT_OLLAMA_MODEL": ["backend", "ollama_model"],
+        "AUTOBOT_OLLAMA_ENDPOINT": [
+            "backend",
+            "llm",
+            "local",
+            "providers",
+            "ollama",
+            "endpoint",
+        ],
+        "AUTOBOT_OLLAMA_SELECTED_MODEL": [
+            "backend",
+            "llm",
+            "local",
+            "providers",
+            "ollama",
+            "selected_model",
+        ],
+        "AUTOBOT_ORCHESTRATOR_LLM": ["llm_config", "orchestrator_llm"],
+        "AUTOBOT_DEFAULT_LLM": ["llm_config", "default_llm"],
+        "AUTOBOT_TASK_LLM": ["llm_config", "task_llm"],
+        "AUTOBOT_LLM_PROVIDER_TYPE": ["backend", "llm", "provider_type"],
+        # Redis configuration
+        "AUTOBOT_REDIS_HOST": ["memory", "redis", "host"],
+        "AUTOBOT_REDIS_PORT": ["memory", "redis", "port"],
+        "AUTOBOT_REDIS_ENABLED": ["memory", "redis", "enabled"],
+        # Chat configuration
+        "AUTOBOT_CHAT_MAX_MESSAGES": ["chat", "max_messages"],
+        "AUTOBOT_CHAT_WELCOME_MESSAGE": ["chat", "default_welcome_message"],
+        "AUTOBOT_CHAT_AUTO_SCROLL": ["chat", "auto_scroll"],
+        "AUTOBOT_CHAT_RETENTION_DAYS": ["chat", "message_retention_days"],
+        # Knowledge base configuration
+        "AUTOBOT_KB_ENABLED": ["knowledge_base", "enabled"],
+        "AUTOBOT_KB_UPDATE_FREQUENCY": ["knowledge_base", "update_frequency_days"],
+        "AUTOBOT_KB_DB_PATH": ["backend", "knowledge_base_db"],
+        # Logging configuration
+        "AUTOBOT_LOG_LEVEL": ["logging", "log_level"],
+        "AUTOBOT_LOG_TO_FILE": ["logging", "log_to_file"],
+        "AUTOBOT_LOG_FILE_PATH": ["logging", "log_file_path"],
+        # Developer configuration
+        "AUTOBOT_DEVELOPER_MODE": ["developer", "enabled"],
+        "AUTOBOT_DEBUG_LOGGING": ["developer", "debug_logging"],
+        "AUTOBOT_ENHANCED_ERRORS": ["developer", "enhanced_errors"],
+        # UI configuration
+        "AUTOBOT_UI_THEME": ["ui", "theme"],
+        "AUTOBOT_UI_FONT_SIZE": ["ui", "font_size"],
+        "AUTOBOT_UI_LANGUAGE": ["ui", "language"],
+        "AUTOBOT_UI_ANIMATIONS": ["ui", "animations"],
+        # Message display configuration
+        "AUTOBOT_SHOW_THOUGHTS": ["message_display", "show_thoughts"],
+        "AUTOBOT_SHOW_JSON": ["message_display", "show_json"],
+        "AUTOBOT_SHOW_DEBUG": ["message_display", "show_debug"],
+        "AUTOBOT_SHOW_PLANNING": ["message_display", "show_planning"],
+        "AUTOBOT_SHOW_UTILITY": ["message_display", "show_utility"],
+        # Security configuration
+        "AUTOBOT_ENABLE_ENCRYPTION": ["security", "enable_encryption"],
+        "AUTOBOT_SESSION_TIMEOUT": ["security", "session_timeout_minutes"],
+        # Voice interface configuration
+        "AUTOBOT_VOICE_ENABLED": ["voice_interface", "enabled"],
+        "AUTOBOT_VOICE_RATE": ["voice_interface", "speech_rate"],
+        "AUTOBOT_VOICE": ["voice_interface", "voice"],
+        # Legacy support
+        "AUTOBOT_USE_LANGCHAIN": ["orchestrator", "use_langchain"],
+        "AUTOBOT_USE_PHI2": ["backend", "use_phi2"],
+    }
+
+    # Issue #620: Agent model configuration extracted as class constant
+    AGENT_MODEL_DEFAULTS = {
+        # Core Orchestration - use available model for flexible reasoning
+        "orchestrator": "llama3.2:3b",
+        "default": "llama3.2:3b",
+        # Specialized Agents - optimized for task complexity
+        "chat": "llama3.2:1b",
+        "system_commands": "llama3.2:1b",
+        "rag": "dolphin-llama3:8b",
+        "knowledge_retrieval": "llama3.2:1b",
+        "research": "dolphin-llama3:8b",
+        # Legacy compatibility
+        "search": "llama3.2:1b",
+        "code": "llama3.2:1b",
+        "analysis": "dolphin-llama3:8b",
+        "planning": "dolphin-llama3:8b",
+        # Fallback models
+        "orchestrator_fallback": "llama3.2:3b",
+        "chat_fallback": "llama3.2:1b",
+        "fallback": "dolphin-llama3:8b",
+    }
+
     def __init__(self, config_dir: str = "config"):
         # Find project root dynamically (directory containing this file is
         # src/, parent is project root)
@@ -185,103 +284,41 @@ class ConfigManager:
 
         return result
 
+    def _convert_env_value(self, env_value: str) -> Any:
+        """Convert environment variable string to appropriate Python type.
+
+        Issue #620: Extracted from _apply_env_overrides to reduce function length.
+        Issue #620.
+
+        Args:
+            env_value: Raw string value from environment variable
+
+        Returns:
+            Converted value (bool, int, or original string)
+        """
+        if env_value.lower() in ("true", "false"):
+            return env_value.lower() == "true"
+        elif env_value.isdigit():
+            return int(env_value)
+        return env_value
+
     def _apply_env_overrides(self) -> None:
-        """Apply environment variable overrides using AUTOBOT_ prefix"""
+        """Apply environment variable overrides using AUTOBOT_ prefix.
+
+        Issue #620: Refactored to use ENV_VAR_MAPPINGS class constant and
+        _convert_env_value helper method for reduced function length.
+        """
         env_overrides = {}
 
-        # Comprehensive environment variable mappings
-        env_mappings = {
-            # Backend configuration
-            "AUTOBOT_BACKEND_HOST": ["backend", "server_host"],
-            "AUTOBOT_BACKEND_PORT": ["backend", "server_port"],
-            "AUTOBOT_BACKEND_API_ENDPOINT": ["backend", "api_endpoint"],
-            "AUTOBOT_BACKEND_TIMEOUT": ["backend", "timeout"],
-            "AUTOBOT_BACKEND_MAX_RETRIES": ["backend", "max_retries"],
-            "AUTOBOT_BACKEND_STREAMING": ["backend", "streaming"],
-            # LLM configuration
-            "AUTOBOT_OLLAMA_HOST": ["backend", "ollama_endpoint"],
-            "AUTOBOT_OLLAMA_MODEL": ["backend", "ollama_model"],
-            "AUTOBOT_OLLAMA_ENDPOINT": [
-                "backend",
-                "llm",
-                "local",
-                "providers",
-                "ollama",
-                "endpoint",
-            ],
-            "AUTOBOT_OLLAMA_SELECTED_MODEL": [
-                "backend",
-                "llm",
-                "local",
-                "providers",
-                "ollama",
-                "selected_model",
-            ],
-            "AUTOBOT_ORCHESTRATOR_LLM": ["llm_config", "orchestrator_llm"],
-            "AUTOBOT_DEFAULT_LLM": ["llm_config", "default_llm"],
-            "AUTOBOT_TASK_LLM": ["llm_config", "task_llm"],
-            "AUTOBOT_LLM_PROVIDER_TYPE": ["backend", "llm", "provider_type"],
-            # Redis configuration
-            "AUTOBOT_REDIS_HOST": ["memory", "redis", "host"],
-            "AUTOBOT_REDIS_PORT": ["memory", "redis", "port"],
-            "AUTOBOT_REDIS_ENABLED": ["memory", "redis", "enabled"],
-            # Chat configuration
-            "AUTOBOT_CHAT_MAX_MESSAGES": ["chat", "max_messages"],
-            "AUTOBOT_CHAT_WELCOME_MESSAGE": ["chat", "default_welcome_message"],
-            "AUTOBOT_CHAT_AUTO_SCROLL": ["chat", "auto_scroll"],
-            "AUTOBOT_CHAT_RETENTION_DAYS": ["chat", "message_retention_days"],
-            # Knowledge base configuration
-            "AUTOBOT_KB_ENABLED": ["knowledge_base", "enabled"],
-            "AUTOBOT_KB_UPDATE_FREQUENCY": [
-                "knowledge_base",
-                "update_frequency_days",
-            ],
-            "AUTOBOT_KB_DB_PATH": ["backend", "knowledge_base_db"],
-            # Logging configuration
-            "AUTOBOT_LOG_LEVEL": ["logging", "log_level"],
-            "AUTOBOT_LOG_TO_FILE": ["logging", "log_to_file"],
-            "AUTOBOT_LOG_FILE_PATH": ["logging", "log_file_path"],
-            # Developer configuration
-            "AUTOBOT_DEVELOPER_MODE": ["developer", "enabled"],
-            "AUTOBOT_DEBUG_LOGGING": ["developer", "debug_logging"],
-            "AUTOBOT_ENHANCED_ERRORS": ["developer", "enhanced_errors"],
-            # UI configuration
-            "AUTOBOT_UI_THEME": ["ui", "theme"],
-            "AUTOBOT_UI_FONT_SIZE": ["ui", "font_size"],
-            "AUTOBOT_UI_LANGUAGE": ["ui", "language"],
-            "AUTOBOT_UI_ANIMATIONS": ["ui", "animations"],
-            # Message display configuration
-            "AUTOBOT_SHOW_THOUGHTS": ["message_display", "show_thoughts"],
-            "AUTOBOT_SHOW_JSON": ["message_display", "show_json"],
-            "AUTOBOT_SHOW_DEBUG": ["message_display", "show_debug"],
-            "AUTOBOT_SHOW_PLANNING": ["message_display", "show_planning"],
-            "AUTOBOT_SHOW_UTILITY": ["message_display", "show_utility"],
-            # Security configuration
-            "AUTOBOT_ENABLE_ENCRYPTION": ["security", "enable_encryption"],
-            "AUTOBOT_SESSION_TIMEOUT": ["security", "session_timeout_minutes"],
-            # Voice interface configuration
-            "AUTOBOT_VOICE_ENABLED": ["voice_interface", "enabled"],
-            "AUTOBOT_VOICE_RATE": ["voice_interface", "speech_rate"],
-            "AUTOBOT_VOICE": ["voice_interface", "voice"],
-            # Legacy support
-            "AUTOBOT_USE_LANGCHAIN": ["orchestrator", "use_langchain"],
-            "AUTOBOT_USE_PHI2": ["backend", "use_phi2"],
-        }
-
-        for env_var, config_path in env_mappings.items():
+        for env_var, config_path in self.ENV_VAR_MAPPINGS.items():
             env_value = os.getenv(env_var)
             if env_value is not None:
-                # Convert string values to appropriate types
-                if env_value.lower() in ("true", "false"):
-                    env_value = env_value.lower() == "true"
-                elif env_value.isdigit():
-                    env_value = int(env_value)
+                converted_value = self._convert_env_value(env_value)
+                self._set_nested_value(env_overrides, config_path, converted_value)
+                logger.info(
+                    f"Applied environment override: {env_var} = {converted_value}"
+                )
 
-                # Set the value in the config
-                self._set_nested_value(env_overrides, config_path, env_value)
-                logger.info(f"Applied environment override: {env_var} = {env_value}")
-
-        # Merge environment overrides
         if env_overrides:
             self._config = self._deep_merge(self._config, env_overrides)
 
@@ -376,41 +413,52 @@ class ConfigManager:
         """Return the complete configuration as a dictionary"""
         return self._config.copy()
 
-    def get_llm_config(self) -> Dict[str, Any]:
-        """Get LLM configuration with fallback defaults - UNIFIED VERSION WITH MULTI-MODEL SUPPORT"""
+    def _migrate_legacy_llm_config(self) -> Dict[str, Any]:
+        """Migrate legacy LLM configuration to new unified structure.
 
-        # SINGLE SOURCE: Use backend.llm as the authoritative config
-        backend_llm = self.get_nested("backend.llm", {})
+        Issue #620: Extracted from get_llm_config to reduce function length.
+        Issue #620.
 
-        # Legacy migration: if backend.llm is empty but legacy fields exist, migrate them
-        if not backend_llm:
-            legacy_ollama_model = self.get_nested("backend.ollama_model")
-            if legacy_ollama_model:
-                logger.info(
-                    f"MIGRATION: Moving legacy ollama_model '{legacy_ollama_model}' to new structure"
-                )
-                backend_llm = {
-                    "provider_type": "local",
-                    "local": {
-                        "provider": "ollama",
-                        "providers": {
-                            "ollama": {
-                                "endpoint": self.get_nested(
-                                    "backend.ollama_endpoint",
-                                    _get_ssot_ollama_endpoint(),
-                                ),
-                                "host": _get_ssot_ollama_url(),
-                                "models": [],
-                                "selected_model": legacy_ollama_model,
-                            }
-                        },
-                    },
-                }
-                # Update the config with migrated structure
-                self.set_nested("backend.llm", backend_llm)
+        Returns:
+            Migrated backend_llm configuration dict
+        """
+        legacy_ollama_model = self.get_nested("backend.ollama_model")
+        if not legacy_ollama_model:
+            return {}
 
-        # Sensible defaults for the new structure
-        defaults = {
+        logger.info(
+            f"MIGRATION: Moving legacy ollama_model '{legacy_ollama_model}' to new structure"
+        )
+        backend_llm = {
+            "provider_type": "local",
+            "local": {
+                "provider": "ollama",
+                "providers": {
+                    "ollama": {
+                        "endpoint": self.get_nested(
+                            "backend.ollama_endpoint",
+                            _get_ssot_ollama_endpoint(),
+                        ),
+                        "host": _get_ssot_ollama_url(),
+                        "models": [],
+                        "selected_model": legacy_ollama_model,
+                    }
+                },
+            },
+        }
+        self.set_nested("backend.llm", backend_llm)
+        return backend_llm
+
+    def _get_llm_config_defaults(self) -> Dict[str, Any]:
+        """Get default LLM configuration structure.
+
+        Issue #620: Extracted from get_llm_config to reduce function length.
+        Issue #620.
+
+        Returns:
+            Default LLM configuration dict
+        """
+        return {
             "provider_type": "local",
             "local": {
                 "provider": "ollama",
@@ -444,82 +492,89 @@ class ConfigManager:
             },
         }
 
-        # Return the unified config
-        unified_config = self._deep_merge(defaults, backend_llm)
+    def _build_legacy_llm_format(
+        self, unified_config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build legacy LLM format for backward compatibility.
 
-        # BACKWARD COMPATIBILITY: Also expose legacy format for old code
-        legacy_format = {
+        Issue #620: Extracted from get_llm_config to reduce function length.
+        Issue #620.
+
+        Args:
+            unified_config: Unified LLM configuration
+
+        Returns:
+            Legacy format configuration dict
+        """
+        ollama_config = unified_config["local"]["providers"]["ollama"]
+        selected_model = ollama_config["selected_model"]
+
+        return {
             "default_llm": (
-                f"ollama_{unified_config['local']['providers']['ollama']['selected_model']}"
+                f"ollama_{selected_model}"
                 if unified_config.get("provider_type") == "local"
                 else "ollama"
             ),
-            "orchestrator_llm": os.getenv(
-                "AUTOBOT_ORCHESTRATOR_LLM",
-                unified_config["local"]["providers"]["ollama"]["selected_model"],
-            ),
-            "task_llm": os.getenv(
-                "AUTOBOT_TASK_LLM",
-                f"ollama_{unified_config['local']['providers']['ollama']['selected_model']}",
-            ),
+            "orchestrator_llm": os.getenv("AUTOBOT_ORCHESTRATOR_LLM", selected_model),
+            "task_llm": os.getenv("AUTOBOT_TASK_LLM", f"ollama_{selected_model}"),
             "ollama": {
-                "host": unified_config["local"]["providers"]["ollama"]["host"],
+                "host": ollama_config["host"],
                 "port": int(os.getenv("AUTOBOT_OLLAMA_PORT", "11434")),
-                "model": unified_config["local"]["providers"]["ollama"][
-                    "selected_model"
-                ],
-                "base_url": unified_config["local"]["providers"]["ollama"]["host"],
+                "model": selected_model,
+                "base_url": ollama_config["host"],
             },
         }
+
+    def get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration with fallback defaults.
+
+        Issue #620: Refactored to use helper methods for reduced function length.
+
+        Returns:
+            Unified LLM configuration with legacy format for backward compatibility
+        """
+        # Get or migrate backend.llm configuration
+        backend_llm = self.get_nested("backend.llm", {})
+        if not backend_llm:
+            backend_llm = self._migrate_legacy_llm_config()
+
+        # Merge with defaults
+        defaults = self._get_llm_config_defaults()
+        unified_config = self._deep_merge(defaults, backend_llm)
+
+        # Build legacy format for backward compatibility
+        legacy_format = self._build_legacy_llm_format(unified_config)
 
         return self._deep_merge(legacy_format, {"unified": unified_config})
 
     def get_task_specific_model(self, task_type: str = "default") -> str:
         """Get model for specific task types to optimize performance and resource usage.
 
+        Issue #620: Refactored to use AGENT_MODEL_DEFAULTS class constant.
+
         Args:
-            task_type: Agent type (orchestrator, chat, system_commands, rag, knowledge_retrieval, research)
+            task_type: Agent type (orchestrator, chat, system_commands, rag, etc.)
 
         Returns:
             Model name for the specified agent
         """
-        # Multi-agent model configuration with available uncensored models for unrestricted capabilities
-        agent_models = {
-            # Core Orchestration - use available model for flexible reasoning
-            "orchestrator": "llama3.2:3b",  # Main coordinator - 3B model
-            "default": "llama3.2:3b",  # Fallback to orchestrator model
-            # Specialized Agents - optimized for task complexity
-            "chat": "llama3.2:1b",  # 1B for fast conversations
-            "system_commands": "llama3.2:1b",  # 1B for command generation
-            "rag": "dolphin-llama3:8b",  # Uncensored for document synthesis
-            "knowledge_retrieval": "llama3.2:1b",  # 1B for fast fact lookup
-            "research": "dolphin-llama3:8b",  # Uncensored for web research
-            # Legacy compatibility - use available models
-            "search": "llama3.2:1b",  # Fast search queries
-            "code": "llama3.2:1b",  # Code understanding
-            "analysis": "dolphin-llama3:8b",  # Analysis tasks - uncensored
-            "planning": "dolphin-llama3:8b",  # Task planning - uncensored
-            # Fallback models for when uncensored is not needed
-            "orchestrator_fallback": "llama3.2:3b",  # Standard 3B
-            "chat_fallback": "llama3.2:1b",  # Standard 1B
-            "fallback": "dolphin-llama3:8b",  # General fallback - uncensored
-        }
-
-        # Allow environment override for specific tasks
+        # Check environment override first
         env_key = f"AUTOBOT_MODEL_{task_type.upper()}"
         env_model = os.getenv(env_key)
         if env_model:
             logger.info(f"Using environment override for {task_type}: {env_model}")
             return env_model
 
-        # Get from config with fallback
+        # Check config file
         config_key = f"backend.llm.task_models.{task_type}"
         configured_model = self.get_nested(config_key)
         if configured_model:
             return configured_model
 
-        # Use agent-specific default or fall back to general default
-        return agent_models.get(task_type, agent_models["default"])
+        # Use class constant defaults
+        return self.AGENT_MODEL_DEFAULTS.get(
+            task_type, self.AGENT_MODEL_DEFAULTS["default"]
+        )
 
     def get_hardware_acceleration_config(
         self, task_type: str = "default"

@@ -69,11 +69,17 @@ class CategoriesMixin:
         self, category_id: str, category_data: Dict[str, Any], parent_id: Optional[str]
     ) -> None:
         """Store category in Redis (Issue #398: extracted)."""
-        await self.aioredis_client.hset(f"category:{category_id}", mapping=category_data)
-        await self.aioredis_client.set(f"category:path:{category_data['path']}", category_id)
+        await self.aioredis_client.hset(
+            f"category:{category_id}", mapping=category_data
+        )
+        await self.aioredis_client.set(
+            f"category:path:{category_data['path']}", category_id
+        )
 
         if parent_id:
-            await self.aioredis_client.sadd(f"category:children:{parent_id}", category_id)
+            await self.aioredis_client.sadd(
+                f"category:children:{parent_id}", category_id
+            )
         else:
             await self.aioredis_client.sadd("category:root", category_id)
 
@@ -99,18 +105,30 @@ class CategoriesMixin:
                 return {"success": False, "message": error}
 
             if await self.aioredis_client.get(f"category:path:{path}"):
-                return {"success": False, "message": f"Category path already exists: {path}"}
+                return {
+                    "success": False,
+                    "message": f"Category path already exists: {path}",
+                }
 
             category_id = str(uuid.uuid4())
             now = datetime.now(timezone.utc).isoformat()
             category_data = {
-                "id": category_id, "name": name, "parent_id": parent_id or "",
-                "path": path, "description": description or "", "icon": icon or "",
-                "color": color or "", "created_at": now, "updated_at": now, "fact_count": 0,
+                "id": category_id,
+                "name": name,
+                "parent_id": parent_id or "",
+                "path": path,
+                "description": description or "",
+                "icon": icon or "",
+                "color": color or "",
+                "created_at": now,
+                "updated_at": now,
+                "fact_count": 0,
             }
 
             await self._store_category(category_id, category_data, parent_id)
-            logger.info("Created category '%s' (path: %s, id: %s)", name, path, category_id)
+            logger.info(
+                "Created category '%s' (path: %s, id: %s)", name, path, category_id
+            )
 
             return {
                 "success": True,
@@ -140,7 +158,10 @@ class CategoriesMixin:
         try:
             data = await self._get_category_data(category_id)
             if not data:
-                return {"success": False, "message": f"Category not found: {category_id}"}
+                return {
+                    "success": False,
+                    "message": f"Category not found: {category_id}",
+                }
 
             return {"success": True, "category": data}
 
@@ -180,7 +201,11 @@ class CategoriesMixin:
             return {"success": False, "message": str(e)}
 
     async def _handle_category_rename(
-        self, category_id: str, current: Dict[str, Any], new_name: str, updates: Dict[str, Any]
+        self,
+        category_id: str,
+        current: Dict[str, Any],
+        new_name: str,
+        updates: Dict[str, Any],
     ) -> Optional[str]:
         """Handle category rename and path update (Issue #398: extracted).
 
@@ -220,12 +245,19 @@ class CategoriesMixin:
         try:
             current = await self._get_category_data(category_id)
             if not current:
-                return {"success": False, "message": f"Category not found: {category_id}"}
+                return {
+                    "success": False,
+                    "message": f"Category not found: {category_id}",
+                }
 
-            updates: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            updates: Dict[str, Any] = {
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
 
             if name and name != current["name"]:
-                error = await self._handle_category_rename(category_id, current, name, updates)
+                error = await self._handle_category_rename(
+                    category_id, current, name, updates
+                )
                 if error:
                     return {"success": False, "message": error}
 
@@ -299,9 +331,14 @@ class CategoriesMixin:
         try:
             category = await self._get_category_data(category_id)
             if not category:
-                return {"success": False, "message": f"Category not found: {category_id}"}
+                return {
+                    "success": False,
+                    "message": f"Category not found: {category_id}",
+                }
 
-            children = await self.aioredis_client.smembers(f"category:children:{category_id}")
+            children = await self.aioredis_client.smembers(
+                f"category:children:{category_id}"
+            )
             if children and not recursive:
                 return {
                     "success": False,
@@ -310,7 +347,9 @@ class CategoriesMixin:
 
             categories_to_delete = [category_id]
             if recursive and children:
-                categories_to_delete.extend(await self._get_all_descendants(category_id))
+                categories_to_delete.extend(
+                    await self._get_all_descendants(category_id)
+                )
 
             facts_reassigned = await self._reassign_category_facts(
                 categories_to_delete, reassign_to
@@ -321,11 +360,13 @@ class CategoriesMixin:
 
             logger.info(
                 "Deleted %d categories, reassigned %d facts",
-                len(categories_to_delete), facts_reassigned
+                len(categories_to_delete),
+                facts_reassigned,
             )
 
             return {
-                "success": True, "deleted_count": len(categories_to_delete),
+                "success": True,
+                "deleted_count": len(categories_to_delete),
                 "facts_reassigned": facts_reassigned,
                 "message": f"Deleted {len(categories_to_delete)} categories",
             }
@@ -358,8 +399,10 @@ class CategoriesMixin:
         return {"success": True, "tree": tree, "total_categories": total}
 
     async def get_category_tree(
-        self, root_id: Optional[str] = None, max_depth: int = 10,
-        include_fact_counts: bool = True
+        self,
+        root_id: Optional[str] = None,
+        max_depth: int = 10,
+        include_fact_counts: bool = True,
     ) -> Dict[str, Any]:
         """Get full category tree structure (Issue #398: refactored)."""
         if not self.aioredis_client:
@@ -369,8 +412,13 @@ class CategoriesMixin:
             if root_id:
                 root_data = await self._get_category_data(root_id)
                 if not root_data:
-                    return {"success": False, "message": f"Category not found: {root_id}"}
-                tree = await self._build_tree_node(root_id, 0, max_depth, include_fact_counts)
+                    return {
+                        "success": False,
+                        "message": f"Category not found: {root_id}",
+                    }
+                tree = await self._build_tree_node(
+                    root_id, 0, max_depth, include_fact_counts
+                )
                 return {"success": True, "tree": [tree], "total_categories": 1}
 
             return await self._build_full_tree(max_depth, include_fact_counts)
@@ -397,9 +445,14 @@ class CategoriesMixin:
             if category_id:
                 parent = await self._get_category_data(category_id)
                 if not parent:
-                    return {"success": False, "message": f"Category not found: {category_id}"}
+                    return {
+                        "success": False,
+                        "message": f"Category not found: {category_id}",
+                    }
 
-            child_ids = await self.aioredis_client.smembers(f"category:children:{category_id}")
+            child_ids = await self.aioredis_client.smembers(
+                f"category:children:{category_id}"
+            )
             children = []
 
             for cid in child_ids:
@@ -439,7 +492,10 @@ class CategoriesMixin:
         try:
             category = await self._get_category_data(category_id)
             if not category:
-                return {"success": False, "message": f"Category not found: {category_id}"}
+                return {
+                    "success": False,
+                    "message": f"Category not found: {category_id}",
+                }
 
             ancestors = []
             current_id = category.get("parent_id", "")
@@ -484,20 +540,26 @@ class CategoriesMixin:
 
         return category, None
 
-    async def _remove_from_old_category(self, fact_id: str, new_category_id: str) -> None:
+    async def _remove_from_old_category(
+        self, fact_id: str, new_category_id: str
+    ) -> None:
         """Remove fact from old category if reassigning (Issue #398: extracted)."""
         old_category = await self._get_fact_category_id(fact_id)
         if old_category and old_category != new_category_id:
             await self.aioredis_client.srem(f"category:facts:{old_category}", fact_id)
             await self._decrement_category_count(old_category)
 
-    async def assign_fact_to_category(self, fact_id: str, category_id: str) -> Dict[str, Any]:
+    async def assign_fact_to_category(
+        self, fact_id: str, category_id: str
+    ) -> Dict[str, Any]:
         """Assign a fact to a category (Issue #398: refactored)."""
         if not self.aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         try:
-            category, error = await self._validate_fact_and_category(fact_id, category_id)
+            category, error = await self._validate_fact_and_category(
+                fact_id, category_id
+            )
             if error:
                 return {"success": False, "message": error}
 
@@ -506,12 +568,20 @@ class CategoriesMixin:
 
             logger.info("Assigned fact '%s' to category '%s'", fact_id, category_id)
             return {
-                "success": True, "fact_id": fact_id, "category_id": category_id,
-                "category_path": category.get("path"), "message": "Fact assigned to category",
+                "success": True,
+                "fact_id": fact_id,
+                "category_id": category_id,
+                "category_path": category.get("path"),
+                "message": "Fact assigned to category",
             }
 
         except Exception as e:
-            logger.error("Failed to assign fact '%s' to category '%s': %s", fact_id, category_id, e)
+            logger.error(
+                "Failed to assign fact '%s' to category '%s': %s",
+                fact_id,
+                category_id,
+                e,
+            )
             return {"success": False, "message": str(e)}
 
     async def _gather_category_fact_ids(self, category_ids: List[str]) -> set:
@@ -530,8 +600,9 @@ class CategoriesMixin:
             fact_data = await self.aioredis_client.hgetall(f"fact:{fid}")
             if fact_data:
                 decoded = {
-                    (k.decode("utf-8") if isinstance(k, bytes) else k):
-                    (v.decode("utf-8") if isinstance(v, bytes) else v)
+                    (k.decode("utf-8") if isinstance(k, bytes) else k): (
+                        v.decode("utf-8") if isinstance(v, bytes) else v
+                    )
                     for k, v in fact_data.items()
                 }
                 decoded["id"] = fid
@@ -552,7 +623,10 @@ class CategoriesMixin:
         try:
             category = await self._get_category_data(category_id)
             if not category:
-                return {"success": False, "message": f"Category not found: {category_id}"}
+                return {
+                    "success": False,
+                    "message": f"Category not found: {category_id}",
+                }
 
             category_ids = [category_id]
             if include_descendants:
@@ -565,10 +639,14 @@ class CategoriesMixin:
             facts = await self._load_fact_data(paginated_ids)
 
             return {
-                "success": True, "category_id": category_id,
-                "category_path": category.get("path"), "facts": facts,
-                "total_count": total_count, "returned_count": len(facts),
-                "limit": limit, "offset": offset,
+                "success": True,
+                "category_id": category_id,
+                "category_path": category.get("path"),
+                "facts": facts,
+                "total_count": total_count,
+                "returned_count": len(facts),
+                "limit": limit,
+                "offset": offset,
                 "has_more": offset + limit < total_count,
                 "include_descendants": include_descendants,
             }
@@ -661,14 +739,20 @@ class CategoriesMixin:
 
         try:
             redis_pattern = self._build_redis_path_pattern(path_pattern)
-            matching_categories = await self._scan_matching_categories(redis_pattern, limit)
+            matching_categories = await self._scan_matching_categories(
+                redis_pattern, limit
+            )
 
             return {
-                "success": True, "pattern": path_pattern,
-                "categories": matching_categories, "count": len(matching_categories),
+                "success": True,
+                "pattern": path_pattern,
+                "categories": matching_categories,
+                "count": len(matching_categories),
             }
         except Exception as e:
-            logger.error("Failed to search categories by path '%s': %s", path_pattern, e)
+            logger.error(
+                "Failed to search categories by path '%s': %s", path_pattern, e
+            )
             return {"success": False, "message": str(e)}
 
     # =========================================================================
@@ -696,21 +780,18 @@ class CategoriesMixin:
 
         return result
 
-    async def _build_tree_node(
-        self,
-        category_id: str,
-        current_depth: int,
-        max_depth: int,
-        include_fact_counts: bool,
-    ) -> Optional[Dict[str, Any]]:
-        """Recursively build a tree node with children."""
-        if current_depth > max_depth:
-            return None
+    def _build_node_base(
+        self, data: Dict[str, Any], include_fact_counts: bool
+    ) -> Dict[str, Any]:
+        """Build base node structure from category data. Issue #620.
 
-        data = await self._get_category_data(category_id)
-        if not data:
-            return None
+        Args:
+            data: Category data dictionary
+            include_fact_counts: Whether to include fact count
 
+        Returns:
+            Dict with base node structure
+        """
         node = {
             "id": data.get("id"),
             "name": data.get("name"),
@@ -719,40 +800,73 @@ class CategoriesMixin:
             "icon": data.get("icon"),
             "color": data.get("color"),
         }
-
         if include_fact_counts:
             node["fact_count"] = data.get("fact_count", 0)
+        return node
 
-        # Get children
-        child_ids = await self.aioredis_client.smembers(f"category:children:{category_id}")
+    async def _fetch_and_build_children(
+        self,
+        category_id: str,
+        current_depth: int,
+        max_depth: int,
+        include_fact_counts: bool,
+    ) -> List[Dict[str, Any]]:
+        """Fetch and build child nodes in parallel. Issue #620.
 
+        Args:
+            category_id: Parent category ID
+            current_depth: Current tree depth
+            max_depth: Maximum tree depth
+            include_fact_counts: Whether to include fact counts
+
+        Returns:
+            List of child node dictionaries
+        """
+        child_ids = await self.aioredis_client.smembers(
+            f"category:children:{category_id}"
+        )
         if not child_ids:
-            node["children"] = []
-            return node
+            return []
 
-        # Issue #614: Fix N+1 pattern - fetch all children in parallel
         decoded_ids = [
-            cid.decode("utf-8") if isinstance(cid, bytes) else cid
-            for cid in child_ids
+            cid.decode("utf-8") if isinstance(cid, bytes) else cid for cid in child_ids
         ]
 
-        # Build all child nodes in parallel
         child_tasks = [
-            self._build_tree_node(cid, current_depth + 1, max_depth, include_fact_counts)
+            self._build_tree_node(
+                cid, current_depth + 1, max_depth, include_fact_counts
+            )
             for cid in decoded_ids
         ]
         child_results = await asyncio.gather(*child_tasks, return_exceptions=True)
 
-        # Filter out None results and exceptions
         children = [
-            result for result in child_results
+            result
+            for result in child_results
             if result is not None and not isinstance(result, Exception)
         ]
-
-        # Sort children by name
         children.sort(key=lambda x: x.get("name", ""))
-        node["children"] = children
+        return children
 
+    async def _build_tree_node(
+        self,
+        category_id: str,
+        current_depth: int,
+        max_depth: int,
+        include_fact_counts: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """Recursively build a tree node with children. Issue #620."""
+        if current_depth > max_depth:
+            return None
+
+        data = await self._get_category_data(category_id)
+        if not data:
+            return None
+
+        node = self._build_node_base(data, include_fact_counts)
+        node["children"] = await self._fetch_and_build_children(
+            category_id, current_depth, max_depth, include_fact_counts
+        )
         return node
 
     def _count_tree_nodes(self, node: Dict[str, Any]) -> int:
@@ -764,15 +878,16 @@ class CategoriesMixin:
 
     async def _get_all_descendants(self, category_id: str) -> List[str]:
         """Get all descendant category IDs recursively."""
-        child_ids = await self.aioredis_client.smembers(f"category:children:{category_id}")
+        child_ids = await self.aioredis_client.smembers(
+            f"category:children:{category_id}"
+        )
 
         if not child_ids:
             return []
 
         # Decode child IDs
         decoded_ids = [
-            cid.decode("utf-8") if isinstance(cid, bytes) else cid
-            for cid in child_ids
+            cid.decode("utf-8") if isinstance(cid, bytes) else cid for cid in child_ids
         ]
 
         # Issue #614: Fix N+1 pattern - fetch all sub-descendants in parallel
@@ -787,7 +902,9 @@ class CategoriesMixin:
 
         return descendants
 
-    async def _update_category_path(self, category_id: str, old_path: str, new_path: str) -> None:
+    async def _update_category_path(
+        self, category_id: str, old_path: str, new_path: str
+    ) -> None:
         """Update category path and all descendant paths."""
         # Delete old path lookup
         await self.aioredis_client.delete(f"category:path:{old_path}")
@@ -796,7 +913,9 @@ class CategoriesMixin:
         await self.aioredis_client.set(f"category:path:{new_path}", category_id)
 
         # Update descendants
-        child_ids = await self.aioredis_client.smembers(f"category:children:{category_id}")
+        child_ids = await self.aioredis_client.smembers(
+            f"category:children:{category_id}"
+        )
 
         for cid in child_ids:
             if isinstance(cid, bytes):
@@ -805,7 +924,9 @@ class CategoriesMixin:
             if child_data:
                 child_old_path = child_data.get("path", "")
                 child_new_path = child_old_path.replace(old_path, new_path, 1)
-                await self.aioredis_client.hset(f"category:{cid}", "path", child_new_path)
+                await self.aioredis_client.hset(
+                    f"category:{cid}", "path", child_new_path
+                )
                 await self._update_category_path(cid, child_old_path, child_new_path)
 
     async def _assign_fact_to_category(self, fact_id: str, category_id: str) -> None:
@@ -832,8 +953,14 @@ class CategoriesMixin:
 
     async def _decrement_category_count(self, category_id: str) -> None:
         """Decrement fact count for a category."""
-        current = await self.aioredis_client.hget(f"category:{category_id}", "fact_count")
+        current = await self.aioredis_client.hget(
+            f"category:{category_id}", "fact_count"
+        )
         if current:
-            count = int(current.decode("utf-8") if isinstance(current, bytes) else current)
+            count = int(
+                current.decode("utf-8") if isinstance(current, bytes) else current
+            )
             if count > 0:
-                await self.aioredis_client.hset(f"category:{category_id}", "fact_count", count - 1)
+                await self.aioredis_client.hset(
+                    f"category:{category_id}", "fact_count", count - 1
+                )

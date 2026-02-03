@@ -368,6 +368,75 @@ class NPUSemanticSearch:
         )
         return fallback_results, fallback_metrics
 
+    def _log_search_completion(
+        self,
+        results: List[SearchResult],
+        total_time: float,
+        embedding_time: float,
+        search_time: float,
+        device: str,
+    ) -> None:
+        """Log search completion with timing details. Issue #620.
+
+        Args:
+            results: Search results list
+            total_time: Total search time in ms
+            embedding_time: Embedding generation time in ms
+            search_time: Similarity search time in ms
+            device: Device used for embedding
+        """
+        logger.info(
+            f"✅ Search completed: {len(results)} results in {total_time:.2f}ms "
+            f"(embedding: {embedding_time:.2f}ms, search: {search_time:.2f}ms) "
+            f"using {device}"
+        )
+
+    async def _execute_search_pipeline(
+        self,
+        query: str,
+        similarity_top_k: int,
+        filters: Optional[Dict[str, Any]],
+        enable_npu_acceleration: bool,
+        force_device: Optional[HardwareDevice],
+        start_time: float,
+        cache_key: str,
+    ) -> Tuple[List[SearchResult], SearchMetrics]:
+        """Execute the core search pipeline with embedding and vector search. Issue #620.
+
+        Args:
+            query: Search query string
+            similarity_top_k: Number of results to return
+            filters: Optional metadata filters
+            enable_npu_acceleration: Whether to use NPU
+            force_device: Force specific device
+            start_time: Search start timestamp
+            cache_key: Cache key for result storage
+
+        Returns:
+            Tuple of (search_results, performance_metrics)
+        """
+        embedding_start = time.time()
+        query_embedding, embedding_device = await self._generate_optimized_embedding(
+            query, enable_npu_acceleration, force_device
+        )
+        embedding_time = (time.time() - embedding_start) * 1000
+
+        search_start = time.time()
+        results = await self._perform_vector_search(
+            query, query_embedding, similarity_top_k, filters, embedding_device
+        )
+        search_time = (time.time() - search_start) * 1000
+        total_time = (time.time() - start_time) * 1000
+
+        metrics = await self._create_search_metrics(
+            results, embedding_time, search_time, total_time, embedding_device
+        )
+        self._cache_result(cache_key, (results, metrics))
+        self._log_search_completion(
+            results, total_time, embedding_time, search_time, embedding_device
+        )
+        return results, metrics
+
     async def enhanced_search(
         self,
         query: str,
@@ -376,21 +445,7 @@ class NPUSemanticSearch:
         enable_npu_acceleration: bool = True,
         force_device: Optional[HardwareDevice] = None,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
-        """
-        Perform NPU-enhanced semantic search.
-
-        Issue #281: Refactored from 136 lines to use extracted helper methods.
-
-        Args:
-            query: Search query string
-            similarity_top_k: Number of results to return
-            filters: Optional metadata filters
-            enable_npu_acceleration: Whether to use NPU acceleration
-            force_device: Force specific device for testing
-
-        Returns:
-            Tuple of (search_results, performance_metrics)
-        """
+        """Perform NPU-enhanced semantic search. Issue #281, #620."""
         start_time = time.time()
 
         if not query.strip():
@@ -400,7 +455,6 @@ class NPUSemanticSearch:
             "🔍 Enhanced search: '%s...' (top_k=%s)", query[:50], similarity_top_k
         )
 
-        # Check cache first
         cache_key = self._generate_cache_key(query, similarity_top_k, filters)
         cached_result = self._get_cached_result(cache_key)
         if cached_result:
@@ -408,77 +462,76 @@ class NPUSemanticSearch:
             return cached_result
 
         try:
-            # Step 1: Generate query embedding with optimal hardware
-            embedding_start = time.time()
-            (
-                query_embedding,
-                embedding_device,
-            ) = await self._generate_optimized_embedding(
-                query, enable_npu_acceleration, force_device
+            return await self._execute_search_pipeline(
+                query,
+                similarity_top_k,
+                filters,
+                enable_npu_acceleration,
+                force_device,
+                start_time,
+                cache_key,
             )
-            embedding_time = (time.time() - embedding_start) * 1000
-
-            # Step 2: Perform vector similarity search
-            search_start = time.time()
-            results = await self._perform_vector_search(
-                query, query_embedding, similarity_top_k, filters, embedding_device
-            )
-            search_time = (time.time() - search_start) * 1000
-            total_time = (time.time() - start_time) * 1000
-
-            # Step 3: Create metrics and cache results
-            metrics = await self._create_search_metrics(
-                results, embedding_time, search_time, total_time, embedding_device
-            )
-            self._cache_result(cache_key, (results, metrics))
-
-            logger.info(
-                f"✅ Search completed: {len(results)} results in {total_time:.2f}ms "
-                f"(embedding: {embedding_time:.2f}ms, search: {search_time:.2f}ms) "
-                f"using {embedding_device}"
-            )
-            return results, metrics
-
         except Exception as e:
             return await self._handle_search_error(
                 e, query, similarity_top_k, filters, start_time
             )
 
+    async def _generate_embedding_with_device(
+        self, text: str, enable_npu: bool, force_device: Optional[HardwareDevice]
+    ) -> Tuple[np.ndarray, str]:
+        """Generate embedding using specified device configuration. Issue #620.
+
+        Args:
+            text: Text to generate embedding for
+            enable_npu: Whether NPU acceleration is enabled
+            force_device: Specific device to force (overrides auto-selection)
+
+        Returns:
+            Tuple of (embedding array, device name used)
+        """
+        if force_device:
+            embedding = await accelerated_embedding_generation(text, force_device)
+            return embedding, force_device.value
+
+        if enable_npu:
+            embedding = await accelerated_embedding_generation(text)
+            return embedding, "auto_selected"
+
+        from src.utils.semantic_chunker import get_semantic_chunker
+
+        chunker = get_semantic_chunker()
+        await chunker._initialize_model()
+        embeddings = await chunker._compute_sentence_embeddings_async([text])
+        return embeddings[0], "gpu_fallback"
+
+    async def _generate_fallback_embedding(self, text: str) -> Tuple[np.ndarray, str]:
+        """Generate embedding using CPU fallback method. Issue #620.
+
+        Args:
+            text: Text to generate embedding for
+
+        Returns:
+            Tuple of (embedding array, device name)
+        """
+        from src.utils.semantic_chunker import get_semantic_chunker
+
+        chunker = get_semantic_chunker()
+        embeddings = chunker._compute_sentence_embeddings([text])
+        return embeddings[0], "cpu_final_fallback"
+
     async def _generate_optimized_embedding(
         self, text: str, enable_npu: bool, force_device: Optional[HardwareDevice]
     ) -> Tuple[np.ndarray, str]:
-        """
-        Generate embedding using optimal hardware with caching.
-
-        Uses EmbeddingCache from Issue #65 P0 optimization for 60-80% improvement.
-        """
-        # Check embedding cache first (Issue #65 P0 optimization)
+        """Generate embedding using optimal hardware with caching. Issue #65 P0."""
         cached_embedding = await self.embedding_cache.get(text)
         if cached_embedding is not None:
             logger.debug("✅ Using cached embedding for query: %s...", text[:50])
             return np.array(cached_embedding), "cached"
 
         try:
-            # Generate new embedding using AI accelerator
-            if force_device:
-                embedding = await accelerated_embedding_generation(text, force_device)
-                device_name = force_device.value
-            elif enable_npu:
-                # Let the accelerator choose optimal device
-                embedding = await accelerated_embedding_generation(text)
-                device_name = "auto_selected"
-            else:
-                # Use GPU/CPU fallback through semantic chunker
-                from src.utils.semantic_chunker import get_semantic_chunker
-
-                chunker = get_semantic_chunker()
-                await chunker._initialize_model()
-
-                embeddings = await chunker._compute_sentence_embeddings_async([text])
-                embedding = embeddings[0]
-                device_name = "gpu_fallback"
-
-            # Cache the new embedding
+            embedding, device_name = await self._generate_embedding_with_device(
+                text, enable_npu, force_device
+            )
             await self.embedding_cache.put(text, embedding.tolist())
             return embedding, device_name
 
@@ -486,19 +539,74 @@ class NPUSemanticSearch:
             logger.warning(
                 f"⚠️ Optimized embedding generation failed: {e}, using fallback"
             )
-
-            # Final fallback - basic embedding
-            from src.utils.semantic_chunker import get_semantic_chunker
-
-            chunker = get_semantic_chunker()
-
-            # Use sync method as final fallback
-            embeddings = chunker._compute_sentence_embeddings([text])
-            embedding = embeddings[0]
-
-            # Cache even fallback embeddings
+            embedding, device_name = await self._generate_fallback_embedding(text)
             await self.embedding_cache.put(text, embedding.tolist())
-            return embedding, "cpu_final_fallback"
+            return embedding, device_name
+
+    def _convert_hybrid_results(
+        self, hybrid_results: List[Any], hybrid_metrics: Any, device_used: str
+    ) -> List[SearchResult]:
+        """Convert hybrid search results to SearchResult format. Issue #620.
+
+        Args:
+            hybrid_results: Results from hybrid vector search
+            hybrid_metrics: Performance metrics from hybrid search
+            device_used: Fallback device identifier
+
+        Returns:
+            List of SearchResult objects
+        """
+        results = []
+        for hr in hybrid_results:
+            result = SearchResult(
+                content=hr.content or "",
+                metadata=hr.metadata,
+                score=hr.score,
+                doc_id=hr.doc_id,
+                device_used="gpu" if hybrid_metrics.gpu_utilized else device_used,
+                processing_time_ms=hybrid_metrics.query_time_ms,
+                embedding_model="hybrid_gpu",
+            )
+            results.append(result)
+
+        logger.debug(
+            f"GPU hybrid search: {len(results)} results in "
+            f"{hybrid_metrics.query_time_ms:.2f}ms "
+            f"(backend={hybrid_metrics.backend_used.value})"
+        )
+        return results
+
+    async def _search_with_llamaindex_fallback(
+        self, top_k: int, device_used: str
+    ) -> List[SearchResult]:
+        """Search using LlamaIndex query engine as fallback. Issue #620.
+
+        Args:
+            top_k: Number of results to return
+            device_used: Device identifier for result metadata
+
+        Returns:
+            List of SearchResult objects
+        """
+        query_engine = self.knowledge_base.vector_index.as_query_engine(
+            similarity_top_k=top_k, response_mode="no_text"
+        )
+        response = await asyncio.to_thread(query_engine.query, "search query")
+
+        results = []
+        if hasattr(response, "source_nodes"):
+            for node in response.source_nodes:
+                result = SearchResult(
+                    content=node.node.text,
+                    metadata=node.node.metadata or {},
+                    score=getattr(node, "score", 0.0),
+                    doc_id=node.node.id_ or str(uuid.uuid4()),
+                    device_used=device_used,
+                    processing_time_ms=0,
+                    embedding_model="enhanced_model",
+                )
+                results.append(result)
+        return results
 
     async def _vector_similarity_search(
         self,
@@ -509,7 +617,6 @@ class NPUSemanticSearch:
     ) -> List[SearchResult]:
         """Perform vector similarity search using GPU-accelerated hybrid or knowledge base."""
         try:
-            # Issue #387: Try GPU-accelerated hybrid search first
             if self.hybrid_search is not None:
                 hybrid_results, hybrid_metrics = await self.hybrid_search.search(
                     query_embedding=query_embedding,
@@ -517,58 +624,12 @@ class NPUSemanticSearch:
                     metadata_filter=filters,
                     include_documents=True,
                 )
-
                 if hybrid_results:
-                    # Convert hybrid results to SearchResult format
-                    results = []
-                    for hr in hybrid_results:
-                        result = SearchResult(
-                            content=hr.content or "",
-                            metadata=hr.metadata,
-                            score=hr.score,
-                            doc_id=hr.doc_id,
-                            device_used=(
-                                "gpu" if hybrid_metrics.gpu_utilized else device_used
-                            ),
-                            processing_time_ms=hybrid_metrics.query_time_ms,
-                            embedding_model="hybrid_gpu",
-                        )
-                        results.append(result)
-
-                    logger.debug(
-                        f"GPU hybrid search: {len(results)} results in "
-                        f"{hybrid_metrics.query_time_ms:.2f}ms "
-                        f"(backend={hybrid_metrics.backend_used.value})"
+                    return self._convert_hybrid_results(
+                        hybrid_results, hybrid_metrics, device_used
                     )
-                    return results
 
-            # Fallback: Perform retrieval using LlamaIndex query engine
-            # Note: LlamaIndex typically handles embedding internally,
-            # but we can use the query engine approach
-            query_engine = self.knowledge_base.vector_index.as_query_engine(
-                similarity_top_k=top_k, response_mode="no_text"
-            )
-
-            # LlamaIndex handles embedding internally via configured embed_model
-            # Pre-computed embeddings are used when available through the vector index
-            # The query engine automatically uses the same embedding model for queries
-            response = await asyncio.to_thread(query_engine.query, "search query")
-
-            results = []
-            if hasattr(response, "source_nodes"):
-                for node in response.source_nodes:
-                    result = SearchResult(
-                        content=node.node.text,
-                        metadata=node.node.metadata or {},
-                        score=getattr(node, "score", 0.0),
-                        doc_id=node.node.id_ or str(uuid.uuid4()),
-                        device_used=device_used,
-                        processing_time_ms=0,  # Individual node processing time
-                        embedding_model="enhanced_model",
-                    )
-                    results.append(result)
-
-            return results
+            return await self._search_with_llamaindex_fallback(top_k, device_used)
 
         except Exception as e:
             logger.error("❌ Vector similarity search failed: %s", e)
@@ -639,6 +700,46 @@ class NPUSemanticSearch:
 
         self.search_results_cache[cache_key] = (result, time.time())
 
+    def _create_error_search_result(
+        self,
+    ) -> Tuple[List[SearchResult], SearchMetrics]:
+        """Create empty result tuple for failed batch search query. Issue #620.
+
+        Returns:
+            Tuple of empty results list and error metrics
+        """
+        return (
+            [],
+            SearchMetrics(
+                total_documents_searched=0,
+                embedding_generation_time_ms=0,
+                similarity_computation_time_ms=0,
+                total_search_time_ms=0,
+                device_used="error",
+                hardware_utilization={},
+            ),
+        )
+
+    def _process_batch_results(
+        self, results: List[Any]
+    ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
+        """Process batch search results, handling exceptions. Issue #620.
+
+        Args:
+            results: Raw results from asyncio.gather with return_exceptions=True
+
+        Returns:
+            List of processed result tuples
+        """
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error("Batch search failed for query %s: %s", i, result)
+                processed_results.append(self._create_error_search_result())
+            else:
+                processed_results.append(result)
+        return processed_results
+
     async def batch_search(
         self,
         queries: List[str],
@@ -665,8 +766,7 @@ class NPUSemanticSearch:
             "🔍 Batch search: %s queries (top_k=%s)", len(queries), similarity_top_k
         )
 
-        # Process all queries in parallel with controlled concurrency
-        semaphore = asyncio.Semaphore(10)  # Limit concurrent searches
+        semaphore = asyncio.Semaphore(10)
 
         async def _search_with_semaphore(query: str):
             """Execute single search with semaphore for concurrency control."""
@@ -682,28 +782,7 @@ class NPUSemanticSearch:
             *[_search_with_semaphore(q) for q in queries], return_exceptions=True
         )
 
-        # Handle any exceptions
-        processed_results = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error("Batch search failed for query %s: %s", i, result)
-                # Return empty result for failed query
-                processed_results.append(
-                    (
-                        [],
-                        SearchMetrics(
-                            total_documents_searched=0,
-                            embedding_generation_time_ms=0,
-                            similarity_computation_time_ms=0,
-                            total_search_time_ms=0,
-                            device_used="error",
-                            hardware_utilization={},
-                        ),
-                    )
-                )
-            else:
-                processed_results.append(result)
-
+        processed_results = self._process_batch_results(results)
         logger.info("✅ Batch search completed: %s results", len(processed_results))
         return processed_results
 
@@ -978,6 +1057,31 @@ class NPUSemanticSearch:
         except Exception as e:
             logger.warning("Failed to store in multimodal collection: %s", e)
 
+    def _store_in_collection(
+        self,
+        modality: str,
+        embedding: np.ndarray,
+        content: Any,
+        doc_metadata: Dict[str, Any],
+        doc_id: str,
+    ) -> None:
+        """Store embedding in the modality-specific collection. Issue #620.
+
+        Args:
+            modality: Target modality collection name
+            embedding: Generated embedding vector
+            content: Original content
+            doc_metadata: Metadata dictionary
+            doc_id: Document ID
+        """
+        collection = self.collections[modality]
+        collection.add(
+            embeddings=[embedding.tolist()],
+            metadatas=[doc_metadata],
+            documents=[str(content)],
+            ids=[doc_id],
+        )
+
     async def store_multimodal_embedding(
         self,
         content: Any,
@@ -985,17 +1089,7 @@ class NPUSemanticSearch:
         metadata: Optional[Dict[str, Any]] = None,
         doc_id: Optional[str] = None,
     ) -> bool:
-        """Store multi-modal content with embeddings in appropriate ChromaDB collection.
-
-        Args:
-            content: The content to store (text, image path, audio data, etc.)
-            modality: Type of content ('text', 'image', 'audio')
-            metadata: Additional metadata to store
-            doc_id: Document ID (auto-generated if not provided)
-
-        Returns:
-            bool: True if storage successful, False otherwise
-        """
+        """Store multi-modal content with embeddings in ChromaDB collection."""
         if not self.chroma_client or modality not in self.collections:
             logger.warning(
                 f"ChromaDB not available or unsupported modality: {modality}"
@@ -1003,25 +1097,15 @@ class NPUSemanticSearch:
             return False
 
         try:
-            # Generate embedding using enhanced accelerated_embedding_generation
             embedding = await accelerated_embedding_generation(
                 content=content, modality=modality, preferred_device=HardwareDevice.GPU
             )
-
-            # Prepare metadata and document ID
             doc_metadata = self._prepare_document_metadata(content, modality, metadata)
             doc_id = self._generate_document_id(modality, doc_id)
 
-            # Store in appropriate collection
-            collection = self.collections[modality]
-            collection.add(
-                embeddings=[embedding.tolist()],
-                metadatas=[doc_metadata],
-                documents=[str(content)],
-                ids=[doc_id],
+            self._store_in_collection(
+                modality, embedding, content, doc_metadata, doc_id
             )
-
-            # Store in fused multimodal collection
             await self._store_in_multimodal_collection(
                 embedding, content, doc_metadata, doc_id, modality
             )
@@ -1032,6 +1116,42 @@ class NPUSemanticSearch:
         except Exception as e:
             logger.error("Failed to store multimodal embedding: %s", e)
             return False
+
+    def _search_single_modality(
+        self,
+        modality: str,
+        query_embedding: np.ndarray,
+        limit: int,
+        threshold: float,
+    ) -> List[MultiModalSearchResult]:
+        """Search a single modality collection and return results. Issue #620.
+
+        Args:
+            modality: Target modality name
+            query_embedding: Query embedding vector
+            limit: Maximum results to return
+            threshold: Minimum similarity threshold
+
+        Returns:
+            List of MultiModalSearchResult objects
+        """
+        try:
+            collection = self.collections[modality]
+            search_results = collection.query(
+                query_embeddings=[query_embedding.tolist()],
+                n_results=limit,
+                include=["metadatas", "documents", "distances"],
+            )
+            modality_results = _convert_chroma_results(
+                search_results, modality, threshold
+            )
+            logger.info(
+                f"Found {len(modality_results)} results in {modality} collection"
+            )
+            return modality_results
+        except Exception as e:
+            logger.error("Search failed for modality %s: %s", modality, e)
+            return []
 
     async def cross_modal_search(
         self,
@@ -1059,51 +1179,23 @@ class NPUSemanticSearch:
             return {}
 
         try:
-            # Generate query embedding
             query_embedding = await accelerated_embedding_generation(
                 content=query,
                 modality=query_modality,
                 preferred_device=HardwareDevice.GPU,
             )
 
-            # Determine target modalities
             if target_modalities is None:
-                target_modalities = (
-                    _DEFAULT_TARGET_MODALITIES  # Issue #380: use module constant
-                )
+                target_modalities = _DEFAULT_TARGET_MODALITIES
 
-            # Use configured threshold if not provided
             threshold = similarity_threshold or self.similarity_threshold
-
             results = {}
 
-            # Search across specified modalities
             for modality in target_modalities:
-                if modality not in self.collections:
-                    continue
-
-                try:
-                    collection = self.collections[modality]
-
-                    # Perform similarity search
-                    search_results = collection.query(
-                        query_embeddings=[query_embedding.tolist()],
-                        n_results=limit,
-                        include=["metadatas", "documents", "distances"],
+                if modality in self.collections:
+                    results[modality] = self._search_single_modality(
+                        modality, query_embedding, limit, threshold
                     )
-
-                    # Convert to MultiModalSearchResult using helper (Issue #315)
-                    modality_results = _convert_chroma_results(
-                        search_results, modality, threshold
-                    )
-                    results[modality] = modality_results
-                    logger.info(
-                        f"Found {len(modality_results)} results in {modality} collection"
-                    )
-
-                except Exception as e:
-                    logger.error("Search failed for modality %s: %s", modality, e)
-                    results[modality] = []
 
             return results
 

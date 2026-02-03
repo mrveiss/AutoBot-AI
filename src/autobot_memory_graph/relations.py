@@ -18,10 +18,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .core import (
-    AutoBotMemoryGraphCore,
-    RELATION_TYPES,
-    OUTGOING_DIRECTIONS,
     INCOMING_DIRECTIONS,
+    OUTGOING_DIRECTIONS,
+    RELATION_TYPES,
+    AutoBotMemoryGraphCore,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,9 @@ class RelationOperationsMixin:
 
             logger.info(
                 "Created relation: %s --[%s]--> %s",
-                from_entity, relation_type, to_entity
+                from_entity,
+                relation_type,
+                to_entity,
             )
             return relation
 
@@ -152,7 +154,9 @@ class RelationOperationsMixin:
 
             logger.debug(
                 "Created relation by ID: %s --[%s]--> %s",
-                from_entity_id[:8], relation_type, to_entity_id[:8],
+                from_entity_id[:8],
+                relation_type,
+                to_entity_id[:8],
             )
             return True
 
@@ -250,25 +254,29 @@ class RelationOperationsMixin:
                 outgoing = await self._get_outgoing_relations(entity_id)
                 for rel in outgoing:
                     if relation_types is None or rel.get("type") in relation_types:
-                        relations.append({
-                            "from": entity_id,
-                            "to": rel.get("to"),
-                            "type": rel.get("type"),
-                            "direction": "outgoing",
-                            "metadata": rel.get("metadata", {}),
-                        })
+                        relations.append(
+                            {
+                                "from": entity_id,
+                                "to": rel.get("to"),
+                                "type": rel.get("type"),
+                                "direction": "outgoing",
+                                "metadata": rel.get("metadata", {}),
+                            }
+                        )
 
             if direction in INCOMING_DIRECTIONS:
                 incoming = await self._get_incoming_relations(entity_id)
                 for rel in incoming:
                     if relation_types is None or rel.get("type") in relation_types:
-                        relations.append({
-                            "from": rel.get("from"),
-                            "to": entity_id,
-                            "type": rel.get("type"),
-                            "direction": "incoming",
-                            "metadata": rel.get("metadata", {}),
-                        })
+                        relations.append(
+                            {
+                                "from": rel.get("from"),
+                                "to": entity_id,
+                                "type": rel.get("type"),
+                                "direction": "incoming",
+                                "metadata": rel.get("metadata", {}),
+                            }
+                        )
 
             return {"relations": relations}
 
@@ -309,22 +317,30 @@ class RelationOperationsMixin:
                 self._get_outgoing_relations(current_id),
                 self._get_incoming_relations(current_id),
             )
-            related.extend(await self._process_direction_relations(
-                outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
-            ))
-            related.extend(await self._process_direction_relations(
-                incoming, relation_type, "incoming", "from", depth, max_depth, queue
-            ))
+            related.extend(
+                await self._process_direction_relations(
+                    outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+                )
+            )
+            related.extend(
+                await self._process_direction_relations(
+                    incoming, relation_type, "incoming", "from", depth, max_depth, queue
+                )
+            )
         elif need_outgoing:
             outgoing = await self._get_outgoing_relations(current_id)
-            related.extend(await self._process_direction_relations(
-                outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
-            ))
+            related.extend(
+                await self._process_direction_relations(
+                    outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+                )
+            )
         elif need_incoming:
             incoming = await self._get_incoming_relations(current_id)
-            related.extend(await self._process_direction_relations(
-                incoming, relation_type, "incoming", "from", depth, max_depth, queue
-            ))
+            related.extend(
+                await self._process_direction_relations(
+                    incoming, relation_type, "incoming", "from", depth, max_depth, queue
+                )
+            )
 
         return related
 
@@ -353,7 +369,8 @@ class RelationOperationsMixin:
             List of related entity dicts with relation metadata
         """
         filtered = [
-            rel for rel in relations
+            rel
+            for rel in relations
             if relation_type is None or rel["type"] == relation_type
         ]
         if not filtered:
@@ -362,17 +379,19 @@ class RelationOperationsMixin:
         entity_ids = [rel[id_field] for rel in filtered]
         entities = await asyncio.gather(
             *[self.get_entity(entity_id=eid) for eid in entity_ids],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         related = []
         for rel, related_entity in zip(filtered, entities):
             if related_entity and not isinstance(related_entity, Exception):
-                related.append({
-                    "entity": related_entity,
-                    "relation": rel,
-                    "direction": direction,
-                })
+                related.append(
+                    {
+                        "entity": related_entity,
+                        "relation": rel,
+                        "direction": direction,
+                    }
+                )
                 if depth + 1 <= max_depth:
                     queue.append((rel[id_field], depth + 1))
 
@@ -425,6 +444,64 @@ class RelationOperationsMixin:
             logger.error("Failed to get related entities: %s", e)
             return []
 
+    async def _filter_outgoing_relations(
+        self: AutoBotMemoryGraphCore,
+        from_id: str,
+        to_id: str,
+        relation_type: str,
+    ) -> None:
+        """
+        Filter out a specific relation from outgoing relations.
+
+        Issue #620.
+
+        Args:
+            from_id: Source entity ID
+            to_id: Target entity ID
+            relation_type: Type of relation to remove
+        """
+        out_key = f"memory:relations:out:{from_id}"
+        out_data = await self.redis_client.json().get(out_key)
+
+        if out_data and "relations" in out_data:
+            filtered_relations = [
+                rel
+                for rel in out_data["relations"]
+                if not (rel["to"] == to_id and rel["type"] == relation_type)
+            ]
+            await self.redis_client.json().set(
+                out_key, "$.relations", filtered_relations
+            )
+
+    async def _filter_incoming_relations(
+        self: AutoBotMemoryGraphCore,
+        from_id: str,
+        to_id: str,
+        relation_type: str,
+    ) -> None:
+        """
+        Filter out a specific relation from incoming relations.
+
+        Issue #620.
+
+        Args:
+            from_id: Source entity ID
+            to_id: Target entity ID
+            relation_type: Type of relation to remove
+        """
+        in_key = f"memory:relations:in:{to_id}"
+        in_data = await self.redis_client.json().get(in_key)
+
+        if in_data and "relations" in in_data:
+            filtered_relations = [
+                rel
+                for rel in in_data["relations"]
+                if not (rel["from"] == from_id and rel["type"] == relation_type)
+            ]
+            await self.redis_client.json().set(
+                in_key, "$.relations", filtered_relations
+            )
+
     async def delete_relation(
         self: AutoBotMemoryGraphCore,
         from_entity: str,
@@ -433,6 +510,8 @@ class RelationOperationsMixin:
     ) -> bool:
         """
         Delete specific relation between entities.
+
+        Issue #620: Refactored using Extract Method pattern.
 
         Args:
             from_entity: Source entity name
@@ -456,35 +535,14 @@ class RelationOperationsMixin:
             from_id = from_entity_data["id"]
             to_id = to_entity_data["id"]
 
-            # Get and filter outgoing relations
-            out_key = f"memory:relations:out:{from_id}"
-            out_data = await self.redis_client.json().get(out_key)
-
-            if out_data and "relations" in out_data:
-                filtered_relations = [
-                    rel for rel in out_data["relations"]
-                    if not (rel["to"] == to_id and rel["type"] == relation_type)
-                ]
-                await self.redis_client.json().set(
-                    out_key, "$.relations", filtered_relations
-                )
-
-            # Remove reverse relation
-            in_key = f"memory:relations:in:{to_id}"
-            in_data = await self.redis_client.json().get(in_key)
-
-            if in_data and "relations" in in_data:
-                filtered_relations = [
-                    rel for rel in in_data["relations"]
-                    if not (rel["from"] == from_id and rel["type"] == relation_type)
-                ]
-                await self.redis_client.json().set(
-                    in_key, "$.relations", filtered_relations
-                )
+            await self._filter_outgoing_relations(from_id, to_id, relation_type)
+            await self._filter_incoming_relations(from_id, to_id, relation_type)
 
             logger.info(
                 "Deleted relation: %s --[%s]--> %s",
-                from_entity, relation_type, to_entity
+                from_entity,
+                relation_type,
+                to_entity,
             )
 
             return True

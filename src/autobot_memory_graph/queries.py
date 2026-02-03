@@ -77,9 +77,17 @@ class QueryOperationsMixin:
             List of matching entity dictionaries
         """
         results = await self.redis_client.execute_command(
-            "FT.SEARCH", "memory_entity_idx", redis_query,
-            "LIMIT", "0", str(limit),
-            "RETURN", "3", "$.name", "$.type", "$.observations",
+            "FT.SEARCH",
+            "memory_entity_idx",
+            redis_query,
+            "LIMIT",
+            "0",
+            str(limit),
+            "RETURN",
+            "3",
+            "$.name",
+            "$.type",
+            "$.observations",
         )
         return await self._parse_search_results(results, limit)
 
@@ -131,9 +139,71 @@ class QueryOperationsMixin:
         if query_lower in entity.get("name", "").lower():
             return True
 
-        return any(
-            query_lower in obs.lower() for obs in entity.get("observations", [])
-        )
+        return any(query_lower in obs.lower() for obs in entity.get("observations", []))
+
+    async def _collect_entity_keys(
+        self: AutoBotMemoryGraphCore,
+        limit: int,
+    ) -> List[str]:
+        """
+        Collect entity keys from Redis for fallback search.
+
+        Issue #620.
+
+        Args:
+            limit: Maximum entities to eventually return (collects limit*10 keys)
+
+        Returns:
+            List of Redis keys for entity documents
+        """
+        keys = []
+        async for key in self.redis_client.scan_iter(match="memory:entity:*"):
+            keys.append(key)
+            if len(keys) >= limit * 10:
+                break
+        return keys
+
+    async def _batch_fetch_and_filter_entities(
+        self: AutoBotMemoryGraphCore,
+        keys: List[str],
+        query_lower: str,
+        entity_type: Optional[str],
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch entities in batches and filter by query criteria.
+
+        Issue #620.
+
+        Args:
+            keys: List of Redis keys to fetch
+            query_lower: Lowercase search query
+            entity_type: Optional entity type filter
+            limit: Maximum entities to return
+
+        Returns:
+            List of matching entity dictionaries
+        """
+        batch_size = 50
+        entities = []
+
+        for i in range(0, len(keys), batch_size):
+            batch_keys = keys[i : i + batch_size]
+
+            pipe = self.redis_client.pipeline()
+            for key in batch_keys:
+                pipe.json().get(key)
+            batch_results = await pipe.execute()
+
+            for entity in batch_results:
+                if entity and self._entity_matches_query(
+                    entity, query_lower, entity_type
+                ):
+                    entities.append(entity)
+                    if len(entities) >= limit:
+                        return entities
+
+        return entities
 
     async def _fallback_search(
         self: AutoBotMemoryGraphCore,
@@ -141,7 +211,11 @@ class QueryOperationsMixin:
         entity_type: Optional[str],
         limit: int,
     ) -> List[Dict[str, Any]]:
-        """Fallback search when RediSearch is unavailable (Issue #315 - refactored).
+        """
+        Fallback search when RediSearch is unavailable.
+
+        Issue #315: Original refactoring.
+        Issue #620: Further refactored using Extract Method pattern.
 
         Args:
             query: Search query string
@@ -153,37 +227,14 @@ class QueryOperationsMixin:
         """
         try:
             query_lower = query.lower() if query else ""
-
-            # Issue #614: Fix N+1 pattern - collect keys first, then batch fetch
-            keys = []
-            async for key in self.redis_client.scan_iter(match="memory:entity:*"):
-                keys.append(key)
-                if len(keys) >= limit * 10:
-                    break
+            keys = await self._collect_entity_keys(limit)
 
             if not keys:
                 return []
 
-            batch_size = 50
-            entities = []
-
-            for i in range(0, len(keys), batch_size):
-                batch_keys = keys[i:i + batch_size]
-
-                pipe = self.redis_client.pipeline()
-                for key in batch_keys:
-                    pipe.json().get(key)
-                batch_results = await pipe.execute()
-
-                for entity in batch_results:
-                    if entity and self._entity_matches_query(
-                        entity, query_lower, entity_type
-                    ):
-                        entities.append(entity)
-                        if len(entities) >= limit:
-                            return entities
-
-            return entities
+            return await self._batch_fetch_and_filter_entities(
+                keys, query_lower, entity_type, limit
+            )
 
         except Exception as e:
             logger.error("Fallback search failed: %s", e)
