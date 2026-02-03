@@ -33,8 +33,6 @@ from backend.type_defs.common import Metadata
 from src.agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
 from src.auth_middleware import get_current_user
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-
-# Issue #756: Consolidated from src/utils/request_utils.py
 from src.utils.request_utils import generate_request_id
 
 # Issue #380: Module-level frozenset for valid message roles
@@ -168,9 +166,6 @@ def get_entity_extractor(request: Request) -> GraphEntityExtractor:
         )
 
     return extractor
-
-
-# Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
 
 # ====================================================================

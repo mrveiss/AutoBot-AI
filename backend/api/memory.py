@@ -39,8 +39,6 @@ from backend.type_defs.common import Metadata
 from src.auth_middleware import check_admin_permission
 from src.autobot_memory_graph import AutoBotMemoryGraph
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-
-# Issue #756: Consolidated from src/utils/request_utils.py
 from src.utils.request_utils import generate_request_id
 
 # ====================================================================
@@ -206,8 +204,6 @@ def get_memory_graph(request: Request) -> AutoBotMemoryGraph:
 
     return memory_graph
 
-
-# Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
 # ====================================================================
 # Helper Functions (Issue #398: Extracted to reduce method length)

@@ -32,8 +32,6 @@ from backend.type_defs.common import Metadata
 from src.auth_middleware import get_current_user
 from src.services.graph_rag_service import GraphRAGService
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-
-# Issue #756: Consolidated from src/utils/request_utils.py
 from src.utils.request_utils import generate_request_id
 
 # ====================================================================
@@ -132,8 +130,6 @@ def get_graph_rag_service(request: Request) -> GraphRAGService:
 
     return service
 
-
-# Note: generate_request_id is now imported from src/utils/request_utils.py (Issue #756)
 
 # ====================================================================
 # API Endpoints
