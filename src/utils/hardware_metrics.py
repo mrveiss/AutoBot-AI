@@ -255,8 +255,62 @@ class Phase9PerformanceMonitor:
         except Exception:
             return False
 
+    def _parse_nvidia_smi_output(self, output: str) -> Optional[GPUMetrics]:
+        """Parse nvidia-smi CSV output into GPUMetrics. Issue #620."""
+        parts = [p.strip() for p in output.strip().split(",")]
+        if len(parts) < 8:
+            return None
+
+        memory_used = int(float(parts[1]))
+        memory_total = int(float(parts[2]))
+        memory_free = memory_total - memory_used
+
+        # Parse throttling reasons
+        thermal_throttling = False
+        power_throttling = False
+        if len(parts) > 16:
+            thermal_throttling = parts[16] == "Active"
+            power_throttling = parts[15] == "Active" or parts[17] == "Active"
+
+        def _parse_optional_int(val: str) -> Optional[int]:
+            """Parse optional integer value from nvidia-smi. Issue #620."""
+            return int(float(val)) if val != "[Not Supported]" else None
+
+        def _parse_optional_float(val: str) -> float:
+            """Parse optional float value from nvidia-smi. Issue #620."""
+            return float(val) if val != "[Not Supported]" else 0.0
+
+        return GPUMetrics(
+            timestamp=time.time(),
+            name=parts[0],
+            utilization_percent=float(parts[3]),
+            memory_used_mb=memory_used,
+            memory_total_mb=memory_total,
+            memory_free_mb=memory_free,
+            memory_utilization_percent=round((memory_used / memory_total) * 100, 1),
+            temperature_celsius=int(float(parts[4])),
+            power_draw_watts=_parse_optional_float(parts[5]),
+            gpu_clock_mhz=_parse_optional_int(parts[6]) or 0,
+            memory_clock_mhz=_parse_optional_int(parts[7]) or 0,
+            fan_speed_percent=_parse_optional_int(parts[8]) if len(parts) > 8 else None,
+            encoder_utilization=_parse_optional_int(parts[9])
+            if len(parts) > 9
+            else None,
+            decoder_utilization=_parse_optional_int(parts[10])
+            if len(parts) > 10
+            else None,
+            performance_state=parts[11]
+            if len(parts) > 11 and parts[11] != "[Not Supported]"
+            else None,
+            thermal_throttling=thermal_throttling,
+            power_throttling=power_throttling,
+        )
+
     async def collect_gpu_metrics(self) -> Optional[GPUMetrics]:
-        """Collect comprehensive GPU performance metrics"""
+        """Collect comprehensive GPU performance metrics.
+
+        Issue #620: Refactored to extract _parse_nvidia_smi_output helper.
+        """
         if not self.gpu_available:
             return None
 
@@ -282,56 +336,7 @@ class Phase9PerformanceMonitor:
             )
 
             if result.returncode == 0:
-                parts = [p.strip() for p in result.stdout.strip().split(",")]
-                if len(parts) >= 8:
-                    memory_used = int(float(parts[1]))
-                    memory_total = int(float(parts[2]))
-                    memory_free = memory_total - memory_used
-
-                    # Parse throttling reasons
-                    thermal_throttling = False
-                    power_throttling = False
-                    if len(parts) > 16:
-                        thermal_throttling = parts[16] == "Active"
-                        power_throttling = (
-                            parts[15] == "Active" or parts[17] == "Active"
-                        )
-
-                    return GPUMetrics(
-                        timestamp=time.time(),
-                        name=parts[0],
-                        utilization_percent=float(parts[3]),
-                        memory_used_mb=memory_used,
-                        memory_total_mb=memory_total,
-                        memory_free_mb=memory_free,
-                        memory_utilization_percent=round(
-                            (memory_used / memory_total) * 100, 1
-                        ),
-                        temperature_celsius=int(float(parts[4])),
-                        power_draw_watts=float(parts[5])
-                        if parts[5] != "[Not Supported]"
-                        else 0.0,
-                        gpu_clock_mhz=int(float(parts[6]))
-                        if parts[6] != "[Not Supported]"
-                        else 0,
-                        memory_clock_mhz=int(float(parts[7]))
-                        if parts[7] != "[Not Supported]"
-                        else 0,
-                        fan_speed_percent=int(float(parts[8]))
-                        if len(parts) > 8 and parts[8] != "[Not Supported]"
-                        else None,
-                        encoder_utilization=int(float(parts[9]))
-                        if len(parts) > 9 and parts[9] != "[Not Supported]"
-                        else None,
-                        decoder_utilization=int(float(parts[10]))
-                        if len(parts) > 10 and parts[10] != "[Not Supported]"
-                        else None,
-                        performance_state=parts[11]
-                        if len(parts) > 11 and parts[11] != "[Not Supported]"
-                        else None,
-                        thermal_throttling=thermal_throttling,
-                        power_throttling=power_throttling,
-                    )
+                return self._parse_nvidia_smi_output(result.stdout)
 
             return None
 
@@ -754,8 +759,74 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error collecting single service metrics: {e}")
             return None
 
+    def _handle_gather_exceptions(self, results: tuple) -> tuple:
+        """Handle exceptions from asyncio.gather results. Issue #620."""
+        (
+            gpu_metrics,
+            npu_metrics,
+            multimodal_metrics,
+            system_metrics,
+            service_metrics,
+        ) = results
+
+        if isinstance(gpu_metrics, Exception):
+            self.logger.error(f"GPU metrics collection failed: {gpu_metrics}")
+            gpu_metrics = None
+
+        if isinstance(npu_metrics, Exception):
+            self.logger.error(f"NPU metrics collection failed: {npu_metrics}")
+            npu_metrics = None
+
+        if isinstance(multimodal_metrics, Exception):
+            self.logger.error(
+                f"Multimodal metrics collection failed: {multimodal_metrics}"
+            )
+            multimodal_metrics = None
+
+        if isinstance(system_metrics, Exception):
+            self.logger.error(f"System metrics collection failed: {system_metrics}")
+            system_metrics = None
+
+        if isinstance(service_metrics, Exception):
+            self.logger.error(f"Service metrics collection failed: {service_metrics}")
+            service_metrics = []
+
+        return (
+            gpu_metrics,
+            npu_metrics,
+            multimodal_metrics,
+            system_metrics,
+            service_metrics,
+        )
+
+    def _store_metrics_in_buffers(
+        self,
+        gpu_metrics: Optional["GPUMetrics"],
+        npu_metrics: Optional["NPUMetrics"],
+        multimodal_metrics: Optional["MultiModalMetrics"],
+        system_metrics: Optional["SystemPerformanceMetrics"],
+        service_metrics: Optional[List["ServicePerformanceMetrics"]],
+    ) -> None:
+        """Store collected metrics in appropriate buffers. Issue #620."""
+        if gpu_metrics:
+            self.gpu_metrics_buffer.append(gpu_metrics)
+        if npu_metrics:
+            self.npu_metrics_buffer.append(npu_metrics)
+        if multimodal_metrics:
+            self.multimodal_metrics_buffer.append(multimodal_metrics)
+        if system_metrics:
+            self.system_metrics_buffer.append(system_metrics)
+
+        for service_metric in service_metrics or []:
+            self.service_metrics_buffer[service_metric.service_name].append(
+                service_metric
+            )
+
     async def collect_all_metrics(self) -> Dict[str, Any]:
-        """Collect all performance metrics in parallel"""
+        """Collect all performance metrics in parallel.
+
+        Issue #620: Refactored to extract _handle_gather_exceptions and _store_metrics_in_buffers.
+        """
         try:
             # Collect all metrics concurrently
             tasks = [
@@ -768,53 +839,23 @@ class Phase9PerformanceMonitor:
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
+            # Handle exceptions (Issue #620: uses helper)
             (
                 gpu_metrics,
                 npu_metrics,
                 multimodal_metrics,
                 system_metrics,
                 service_metrics,
-            ) = results
+            ) = self._handle_gather_exceptions(results)
 
-            # Handle exceptions
-            if isinstance(gpu_metrics, Exception):
-                self.logger.error(f"GPU metrics collection failed: {gpu_metrics}")
-                gpu_metrics = None
-
-            if isinstance(npu_metrics, Exception):
-                self.logger.error(f"NPU metrics collection failed: {npu_metrics}")
-                npu_metrics = None
-
-            if isinstance(multimodal_metrics, Exception):
-                self.logger.error(
-                    f"Multimodal metrics collection failed: {multimodal_metrics}"
-                )
-                multimodal_metrics = None
-
-            if isinstance(system_metrics, Exception):
-                self.logger.error(f"System metrics collection failed: {system_metrics}")
-                system_metrics = None
-
-            if isinstance(service_metrics, Exception):
-                self.logger.error(
-                    f"Service metrics collection failed: {service_metrics}"
-                )
-                service_metrics = []
-
-            # Store metrics in buffers
-            if gpu_metrics:
-                self.gpu_metrics_buffer.append(gpu_metrics)
-            if npu_metrics:
-                self.npu_metrics_buffer.append(npu_metrics)
-            if multimodal_metrics:
-                self.multimodal_metrics_buffer.append(multimodal_metrics)
-            if system_metrics:
-                self.system_metrics_buffer.append(system_metrics)
-
-            for service_metric in service_metrics or []:
-                self.service_metrics_buffer[service_metric.service_name].append(
-                    service_metric
-                )
+            # Store metrics in buffers (Issue #620: uses helper)
+            self._store_metrics_in_buffers(
+                gpu_metrics,
+                npu_metrics,
+                multimodal_metrics,
+                system_metrics,
+                service_metrics,
+            )
 
             # Persist to Redis if available
             if self.redis_client:
