@@ -125,76 +125,90 @@ class TerminalWebSocketHandler:
         finally:
             await self.disconnect(chat_id)
 
+    async def _handle_start_command(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle start_command message. Issue #620."""
+        command = data.get("command", "")
+        description = data.get("description", "")
+        require_confirmation = data.get("require_confirmation", True)
+
+        asyncio.create_task(
+            system_command_agent.execute_interactive_command(
+                command=command,
+                chat_id=chat_id,
+                description=description,
+                require_confirmation=require_confirmation,
+            )
+        )
+
+    async def _handle_input(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle input message. Issue #620."""
+        user_input = data.get("text", "")
+        is_password = data.get("is_password", False)
+
+        try:
+            await system_command_agent.send_input_to_session(
+                chat_id=chat_id, user_input=user_input, is_password=is_password
+            )
+        except ValueError as e:
+            await self._send_error_to_chat(chat_id, str(e))
+
+    async def _handle_control_action(self, chat_id: str, action: str) -> None:
+        """Handle take_control or return_control messages. Issue #620."""
+        try:
+            if action == "take":
+                await system_command_agent.take_control_of_session(chat_id)
+            else:
+                await system_command_agent.return_control_of_session(chat_id)
+        except ValueError as e:
+            await self._send_error_to_chat(chat_id, str(e))
+
+    async def _handle_signal(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle signal message. Issue #620."""
+        signal_type = data.get("signal", "interrupt")
+        try:
+            await system_command_agent.send_signal_to_session(chat_id, signal_type)
+        except ValueError as e:
+            await self._send_error_to_chat(chat_id, str(e))
+
+    async def _handle_resize(self, chat_id: str, data: Dict[str, Any]) -> None:
+        """Handle resize message. Issue #620."""
+        cols = data.get("cols", 80)
+        rows = data.get("rows", 24)
+
+        session_id = f"{chat_id}_terminal"
+        if session_id in system_command_agent.active_sessions:
+            terminal = system_command_agent.active_sessions[session_id]
+            await terminal.resize_terminal(cols, rows)
+
+    async def _handle_get_sessions(self, chat_id: str) -> None:
+        """Handle get_sessions message. Issue #620."""
+        sessions = await system_command_agent.get_active_sessions()
+        await self._send_message_to_chat(
+            chat_id, {"type": "sessions", "sessions": sessions}
+        )
+
     async def _process_client_message(self, chat_id: str, data: Dict[str, Any]):
-        """Process messages from the client"""
+        """
+        Process messages from the client.
+
+        Issue #620: Refactored to use extracted handler methods.
+        """
         msg_type = data.get("type")
 
         if msg_type == "start_command":
-            # Start a new command
-            command = data.get("command", "")
-            description = data.get("description", "")
-            require_confirmation = data.get("require_confirmation", True)
-
-            asyncio.create_task(
-                system_command_agent.execute_interactive_command(
-                    command=command,
-                    chat_id=chat_id,
-                    description=description,
-                    require_confirmation=require_confirmation,
-                )
-            )
-
+            await self._handle_start_command(chat_id, data)
         elif msg_type == "input":
-            # Send input to terminal
-            user_input = data.get("text", "")
-            is_password = data.get("is_password", False)
-
-            try:
-                await system_command_agent.send_input_to_session(
-                    chat_id=chat_id, user_input=user_input, is_password=is_password
-                )
-            except ValueError as e:
-                await self._send_error_to_chat(chat_id, str(e))
-
+            await self._handle_input(chat_id, data)
         elif msg_type == "take_control":
-            # User wants to take control
-            try:
-                await system_command_agent.take_control_of_session(chat_id)
-            except ValueError as e:
-                await self._send_error_to_chat(chat_id, str(e))
-
+            await self._handle_control_action(chat_id, "take")
         elif msg_type == "return_control":
-            # Return control to agent
-            try:
-                await system_command_agent.return_control_of_session(chat_id)
-            except ValueError as e:
-                await self._send_error_to_chat(chat_id, str(e))
-
+            await self._handle_control_action(chat_id, "return")
         elif msg_type == "signal":
-            # Send signal to process
-            signal_type = data.get("signal", "interrupt")
-            try:
-                await system_command_agent.send_signal_to_session(chat_id, signal_type)
-            except ValueError as e:
-                await self._send_error_to_chat(chat_id, str(e))
-
+            await self._handle_signal(chat_id, data)
         elif msg_type == "resize":
-            # Resize terminal
-            cols = data.get("cols", 80)
-            rows = data.get("rows", 24)
-
-            session_id = f"{chat_id}_terminal"
-            if session_id in system_command_agent.active_sessions:
-                terminal = system_command_agent.active_sessions[session_id]
-                await terminal.resize_terminal(cols, rows)
-
+            await self._handle_resize(chat_id, data)
         elif msg_type == "get_sessions":
-            # Get active sessions
-            sessions = await system_command_agent.get_active_sessions()
-            await self._send_message_to_chat(
-                chat_id, {"type": "sessions", "sessions": sessions}
-            )
-
+            await self._handle_get_sessions(chat_id)
         else:
             await self._send_error_to_chat(chat_id, f"Unknown message type: {msg_type}")
 

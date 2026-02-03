@@ -424,92 +424,111 @@ def _create_vectorization_result() -> dict:
     }
 
 
+def _add_vectorization_detail(
+    results: dict, doc_id: str, command: str, status: str, **kwargs
+) -> None:
+    """
+    Add a detail entry to vectorization results. Issue #620.
+
+    Args:
+        results: Results dict to update
+        doc_id: Document ID
+        command: Command name
+        status: Status string (skipped, failed, success, error)
+        **kwargs: Additional fields (reason, fact_id)
+    """
+    detail = {"doc_id": doc_id, "command": command, "status": status}
+    detail.update(kwargs)
+    results["details"].append(detail)
+
+
+def _build_document_metadata(
+    doc_change: dict, machine_id: str, content_size: int
+) -> dict:
+    """
+    Build metadata dict for knowledge base document. Issue #620.
+
+    Args:
+        doc_change: Document change info
+        machine_id: Machine identifier
+        content_size: Size of content
+
+    Returns:
+        Metadata dictionary
+    """
+    return {
+        "category": "system/manpages",
+        "title": f"man {doc_change.get('command')}",
+        "command": doc_change.get("command"),
+        "machine_id": machine_id,
+        "file_path": doc_change.get("file_path"),
+        "document_id": doc_change.get("document_id"),
+        "change_type": doc_change.get("change_type"),
+        "content_size": content_size,
+    }
+
+
 async def _vectorize_single_document(
     kb, scanner, doc_change: dict, machine_id: str, results: dict
 ) -> None:
-    """Vectorize a single document and update results (Issue #281: extracted)."""
+    """
+    Vectorize a single document and update results.
+
+    Issue #281: Originally extracted from larger function.
+    Issue #620: Further refactored with helper methods.
+    """
     results["attempted"] += 1
 
     command = doc_change.get("command")
     file_path = doc_change.get("file_path")
     doc_id = doc_change.get("document_id")
 
+    # Validate required fields
     if not file_path or not command:
         results["skipped"] += 1
-        results["details"].append(
-            {
-                "doc_id": doc_id,
-                "command": command,
-                "status": "skipped",
-                "reason": "Missing file_path or command",
-            }
+        _add_vectorization_detail(
+            results, doc_id, command, "skipped", reason="Missing file_path or command"
         )
         return
 
     try:
-        # Read man page content
+        # Read and validate content
         content = scanner.read_man_page_content(file_path, command)
 
         if not content or len(content.strip()) < 10:
             results["failed"] += 1
-            results["details"].append(
-                {
-                    "doc_id": doc_id,
-                    "command": command,
-                    "status": "failed",
-                    "reason": "Empty or too short content",
-                }
+            _add_vectorization_detail(
+                results, doc_id, command, "failed", reason="Empty or too short content"
             )
             return
 
-        # Add to knowledge base with metadata
-        metadata = {
-            "category": "system/manpages",
-            "title": f"man {command}",
-            "command": command,
-            "machine_id": machine_id,
-            "file_path": file_path,
-            "document_id": doc_id,
-            "change_type": doc_change.get("change_type"),
-            "content_size": len(content),
-        }
+        # Issue #620: Extracted metadata building
+        metadata = _build_document_metadata(doc_change, machine_id, len(content))
 
+        # Add to knowledge base
         kb_result = await kb.add_document(
             content=content, metadata=metadata, doc_id=doc_id
         )
 
         if kb_result.get("status") == "success":
             results["successful"] += 1
-            results["details"].append(
-                {
-                    "doc_id": doc_id,
-                    "command": command,
-                    "status": "success",
-                    "fact_id": kb_result.get("fact_id"),
-                }
+            _add_vectorization_detail(
+                results, doc_id, command, "success", fact_id=kb_result.get("fact_id")
             )
         else:
             results["failed"] += 1
-            results["details"].append(
-                {
-                    "doc_id": doc_id,
-                    "command": command,
-                    "status": "failed",
-                    "reason": kb_result.get("message", "Unknown error"),
-                }
+            _add_vectorization_detail(
+                results,
+                doc_id,
+                command,
+                "failed",
+                reason=kb_result.get("message", "Unknown error"),
             )
 
     except Exception as e:
         logger.error("Vectorization failed for %s: %s", command, e)
         results["failed"] += 1
-        results["details"].append(
-            {
-                "doc_id": doc_id,
-                "command": command,
-                "status": "error",
-                "reason": str(e),
-            }
-        )
+        _add_vectorization_detail(results, doc_id, command, "error", reason=str(e))
 
 
 async def _process_vectorization(kb, scanner, result: dict, machine_id: str) -> dict:
