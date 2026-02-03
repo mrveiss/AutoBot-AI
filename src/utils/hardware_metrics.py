@@ -449,8 +449,39 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error collecting multimodal metrics: {e}")
             return None
 
+    def _create_empty_system_metrics(self) -> SystemPerformanceMetrics:
+        """Create empty system metrics for error fallback. Issue #620."""
+        return SystemPerformanceMetrics(
+            timestamp=time.time(),
+            cpu_usage_percent=0,
+            cpu_cores_physical=0,
+            cpu_cores_logical=0,
+            cpu_frequency_mhz=0,
+            cpu_load_1m=0,
+            cpu_load_5m=0,
+            cpu_load_15m=0,
+            memory_total_gb=0,
+            memory_used_gb=0,
+            memory_available_gb=0,
+            memory_usage_percent=0,
+            swap_usage_percent=0,
+            disk_read_mb_s=0,
+            disk_write_mb_s=0,
+            disk_usage_percent=0,
+            disk_queue_depth=0,
+            network_upload_mb_s=0,
+            network_download_mb_s=0,
+            network_latency_ms=0,
+            network_packet_loss_percent=0,
+            autobot_memory_usage_mb=0,
+            autobot_cpu_usage_percent=0,
+        )
+
     async def collect_system_performance_metrics(self) -> SystemPerformanceMetrics:
-        """Collect comprehensive system performance metrics"""
+        """Collect comprehensive system performance metrics.
+
+        Issue #620: Refactored to extract _create_empty_system_metrics.
+        """
         try:
             # CPU metrics
             cpu_percent = psutil.cpu_percent(interval=0.1)
@@ -516,32 +547,7 @@ class Phase9PerformanceMonitor:
 
         except Exception as e:
             self.logger.error(f"Error collecting system performance metrics: {e}")
-            # Return empty metrics on error
-            return SystemPerformanceMetrics(
-                timestamp=time.time(),
-                cpu_usage_percent=0,
-                cpu_cores_physical=0,
-                cpu_cores_logical=0,
-                cpu_frequency_mhz=0,
-                cpu_load_1m=0,
-                cpu_load_5m=0,
-                cpu_load_15m=0,
-                memory_total_gb=0,
-                memory_used_gb=0,
-                memory_available_gb=0,
-                memory_usage_percent=0,
-                swap_usage_percent=0,
-                disk_read_mb_s=0,
-                disk_write_mb_s=0,
-                disk_usage_percent=0,
-                disk_queue_depth=0,
-                network_upload_mb_s=0,
-                network_download_mb_s=0,
-                network_latency_ms=0,
-                network_packet_loss_percent=0,
-                autobot_memory_usage_mb=0,
-                autobot_cpu_usage_percent=0,
-            )
+            return self._create_empty_system_metrics()
 
     def _get_autobot_processes(self) -> List[Dict[str, Any]]:
         """Get AutoBot-specific process information"""

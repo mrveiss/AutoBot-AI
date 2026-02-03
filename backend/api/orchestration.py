@@ -42,6 +42,54 @@ class AgentRecommendationRequest(BaseModel):
     operation="execute_workflow",
     error_code_prefix="ORCHESTRATION",
 )
+def _build_multi_task_response(result: dict) -> JSONResponse:
+    """Build response for workflows with multiple tasks. Issue #620."""
+    workflow_preview = []
+    for task_id, task_result in result.get("results", {}).items():
+        description = task_result.get("description", f"Task {task_id}")
+        workflow_preview.append(description)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "type": "workflow_orchestration",
+            "workflow_id": result.get("plan_id"),
+            "workflow_response": {
+                "workflow_preview": workflow_preview,
+                "strategy_used": result.get("strategy_used"),
+                "execution_time": result.get("execution_time"),
+            },
+            "details": result,
+        },
+    )
+
+
+def _build_single_task_response(result: dict) -> JSONResponse:
+    """Build response for single task execution. Issue #620."""
+    task_results = list(result.get("results", {}).values())
+    if task_results:
+        task_result = task_results[0]
+        response_text = task_result.get(
+            "response", task_result.get("result", "Task completed")
+        )
+    else:
+        response_text = "Task completed successfully"
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "type": "direct_execution",
+            "result": {
+                "response": response_text,
+                "response_text": response_text,
+                "messageType": "response",
+            },
+            "workflow_id": result.get("plan_id"),
+            "details": result,
+        },
+    )
+
+
 @router.post("/workflow/execute")
 async def execute_workflow(
     request: WorkflowRequest,
@@ -57,6 +105,7 @@ async def execute_workflow(
     - Automatic failover and retry logic
 
     Issue #744: Requires authenticated user.
+    Issue #620: Refactored to extract _build_multi_task_response and _build_single_task_response.
     """
     try:
         logger.info("Executing workflow for goal: %s", request.goal)
@@ -68,53 +117,13 @@ async def execute_workflow(
         # Create and execute workflow
         result = await create_and_execute_workflow(request.goal, request.context)
 
-        # Check if workflow was executed (has multiple steps/tasks)
+        # Check if workflow has multiple tasks (Issue #620: uses helpers)
         has_multiple_tasks = len(result.get("results", {})) > 1
 
         if has_multiple_tasks:
-            # Format as workflow orchestration response that frontend expects
-            workflow_preview = []
-            for task_id, task_result in result.get("results", {}).items():
-                description = task_result.get("description", f"Task {task_id}")
-                workflow_preview.append(description)
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "type": "workflow_orchestration",
-                    "workflow_id": result.get("plan_id"),
-                    "workflow_response": {
-                        "workflow_preview": workflow_preview,
-                        "strategy_used": result.get("strategy_used"),
-                        "execution_time": result.get("execution_time"),
-                    },
-                    "details": result,
-                },
-            )
+            return _build_multi_task_response(result)
         else:
-            # Single task execution - return as direct result for simpler processing
-            task_results = list(result.get("results", {}).values())
-            if task_results:
-                task_result = task_results[0]
-                response_text = task_result.get(
-                    "response", task_result.get("result", "Task completed")
-                )
-            else:
-                response_text = "Task completed successfully"
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "type": "direct_execution",
-                    "result": {
-                        "response": response_text,
-                        "response_text": response_text,
-                        "messageType": "response",
-                    },
-                    "workflow_id": result.get("plan_id"),
-                    "details": result,
-                },
-            )
+            return _build_single_task_response(result)
 
     except Exception as e:
         logger.error("Workflow execution error: %s", e)

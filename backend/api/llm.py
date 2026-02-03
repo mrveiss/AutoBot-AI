@@ -165,6 +165,50 @@ async def get_current_llm(
     operation="update_llm_provider",
     error_code_prefix="LLM",
 )
+async def _update_local_provider(model_name: str) -> None:
+    """Update local Ollama provider configuration. Issue #620."""
+    logger.info("UNIFIED CONFIG: Updating Ollama model to: %s", model_name)
+    await asyncio.to_thread(config.update_llm_model, model_name)
+
+
+def _update_cloud_provider(cloud_provider: str, cloud_model: str) -> None:
+    """Update cloud provider configuration. Issue #620."""
+    logger.info(
+        "UNIFIED CONFIG: Updating cloud provider to: %s, model: %s",
+        cloud_provider,
+        cloud_model,
+    )
+    config.set("backend.llm.provider_type", "cloud")
+    config.set("backend.llm.cloud.provider", cloud_provider)
+    config.set(
+        f"backend.llm.cloud.providers.{cloud_provider}.selected_model",
+        cloud_model,
+    )
+
+
+def _build_llm_update_response() -> dict:
+    """Build LLM provider update response. Issue #620."""
+    current_llm_config = config.get("llm", {})
+    return {
+        "status": "success",
+        "message": "LLM provider configuration updated successfully using unified config system",
+        "current_config": {
+            "provider_type": current_llm_config.get("unified", {}).get(
+                "provider_type", "local"
+            ),
+            "selected_model": (
+                current_llm_config.get("unified", {})
+                .get("local", {})
+                .get("providers", {})
+                .get("ollama", {})
+                .get("selected_model")
+                or current_llm_config.get("ollama", {}).get("model", "unknown")
+            ),
+            "streaming": config.get("backend.streaming", False),
+        },
+    }
+
+
 @router.post("/provider")
 async def update_llm_provider(
     provider_data: dict,
@@ -173,11 +217,11 @@ async def update_llm_provider(
     """Update LLM provider configuration using unified config system.
 
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to extract _update_local_provider, _update_cloud_provider,
+    and _build_llm_update_response helpers.
     """
     try:
         logger.info("UNIFIED CONFIG: Received LLM provider update: %s", provider_data)
-
-        # Use unified configuration system
 
         # Handle streaming setting
         if "streaming" in provider_data:
@@ -186,62 +230,25 @@ async def update_llm_provider(
             )
             config.set("backend.streaming", provider_data["streaming"])
 
-        # Handle local provider updates (Ollama)
+        # Handle local provider updates (Issue #620: uses helper)
         if provider_data.get("provider_type") == "local" and provider_data.get(
             "local_model"
         ):
-            model_name = provider_data.get("local_model")
-            logger.info("UNIFIED CONFIG: Updating Ollama model to: %s", model_name)
+            await _update_local_provider(provider_data.get("local_model"))
 
-            # Use the unified model update method (wrapped for async - Issue #362)
-            await asyncio.to_thread(config.update_llm_model, model_name)
-
-        # Handle cloud provider updates
+        # Handle cloud provider updates (Issue #620: uses helper)
         elif provider_data.get("provider_type") == "cloud":
             if provider_data.get("cloud_provider") and provider_data.get("cloud_model"):
-                cloud_provider = provider_data.get("cloud_provider")
-                cloud_model = provider_data.get("cloud_model")
-                logger.info(
-                    "UNIFIED CONFIG: Updating cloud provider to: %s, model: %s",
-                    cloud_provider,
-                    cloud_model,
-                )
-
-                # Update provider type
-                config.set("backend.llm.provider_type", "cloud")
-                config.set("backend.llm.cloud.provider", cloud_provider)
-                config.set(
-                    f"backend.llm.cloud.providers.{cloud_provider}.selected_model",
-                    cloud_model,
+                _update_cloud_provider(
+                    provider_data.get("cloud_provider"),
+                    provider_data.get("cloud_model"),
                 )
 
         # Save all changes (wrapped for async - Issue #362)
         await asyncio.to_thread(config.save_settings)
         await asyncio.to_thread(config.save_config_to_yaml)
 
-        # Return current configuration
-        current_llm_config = config.get("llm", {})
-
-        return {
-            "status": "success",
-            "message": (
-                "LLM provider configuration updated successfully using unified config system"
-            ),
-            "current_config": {
-                "provider_type": (
-                    current_llm_config.get("unified", {}).get("provider_type", "local")
-                ),
-                "selected_model": (
-                    current_llm_config.get("unified", {})
-                    .get("local", {})
-                    .get("providers", {})
-                    .get("ollama", {})
-                    .get("selected_model")
-                    or current_llm_config.get("ollama", {}).get("model", "unknown")
-                ),
-                "streaming": config.get("backend.streaming", False),
-            },
-        }
+        return _build_llm_update_response()
 
     except Exception as e:
         logger.error("Error updating LLM provider: %s", str(e))
