@@ -1089,6 +1089,75 @@ async def get_prediction_trends(
     }
 
 
+def _calculate_risk_distribution(analyzed_files: list) -> dict[str, int]:
+    """
+    Calculate risk level distribution from analyzed files. Issue #620.
+
+    Args:
+        analyzed_files: List of analyzed file dictionaries
+
+    Returns:
+        Dict mapping risk level names to counts
+    """
+    risk_dist = {level.value: 0 for level in RiskLevel}
+    for f in analyzed_files:
+        level = get_risk_level(f["risk_score"])
+        risk_dist[level.value] += 1
+    return risk_dist
+
+
+def _aggregate_risk_factors(analyzed_files: list) -> list[tuple[str, float]]:
+    """
+    Aggregate risk factors across all files, sorted by total score. Issue #620.
+
+    Args:
+        analyzed_files: List of analyzed file dictionaries
+
+    Returns:
+        Sorted list of (factor_name, total_score) tuples
+    """
+    factor_totals: dict[str, float] = {}
+    for f in analyzed_files:
+        for factor, score in f["factors"].items():
+            factor_totals[factor] = factor_totals.get(factor, 0) + score
+    return sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)
+
+
+def _generate_summary_recommendations(
+    risk_dist: dict[str, int], analyzed_files: list
+) -> list[str]:
+    """
+    Generate recommendations based on risk analysis. Issue #620.
+
+    Args:
+        risk_dist: Risk distribution dictionary
+        analyzed_files: List of analyzed file dictionaries
+
+    Returns:
+        List of recommendation strings
+    """
+    high_risk_count = risk_dist.get("high", 0) + risk_dist.get("critical", 0)
+    recommendations = []
+
+    if high_risk_count > 0:
+        recommendations.append(
+            f"Focus testing efforts on {high_risk_count} high-risk files"
+        )
+
+    # Get top 3 highest risk files
+    top_risky = sorted(analyzed_files, key=lambda x: x["risk_score"], reverse=True)[:3]
+    for f in top_risky:
+        if f["risk_score"] >= 60:
+            recommendations.append(
+                f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})"
+            )
+
+    if not recommendations:
+        recommendations.append("All files are within acceptable risk levels")
+
+    return recommendations[:5]
+
+
 @router.get("/summary")
 async def get_prediction_summary(
     admin_check: bool = Depends(check_admin_permission),
@@ -1099,6 +1168,7 @@ async def get_prediction_summary(
     """
     Get summary of bug predictions and risk assessment (Issue #543: no demo data).
     Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use extracted helper methods.
 
     Returns high-level metrics for dashboard display.
     """
@@ -1120,40 +1190,11 @@ async def get_prediction_summary(
             files_to_analyze, change_freq, bug_history
         )
 
-        # Risk distribution
-        risk_dist = {level.value: 0 for level in RiskLevel}
-        for f in analyzed_files:
-            level = get_risk_level(f["risk_score"])
-            risk_dist[level.value] += 1
-
-        # Top risk factors across all files
-        factor_totals: dict[str, float] = {}
-        for f in analyzed_files:
-            for factor, score in f["factors"].items():
-                factor_totals[factor] = factor_totals.get(factor, 0) + score
-
-        top_factors = sorted(factor_totals.items(), key=lambda x: x[1], reverse=True)
-
-        # Generate recommendations based on actual data
+        # Issue #620: Extracted to helper methods
+        risk_dist = _calculate_risk_distribution(analyzed_files)
+        top_factors = _aggregate_risk_factors(analyzed_files)
+        recommendations = _generate_summary_recommendations(risk_dist, analyzed_files)
         high_risk_count = risk_dist.get("high", 0) + risk_dist.get("critical", 0)
-        recommendations = []
-        if high_risk_count > 0:
-            recommendations.append(
-                f"Focus testing efforts on {high_risk_count} high-risk files"
-            )
-
-        # Get top 3 highest risk files for recommendations
-        top_risky = sorted(analyzed_files, key=lambda x: x["risk_score"], reverse=True)[
-            :3
-        ]
-        for f in top_risky:
-            if f["risk_score"] >= 60:
-                recommendations.append(
-                    f"Review {f['file_path']} (risk score: {f['risk_score']:.1f})"
-                )
-
-        if not recommendations:
-            recommendations.append("All files are within acceptable risk levels")
 
         return {
             "status": "success",
@@ -1169,7 +1210,7 @@ async def get_prediction_summary(
                 }
                 for f in top_factors[:5]
             ],
-            "recommendations": recommendations[:5],
+            "recommendations": recommendations,
         }
 
     except Exception as e:

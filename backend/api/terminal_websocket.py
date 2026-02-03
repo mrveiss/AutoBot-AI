@@ -198,90 +198,109 @@ class TerminalWebSocketHandler:
         else:
             await self._send_error_to_chat(chat_id, f"Unknown message type: {msg_type}")
 
+    def _build_event_message(
+        self, event_type: str, event_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build WebSocket message from event data. Issue #620.
+
+        Args:
+            event_type: Type of terminal event
+            event_data: Raw event data from event manager
+
+        Returns:
+            Formatted message dictionary for WebSocket
+        """
+        if event_type == "terminal_output":
+            return {
+                "type": "output",
+                "content": event_data.get("output", ""),
+                "output_type": event_data.get("type", "output"),
+                "timestamp": event_data.get("timestamp"),
+            }
+        elif event_type == "terminal_control":
+            return {
+                "type": "control_change",
+                "status": event_data.get("status"),
+                "message": event_data.get("message"),
+            }
+        elif event_type == "terminal_session":
+            return {
+                "type": "session_status",
+                "status": event_data.get("status"),
+                "exit_code": event_data.get("exit_code"),
+                "duration": event_data.get("duration"),
+            }
+        elif event_type == "command_execution":
+            return {
+                "type": "command_status",
+                "command": event_data.get("command"),
+                "status": event_data.get("status"),
+                "description": event_data.get("description"),
+                "exit_code": event_data.get("exit_code"),
+                "duration": event_data.get("duration"),
+            }
+        elif event_type == "command_confirmation":
+            return {
+                "type": "confirmation_request",
+                "command": event_data.get("command"),
+                "warning": event_data.get("warning"),
+                "requires_confirmation": True,
+            }
+        return {"type": "unknown", "data": event_data}
+
+    def _create_event_handler(
+        self, chat_id: str, websocket: WebSocket, event_type: str
+    ):
+        """
+        Create an event handler for a specific event type. Issue #620.
+
+        Args:
+            chat_id: Chat ID to filter events for
+            websocket: WebSocket connection to send messages to
+            event_type: Type of event to handle
+
+        Returns:
+            Async event handler function
+        """
+
+        async def handler(event_data):
+            if event_data.get("chat_id") == chat_id:
+                message = self._build_event_message(event_type, event_data)
+                await self._send_message(websocket, message)
+
+        return handler
+
     async def _subscribe_to_terminal_events(self, chat_id: str, websocket: WebSocket):
-        """Subscribe to terminal events and forward to WebSocket"""
+        """
+        Subscribe to terminal events and forward to WebSocket.
 
-        async def handle_terminal_output(event_data):
-            if event_data.get("chat_id") == chat_id:
-                await self._send_message(
-                    websocket,
-                    {
-                        "type": "output",
-                        "content": event_data.get("output", ""),
-                        "output_type": event_data.get("type", "output"),
-                        "timestamp": event_data.get("timestamp"),
-                    },
-                )
+        Issue #620: Refactored to use extracted helpers for handler creation.
+        """
+        # Issue #620: Event types to subscribe to
+        event_types = [
+            "terminal_output",
+            "terminal_control",
+            "terminal_session",
+            "command_execution",
+            "command_confirmation",
+        ]
 
-        async def handle_terminal_control(event_data):
-            if event_data.get("chat_id") == chat_id:
-                await self._send_message(
-                    websocket,
-                    {
-                        "type": "control_change",
-                        "status": event_data.get("status"),
-                        "message": event_data.get("message"),
-                    },
-                )
-
-        async def handle_terminal_session(event_data):
-            if event_data.get("chat_id") == chat_id:
-                await self._send_message(
-                    websocket,
-                    {
-                        "type": "session_status",
-                        "status": event_data.get("status"),
-                        "exit_code": event_data.get("exit_code"),
-                        "duration": event_data.get("duration"),
-                    },
-                )
-
-        async def handle_command_execution(event_data):
-            if event_data.get("chat_id") == chat_id:
-                await self._send_message(
-                    websocket,
-                    {
-                        "type": "command_status",
-                        "command": event_data.get("command"),
-                        "status": event_data.get("status"),
-                        "description": event_data.get("description"),
-                        "exit_code": event_data.get("exit_code"),
-                        "duration": event_data.get("duration"),
-                    },
-                )
-
-        async def handle_command_confirmation(event_data):
-            if event_data.get("chat_id") == chat_id:
-                await self._send_message(
-                    websocket,
-                    {
-                        "type": "confirmation_request",
-                        "command": event_data.get("command"),
-                        "warning": event_data.get("warning"),
-                        "requires_confirmation": True,
-                    },
-                )
-
-        # Subscribe to events
-        event_manager.subscribe("terminal_output", handle_terminal_output)
-        event_manager.subscribe("terminal_control", handle_terminal_control)
-        event_manager.subscribe("terminal_session", handle_terminal_session)
-        event_manager.subscribe("command_execution", handle_command_execution)
-        event_manager.subscribe("command_confirmation", handle_command_confirmation)
+        # Create and register handlers
+        handlers = {}
+        for event_type in event_types:
+            handler = self._create_event_handler(chat_id, websocket, event_type)
+            handlers[event_type] = handler
+            event_manager.subscribe(event_type, handler)
 
         # Keep the subscription alive
         try:
             while chat_id in self.active_connections:
                 await asyncio.sleep(1)
         finally:
-            # Unsubscribe when done
-            event_manager.unsubscribe("terminal_output", handle_terminal_output)
-            event_manager.unsubscribe("terminal_control", handle_terminal_control)
-            event_manager.unsubscribe("terminal_session", handle_terminal_session)
-            event_manager.unsubscribe("command_execution", handle_command_execution)
-            event_manager.unsubscribe(
-                "command_confirmation", handle_command_confirmation
-            )
+            # Unsubscribe all handlers
+            for event_type, handler in handlers.items():
+                event_manager.unsubscribe(event_type, handler)
 
     async def _send_message(self, websocket: WebSocket, message: Dict[str, Any]):
         """Send message to WebSocket if connection is open"""
