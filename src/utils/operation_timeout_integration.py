@@ -328,7 +328,13 @@ class OperationIntegrationManager:
             raise_server_error("API_0003", str(e))
 
     def _setup_routes(self):
-        """Setup FastAPI routes for operation management."""
+        """Setup FastAPI routes for operation management. Issue #620."""
+        self._setup_crud_routes()
+        self._setup_lifecycle_routes()
+        self._setup_specialized_routes()
+
+    def _setup_crud_routes(self):
+        """Setup CRUD routes for operation management. Issue #620."""
 
         @self.router.post("/create", response_model=Dict[str, str])
         async def create_operation(request: CreateOperationRequest):
@@ -367,6 +373,9 @@ class OperationIntegrationManager:
                 failed_count=failed,
             )
 
+    def _setup_lifecycle_routes(self):
+        """Setup operation lifecycle routes (cancel, resume, progress). Issue #620."""
+
         @self.router.post("/{operation_id}/cancel")
         async def cancel_operation(operation_id: str):
             """Cancel a running operation."""
@@ -390,6 +399,9 @@ class OperationIntegrationManager:
         async def websocket_progress_updates(websocket: WebSocket, operation_id: str):
             """WebSocket endpoint for real-time progress updates."""
             await self._handle_websocket_connection(websocket, operation_id)
+
+    def _setup_specialized_routes(self):
+        """Setup specialized operation routes (indexing, testing). Issue #620."""
 
         @self.router.post("/codebase/index")
         async def start_codebase_indexing(
@@ -744,7 +756,8 @@ if __name__ == "__main__":
                     )
                 )
                 # Check if operation reached terminal state (Issue #326)
-                # Note: Using subset of TERMINAL_OPERATION_STATUSES (excluding CANCELLED for this polling loop)
+                # Note: Using subset of TERMINAL_OPERATION_STATUSES
+                # (excluding CANCELLED for this polling loop)
                 if operation.status in {
                     OperationStatus.COMPLETED,
                     OperationStatus.FAILED,

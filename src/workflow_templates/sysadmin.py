@@ -91,6 +91,75 @@ def create_system_health_check_template() -> WorkflowTemplate:
     )
 
 
+def _create_performance_optimization_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for performance optimization template.
+
+    Returns a list of WorkflowStep objects defining the performance optimization
+    workflow sequence from baseline metrics collection through optimization
+    implementation and verification. Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="baseline_metrics",
+            agent_type="system_commands",
+            action="Collect baseline performance metrics",
+            description="System_Commands: Baseline Metrics Collection",
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="bottleneck_analysis",
+            agent_type="system_commands",
+            action="Analyze system for performance bottlenecks",
+            description="System_Commands: Bottleneck Analysis",
+            dependencies=["baseline_metrics"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="optimization_research",
+            agent_type="research",
+            action="Research performance optimization techniques",
+            description="Research: Optimization Techniques",
+            dependencies=["bottleneck_analysis"],
+            expected_duration_ms=35000,
+        ),
+        WorkflowStep(
+            id="optimization_plan",
+            agent_type="orchestrator",
+            action="Create detailed optimization implementation plan",
+            description="Orchestrator: Optimization Plan (requires your approval)",
+            requires_approval=True,
+            dependencies=["optimization_research"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="implement_optimizations",
+            agent_type="system_commands",
+            action="Implement approved performance optimizations",
+            description="System_Commands: Apply Optimizations (requires your approval)",
+            requires_approval=True,
+            dependencies=["optimization_plan"],
+            expected_duration_ms=45000,
+        ),
+        WorkflowStep(
+            id="verify_improvements",
+            agent_type="system_commands",
+            action="Verify performance improvements and measure impact",
+            description="System_Commands: Performance Verification",
+            dependencies=["implement_optimizations"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="store_optimization",
+            agent_type="knowledge_manager",
+            action="Store optimization results and procedures",
+            description="Knowledge_Manager: Store Optimization Results",
+            dependencies=["verify_improvements"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
 def create_performance_optimization_template() -> WorkflowTemplate:
     """Create performance optimization workflow template."""
     return WorkflowTemplate(
@@ -111,65 +180,7 @@ def create_performance_optimization_template() -> WorkflowTemplate:
             "target_system": "System or application to optimize",
             "performance_goals": "Specific performance goals or metrics",
         },
-        steps=[
-            WorkflowStep(
-                id="baseline_metrics",
-                agent_type="system_commands",
-                action="Collect baseline performance metrics",
-                description="System_Commands: Baseline Metrics Collection",
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="bottleneck_analysis",
-                agent_type="system_commands",
-                action="Analyze system for performance bottlenecks",
-                description="System_Commands: Bottleneck Analysis",
-                dependencies=["baseline_metrics"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="optimization_research",
-                agent_type="research",
-                action="Research performance optimization techniques",
-                description="Research: Optimization Techniques",
-                dependencies=["bottleneck_analysis"],
-                expected_duration_ms=35000,
-            ),
-            WorkflowStep(
-                id="optimization_plan",
-                agent_type="orchestrator",
-                action="Create detailed optimization implementation plan",
-                description="Orchestrator: Optimization Plan (requires your approval)",
-                requires_approval=True,
-                dependencies=["optimization_research"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="implement_optimizations",
-                agent_type="system_commands",
-                action="Implement approved performance optimizations",
-                description="System_Commands: Apply Optimizations (requires your approval)",
-                requires_approval=True,
-                dependencies=["optimization_plan"],
-                expected_duration_ms=45000,
-            ),
-            WorkflowStep(
-                id="verify_improvements",
-                agent_type="system_commands",
-                action="Verify performance improvements and measure impact",
-                description="System_Commands: Performance Verification",
-                dependencies=["implement_optimizations"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="store_optimization",
-                agent_type="knowledge_manager",
-                action="Store optimization results and procedures",
-                description="Knowledge_Manager: Store Optimization Results",
-                dependencies=["verify_improvements"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_performance_optimization_steps(),
     )
 
 
