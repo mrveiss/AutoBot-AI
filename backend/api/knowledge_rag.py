@@ -12,14 +12,13 @@ with cross-encoder reranking for improved relevance scoring.
 import logging
 from typing import List
 
-from backend.type_defs.common import Metadata
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.rag_config import get_rag_config, update_rag_config
 from backend.services.rag_service import RAGService
+from backend.type_defs.common import Metadata
 from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -35,7 +34,12 @@ class AdvancedSearchRequest(BaseModel):
     """Request model for advanced RAG search with reranking"""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    max_results: int = Field(default=QueryDefaults.RAG_DEFAULT_RESULTS, ge=1, le=50, description="Maximum results")
+    max_results: int = Field(
+        default=QueryDefaults.RAG_DEFAULT_RESULTS,
+        ge=1,
+        le=50,
+        description="Maximum results",
+    )
     enable_reranking: bool = Field(
         default=True, description="Enable cross-encoder reranking"
     )
@@ -92,6 +96,56 @@ async def get_rag_service_dependency(request: Request) -> RAGService:
 # ===== ENDPOINTS =====
 
 
+def _convert_results_to_dicts(results: list) -> list:
+    """
+    Convert SearchResult objects to dictionaries.
+
+    Issue #620: Extracted from advanced_search.
+
+    Args:
+        results: List of SearchResult objects
+
+    Returns:
+        List of result dictionaries
+    """
+    return [
+        {
+            "content": r.content,
+            "metadata": r.metadata,
+            "source_path": r.source_path,
+            "semantic_score": r.semantic_score,
+            "keyword_score": r.keyword_score,
+            "hybrid_score": r.hybrid_score,
+            "rerank_score": r.rerank_score,
+            "relevance_rank": r.relevance_rank,
+        }
+        for r in results
+    ]
+
+
+def _build_search_metrics(metrics) -> dict:
+    """
+    Build metrics dictionary from search metrics object.
+
+    Issue #620: Extracted from advanced_search.
+
+    Args:
+        metrics: Search metrics object
+
+    Returns:
+        Metrics dictionary
+    """
+    return {
+        "query_processing_time": metrics.query_processing_time,
+        "retrieval_time": metrics.retrieval_time,
+        "reranking_time": metrics.reranking_time,
+        "total_time": metrics.total_time,
+        "documents_considered": metrics.documents_considered,
+        "final_results_count": metrics.final_results_count,
+        "hybrid_search_enabled": metrics.hybrid_search_enabled,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="advanced_rag_search",
@@ -105,11 +159,7 @@ async def advanced_search(
     """
     Perform advanced RAG search with cross-encoder reranking.
 
-    This endpoint provides state-of-the-art retrieval using:
-    - Hybrid search (semantic + keyword)
-    - Query expansion
-    - Result diversification
-    - Cross-encoder reranking for improved relevance
+    Issue #620: Refactored to use extracted helper methods.
 
     **Parameters:**
     - **query**: Search query string
@@ -124,8 +174,10 @@ async def advanced_search(
     - **context**: Optimized context (if return_context=true)
     """
     logger.info(
-        f"Advanced search: '{request.query}' (max_results={request.max_results}, "
-        f"reranking={request.enable_reranking})"
+        "Advanced search: '%s' (max_results=%d, reranking=%s)",
+        request.query,
+        request.max_results,
+        request.enable_reranking,
     )
 
     # Perform advanced search
@@ -136,42 +188,19 @@ async def advanced_search(
         timeout=request.timeout,
     )
 
-    # Convert SearchResult objects to dictionaries
-    results_dicts = [
-        {
-            "content": r.content,
-            "metadata": r.metadata,
-            "source_path": r.source_path,
-            "semantic_score": r.semantic_score,
-            "keyword_score": r.keyword_score,
-            "hybrid_score": r.hybrid_score,
-            "rerank_score": r.rerank_score,
-            "relevance_rank": r.relevance_rank,
-        }
-        for r in results
-    ]
-
+    # Build response (Issue #620: uses helpers)
+    results_dicts = _convert_results_to_dicts(results)
     response = {
         "results": results_dicts,
         "total_results": len(results_dicts),
         "query": request.query,
-        "metrics": {
-            "query_processing_time": metrics.query_processing_time,
-            "retrieval_time": metrics.retrieval_time,
-            "reranking_time": metrics.reranking_time,
-            "total_time": metrics.total_time,
-            "documents_considered": metrics.documents_considered,
-            "final_results_count": metrics.final_results_count,
-            "hybrid_search_enabled": metrics.hybrid_search_enabled,
-        },
+        "metrics": _build_search_metrics(metrics),
         "reranking_enabled": request.enable_reranking,
     }
 
     # Optionally include optimized context
     if request.return_context:
-        context, context_metrics = await rag_service.get_optimized_context(
-            query=request.query
-        )
+        context, _ = await rag_service.get_optimized_context(query=request.query)
         response["context"] = context
         response["context_length"] = len(context)
 

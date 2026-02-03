@@ -8,11 +8,12 @@ to be applied across the codebase.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
+from src.auth_middleware import get_current_user
 from src.error_handler import log_error, safe_api_error, with_error_handling
 from src.exceptions import (
     AutoBotError,
@@ -35,8 +36,15 @@ class ChatRequest(BaseModel):
 
 
 @router.get("/chats")
-async def list_chats(request: Request):
-    """List all chat sessions with improved error handling."""
+async def list_chats(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List all chat sessions with improved error handling.
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
 
     try:
@@ -87,8 +95,16 @@ async def list_chats(request: Request):
 
 
 @router.get("/chats/{chat_id}")
-async def get_chat(chat_id: str, request: Request):
-    """Get a specific chat session with improved error handling."""
+async def get_chat(
+    chat_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get a specific chat session with improved error handling.
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
 
     try:
@@ -148,8 +164,16 @@ async def get_chat(chat_id: str, request: Request):
 
 
 @router.delete("/chats/{chat_id}")
-async def delete_chat(chat_id: str, request: Request):
-    """Delete a specific chat session with improved error handling."""
+async def delete_chat(
+    chat_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Delete a specific chat session with improved error handling.
+
+    Issue #744: Requires authenticated user.
+    """
     request_id = generate_request_id()
 
     try:
@@ -204,57 +228,98 @@ async def delete_chat(chat_id: str, request: Request):
         )
 
 
+def _validate_chat_message(message: str) -> None:
+    """
+    Validate chat message content.
+
+    Issue #620: Extracted from process_chat.
+
+    Args:
+        message: Message to validate
+
+    Raises:
+        ValidationError: If message is invalid
+    """
+    if not message.strip():
+        raise ValidationError("Message cannot be empty", field="message")
+
+    if len(message) > 10000:  # Reasonable limit
+        raise ValidationError(
+            "Message too long (max 10000 characters)",
+            field="message",
+            value=len(message),
+        )
+
+
+async def _process_message_with_timeout(
+    orchestrator, message: str, chat_id: Optional[str], request_id: str
+) -> JSONResponse:
+    """
+    Process chat message with timeout handling.
+
+    Issue #620: Extracted from process_chat.
+
+    Args:
+        orchestrator: Chat orchestrator instance
+        message: User message
+        chat_id: Optional chat session ID
+        request_id: Request identifier for logging
+
+    Returns:
+        JSONResponse with chat response
+
+    Raises:
+        InternalError: On timeout or service unavailability
+        ValidationError: On invalid message format
+    """
+    import asyncio
+
+    try:
+        response = await asyncio.wait_for(
+            orchestrator.process_message(message=message, chat_id=chat_id),
+            timeout=30.0,
+        )
+        return JSONResponse(status_code=200, content=response)
+
+    except asyncio.TimeoutError:
+        logger.error("Chat processing timeout for request %s", request_id)
+        raise InternalError("Request processing timed out")
+    except ValueError as e:
+        raise ValidationError(f"Invalid message format: {str(e)}")
+    except ConnectionError as e:
+        logger.error("External service connection failed: %s", e)
+        raise InternalError("Unable to process message due to service unavailability")
+
+
 @router.post("/chat")
-async def process_chat(request: ChatRequest, http_request: Request):
-    """Process a chat message with improved error handling."""
+async def process_chat(
+    request: ChatRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Process a chat message with improved error handling.
+
+    Issue #744: Requires authenticated user.
+    Issue #620: Refactored to use extracted helper methods.
+    """
     request_id = generate_request_id()
 
     try:
-        # Validate request
-        if not request.message.strip():
-            raise ValidationError("Message cannot be empty", field="message")
-
-        if len(request.message) > 10000:  # Reasonable limit
-            raise ValidationError(
-                "Message too long (max 10000 characters)",
-                field="message",
-                value=len(request.message),
-            )
+        # Validate request (Issue #620: uses helper)
+        _validate_chat_message(request.message)
 
         # Get required components with specific errors
         orchestrator = getattr(http_request.app.state, "orchestrator", None)
         if orchestrator is None:
             raise InternalError("Chat orchestrator not initialized")
 
-        # Process message with timeout and specific error handling
-        try:
-            import asyncio
-
-            # Add timeout to prevent hanging
-            response = await asyncio.wait_for(
-                orchestrator.process_message(
-                    message=request.message, chat_id=request.chat_id
-                ),
-                timeout=30.0,  # 30 second timeout
-            )
-
-            return JSONResponse(status_code=200, content=response)
-
-        except asyncio.TimeoutError:
-            logger.error(f"Chat processing timeout for request {request_id}")
-            raise InternalError("Request processing timed out")
-        except ValueError as e:
-            # Handle validation errors from orchestrator
-            raise ValidationError(f"Invalid message format: {str(e)}")
-        except ConnectionError as e:
-            # Handle external service failures
-            logger.error(f"External service connection failed: {e}")
-            raise InternalError(
-                "Unable to process message due to service unavailability"
-            )
+        # Process message (Issue #620: uses helper)
+        return await _process_message_with_timeout(
+            orchestrator, request.message, request.chat_id, request_id
+        )
 
     except PydanticValidationError as e:
-        # Handle Pydantic validation errors
         return JSONResponse(
             status_code=400,
             content={
@@ -286,8 +351,14 @@ async def process_chat(request: ChatRequest, http_request: Request):
     ),
     context="chat_health_check",
 )
-async def health_check():
-    """Simple health check endpoint with decorator-based error handling."""
+async def health_check(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Simple health check endpoint with decorator-based error handling.
+
+    Issue #744: Requires authenticated user.
+    """
     # This will automatically handle and log any errors
     return JSONResponse(
         status_code=200, content={"status": "healthy", "service": "chat"}
