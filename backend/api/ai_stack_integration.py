@@ -12,17 +12,18 @@ import logging
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from backend.dependencies import get_knowledge_base
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from backend.utils.response_helpers import create_success_response
+from src.auth_middleware import check_admin_permission
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +127,12 @@ class ContentClassificationRequest(BaseModel):
     error_code_prefix="AI_STACK",
 )
 @router.get("/health")
-async def ai_stack_health_check():
-    """Check AI Stack health and connectivity."""
+async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Check AI Stack health and connectivity.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         ai_client = await get_ai_stack_client()
         health_status = await ai_client.health_check()
@@ -157,8 +162,12 @@ async def ai_stack_health_check():
     error_code_prefix="AI_STACK",
 )
 @router.get("/agents")
-async def list_ai_agents():
-    """List all available AI agents."""
+async def list_ai_agents(admin_check: bool = Depends(check_admin_permission)):
+    """
+    List all available AI agents.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     agents = await ai_client.list_available_agents()
 
@@ -177,13 +186,17 @@ async def list_ai_agents():
 )
 @router.post("/rag/query")
 async def rag_query(
-    request: RAGQueryRequest, knowledge_base=Depends(get_knowledge_base)
+    request: RAGQueryRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    knowledge_base=Depends(get_knowledge_base),
 ):
     """
     Perform advanced RAG query with document synthesis.
 
     This endpoint combines the AutoBot knowledge base with AI Stack's
     RAG agent for enhanced retrieval and generation capabilities.
+
+    Issue #744: Requires admin authentication.
     """
     ai_client = await get_ai_stack_client()
 
@@ -216,8 +229,16 @@ async def rag_query(
     error_code_prefix="AI_STACK",
 )
 @router.post("/rag/reformulate")
-async def reformulate_query(query: str, context: Optional[str] = None):
-    """Reformulate query for better retrieval results."""
+async def reformulate_query(
+    query: str,
+    context: Optional[str] = None,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Reformulate query for better retrieval results.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.reformulate_query(query, context)
 
@@ -230,8 +251,14 @@ async def reformulate_query(query: str, context: Optional[str] = None):
     error_code_prefix="AI_STACK",
 )
 @router.post("/rag/analyze-documents")
-async def analyze_documents(documents: List[Metadata]):
-    """Analyze and synthesize multiple documents."""
+async def analyze_documents(
+    documents: List[Metadata], admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Analyze and synthesize multiple documents.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.analyze_documents(documents)
 
@@ -250,13 +277,17 @@ async def analyze_documents(documents: List[Metadata]):
 )
 @router.post("/chat/enhanced")
 async def enhanced_chat(
-    request: EnhancedChatRequest, knowledge_base=Depends(get_knowledge_base)
+    request: EnhancedChatRequest,
+    admin_check: bool = Depends(check_admin_permission),
+    knowledge_base=Depends(get_knowledge_base),
 ):
     """
     Enhanced chat with AI Stack integration and knowledge base support.
 
     This endpoint provides intelligent conversation with access to
     knowledge base and advanced AI reasoning capabilities.
+
+    Issue #744: Requires admin authentication.
     """
     ai_client = await get_ai_stack_client()
 
@@ -297,8 +328,15 @@ async def enhanced_chat(
     error_code_prefix="AI_STACK",
 )
 @router.post("/knowledge/extract")
-async def extract_knowledge(request: KnowledgeExtractionRequest):
-    """Extract structured knowledge from content."""
+async def extract_knowledge(
+    request: KnowledgeExtractionRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Extract structured knowledge from content.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.extract_knowledge(
         content=request.content,
@@ -321,10 +359,13 @@ async def enhanced_knowledge_search(
     query: str,
     search_type: str = "comprehensive",
     max_results: int = 10,
+    admin_check: bool = Depends(check_admin_permission),
     knowledge_base=Depends(get_knowledge_base),
 ):
     """
     Enhanced knowledge search combining local KB and AI Stack capabilities.
+
+    Issue #744: Requires admin authentication.
     """
     ai_client = await get_ai_stack_client()
 
@@ -359,8 +400,15 @@ async def enhanced_knowledge_search(
     error_code_prefix="AI_STACK",
 )
 @router.get("/knowledge/system")
-async def get_system_knowledge(knowledge_category: Optional[str] = None):
-    """Get system-wide knowledge insights."""
+async def get_system_knowledge(
+    knowledge_category: Optional[str] = None,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get system-wide knowledge insights.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.get_system_knowledge(knowledge_category)
 
@@ -378,8 +426,14 @@ async def get_system_knowledge(knowledge_category: Optional[str] = None):
     error_code_prefix="AI_STACK",
 )
 @router.post("/research/comprehensive")
-async def comprehensive_research(request: ResearchRequest):
-    """Perform comprehensive research with multiple AI agents."""
+async def comprehensive_research(
+    request: ResearchRequest, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Perform comprehensive research with multiple AI agents.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     results = {}
 
@@ -413,8 +467,17 @@ async def comprehensive_research(request: ResearchRequest):
     error_code_prefix="AI_STACK",
 )
 @router.post("/research/web")
-async def web_research(query: str, max_pages: int = 10, include_analysis: bool = True):
-    """Perform web research with analysis."""
+async def web_research(
+    query: str,
+    max_pages: int = 10,
+    include_analysis: bool = True,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Perform web research with analysis.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.web_research(
         query=query, max_pages=max_pages, include_analysis=include_analysis
@@ -434,8 +497,14 @@ async def web_research(query: str, max_pages: int = 10, include_analysis: bool =
     error_code_prefix="AI_STACK",
 )
 @router.post("/development/search-code")
-async def search_code(request: CodeSearchRequest):
-    """Search codebase using NPU-accelerated AI."""
+async def search_code(
+    request: CodeSearchRequest, admin_check: bool = Depends(check_admin_permission)
+):
+    """
+    Search codebase using NPU-accelerated AI.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.search_code(
         query=request.query,
@@ -452,8 +521,15 @@ async def search_code(request: CodeSearchRequest):
     error_code_prefix="AI_STACK",
 )
 @router.post("/development/analyze-speedup")
-async def analyze_development_speedup(request: DevelopmentAnalysisRequest):
-    """Analyze codebase for development speedup opportunities."""
+async def analyze_development_speedup(
+    request: DevelopmentAnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Analyze codebase for development speedup opportunities.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.analyze_development_speedup(
         code_path=request.code_path, analysis_type=request.analysis_type
@@ -475,8 +551,15 @@ async def analyze_development_speedup(request: DevelopmentAnalysisRequest):
     error_code_prefix="AI_STACK",
 )
 @router.post("/classification/classify")
-async def classify_content(request: ContentClassificationRequest):
-    """Classify content using AI classification agents."""
+async def classify_content(
+    request: ContentClassificationRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Classify content using AI classification agents.
+
+    Issue #744: Requires admin authentication.
+    """
     ai_client = await get_ai_stack_client()
     result = await ai_client.classify_content(
         content=request.content, classification_types=request.classification_types
@@ -596,7 +679,10 @@ async def _execute_sequential_agents(
 )
 @router.post("/orchestrate/multi-agent-query")
 async def multi_agent_query(
-    query: str, agents: List[str], coordination_mode: str = "parallel"
+    query: str,
+    agents: List[str],
+    coordination_mode: str = "parallel",
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Orchestrate multiple AI agents for complex query processing.
@@ -605,6 +691,8 @@ async def multi_agent_query(
         query: Query to process with multiple agents
         agents: List of agent names to use
         coordination_mode: How to coordinate agents (parallel, sequential)
+
+    Issue #744: Requires admin authentication.
     """
     ai_client = await get_ai_stack_client()
 
@@ -636,8 +724,16 @@ async def multi_agent_query(
     error_code_prefix="AI_STACK",
 )
 @router.post("/legacy/rag-search")
-async def legacy_rag_search(query: str, max_results: int = 10):
-    """Legacy RAG search endpoint for backward compatibility."""
+async def legacy_rag_search(
+    query: str,
+    max_results: int = 10,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Legacy RAG search endpoint for backward compatibility.
+
+    Issue #744: Requires admin authentication.
+    """
     request = RAGQueryRequest(query=query, max_results=max_results)
     return await rag_query(request)
 
@@ -648,7 +744,15 @@ async def legacy_rag_search(query: str, max_results: int = 10):
     error_code_prefix="AI_STACK",
 )
 @router.post("/legacy/enhanced-chat")
-async def legacy_enhanced_chat(message: str, context: Optional[str] = None):
-    """Legacy enhanced chat endpoint for backward compatibility."""
+async def legacy_enhanced_chat(
+    message: str,
+    context: Optional[str] = None,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Legacy enhanced chat endpoint for backward compatibility.
+
+    Issue #744: Requires admin authentication.
+    """
     request = EnhancedChatRequest(message=message, context=context)
     return await enhanced_chat(request)

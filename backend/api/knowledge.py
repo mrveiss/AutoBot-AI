@@ -7,18 +7,27 @@ import asyncio
 import json
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Query, Request
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+)
 from pydantic import BaseModel, Field, field_validator
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.auth_middleware import check_admin_permission
+from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from src.exceptions import InternalError
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from src.utils.path_validation import contains_path_traversal
-
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
@@ -28,10 +37,16 @@ from src.utils.path_validation import contains_path_traversal
 class AddFactsRequest(BaseModel):
     """Request model for adding text content to knowledge base."""
 
-    content: str = Field(..., min_length=1, max_length=100000, description="Text content")
+    content: str = Field(
+        ..., min_length=1, max_length=100000, description="Text content"
+    )
     title: str = Field(default="", max_length=500, description="Document title")
-    source: str = Field(default="Manual Entry", max_length=500, description="Content source")
-    category: str = Field(default=CategoryDefaults.GENERAL, max_length=100, description="Category")
+    source: str = Field(
+        default="Manual Entry", max_length=500, description="Content source"
+    )
+    category: str = Field(
+        default=CategoryDefaults.GENERAL, max_length=100, description="Category"
+    )
     tags: List[str] = Field(default_factory=list, description="Tags for the content")
 
     @field_validator("tags")
@@ -47,7 +62,9 @@ class AddUrlRequest(BaseModel):
 
     url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
     title: str = Field(default="", max_length=500, description="Document title")
-    method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
+    method: str = Field(
+        default="fetch", pattern="^(fetch|raw)$", description="Fetch method"
+    )
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
 
@@ -79,7 +96,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Cache TTL constants (seconds)
-CATEGORY_CACHE_TTL = 3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
+CATEGORY_CACHE_TTL = (
+    3600  # 1 hour for category counts (expensive to compute with 5k+ facts)
+)
 
 # Performance optimization: O(1) lookup for metadata types (Issue #326)
 MANUAL_PAGE_TYPES = {"manual_page", "system_command"}
@@ -174,12 +193,13 @@ router = APIRouter()
 
 # Import vectorization router (extracted from this file - Issue #185)
 from backend.api.knowledge_vectorization import router as vectorization_router
+
 router.include_router(vectorization_router)
 
 # Import population functions (extracted from this file - Issue #209)
 from backend.api.knowledge_population import (
-    populate_system_commands,
     _populate_man_pages_background,
+    populate_system_commands,
 )
 
 # ===== ENDPOINTS =====
@@ -191,8 +211,14 @@ from backend.api.knowledge_population import (
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/stats")
-async def get_knowledge_stats(req: Request):
-    """Get knowledge base statistics - FIXED to use proper instance"""
+async def get_knowledge_stats(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get knowledge base statistics - FIXED to use proper instance
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -233,8 +259,13 @@ async def get_knowledge_stats(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/test_categories_main")
-async def test_main_categories():
-    """Test endpoint to verify file is loaded"""
+async def test_main_categories(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Test endpoint to verify file is loaded
+
+    Issue #744: Requires admin authentication.
+    """
     from backend.knowledge_categories import CATEGORY_METADATA
 
     return {"status": "working", "categories": list(CATEGORY_METADATA.keys())}
@@ -246,8 +277,14 @@ async def test_main_categories():
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/stats/basic")
-async def get_knowledge_stats_basic(req: Request):
-    """Get basic knowledge base statistics for quick display"""
+async def get_knowledge_stats_basic(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get basic knowledge base statistics for quick display
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -288,7 +325,9 @@ async def _get_or_compute_category_counts(
         logger.info("Cache miss - computing category counts from all facts")
         all_facts = await kb.get_all_facts()
         logger.info("Categorizing %s facts into main categories", len(all_facts))
-        await _compute_category_counts(all_facts, get_category_for_source, category_counts)
+        await _compute_category_counts(
+            all_facts, get_category_for_source, category_counts
+        )
         logger.info("Category counts: %s", category_counts)
         # Cache for 1 hour
         for cat_id, cache_key in cache_keys.items():
@@ -301,9 +340,13 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
     """Build main categories list with counts (Issue #398: extracted)."""
     return [
         {
-            "id": cat_id, "name": meta["name"], "description": meta["description"],
-            "icon": meta["icon"], "color": meta["color"],
-            "examples": meta["examples"], "count": category_counts.get(cat_id, 0),
+            "id": cat_id,
+            "name": meta["name"],
+            "description": meta["description"],
+            "icon": meta["icon"],
+            "color": meta["color"],
+            "examples": meta["examples"],
+            "count": category_counts.get(cat_id, 0),
         }
         for cat_id, meta in CATEGORY_METADATA.items()
     ]
@@ -315,15 +358,25 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/categories/main")
-async def get_main_categories(req: Request):
-    """Get the 3 main knowledge base categories with their metadata and stats."""
+async def get_main_categories(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get the 3 main knowledge base categories with their metadata and stats.
+
+    Issue #744: Requires admin authentication.
+    """
     from backend.knowledge_categories import (
-        CATEGORY_METADATA, KnowledgeCategory, get_category_for_source,
+        CATEGORY_METADATA,
+        KnowledgeCategory,
+        get_category_for_source,
     )
 
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     has_redis = kb.aioredis_client is not None if kb else False
-    logger.info("get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis)
+    logger.info(
+        "get_main_categories - kb: %s, has_redis: %s", kb is not None, has_redis
+    )
 
     category_counts = {
         KnowledgeCategory.AUTOBOT_DOCUMENTATION: 0,
@@ -351,8 +404,14 @@ async def get_main_categories(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/categories")
-async def get_knowledge_categories(req: Request):
-    """Get all knowledge base categories with fact counts"""
+async def get_knowledge_categories(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get all knowledge base categories with fact counts
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -396,8 +455,15 @@ async def get_knowledge_categories(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/add_text")
-async def add_text_to_knowledge(request: dict, req: Request):
-    """Add text to knowledge base - FIXED to use proper instance"""
+async def add_text_to_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+    req: Request = None,
+):
+    """Add text to knowledge base - FIXED to use proper instance
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -480,8 +546,8 @@ def _sanitize_html_content(html_content: str) -> tuple:
     Returns:
         Tuple of (plain_text, extracted_title)
     """
-    from html.parser import HTMLParser
     from html import unescape
+    from html.parser import HTMLParser
 
     class TextExtractor(HTMLParser):
         def __init__(self):
@@ -524,6 +590,7 @@ def _sanitize_html_content(html_content: str) -> tuple:
     except Exception:
         # Fallback: just unescape and strip tags with regex
         import re
+
         text = re.sub(r"<[^>]+>", " ", html_content)
         text = unescape(text)
         return re.sub(r"\s+", " ", text).strip(), ""
@@ -549,7 +616,7 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     if file_size > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB"
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB",
         )
 
     # Check extension
@@ -557,7 +624,7 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            detail=f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
     # Check for path traversal
@@ -571,18 +638,27 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/facts")
-async def add_facts_to_knowledge(request: AddFactsRequest, req: Request):
+async def add_facts_to_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: AddFactsRequest = None,
+    req: Request = None,
+):
     """
     Add text content to knowledge base (frontend-compatible endpoint).
 
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/facts
+    Issue #744: Requires admin authentication.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
-        raise InternalError("Knowledge base not initialized - please check logs for errors")
+        raise InternalError(
+            "Knowledge base not initialized - please check logs for errors"
+        )
 
-    logger.info(f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}")
+    logger.info(
+        f"Adding fact: title='{request.title}', source='{request.source}', len={len(request.content)}"
+    )
 
     fact_id = await _store_fact_in_kb(
         kb_to_use,
@@ -599,7 +675,9 @@ async def add_facts_to_knowledge(request: AddFactsRequest, req: Request):
         "success": True,
         "document_id": fact_id,
         "title": request.title,
-        "content": request.content[:100] + "..." if len(request.content) > 100 else request.content,
+        "content": request.content[:100] + "..."
+        if len(request.content) > 100
+        else request.content,
         "message": "Document added successfully",
     }
 
@@ -610,11 +688,16 @@ async def add_facts_to_knowledge(request: AddFactsRequest, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/url")
-async def add_url_to_knowledge(request: AddUrlRequest, req: Request):
+async def add_url_to_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: AddUrlRequest = None,
+    req: Request = None,
+):
     """
     Add content from URL to knowledge base.
 
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/url
+    Issue #744: Requires admin authentication.
     """
     import aiohttp
 
@@ -627,9 +710,13 @@ async def add_url_to_knowledge(request: AddUrlRequest, req: Request):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(request.url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.get(
+                request.url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
                 if response.status != 200:
-                    raise HTTPException(status_code=400, detail=f"HTTP {response.status}")
+                    raise HTTPException(
+                        status_code=400, detail=f"HTTP {response.status}"
+                    )
                 html_content = await response.text()
 
                 # Use safe HTML parser instead of regex (Issue #549 Code Review)
@@ -697,10 +784,13 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
     if ext == ".pdf":
         try:
             import pypdf
+
             pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
             return "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
         except ImportError:
-            raise HTTPException(status_code=400, detail="PDF support requires pypdf library")
+            raise HTTPException(
+                status_code=400, detail="PDF support requires pypdf library"
+            )
         except Exception as e:
             logger.error("PDF parse error for %s: %s", filename, e)
             raise HTTPException(status_code=400, detail="Failed to parse PDF file")
@@ -708,10 +798,13 @@ def _extract_file_content(filename: str, file_content: bytes) -> str:
     if ext == ".docx":
         try:
             import docx
+
             doc = docx.Document(io.BytesIO(file_content))
             return "\n".join(para.text for para in doc.paragraphs)
         except ImportError:
-            raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
+            raise HTTPException(
+                status_code=400, detail="DOCX support requires python-docx library"
+            )
         except Exception as e:
             logger.error("DOCX parse error for %s: %s", filename, e)
             raise HTTPException(status_code=400, detail="Failed to parse DOCX file")
@@ -737,12 +830,16 @@ def _parse_upload_tags(tags_str) -> list:
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/upload")
-async def upload_file_to_knowledge(req: Request):
+async def upload_file_to_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Upload file to knowledge base.
 
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/upload
     Supports: .txt, .md, .pdf, .docx, .json, .csv, .html files
+    Issue #744: Requires admin authentication.
     """
     import os
 
@@ -768,7 +865,9 @@ async def upload_file_to_knowledge(req: Request):
 
     content = _extract_file_content(filename, file_content)
     if not content.strip():
-        raise HTTPException(status_code=400, detail="No text content could be extracted from file")
+        raise HTTPException(
+            status_code=400, detail="No text content could be extracted from file"
+        )
 
     logger.info("Uploading file: filename='%s', size=%d", filename, len(file_content))
 
@@ -806,8 +905,14 @@ async def upload_file_to_knowledge(req: Request):
     error_code_prefix="KB",
 )
 @router.get("/health")
-async def get_knowledge_health(req: Request):
-    """Get knowledge base health status with RAG capability status - FIXED to use proper instance"""
+async def get_knowledge_health(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get knowledge base health status with RAG capability status - FIXED to use proper instance
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -862,9 +967,7 @@ def _empty_entries_response(message: str = "", error: str = "") -> dict:
     return resp
 
 
-def _parse_and_filter_facts(
-    items: dict, category: Optional[str], limit: int
-) -> list:
+def _parse_and_filter_facts(items: dict, category: Optional[str], limit: int) -> list:
     """Parse and filter facts from HSCAN results (Issue #398: extracted)."""
     entries = []
     for fact_id, fact_json in items.items():
@@ -882,12 +985,16 @@ def _parse_and_filter_facts(
 
 @router.get("/entries")
 async def get_knowledge_entries(
-    req: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
     cursor: Optional[str] = Query(default="0", regex=r"^[0-9]+$"),
     category: Optional[str] = Query(default=None, regex=r"^[a-zA-Z0-9_-]*$"),
 ):
-    """Get knowledge base entries with cursor-based pagination."""
+    """Get knowledge base entries with cursor-based pagination.
+
+    Issue #744: Requires admin authentication.
+    """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
         return _empty_entries_response(message="Knowledge base not initialized")
@@ -896,16 +1003,20 @@ async def get_knowledge_entries(
     current_cursor = int(cursor) if cursor else 0
 
     try:
+
         def _hscan():
             return kb.redis_client.hscan(
                 "knowledge_base:facts", cursor=current_cursor, count=limit * 2
             )
+
         next_cursor, items = await asyncio.to_thread(_hscan)
         entries = _parse_and_filter_facts(items, category, limit)
         entries.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return {
-            "entries": entries[:limit], "next_cursor": str(next_cursor),
-            "count": len(entries[:limit]), "has_more": next_cursor != 0,
+            "entries": entries[:limit],
+            "next_cursor": str(next_cursor),
+            "count": len(entries[:limit]),
+            "has_more": next_cursor != 0,
         }
     except Exception as e:
         logger.error("Redis error getting facts: %s", e)
@@ -915,9 +1026,13 @@ async def get_knowledge_entries(
 def _create_offline_stats_response() -> dict:
     """Create offline stats response (Issue #398: extracted)."""
     return {
-        "status": "offline", "message": "Knowledge base not initialized",
-        "basic_stats": {}, "category_breakdown": {}, "source_breakdown": {},
-        "type_breakdown": {}, "size_metrics": {},
+        "status": "offline",
+        "message": "Knowledge base not initialized",
+        "basic_stats": {},
+        "category_breakdown": {},
+        "source_breakdown": {},
+        "type_breakdown": {},
+        "size_metrics": {},
     }
 
 
@@ -949,8 +1064,11 @@ def _compute_size_metrics(fact_sizes: list) -> dict:
     """Compute size metrics from fact sizes (Issue #398: extracted)."""
     if not fact_sizes:
         return {
-            "total_content_size": 0, "average_fact_size": 0, "median_fact_size": 0,
-            "largest_fact_size": 0, "smallest_fact_size": 0,
+            "total_content_size": 0,
+            "average_fact_size": 0,
+            "median_fact_size": 0,
+            "largest_fact_size": 0,
+            "smallest_fact_size": 0,
         }
     total = sum(fact_sizes)
     sorted_sizes = sorted(fact_sizes)
@@ -969,8 +1087,14 @@ def _compute_size_metrics(fact_sizes: list) -> dict:
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/detailed_stats")
-async def get_detailed_stats(req: Request):
-    """Get detailed knowledge base statistics with additional metrics."""
+async def get_detailed_stats(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get detailed knowledge base statistics with additional metrics.
+
+    Issue #744: Requires admin authentication.
+    """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
         return _create_offline_stats_response()
@@ -983,7 +1107,9 @@ async def get_detailed_stats(req: Request):
     except Exception:
         all_facts_data = {}
 
-    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(all_facts_data)
+    cat_counts, src_counts, type_counts, sizes = _analyze_facts_for_stats(
+        all_facts_data
+    )
     return {
         "status": "online" if basic_stats.get("initialized") else "offline",
         "basic_stats": basic_stats,
@@ -1001,8 +1127,14 @@ async def get_detailed_stats(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/machine_profile")
-async def get_machine_profile(req: Request):
-    """Get machine profile with system information and capabilities"""
+async def get_machine_profile(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get machine profile with system information and capabilities
+
+    Issue #744: Requires admin authentication.
+    """
     import platform
 
     import psutil
@@ -1019,7 +1151,9 @@ async def get_machine_profile(req: Request):
         "cpu_count": psutil.cpu_count(logical=False),
         "cpu_count_logical": psutil.cpu_count(logical=True),
         "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-        "memory_available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
+        "memory_available_gb": round(
+            psutil.virtual_memory().available / (1024**3), 2
+        ),
         "disk_total_gb": round(psutil.disk_usage("/").total / (1024**3), 2),
         "disk_free_gb": round(psutil.disk_usage("/").free / (1024**3), 2),
     }
@@ -1047,8 +1181,14 @@ async def get_machine_profile(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/man_pages/summary")
-async def get_man_pages_summary(req: Request):
-    """Get summary of man pages integration status"""
+async def get_man_pages_summary(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get summary of man pages integration status
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1112,8 +1252,15 @@ async def get_man_pages_summary(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/machine_knowledge/initialize")
-async def initialize_machine_knowledge(request: dict, req: Request):
-    """Initialize machine-specific knowledge including man pages and system commands"""
+async def initialize_machine_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+    req: Request = None,
+):
+    """Initialize machine-specific knowledge including man pages and system commands
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1148,8 +1295,15 @@ async def initialize_machine_knowledge(request: dict, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/man_pages/integrate")
-async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
-    """Integrate system man pages into knowledge base (background task)"""
+async def integrate_man_pages(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    background_tasks: BackgroundTasks = None,
+):
+    """Integrate system man pages into knowledge base (background task)
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1176,8 +1330,16 @@ async def integrate_man_pages(req: Request, background_tasks: BackgroundTasks):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/man_pages/search")
-async def search_man_pages(req: Request, query: str, limit: int = 10):
-    """Search specifically for man pages in knowledge base"""
+async def search_man_pages(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    query: str = None,
+    limit: int = 10,
+):
+    """Search specifically for man pages in knowledge base
+
+    Issue #744: Requires admin authentication.
+    """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
@@ -1212,7 +1374,9 @@ async def _clear_kb_via_redis(kb) -> int:
     """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
     if not (hasattr(kb, "redis") and kb.redis):
         logger.error("No clear method available for knowledge base implementation")
-        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
+        raise HTTPException(
+            status_code=500, detail="Knowledge base clearing not supported"
+        )
 
     keys = await kb.redis.keys("fact:*")
     if keys:
@@ -1229,16 +1393,26 @@ async def _clear_kb_via_redis(kb) -> int:
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/clear_all")
-async def clear_all_knowledge(request: dict, req: Request):
-    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION."""
+async def clear_all_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+    req: Request = None,
+):
+    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+
+    Issue #744: Requires admin authentication.
+    """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
         return {
-            "status": "error", "items_removed": 0,
+            "status": "error",
+            "items_removed": 0,
             "message": "Knowledge base not initialized - please check logs for errors",
         }
 
-    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
+    logger.warning(
+        "Starting DESTRUCTIVE operation: clearing all knowledge base entries"
+    )
     try:
         stats_before = await kb.get_stats()
         items_before = stats_before.get("total_facts", 0)
@@ -1257,7 +1431,9 @@ async def clear_all_knowledge(request: dict, req: Request):
 
     logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
     return {
-        "status": "success", "items_removed": items_removed, "items_before": items_before,
+        "status": "success",
+        "items_removed": items_removed,
+        "items_before": items_before,
         "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
     }
 
@@ -1269,8 +1445,15 @@ async def clear_all_knowledge(request: dict, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/add_document")
-async def add_document_to_knowledge(request: dict, req: Request):
-    """Legacy endpoint - redirects to add_text"""
+async def add_document_to_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+    req: Request = None,
+):
+    """Legacy endpoint - redirects to add_text
+
+    Issue #744: Requires admin authentication.
+    """
     return await add_text_to_knowledge(request, req)
 
 
@@ -1280,10 +1463,18 @@ async def add_document_to_knowledge(request: dict, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/query")
-async def query_knowledge(request: dict, req: Request):
-    """Legacy endpoint - redirects to search (now in knowledge_search.py)"""
+async def query_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+    req: Request = None,
+):
+    """Legacy endpoint - redirects to search (now in knowledge_search.py)
+
+    Issue #744: Requires admin authentication.
+    """
     # Import search function from knowledge_search module
     from backend.api.knowledge_search import search_knowledge
+
     return await search_knowledge(request, req)
 
 
@@ -1298,6 +1489,7 @@ async def query_knowledge(request: dict, req: Request):
 async def _check_facts_cache(kb, category: Optional[str], limit: int) -> tuple:
     """Check cache for facts_by_category result (Issue #281: extracted)."""
     import json
+
     cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
     cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
 
@@ -1335,9 +1527,7 @@ async def _fetch_category_fact_ids(kb, categories_to_fetch: list, limit: int) ->
                 for fid in fact_ids
             ]
             category_fact_ids[cat] = decoded_ids
-            logger.debug(
-                f"Category index {cat}: fetched {len(decoded_ids)} fact IDs"
-            )
+            logger.debug(f"Category index {cat}: fetched {len(decoded_ids)} fact IDs")
     return category_fact_ids
 
 
@@ -1381,7 +1571,9 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dic
         content = (
             content_raw.decode("utf-8")
             if isinstance(content_raw, bytes)
-            else str(content_raw) if content_raw else ""
+            else str(content_raw)
+            if content_raw
+            else ""
         )
 
         fact_title = metadata.get("title", metadata.get("command", "Untitled"))
@@ -1404,6 +1596,7 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dic
 async def _cache_facts_result(kb, cache_key: str, result: dict) -> None:
     """Cache the facts_by_category result (Issue #281: extracted)."""
     import json
+
     try:
         await asyncio.to_thread(
             kb.redis_client.setex, cache_key, 60, json.dumps(result)
@@ -1445,9 +1638,15 @@ def _build_categories_dict(all_fact_keys: list, fact_results: list) -> dict:
 )
 @router.get("/facts/by_category")
 async def get_facts_by_category(
-    req: Request, category: Optional[str] = None, limit: int = 100
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    category: Optional[str] = None,
+    limit: int = 100,
 ):
-    """Get facts grouped by category for browsing with caching."""
+    """Get facts grouped by category for browsing with caching.
+
+    Issue #744: Requires admin authentication.
+    """
     kb = await get_or_create_knowledge_base(req.app)
     if kb is None:
         _raise_kb_unavailable()
@@ -1457,10 +1656,15 @@ async def get_facts_by_category(
         return cached_result
 
     from backend.knowledge_categories import KnowledgeCategory
-    categories_to_fetch = [category] if category else [c.value for c in KnowledgeCategory]
+
+    categories_to_fetch = (
+        [category] if category else [c.value for c in KnowledgeCategory]
+    )
 
     try:
-        category_fact_ids = await _fetch_category_fact_ids(kb, categories_to_fetch, limit)
+        category_fact_ids = await _fetch_category_fact_ids(
+            kb, categories_to_fetch, limit
+        )
         if not category_fact_ids:
             logger.warning("No category indexes - falling back to SCAN method")
             return await _get_facts_by_category_legacy(kb, category, limit)
@@ -1564,12 +1768,17 @@ async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int)
             categories_dict[fact_cat] = []
         if len(categories_dict[fact_cat]) >= limit:
             continue
-        categories_dict[fact_cat].append({
-            "key": fact_key, "title": title,
-            "content": content[:500] + "..." if len(content) > 500 else content,
-            "full_content": content, "category": fact_cat,
-            "type": fact_type, "metadata": metadata,
-        })
+        categories_dict[fact_cat].append(
+            {
+                "key": fact_key,
+                "title": title,
+                "content": content[:500] + "..." if len(content) > 500 else content,
+                "full_content": content,
+                "category": fact_cat,
+                "type": fact_type,
+                "metadata": metadata,
+            }
+        )
 
     return {
         "categories": categories_dict,
@@ -1585,6 +1794,7 @@ async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int)
 )
 @router.get("/fact/{fact_key}")
 async def get_fact_by_key(
+    admin_check: bool = Depends(check_admin_permission),
     fact_key: str = Path(..., regex=r"^[a-zA-Z0-9_:-]+$", max_length=255),
     req: Request = None,
 ):
@@ -1598,6 +1808,8 @@ async def get_fact_by_key(
         - Key format validated to prevent Redis key enumeration attacks
         - Path traversal attempts blocked
         - Maximum key length enforced
+
+    Issue #744: Requires admin authentication.
     """
     # Additional security check for path traversal (Issue #328 - uses shared validation)
     if contains_path_traversal(fact_key):
@@ -1627,7 +1839,9 @@ async def get_fact_by_key(
     content = (
         content_raw.decode("utf-8")
         if isinstance(content_raw, bytes)
-        else str(content_raw) if content_raw else ""
+        else str(content_raw)
+        if content_raw
+        else ""
     )
 
     # Extract created_at (handle both bytes and string keys from Redis)
@@ -1635,7 +1849,9 @@ async def get_fact_by_key(
     created_at = (
         created_at_raw.decode("utf-8")
         if isinstance(created_at_raw, bytes)
-        else str(created_at_raw) if created_at_raw else ""
+        else str(created_at_raw)
+        if created_at_raw
+        else ""
     )
 
     return {
@@ -1653,9 +1869,15 @@ async def get_fact_by_key(
 )
 @router.get("/import/status")
 async def get_import_status(
-    req: Request, file_path: Optional[str] = None, category: Optional[str] = None
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    file_path: Optional[str] = None,
+    category: Optional[str] = None,
 ):
-    """Get import status for files"""
+    """Get import status for files
+
+    Issue #744: Requires admin authentication.
+    """
     from backend.models.knowledge_import_tracking import ImportTracker
 
     tracker = ImportTracker()
@@ -1670,8 +1892,14 @@ async def get_import_status(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/import/statistics")
-async def get_import_statistics(req: Request):
-    """Get import statistics"""
+async def get_import_statistics(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
+    """Get import statistics
+
+    Issue #744: Requires admin authentication.
+    """
     from backend.models.knowledge_import_tracking import ImportTracker
 
     tracker = ImportTracker()
@@ -1691,34 +1919,32 @@ class DocsBrowseRequest(BaseModel):
     category: Optional[str] = Field(
         default=None,
         max_length=100,
-        description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')"
+        description="Filter by category (e.g., 'developer', 'api', 'troubleshooting')",
     )
     doc_type: Optional[str] = Field(
         default=None,
         max_length=50,
-        description="Filter by document type (e.g., 'markdown', 'code')"
+        description="Filter by document type (e.g., 'markdown', 'code')",
     )
     file_path_pattern: Optional[str] = Field(
         default=None,
         max_length=500,
-        description="Filter by file path pattern (e.g., 'docs/api/')"
+        description="Filter by file path pattern (e.g., 'docs/api/')",
     )
     search_query: Optional[str] = Field(
         default=None,
         max_length=500,
-        description="Optional text search within documents"
+        description="Optional text search within documents",
     )
     page: int = Field(default=1, ge=1, le=1000, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
     sort_by: str = Field(
         default="indexed_at",
         pattern="^(indexed_at|title|category|file_path)$",
-        description="Sort field"
+        description="Sort field",
     )
     sort_order: str = Field(
-        default="desc",
-        pattern="^(asc|desc)$",
-        description="Sort order"
+        default="desc", pattern="^(asc|desc)$", description="Sort order"
     )
 
 
@@ -1762,7 +1988,8 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
     if request.category:
         category_lower = request.category.lower()
         filtered = [
-            d for d in filtered
+            d
+            for d in filtered
             if category_lower in d.get("file_path", "").lower()
             or d.get("category", "").lower() == category_lower
         ]
@@ -1771,7 +1998,8 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
     if request.doc_type:
         doc_type_lower = request.doc_type.lower()
         filtered = [
-            d for d in filtered
+            d
+            for d in filtered
             if d.get("doc_type", "").lower() == doc_type_lower
             or d.get("file_path", "").lower().endswith(f".{doc_type_lower}")
         ]
@@ -1785,7 +2013,8 @@ def _filter_docs(docs: list, request: DocsBrowseRequest) -> list:
     if request.search_query:
         query_lower = request.search_query.lower()
         filtered = [
-            d for d in filtered
+            d
+            for d in filtered
             if query_lower in d.get("title", "").lower()
             or query_lower in d.get("file_path", "").lower()
         ]
@@ -1814,12 +2043,17 @@ def _paginate_docs(docs: list, page: int, page_size: int) -> tuple:
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/docs/browse")
-async def browse_documentation(request: DocsBrowseRequest, req: Request):
+async def browse_documentation(
+    admin_check: bool = Depends(check_admin_permission),
+    request: DocsBrowseRequest = None,
+    req: Request = None,
+):
     """
     Browse indexed documentation with filtering and pagination.
 
     Issue #165: Provides frontend with filterable documentation browsing.
     Supports category, doc_type, file_path, and search filters.
+    Issue #744: Requires admin authentication.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
@@ -1863,12 +2097,16 @@ async def browse_documentation(request: DocsBrowseRequest, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/docs/categories")
-async def get_documentation_categories(req: Request):
+async def get_documentation_categories(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Get list of documentation categories with counts.
 
     Issue #165: Provides category filter options for documentation browser.
     Categories are detected from file paths using CATEGORY_TAXONOMY.
+    Issue #744: Requires admin authentication.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
@@ -1878,8 +2116,9 @@ async def get_documentation_categories(req: Request):
     all_docs = await _get_indexed_docs_from_redis(kb)
 
     # Count by category (detected from file path)
-    from scripts.utilities.index_documentation import CATEGORY_TAXONOMY, detect_category
     from pathlib import Path
+
+    from scripts.utilities.index_documentation import CATEGORY_TAXONOMY, detect_category
 
     category_counts: dict = {}
     for doc in all_docs:
@@ -1898,12 +2137,14 @@ async def get_documentation_categories(req: Request):
     categories = []
     for cat_id, count in sorted(category_counts.items(), key=lambda x: -x[1]):
         cat_meta = CATEGORY_TAXONOMY.get(cat_id, {})
-        categories.append({
-            "id": cat_id,
-            "name": cat_meta.get("name", cat_id.title()),
-            "description": cat_meta.get("description", ""),
-            "count": count,
-        })
+        categories.append(
+            {
+                "id": cat_id,
+                "name": cat_meta.get("name", cat_id.title()),
+                "description": cat_meta.get("description", ""),
+                "count": count,
+            }
+        )
 
     return {
         "success": True,
@@ -1918,11 +2159,15 @@ async def get_documentation_categories(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/docs/stats")
-async def get_documentation_stats(req: Request):
+async def get_documentation_stats(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Get documentation indexing statistics.
 
     Issue #165: Provides overview stats for documentation health dashboard.
+    Issue #744: Requires admin authentication.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
@@ -1950,9 +2195,9 @@ async def get_documentation_stats(req: Request):
             "total_indexed_entries": len(all_docs),
             "total_chunks": total_chunks,
             "latest_indexed": latest_indexed,
-            "categories_count": len(set(
-                doc.get("category", "general") for doc in all_docs
-            )),
+            "categories_count": len(
+                set(doc.get("category", "general") for doc in all_docs)
+            ),
         },
     }
 
@@ -1963,11 +2208,15 @@ async def get_documentation_stats(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/docs/watcher/status")
-async def get_documentation_watcher_status(req: Request):
+async def get_documentation_watcher_status(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Get documentation watcher status.
 
     Issue #165: Returns status of the real-time documentation sync service.
+    Issue #744: Requires admin authentication.
     """
     try:
         from backend.services.documentation_watcher import get_documentation_watcher
@@ -1995,11 +2244,16 @@ async def get_documentation_watcher_status(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/docs/watcher/control")
-async def control_documentation_watcher(request: dict, req: Request):
+async def control_documentation_watcher(
+    admin_check: bool = Depends(check_admin_permission),
+    request: dict = None,
+    req: Request = None,
+):
     """
     Control documentation watcher (start/stop).
 
     Issue #165: Allows manual control of the real-time sync service.
+    Issue #744: Requires admin authentication.
     """
     action = request.get("action", "status")
 
@@ -2049,6 +2303,7 @@ async def control_documentation_watcher(request: dict, req: Request):
 # Includes: deduplication, bulk operations, orphaned facts, export/import, cleanup, host scanning
 
 from backend.api.knowledge_maintenance import router as maintenance_router
+
 router.include_router(maintenance_router)
 
 # ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
@@ -2060,7 +2315,10 @@ router.include_router(maintenance_router)
 #           /system/insights, /stats/enhanced, /health/enhanced
 try:
     from backend.api.knowledge_ai_stack import router as ai_stack_router
-    router.include_router(ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"])
+
+    router.include_router(
+        ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"]
+    )
 except ImportError as e:
     logging.warning("AI Stack knowledge router not available: %s", e)
 
@@ -2068,6 +2326,7 @@ except ImportError as e:
 # Provides: /fresh_stats, /debug_redis, /rebuild_index
 try:
     from backend.api.knowledge_debug import router as debug_router
+
     router.include_router(debug_router, prefix="/debug", tags=["knowledge-debug"])
 except ImportError as e:
     logging.warning("Knowledge debug router not available: %s", e)
@@ -2077,6 +2336,7 @@ except ImportError as e:
 #           /unified/graph (for KnowledgeGraph.vue visualization)
 try:
     from backend.api.knowledge_search_aggregator import router as unified_router
+
     router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
 except ImportError as e:
     logging.warning("Unified knowledge search router not available: %s", e)

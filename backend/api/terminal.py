@@ -115,26 +115,26 @@ import time
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-
-from backend.services.simple_pty import simple_pty_manager
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 from backend.api.terminal_models import (
-    CommandRequest,
-    CommandRiskLevel,
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
+    CommandRequest,
+    CommandRiskLevel,
     SecurityLevel,
     SSHKeyAgentRequest,
     SSHKeySetupRequest,
     TerminalInputRequest,
     TerminalSessionRequest,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from backend.services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
 from backend.services.terminal_secrets_service import get_terminal_secrets_service
+from src.auth_middleware import get_current_user
+from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -142,17 +142,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["terminal"])
 
 
-# Import handler classes (extracted from this file - Issue #210)
-from backend.api.terminal_handlers import (
-    ConsolidatedTerminalWebSocket,
-    session_manager,
-)
-
 # Import SSH terminal handlers for infrastructure host connections (Issue #715)
-from backend.api.ssh_terminal_handlers import (
-    SSHTerminalWebSocket,
-    ssh_terminal_manager,
-)
+from backend.api.ssh_terminal_handlers import SSHTerminalWebSocket, ssh_terminal_manager
+
+# Import handler classes (extracted from this file - Issue #210)
+from backend.api.terminal_handlers import ConsolidatedTerminalWebSocket, session_manager
 
 # Import tool management router (extracted from this file - Issue #185)
 from backend.api.terminal_tools import router as tools_router
@@ -170,10 +164,14 @@ router.include_router(tools_router, prefix="/terminal")
     error_code_prefix="TERMINAL",
 )
 @router.post("/sessions")
-async def create_terminal_session(request: TerminalSessionRequest):
+async def create_terminal_session(
+    request: TerminalSessionRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Create a new terminal session with enhanced security options.
 
     Supports automatic SSH key injection from secrets management (Issue #211).
+    Issue #744: Requires authenticated user.
     """
     session_id = str(uuid.uuid4())
 
@@ -237,8 +235,12 @@ async def create_terminal_session(request: TerminalSessionRequest):
     error_code_prefix="TERMINAL",
 )
 @router.get("/sessions")
-async def list_terminal_sessions():
-    """List all active terminal sessions"""
+async def list_terminal_sessions(
+    current_user: dict = Depends(get_current_user),
+):
+    """List all active terminal sessions
+    Issue #744: Requires authenticated user.
+    """
     sessions = []
     for session_id, config in session_manager.session_configs.items():
         is_active = session_manager.has_connection(session_id)
@@ -265,8 +267,13 @@ async def list_terminal_sessions():
     error_code_prefix="TERMINAL",
 )
 @router.get("/sessions/{session_id}")
-async def get_terminal_session(session_id: str):
-    """Get information about a specific terminal session"""
+async def get_terminal_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get information about a specific terminal session
+    Issue #744: Requires authenticated user.
+    """
     config = session_manager.session_configs.get(session_id)
     if not config:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -292,10 +299,14 @@ async def get_terminal_session(session_id: str):
     error_code_prefix="TERMINAL",
 )
 @router.delete("/sessions/{session_id}")
-async def delete_terminal_session(session_id: str):
+async def delete_terminal_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Delete a terminal session and close any active connections.
 
     Also cleans up any SSH keys loaded for this session (Issue #211).
+    Issue #744: Requires authenticated user.
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
@@ -329,8 +340,13 @@ async def delete_terminal_session(session_id: str):
     error_code_prefix="TERMINAL",
 )
 @router.post("/sessions/{session_id}/ssh-keys")
-async def setup_ssh_keys(session_id: str, request: SSHKeySetupRequest):
+async def setup_ssh_keys(
+    session_id: str,
+    request: SSHKeySetupRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Setup SSH keys for an existing terminal session.
+    Issue #744: Requires authenticated user.
 
     Retrieves SSH keys from secrets storage and makes them available
     for use in SSH commands. Keys are written to temporary files with
@@ -367,11 +383,15 @@ async def setup_ssh_keys(session_id: str, request: SSHKeySetupRequest):
     error_code_prefix="TERMINAL",
 )
 @router.get("/sessions/{session_id}/ssh-keys")
-async def list_session_ssh_keys(session_id: str):
+async def list_session_ssh_keys(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get list of SSH keys available for a terminal session.
 
     Returns information about loaded SSH keys including name,
     fingerprint, and whether a passphrase is required.
+    Issue #744: Requires authenticated user.
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
@@ -394,12 +414,16 @@ async def list_session_ssh_keys(session_id: str):
 )
 @router.post("/sessions/{session_id}/ssh-keys/{key_name}/agent")
 async def add_key_to_ssh_agent(
-    session_id: str, key_name: str, request: SSHKeyAgentRequest
+    session_id: str,
+    key_name: str,
+    request: SSHKeyAgentRequest,
+    current_user: dict = Depends(get_current_user),
 ):
     """Add an SSH key to ssh-agent for easier authentication.
 
     For keys that require a passphrase, the passphrase must be provided.
     The key remains in the agent until the session ends.
+    Issue #744: Requires authenticated user.
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
@@ -431,11 +455,16 @@ async def add_key_to_ssh_agent(
     error_code_prefix="TERMINAL",
 )
 @router.get("/sessions/{session_id}/ssh-keys/{key_name}/path")
-async def get_ssh_key_path(session_id: str, key_name: str):
+async def get_ssh_key_path(
+    session_id: str,
+    key_name: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get the file path for an SSH key in a terminal session.
 
     Returns the temporary file path where the key is stored.
     Use this path with ssh -i option for explicit key specification.
+    Issue #744: Requires authenticated user.
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
@@ -461,8 +490,13 @@ async def get_ssh_key_path(session_id: str, key_name: str):
     error_code_prefix="TERMINAL",
 )
 @router.post("/command")
-async def execute_single_command(request: CommandRequest):
-    """Execute a single command with security assessment"""
+async def execute_single_command(
+    request: CommandRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Execute a single command with security assessment
+    Issue #744: Requires authenticated user.
+    """
     # Assess command for security risk
 
     # Assess command risk
@@ -500,8 +534,14 @@ async def execute_single_command(request: CommandRequest):
     error_code_prefix="TERMINAL",
 )
 @router.post("/sessions/{session_id}/input")
-async def send_terminal_input(session_id: str, request: TerminalInputRequest):
-    """Send input to a specific terminal session"""
+async def send_terminal_input(
+    session_id: str,
+    request: TerminalInputRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send input to a specific terminal session
+    Issue #744: Requires authenticated user.
+    """
     if not session_manager.has_connection(session_id):
         raise HTTPException(status_code=404, detail="Session not active")
 
@@ -525,8 +565,14 @@ async def send_terminal_input(session_id: str, request: TerminalInputRequest):
     error_code_prefix="TERMINAL",
 )
 @router.post("/sessions/{session_id}/signal/{signal_name}")
-async def send_terminal_signal(session_id: str, signal_name: str):
-    """Send a signal to a terminal session"""
+async def send_terminal_signal(
+    session_id: str,
+    signal_name: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a signal to a terminal session
+    Issue #744: Requires authenticated user.
+    """
     if not session_manager.has_connection(session_id):
         raise HTTPException(status_code=404, detail="Session not active")
 
@@ -556,8 +602,13 @@ async def send_terminal_signal(session_id: str, signal_name: str):
     error_code_prefix="TERMINAL",
 )
 @router.get("/sessions/{session_id}/history")
-async def get_terminal_command_history(session_id: str):
-    """Get command history for a terminal session"""
+async def get_terminal_command_history(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get command history for a terminal session
+    Issue #744: Requires authenticated user.
+    """
     config = session_manager.session_configs.get(session_id)
     if not config:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -590,8 +641,13 @@ async def get_terminal_command_history(session_id: str):
     error_code_prefix="TERMINAL",
 )
 @router.get("/audit/{session_id}")
-async def get_session_audit_log(session_id: str):
-    """Get security audit log for a session (elevated access required)"""
+async def get_session_audit_log(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get security audit log for a session (elevated access required)
+    Issue #744: Requires authenticated user.
+    """
     config = session_manager.session_configs.get(session_id)
     if not config:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -773,6 +829,7 @@ async def ssh_terminal_websocket(
         redis_client = None
         try:
             from backend.dependencies import get_async_redis_client
+
             redis_client = await get_async_redis_client(database="main")
         except Exception as e:
             logger.warning("Could not get Redis client for SSH terminal logging: %s", e)
@@ -795,8 +852,7 @@ async def ssh_terminal_websocket(
             return
 
         logger.info(
-            "SSH WebSocket connection established: %s -> host %s",
-            session_id, host_id
+            "SSH WebSocket connection established: %s -> host %s", session_id, host_id
         )
 
         # Handle WebSocket communication
@@ -811,11 +867,13 @@ async def ssh_terminal_websocket(
         except Exception as e:
             logger.error("Error in SSH WebSocket handling: %s", e)
             await websocket.send_text(
-                json.dumps({
-                    "type": "error",
-                    "content": f"SSH terminal error: {str(e)}",
-                    "timestamp": time.time(),
-                })
+                json.dumps(
+                    {
+                        "type": "error",
+                        "content": f"SSH terminal error: {str(e)}",
+                        "timestamp": time.time(),
+                    }
+                )
             )
 
     except Exception as e:
@@ -834,8 +892,12 @@ async def ssh_terminal_websocket(
     error_code_prefix="TERMINAL",
 )
 @router.get("/")
-async def terminal_info():
-    """Get information about the consolidated terminal API"""
+async def terminal_info(
+    current_user: dict = Depends(get_current_user),
+):
+    """Get information about the consolidated terminal API
+    Issue #744: Requires authenticated user.
+    """
     return {
         "name": "Consolidated Terminal API",
         "version": "1.0.0",
@@ -865,7 +927,7 @@ async def terminal_info():
         ],
         # Issue #729: Layer separation notice
         "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
-                  "Use slm-admin or the SLM API for infrastructure terminal access.",
+        "Use slm-admin or the SLM API for infrastructure terminal access.",
     }
 
 
@@ -878,8 +940,11 @@ async def terminal_info():
     error_code_prefix="TERMINAL",
 )
 @router.get("/health")
-async def terminal_health_check():
+async def terminal_health_check(
+    current_user: dict = Depends(get_current_user),
+):
     """Health check for consolidated terminal system
+    Issue #744: Requires authenticated user.
 
     Returns:
         Health status of all terminal components including:
@@ -920,8 +985,11 @@ async def terminal_health_check():
     error_code_prefix="TERMINAL",
 )
 @router.get("/status")
-async def get_terminal_system_status():
+async def get_terminal_system_status(
+    current_user: dict = Depends(get_current_user),
+):
     """Get overall terminal system status and configuration
+    Issue #744: Requires authenticated user.
 
     Returns:
         System status including:
@@ -960,8 +1028,11 @@ async def get_terminal_system_status():
     error_code_prefix="TERMINAL",
 )
 @router.get("/capabilities")
-async def get_terminal_capabilities():
+async def get_terminal_capabilities(
+    current_user: dict = Depends(get_current_user),
+):
     """Get terminal system capabilities
+    Issue #744: Requires authenticated user.
 
     Returns:
         Detailed list of all capabilities supported by the consolidated
@@ -1013,8 +1084,11 @@ async def get_terminal_capabilities():
     error_code_prefix="TERMINAL",
 )
 @router.get("/security")
-async def get_security_policies():
+async def get_security_policies(
+    current_user: dict = Depends(get_current_user),
+):
     """Get terminal security policies and command validation info
+    Issue #744: Requires authenticated user.
 
     Returns:
         Security configuration including:
@@ -1052,8 +1126,11 @@ async def get_security_policies():
     error_code_prefix="TERMINAL",
 )
 @router.get("/features")
-async def get_terminal_features():
+async def get_terminal_features(
+    current_user: dict = Depends(get_current_user),
+):
     """Get available terminal features and implementation details
+    Issue #744: Requires authenticated user.
 
     Returns:
         Comprehensive feature list including:
@@ -1108,7 +1185,10 @@ async def get_terminal_features():
     error_code_prefix="TERMINAL",
 )
 @router.get("/stats")
-async def get_terminal_statistics(session_id: str = None):
+async def get_terminal_statistics(
+    session_id: str = None,
+    current_user: dict = Depends(get_current_user),
+):
     """Get terminal statistics for specific session or all sessions
 
     Args:
@@ -1124,5 +1204,7 @@ async def get_terminal_statistics(session_id: str = None):
     Examples:
         GET /api/terminal/stats - Get overall system statistics
         GET /api/terminal/stats?session_id=abc123 - Get stats for session abc123
+
+    Issue #744: Requires authenticated user.
     """
     return session_manager.get_terminal_stats(session_id)

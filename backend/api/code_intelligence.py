@@ -19,27 +19,25 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
-)
-from src.code_intelligence.redis_optimizer import (
-    OptimizationSeverity,
-    RedisOptimizer,
-)
-from src.code_intelligence.security_analyzer import (
-    SecurityAnalyzer,
-    SecuritySeverity,
-    get_vulnerability_types,
 )
 from src.code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceSeverity,
     get_performance_issue_types,
+)
+from src.code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
+from src.code_intelligence.security_analyzer import (
+    SecurityAnalyzer,
+    SecuritySeverity,
+    get_vulnerability_types,
 )
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -353,9 +351,7 @@ def _calculate_health_score(anti_patterns: list) -> float:
     Returns:
         Health score from 1-100
     """
-    from src.code_intelligence.shared.scoring import (
-        calculate_exponential_score,
-    )
+    from src.code_intelligence.shared.scoring import calculate_exponential_score
 
     # Calculate weighted deduction
     severity_penalties = {
@@ -388,9 +384,7 @@ def _calculate_redis_health_score(results: list) -> float:
     Returns:
         Health score from 1-100
     """
-    from src.code_intelligence.shared.scoring import (
-        calculate_exponential_score,
-    )
+    from src.code_intelligence.shared.scoring import calculate_exponential_score
 
     # Calculate weighted deduction
     severity_penalties = {
@@ -456,8 +450,7 @@ def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> l
     try:
         min_idx = _SEVERITY_ORDER.index(min_severity.lower())
         return [
-            r for r in results
-            if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
+            r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx
         ]
     except ValueError as e:
         logger.debug("Value parsing failed during severity filtering: %s", e)
@@ -493,9 +486,14 @@ class QuickScanRequest(BaseModel):
     error_code_prefix="CODE_INTEL",
 )
 @router.post("/analyze")
-async def analyze_codebase(request: AnalysisRequest):
+async def analyze_codebase(
+    request: AnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Analyze a codebase for anti-patterns and code smells.
+
+    Issue #744: Requires admin authentication.
 
     Scans all Python files in the specified directory and returns
     a comprehensive report of detected anti-patterns.
@@ -555,9 +553,14 @@ async def analyze_codebase(request: AnalysisRequest):
     error_code_prefix="CODE_INTEL",
 )
 @router.post("/scan-file")
-async def quick_scan_file(request: QuickScanRequest):
+async def quick_scan_file(
+    request: QuickScanRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Quick scan a single Python file for anti-patterns.
+
+    Issue #744: Requires admin authentication.
 
     Faster than full codebase analysis when you only need
     to check one file.
@@ -610,9 +613,12 @@ async def quick_scan_file(request: QuickScanRequest):
 @router.get("/health-score")
 async def get_codebase_health_score(
     path: str = Query(..., description="Directory path to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get a simple health score for a codebase.
+
+    Issue #744: Requires admin authentication.
 
     Returns a score from 0-100 based on the number and severity
     of anti-patterns detected.
@@ -662,10 +668,13 @@ async def get_codebase_health_score(
     error_code_prefix="CODE_INTEL",
 )
 @router.get("/pattern-types")
-async def get_supported_pattern_types():
+async def get_supported_pattern_types(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get list of supported anti-pattern types.
 
+    Issue #744: Requires admin authentication.
     Issue #281: Refactored to use module-level PATTERN_TYPE_DEFINITIONS constant.
     Reduced from 120 lines to ~15 lines.
 
@@ -717,9 +726,14 @@ class RedisFileScanRequest(BaseModel):
     error_code_prefix="CODE_INTEL",
 )
 @router.post("/redis/analyze")
-async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
+async def analyze_redis_usage_endpoint(
+    request: RedisAnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Analyze Redis usage patterns in a codebase.
+
+    Issue #744: Requires admin authentication.
 
     Identifies optimization opportunities including:
     - Pipeline opportunities (sequential operations that can be batched)
@@ -791,9 +805,14 @@ async def analyze_redis_usage_endpoint(request: RedisAnalysisRequest):
     error_code_prefix="CODE_INTEL",
 )
 @router.post("/redis/scan-file")
-async def scan_redis_file(request: RedisFileScanRequest):
+async def scan_redis_file(
+    request: RedisFileScanRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Quick scan a single Python file for Redis optimization opportunities.
+
+    Issue #744: Requires admin authentication.
 
     Faster than full codebase analysis when you only need
     to check one file's Redis usage.
@@ -844,10 +863,13 @@ async def scan_redis_file(request: RedisFileScanRequest):
     error_code_prefix="CODE_INTEL",
 )
 @router.get("/redis/optimization-types")
-async def get_redis_optimization_types():
+async def get_redis_optimization_types(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get list of supported Redis optimization types.
 
+    Issue #744: Requires admin authentication.
     Issue #281: Refactored to use module-level REDIS_OPTIMIZATION_TYPES and
     REDIS_OPTIMIZATION_CATEGORIES constants. Reduced from 96 lines to ~15 lines.
 
@@ -873,9 +895,12 @@ async def get_redis_optimization_types():
 @router.get("/redis/health-score")
 async def get_redis_usage_health_score(
     path: str = Query(..., description="Directory path to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get a Redis usage health score for a codebase.
+
+    Issue #744: Requires admin authentication.
 
     Returns a score from 0-100 based on the number and severity
     of optimization opportunities detected. Lower scores indicate
@@ -960,10 +985,14 @@ class SecurityFileScanRequest(BaseModel):
     error_code_prefix="SECURITY",
 )
 @router.post("/security/analyze")
-async def security_analyze(request: SecurityAnalysisRequest):
+async def security_analyze(
+    request: SecurityAnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Analyze a codebase for security vulnerabilities.
 
+    Issue #744: Requires admin authentication.
     Issue #665: Refactored to use helper functions.
 
     Scans all Python files in the specified directory for:
@@ -1012,9 +1041,14 @@ async def security_analyze(request: SecurityAnalysisRequest):
     error_code_prefix="SECURITY",
 )
 @router.post("/security/scan-file")
-async def security_scan_file(request: SecurityFileScanRequest):
+async def security_scan_file(
+    request: SecurityFileScanRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Scan a single file for security vulnerabilities.
+
+    Issue #744: Requires admin authentication.
 
     Quick scan of a single Python file for security issues.
     """
@@ -1073,9 +1107,13 @@ async def security_scan_file(request: SecurityFileScanRequest):
     error_code_prefix="SECURITY",
 )
 @router.get("/security/vulnerability-types")
-async def list_vulnerability_types():
+async def list_vulnerability_types(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get all supported vulnerability types with OWASP mappings.
+
+    Issue #744: Requires admin authentication.
 
     Returns list of all vulnerability types that can be detected,
     along with their OWASP Top 10 2021 category mappings.
@@ -1110,9 +1148,12 @@ async def list_vulnerability_types():
 @router.get("/security/score")
 async def get_security_score(
     path: str = Query(..., description="Directory path to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get security health score for a codebase.
+
+    Issue #744: Requires admin authentication.
 
     Returns a score from 0-100 based on the number and severity
     of security vulnerabilities detected. Higher scores indicate
@@ -1171,9 +1212,12 @@ async def get_security_score(
 async def get_security_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Generate a comprehensive security report.
+
+    Issue #744: Requires admin authentication.
 
     Returns a detailed security analysis report including:
     - Executive summary
@@ -1260,10 +1304,14 @@ class PerformanceFileScanRequest(BaseModel):
     error_code_prefix="PERFORMANCE",
 )
 @router.post("/performance/analyze")
-async def performance_analyze(request: PerformanceAnalysisRequest):
+async def performance_analyze(
+    request: PerformanceAnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Analyze a codebase for performance issues.
 
+    Issue #744: Requires admin authentication.
     Issue #665: Refactored to use helper functions.
 
     Detects:
@@ -1311,9 +1359,14 @@ async def performance_analyze(request: PerformanceAnalysisRequest):
     error_code_prefix="PERFORMANCE",
 )
 @router.post("/performance/scan-file")
-async def performance_scan_file(request: PerformanceFileScanRequest):
+async def performance_scan_file(
+    request: PerformanceFileScanRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Scan a single file for performance issues.
+
+    Issue #744: Requires admin authentication.
 
     Quick scan of a single Python file for performance bottlenecks.
     """
@@ -1372,9 +1425,13 @@ async def performance_scan_file(request: PerformanceFileScanRequest):
     error_code_prefix="PERFORMANCE",
 )
 @router.get("/performance/issue-types")
-async def list_performance_issue_types():
+async def list_performance_issue_types(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get all supported performance issue types.
+
+    Issue #744: Requires admin authentication.
 
     Returns list of all performance issues that can be detected,
     along with their categories.
@@ -1409,9 +1466,12 @@ async def list_performance_issue_types():
 @router.get("/performance/score")
 async def get_performance_score(
     path: str = Query(..., description="Directory path to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Get performance health score for a codebase.
+
+    Issue #744: Requires admin authentication.
 
     Returns a score from 0-100 based on the number and severity
     of performance issues detected. Higher scores indicate
@@ -1469,9 +1529,12 @@ async def get_performance_score(
 async def get_performance_report(
     path: str = Query(..., description="Directory path to analyze"),
     format: str = Query(default="json", description="Report format: json or markdown"),
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Generate a comprehensive performance report.
+
+    Issue #744: Requires admin authentication.
 
     Returns a detailed performance analysis report including:
     - Summary with score and grade

@@ -20,7 +20,8 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path as PathLib
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
 # Import Pydantic models from dedicated module
 from backend.api.knowledge_models import (
@@ -36,8 +37,9 @@ from backend.api.knowledge_models import (
     ScanHostChangesRequest,
     UpdateFactRequest,
 )
-from src.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.auth_middleware import check_admin_permission
+from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 # Set up logging
@@ -95,6 +97,7 @@ async def _scan_all_facts(kb) -> tuple[dict, int]:
     total_facts = 0
 
     while True:
+
         def _scan_and_fetch():
             cur, scanned_keys = kb.redis_client.scan(cursor, match="fact:*", count=100)
             if not scanned_keys:
@@ -140,22 +143,26 @@ def _find_duplicates_in_groups(fact_groups: dict) -> tuple[list, list]:
         kept_fact = facts[0]
         duplicate_facts = facts[1:]
 
-        duplicates_found.append({
-            "category": kept_fact["category"],
-            "title": kept_fact["title"],
-            "total_copies": len(facts),
-            "kept_fact_id": kept_fact["fact_id"],
-            "kept_created_at": kept_fact["created_at"],
-            "removed_count": len(duplicate_facts),
-            "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
-        })
+        duplicates_found.append(
+            {
+                "category": kept_fact["category"],
+                "title": kept_fact["title"],
+                "total_copies": len(facts),
+                "kept_fact_id": kept_fact["fact_id"],
+                "kept_created_at": kept_fact["created_at"],
+                "removed_count": len(duplicate_facts),
+                "removed_fact_ids": [f["fact_id"] for f in duplicate_facts],
+            }
+        )
 
         facts_to_delete.extend([f["fact_key"] for f in duplicate_facts])
 
     return duplicates_found, facts_to_delete
 
 
-async def _delete_facts_in_batches(kb, facts_to_delete: list, batch_size: int = 100) -> int:
+async def _delete_facts_in_batches(
+    kb, facts_to_delete: list, batch_size: int = 100
+) -> int:
     """Delete facts in batches (Issue #398: extracted).
 
     Returns:
@@ -175,10 +182,16 @@ async def _delete_facts_in_batches(kb, facts_to_delete: list, batch_size: int = 
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/deduplicate")
-async def deduplicate_facts(req: Request, dry_run: bool = True):
+async def deduplicate_facts(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    dry_run: bool = True,
+):
     """
     Remove duplicate facts based on category + title (Issue #398: refactored).
     Keeps the oldest fact and removes newer duplicates.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         dry_run: If True, only report duplicates without deleting (default: True)
@@ -226,11 +239,16 @@ async def deduplicate_facts(req: Request, dry_run: bool = True):
     error_code_prefix="KB",
 )
 @router.post("/deduplicate/advanced")
-async def find_duplicates(request: DeduplicationRequest, req: Request):
+async def find_duplicates(
+    admin_check: bool = Depends(check_admin_permission),
+    request: DeduplicationRequest = None,
+    req: Request = None,
+):
     """
     Find duplicate or near-duplicate facts in the knowledge base.
 
     Issue #79: Bulk Operations - Deduplication
+    Issue #744: Requires admin authentication.
 
     Request body:
     - similarity_threshold: Threshold for near-duplicates (0.5-1.0, default: 0.95)
@@ -279,11 +297,15 @@ async def find_duplicates(request: DeduplicationRequest, req: Request):
     error_code_prefix="KB",
 )
 @router.get("/quality")
-async def get_data_quality_metrics(req: Request):
+async def get_data_quality_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Get comprehensive data quality metrics for the knowledge base.
 
     Issue #418: Data quality metrics and health dashboard.
+    Issue #744: Requires admin authentication.
 
     Returns comprehensive quality analysis including:
     - Overall quality score (0-100)
@@ -324,11 +346,15 @@ async def get_data_quality_metrics(req: Request):
     error_code_prefix="KB",
 )
 @router.get("/health/dashboard")
-async def get_health_dashboard(req: Request):
+async def get_health_dashboard(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Get a combined health dashboard with stats and quality metrics.
 
     Issue #418: Health dashboard endpoint.
+    Issue #744: Requires admin authentication.
 
     Returns:
     - status: Overall system status
@@ -410,12 +436,14 @@ async def _vectorize_single_document(
 
     if not file_path or not command:
         results["skipped"] += 1
-        results["details"].append({
-            "doc_id": doc_id,
-            "command": command,
-            "status": "skipped",
-            "reason": "Missing file_path or command",
-        })
+        results["details"].append(
+            {
+                "doc_id": doc_id,
+                "command": command,
+                "status": "skipped",
+                "reason": "Missing file_path or command",
+            }
+        )
         return
 
     try:
@@ -424,12 +452,14 @@ async def _vectorize_single_document(
 
         if not content or len(content.strip()) < 10:
             results["failed"] += 1
-            results["details"].append({
-                "doc_id": doc_id,
-                "command": command,
-                "status": "failed",
-                "reason": "Empty or too short content",
-            })
+            results["details"].append(
+                {
+                    "doc_id": doc_id,
+                    "command": command,
+                    "status": "failed",
+                    "reason": "Empty or too short content",
+                }
+            )
             return
 
         # Add to knowledge base with metadata
@@ -450,42 +480,44 @@ async def _vectorize_single_document(
 
         if kb_result.get("status") == "success":
             results["successful"] += 1
-            results["details"].append({
-                "doc_id": doc_id,
-                "command": command,
-                "status": "success",
-                "fact_id": kb_result.get("fact_id"),
-            })
+            results["details"].append(
+                {
+                    "doc_id": doc_id,
+                    "command": command,
+                    "status": "success",
+                    "fact_id": kb_result.get("fact_id"),
+                }
+            )
         else:
             results["failed"] += 1
-            results["details"].append({
-                "doc_id": doc_id,
-                "command": command,
-                "status": "failed",
-                "reason": kb_result.get("message", "Unknown error"),
-            })
+            results["details"].append(
+                {
+                    "doc_id": doc_id,
+                    "command": command,
+                    "status": "failed",
+                    "reason": kb_result.get("message", "Unknown error"),
+                }
+            )
 
     except Exception as e:
         logger.error("Vectorization failed for %s: %s", command, e)
         results["failed"] += 1
-        results["details"].append({
-            "doc_id": doc_id,
-            "command": command,
-            "status": "error",
-            "reason": str(e),
-        })
+        results["details"].append(
+            {
+                "doc_id": doc_id,
+                "command": command,
+                "status": "error",
+                "reason": str(e),
+            }
+        )
 
 
-async def _process_vectorization(
-    kb, scanner, result: dict, machine_id: str
-) -> dict:
+async def _process_vectorization(kb, scanner, result: dict, machine_id: str) -> dict:
     """Process vectorization for added/updated documents (Issue #281: extracted)."""
     vectorization_results = _create_vectorization_result()
 
     # Vectorize added and updated documents
-    documents_to_vectorize = (
-        result["changes"]["added"] + result["changes"]["updated"]
-    )
+    documents_to_vectorize = result["changes"]["added"] + result["changes"]["updated"]
 
     for doc_change in documents_to_vectorize:
         await _vectorize_single_document(
@@ -506,10 +538,15 @@ async def _process_vectorization(
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/scan_host_changes")
-async def scan_host_changes(req: Request, request_data: ScanHostChangesRequest):
+async def scan_host_changes(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    request_data: ScanHostChangesRequest = None,
+):
     """
     ULTRA-FAST document change scanner using file metadata.
     Issue #281: Refactored from 162 lines to use extracted helper methods.
+    Issue #744: Requires admin authentication.
 
     Performance: ~0.5 seconds for 10,000 documents (100x faster than subprocess approach)
 
@@ -604,14 +641,18 @@ def _check_orphaned_fact(key: str, metadata_str) -> tuple:
         return True, False, None
 
     # File doesn't exist - this is an orphan
-    return True, True, {
-        "fact_id": metadata.get("fact_id"),
-        "fact_key": key,
-        "title": metadata.get("title", "Unknown"),
-        "category": metadata.get("category", "Unknown"),
-        "file_path": file_path,
-        "source": metadata.get("source", "Unknown"),
-    }
+    return (
+        True,
+        True,
+        {
+            "fact_id": metadata.get("fact_id"),
+            "fact_key": key,
+            "title": metadata.get("title", "Unknown"),
+            "category": metadata.get("category", "Unknown"),
+            "file_path": file_path,
+            "source": metadata.get("source", "Unknown"),
+        },
+    )
 
 
 def _process_orphan_batch(keys: list, results: list) -> tuple:
@@ -642,10 +683,15 @@ def _process_orphan_batch(keys: list, results: list) -> tuple:
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/orphans")
-async def find_orphaned_facts(req: Request):
+async def find_orphaned_facts(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Find facts whose source files no longer exist.
     Only checks facts with file_path metadata.
+
+    Issue #744: Requires admin authentication.
 
     Returns:
         List of orphaned facts
@@ -707,9 +753,15 @@ async def find_orphaned_facts(req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/orphans")
-async def cleanup_orphaned_facts(req: Request, dry_run: bool = True):
+async def cleanup_orphaned_facts(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    dry_run: bool = True,
+):
     """
     Remove facts whose source files no longer exist.
+
+    Issue #744: Requires admin authentication.
 
     Args:
         dry_run: If True, only report orphans without deleting (default: True)
@@ -777,7 +829,9 @@ def _parse_fact_metadata(fact_data: dict) -> dict | None:
         return None
 
 
-def _build_orphan_fact_info(key, fact_data: dict, metadata: dict, source_session_id: str) -> dict:
+def _build_orphan_fact_info(
+    key, fact_data: dict, metadata: dict, source_session_id: str
+) -> dict:
     """Build orphan fact information dictionary."""
     fact_key = key.decode("utf-8") if isinstance(key, bytes) else key
     fact_id = fact_key.replace("fact:", "")
@@ -849,7 +903,9 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
                 orphaned_facts.append(
                     _build_orphan_fact_info(key, fact_data, metadata, source_session_id)
                 )
-                session_stats[source_session_id] = session_stats.get(source_session_id, 0) + 1
+                session_stats[source_session_id] = (
+                    session_stats.get(source_session_id, 0) + 1
+                )
 
         if cursor == 0:
             break
@@ -863,13 +919,17 @@ def _scan_redis_for_session_orphans(redis_client, existing_session_ids: set) -> 
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/session-orphans")
-async def find_session_orphan_facts(req: Request):
+async def find_session_orphan_facts(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+):
     """
     Find facts from deleted chat sessions (session-orphans).
 
     Issue #547: Detects facts that have source_session_id metadata pointing
     to sessions that no longer exist. These are orphaned data from deleted
     conversations.
+    Issue #744: Requires admin authentication.
 
     Returns:
         List of facts with their session_id and fact details
@@ -892,21 +952,23 @@ async def find_session_orphan_facts(req: Request):
 
     logger.info(
         "Scanning for session-orphan facts (existing sessions: %d)",
-        len(existing_session_ids)
+        len(existing_session_ids),
     )
 
     (
         total_checked,
         total_with_session,
         orphaned_facts,
-        session_stats
+        session_stats,
     ) = await asyncio.to_thread(
         _scan_redis_for_session_orphans, kb.redis_client, existing_session_ids
     )
 
     logger.info(
         "Session-orphan scan: checked %d facts, %d with session tracking, %d orphans found",
-        total_checked, total_with_session, len(orphaned_facts)
+        total_checked,
+        total_with_session,
+        len(orphaned_facts),
     )
 
     return {
@@ -936,10 +998,9 @@ async def _delete_orphan_facts(
     for fact in orphaned_facts:
         if preserve_important and (fact.get("important") or fact.get("preserve")):
             preserved_count += 1
-            preserved_facts.append({
-                "fact_id": fact["fact_id"],
-                "reason": "marked as important/preserve"
-            })
+            preserved_facts.append(
+                {"fact_id": fact["fact_id"], "reason": "marked as important/preserve"}
+            )
             continue
 
         try:
@@ -949,7 +1010,8 @@ async def _delete_orphan_facts(
             else:
                 logger.warning(
                     "Failed to delete fact %s: %s",
-                    fact["fact_id"], result.get("message")
+                    fact["fact_id"],
+                    result.get("message"),
                 )
         except Exception as e:
             logger.error("Error deleting fact %s: %s", fact["fact_id"], e)
@@ -964,15 +1026,19 @@ async def _delete_orphan_facts(
 )
 @router.delete("/session-orphans")
 async def cleanup_session_orphan_facts(
-    req: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
     dry_run: bool = Query(True, description="If True, only report without deleting"),
-    preserve_important: bool = Query(True, description="Keep facts marked as important"),
+    preserve_important: bool = Query(
+        True, description="Keep facts marked as important"
+    ),
 ):
     """
     Remove facts from deleted chat sessions.
 
     Issue #547: Cleans up orphaned KB data from deleted conversations.
     Issue #665: Refactored to use extracted helper.
+    Issue #744: Requires admin authentication.
 
     Args:
         dry_run: If True, only report orphans without deleting (default: True)
@@ -996,7 +1062,8 @@ async def cleanup_session_orphan_facts(
     if not dry_run:
         logger.info(
             "Cleaning up %d session-orphan facts (preserve_important=%s)",
-            len(orphaned_facts), preserve_important
+            len(orphaned_facts),
+            preserve_important,
         )
         kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
         deleted_count, preserved_count, preserved_facts = await _delete_orphan_facts(
@@ -1004,7 +1071,8 @@ async def cleanup_session_orphan_facts(
         )
         logger.info(
             "Session-orphan cleanup: deleted=%d, preserved=%d",
-            deleted_count, preserved_count
+            deleted_count,
+            preserved_count,
         )
 
     return {
@@ -1027,8 +1095,15 @@ async def cleanup_session_orphan_facts(
     error_code_prefix="KNOWLEDGE",
 )
 @router.post("/import/scan")
-async def scan_for_unimported_files(req: Request, directory: str = "docs"):
-    """Scan directory for files that need to be imported"""
+async def scan_for_unimported_files(
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    directory: str = "docs",
+):
+    """Scan directory for files that need to be imported
+
+    Issue #744: Requires admin authentication.
+    """
     from backend.models.knowledge_import_tracking import ImportTracker
 
     tracker = ImportTracker()
@@ -1069,11 +1144,16 @@ async def scan_for_unimported_files(req: Request, directory: str = "docs"):
     error_code_prefix="KB",
 )
 @router.post("/export")
-async def export_knowledge(request: ExportRequest, req: Request):
+async def export_knowledge(
+    admin_check: bool = Depends(check_admin_permission),
+    request: ExportRequest = None,
+    req: Request = None,
+):
     """
     Export knowledge base facts to JSON, CSV, or Markdown.
 
     Issue #79: Bulk Operations - Export functionality
+    Issue #744: Requires admin authentication.
 
     Request body:
     - format: "json", "csv", or "markdown" (default: "json")
@@ -1105,7 +1185,8 @@ async def export_knowledge(request: ExportRequest, req: Request):
     date_to = filters.date_to if filters else None
 
     logger.info(
-        f"Export request: format={request.format.value}, include_metadata={request.include_metadata}")
+        f"Export request: format={request.format.value}, include_metadata={request.include_metadata}"
+    )
 
     result = await kb.export_facts(
         format=request.format.value,
@@ -1129,14 +1210,16 @@ async def export_knowledge(request: ExportRequest, req: Request):
 )
 @router.post("/import")
 async def import_knowledge(
-    request: ImportRequest,
-    req: Request,
+    admin_check: bool = Depends(check_admin_permission),
+    request: ImportRequest = None,
+    req: Request = None,
     data: str = Query(..., description="Import data string"),
 ):
     """
     Import facts into the knowledge base from JSON or CSV.
 
     Issue #79: Bulk Operations - Import functionality
+    Issue #744: Requires admin authentication.
 
     Query parameters:
     - data: The import data as a string
@@ -1190,12 +1273,15 @@ async def import_knowledge(
 )
 @router.put("/fact/{fact_id}")
 async def update_fact(
+    admin_check: bool = Depends(check_admin_permission),
     fact_id: str = Path(..., description="Fact ID to update"),
     request: UpdateFactRequest = ...,
     req: Request = None,
 ):
     """
     Update an existing knowledge base fact.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - fact_id: UUID of the fact to update
@@ -1234,8 +1320,8 @@ async def update_fact(
             detail="Update operation not supported by current knowledge base implementation",
         )
 
-    content_status = 'provided' if request.content else 'unchanged'
-    metadata_status = 'provided' if request.metadata else 'unchanged'
+    content_status = "provided" if request.content else "unchanged"
+    metadata_status = "provided" if request.metadata else "unchanged"
     logger.info(
         f"Updating fact {fact_id}: content={content_status}, metadata={metadata_status}"
     )
@@ -1270,10 +1356,14 @@ async def update_fact(
 )
 @router.delete("/fact/{fact_id}")
 async def delete_fact(
-    fact_id: str = Path(..., description="Fact ID to delete"), req: Request = None
+    admin_check: bool = Depends(check_admin_permission),
+    fact_id: str = Path(..., description="Fact ID to delete"),
+    req: Request = None,
 ):
     """
     Delete a knowledge base fact and its vectorization.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - fact_id: UUID of the fact to delete
@@ -1333,11 +1423,16 @@ async def delete_fact(
     error_code_prefix="KB",
 )
 @router.delete("/bulk")
-async def bulk_delete_facts(request: BulkDeleteRequest, req: Request):
+async def bulk_delete_facts(
+    admin_check: bool = Depends(check_admin_permission),
+    request: BulkDeleteRequest = None,
+    req: Request = None,
+):
     """
     Delete multiple facts at once.
 
     Issue #79: Bulk Operations - Bulk delete
+    Issue #744: Requires admin authentication.
 
     Request body:
     - fact_ids: List of fact IDs to delete (max 500)
@@ -1356,7 +1451,11 @@ async def bulk_delete_facts(request: BulkDeleteRequest, req: Request):
             detail="Knowledge base not initialized",
         )
 
-    logger.info("Bulk delete request: %s facts, confirm=%s", len(request.fact_ids), request.confirm)
+    logger.info(
+        "Bulk delete request: %s facts, confirm=%s",
+        len(request.fact_ids),
+        request.confirm,
+    )
 
     result = await kb.bulk_delete(
         fact_ids=request.fact_ids,
@@ -1372,11 +1471,16 @@ async def bulk_delete_facts(request: BulkDeleteRequest, req: Request):
     error_code_prefix="KB",
 )
 @router.post("/bulk/category")
-async def bulk_update_category(request: BulkCategoryUpdateRequest, req: Request):
+async def bulk_update_category(
+    admin_check: bool = Depends(check_admin_permission),
+    request: BulkCategoryUpdateRequest = None,
+    req: Request = None,
+):
     """
     Update category for multiple facts at once.
 
     Issue #79: Bulk Operations - Bulk category update
+    Issue #744: Requires admin authentication.
 
     Request body:
     - fact_ids: List of fact IDs to update (max 500)
@@ -1413,11 +1517,16 @@ async def bulk_update_category(request: BulkCategoryUpdateRequest, req: Request)
     error_code_prefix="KB",
 )
 @router.post("/cleanup")
-async def cleanup_knowledge_base(request: CleanupRequest, req: Request):
+async def cleanup_knowledge_base(
+    admin_check: bool = Depends(check_admin_permission),
+    request: CleanupRequest = None,
+    req: Request = None,
+):
     """
     Clean up the knowledge base.
 
     Issue #79: Bulk Operations - Cleanup
+    Issue #744: Requires admin authentication.
 
     Request body:
     - remove_empty: Remove facts with empty content (default: True)
@@ -1463,11 +1572,16 @@ async def cleanup_knowledge_base(request: CleanupRequest, req: Request):
     error_code_prefix="KB",
 )
 @router.post("/backup")
-async def create_backup(request: BackupRequest, req: Request):
+async def create_backup(
+    admin_check: bool = Depends(check_admin_permission),
+    request: BackupRequest = None,
+    req: Request = None,
+):
     """
     Create a backup of the knowledge base.
 
     Issue #419: Backup and restore functionality.
+    Issue #744: Requires admin authentication.
 
     Request body:
     - include_embeddings: Include vector embeddings (default: True, larger file)
@@ -1511,11 +1625,16 @@ async def create_backup(request: BackupRequest, req: Request):
     error_code_prefix="KB",
 )
 @router.post("/restore")
-async def restore_backup(request: RestoreRequest, req: Request):
+async def restore_backup(
+    admin_check: bool = Depends(check_admin_permission),
+    request: RestoreRequest = None,
+    req: Request = None,
+):
     """
     Restore knowledge base from a backup file.
 
     Issue #419: Backup and restore functionality.
+    Issue #744: Requires admin authentication.
 
     Request body:
     - backup_file: Path to backup file (required)
@@ -1565,13 +1684,20 @@ async def restore_backup(request: RestoreRequest, req: Request):
 )
 @router.get("/backups")
 async def list_backups(
-    req: Request,
-    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=200, description="Max backups to return"),
+    admin_check: bool = Depends(check_admin_permission),
+    req: Request = None,
+    limit: int = Query(
+        default=QueryDefaults.DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=200,
+        description="Max backups to return",
+    ),
 ):
     """
     List available knowledge base backups.
 
     Issue #419: Backup and restore functionality.
+    Issue #744: Requires admin authentication.
 
     Query parameters:
     - limit: Maximum number of backups to return (default: 50, max: 200)
@@ -1602,11 +1728,16 @@ async def list_backups(
     error_code_prefix="KB",
 )
 @router.delete("/backup")
-async def delete_backup(request: DeleteBackupRequest, req: Request):
+async def delete_backup(
+    admin_check: bool = Depends(check_admin_permission),
+    request: DeleteBackupRequest = None,
+    req: Request = None,
+):
     """
     Delete a knowledge base backup file.
 
     Issue #419: Backup and restore functionality.
+    Issue #744: Requires admin authentication.
 
     Request body:
     - backup_file: Path to backup file to delete (required)
