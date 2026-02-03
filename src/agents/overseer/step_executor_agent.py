@@ -25,10 +25,7 @@ from datetime import datetime
 from typing import AsyncGenerator, Optional, Tuple, Union
 
 from src.security.command_patterns import check_dangerous_patterns, is_safe_command
-from src.utils.command_utils import (
-    execute_shell_command_streaming,
-    StreamChunk as BaseStreamChunk,
-)
+from src.utils.command_utils import execute_shell_command_streaming
 
 from .command_explanation_service import (
     CommandExplanationService,

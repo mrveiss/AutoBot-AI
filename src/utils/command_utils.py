@@ -21,7 +21,7 @@ Usage:
 
     # Streaming output
     async for chunk in execute_shell_command_streaming("long_running_cmd"):
-        print(chunk["content"])
+        logger.info(chunk.content)  # Process each chunk
 """
 import asyncio
 import logging
@@ -150,7 +150,7 @@ async def execute_command(
     Example:
         result = await execute_command(["man", "-w", "ls"], timeout=5.0)
         if result.status == "success":
-            print(result.stdout)
+            logger.info("Output: %s", result.stdout)
     """
     import os
 
@@ -236,7 +236,7 @@ async def execute_shell_command_streaming(
 
     Example:
         async for chunk in execute_shell_command_streaming("apt update"):
-            print(f"[{chunk.chunk_type}] {chunk.content}", end="")
+            logger.debug("[%s] %s", chunk.chunk_type, chunk.content)
     """
     try:
         process = await asyncio.create_subprocess_shell(

@@ -24,7 +24,9 @@ from src.utils.command_utils import execute_command
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for common command line starters
-_COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset({"ls", "cat", "grep", "find", "awk", "sed"})
+_COMMON_COMMAND_STARTERS: FrozenSet[str] = frozenset(
+    {"ls", "cat", "grep", "find", "awk", "sed"}
+)
 
 
 @dataclass
@@ -236,20 +238,83 @@ class ManPageKnowledgeIntegrator:
         """Get priority commands list (Issue #398: extracted)."""
         return [
             # Network tools
-            "ping", "curl", "wget", "netstat", "ss", "nmap", "arp", "dig",
-            "nslookup", "traceroute", "ifconfig", "ip", "iptables", "ufw",
+            "ping",
+            "curl",
+            "wget",
+            "netstat",
+            "ss",
+            "nmap",
+            "arp",
+            "dig",
+            "nslookup",
+            "traceroute",
+            "ifconfig",
+            "ip",
+            "iptables",
+            "ufw",
             # File operations
-            "ls", "find", "grep", "cat", "head", "tail", "less", "more",
-            "wc", "sort", "uniq", "cut", "awk", "sed", "tar", "zip", "unzip", "gzip",
+            "ls",
+            "find",
+            "grep",
+            "cat",
+            "head",
+            "tail",
+            "less",
+            "more",
+            "wc",
+            "sort",
+            "uniq",
+            "cut",
+            "awk",
+            "sed",
+            "tar",
+            "zip",
+            "unzip",
+            "gzip",
             # System monitoring
-            "ps", "top", "htop", "d", "du", "free", "uname", "whoami", "id",
-            "groups", "sudo", "su", "systemctl", "service", "crontab",
+            "ps",
+            "top",
+            "htop",
+            "d",
+            "du",
+            "free",
+            "uname",
+            "whoami",
+            "id",
+            "groups",
+            "sudo",
+            "su",
+            "systemctl",
+            "service",
+            "crontab",
             # Development tools
-            "git", "python", "python3", "node", "npm", "docker", "docker-compose",
-            "vim", "nano", "emacs", "make", "gcc", "g++",
+            "git",
+            "python",
+            "python3",
+            "node",
+            "npm",
+            "docker",
+            "docker-compose",
+            "vim",
+            "nano",
+            "emacs",
+            "make",
+            "gcc",
+            "g++",
             # Security tools
-            "ssh", "scp", "rsync", "gpg", "openssl", "chmod", "chown", "chgrp",
-            "passwd", "useradd", "usermod", "userdel", "groupadd",
+            "ssh",
+            "scp",
+            "rsync",
+            "gpg",
+            "openssl",
+            "chmod",
+            "chown",
+            "chgrp",
+            "passwd",
+            "useradd",
+            "usermod",
+            "userdel",
+            "groupadd",
         ]
 
     def __init__(self):
@@ -283,9 +348,7 @@ class ManPageKnowledgeIntegrator:
         Issue #751: Uses centralized execute_command from command_utils.
         """
         try:
-            result = await execute_command(
-                ["man", str(section), command], timeout=10.0
-            )
+            result = await execute_command(["man", str(section), command], timeout=10.0)
 
             if result.status == "timeout":
                 logger.warning("Timeout extracting man page for %s", command)
@@ -332,9 +395,7 @@ class ManPageKnowledgeIntegrator:
 
         # Use aiofiles for non-blocking file I/O
         try:
-            async with aiofiles.open(
-                cache_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(cache_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(man_data, indent=2))
             logger.info("Cached man page for %s to %s", man_info.command, cache_file)
         except OSError as e:
@@ -430,7 +491,9 @@ class ManPageKnowledgeIntegrator:
 
         return knowledge_data
 
-    async def _process_single_command(self, command: str, results: Dict[str, Any]) -> None:
+    async def _process_single_command(
+        self, command: str, results: Dict[str, Any]
+    ) -> None:
         """Process single command integration (Issue #398: extracted)."""
         results["processed"] += 1
         try:
@@ -462,14 +525,27 @@ class ManPageKnowledgeIntegrator:
         """Extract and integrate man pages (Issue #398: refactored)."""
         logger.info("Starting man page integration for priority commands...")
         available_commands = await self.get_available_commands()
-        commands_to_process = [cmd for cmd in self.priority_commands if cmd in available_commands]
-        logger.info("Processing %d priority commands available on this machine", len(commands_to_process))
-        results = {"processed": 0, "successful": 0, "failed": 0, "cached": 0, "commands": {}}
+        commands_to_process = [
+            cmd for cmd in self.priority_commands if cmd in available_commands
+        ]
+        logger.info(
+            "Processing %d priority commands available on this machine",
+            len(commands_to_process),
+        )
+        results = {
+            "processed": 0,
+            "successful": 0,
+            "failed": 0,
+            "cached": 0,
+            "commands": {},
+        }
         for command in commands_to_process:
             await self._process_single_command(command, results)
         logger.info(
             "Man page integration complete: %d successful, %d failed, %d cached",
-            results['successful'], results['failed'], results['cached']
+            results["successful"],
+            results["failed"],
+            results["cached"],
         )
         return results
 
@@ -489,9 +565,7 @@ class ManPageKnowledgeIntegrator:
         # Save as YAML using aiofiles for non-blocking I/O
         yaml_file = man_knowledge_dir / f"{man_info.command}.yaml"
         try:
-            async with aiofiles.open(
-                yaml_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(yaml_file, "w", encoding="utf-8") as f:
                 await f.write(
                     yaml.dump(knowledge_data, default_flow_style=False, indent=2)
                 )
@@ -499,9 +573,7 @@ class ManPageKnowledgeIntegrator:
                 f"Saved man page knowledge for {man_info.command} to {yaml_file}"
             )
         except OSError as e:
-            logger.error(
-                f"Failed to save man page knowledge to {yaml_file}: {e}"
-            )
+            logger.error(f"Failed to save man page knowledge to {yaml_file}: {e}")
 
     async def search_man_pages(self, query: str) -> List[ManPageInfo]:
         """Search cached man pages by query"""
