@@ -10,10 +10,11 @@ import logging
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.auth_middleware import check_admin_permission
 from src.config import UnifiedConfigManager
 from src.llm_interface import LLMInterface
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
@@ -87,8 +88,10 @@ class InferenceOptimizationSettings(BaseModel):
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/health")
-async def get_optimization_health():
-    """Get model optimization system health status"""
+async def get_optimization_health(admin_check: bool = Depends(check_admin_permission)):
+    """Get model optimization system health status
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
 
@@ -118,8 +121,10 @@ async def get_optimization_health():
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/models/available")
-async def get_available_models():
-    """Get all available models with performance data"""
+async def get_available_models(admin_check: bool = Depends(check_admin_permission)):
+    """Get all available models with performance data
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
         models = await optimizer.refresh_available_models()
@@ -149,8 +154,12 @@ async def get_available_models():
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.post("/models/select")
-async def select_optimal_model(request: OptimizationRequest):
-    """Select the optimal model for a given task"""
+async def select_optimal_model(
+    request: OptimizationRequest, admin_check: bool = Depends(check_admin_permission)
+):
+    """Select the optimal model for a given task
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
 
@@ -210,8 +219,13 @@ async def select_optimal_model(request: OptimizationRequest):
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.post("/models/performance/track")
-async def track_model_performance(performance_data: ModelPerformanceData):
-    """Track model performance for future optimization"""
+async def track_model_performance(
+    performance_data: ModelPerformanceData,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Track model performance for future optimization
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
 
@@ -246,8 +260,12 @@ async def track_model_performance(performance_data: ModelPerformanceData):
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/models/performance/history/{model_name}")
-async def get_model_performance_history(model_name: str):
-    """Get performance history for a specific model"""
+async def get_model_performance_history(
+    model_name: str, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get performance history for a specific model
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
 
@@ -279,8 +297,12 @@ async def get_model_performance_history(model_name: str):
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/optimization/suggestions")
-async def get_optimization_suggestions():
-    """Get optimization suggestions based on usage patterns"""
+async def get_optimization_suggestions(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get optimization suggestions based on usage patterns
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
         suggestions = await optimizer.get_optimization_suggestions()
@@ -304,8 +326,10 @@ async def get_optimization_suggestions():
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/models/comparison")
-async def compare_models():
-    """Compare all available models by performance metrics"""
+async def compare_models(admin_check: bool = Depends(check_admin_permission)):
+    """Compare all available models by performance metrics
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
         models = await optimizer.refresh_available_models()
@@ -362,9 +386,14 @@ async def compare_models():
 )
 @router.post("/models/benchmark/{model_name}")
 async def benchmark_model(
-    model_name: str, test_queries: List[str] = None, iterations: int = 3
+    model_name: str,
+    admin_check: bool = Depends(check_admin_permission),
+    test_queries: List[str] = None,
+    iterations: int = 3,
 ):
-    """Benchmark a specific model with test queries"""
+    """Benchmark a specific model with test queries
+
+    Issue #744: Requires admin authentication."""
     try:
         if not test_queries:
             test_queries = [
@@ -423,8 +452,10 @@ async def benchmark_model(
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/system/resources")
-async def get_system_resources():
-    """Get current system resources for model optimization"""
+async def get_system_resources(admin_check: bool = Depends(check_admin_permission)):
+    """Get current system resources for model optimization
+
+    Issue #744: Requires admin authentication."""
     try:
         optimizer = get_model_optimizer()
         resources = optimizer.get_system_resources()
@@ -483,8 +514,10 @@ async def get_system_resources():
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/config")
-async def get_optimization_config():
-    """Get current optimization configuration"""
+async def get_optimization_config(admin_check: bool = Depends(check_admin_permission)):
+    """Get current optimization configuration
+
+    Issue #744: Requires admin authentication."""
     try:
         optimization_config = {
             "performance_threshold": config.get(
@@ -593,7 +626,9 @@ def _get_local_settings(opt_config: dict) -> dict:
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/inference/settings")
-async def get_inference_optimization_settings():
+async def get_inference_optimization_settings(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get current inference optimization settings (Issue #717).
 
@@ -604,6 +639,7 @@ async def get_inference_optimization_settings():
     - Local optimizations (speculative decoding, quantization, vLLM)
 
     Issue #620: Refactored to use helper functions.
+    Issue #744: Requires admin authentication.
     """
     try:
         opt_config = config.get("optimization", {})
@@ -637,11 +673,13 @@ async def get_inference_optimization_settings():
 @router.post("/inference/settings")
 async def update_inference_optimization_settings(
     settings: InferenceOptimizationSettings,
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """
     Update inference optimization settings (Issue #717).
 
     Saves settings to config and updates runtime configuration.
+    Issue #744: Requires admin authentication.
     """
     try:
         # Build optimization config structure
@@ -705,11 +743,12 @@ async def update_inference_optimization_settings(
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/inference/metrics")
-async def get_inference_metrics():
+async def get_inference_metrics(admin_check: bool = Depends(check_admin_permission)):
     """
     Get inference optimization metrics (Issue #717).
 
     Returns real-time metrics from the LLMInterface optimization layer.
+    Issue #744: Requires admin authentication.
     """
     try:
         llm_interface = LLMInterface()
@@ -739,7 +778,9 @@ async def get_inference_metrics():
     error_code_prefix="LLM_OPTIMIZATION",
 )
 @router.get("/inference/provider/{provider_type}/optimizations")
-async def get_provider_optimization_summary(provider_type: str):
+async def get_provider_optimization_summary(
+    provider_type: str, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Get optimization summary for a specific provider type (Issue #717).
 
@@ -747,6 +788,7 @@ async def get_provider_optimization_summary(provider_type: str):
         provider_type: Provider type (ollama, openai, anthropic, vllm, etc.)
 
     Returns applicable optimizations for the provider.
+    Issue #744: Requires admin authentication.
     """
     try:
         from src.llm_interface_pkg.optimization import get_optimization_router

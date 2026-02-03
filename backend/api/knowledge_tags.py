@@ -30,10 +30,8 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from starlette.requests import Request
-
-from src.constants.threshold_constants import QueryDefaults
 
 from backend.api.knowledge_models import (
     AddTagsRequest,
@@ -46,6 +44,8 @@ from backend.api.knowledge_models import (
     UpdateTagStyleRequest,
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
+from src.auth_middleware import check_admin_permission
+from src.constants.threshold_constants import QueryDefaults
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -77,10 +77,13 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
 async def add_tags_to_fact(
     fact_id: str = Path(..., description="Fact ID to add tags to"),
     request: AddTagsRequest = ...,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Add tags to a knowledge base fact.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - fact_id: UUID of the fact
@@ -129,10 +132,13 @@ async def add_tags_to_fact(
 async def remove_tags_from_fact(
     fact_id: str = Path(..., description="Fact ID to remove tags from"),
     request: RemoveTagsRequest = ...,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Remove tags from a knowledge base fact.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - fact_id: UUID of the fact
@@ -180,10 +186,13 @@ async def remove_tags_from_fact(
 @router.get("/fact/{fact_id}/tags")
 async def get_fact_tags(
     fact_id: str = Path(..., description="Fact ID to get tags for"),
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Get all tags for a specific fact.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - fact_id: UUID of the fact
@@ -223,10 +232,13 @@ async def get_fact_tags(
 @router.post("/tags/search")
 async def search_facts_by_tags(
     request: SearchByTagsRequest,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Search for facts by tags.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - tags: List of tags to search for
@@ -278,12 +290,15 @@ async def search_facts_by_tags(
 )
 @router.get("/tags")
 async def list_all_tags(
+    admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
     prefix: Optional[str] = Query(default=None, max_length=50),
     req: Request = None,
 ):
     """
     List all unique tags in the knowledge base.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - limit: Maximum number of tags to return (default: 100)
@@ -327,10 +342,13 @@ async def list_all_tags(
 @router.post("/tags/bulk")
 async def bulk_tag_facts(
     request: BulkTagRequest,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Apply or remove tags from multiple facts at once.
+
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - fact_ids: List of fact IDs to tag (max 100)
@@ -383,12 +401,14 @@ async def bulk_tag_facts(
 async def rename_tag(
     tag_name: str = Path(..., description="Current tag name to rename"),
     request: RenameTagRequest = ...,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Rename a tag globally across all facts.
 
     Issue #409: Tag management CRUD operations.
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - tag_name: Current name of the tag (path parameter)
@@ -440,12 +460,14 @@ async def rename_tag(
 @router.delete("/tags/{tag_name}")
 async def delete_tag_globally(
     tag_name: str = Path(..., description="Tag name to delete"),
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Delete a tag from all facts globally.
 
     Issue #409: Tag management CRUD operations.
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - tag_name: Name of the tag to delete
@@ -494,12 +516,14 @@ async def delete_tag_globally(
 @router.post("/tags/merge")
 async def merge_tags(
     request: MergeTagsRequest,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Merge multiple source tags into a single target tag.
 
     Issue #409: Tag management CRUD operations.
+    Issue #744: Requires admin authentication.
 
     All facts with any of the source tags will have those tags replaced
     with the target tag. Source tags are deleted after merge.
@@ -522,9 +546,7 @@ async def merge_tags(
             detail="Knowledge base not initialized - please check logs for errors",
         )
 
-    logger.info(
-        "Merging tags %s into '%s'", request.source_tags, request.target_tag
-    )
+    logger.info("Merging tags %s into '%s'", request.source_tags, request.target_tag)
 
     result = await kb.merge_tags(
         source_tags=request.source_tags,
@@ -552,6 +574,7 @@ async def merge_tags(
 @router.get("/tags/{tag_name}/facts")
 async def get_facts_by_tag(
     tag_name: str = Path(..., description="Tag name to get facts for"),
+    admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
     include_content: bool = Query(default=False),
@@ -561,6 +584,7 @@ async def get_facts_by_tag(
     Get all facts with a specific tag.
 
     Issue #409: Tag management CRUD operations.
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - tag_name: Tag to search for
@@ -622,12 +646,14 @@ async def get_facts_by_tag(
 @router.get("/tags/{tag_name}/info")
 async def get_tag_info(
     tag_name: str = Path(..., description="Tag name to get info for"),
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Get detailed information about a specific tag.
 
     Issue #409: Tag management CRUD operations.
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - tag_name: Tag to get information for
@@ -677,12 +703,14 @@ async def get_tag_info(
 async def update_tag_style(
     tag_name: str = Path(..., description="Tag name to update styling for"),
     request: UpdateTagStyleRequest = ...,
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Update styling for a tag (color, icon, description).
 
     Issue #410: Tag styling - colors and visual customization.
+    Issue #744: Requires admin authentication.
 
     Parameters:
     - tag_name: Name of the tag to style
@@ -744,12 +772,14 @@ async def update_tag_style(
 @router.get("/tags/{tag_name}/style")
 async def get_tag_style(
     tag_name: str = Path(..., description="Tag name to get styling for"),
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Get styling information for a tag.
 
     Issue #410: Tag styling - colors and visual customization.
+    Issue #744: Requires admin authentication.
 
     Returns default color if no custom style is set.
 
@@ -803,12 +833,14 @@ async def get_tag_style(
 @router.delete("/tags/{tag_name}/style")
 async def delete_tag_style(
     tag_name: str = Path(..., description="Tag name to reset styling for"),
+    admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
 ):
     """
     Delete custom styling for a tag (reset to defaults).
 
     Issue #410: Tag styling - colors and visual customization.
+    Issue #744: Requires admin authentication.
 
     After deletion, the tag will use a deterministic default color.
 

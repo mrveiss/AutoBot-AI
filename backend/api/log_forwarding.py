@@ -16,16 +16,16 @@ Features:
 """
 
 import asyncio
-import json
 import logging
 import socket
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.config.ssot_config import config
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
@@ -38,7 +38,6 @@ from scripts.logging.log_forwarder import (
     DestinationType,
     LogForwarder,
     SyslogProtocol,
-    create_destination,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,33 +61,50 @@ async def _get_forwarder() -> LogForwarder:
 # Pydantic models for API
 class DestinationCreate(BaseModel):
     """Model for creating a new destination."""
+
     name: str = Field(..., description="Unique name for the destination")
-    type: str = Field(..., description="Destination type: seq, elasticsearch, loki, syslog, webhook, file")
+    type: str = Field(
+        ...,
+        description="Destination type: seq, elasticsearch, loki, syslog, webhook, file",
+    )
     enabled: bool = Field(True, description="Whether the destination is enabled")
     url: Optional[str] = Field(None, description="URL/host for the destination")
     api_key: Optional[str] = Field(None, description="API key for authentication")
     username: Optional[str] = Field(None, description="Username for authentication")
     password: Optional[str] = Field(None, description="Password for authentication")
-    index: Optional[str] = Field("autobot-logs", description="Index name (Elasticsearch)")
+    index: Optional[str] = Field(
+        "autobot-logs", description="Index name (Elasticsearch)"
+    )
     file_path: Optional[str] = Field(None, description="File path (file destination)")
     min_level: str = Field("Information", description="Minimum log level to forward")
     batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(5.0, ge=0.1, le=60.0, description="Batch timeout in seconds")
+    batch_timeout: float = Field(
+        5.0, ge=0.1, le=60.0, description="Batch timeout in seconds"
+    )
     retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(1.0, ge=0.1, le=30.0, description="Delay between retries")
+    retry_delay: float = Field(
+        1.0, ge=0.1, le=30.0, description="Delay between retries"
+    )
     # Scope configuration
     scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(default_factory=list, description="Target hosts for per_host scope")
+    target_hosts: List[str] = Field(
+        default_factory=list, description="Target hosts for per_host scope"
+    )
     # Syslog-specific options
-    syslog_protocol: str = Field("udp", description="Syslog protocol: udp, tcp, tcp_tls")
+    syslog_protocol: str = Field(
+        "udp", description="Syslog protocol: udp, tcp, tcp_tls"
+    )
     ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
     ssl_ca_cert: Optional[str] = Field(None, description="Path to CA certificate")
-    ssl_client_cert: Optional[str] = Field(None, description="Path to client certificate")
+    ssl_client_cert: Optional[str] = Field(
+        None, description="Path to client certificate"
+    )
     ssl_client_key: Optional[str] = Field(None, description="Path to client key")
 
 
 class DestinationUpdate(BaseModel):
     """Model for updating an existing destination."""
+
     enabled: Optional[bool] = None
     url: Optional[str] = None
     api_key: Optional[str] = None
@@ -112,6 +128,7 @@ class DestinationUpdate(BaseModel):
 
 class DestinationResponse(BaseModel):
     """Response model for a destination."""
+
     name: str
     type: str
     enabled: bool
@@ -137,7 +154,9 @@ def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
     try:
         dest_type = DestinationType(data.type)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid destination type: {data.type}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid destination type: {data.type}"
+        )
 
     try:
         scope = DestinationScope(data.scope)
@@ -203,19 +222,26 @@ def _destination_to_response(dest) -> DestinationResponse:
     error_code_prefix="LOGFWD",
 )
 @router.get("/destinations")
-async def list_destinations() -> List[Dict[str, Any]]:
-    """List all configured log forwarding destinations."""
+async def list_destinations(
+    admin_check: bool = Depends(check_admin_permission),
+) -> List[Dict[str, Any]]:
+    """List all configured log forwarding destinations.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
         destinations = []
         for dest in forwarder.destinations.values():
-            destinations.append({
-                **dest.config.to_dict_sanitized(),
-                "healthy": dest.is_healthy,
-                "last_error": dest._last_error,
-                "sent_count": dest._sent_count,
-                "failed_count": dest._failed_count,
-            })
+            destinations.append(
+                {
+                    **dest.config.to_dict_sanitized(),
+                    "healthy": dest.is_healthy,
+                    "last_error": dest._last_error,
+                    "sent_count": dest._sent_count,
+                    "failed_count": dest._failed_count,
+                }
+            )
         return destinations
     except Exception as e:
         logger.error("Error listing destinations: %s", e)
@@ -228,12 +254,20 @@ async def list_destinations() -> List[Dict[str, Any]]:
     error_code_prefix="LOGFWD",
 )
 @router.get("/destinations/{name}")
-async def get_destination(name: str) -> Dict[str, Any]:
-    """Get a specific destination by name."""
+async def get_destination(
+    name: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Get a specific destination by name.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
         if name not in forwarder.destinations:
-            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
+            raise HTTPException(
+                status_code=404, detail=f"Destination not found: {name}"
+            )
 
         dest = forwarder.destinations[name]
         return {
@@ -256,14 +290,22 @@ async def get_destination(name: str) -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.post("/destinations")
-async def create_destination_endpoint(data: DestinationCreate) -> Dict[str, Any]:
-    """Create a new log forwarding destination."""
+async def create_destination_endpoint(
+    data: DestinationCreate,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Create a new log forwarding destination.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
         # Check if name already exists
         if data.name in forwarder.destinations:
-            raise HTTPException(status_code=409, detail=f"Destination already exists: {data.name}")
+            raise HTTPException(
+                status_code=409, detail=f"Destination already exists: {data.name}"
+            )
 
         config = _config_to_destination_config(data)
         success = forwarder.add_destination(config)
@@ -280,7 +322,7 @@ async def create_destination_endpoint(data: DestinationCreate) -> Dict[str, Any]
                 "last_error": dest._last_error,
                 "sent_count": dest._sent_count,
                 "failed_count": dest._failed_count,
-            }
+            },
         }
     except HTTPException:
         raise
@@ -295,13 +337,22 @@ async def create_destination_endpoint(data: DestinationCreate) -> Dict[str, Any]
     error_code_prefix="LOGFWD",
 )
 @router.put("/destinations/{name}")
-async def update_destination(name: str, data: DestinationUpdate) -> Dict[str, Any]:
-    """Update an existing destination."""
+async def update_destination(
+    name: str,
+    data: DestinationUpdate,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Update an existing destination.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
+            raise HTTPException(
+                status_code=404, detail=f"Destination not found: {name}"
+            )
 
         # Get existing config and update fields
         existing = forwarder.destinations[name].config
@@ -325,10 +376,14 @@ async def update_destination(name: str, data: DestinationUpdate) -> Dict[str, An
             retry_delay=update_dict.get("retry_delay", existing.retry_delay),
             scope=DestinationScope(update_dict.get("scope", existing.scope.value)),
             target_hosts=update_dict.get("target_hosts", existing.target_hosts),
-            syslog_protocol=SyslogProtocol(update_dict.get("syslog_protocol", existing.syslog_protocol.value)),
+            syslog_protocol=SyslogProtocol(
+                update_dict.get("syslog_protocol", existing.syslog_protocol.value)
+            ),
             ssl_verify=update_dict.get("ssl_verify", existing.ssl_verify),
             ssl_ca_cert=update_dict.get("ssl_ca_cert", existing.ssl_ca_cert),
-            ssl_client_cert=update_dict.get("ssl_client_cert", existing.ssl_client_cert),
+            ssl_client_cert=update_dict.get(
+                "ssl_client_cert", existing.ssl_client_cert
+            ),
             ssl_client_key=update_dict.get("ssl_client_key", existing.ssl_client_key),
         )
 
@@ -345,7 +400,7 @@ async def update_destination(name: str, data: DestinationUpdate) -> Dict[str, An
                 "last_error": dest._last_error,
                 "sent_count": dest._sent_count,
                 "failed_count": dest._failed_count,
-            }
+            },
         }
     except HTTPException:
         raise
@@ -360,13 +415,21 @@ async def update_destination(name: str, data: DestinationUpdate) -> Dict[str, An
     error_code_prefix="LOGFWD",
 )
 @router.delete("/destinations/{name}")
-async def delete_destination(name: str) -> Dict[str, str]:
-    """Delete a log forwarding destination."""
+async def delete_destination(
+    name: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """Delete a log forwarding destination.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
+            raise HTTPException(
+                status_code=404, detail=f"Destination not found: {name}"
+            )
 
         success = forwarder.remove_destination(name)
         if not success:
@@ -386,13 +449,21 @@ async def delete_destination(name: str) -> Dict[str, str]:
     error_code_prefix="LOGFWD",
 )
 @router.post("/destinations/{name}/test")
-async def test_destination(name: str) -> Dict[str, Any]:
-    """Test connectivity to a destination."""
+async def test_destination(
+    name: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Test connectivity to a destination.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
         if name not in forwarder.destinations:
-            raise HTTPException(status_code=404, detail=f"Destination not found: {name}")
+            raise HTTPException(
+                status_code=404, detail=f"Destination not found: {name}"
+            )
 
         dest = forwarder.destinations[name]
 
@@ -403,7 +474,9 @@ async def test_destination(name: str) -> Dict[str, Any]:
             "name": name,
             "healthy": healthy,
             "last_error": dest._last_error,
-            "message": "Connection successful" if healthy else f"Connection failed: {dest._last_error}"
+            "message": "Connection successful"
+            if healthy
+            else f"Connection failed: {dest._last_error}",
         }
     except HTTPException:
         raise
@@ -418,8 +491,13 @@ async def test_destination(name: str) -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.post("/test-all")
-async def test_all_destinations() -> Dict[str, Any]:
-    """Test connectivity to all destinations."""
+async def test_all_destinations(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Test connectivity to all destinations.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
         results = await asyncio.to_thread(forwarder.test_destinations)
@@ -441,8 +519,13 @@ async def test_all_destinations() -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.get("/status")
-async def get_status() -> Dict[str, Any]:
-    """Get log forwarding service status and statistics."""
+async def get_status(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Get log forwarding service status and statistics.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
@@ -451,16 +534,18 @@ async def get_status() -> Dict[str, Any]:
         total_failed = 0
 
         for dest in forwarder.destinations.values():
-            destinations_status.append({
-                "name": dest.config.name,
-                "type": dest.config.type.value,
-                "enabled": dest.config.enabled,
-                "healthy": dest.is_healthy,
-                "last_error": dest._last_error,
-                "sent_count": dest._sent_count,
-                "failed_count": dest._failed_count,
-                "scope": dest.config.scope.value,
-            })
+            destinations_status.append(
+                {
+                    "name": dest.config.name,
+                    "type": dest.config.type.value,
+                    "enabled": dest.config.enabled,
+                    "healthy": dest.is_healthy,
+                    "last_error": dest._last_error,
+                    "sent_count": dest._sent_count,
+                    "failed_count": dest._failed_count,
+                    "scope": dest.config.scope.value,
+                }
+            )
             total_sent += dest._sent_count
             total_failed += dest._failed_count
 
@@ -470,8 +555,12 @@ async def get_status() -> Dict[str, Any]:
             "queue_size": forwarder.log_queue.qsize(),
             "destinations": destinations_status,
             "total_destinations": len(forwarder.destinations),
-            "enabled_destinations": sum(1 for d in forwarder.destinations.values() if d.config.enabled),
-            "healthy_destinations": sum(1 for d in forwarder.destinations.values() if d.is_healthy),
+            "enabled_destinations": sum(
+                1 for d in forwarder.destinations.values() if d.config.enabled
+            ),
+            "healthy_destinations": sum(
+                1 for d in forwarder.destinations.values() if d.is_healthy
+            ),
             "total_sent": total_sent,
             "total_failed": total_failed,
         }
@@ -486,8 +575,13 @@ async def get_status() -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.post("/start")
-async def start_forwarding() -> Dict[str, str]:
-    """Start the log forwarding service."""
+async def start_forwarding(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """Start the log forwarding service.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
@@ -496,6 +590,7 @@ async def start_forwarding() -> Dict[str, str]:
 
         # Start in background thread
         import threading
+
         thread = threading.Thread(target=forwarder.start, daemon=True)
         thread.start()
 
@@ -514,8 +609,13 @@ async def start_forwarding() -> Dict[str, str]:
     error_code_prefix="LOGFWD",
 )
 @router.post("/stop")
-async def stop_forwarding() -> Dict[str, str]:
-    """Stop the log forwarding service."""
+async def stop_forwarding(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """Stop the log forwarding service.
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         forwarder = await _get_forwarder()
 
@@ -536,8 +636,13 @@ async def stop_forwarding() -> Dict[str, str]:
     error_code_prefix="LOGFWD",
 )
 @router.get("/destination-types")
-async def get_destination_types() -> Dict[str, Any]:
-    """Get available destination types and their configuration options."""
+async def get_destination_types(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Get available destination types and their configuration options.
+
+    Issue #744: Requires admin authentication.
+    """
     return {
         "types": [
             {
@@ -566,7 +671,13 @@ async def get_destination_types() -> Dict[str, Any]:
                 "label": "Syslog",
                 "description": "Standard syslog server (UDP/TCP/TLS)",
                 "requires": ["url"],
-                "optional": ["syslog_protocol", "ssl_verify", "ssl_ca_cert", "ssl_client_cert", "ssl_client_key"],
+                "optional": [
+                    "syslog_protocol",
+                    "ssl_verify",
+                    "ssl_ca_cert",
+                    "ssl_client_cert",
+                    "ssl_client_key",
+                ],
                 "protocols": ["udp", "tcp", "tcp_tls"],
             },
             {
@@ -586,13 +697,21 @@ async def get_destination_types() -> Dict[str, Any]:
         ],
         "scopes": [
             {"value": "global", "label": "Global", "description": "Apply to all hosts"},
-            {"value": "per_host", "label": "Per Host", "description": "Apply only to specified hosts"},
+            {
+                "value": "per_host",
+                "label": "Per Host",
+                "description": "Apply only to specified hosts",
+            },
         ],
         "log_levels": ["Debug", "Information", "Warning", "Error", "Fatal"],
         "syslog_protocols": [
             {"value": "udp", "label": "UDP", "description": "UDP (unreliable, fast)"},
             {"value": "tcp", "label": "TCP", "description": "TCP (reliable)"},
-            {"value": "tcp_tls", "label": "TCP + TLS", "description": "TCP with SSL/TLS encryption"},
+            {
+                "value": "tcp_tls",
+                "label": "TCP + TLS",
+                "description": "TCP with SSL/TLS encryption",
+            },
         ],
     }
 
@@ -603,17 +722,46 @@ async def get_destination_types() -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.get("/known-hosts")
-async def get_known_hosts() -> Dict[str, Any]:
-    """Get list of known AutoBot hosts for per-host configuration."""
+async def get_known_hosts(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Get list of known AutoBot hosts for per-host configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     # Return the known AutoBot infrastructure hosts from SSOT config
     return {
         "hosts": [
-            {"hostname": "autobot-main", "ip": config.vm.main, "description": "Main Machine (Backend API)"},
-            {"hostname": "autobot-frontend", "ip": config.vm.frontend, "description": "Frontend VM"},
-            {"hostname": "autobot-npu-worker", "ip": config.vm.npu, "description": "NPU Worker VM"},
-            {"hostname": "autobot-redis", "ip": config.vm.redis, "description": "Redis VM"},
-            {"hostname": "autobot-ai-stack", "ip": config.vm.aistack, "description": "AI Stack VM"},
-            {"hostname": "autobot-browser", "ip": config.vm.browser, "description": "Browser VM"},
+            {
+                "hostname": "autobot-main",
+                "ip": config.vm.main,
+                "description": "Main Machine (Backend API)",
+            },
+            {
+                "hostname": "autobot-frontend",
+                "ip": config.vm.frontend,
+                "description": "Frontend VM",
+            },
+            {
+                "hostname": "autobot-npu-worker",
+                "ip": config.vm.npu,
+                "description": "NPU Worker VM",
+            },
+            {
+                "hostname": "autobot-redis",
+                "ip": config.vm.redis,
+                "description": "Redis VM",
+            },
+            {
+                "hostname": "autobot-ai-stack",
+                "ip": config.vm.aistack,
+                "description": "AI Stack VM",
+            },
+            {
+                "hostname": "autobot-browser",
+                "ip": config.vm.browser,
+                "description": "Browser VM",
+            },
         ],
         "current_hostname": socket.gethostname(),
     }
@@ -626,12 +774,19 @@ async def get_known_hosts() -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.get("/auto-start")
-async def get_auto_start() -> Dict[str, Any]:
-    """Get auto-start configuration."""
-    forwarder = await get_forwarder()
+async def get_auto_start(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Get auto-start configuration.
+
+    Issue #744: Requires admin authentication.
+    """
+    forwarder = await _get_forwarder()
     return {
         "auto_start": forwarder.auto_start,
-        "message": "Auto-start is enabled" if forwarder.auto_start else "Auto-start is disabled"
+        "message": "Auto-start is enabled"
+        if forwarder.auto_start
+        else "Auto-start is disabled",
     }
 
 
@@ -641,12 +796,18 @@ async def get_auto_start() -> Dict[str, Any]:
     error_code_prefix="LOGFWD",
 )
 @router.put("/auto-start")
-async def set_auto_start(enabled: bool = Query(..., description="Enable or disable auto-start")) -> Dict[str, Any]:
-    """Set auto-start configuration."""
-    forwarder = await get_forwarder()
+async def set_auto_start(
+    enabled: bool = Query(..., description="Enable or disable auto-start"),
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, Any]:
+    """Set auto-start configuration.
+
+    Issue #744: Requires admin authentication.
+    """
+    forwarder = await _get_forwarder()
     forwarder.auto_start = enabled
     forwarder.save_config()
     return {
         "auto_start": forwarder.auto_start,
-        "message": f"Auto-start {'enabled' if enabled else 'disabled'}"
+        "message": f"Auto-start {'enabled' if enabled else 'disabled'}",
     }

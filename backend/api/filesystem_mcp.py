@@ -59,9 +59,11 @@ async def _get_file_lock(filepath: str) -> asyncio.Lock:
             _file_locks[filepath] = asyncio.Lock()
         return _file_locks[filepath]
 
-from fastapi import APIRouter, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.utils.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -71,7 +73,7 @@ router = APIRouter(tags=["filesystem_mcp", "mcp"])
 # Only paths within these directories are accessible
 ALLOWED_DIRECTORIES = [
     "/home/kali/Desktop/AutoBot/",  # Project root
-    "/tmp/autobot/",  # Temporary files
+    "/tmp/autobot/",  # Temporary files  # nosec B108
     "/home/kali/Desktop/",  # User workspace
 ]
 
@@ -82,6 +84,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 def _should_include_file(filename: str, pattern: str, exclude_patterns: list) -> bool:
     """Check if a file should be included in search results. (Issue #315 - extracted)"""
     import fnmatch
+
     if not fnmatch.fnmatch(filename, pattern):
         return False
     return not any(fnmatch.fnmatch(filename, pat) for pat in exclude_patterns)
@@ -577,8 +580,14 @@ def _get_discovery_analysis_tools() -> List[MCPTool]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.get("/mcp/tools")
-async def get_filesystem_mcp_tools() -> List[MCPTool]:
-    """Get available MCP tools for filesystem operations"""
+async def get_filesystem_mcp_tools(
+    admin_check: bool = Depends(check_admin_permission),
+) -> List[MCPTool]:
+    """
+    Get available MCP tools for filesystem operations
+
+    Issue #744: Requires admin authentication.
+    """
     # Issue #281: Use extracted helpers for tool definitions by category
     tools = []
     tools.extend(_get_read_operation_tools())
@@ -597,8 +606,15 @@ async def get_filesystem_mcp_tools() -> List[MCPTool]:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/read_text_file")
-async def read_text_file_mcp(request: ReadTextFileRequest) -> Metadata:
-    """Read text file with security validation"""
+async def read_text_file_mcp(
+    request: ReadTextFileRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Read text file with security validation
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -655,8 +671,15 @@ async def read_text_file_mcp(request: ReadTextFileRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/read_media_file")
-async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
-    """Read media file as base64 with MIME type"""
+async def read_media_file_mcp(
+    request: ReadMediaFileRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Read media file as base64 with MIME type
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -713,8 +736,15 @@ async def read_media_file_mcp(request: ReadMediaFileRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/read_multiple_files")
-async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata:
-    """Batch read multiple files with graceful error handling"""
+async def read_multiple_files_mcp(
+    request: ReadMultipleFilesRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Batch read multiple files with graceful error handling
+
+    Issue #744: Requires admin authentication.
+    """
 
     async def read_single_file(path: str) -> dict:
         """Read a single file and return result or error dict"""
@@ -732,12 +762,19 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata
 
             file_size = await run_in_file_executor(os.path.getsize, path)
             if file_size > MAX_FILE_SIZE:
-                return {"error": {"path": path, "error": f"File too large ({file_size} bytes)"}}
+                return {
+                    "error": {
+                        "path": path,
+                        "error": f"File too large ({file_size} bytes)",
+                    }
+                }
 
             async with aiofiles.open(path, "r", encoding="utf-8") as f:
                 content = await f.read()
 
-            return {"result": {"path": path, "content": content, "size_bytes": file_size}}
+            return {
+                "result": {"path": path, "content": content, "size_bytes": file_size}
+            }
         except OSError as e:
             return {"error": {"path": path, "error": f"Failed to read file: {str(e)}"}}
         except Exception as e:
@@ -745,8 +782,7 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata
 
     # Read all files in parallel - eliminates N+1 sequential I/O
     all_results = await asyncio.gather(
-        *[read_single_file(path) for path in request.paths],
-        return_exceptions=True
+        *[read_single_file(path) for path in request.paths], return_exceptions=True
     )
 
     # Separate results and errors
@@ -775,8 +811,15 @@ async def read_multiple_files_mcp(request: ReadMultipleFilesRequest) -> Metadata
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/write_file")
-async def write_file_mcp(request: WriteFileRequest) -> Metadata:
-    """Write file with security validation"""
+async def write_file_mcp(
+    request: WriteFileRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Write file with security validation
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -784,7 +827,9 @@ async def write_file_mcp(request: WriteFileRequest) -> Metadata:
 
     # Create parent directories if needed
     parent_dir = os.path.dirname(request.path)
-    parent_exists = await run_in_file_executor(os.path.exists, parent_dir) if parent_dir else True
+    parent_exists = (
+        await run_in_file_executor(os.path.exists, parent_dir) if parent_dir else True
+    )
     if parent_dir and not parent_exists:
         if not is_path_allowed(parent_dir):
             raise HTTPException(
@@ -819,8 +864,15 @@ async def write_file_mcp(request: WriteFileRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/edit_file")
-async def edit_file_mcp(request: EditFileRequest) -> Metadata:
-    """Edit file using find-and-replace patterns"""
+async def edit_file_mcp(
+    request: EditFileRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Edit file using find-and-replace patterns
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -869,7 +921,9 @@ async def edit_file_mcp(request: EditFileRequest) -> Metadata:
             "size_after": len(content),
         }
     except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read/write file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read/write file: {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error editing file: {str(e)}")
 
@@ -880,8 +934,15 @@ async def edit_file_mcp(request: EditFileRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/create_directory")
-async def create_directory_mcp(request: CreateDirectoryRequest) -> Metadata:
-    """Create directory with recursive parent creation"""
+async def create_directory_mcp(
+    request: CreateDirectoryRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Create directory with recursive parent creation
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -907,8 +968,15 @@ async def create_directory_mcp(request: CreateDirectoryRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/list_directory")
-async def list_directory_mcp(request: ListDirectoryRequest) -> Metadata:
-    """List directory contents with type prefixes"""
+async def list_directory_mcp(
+    request: ListDirectoryRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    List directory contents with type prefixes
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -963,8 +1031,13 @@ async def list_directory_mcp(request: ListDirectoryRequest) -> Metadata:
 @router.post("/mcp/list_directory_with_sizes")
 async def list_directory_with_sizes_mcp(
     request: ListDirectoryWithSizesRequest,
+    admin_check: bool = Depends(check_admin_permission),
 ) -> Metadata:
-    """List directory with detailed size information"""
+    """
+    List directory with detailed size information
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -1004,7 +1077,9 @@ async def list_directory_with_sizes_mcp(
         )
 
         entries = []
-        for name, full_path, entry_is_dir, size in zip(dir_contents, full_paths, is_dir_checks, sizes):
+        for name, full_path, entry_is_dir, size in zip(
+            dir_contents, full_paths, is_dir_checks, sizes
+        ):
             entries.append(
                 {
                     "name": name,
@@ -1039,8 +1114,15 @@ async def list_directory_with_sizes_mcp(
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/move_file")
-async def move_file_mcp(request: MoveFileRequest) -> Metadata:
-    """Move or rename file/directory"""
+async def move_file_mcp(
+    request: MoveFileRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Move or rename file/directory
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.source):
         raise HTTPException(
             status_code=403,
@@ -1084,8 +1166,15 @@ async def move_file_mcp(request: MoveFileRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/search_files")
-async def search_files_mcp(request: SearchFilesRequest) -> Metadata:
-    """Search for files matching pattern"""
+async def search_files_mcp(
+    request: SearchFilesRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Search for files matching pattern
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -1136,8 +1225,15 @@ async def search_files_mcp(request: SearchFilesRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/directory_tree")
-async def directory_tree_mcp(request: DirectoryTreeRequest) -> Metadata:
-    """Get recursive directory tree as JSON"""
+async def directory_tree_mcp(
+    request: DirectoryTreeRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Get recursive directory tree as JSON
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -1194,8 +1290,15 @@ async def directory_tree_mcp(request: DirectoryTreeRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.post("/mcp/get_file_info")
-async def get_file_info_mcp(request: GetFileInfoRequest) -> Metadata:
-    """Get comprehensive file/directory metadata"""
+async def get_file_info_mcp(
+    request: GetFileInfoRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    Get comprehensive file/directory metadata
+
+    Issue #744: Requires admin authentication.
+    """
     if not is_path_allowed(request.path):
         raise HTTPException(
             status_code=403, detail="Access denied: Path not in allowed directories"
@@ -1239,8 +1342,14 @@ async def get_file_info_mcp(request: GetFileInfoRequest) -> Metadata:
     error_code_prefix="FILESYSTEM_MCP",
 )
 @router.get("/mcp/list_allowed_directories")
-async def list_allowed_directories_mcp() -> Metadata:
-    """List all allowed directories for filesystem access"""
+async def list_allowed_directories_mcp(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Metadata:
+    """
+    List all allowed directories for filesystem access
+
+    Issue #744: Requires admin authentication.
+    """
     return {
         "success": True,
         "allowed_directories": ALLOWED_DIRECTORIES,

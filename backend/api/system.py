@@ -7,8 +7,9 @@ import logging
 import sys
 from datetime import datetime
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
+from src.auth_middleware import check_admin_permission
 from src.config import UnifiedConfigManager
 from src.constants.model_constants import ModelConstants as ModelConsts
 
@@ -84,11 +85,13 @@ async def _check_detailed_conversation_db(
 )
 @router.get("/frontend-config")
 @cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
-async def get_frontend_config():
+async def get_frontend_config(admin_check: bool = Depends(check_admin_permission)):
     """Get configuration values needed by the frontend.
 
     This endpoint provides all service URLs and configuration that the frontend needs,
     eliminating the need for hardcoded values in the frontend code.
+
+    Issue #744: Requires admin authentication.
     """
     # Get configuration from the config manager
     ollama_url = config.get_service_url("ollama")
@@ -168,8 +171,13 @@ async def get_frontend_config():
 @router.get("/health")
 @router.get("/system/health")  # Frontend compatibility alias
 @cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
-async def get_system_health(request: Request = None):
-    """Get system health status"""
+async def get_system_health(
+    request: Request = None, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get system health status
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         # Import app_state to get initialization status
         from backend.initialization.lifespan import app_state
@@ -221,8 +229,11 @@ async def get_system_health(request: Request = None):
 )
 @router.get("/info")
 @cache_response(cache_key="system_info", ttl=300)  # Cache for 5 minutes
-async def get_system_info():
-    """Get system information"""
+async def get_system_info(admin_check: bool = Depends(check_admin_permission)):
+    """Get system information
+
+    Issue #744: Requires admin authentication.
+    """
     python_version = (
         f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     )
@@ -250,8 +261,11 @@ async def get_system_info():
     error_code_prefix="SYSTEM",
 )
 @router.post("/reload_config")
-async def reload_system_config():
-    """Reload system configuration and clear caches"""
+async def reload_system_config(admin_check: bool = Depends(check_admin_permission)):
+    """Reload system configuration and clear caches
+
+    Issue #744: Requires admin authentication.
+    """
     logger.info("Reloading system configuration...")
 
     # Reload configuration
@@ -281,8 +295,11 @@ async def reload_system_config():
     error_code_prefix="SYSTEM",
 )
 @router.get("/prompt_reload")
-async def reload_prompts():
-    """Reload prompt templates"""
+async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
+    """Reload prompt templates
+
+    Issue #744: Requires admin authentication.
+    """
     logger.info("Reloading prompt templates...")
 
     # Try to reload prompts if available
@@ -309,8 +326,11 @@ async def reload_prompts():
     error_code_prefix="SYSTEM",
 )
 @router.get("/admin_check")
-async def admin_check():
-    """Check admin status and permissions"""
+async def admin_check(admin_check: bool = Depends(check_admin_permission)):
+    """Check admin status and permissions
+
+    Issue #744: Requires admin authentication.
+    """
     import os
 
     admin_status = {
@@ -328,8 +348,15 @@ async def admin_check():
     error_code_prefix="SYSTEM",
 )
 @router.post("/dynamic_import")
-async def dynamic_import(request: Request, module_name: str = Form(...)):
-    """Dynamically import a module (admin only)"""
+async def dynamic_import(
+    request: Request,
+    module_name: str = Form(...),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Dynamically import a module (admin only)
+
+    Issue #744: Requires admin authentication.
+    """
     logger.info("Dynamic import requested for module: %s", module_name)
 
     # Security check - only allow specific modules (Issue #380: use module-level constant)
@@ -366,8 +393,13 @@ async def dynamic_import(request: Request, module_name: str = Form(...)):
 )
 @router.get("/health/detailed")
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
-async def get_detailed_health(request: Request):
-    """Get detailed system health status including all components (Issue #665: refactored)."""
+async def get_detailed_health(
+    request: Request, admin_check: bool = Depends(check_admin_permission)
+):
+    """Get detailed system health status including all components (Issue #665: refactored).
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         basic_health = await get_system_health()
         detailed_components = {}
@@ -463,8 +495,11 @@ def _determine_overall_health_status(health_status: dict) -> None:
 )
 @router.get("/cache/stats")
 @cache_response(cache_key="cache_stats", ttl=15)  # Cache for 15 seconds
-async def get_cache_stats():
-    """Get cache statistics and performance metrics"""
+async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
+    """Get cache statistics and performance metrics
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         from backend.utils.cache_manager import cache_manager
 
@@ -567,10 +602,11 @@ def _analyze_key_patterns(cache_keys: list, cache_prefix: str) -> dict:
 )
 @router.get("/cache/activity")
 @cache_response(cache_key="cache_activity", ttl=10)  # Cache for 10 seconds
-async def get_cache_activity():
+async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)):
     """Get recent cache activity and key information.
 
     Issue #315: Refactored to use helper functions for reduced nesting depth.
+    Issue #744: Requires admin authentication.
     """
     try:
         from backend.utils.cache_manager import cache_manager
@@ -628,8 +664,11 @@ async def get_cache_activity():
 )
 @router.get("/metrics")
 @cache_response(cache_key="system_metrics", ttl=15)  # Cache for 15 seconds
-async def get_system_metrics():
-    """Get system performance metrics"""
+async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)):
+    """Get system performance metrics
+
+    Issue #744: Requires admin authentication.
+    """
     try:
         pass
 
@@ -693,7 +732,9 @@ async def get_system_metrics():
     error_code_prefix="SYSTEM",
 )
 @router.get("/api/cache/stats")
-async def get_cache_coordinator_stats():
+async def get_cache_coordinator_stats(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """
     Get unified cache statistics from the cache coordinator.
 
@@ -702,6 +743,8 @@ async def get_cache_coordinator_stats():
     - Total items across all caches
     - System memory percentage
     - Pressure trigger count
+
+    Issue #744: Requires admin authentication.
     """
     try:
         from src.cache import get_cache_coordinator
@@ -721,11 +764,13 @@ async def get_cache_coordinator_stats():
     error_code_prefix="SYSTEM",
 )
 @router.post("/api/cache/evict")
-async def trigger_cache_eviction():
+async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permission)):
     """
     Manually trigger coordinated cache eviction.
 
     Evicts items from all registered caches according to eviction_ratio.
+
+    Issue #744: Requires admin authentication.
     """
     try:
         from src.cache import get_cache_coordinator
@@ -751,12 +796,16 @@ async def trigger_cache_eviction():
     error_code_prefix="SYSTEM",
 )
 @router.post("/api/cache/clear/{cache_name}")
-async def clear_cache(cache_name: str):
+async def clear_cache(
+    cache_name: str, admin_check: bool = Depends(check_admin_permission)
+):
     """
     Clear a specific cache by name.
 
     Args:
         cache_name: Name of the cache to clear (e.g., 'lru_memory', 'embedding')
+
+    Issue #744: Requires admin authentication.
     """
     try:
         from src.cache import get_cache_coordinator

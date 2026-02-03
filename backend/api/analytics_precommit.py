@@ -11,16 +11,17 @@ Features fast pattern checking, clear error messages, and bypass mechanism.
 import asyncio
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404
 import threading
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.auth_middleware import check_admin_permission
 from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ BUILTIN_CHECKS: dict[str, CheckDefinition] = {
         name="Hardcoded IP Address",
         category=CheckCategory.SECURITY,
         severity=CheckSeverity.WARN,
-        pattern=r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b(?!.*(?:0\.0\.0\.0|127\.0\.0\.1|localhost))',
+        pattern=r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b(?!.*(?:0\.0\.0\.0|127\.0\.0\.1|localhost))",  # noqa: E501
         description="Hardcoded IP address detected",
         suggestion="Use configuration or environment variables for IP addresses",
         file_patterns=["*.py", "*.js", "*.ts"],
@@ -288,7 +289,7 @@ _config_lock = threading.Lock()
 def get_staged_files() -> list[str]:
     """Get list of staged files from git."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B607
             ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
             capture_output=True,
             text=True,
@@ -306,7 +307,7 @@ def get_file_content(filepath: str) -> Optional[str]:
     """Get content of a file."""
     try:
         # Try to get staged content first
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B607
             ["git", "show", f":{filepath}"],
             capture_output=True,
             text=True,
@@ -377,33 +378,22 @@ def run_check(check: CheckDefinition, filepath: str, content: str) -> list[Check
     return results
 
 
-# ============================================================================
-# API Endpoints
-# ============================================================================
-
-
-@router.get("/check")
-async def check_staged_files(
-    fast_mode: bool = Query(True, description="Skip expensive checks"),
-) -> CommitCheckResult:
+def _filter_enabled_checks(fast_mode: bool) -> dict:
     """
-    Check all staged files against pre-commit rules.
+    Filter checks based on configuration and fast mode.
 
-    Runs pattern checks on files staged for commit.
-    Returns results with pass/fail status and detailed findings.
+    Issue #620: Extracted from check_staged_files to reduce function length.
+
+    Args:
+        fast_mode: Whether to skip expensive checks
+
+    Returns:
+        Dictionary of enabled check IDs to PreCommitCheck objects
     """
-    start_time = datetime.now()
-
-    # Get staged files
-    staged_files = get_staged_files()
-
-    if not staged_files:
-        # Demo mode with sample files
-        staged_files = ["src/example.py", "src/config.js"]
-
-    results: list[CheckResult] = []
     enabled_checks = {
-        k: v for k, v in BUILTIN_CHECKS.items() if v.enabled and k not in _hook_config.disabled_checks
+        k: v
+        for k, v in BUILTIN_CHECKS.items()
+        if v.enabled and k not in _hook_config.disabled_checks
     }
 
     # If specific checks enabled, filter to those
@@ -418,30 +408,93 @@ async def check_staged_files(
             k: v for k, v in enabled_checks.items() if k not in _EXPENSIVE_CHECKS
         }
 
-    for filepath in staged_files:
-        content = get_file_content(filepath)
-        if content is None:
-            # Use demo content
-            content = get_demo_content(filepath)
+    return enabled_checks
 
-        for check in enabled_checks.values():
-            check_results = run_check(check, filepath, content)
-            results.extend(check_results)
 
-    # Calculate statistics
+def _calculate_check_statistics(
+    results: list,
+    enabled_checks: dict,
+    staged_files: list,
+    start_time,
+) -> dict:
+    """
+    Calculate statistics from check results.
+
+    Issue #620: Extracted from check_staged_files to reduce function length.
+
+    Args:
+        results: List of CheckResult objects
+        enabled_checks: Dictionary of enabled checks
+        staged_files: List of staged file paths
+        start_time: When check started
+
+    Returns:
+        Dictionary with duration_ms, blocked, warnings, failed counts
+    """
     duration_ms = (datetime.now() - start_time).total_seconds() * 1000
     blocked = any(r.severity == CheckSeverity.BLOCK and not r.passed for r in results)
-    warnings = sum(1 for r in results if r.severity == CheckSeverity.WARN and not r.passed)
+    warnings = sum(
+        1 for r in results if r.severity == CheckSeverity.WARN and not r.passed
+    )
     failed = sum(1 for r in results if not r.passed)
 
+    return {
+        "duration_ms": round(duration_ms, 2),
+        "blocked": blocked,
+        "warnings": warnings,
+        "failed": failed,
+        "total_checks": len(enabled_checks) * len(staged_files),
+        "passed_checks": len(enabled_checks) * len(staged_files) - failed,
+    }
+
+
+# ============================================================================
+# API Endpoints
+# ============================================================================
+
+
+@router.get("/check")
+async def check_staged_files(
+    admin_check: bool = Depends(check_admin_permission),
+    fast_mode: bool = Query(True, description="Skip expensive checks"),
+) -> CommitCheckResult:
+    """
+    Check all staged files against pre-commit rules.
+
+    Runs pattern checks on files staged for commit.
+    Returns results with pass/fail status and detailed findings.
+
+    Issue #744: Requires admin authentication.
+    Issue #620: Refactored to use helper functions.
+    """
+    start_time = datetime.now()
+
+    # Get staged files
+    staged_files = get_staged_files()
+    if not staged_files:
+        staged_files = ["src/example.py", "src/config.js"]  # Demo mode
+
+    # Filter enabled checks (Issue #620)
+    enabled_checks = _filter_enabled_checks(fast_mode)
+
+    # Run checks on all files
+    results: list[CheckResult] = []
+    for filepath in staged_files:
+        content = get_file_content(filepath) or get_demo_content(filepath)
+        for check in enabled_checks.values():
+            results.extend(run_check(check, filepath, content))
+
+    # Calculate statistics (Issue #620)
+    stats = _calculate_check_statistics(results, enabled_checks, staged_files, start_time)
+
     result = CommitCheckResult(
-        passed=not blocked,
-        total_checks=len(enabled_checks) * len(staged_files),
-        passed_checks=len(enabled_checks) * len(staged_files) - failed,
-        failed_checks=failed,
-        warnings=warnings,
-        blocked=blocked,
-        duration_ms=round(duration_ms, 2),
+        passed=not stats["blocked"],
+        total_checks=stats["total_checks"],
+        passed_checks=stats["passed_checks"],
+        failed_checks=stats["failed"],
+        warnings=stats["warnings"],
+        blocked=stats["blocked"],
+        duration_ms=stats["duration_ms"],
         results=results,
         files_checked=staged_files,
         timestamp=datetime.now().isoformat(),
@@ -459,12 +512,15 @@ async def check_staged_files(
 @router.post("/check-content")
 async def check_content(
     content: str,
+    admin_check: bool = Depends(check_admin_permission),
     filepath: str = Query("untitled.py", description="Filename for pattern matching"),
 ) -> list[CheckResult]:
     """
     Check arbitrary content against pre-commit rules.
 
     Useful for checking content before staging.
+
+    Issue #744: Requires admin authentication.
     """
     results: list[CheckResult] = []
 
@@ -477,22 +533,43 @@ async def check_content(
 
 
 @router.get("/checks")
-async def list_checks() -> list[CheckDefinition]:
-    """List all available pre-commit checks."""
+async def list_checks(
+    admin_check: bool = Depends(check_admin_permission),
+) -> list[CheckDefinition]:
+    """
+    List all available pre-commit checks.
+
+    Issue #744: Requires admin authentication.
+    """
     return list(BUILTIN_CHECKS.values())
 
 
 @router.get("/checks/{check_id}")
-async def get_check(check_id: str) -> CheckDefinition:
-    """Get details for a specific check."""
+async def get_check(
+    check_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> CheckDefinition:
+    """
+    Get details for a specific check.
+
+    Issue #744: Requires admin authentication.
+    """
     if check_id not in BUILTIN_CHECKS:
         raise HTTPException(status_code=404, detail=f"Check {check_id} not found")
     return BUILTIN_CHECKS[check_id]
 
 
 @router.post("/checks/{check_id}/toggle")
-async def toggle_check(check_id: str, enabled: bool) -> dict:
-    """Enable or disable a specific check."""
+async def toggle_check(
+    check_id: str,
+    enabled: bool,
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """
+    Enable or disable a specific check.
+
+    Issue #744: Requires admin authentication.
+    """
     if check_id not in BUILTIN_CHECKS:
         raise HTTPException(status_code=404, detail=f"Check {check_id} not found")
 
@@ -506,15 +583,28 @@ async def toggle_check(check_id: str, enabled: bool) -> dict:
 
 
 @router.get("/config")
-async def get_config() -> HookConfig:
-    """Get current hook configuration."""
+async def get_config(
+    admin_check: bool = Depends(check_admin_permission),
+) -> HookConfig:
+    """
+    Get current hook configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     with _config_lock:
         return _hook_config
 
 
 @router.post("/config")
-async def update_config(config: HookConfig) -> dict:
-    """Update hook configuration."""
+async def update_config(
+    config: HookConfig,
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """
+    Update hook configuration.
+
+    Issue #744: Requires admin authentication.
+    """
     global _hook_config
     with _config_lock:
         _hook_config = config
@@ -523,8 +613,14 @@ async def update_config(config: HookConfig) -> dict:
 
 
 @router.get("/status")
-async def get_status() -> HookStatus:
-    """Get status of installed pre-commit hooks."""
+async def get_status(
+    admin_check: bool = Depends(check_admin_permission),
+) -> HookStatus:
+    """
+    Get status of installed pre-commit hooks.
+
+    Issue #744: Requires admin authentication.
+    """
     hook_path = Path(".git/hooks/pre-commit")
     # Issue #358 - avoid blocking
     installed = await asyncio.to_thread(hook_path.exists)
@@ -554,8 +650,14 @@ async def get_status() -> HookStatus:
 
 
 @router.post("/install")
-async def install_hooks() -> dict:
-    """Install pre-commit hooks."""
+async def install_hooks(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """
+    Install pre-commit hooks.
+
+    Issue #744: Requires admin authentication.
+    """
     hook_path = Path(".git/hooks/pre-commit")
 
     # Check if .git exists
@@ -569,7 +671,7 @@ async def install_hooks() -> dict:
 
     # Create pre-commit hook script with dynamic port from NetworkConstants
     backend_port = NetworkConstants.BACKEND_PORT
-    hook_content = f'''#!/bin/bash
+    hook_content = f"""#!/bin/bash
 # AutoBot Pre-commit Hook v1.0.0
 # Copyright (c) 2025 mrveiss
 
@@ -615,7 +717,7 @@ else
 fi
 
 exit 0
-'''
+"""
 
     try:
         # Issue #358 - avoid blocking
@@ -634,8 +736,14 @@ exit 0
 
 
 @router.post("/uninstall")
-async def uninstall_hooks() -> dict:
-    """Uninstall pre-commit hooks."""
+async def uninstall_hooks(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """
+    Uninstall pre-commit hooks.
+
+    Issue #744: Requires admin authentication.
+    """
     hook_path = Path(".git/hooks/pre-commit")
 
     # Issue #358 - avoid blocking
@@ -665,16 +773,27 @@ async def uninstall_hooks() -> dict:
 
 @router.get("/history")
 async def get_history(
-    limit: int = Query(20, ge=1, le=100, description="Number of results")
+    admin_check: bool = Depends(check_admin_permission),
+    limit: int = Query(20, ge=1, le=100, description="Number of results"),
 ) -> list[CommitCheckResult]:
-    """Get recent pre-commit check history."""
+    """
+    Get recent pre-commit check history.
+
+    Issue #744: Requires admin authentication.
+    """
     with _history_lock:
         return _check_history[:limit]
 
 
 @router.get("/summary")
-async def get_summary() -> dict:
-    """Get summary of pre-commit checks."""
+async def get_summary(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict:
+    """
+    Get summary of pre-commit checks.
+
+    Issue #744: Requires admin authentication.
+    """
     # Thread-safe copy for processing
     with _history_lock:
         history_copy = list(_check_history)
@@ -700,10 +819,22 @@ async def get_summary() -> dict:
                 issue_counts[key] = issue_counts.get(key, 0) + 1
 
     common_issues = [
-        {"check_id": k, "count": v, "name": BUILTIN_CHECKS.get(k, CheckDefinition(
-            id=k, name=k, category=CheckCategory.QUALITY,
-            severity=CheckSeverity.INFO, pattern="", description="", suggestion=""
-        )).name}
+        {
+            "check_id": k,
+            "count": v,
+            "name": BUILTIN_CHECKS.get(
+                k,
+                CheckDefinition(
+                    id=k,
+                    name=k,
+                    category=CheckCategory.QUALITY,
+                    severity=CheckSeverity.INFO,
+                    pattern="",
+                    description="",
+                    suggestion="",
+                ),
+            ).name,
+        }
         for k, v in sorted(issue_counts.items(), key=lambda x: -x[1])[:10]
     ]
 
@@ -718,8 +849,14 @@ async def get_summary() -> dict:
 
 
 @router.get("/categories")
-async def get_categories() -> list[dict]:
-    """Get check categories with counts."""
+async def get_categories(
+    admin_check: bool = Depends(check_admin_permission),
+) -> list[dict]:
+    """
+    Get check categories with counts.
+
+    Issue #744: Requires admin authentication.
+    """
     category_counts: dict[str, dict] = {}
 
     for check in BUILTIN_CHECKS.values():
@@ -751,7 +888,7 @@ async def get_categories() -> list[dict]:
 def get_demo_content(filepath: str) -> str:
     """Get demo content for testing."""
     if filepath.endswith(".py"):
-        return '''
+        return """
 import os
 
 # Configuration
@@ -770,9 +907,9 @@ def process_data(items):
 
 def helper():
     pass
-'''
+"""
     elif filepath.endswith(".js") or filepath.endswith(".ts"):
-        return '''
+        return """
 const API_KEY = "secret-api-key-12345678901234";
 
 function processData(items) {
@@ -785,5 +922,5 @@ function processData(items) {
 
     return items.length;
 }
-'''
+"""
     return ""
