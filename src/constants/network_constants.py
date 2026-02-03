@@ -120,7 +120,7 @@ class NetworkConstants:
     BROWSER_SERVICE_PORT: int = int(ConfigRegistry.get("port.browser", "3000"))
     AI_STACK_PORT: int = int(ConfigRegistry.get("port.aistack", "8080"))
     NPU_WORKER_PORT: int = int(ConfigRegistry.get("port.npu", "8081"))
-    NPU_WORKER_WINDOWS_PORT: int = 8082  # Windows NPU worker (static)
+    NPU_WORKER_WINDOWS_PORT: int = int(ConfigRegistry.get("port.npu_windows", "8081"))
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
     # Issue #474: Monitoring stack ports (from ConfigRegistry)

@@ -49,6 +49,7 @@ REGISTRY_DEFAULTS = {
     "port.browser": "3000",
     "port.aistack": "8080",
     "port.npu": "8081",
+    "port.npu_windows": "8081",
     "port.prometheus": "9090",
     "port.grafana": "3000",
     # LLM defaults
