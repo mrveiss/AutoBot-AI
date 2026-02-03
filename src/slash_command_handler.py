@@ -220,65 +220,82 @@ class DocsCommand(Command):
             file_paths=file_paths[:20],
         )
 
-    async def _search_docs(self, query: str) -> SlashCommandResult:
-        """Search documentation for matching files."""
-        query_lower = query.lower()
-        matches = []
+    def _is_excluded_path(self, md_file_str_lower: str) -> bool:
+        """
+        Check if a file path should be excluded from search results.
 
-        # Search in all markdown files
-        # Issue #358 - avoid blocking
-        all_md_files = await asyncio.to_thread(
-            lambda: list(self.docs_base_path.rglob("*.md"))
-        )
-        for md_file in all_md_files:
-            # Cache str(md_file).lower() to avoid repeated calls (Issue #624)
-            md_file_str_lower = str(md_file).lower()
-            # Skip archive directories
-            if "archive" in md_file_str_lower or "legacy" in md_file_str_lower:
-                continue
+        Issue #620.
+        """
+        return "archive" in md_file_str_lower or "legacy" in md_file_str_lower
 
-            rel_path = md_file.relative_to(self.docs_base_path)
-            file_name = md_file.stem.lower().replace("_", " ").replace("-", " ")
+    def _matches_query(self, md_file, query_lower: str) -> Optional[Path]:
+        """
+        Check if a markdown file matches the search query.
 
-            # Match filename or path
-            if query_lower in file_name or query_lower in str(rel_path).lower():
-                matches.append(rel_path)
+        Issue #620.
 
-        if not matches:
-            no_match_msg = (
-                f"🔍 No documentation found matching '{query}'.\n\n"
-                "Try `/docs` to see categories."
-            )
-            return SlashCommandResult(
-                success=True,
-                command_type=CommandType.DOCS,
-                content=no_match_msg,
-            )
+        Returns:
+            Relative path if matched, None otherwise.
+        """
+        md_file_str_lower = str(md_file).lower()
+        if self._is_excluded_path(md_file_str_lower):
+            return None
 
+        rel_path = md_file.relative_to(self.docs_base_path)
+        file_name = md_file.stem.lower().replace("_", " ").replace("-", " ")
+
+        if query_lower in file_name or query_lower in str(rel_path).lower():
+            return rel_path
+        return None
+
+    def _format_search_results(self, query: str, matches: List[Path]) -> str:
+        """
+        Format search results for display.
+
+        Issue #620.
+        """
         lines = [
             f"## 🔍 Search Results for '{query}'",
             "",
             f"Found {len(matches)} matching document(s):",
             "",
         ]
-
         for match in sorted(matches)[:15]:
             lines.append(f"  • `{match}`")
-
         if len(matches) > 15:
             lines.append(f"  ... and {len(matches) - 15} more")
+        lines.extend(["", "💡 Use file browser or read directly for full content."])
+        return "\n".join(lines)
 
-        lines.extend(
-            [
-                "",
-                "💡 Use file browser or read directly for full content.",
-            ]
+    async def _search_docs(self, query: str) -> SlashCommandResult:
+        """Search documentation for matching files. Issue #620: Refactored using Extract Method."""
+        query_lower = query.lower()
+
+        # Issue #358 - avoid blocking
+        all_md_files = await asyncio.to_thread(
+            lambda: list(self.docs_base_path.rglob("*.md"))
         )
+
+        matches = []
+        for md_file in all_md_files:
+            rel_path = self._matches_query(md_file, query_lower)
+            if rel_path:
+                matches.append(rel_path)
+
+        if not matches:
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.DOCS,
+                content=(
+                    f"🔍 No documentation found matching '{query}'.\n\n"
+                    "Try `/docs` to see categories."
+                ),
+            )
 
         return SlashCommandResult(
             success=True,
             command_type=CommandType.DOCS,
-            content="\n".join(lines),
+            content=self._format_search_results(query, matches),
             file_paths=[str(m) for m in matches[:15]],
         )
 
@@ -560,7 +577,10 @@ class SecurityCommand(Command):
                 return SlashCommandResult(
                     success=False,
                     command_type=CommandType.SECURITY,
-                    content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/security` for available commands.",
+                    content=(
+                        f"❓ Unknown subcommand: `{subcommand}`\n\n"
+                        "Use `/security` for available commands."
+                    ),
                 )
 
         except Exception as e:
@@ -948,7 +968,10 @@ class SecretsCommand(Command):
                 return SlashCommandResult(
                     success=False,
                     command_type=CommandType.SECRETS,
-                    content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/secrets` for available commands.",
+                    content=(
+                        f"❓ Unknown subcommand: `{subcommand}`\n\n"
+                        "Use `/secrets` for available commands."
+                    ),
                 )
 
         except Exception as e:
@@ -1130,7 +1153,10 @@ class SecretsAddSubcommand(Command):
             return SlashCommandResult(
                 success=False,
                 command_type=CommandType.SECRETS,
-                content=f"❌ Invalid type `{secret_type}`.\n\nValid types: {', '.join(self.VALID_SECRET_TYPES)}",
+                content=(
+                    f"❌ Invalid type `{secret_type}`.\n\n"
+                    f"Valid types: {', '.join(self.VALID_SECRET_TYPES)}"
+                ),
             )
 
         self._parsed_name = name
@@ -1214,8 +1240,50 @@ class SecretsShowSubcommand(Command):
         self.secret_name = secret_name
         self.chat_id = chat_id
 
+    def _find_secret_by_name(self, secret_name: str) -> Optional[dict]:
+        """
+        Find a secret by name from accessible secrets.
+
+        Issue #620.
+        """
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+        for s in secrets:
+            if s.get("name") == secret_name:
+                return s
+        return None
+
+    def _mask_secret_value(self, value: str) -> str:
+        """
+        Mask a secret value for safe display.
+
+        Issue #620.
+        """
+        if len(value) > 12:
+            return f"{value[:4]}...{value[-4:]}"
+        return "****" if value else "(empty)"
+
+    def _format_secret_display(self, full_secret: dict) -> str:
+        """
+        Format secret details for display output.
+
+        Issue #620.
+        """
+        masked = self._mask_secret_value(full_secret.get("value", ""))
+        description = full_secret.get("description", "")
+        desc_line = f"\n**Description:** {description}" if description else ""
+        scope_text = "Chat" if full_secret.get("scope") == "chat" else "General"
+
+        return f"""## 🔐 Secret: {self.secret_name}
+
+**Type:** {full_secret.get('type', 'unknown')}
+**Scope:** {scope_text}
+**Value (masked):** `{masked}`{desc_line}
+
+💡 Use `/secrets copy {self.secret_name}` to copy the full value to clipboard.
+📋 The full value is NOT displayed to protect against chat history exposure."""
+
     async def execute(self) -> SlashCommandResult:
-        """Show a secret's value."""
+        """Show a secret's value. Issue #620: Refactored using Extract Method."""
         if not self.secret_name:
             return SlashCommandResult(
                 success=False,
@@ -1223,15 +1291,7 @@ class SecretsShowSubcommand(Command):
                 content="❌ Please provide a secret name: `/secrets show <name>`",
             )
 
-        # Find the secret by name
-        secrets = self.manager.list_secrets(chat_id=self.chat_id)
-        target_secret = None
-
-        for s in secrets:
-            if s.get("name") == self.secret_name:
-                target_secret = s
-                break
-
+        target_secret = self._find_secret_by_name(self.secret_name)
         if not target_secret:
             return SlashCommandResult(
                 success=False,
@@ -1240,12 +1300,9 @@ class SecretsShowSubcommand(Command):
             )
 
         try:
-            # Get the full secret with value
             full_secret = self.manager.get_secret(
-                target_secret["id"],
-                chat_id=self.chat_id,
+                target_secret["id"], chat_id=self.chat_id
             )
-
             if not full_secret:
                 return SlashCommandResult(
                     success=False,
@@ -1253,28 +1310,10 @@ class SecretsShowSubcommand(Command):
                     content=f"❌ Could not retrieve secret: `{self.secret_name}`",
                 )
 
-            # Mask value for display (show first/last 4 chars)
-            value = full_secret.get("value", "")
-            if len(value) > 12:
-                masked = f"{value[:4]}...{value[-4:]}"
-            else:
-                masked = "****" if value else "(empty)"
-
-            # Build response with metadata only (no full value for security)
-            description = full_secret.get("description", "")
-            desc_line = f"\n**Description:** {description}" if description else ""
-
             return SlashCommandResult(
                 success=True,
                 command_type=CommandType.SECRETS,
-                content=f"""## 🔐 Secret: {self.secret_name}
-
-**Type:** {full_secret.get('type', 'unknown')}
-**Scope:** {'Chat' if full_secret.get('scope') == 'chat' else 'General'}
-**Value (masked):** `{masked}`{desc_line}
-
-💡 Use `/secrets copy {self.secret_name}` to copy the full value to clipboard.
-📋 The full value is NOT displayed to protect against chat history exposure.""",
+                content=self._format_secret_display(full_secret),
             )
 
         except PermissionError:
@@ -1329,7 +1368,10 @@ class SecretsDeleteSubcommand(Command):
                 return SlashCommandResult(
                     success=True,
                     command_type=CommandType.SECRETS,
-                    content=f"## ✅ Secret Deleted\n\n`{self.secret_name}` has been permanently removed.",
+                    content=(
+                        f"## ✅ Secret Deleted\n\n"
+                        f"`{self.secret_name}` has been permanently removed."
+                    ),
                 )
             else:
                 return SlashCommandResult(
@@ -1355,8 +1397,45 @@ class SecretsTransferSubcommand(Command):
         self.args = args
         self.chat_id = chat_id
 
+    def _find_secret_by_name(self, secret_name: str) -> Optional[dict]:
+        """
+        Find a secret by name from accessible secrets.
+
+        Issue #620.
+        """
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+        for s in secrets:
+            if s.get("name") == secret_name:
+                return s
+        return None
+
+    def _build_transfer_request(self, target_secret: dict, target_scope_str: str):
+        """
+        Build a SecretTransferRequest for the given scope.
+
+        Issue #620.
+
+        Returns:
+            Tuple of (SecretTransferRequest, scope_display_text)
+        """
+        from backend.api.secrets import SecretScope, SecretTransferRequest
+
+        if target_scope_str == "to-general":
+            new_scope = SecretScope.GENERAL
+            scope_text = "General 🌐"
+        else:
+            new_scope = SecretScope.CHAT
+            scope_text = "Chat 💬"
+
+        request = SecretTransferRequest(
+            secret_ids=[target_secret["id"]],
+            target_scope=new_scope,
+            target_chat_id=self.chat_id if new_scope == SecretScope.CHAT else None,
+        )
+        return request, scope_text
+
     async def execute(self) -> SlashCommandResult:
-        """Transfer a secret between scopes."""
+        """Transfer a secret between scopes. Issue #620: Refactored using Extract Method."""
         if not self.args:
             return SlashCommandResult(
                 success=False,
@@ -1366,17 +1445,9 @@ class SecretsTransferSubcommand(Command):
 
         parts = self.args.split()
         secret_name = parts[0]
-        target_scope = parts[1] if len(parts) > 1 else "to-general"
+        target_scope_str = parts[1] if len(parts) > 1 else "to-general"
 
-        # Find the secret by name
-        secrets = self.manager.list_secrets(chat_id=self.chat_id)
-        target_secret = None
-
-        for s in secrets:
-            if s.get("name") == secret_name:
-                target_secret = s
-                break
-
+        target_secret = self._find_secret_by_name(secret_name)
         if not target_secret:
             return SlashCommandResult(
                 success=False,
@@ -1385,21 +1456,9 @@ class SecretsTransferSubcommand(Command):
             )
 
         try:
-            from backend.api.secrets import SecretScope, SecretTransferRequest
-
-            if target_scope == "to-general":
-                new_scope = SecretScope.GENERAL
-                scope_text = "General 🌐"
-            else:
-                new_scope = SecretScope.CHAT
-                scope_text = "Chat 💬"
-
-            request = SecretTransferRequest(
-                secret_ids=[target_secret["id"]],
-                target_scope=new_scope,
-                target_chat_id=self.chat_id if new_scope == SecretScope.CHAT else None,
+            request, scope_text = self._build_transfer_request(
+                target_secret, target_scope_str
             )
-
             result = self.manager.transfer_secrets(request, chat_id=self.chat_id)
 
             if result.get("transferred"):
@@ -1408,12 +1467,11 @@ class SecretsTransferSubcommand(Command):
                     command_type=CommandType.SECRETS,
                     content=f"## ✅ Secret Transferred\n\n`{secret_name}` is now {scope_text}.",
                 )
-            else:
-                return SlashCommandResult(
-                    success=False,
-                    command_type=CommandType.SECRETS,
-                    content=f"❌ Failed to transfer secret: {result.get('failed', [])}",
-                )
+            return SlashCommandResult(
+                success=False,
+                command_type=CommandType.SECRETS,
+                content=f"❌ Failed to transfer secret: {result.get('failed', [])}",
+            )
 
         except Exception as e:
             logger.error("Failed to transfer secret: %s", e)

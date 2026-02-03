@@ -81,12 +81,8 @@ class EnhancedMemoryManager:
             f"Enhanced Memory Manager initialized with database: {self.db_path}"
         )
 
-    def _create_tables(self, conn: sqlite3.Connection) -> None:
-        """Create all database tables (Issue #665: extracted helper).
-
-        Args:
-            conn: SQLite connection
-        """
+    def _create_task_execution_table(self, conn: sqlite3.Connection) -> None:
+        """Create task_execution_history table. Issue #620."""
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS task_execution_history (
@@ -111,6 +107,8 @@ class EnhancedMemoryManager:
         """
         )
 
+    def _create_markdown_references_table(self, conn: sqlite3.Connection) -> None:
+        """Create markdown_references table. Issue #620."""
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS markdown_references (
@@ -125,6 +123,8 @@ class EnhancedMemoryManager:
         """
         )
 
+    def _create_embedding_cache_table(self, conn: sqlite3.Connection) -> None:
+        """Create embedding_cache table. Issue #620."""
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS embedding_cache (
@@ -138,6 +138,8 @@ class EnhancedMemoryManager:
         """
         )
 
+    def _create_subtask_relationships_table(self, conn: sqlite3.Connection) -> None:
+        """Create subtask_relationships table. Issue #620."""
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS subtask_relationships (
@@ -150,6 +152,19 @@ class EnhancedMemoryManager:
             )
         """
         )
+
+    def _create_tables(self, conn: sqlite3.Connection) -> None:
+        """Create all database tables.
+
+        Issue #620: Refactored to use extracted helper methods for each table.
+
+        Args:
+            conn: SQLite connection
+        """
+        self._create_task_execution_table(conn)
+        self._create_markdown_references_table(conn)
+        self._create_embedding_cache_table(conn)
+        self._create_subtask_relationships_table(conn)
 
     def _create_indexes(self, conn: sqlite3.Connection) -> None:
         """Create performance indexes (Issue #665: extracted helper).
@@ -479,7 +494,7 @@ class EnhancedMemoryManager:
             SELECT task_id, markdown_file_path
             FROM markdown_references
             WHERE task_id IN ({task_ids_placeholder})
-            """,
+            """,  # nosec B608 - parameterized query with ? placeholders
             task_ids,
         )
         markdown_refs_by_task: Dict[str, List[str]] = {}
@@ -511,7 +526,7 @@ class EnhancedMemoryManager:
             SELECT parent_task_id, subtask_id
             FROM subtask_relationships
             WHERE parent_task_id IN ({task_ids_placeholder})
-            """,
+            """,  # nosec B608 - parameterized query with ? placeholders
             task_ids,
         )
         subtasks_by_parent: Dict[str, List[str]] = {}
@@ -563,16 +578,14 @@ class EnhancedMemoryManager:
             metadata=json.loads(row[15]) if row[15] else None,
         )
 
-    def get_task_history(
+    def _build_history_query(
         self,
-        agent_type: Optional[str] = None,
-        status: Optional[TaskStatus] = None,
-        limit: int = 100,
-        days_back: int = 30,
-    ) -> List[TaskExecutionRecord]:
-        """Get task execution history with optional filtering"""
-        cutoff_date = datetime.now() - timedelta(days=days_back)
-
+        cutoff_date: datetime,
+        agent_type: Optional[str],
+        status: Optional[TaskStatus],
+        limit: int,
+    ) -> tuple:
+        """Build SQL query and params for task history retrieval. Issue #620."""
         query = """
             SELECT task_id, task_name, description, status, priority,
                    created_at, started_at, completed_at, duration_seconds,
@@ -581,7 +594,7 @@ class EnhancedMemoryManager:
             FROM task_execution_history
             WHERE created_at > ?
         """
-        params = [cutoff_date]
+        params: List[Any] = [cutoff_date]
 
         if agent_type:
             query += " AND agent_type = ?"
@@ -594,8 +607,25 @@ class EnhancedMemoryManager:
         query += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
 
+        return query, params
+
+    def get_task_history(
+        self,
+        agent_type: Optional[str] = None,
+        status: Optional[TaskStatus] = None,
+        limit: int = 100,
+        days_back: int = 30,
+    ) -> List[TaskExecutionRecord]:
+        """Get task execution history with optional filtering.
+
+        Issue #620: Refactored to use _build_history_query helper.
+        """
+        cutoff_date = datetime.now() - timedelta(days=days_back)
+        query, params = self._build_history_query(
+            cutoff_date, agent_type, status, limit
+        )
+
         tasks: List[TaskExecutionRecord] = []
-        # Use connection pool instead of direct connection
         pool = get_connection_pool(self.db_path)
         with pool.get_connection() as conn:
             cursor = conn.execute(query, params)
@@ -604,14 +634,10 @@ class EnhancedMemoryManager:
             if not task_rows:
                 return tasks
 
-            # Extract task IDs for batch queries
             task_ids = [row[0] for row in task_rows]
-
-            # Issue #665: Use extracted helpers for batch loading
             markdown_refs_by_task = self._batch_load_markdown_refs(conn, task_ids)
             subtasks_by_parent = self._batch_load_subtasks(conn, task_ids)
 
-            # Build task objects using extracted helper (Issue #281)
             for row in task_rows:
                 task_id = row[0]
                 markdown_refs = markdown_refs_by_task.get(task_id, [])
@@ -621,67 +647,85 @@ class EnhancedMemoryManager:
 
         return tasks
 
+    def _get_status_counts(
+        self, conn: sqlite3.Connection, cutoff_date: datetime
+    ) -> Dict[str, int]:
+        """Get task status counts from database. Issue #620."""
+        cursor = conn.execute(
+            """
+            SELECT status, COUNT(*)
+            FROM task_execution_history
+            WHERE created_at > ?
+            GROUP BY status
+        """,
+            (cutoff_date,),
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+    def _get_agent_statistics(
+        self, conn: sqlite3.Connection, cutoff_date: datetime
+    ) -> Dict[str, Dict[str, Any]]:
+        """Get per-agent task statistics. Issue #620."""
+        cursor = conn.execute(
+            """
+            SELECT agent_type, COUNT(*), AVG(duration_seconds)
+            FROM task_execution_history
+            WHERE created_at > ? AND agent_type IS NOT NULL
+            GROUP BY agent_type
+        """,
+            (cutoff_date,),
+        )
+        agent_stats = {}
+        for row in cursor.fetchall():
+            agent_stats[row[0]] = {"count": row[1], "avg_duration": row[2]}
+        return agent_stats
+
+    def _get_performance_metrics(
+        self, conn: sqlite3.Connection, cutoff_date: datetime
+    ) -> Dict[str, Any]:
+        """Get success rate and performance metrics. Issue #620."""
+        cursor = conn.execute(
+            """
+            SELECT
+                COUNT(*) as total_tasks,
+                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_tasks,
+                AVG(duration_seconds) as avg_duration,
+                AVG(retry_count) as avg_retries
+            FROM task_execution_history
+            WHERE created_at > ?
+        """,
+            (cutoff_date,),
+        )
+        row = cursor.fetchone()
+        total_tasks = row[0] if row[0] else 0
+        completed_tasks = row[1] if row[1] else 0
+        success_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+        return {
+            "total_tasks": total_tasks,
+            "success_rate_percent": round(success_rate, 2),
+            "avg_duration_seconds": row[2],
+            "avg_retry_count": row[3],
+        }
+
     def get_task_statistics(self, days_back: int = 30) -> Dict[str, Any]:
-        """Get comprehensive task execution statistics"""
+        """Get comprehensive task execution statistics.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
         cutoff_date = datetime.now() - timedelta(days=days_back)
 
         with sqlite3.connect(self.db_path) as conn:
-            # Overall statistics
-            cursor = conn.execute(
-                """
-                SELECT status, COUNT(*)
-                FROM task_execution_history
-                WHERE created_at > ?
-                GROUP BY status
-            """,
-                (cutoff_date,),
-            )
-
-            status_counts = {row[0]: row[1] for row in cursor.fetchall()}
-
-            # Agent type statistics
-            cursor = conn.execute(
-                """
-                SELECT agent_type, COUNT(*), AVG(duration_seconds)
-                FROM task_execution_history
-                WHERE created_at > ? AND agent_type IS NOT NULL
-                GROUP BY agent_type
-            """,
-                (cutoff_date,),
-            )
-
-            agent_stats = {}
-            for row in cursor.fetchall():
-                agent_stats[row[0]] = {"count": row[1], "avg_duration": row[2]}
-
-            # Success rate and performance metrics
-            cursor = conn.execute(
-                """
-                SELECT
-                    COUNT(*) as total_tasks,
-                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_tasks,
-                    AVG(duration_seconds) as avg_duration,
-                    AVG(retry_count) as avg_retries
-                FROM task_execution_history
-                WHERE created_at > ?
-            """,
-                (cutoff_date,),
-            )
-
-            row = cursor.fetchone()
-            total_tasks = row[0] if row[0] else 0
-            completed_tasks = row[1] if row[1] else 0
-            success_rate = (
-                (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-            )
+            status_counts = self._get_status_counts(conn, cutoff_date)
+            agent_stats = self._get_agent_statistics(conn, cutoff_date)
+            performance = self._get_performance_metrics(conn, cutoff_date)
 
             return {
                 "period_days": days_back,
-                "total_tasks": total_tasks,
+                "total_tasks": performance["total_tasks"],
                 "status_breakdown": status_counts,
-                "success_rate_percent": round(success_rate, 2),
-                "avg_duration_seconds": row[2],
-                "avg_retry_count": row[3],
+                "success_rate_percent": performance["success_rate_percent"],
+                "avg_duration_seconds": performance["avg_duration_seconds"],
+                "avg_retry_count": performance["avg_retry_count"],
                 "agent_statistics": agent_stats,
                 "embedding_cache_size": self._get_embedding_cache_size(),
             }
