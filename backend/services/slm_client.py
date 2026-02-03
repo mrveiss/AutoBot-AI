@@ -23,6 +23,7 @@ Related to Issue #760 Phase 2.
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
@@ -112,6 +113,22 @@ class ServiceDiscoveryCache:
         """Clear entire cache."""
         self._cache.clear()
         logger.debug("Cleared service discovery cache")
+
+
+class ServiceNotConfiguredError(Exception):
+    """Raised when a service is not configured in SLM or environment."""
+
+
+# Service name to environment variable mapping
+ENV_VAR_MAP = {
+    "autobot-backend": "AUTOBOT_BACKEND_URL",
+    "redis": "REDIS_URL",
+    "ollama": "OLLAMA_URL",
+    "slm-server": "SLM_URL",
+    "npu-worker": "NPU_WORKER_URL",
+    "ai-stack": "AI_STACK_URL",
+    "browser-service": "BROWSER_SERVICE_URL",
+}
 
 
 class AgentConfigCache:
@@ -545,6 +562,9 @@ class SLMClient:
 # Module-level singleton instance
 _slm_client: Optional[SLMClient] = None
 
+# Module-level service discovery cache
+_discovery_cache = ServiceDiscoveryCache(ttl_seconds=60)
+
 
 def get_slm_client() -> Optional[SLMClient]:
     """
@@ -593,3 +613,107 @@ async def shutdown_slm_client() -> None:
         await _slm_client.disconnect()
         _slm_client = None
         logger.info("SLM client shutdown complete")
+
+
+# =============================================================================
+# Service Discovery Functions (Issue #760 Phase 3)
+# =============================================================================
+
+
+async def _fetch_from_slm(service_name: str) -> Optional[str]:
+    """
+    Fetch service URL from SLM discovery API.
+
+    Args:
+        service_name: Service identifier
+
+    Returns:
+        Service URL or None on failure
+    """
+    client = get_slm_client()
+    if not client:
+        logger.debug("SLM client not initialized, cannot discover %s", service_name)
+        return None
+
+    try:
+        session = await client._get_session()
+        url = f"{client.slm_url}/api/discover/{service_name}"
+
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+                return data.get("url")
+            elif response.status == 404:
+                logger.debug("Service %s not found in SLM", service_name)
+            else:
+                logger.warning(
+                    "SLM discovery failed for %s: HTTP %d",
+                    service_name,
+                    response.status,
+                )
+    except Exception as e:
+        logger.warning("Error discovering service %s from SLM: %s", service_name, e)
+
+    return None
+
+
+def _get_env_fallback(service_name: str) -> Optional[str]:
+    """
+    Get service URL from environment variable.
+
+    Args:
+        service_name: Service identifier
+
+    Returns:
+        URL from environment or None
+    """
+    env_var = ENV_VAR_MAP.get(service_name)
+    if env_var:
+        return os.environ.get(env_var)
+    return None
+
+
+async def discover_service(service_name: str) -> str:
+    """
+    Discover service URL with fallback chain.
+
+    Fallback order:
+    1. Cache (60s TTL)
+    2. SLM /api/discover/{service_name}
+    3. Environment variable
+    4. Error (service must be configured)
+
+    Args:
+        service_name: Service identifier
+
+    Returns:
+        Service URL
+
+    Raises:
+        ServiceNotConfiguredError: When service not found anywhere
+    """
+    # 1. Check cache
+    cached = _discovery_cache.get(service_name)
+    if cached:
+        return cached
+
+    # 2. Try SLM
+    url = await _fetch_from_slm(service_name)
+    if url:
+        _discovery_cache.set(service_name, {"url": url})
+        return url
+
+    # 3. Env var fallback
+    env_url = _get_env_fallback(service_name)
+    if env_url:
+        logger.info(
+            "Service %s discovered via env var fallback: %s",
+            service_name,
+            ENV_VAR_MAP.get(service_name),
+        )
+        return env_url
+
+    # 4. Error - not configured
+    raise ServiceNotConfiguredError(
+        f"Service '{service_name}' not found in SLM or environment"
+    )
