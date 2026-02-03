@@ -254,6 +254,45 @@ export interface AutoBotConfig {
 }
 
 // =============================================================================
+// Service Discovery Types (Issue #760 Phase 3)
+// =============================================================================
+
+/**
+ * Discovered service information from SLM.
+ */
+export interface DiscoveredService {
+  service_name: string;
+  url: string;
+  host: string;
+  port?: number;
+  protocol: string;
+  healthy: boolean;
+  node_id: string;
+}
+
+/**
+ * Cache entry for discovered services.
+ */
+interface DiscoveryCacheEntry {
+  data: DiscoveredService;
+  expiresAt: number;
+}
+
+/** Service discovery cache (module-level) */
+const discoveryCache = new Map<string, DiscoveryCacheEntry>();
+const DISCOVERY_CACHE_TTL_MS = 60000; // 60 seconds
+
+// Lazy-import logger to avoid circular dependencies
+let _discoveryLogger: ReturnType<typeof import('@/utils/debugUtils').createLogger> | null = null;
+async function getDiscoveryLogger() {
+  if (!_discoveryLogger) {
+    const { createLogger } = await import('@/utils/debugUtils');
+    _discoveryLogger = createLogger('ServiceDiscovery');
+  }
+  return _discoveryLogger;
+}
+
+// =============================================================================
 // Environment Variable Helpers
 // =============================================================================
 
@@ -593,4 +632,79 @@ export function getSLMUrl(): string {
  */
 export function getSLMAdminUrl(): string {
   return getConfig().slmAdminUrl;
+}
+
+// =============================================================================
+// Service Discovery Functions (Issue #760 Phase 3)
+// =============================================================================
+
+/**
+ * Discover a service by name with fallback chain.
+ *
+ * Fallback order:
+ * 1. Cache (60s TTL)
+ * 2. SLM /api/discover/{serviceName}
+ * 3. Environment-based getServiceUrl()
+ * 4. Error
+ *
+ * @param serviceName - Service identifier (e.g., 'redis', 'ollama')
+ * @param authToken - JWT token for SLM authentication
+ * @returns Service URL
+ * @throws Error if service not configured anywhere
+ */
+export async function discoverService(
+  serviceName: string,
+  authToken: string
+): Promise<string> {
+  const logger = await getDiscoveryLogger();
+
+  // 1. Check cache
+  const cached = discoveryCache.get(serviceName);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data.url;
+  }
+
+  // 2. Try SLM
+  try {
+    const slmUrl = getConfig().slmUrl;
+    const response = await fetch(`${slmUrl}/api/discover/${serviceName}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data: DiscoveredService = await response.json();
+      discoveryCache.set(serviceName, {
+        data,
+        expiresAt: Date.now() + DISCOVERY_CACHE_TTL_MS,
+      });
+      return data.url;
+    }
+
+    if (response.status !== 404) {
+      logger.warn(`SLM discovery failed for ${serviceName}: ${response.status}`);
+    }
+  } catch (err) {
+    logger.warn(`SLM discovery error for ${serviceName}:`, err);
+  }
+
+  // 3. Env var fallback (via existing getServiceUrl)
+  const envUrl = getServiceUrl(serviceName);
+  if (envUrl) {
+    logger.info(`Service ${serviceName} discovered via env fallback`);
+    return envUrl;
+  }
+
+  // 4. Error
+  throw new Error(`Service '${serviceName}' not configured in SLM or environment`);
+}
+
+/**
+ * Clear the service discovery cache.
+ * Useful when services are known to have changed.
+ */
+export function clearDiscoveryCache(): void {
+  discoveryCache.clear();
 }
