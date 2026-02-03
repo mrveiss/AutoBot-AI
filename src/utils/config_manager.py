@@ -25,7 +25,7 @@ def _get_ollama_base_url() -> str:
         try:
             return get_ssot_config().ollama_url
         except Exception:
-            pass
+            pass  # nosec B110 - intentional fallback to env vars
     # Fallback to environment variable, then default
     return os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
 
@@ -79,20 +79,33 @@ class ConfigManager:
             else:
                 base_config[key] = value
 
-    def _get_default_config(self) -> Dict[str, Any]:
-        """Get default configuration values"""
+    def _get_llm_defaults(self) -> Dict[str, Any]:
+        """
+        Get default LLM configuration values.
+
+        Returns LLM provider settings for orchestrator and task processing.
+        Issue #620.
+        """
         return {
-            "llm": {
-                "orchestrator_llm": "ollama",
-                "task_llm": "ollama",
-                "ollama": {
-                    "model": "llama3.2",
-                    "base_url": _get_ollama_base_url(),
-                    "timeout": 30,
-                    "port": 11434,
-                },
-                "openai": {"api_key": ""},
+            "orchestrator_llm": "ollama",
+            "task_llm": "ollama",
+            "ollama": {
+                "model": "llama3.2",
+                "base_url": _get_ollama_base_url(),
+                "timeout": 30,
+                "port": 11434,
             },
+            "openai": {"api_key": ""},
+        }
+
+    def _get_infrastructure_defaults(self) -> Dict[str, Any]:
+        """
+        Get default infrastructure configuration values.
+
+        Returns deployment, data storage, and Redis connection settings.
+        Issue #620.
+        """
+        return {
             "deployment": {"mode": "local", "host": "localhost", "port": 8001},
             "data": {
                 "reliability_stats_file": "data/reliability_stats.json",
@@ -101,23 +114,41 @@ class ConfigManager:
                 "chats_directory": "data/chats",
             },
             "redis": {"host": "localhost", "port": 6379, "db": 0, "password": None},
-            "multimodal": {
-                "vision": {
-                    "enabled": True,
-                    "confidence_threshold": 0.7,
-                    "processing_timeout": 30,
-                },
-                "voice": {
-                    "enabled": True,
-                    "confidence_threshold": 0.8,
-                    "processing_timeout": 15,
-                },
-                "context": {
-                    "enabled": True,
-                    "decision_threshold": 0.9,
-                    "processing_timeout": 10,
-                },
+        }
+
+    def _get_multimodal_defaults(self) -> Dict[str, Any]:
+        """
+        Get default multimodal AI configuration values.
+
+        Returns vision, voice, and context processing settings.
+        Issue #620.
+        """
+        return {
+            "vision": {
+                "enabled": True,
+                "confidence_threshold": 0.7,
+                "processing_timeout": 30,
             },
+            "voice": {
+                "enabled": True,
+                "confidence_threshold": 0.8,
+                "processing_timeout": 15,
+            },
+            "context": {
+                "enabled": True,
+                "decision_threshold": 0.9,
+                "processing_timeout": 10,
+            },
+        }
+
+    def _get_hardware_defaults(self) -> Dict[str, Any]:
+        """
+        Get default hardware acceleration configuration values.
+
+        Returns NPU, GPU, and CPU acceleration settings.
+        Issue #620.
+        """
+        return {
             "npu": {
                 "enabled": False,
                 "device": "CPU",
@@ -142,6 +173,16 @@ class ConfigManager:
                     "memory_optimization": "enabled",
                 },
             },
+        }
+
+    def _get_system_defaults(self) -> Dict[str, Any]:
+        """
+        Get default system and network configuration values.
+
+        Returns system environment, network, memory, and task transport settings.
+        Issue #620.
+        """
+        return {
             "system": {
                 "environment": {"DISPLAY": ":0", "USER": "unknown", "SHELL": "unknown"},
                 "desktop_streaming": {
@@ -164,6 +205,16 @@ class ConfigManager:
                 "type": "redis",
                 "redis": {"host": "localhost", "port": 6379, "password": None, "db": 0},
             },
+        }
+
+    def _get_security_logging_defaults(self) -> Dict[str, Any]:
+        """
+        Get default security and logging configuration values.
+
+        Returns sandboxing, command filtering, and log rotation settings.
+        Issue #620.
+        """
+        return {
             "security": {
                 "enable_sandboxing": True,
                 "allowed_commands": [],
@@ -184,6 +235,32 @@ class ConfigManager:
                 "rotation": {"max_bytes": 10485760, "backup_count": 5},  # 10MB
             },
         }
+
+    def _get_default_config(self) -> Dict[str, Any]:
+        """
+        Get default configuration values.
+
+        Assembles complete default configuration from categorized helper methods.
+        Issue #620.
+        """
+        config = {"llm": self._get_llm_defaults()}
+
+        # Add infrastructure defaults
+        config.update(self._get_infrastructure_defaults())
+
+        # Add multimodal defaults
+        config["multimodal"] = self._get_multimodal_defaults()
+
+        # Add hardware defaults
+        config.update(self._get_hardware_defaults())
+
+        # Add system defaults
+        config.update(self._get_system_defaults())
+
+        # Add security and logging defaults
+        config.update(self._get_security_logging_defaults())
+
+        return config
 
     def get(self, key: str, default: Any = None) -> Any:
         """

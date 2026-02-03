@@ -189,9 +189,11 @@ class RedisNotificationChannel(AlertNotificationChannel):
                 "rule_id": alert.rule_id,
                 "rule_name": alert.rule_name,
                 "severity": alert.severity.value,
-                "resolved_at": alert.resolved_at.isoformat()
-                if alert.resolved_at
-                else datetime.now().isoformat(),
+                "resolved_at": (
+                    alert.resolved_at.isoformat()
+                    if alert.resolved_at
+                    else datetime.now().isoformat()
+                ),
                 "tags": alert.tags,
             }
 
@@ -254,9 +256,11 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
                     "rule_id": alert.rule_id,
                     "rule_name": alert.rule_name,
                     "severity": alert.severity.value,
-                    "resolved_at": alert.resolved_at.isoformat()
-                    if alert.resolved_at
-                    else datetime.now().isoformat(),
+                    "resolved_at": (
+                        alert.resolved_at.isoformat()
+                        if alert.resolved_at
+                        else datetime.now().isoformat()
+                    ),
                     "tags": alert.tags,
                 },
             }
@@ -327,10 +331,14 @@ class MonitoringAlertsManager:
             "websocket", {"enabled": False}
         )
 
-    def _load_default_rules(self):
-        """Load default alert rules based on system configuration"""
-        default_rules = [
-            # CPU Usage Alerts
+    def _create_cpu_alert_rules(self) -> List[AlertRule]:
+        """
+        Create CPU usage alert rules for VM0.
+
+        Returns list of AlertRule objects for high and critical CPU thresholds.
+        Issue #620.
+        """
+        return [
             AlertRule(
                 id="vm0_high_cpu",
                 name="VM0 High CPU Usage",
@@ -353,7 +361,16 @@ class MonitoringAlertsManager:
                 description="VM0 CPU usage exceeds 95%",
                 tags=["cpu", "performance", "vm0", "critical"],
             ),
-            # Memory Usage Alerts
+        ]
+
+    def _create_memory_alert_rules(self) -> List[AlertRule]:
+        """
+        Create memory usage alert rules for VM0.
+
+        Returns list of AlertRule objects for high and critical memory thresholds.
+        Issue #620.
+        """
+        return [
             AlertRule(
                 id="vm0_high_memory",
                 name="VM0 High Memory Usage",
@@ -376,7 +393,16 @@ class MonitoringAlertsManager:
                 description="VM0 memory usage exceeds 95%",
                 tags=["memory", "performance", "vm0", "critical"],
             ),
-            # Disk Usage Alerts
+        ]
+
+    def _create_disk_alert_rules(self) -> List[AlertRule]:
+        """
+        Create disk usage alert rules for VM0.
+
+        Returns list of AlertRule objects for high and critical disk thresholds.
+        Issue #620.
+        """
+        return [
             AlertRule(
                 id="vm0_high_disk",
                 name="VM0 High Disk Usage",
@@ -399,7 +425,16 @@ class MonitoringAlertsManager:
                 description="VM0 disk usage exceeds 95%",
                 tags=["disk", "storage", "vm0", "critical"],
             ),
-            # Load Average Alerts
+        ]
+
+    def _create_load_alert_rules(self) -> List[AlertRule]:
+        """
+        Create load average alert rules for VM0.
+
+        Returns list of AlertRule objects for high load thresholds.
+        Issue #620.
+        """
+        return [
             AlertRule(
                 id="vm0_high_load",
                 name="VM0 High Load Average",
@@ -411,7 +446,16 @@ class MonitoringAlertsManager:
                 description="VM0 1-minute load average exceeds 4.0",
                 tags=["load", "performance", "vm0"],
             ),
-            # Service Health Alerts
+        ]
+
+    def _create_service_alert_rules(self) -> List[AlertRule]:
+        """
+        Create service health alert rules.
+
+        Returns list of AlertRule objects for critical service availability monitoring.
+        Issue #620.
+        """
+        return [
             AlertRule(
                 id="backend_api_down",
                 name="Backend API Unavailable",
@@ -446,6 +490,22 @@ class MonitoringAlertsManager:
                 tags=["service", "llm", "high"],
             ),
         ]
+
+    def _load_default_rules(self):
+        """
+        Load default alert rules based on system configuration.
+
+        Aggregates rules from helper methods for CPU, memory, disk, load,
+        and service health monitoring. Issue #620.
+        """
+        default_rules: List[AlertRule] = []
+
+        # Collect rules from categorized helper methods
+        default_rules.extend(self._create_cpu_alert_rules())
+        default_rules.extend(self._create_memory_alert_rules())
+        default_rules.extend(self._create_disk_alert_rules())
+        default_rules.extend(self._create_load_alert_rules())
+        default_rules.extend(self._create_service_alert_rules())
 
         # Add rules to manager
         for rule in default_rules:
@@ -729,7 +789,8 @@ class MonitoringAlertsManager:
 
         # Issue #729: Infrastructure monitoring moved to SLM server
         # This legacy monitoring_alerts.py was replaced by Prometheus AlertManager (Issue #69)
-        # Infrastructure data now available via SLM API instead of backend.api.infrastructure_monitor
+        # Infrastructure data now available via SLM API instead of
+        # backend.api.infrastructure_monitor
         logger.warning(
             "⚠️ Infrastructure monitoring deprecated - use SLM server and Prometheus AlertManager"
         )
