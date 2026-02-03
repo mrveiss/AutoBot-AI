@@ -38,6 +38,7 @@ from api import (
     vnc_router,
     websocket_router,
 )
+from api.code_source import router as code_source_router
 from api.roles import router as roles_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -162,6 +163,7 @@ app.include_router(tls_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(code_sync_router, prefix="/api")
 app.include_router(roles_router, prefix="/api")
+app.include_router(code_source_router, prefix="/api")
 app.include_router(orchestration_router, prefix="/api")
 app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
