@@ -137,94 +137,142 @@ const handleTerminalData = (data: string) => {
   emit('data', data)
 }
 
-// Issue #749: Update line buffer based on input character
-const updateLineBuffer = (data: string) => {
+/**
+ * Issue #749: Handle Enter key press - resets the line buffer.
+ * Extracted from updateLineBuffer for readability.
+ */
+const handleEnterKey = (): void => {
+  currentLineBuffer.value = ''
+  cursorPosition.value = 0
+}
+
+/**
+ * Issue #749: Handle Backspace key (character code 127 or \x7f).
+ * Removes character before cursor position.
+ * Extracted from updateLineBuffer for readability.
+ */
+const handleBackspace = (): void => {
+  if (cursorPosition.value > 0) {
+    const before = currentLineBuffer.value.slice(0, cursorPosition.value - 1)
+    const after = currentLineBuffer.value.slice(cursorPosition.value)
+    currentLineBuffer.value = before + after
+    cursorPosition.value--
+  }
+}
+
+/**
+ * Issue #749: Handle Delete key (escape sequence \x1b[3~).
+ * Removes character at cursor position.
+ * Extracted from updateLineBuffer for readability.
+ */
+const handleDeleteKey = (): void => {
+  if (cursorPosition.value < currentLineBuffer.value.length) {
+    const before = currentLineBuffer.value.slice(0, cursorPosition.value)
+    const after = currentLineBuffer.value.slice(cursorPosition.value + 1)
+    currentLineBuffer.value = before + after
+  }
+}
+
+/**
+ * Issue #749: Handle arrow keys and Home/End navigation.
+ * Updates cursor position based on the escape sequence.
+ * Extracted from updateLineBuffer for readability.
+ * @param sequence - The escape sequence suffix (e.g., 'D' for left arrow)
+ */
+const handleArrowKeys = (sequence: string): void => {
+  switch (sequence) {
+    case 'D': // Left arrow
+      if (cursorPosition.value > 0) {
+        cursorPosition.value--
+      }
+      break
+    case 'C': // Right arrow
+      if (cursorPosition.value < currentLineBuffer.value.length) {
+        cursorPosition.value++
+      }
+      break
+    case 'H': // Home
+      cursorPosition.value = 0
+      break
+    case 'F': // End
+      cursorPosition.value = currentLineBuffer.value.length
+      break
+  }
+}
+
+/**
+ * Issue #749: Handle Ctrl+W - delete word backward.
+ * Removes the word before the cursor position.
+ * Extracted from updateLineBuffer for readability.
+ */
+const handleCtrlW = (): void => {
+  const before = currentLineBuffer.value.slice(0, cursorPosition.value)
+  const after = currentLineBuffer.value.slice(cursorPosition.value)
+  const match = before.match(/\S*\s*$/)
+  if (match) {
+    const deleteLen = match[0].length
+    currentLineBuffer.value = before.slice(0, before.length - deleteLen) + after
+    cursorPosition.value -= deleteLen
+  }
+}
+
+/**
+ * Issue #749: Insert a printable character at the cursor position.
+ * Extracted from updateLineBuffer for readability.
+ * @param char - The character to insert
+ */
+const insertPrintableChar = (char: string): void => {
+  const before = currentLineBuffer.value.slice(0, cursorPosition.value)
+  const after = currentLineBuffer.value.slice(cursorPosition.value)
+  currentLineBuffer.value = before + char + after
+  cursorPosition.value++
+}
+
+/**
+ * Issue #749: Update line buffer based on input character.
+ * Dispatches to helper functions for specific key handling.
+ * Refactored to comply with 50-line function limit per CLAUDE.md.
+ */
+const updateLineBuffer = (data: string): void => {
   // Handle Enter key - reset line buffer
   if (data === '\r' || data === '\n') {
-    currentLineBuffer.value = ''
-    cursorPosition.value = 0
+    handleEnterKey()
     return
   }
 
   // Handle Backspace (character code 127 or \x7f)
   if (data === '\x7f' || data === '\b') {
-    if (cursorPosition.value > 0) {
-      const before = currentLineBuffer.value.slice(0, cursorPosition.value - 1)
-      const after = currentLineBuffer.value.slice(cursorPosition.value)
-      currentLineBuffer.value = before + after
-      cursorPosition.value--
-    }
+    handleBackspace()
     return
   }
 
   // Handle Delete key (escape sequence)
   if (data === '\x1b[3~') {
-    if (cursorPosition.value < currentLineBuffer.value.length) {
-      const before = currentLineBuffer.value.slice(0, cursorPosition.value)
-      const after = currentLineBuffer.value.slice(cursorPosition.value + 1)
-      currentLineBuffer.value = before + after
-    }
+    handleDeleteKey()
     return
   }
 
   // Handle arrow keys for cursor movement
   if (data.startsWith('\x1b[')) {
-    const sequence = data.slice(2)
-    switch (sequence) {
-      case 'D': // Left arrow
-        if (cursorPosition.value > 0) {
-          cursorPosition.value--
-        }
-        break
-      case 'C': // Right arrow
-        if (cursorPosition.value < currentLineBuffer.value.length) {
-          cursorPosition.value++
-        }
-        break
-      case 'H': // Home
-        cursorPosition.value = 0
-        break
-      case 'F': // End
-        cursorPosition.value = currentLineBuffer.value.length
-        break
-    }
+    handleArrowKeys(data.slice(2))
     return
   }
 
-  // Handle Ctrl+C, Ctrl+D - reset line buffer
-  if (data === '\x03' || data === '\x04') {
-    currentLineBuffer.value = ''
-    cursorPosition.value = 0
-    return
-  }
-
-  // Handle Ctrl+U - clear line
-  if (data === '\x15') {
-    currentLineBuffer.value = ''
-    cursorPosition.value = 0
+  // Handle Ctrl+C, Ctrl+D, Ctrl+U - reset line buffer
+  if (data === '\x03' || data === '\x04' || data === '\x15') {
+    handleEnterKey()
     return
   }
 
   // Handle Ctrl+W - delete word backward
   if (data === '\x17') {
-    const before = currentLineBuffer.value.slice(0, cursorPosition.value)
-    const after = currentLineBuffer.value.slice(cursorPosition.value)
-    // Find last word boundary
-    const match = before.match(/\S*\s*$/)
-    if (match) {
-      const deleteLen = match[0].length
-      currentLineBuffer.value = before.slice(0, before.length - deleteLen) + after
-      cursorPosition.value -= deleteLen
-    }
+    handleCtrlW()
     return
   }
 
   // Normal printable character - insert at cursor position
   if (data.length === 1 && data.charCodeAt(0) >= 32) {
-    const before = currentLineBuffer.value.slice(0, cursorPosition.value)
-    const after = currentLineBuffer.value.slice(cursorPosition.value)
-    currentLineBuffer.value = before + data + after
-    cursorPosition.value++
+    insertPrintableChar(data)
   }
 }
 
