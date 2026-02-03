@@ -81,6 +81,36 @@ class RoleReportItem(BaseModel):
     status: str = "not_installed"
 
 
+class NodeRoleResponse(BaseModel):
+    """Node role assignment with status (Issue #779)."""
+
+    role_name: str
+    assignment_type: str = "auto"  # auto | manual
+    status: str = "not_installed"  # active | inactive | not_installed
+    current_version: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class NodeRolesResponse(BaseModel):
+    """All roles for a node (Issue #779)."""
+
+    node_id: str
+    detected_roles: List[str] = Field(default_factory=list)
+    role_versions: Dict[str, str] = Field(default_factory=dict)
+    listening_ports: List[PortInfo] = Field(default_factory=list)
+    roles: List[NodeRoleResponse] = Field(default_factory=list)
+
+
+class NodeRoleAssignRequest(BaseModel):
+    """Request to assign role to a node (Issue #779)."""
+
+    role_name: str
+    assignment_type: str = "manual"
+
+
 # =============================================================================
 # Node Schemas
 # =============================================================================
