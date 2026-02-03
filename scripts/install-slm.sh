@@ -373,13 +373,15 @@ setup_slm_backend() {
         sudo -u autobot "$SLM_SERVER_DIR/venv/bin/pip" install --quiet \
             -r "$SLM_SERVER_DIR/requirements.txt"
     else
-        # Install minimal dependencies for now
+        # Install minimal dependencies for now (fallback if requirements.txt missing)
+        # Issue #768: Ensure pydantic-settings is included for Pydantic v2 compatibility
         sudo -u autobot "$SLM_SERVER_DIR/venv/bin/pip" install --quiet \
             fastapi \
             uvicorn[standard] \
             sqlalchemy \
             aiosqlite \
             pydantic \
+            pydantic-settings \
             python-jose[cryptography] \
             passlib[bcrypt] \
             aiofiles \

@@ -10,6 +10,7 @@ aiosqlite>=0.17.0
 beautifulsoup4>=4.12.0
 pyyaml==6.0.1
 pydantic>=2.8.0
+pydantic-settings>=2.1.0          # Pydantic v2 settings management (Issue #768)
 websockets>=11.0.0
 
 # ===== MULTI-AGENT ARCHITECTURE DEPENDENCIES =====
