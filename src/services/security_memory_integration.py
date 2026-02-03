@@ -629,60 +629,24 @@ class SecurityMemoryIntegration:
             metadata,
         )
 
-    async def create_vulnerability_entity(
+    async def _build_and_store_vulnerability(
         self,
-        request: Optional[VulnerabilityRequest] = None,
-        *,
-        assessment_id: Optional[str] = None,
-        host_ip: Optional[str] = None,
-        cve_id: Optional[str] = None,
-        title: str = "",
-        severity: str = "unknown",
-        description: str = "",
-        affected_port: Optional[int] = None,
-        affected_service: Optional[str] = None,
-        references: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        assessment_id: str,
+        host_ip: str,
+        cve_id: Optional[str],
+        title: str,
+        severity: str,
+        description: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+        references: Optional[list[str]],
+        metadata: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
         """
-        Create a memory entity for a discovered vulnerability.
+        Build observations, store entity, and create relations for a vulnerability.
 
-        Args:
-            request: VulnerabilityRequest object (preferred).
-            assessment_id: Parent assessment ID. host_ip: Affected host IP.
-            cve_id: CVE ID. title: Title. severity: Level. description: Details.
-            affected_port: Port. affected_service: Service. references: URLs.
-            metadata: Additional metadata dict.
-
-        Returns:
-            dict[str, Any]: Created entity data.
+        Issue #620.
         """
-        params = self._extract_vulnerability_params(
-            request,
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
-        )
-        (
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
-        ) = params
-        await self.ensure_initialized()
         vuln_name = cve_id or title or "Unknown Vulnerability"
         entity_name = f"Vuln: {vuln_name} on {host_ip}"
         observations = self._build_vuln_observations(
@@ -711,6 +675,72 @@ class SecurityMemoryIntegration:
         )
         logger.info("Created vulnerability entity: %s", entity_name)
         return entity
+
+    async def create_vulnerability_entity(
+        self,
+        request: Optional[VulnerabilityRequest] = None,
+        *,
+        assessment_id: Optional[str] = None,
+        host_ip: Optional[str] = None,
+        cve_id: Optional[str] = None,
+        title: str = "",
+        severity: str = "unknown",
+        description: str = "",
+        affected_port: Optional[int] = None,
+        affected_service: Optional[str] = None,
+        references: Optional[list[str]] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """
+        Create a memory entity for a discovered vulnerability.
+
+        Args:
+            request: VulnerabilityRequest object (preferred).
+            assessment_id: Parent assessment ID. host_ip: Affected host IP.
+            cve_id: CVE ID. title: Title. severity: Level. description: Details.
+            affected_port: Port. affected_service: Service. references: URLs.
+            metadata: Additional metadata dict.
+
+        Returns:
+            dict[str, Any]: Created entity data.
+        """
+        (
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        ) = self._extract_vulnerability_params(
+            request,
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        )
+        await self.ensure_initialized()
+        return await self._build_and_store_vulnerability(
+            assessment_id,
+            host_ip,
+            cve_id,
+            title,
+            severity,
+            description,
+            affected_port,
+            affected_service,
+            references,
+            metadata,
+        )
 
     async def _create_security_relation(
         self,

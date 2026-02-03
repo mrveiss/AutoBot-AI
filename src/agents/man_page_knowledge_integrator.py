@@ -234,10 +234,9 @@ class ManPageParser:
 class ManPageKnowledgeIntegrator:
     """Main service for integrating man pages into machine-aware knowledge"""
 
-    def _get_priority_commands(self) -> list:
-        """Get priority commands list (Issue #398: extracted)."""
+    def _get_network_commands(self) -> list:
+        """Get network-related priority commands. Issue #620."""
         return [
-            # Network tools
             "ping",
             "curl",
             "wget",
@@ -252,7 +251,11 @@ class ManPageKnowledgeIntegrator:
             "ip",
             "iptables",
             "ufw",
-            # File operations
+        ]
+
+    def _get_file_operation_commands(self) -> list:
+        """Get file operation priority commands. Issue #620."""
+        return [
             "ls",
             "find",
             "grep",
@@ -271,11 +274,15 @@ class ManPageKnowledgeIntegrator:
             "zip",
             "unzip",
             "gzip",
-            # System monitoring
+        ]
+
+    def _get_system_monitoring_commands(self) -> list:
+        """Get system monitoring priority commands. Issue #620."""
+        return [
             "ps",
             "top",
             "htop",
-            "d",
+            "df",
             "du",
             "free",
             "uname",
@@ -287,7 +294,11 @@ class ManPageKnowledgeIntegrator:
             "systemctl",
             "service",
             "crontab",
-            # Development tools
+        ]
+
+    def _get_development_commands(self) -> list:
+        """Get development tool priority commands. Issue #620."""
+        return [
             "git",
             "python",
             "python3",
@@ -301,7 +312,11 @@ class ManPageKnowledgeIntegrator:
             "make",
             "gcc",
             "g++",
-            # Security tools
+        ]
+
+    def _get_security_commands(self) -> list:
+        """Get security tool priority commands. Issue #620."""
+        return [
             "ssh",
             "scp",
             "rsync",
@@ -316,6 +331,16 @@ class ManPageKnowledgeIntegrator:
             "userdel",
             "groupadd",
         ]
+
+    def _get_priority_commands(self) -> list:
+        """Get combined priority commands list. Issue #620."""
+        commands = []
+        commands.extend(self._get_network_commands())
+        commands.extend(self._get_file_operation_commands())
+        commands.extend(self._get_system_monitoring_commands())
+        commands.extend(self._get_development_commands())
+        commands.extend(self._get_security_commands())
+        return commands
 
     def __init__(self):
         """Initialize knowledge integrator (Issue #398: refactored)."""
