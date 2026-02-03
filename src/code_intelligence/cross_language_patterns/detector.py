@@ -425,19 +425,15 @@ class CrossLanguagePatternDetector:
 
         return mismatches
 
-    def _compare_dto_fields(
-        self, name: str, py_dto: Dict, ts_dto: Dict
+    def _find_missing_frontend_fields(
+        self, name: str, py_dto: Dict, ts_dto: Dict, py_fields: Dict, py_only: set
     ) -> List[DTOMismatch]:
-        """Compare DTO fields and find mismatches (Issue #665: extracted helper)."""
+        """
+        Find fields present in backend but missing from frontend.
+
+        Issue #620.
+        """
         mismatches = []
-
-        py_fields = {f["name"]: f for f in py_dto.get("fields", [])}
-        ts_fields = {f["name"]: f for f in ts_dto.get("fields", [])}
-
-        # Check for missing fields
-        py_only = set(py_fields.keys()) - set(ts_fields.keys())
-        ts_only = set(ts_fields.keys()) - set(py_fields.keys())
-
         for field_name in py_only:
             mismatches.append(
                 self._create_dto_mismatch(
@@ -451,7 +447,17 @@ class CrossLanguagePatternDetector:
                     recommendation=f"Add field '{field_name}' to frontend interface '{name}'",
                 )
             )
+        return mismatches
 
+    def _find_missing_backend_fields(
+        self, name: str, py_dto: Dict, ts_dto: Dict, ts_fields: Dict, ts_only: set
+    ) -> List[DTOMismatch]:
+        """
+        Find fields present in frontend but missing from backend.
+
+        Issue #620.
+        """
+        mismatches = []
         for field_name in ts_only:
             mismatches.append(
                 self._create_dto_mismatch(
@@ -468,9 +474,23 @@ class CrossLanguagePatternDetector:
                     ),
                 )
             )
+        return mismatches
 
-        # Check for type mismatches in common fields
-        common_fields = set(py_fields.keys()) & set(ts_fields.keys())
+    def _find_optional_mismatches(
+        self,
+        name: str,
+        py_dto: Dict,
+        ts_dto: Dict,
+        py_fields: Dict,
+        ts_fields: Dict,
+        common_fields: set,
+    ) -> List[DTOMismatch]:
+        """
+        Find fields with mismatched optional status between backend and frontend.
+
+        Issue #620.
+        """
+        mismatches = []
         for field_name in common_fields:
             py_field = py_fields[field_name]
             ts_field = ts_fields[field_name]
@@ -489,6 +509,30 @@ class CrossLanguagePatternDetector:
                         recommendation=f"Align optional status of field '{field_name}' between backend and frontend",
                     )
                 )
+        return mismatches
+
+    def _compare_dto_fields(
+        self, name: str, py_dto: Dict, ts_dto: Dict
+    ) -> List[DTOMismatch]:
+        """Compare DTO fields and find mismatches (Issue #665: extracted helper)."""
+        py_fields = {f["name"]: f for f in py_dto.get("fields", [])}
+        ts_fields = {f["name"]: f for f in ts_dto.get("fields", [])}
+
+        py_only = set(py_fields.keys()) - set(ts_fields.keys())
+        ts_only = set(ts_fields.keys()) - set(py_fields.keys())
+        common_fields = set(py_fields.keys()) & set(ts_fields.keys())
+
+        mismatches = self._find_missing_frontend_fields(
+            name, py_dto, ts_dto, py_fields, py_only
+        )
+        mismatches.extend(
+            self._find_missing_backend_fields(name, py_dto, ts_dto, ts_fields, ts_only)
+        )
+        mismatches.extend(
+            self._find_optional_mismatches(
+                name, py_dto, ts_dto, py_fields, ts_fields, common_fields
+            )
+        )
 
         return mismatches
 
@@ -580,29 +624,17 @@ class CrossLanguagePatternDetector:
 
         return duplications
 
-    async def _find_api_contract_mismatches(
-        self,
-        python_patterns: List[Dict],
-        typescript_patterns: List[Dict],
+    def _find_orphaned_endpoints(
+        self, backend_endpoints: Dict, frontend_calls: Dict
     ) -> List[APIContractMismatch]:
-        """Find mismatches between backend endpoints and frontend API calls."""
+        """
+        Find backend endpoints that have no matching frontend call.
+
+        Issue #620.
+        """
         mismatches = []
-
-        # Get all API patterns
-        backend_endpoints = {
-            (p.get("method", "GET"), self._normalize_path(p.get("path", ""))): p
-            for p in python_patterns
-            if p.get("type") == PatternType.API_ENDPOINT
-        }
-
-        frontend_calls = {
-            (p.get("method", "GET"), self._normalize_path(p.get("path", ""))): p
-            for p in typescript_patterns
-            if p.get("type") == PatternType.API_CALL
-        }
-
-        # Find orphaned endpoints (backend has, frontend doesn't call)
         backend_only = set(backend_endpoints.keys()) - set(frontend_calls.keys())
+
         for method, path in backend_only:
             ep = backend_endpoints[(method, path)]
             mismatches.append(
@@ -618,12 +650,21 @@ class CrossLanguagePatternDetector:
                     recommendation="Consider removing unused endpoint or add frontend integration",
                 )
             )
+        return mismatches
 
-        # Find missing endpoints (frontend calls, backend doesn't have)
+    def _find_missing_endpoints(
+        self, backend_endpoints: Dict, frontend_calls: Dict
+    ) -> List[APIContractMismatch]:
+        """
+        Find frontend API calls that have no matching backend endpoint.
+
+        Issue #620.
+        """
+        mismatches = []
         frontend_only = set(frontend_calls.keys()) - set(backend_endpoints.keys())
+
         for method, path in frontend_only:
             call = frontend_calls[(method, path)]
-            # Skip dynamic paths
             if call.get("is_dynamic"):
                 continue
 
@@ -640,6 +681,30 @@ class CrossLanguagePatternDetector:
                     recommendation="Create backend endpoint or fix frontend API call",
                 )
             )
+        return mismatches
+
+    async def _find_api_contract_mismatches(
+        self,
+        python_patterns: List[Dict],
+        typescript_patterns: List[Dict],
+    ) -> List[APIContractMismatch]:
+        """Find mismatches between backend endpoints and frontend API calls."""
+        backend_endpoints = {
+            (p.get("method", "GET"), self._normalize_path(p.get("path", ""))): p
+            for p in python_patterns
+            if p.get("type") == PatternType.API_ENDPOINT
+        }
+
+        frontend_calls = {
+            (p.get("method", "GET"), self._normalize_path(p.get("path", ""))): p
+            for p in typescript_patterns
+            if p.get("type") == PatternType.API_CALL
+        }
+
+        mismatches = self._find_orphaned_endpoints(backend_endpoints, frontend_calls)
+        mismatches.extend(
+            self._find_missing_endpoints(backend_endpoints, frontend_calls)
+        )
 
         return mismatches
 
@@ -751,6 +816,82 @@ class CrossLanguagePatternDetector:
         # Apply limit
         return combined[:MAX_PATTERNS_FOR_EMBEDDING]
 
+    def _build_pattern_metadata(self, pattern: Dict) -> Dict[str, str]:
+        """
+        Build metadata dictionary for a single pattern.
+
+        Issue #620.
+        """
+        return {
+            "language": pattern["language"],
+            "type": str(pattern["pattern"].get("type", "unknown")),
+            "name": pattern["pattern"].get("name", ""),
+        }
+
+    async def _batch_insert_patterns(self, collection, patterns: List[Dict]) -> bool:
+        """
+        Attempt batch insertion of patterns into ChromaDB.
+
+        Returns True on success, False on failure. Issue #620.
+        """
+        try:
+            await collection.add(
+                ids=[p["id"] for p in patterns],
+                embeddings=[p["embedding"] for p in patterns],
+                documents=[p["normalized"] for p in patterns],
+                metadatas=[self._build_pattern_metadata(p) for p in patterns],
+            )
+            return True
+        except Exception as batch_error:
+            logger.warning(
+                "Batch insertion failed (%s), falling back to individual insertion",
+                batch_error,
+            )
+            return False
+
+    async def _individual_insert_patterns(
+        self, collection, patterns: List[Dict]
+    ) -> List[Dict]:
+        """
+        Insert patterns individually as fallback when batch fails.
+
+        Issue #620.
+        """
+        stored_patterns = []
+        for pattern in patterns:
+            try:
+                await collection.add(
+                    ids=[pattern["id"]],
+                    embeddings=[pattern["embedding"]],
+                    documents=[pattern["normalized"]],
+                    metadatas=[self._build_pattern_metadata(pattern)],
+                )
+                stored_patterns.append(pattern)
+            except Exception as individual_error:
+                logger.debug(
+                    "Failed to store pattern %s: %s", pattern["id"], individual_error
+                )
+
+        self._log_individual_insert_result(stored_patterns, patterns)
+        return stored_patterns
+
+    def _log_individual_insert_result(
+        self, stored_patterns: List[Dict], all_patterns: List[Dict]
+    ) -> None:
+        """
+        Log the result of individual pattern insertion.
+
+        Issue #620.
+        """
+        if stored_patterns:
+            logger.info(
+                "Recovered %d/%d patterns via individual insertion",
+                len(stored_patterns),
+                len(all_patterns),
+            )
+        else:
+            logger.error("All pattern insertions failed")
+
     async def _store_patterns_in_chromadb(
         self,
         collection,
@@ -766,60 +907,60 @@ class CrossLanguagePatternDetector:
         Returns:
             List of successfully stored patterns
         """
-        # Try batch insertion first
-        try:
-            await collection.add(
-                ids=[p["id"] for p in patterns],
-                embeddings=[p["embedding"] for p in patterns],
-                documents=[p["normalized"] for p in patterns],
-                metadatas=[
-                    {
-                        "language": p["language"],
-                        "type": str(p["pattern"].get("type", "unknown")),
-                        "name": p["pattern"].get("name", ""),
-                    }
-                    for p in patterns
-                ],
-            )
+        if await self._batch_insert_patterns(collection, patterns):
             return patterns
-        except Exception as batch_error:
-            logger.warning(
-                "Batch insertion failed (%s), falling back to individual insertion",
-                batch_error,
-            )
 
-        # Fall back to individual insertion for error recovery
-        stored_patterns = []
-        for pattern in patterns:
-            try:
-                await collection.add(
-                    ids=[pattern["id"]],
-                    embeddings=[pattern["embedding"]],
-                    documents=[pattern["normalized"]],
-                    metadatas=[
-                        {
-                            "language": pattern["language"],
-                            "type": str(pattern["pattern"].get("type", "unknown")),
-                            "name": pattern["pattern"].get("name", ""),
-                        }
-                    ],
+        return await self._individual_insert_patterns(collection, patterns)
+
+    def _create_pattern_match(
+        self, py_pattern: Dict, ts_pattern: Dict, similarity: float
+    ) -> PatternMatch:
+        """
+        Create a PatternMatch object from Python and TypeScript patterns.
+
+        Issue #620.
+        """
+        return PatternMatch(
+            pattern_id=f"match_{uuid.uuid4().hex[:8]}",
+            similarity_score=similarity,
+            source_location=py_pattern["pattern"].get("location"),
+            target_location=ts_pattern["pattern"].get("location"),
+            source_code=py_pattern["pattern"].get("code", "")[:300],
+            target_code=ts_pattern["pattern"].get("code", "")[:300],
+            match_type="semantic",
+            confidence=similarity,
+            metadata={
+                "python_name": py_pattern["pattern"].get("name"),
+                "typescript_name": ts_pattern["pattern"].get("name"),
+                "pattern_type": str(py_pattern["pattern"].get("type")),
+            },
+        )
+
+    def _process_query_results(
+        self, results: Dict, py_pattern: Dict, ts_pattern_lookup: Dict
+    ) -> List[PatternMatch]:
+        """
+        Process ChromaDB query results and create pattern matches.
+
+        Issue #620.
+        """
+        matches = []
+        if not results or not results.get("distances"):
+            return matches
+
+        for distance, doc_id in zip(results["distances"][0], results["ids"][0]):
+            similarity = 1 - distance
+
+            if similarity < SIMILARITY_MEDIUM:
+                continue
+
+            ts_pattern = ts_pattern_lookup.get(doc_id)
+            if ts_pattern:
+                matches.append(
+                    self._create_pattern_match(py_pattern, ts_pattern, similarity)
                 )
-                stored_patterns.append(pattern)
-            except Exception as individual_error:
-                logger.debug(
-                    "Failed to store pattern %s: %s", pattern["id"], individual_error
-                )
 
-        if stored_patterns:
-            logger.info(
-                "Recovered %d/%d patterns via individual insertion",
-                len(stored_patterns),
-                len(patterns),
-            )
-        else:
-            logger.error("All pattern insertions failed")
-
-        return stored_patterns
+        return matches
 
     async def _query_cross_language_matches(
         self,
@@ -841,44 +982,16 @@ class CrossLanguagePatternDetector:
         matches = []
         ts_pattern_lookup = {p["id"]: p for p in typescript_patterns}
 
-        for py_p in python_patterns[:50]:  # Limit queries
+        for py_p in python_patterns[:50]:
             try:
                 results = await collection.query(
                     query_embeddings=[py_p["embedding"]],
                     n_results=5,
                     where={"language": "typescript"},
                 )
-
-                if not results or not results.get("distances"):
-                    continue
-
-                for distance, doc_id in zip(results["distances"][0], results["ids"][0]):
-                    similarity = 1 - distance  # Convert distance to similarity
-
-                    if similarity < SIMILARITY_MEDIUM:
-                        continue
-
-                    ts_pattern = ts_pattern_lookup.get(doc_id)
-                    if ts_pattern:
-                        matches.append(
-                            PatternMatch(
-                                pattern_id=f"match_{uuid.uuid4().hex[:8]}",
-                                similarity_score=similarity,
-                                source_location=py_p["pattern"].get("location"),
-                                target_location=ts_pattern["pattern"].get("location"),
-                                source_code=py_p["pattern"].get("code", "")[:300],
-                                target_code=ts_pattern["pattern"].get("code", "")[:300],
-                                match_type="semantic",
-                                confidence=similarity,
-                                metadata={
-                                    "python_name": py_p["pattern"].get("name"),
-                                    "typescript_name": ts_pattern["pattern"].get(
-                                        "name"
-                                    ),
-                                    "pattern_type": str(py_p["pattern"].get("type")),
-                                },
-                            )
-                        )
+                matches.extend(
+                    self._process_query_results(results, py_p, ts_pattern_lookup)
+                )
             except Exception as e:
                 logger.warning("Query failed for pattern %s: %s", py_p["id"], e)
 

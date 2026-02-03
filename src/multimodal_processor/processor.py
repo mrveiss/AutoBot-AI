@@ -56,7 +56,8 @@ class UnifiedMultiModalProcessor:
 
         # Enable mixed precision for RTX 4070 optimization
         self.use_amp = self.performance_monitor.enable_mixed_precision(enable=True)
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        # Use torch.amp.GradScaler('cuda') instead of deprecated torch.cuda.amp.GradScaler()
+        self.scaler = torch.amp.GradScaler("cuda") if self.use_amp else None
 
         if self.use_amp:
             self.logger.info("Mixed precision (AMP) enabled for RTX 4070 optimization")
@@ -622,7 +623,7 @@ class UnifiedMultiModalProcessor:
         try:
             # Use mixed precision if available
             if self.use_amp and torch.cuda.is_available():
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     for inp in batch:
                         result = await self.vision_processor.process(inp)
                         results.append(result)
@@ -663,7 +664,7 @@ class UnifiedMultiModalProcessor:
         try:
             # Use mixed precision if available
             if self.use_amp and torch.cuda.is_available():
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     for inp in batch:
                         result = await self.voice_processor.process(inp)
                         results.append(result)
