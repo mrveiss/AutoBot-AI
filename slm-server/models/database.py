@@ -268,6 +268,11 @@ class NodeEvent(Base):
     details = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Error resolution tracking (Issue #563)
+    resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(255), nullable=True)
+
 
 class Certificate(Base):
     """Certificate tracking for mTLS."""
