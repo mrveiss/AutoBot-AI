@@ -598,6 +598,53 @@ class AIHardwareAccelerator:
             # Fallback to CPU for unsupported GPU tasks
             return await self._process_on_cpu(task)
 
+    def _initialize_clip_model(self, device: torch.device) -> None:
+        """
+        Initialize CLIP model and processor for image embeddings.
+
+        Loads openai/clip-vit-base-patch32 with appropriate dtype. Issue #620.
+        """
+        self.clip_processor = CLIPProcessor.from_pretrained(
+            "openai/clip-vit-base-patch32"
+        )
+        self.clip_model = CLIPModel.from_pretrained(
+            "openai/clip-vit-base-patch32",
+            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+        ).to(device)
+        self.clip_model.eval()
+
+    def _initialize_wav2vec_model(self, device: torch.device) -> None:
+        """
+        Initialize Wav2Vec2 model and processor for audio embeddings.
+
+        Loads facebook/wav2vec2-base-960h with appropriate dtype. Issue #620.
+        """
+        self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
+            "facebook/wav2vec2-base-960h"
+        )
+        self.wav2vec_model = Wav2Vec2Model.from_pretrained(
+            "facebook/wav2vec2-base-960h",
+            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+        ).to(device)
+        self.wav2vec_model.eval()
+
+    def _initialize_projection_matrices(self, device: torch.device) -> None:
+        """
+        Initialize projection matrices for unified embedding space.
+
+        Creates linear projections for text (384), image (512), and audio (768)
+        dimensions to unified space. Issue #620.
+        """
+        self.text_projection = torch.nn.Linear(
+            HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim
+        ).to(device)
+        self.image_projection = torch.nn.Linear(
+            HardwareAcceleratorConfig.CLIP_OUTPUT_DIM, self.unified_dim
+        ).to(device)
+        self.audio_projection = torch.nn.Linear(
+            HardwareAcceleratorConfig.WAV2VEC_OUTPUT_DIM, self.unified_dim
+        ).to(device)
+
     async def _initialize_multimodal_models(self):
         """Initialize multi-modal models for embeddings."""
         if not MULTIMODAL_MODELS_AVAILABLE:
@@ -610,49 +657,10 @@ class AIHardwareAccelerator:
         logger.info("Initializing multi-modal models on %s", device)
 
         try:
-            # Initialize CLIP for image embeddings
-            self.clip_processor = CLIPProcessor.from_pretrained(
-                "openai/clip-vit-base-patch32"
-            )
-            self.clip_model = CLIPModel.from_pretrained(
-                "openai/clip-vit-base-patch32",
-                torch_dtype=(
-                    torch.float16 if torch.cuda.is_available() else torch.float32
-                ),
-            ).to(device)
-            self.clip_model.eval()
-
-            # Initialize Wav2Vec2 for audio embeddings
-            self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
-                "facebook/wav2vec2-base-960h"
-            )
-            self.wav2vec_model = Wav2Vec2Model.from_pretrained(
-                "facebook/wav2vec2-base-960h",
-                torch_dtype=(
-                    torch.float16 if torch.cuda.is_available() else torch.float32
-                ),
-            ).to(device)
-            self.wav2vec_model.eval()
-
-            # Initialize projection matrices for unified space (Issue #376 - use named constants)
-            # CLIP: 512 dims, Wav2Vec2: 768 dims, Text: varies
-            self.text_projection = torch.nn.Linear(
-                HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim
-            ).to(
-                device
-            )  # MiniLM outputs 384
-            self.image_projection = torch.nn.Linear(
-                HardwareAcceleratorConfig.CLIP_OUTPUT_DIM, self.unified_dim
-            ).to(
-                device
-            )  # CLIP outputs 512
-            self.audio_projection = torch.nn.Linear(
-                HardwareAcceleratorConfig.WAV2VEC_OUTPUT_DIM, self.unified_dim
-            ).to(
-                device
-            )  # Wav2Vec2 outputs 768
-
-            logger.info("✅ Multi-modal models initialized successfully")
+            self._initialize_clip_model(device)
+            self._initialize_wav2vec_model(device)
+            self._initialize_projection_matrices(device)
+            logger.info("Multi-modal models initialized successfully")
         except Exception as e:
             logger.error("Failed to initialize multi-modal models: %s", e)
 

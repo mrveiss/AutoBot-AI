@@ -652,6 +652,21 @@ class SessionMixin:
             logger.error("Error deleting chat session %s: %s", session_id, e)
             return False
 
+    async def _update_redis_session_cache(
+        self, session_id: str, chat_data: Dict[str, Any]
+    ) -> None:
+        """
+        Update the Redis cache for a session.
+
+        Silently handles Redis errors to avoid failing the update. Issue #620.
+        """
+        if self.redis_client:
+            try:
+                cache_key = f"chat:session:{session_id}"
+                await self._async_cache_session(cache_key, chat_data)
+            except Exception as e:
+                logger.error("Failed to update Redis cache: %s", e)
+
     async def update_session(self, session_id: str, updates: Dict[str, Any]) -> bool:
         """
         Update session metadata (name, etc).
@@ -665,17 +680,12 @@ class SessionMixin:
         """
         try:
             chats_directory = self._get_chats_directory()
-
-            # Try new format first
-            chat_file = f"{chats_directory}/{session_id}_chat.json"
-            file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-            if not file_exists:
-                # Try old format
-                chat_file = f"{chats_directory}/chat_{session_id}.json"
-                old_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-                if not old_exists:
-                    logger.warning("Session %s not found for update", session_id)
-                    return False
+            chat_file = await self._resolve_session_file_path(
+                session_id, chats_directory
+            )
+            if not chat_file:
+                logger.warning("Session %s not found for update", session_id)
+                return False
 
             # Load existing data
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
@@ -692,14 +702,7 @@ class SessionMixin:
             async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
                 await f.write(encrypted_data)
 
-            # Update Redis cache
-            if self.redis_client:
-                try:
-                    cache_key = f"chat:session:{session_id}"
-                    await self._async_cache_session(cache_key, chat_data)
-                except Exception as e:
-                    logger.error("Failed to update Redis cache: %s", e)
-
+            await self._update_redis_session_cache(session_id, chat_data)
             logger.info("Session %s updated successfully", session_id)
             return True
 

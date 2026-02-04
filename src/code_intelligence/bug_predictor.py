@@ -1047,6 +1047,48 @@ class BugPredictor(_BaseClass):
     # Issue #554: Async Semantic Analysis Methods
     # =========================================================================
 
+    def _collect_bug_patterns_from_cache(self) -> list:
+        """
+        Collect bug patterns from the bug history cache.
+
+        Extracts pattern IDs, file paths, and messages from cached bug data.
+        Limits to 5 patterns per file for performance. Issue #620.
+        """
+        bug_patterns = []
+        for file_path, bugs in (self._bug_history_cache or {}).items():
+            for bug in bugs[:5]:  # Limit per file for performance
+                pattern_id = f"{file_path}:{bug.get('hash', 'unknown')}"
+                message = bug.get("message", "")
+                bug_patterns.append(
+                    {
+                        "id": pattern_id,
+                        "file": file_path,
+                        "message": message,
+                    }
+                )
+        return bug_patterns
+
+    def _filter_valid_embeddings(
+        self, bug_patterns: list, texts: list, embeddings: list
+    ) -> tuple:
+        """
+        Filter valid embeddings from batch results.
+
+        Returns tuple of (valid_ids, valid_embeddings, valid_texts, valid_metadata)
+        containing only successfully generated embeddings. Issue #620.
+        """
+        valid_ids = []
+        valid_embeddings = []
+        valid_texts = []
+        valid_metadata = []
+        for i, emb in enumerate(embeddings):
+            if emb is not None:
+                valid_ids.append(bug_patterns[i]["id"])
+                valid_embeddings.append(emb)
+                valid_texts.append(texts[i])
+                valid_metadata.append({"file": bug_patterns[i]["file"]})
+        return valid_ids, valid_embeddings, valid_texts, valid_metadata
+
     async def _learn_bug_patterns_async(self) -> None:
         """
         Learn bug patterns from historical bug fix commits.
@@ -1060,39 +1102,20 @@ class BugPredictor(_BaseClass):
         if self._bug_history_cache is None:
             self._build_bug_history_cache()
 
-        # Collect code snippets from bug fixes
-        bug_patterns = []
-        for file_path, bugs in (self._bug_history_cache or {}).items():
-            for bug in bugs[:5]:  # Limit per file for performance
-                pattern_id = f"{file_path}:{bug.get('hash', 'unknown')}"
-                message = bug.get("message", "")
-                bug_patterns.append(
-                    {
-                        "id": pattern_id,
-                        "file": file_path,
-                        "message": message,
-                    }
-                )
-
+        bug_patterns = self._collect_bug_patterns_from_cache()
         if not bug_patterns:
             logger.debug("No bug patterns found to learn from")
             return
 
-        # Store patterns in vector DB
         texts = [f"Bug fix in {p['file']}: {p['message']}" for p in bug_patterns]
         embeddings = await self._get_embeddings_batch(texts)
 
-        # Filter out failed embeddings and store valid ones
-        valid_ids = []
-        valid_embeddings = []
-        valid_texts = []
-        valid_metadata = []
-        for i, emb in enumerate(embeddings):
-            if emb is not None:
-                valid_ids.append(bug_patterns[i]["id"])
-                valid_embeddings.append(emb)
-                valid_texts.append(texts[i])
-                valid_metadata.append({"file": bug_patterns[i]["file"]})
+        (
+            valid_ids,
+            valid_embeddings,
+            valid_texts,
+            valid_metadata,
+        ) = self._filter_valid_embeddings(bug_patterns, texts, embeddings)
 
         if valid_embeddings:
             await self._store_vectors(

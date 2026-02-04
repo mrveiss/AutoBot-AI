@@ -42,58 +42,66 @@ class InteractiveTerminalAgent:
         self.start_time = None
         self.terminal_size = (80, 24)  # cols, rows
 
-    async def start_session(self, command: str, env: dict = None, cwd: str = None):
-        """Start an interactive terminal session"""
+    def _setup_pty(self) -> None:
+        """Create and configure pseudo-terminal for session. Issue #620."""
+        self.master_fd, self.slave_fd = pty.openpty()
+        self._set_terminal_size(self.terminal_size[0], self.terminal_size[1])
+        flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+    def _prepare_env_vars(self, env: Optional[dict]) -> dict:
+        """Prepare environment variables for terminal session. Issue #620."""
+        env_vars = os.environ.copy()
+        if env:
+            env_vars.update(env)
+        env_vars["TERM"] = "xterm-256color"
+        return env_vars
+
+    async def _spawn_process(
+        self, command: str, env_vars: dict, cwd: Optional[str]
+    ) -> None:
+        """Spawn the subprocess attached to PTY. Issue #620."""
+        self.process = await asyncio.create_subprocess_exec(
+            "/bin/bash",
+            "-c",
+            command,
+            stdin=self.slave_fd,
+            stdout=self.slave_fd,
+            stderr=self.slave_fd,
+            env=env_vars,
+            cwd=cwd or os.getcwd(),
+            preexec_fn=os.setsid,
+        )
+
+    async def _notify_session_started(self, command: str) -> None:
+        """Publish session started event. Issue #620."""
+        await event_manager.publish(
+            "terminal_session",
+            {
+                "chat_id": self.chat_id,
+                "status": "started",
+                "command": command,
+                "pid": self.process.pid,
+            },
+        )
+
+    async def start_session(
+        self, command: str, env: dict = None, cwd: str = None
+    ) -> None:
+        """Start an interactive terminal session."""
         try:
-            # Create pseudo-terminal
-            self.master_fd, self.slave_fd = pty.openpty()
-
-            # Set terminal size
-            self._set_terminal_size(self.terminal_size[0], self.terminal_size[1])
-
-            # Make master_fd non-blocking
-            flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
-            fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
-            # Prepare environment
-            env_vars = os.environ.copy()
-            if env:
-                env_vars.update(env)
-
-            # Set TERM environment variable for proper terminal support
-            env_vars["TERM"] = "xterm-256color"
-
-            # Start process with PTY
-            self.process = await asyncio.create_subprocess_exec(
-                "/bin/bash",
-                "-c",
-                command,
-                stdin=self.slave_fd,
-                stdout=self.slave_fd,
-                stderr=self.slave_fd,
-                env=env_vars,
-                cwd=cwd or os.getcwd(),
-                preexec_fn=os.setsid,
-            )
+            self._setup_pty()
+            env_vars = self._prepare_env_vars(env)
+            await self._spawn_process(command, env_vars, cwd)
 
             self.session_active = True
             self.start_time = time.time()
 
-            # Notify session started
-            await event_manager.publish(
-                "terminal_session",
-                {
-                    "chat_id": self.chat_id,
-                    "status": "started",
-                    "command": command,
-                    "pid": self.process.pid,
-                },
-            )
-
-            # Start output streaming
+            await self._notify_session_started(command)
             asyncio.create_task(self._stream_output())
-
-            logger.info("Started terminal session for chat %s: %s", self.chat_id, command)
+            logger.info(
+                "Started terminal session for chat %s: %s", self.chat_id, command
+            )
 
         except Exception as e:
             logger.error("Failed to start terminal session: %s", e)
@@ -294,8 +302,7 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "status": "user_control",
                 "message": (
-                    "🎮 You now have control of the terminal. "
-                    "Type commands directly."
+                    "🎮 You now have control of the terminal. " "Type commands directly."
                 ),
             },
         )
@@ -327,9 +334,9 @@ class InteractiveTerminalAgent:
     def _get_signal_map(self) -> Dict[str, int]:
         """Get signal type to signal number mapping (Issue #334 - extracted helper)."""
         return {
-            "interrupt": 2,   # SIGINT (Ctrl+C)
-            "quit": 3,        # SIGQUIT (Ctrl+\)
-            "suspend": 20,    # SIGTSTP (Ctrl+Z)
+            "interrupt": 2,  # SIGINT (Ctrl+C)
+            "quit": 3,  # SIGQUIT (Ctrl+\)
+            "suspend": 20,  # SIGTSTP (Ctrl+Z)
         }
 
     async def send_signal(self, signal_type: str):
