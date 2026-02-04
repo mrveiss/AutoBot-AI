@@ -215,6 +215,51 @@ def generate_benchmark_recommendations(
     return recommendations
 
 
+async def _run_benchmark_tests(
+    capabilities: GPUCapabilities,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Execute all benchmark tests based on GPU capabilities.
+
+    Runs memory bandwidth, compute performance, and optional
+    mixed precision and tensor core tests. Issue #620.
+
+    Args:
+        capabilities: GPU capabilities to determine which tests to run
+
+    Returns:
+        Dictionary mapping test names to their results
+    """
+    tests = {}
+
+    tests["memory_bandwidth"] = await benchmark_memory_bandwidth()
+    tests["compute_performance"] = await benchmark_compute_performance()
+
+    if capabilities.mixed_precision:
+        tests["mixed_precision"] = await benchmark_mixed_precision()
+
+    if capabilities.tensor_cores:
+        tests["tensor_core"] = await benchmark_tensor_cores()
+
+    return tests
+
+
+def _calculate_overall_score(benchmark_tests: Dict[str, Dict[str, Any]]) -> float:
+    """
+    Calculate the overall benchmark score from individual test results.
+
+    Computes the average score across all benchmark tests. Issue #620.
+
+    Args:
+        benchmark_tests: Dictionary of test results with scores
+
+    Returns:
+        Average score as a float, or 0.0 if no scores available
+    """
+    scores = [test.get("score", 0) for test in benchmark_tests.values()]
+    return sum(scores) / len(scores) if scores else 0.0
+
+
 async def run_comprehensive_benchmark(
     capabilities: GPUCapabilities,
 ) -> Dict[str, Any]:
@@ -230,37 +275,10 @@ async def run_comprehensive_benchmark(
             "recommendations": [],
         }
 
-        # Memory bandwidth test
-        memory_bandwidth = await benchmark_memory_bandwidth()
-        benchmark_results["benchmark_tests"]["memory_bandwidth"] = memory_bandwidth
-
-        # Compute performance test
-        compute_performance = await benchmark_compute_performance()
-        benchmark_results["benchmark_tests"][
-            "compute_performance"
-        ] = compute_performance
-
-        # Mixed precision performance test
-        if capabilities.mixed_precision:
-            mixed_precision_perf = await benchmark_mixed_precision()
-            benchmark_results["benchmark_tests"][
-                "mixed_precision"
-            ] = mixed_precision_perf
-
-        # Tensor Core performance test
-        if capabilities.tensor_cores:
-            tensor_core_perf = await benchmark_tensor_cores()
-            benchmark_results["benchmark_tests"]["tensor_core"] = tensor_core_perf
-
-        # Calculate overall score
-        scores = [
-            test.get("score", 0)
-            for test in benchmark_results["benchmark_tests"].values()
-        ]
-        if scores:
-            benchmark_results["overall_score"] = sum(scores) / len(scores)
-
-        # Generate recommendations
+        benchmark_results["benchmark_tests"] = await _run_benchmark_tests(capabilities)
+        benchmark_results["overall_score"] = _calculate_overall_score(
+            benchmark_results["benchmark_tests"]
+        )
         benchmark_results["recommendations"] = generate_benchmark_recommendations(
             benchmark_results, capabilities
         )

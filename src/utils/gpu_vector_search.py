@@ -658,6 +658,58 @@ class GPUVectorIndex:
             logger.error("Failed to save index: %s", e)
             return False
 
+    async def _load_faiss_index(self, load_dir: Path) -> Any:
+        """
+        Load FAISS index from disk and transfer to GPU if configured.
+
+        Reads the CPU index from disk and optionally transfers it to GPU
+        based on configuration settings. Issue #620.
+
+        Args:
+            load_dir: Directory containing the index files
+
+        Returns:
+            The loaded FAISS index (GPU or CPU)
+        """
+        cpu_index = await asyncio.to_thread(
+            faiss.read_index, str(load_dir / "index.faiss")
+        )
+
+        if self.config.use_gpu and FAISS_GPU_AVAILABLE:
+            self.gpu_resources = faiss.StandardGpuResources()
+            self.index = faiss.index_cpu_to_gpu(
+                self.gpu_resources, self.config.gpu_device, cpu_index
+            )
+            self.backend = SearchBackend.FAISS_GPU
+        else:
+            self.index = cpu_index
+            self.backend = SearchBackend.FAISS_CPU
+
+        return self.index
+
+    async def _load_id_mappings(self, load_dir: Path) -> None:
+        """
+        Load ID mappings from disk and rebuild reverse mappings.
+
+        Reads the JSON file containing ID-to-document mappings and
+        reconstructs internal state. Issue #620.
+
+        Args:
+            load_dir: Directory containing the id_map.json file
+        """
+        import json
+
+        id_map_path = load_dir / "id_map.json"
+
+        def _read_id_map():
+            with open(id_map_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        raw_map = await asyncio.to_thread(_read_id_map)
+        self.id_map = {int(k): v for k, v in raw_map.items()}
+        self.reverse_id_map = {v: int(k) for k, v in raw_map.items()}
+        self.next_id = max(self.id_map.keys()) + 1 if self.id_map else 0
+
     async def load(self, path: Optional[str] = None) -> bool:
         """Load index from disk."""
         load_path = path or self.config.index_path
@@ -676,36 +728,8 @@ class GPUVectorIndex:
                 logger.warning("No index file found at %s", load_path)
                 return False
 
-            # Load CPU index
-            cpu_index = await asyncio.to_thread(
-                faiss.read_index, str(load_dir / "index.faiss")
-            )
-
-            # Transfer to GPU if configured
-            if self.config.use_gpu and FAISS_GPU_AVAILABLE:
-                self.gpu_resources = faiss.StandardGpuResources()
-                self.index = faiss.index_cpu_to_gpu(
-                    self.gpu_resources, self.config.gpu_device, cpu_index
-                )
-                self.backend = SearchBackend.FAISS_GPU
-            else:
-                self.index = cpu_index
-                self.backend = SearchBackend.FAISS_CPU
-
-            # Load ID mappings
-            import json
-
-            # Issue #358 - avoid blocking
-            id_map_path = load_dir / "id_map.json"
-
-            def _read_id_map():
-                with open(id_map_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-
-            raw_map = await asyncio.to_thread(_read_id_map)
-            self.id_map = {int(k): v for k, v in raw_map.items()}
-            self.reverse_id_map = {v: int(k) for k, v in raw_map.items()}
-            self.next_id = max(self.id_map.keys()) + 1 if self.id_map else 0
+            await self._load_faiss_index(load_dir)
+            await self._load_id_mappings(load_dir)
 
             self.is_trained = True
             logger.info(

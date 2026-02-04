@@ -264,6 +264,61 @@ class SessionListingMixin:
             return filename.replace("_terminal_transcript.txt", "")
         return None
 
+    def _build_empty_chat_data(self, session_id: str, filename: str) -> Dict[str, Any]:
+        """Build empty chat data structure for orphaned terminal. Issue #620.
+
+        Args:
+            session_id: Session identifier
+            filename: Source terminal filename
+
+        Returns:
+            Empty chat data dictionary
+        """
+        return {
+            "id": session_id,
+            "name": f"Terminal Session {session_id[:8]}",
+            "messages": [],
+            "created_at": datetime.now().isoformat(),
+            "metadata": {
+                "auto_created": True,
+                "reason": "orphaned_terminal_files",
+                "source": f"Found {filename}",
+            },
+        }
+
+    def _build_orphaned_session_dict(
+        self, session_id: str, stat: os.stat_result
+    ) -> Dict[str, Any]:
+        """Build session dictionary from stat result for orphaned session. Issue #620.
+
+        Args:
+            session_id: Session identifier
+            stat: File stat result
+
+        Returns:
+            Session dictionary with all metadata
+        """
+        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
+        last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+        session_name = f"Terminal Session {session_id[:8]}"
+
+        return {
+            "id": session_id,
+            "chatId": session_id,
+            "title": session_name,
+            "name": session_name,
+            "messages": [],
+            "messageCount": 0,
+            "createdAt": created_time,
+            "createdTime": created_time,
+            "updatedAt": last_modified,
+            "lastModified": last_modified,
+            "isActive": False,
+            "fileSize": stat.st_size,
+            "fast_mode": True,
+            "auto_created": True,
+        }
+
     async def _create_orphaned_session(
         self, session_id: str, filename: str, chats_directory: str
     ) -> Dict[str, Any] | None:
@@ -283,46 +338,18 @@ class SessionListingMixin:
         if chat_file_exists:
             return None
 
-        empty_chat = {
-            "id": session_id,
-            "name": f"Terminal Session {session_id[:8]}",
-            "messages": [],
-            "created_at": datetime.now().isoformat(),
-            "metadata": {
-                "auto_created": True,
-                "reason": "orphaned_terminal_files",
-                "source": f"Found {filename}",
-            },
-        }
-
+        empty_chat = self._build_empty_chat_data(session_id, filename)
         async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(empty_chat, indent=2, ensure_ascii=False))
 
         stat = await run_in_chat_io_executor(os.stat, chat_file)
-        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-        last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
-
         logger.info(
-            f"Auto-created chat session for orphaned terminal "
-            f"file: {session_id} (from {filename})"
+            "Auto-created chat session for orphaned terminal file: %s (from %s)",
+            session_id,
+            filename,
         )
 
-        return {
-            "id": session_id,
-            "chatId": session_id,
-            "title": f"Terminal Session {session_id[:8]}",
-            "name": f"Terminal Session {session_id[:8]}",
-            "messages": [],
-            "messageCount": 0,
-            "createdAt": created_time,
-            "createdTime": created_time,
-            "updatedAt": last_modified,
-            "lastModified": last_modified,
-            "isActive": False,
-            "fileSize": stat.st_size,
-            "fast_mode": True,
-            "auto_created": True,
-        }
+        return self._build_orphaned_session_dict(session_id, stat)
 
     async def _recover_orphaned_terminal_sessions(
         self,

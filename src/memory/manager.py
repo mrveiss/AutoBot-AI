@@ -465,6 +465,57 @@ class UnifiedMemoryManager:
     # UNIFIED STORAGE API (Strategy Pattern)
     # ========================================================================
 
+    async def _store_task_execution(self, data: Any) -> str:
+        """Store data using task execution strategy. Issue #620.
+
+        Args:
+            data: Data to store (must be TaskExecutionRecord)
+
+        Returns:
+            Task ID of stored record
+
+        Raises:
+            TypeError: If data is not a TaskExecutionRecord
+        """
+        if not isinstance(data, TaskExecutionRecord):
+            raise TypeError("TASK_EXECUTION strategy requires TaskExecutionRecord")
+        return await self.log_task(data)
+
+    async def _store_general_memory(self, data: Any) -> int:
+        """Store data using general memory strategy. Issue #620.
+
+        Args:
+            data: Data to store (must be MemoryEntry)
+
+        Returns:
+            Entry ID of stored memory
+
+        Raises:
+            TypeError: If data is not a MemoryEntry
+        """
+        if not isinstance(data, MemoryEntry):
+            raise TypeError("GENERAL_MEMORY strategy requires MemoryEntry")
+        return await self.store_memory(
+            data.category,
+            data.content,
+            data.metadata,
+            data.reference_path,
+            data.embedding,
+        )
+
+    def _store_cached(self, data: Any) -> str:
+        """Store data using cache strategy. Issue #620.
+
+        Args:
+            data: Data to cache
+
+        Returns:
+            Cache key for stored data
+        """
+        key = hashlib.sha256(str(data).encode()).hexdigest()[:16]
+        self.cache_put(key, data)
+        return key
+
     async def store(
         self,
         data: Union[TaskExecutionRecord, MemoryEntry, Any],
@@ -472,9 +523,6 @@ class UnifiedMemoryManager:
     ) -> Union[str, int]:
         """
         Unified storage interface with strategy pattern
-
-        This demonstrates code reusability by providing a single interface
-        for different storage strategies.
 
         Args:
             data: Data to store (TaskExecutionRecord, MemoryEntry, or any)
@@ -486,42 +534,15 @@ class UnifiedMemoryManager:
         Raises:
             TypeError: If data type doesn't match strategy
             ValueError: If strategy is unknown
-
-        Example:
-            >>> # Task strategy
-            >>> task = TaskExecutionRecord(...)
-            >>> task_id = await manager.store(task, StorageStrategy.TASK_EXECUTION)
-
-            >>> # Memory strategy
-            >>> entry = MemoryEntry(...)
-            >>> entry_id = await manager.store(entry, StorageStrategy.GENERAL_MEMORY)
-
-            >>> # Cache strategy
-            >>> cache_key = await manager.store({"data": "test"}, StorageStrategy.CACHED)
         """
         await self._ensure_initialized()
+
         if strategy == StorageStrategy.TASK_EXECUTION:
-            if not isinstance(data, TaskExecutionRecord):
-                raise TypeError("TASK_EXECUTION strategy requires TaskExecutionRecord")
-            return await self.log_task(data)
-
+            return await self._store_task_execution(data)
         elif strategy == StorageStrategy.GENERAL_MEMORY:
-            if not isinstance(data, MemoryEntry):
-                raise TypeError("GENERAL_MEMORY strategy requires MemoryEntry")
-            return await self.store_memory(
-                data.category,
-                data.content,
-                data.metadata,
-                data.reference_path,
-                data.embedding,
-            )
-
+            return await self._store_general_memory(data)
         elif strategy == StorageStrategy.CACHED:
-            # Generate cache key from data
-            key = hashlib.sha256(str(data).encode()).hexdigest()[:16]
-            self.cache_put(key, data)
-            return key
-
+            return self._store_cached(data)
         else:
             raise ValueError(f"Unknown storage strategy: {strategy}")
 

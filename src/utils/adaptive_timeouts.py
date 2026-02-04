@@ -156,6 +156,44 @@ class AdaptiveTimeout:
         )
         return context_str
 
+    def _log_operation_success(self, timeout_duration: float) -> float:
+        """
+        Log successful operation completion and return elapsed time.
+
+        Calculates elapsed time from start and logs completion details. Issue #620.
+
+        Args:
+            timeout_duration: The timeout that was configured
+
+        Returns:
+            Elapsed time in seconds
+        """
+        elapsed = time.time() - self.start_time
+        logger.info(
+            f"Operation completed in {elapsed:.2f}s (timeout was {timeout_duration}s)"
+        )
+        return elapsed
+
+    def _log_timeout_error(self, timeout_duration: float, context_str: str) -> float:
+        """
+        Log timeout error details and return elapsed time.
+
+        Records timeout information for optimization analysis. Issue #620.
+
+        Args:
+            timeout_duration: The timeout that was exceeded
+            context_str: Formatted context string for logging
+
+        Returns:
+            Elapsed time in seconds
+        """
+        elapsed = time.time() - self.start_time
+        logger.warning(
+            f"TIMEOUT OPTIMIZATION: {self.category.value} operation timed out "
+            f"after {elapsed:.2f}s (limit: {timeout_duration}s){context_str}"
+        )
+        return elapsed
+
     async def execute_with_intelligent_timeout(
         self,
         operation: Callable,
@@ -181,7 +219,6 @@ class AdaptiveTimeout:
         )
 
         context_str = self._log_operation_start(timeout_duration, context)
-
         warning_task = asyncio.create_task(
             self._send_timeout_warning(warning_threshold, operation_type)
         )
@@ -191,22 +228,12 @@ class AdaptiveTimeout:
                 operation, timeout_duration
             )
             warning_task.cancel()
-
-            elapsed = time.time() - self.start_time
-            logger.info(
-                f"Operation completed in {elapsed:.2f}s (timeout was {timeout_duration}s)"
-            )
+            self._log_operation_success(timeout_duration)
             return result
 
         except asyncio.TimeoutError:
-            elapsed = time.time() - self.start_time
             warning_task.cancel()
-
-            logger.warning(
-                f"TIMEOUT OPTIMIZATION: {self.category.value} operation timed out "
-                f"after {elapsed:.2f}s (limit: {timeout_duration}s){context_str}"
-            )
-
+            elapsed = self._log_timeout_error(timeout_duration, context_str)
             return await self._handle_timeout_fallback(
                 operation, operation_type, elapsed, background_allowed, fallback_result
             )

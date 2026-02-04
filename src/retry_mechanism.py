@@ -167,6 +167,39 @@ class RetryMechanism:
 
             self.stats["operations_by_type"][operation_name]["total"] += 1
 
+    async def _execute_function_async(self, func: Callable, *args, **kwargs) -> Any:
+        """Execute a function, handling both sync and async callables. Issue #620."""
+        if asyncio.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+        return func(*args, **kwargs)
+
+    def _handle_retry_failure(
+        self, operation_name: str, attempt: int, exception: Exception
+    ) -> bool:
+        """Handle a failed attempt and determine if retry should continue. Issue #620.
+
+        Args:
+            operation_name: Name of the operation for logging
+            attempt: Current attempt number
+            exception: The exception that was raised
+
+        Returns:
+            True if should continue to next attempt, False if should stop
+        """
+        logger.debug(
+            f"{operation_name} failed on attempt {attempt}: "
+            f"{type(exception).__name__}: {exception}"
+        )
+
+        if not self.is_retryable_exception(exception):
+            logger.warning(
+                f"{operation_name} failed with non-retryable exception: "
+                f"{type(exception).__name__}"
+            )
+            return False
+
+        return True
+
     async def execute_async(
         self, func: Callable, *args, operation_name: str = None, **kwargs
     ) -> Any:
@@ -181,47 +214,27 @@ class RetryMechanism:
                 logger.debug(
                     f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}"
                 )
+                result = await self._execute_function_async(func, *args, **kwargs)
 
-                if asyncio.iscoroutinefunction(func):
-                    result = await func(*args, **kwargs)
-                else:
-                    result = func(*args, **kwargs)
-
-                # Success!
                 if attempt > 1:
                     logger.info("%s succeeded on attempt %s", operation_name, attempt)
 
-                # Update operation stats (thread-safe)
                 self._update_stats_success(operation_name, attempt)
-
                 return result
 
             except Exception as e:
                 last_exception = e
-
-                logger.debug(
-                    f"{operation_name} failed on attempt {attempt}: {type(e).__name__}: {e}"
-                )
-
-                # Check if we should retry this exception
-                if not self.is_retryable_exception(e):
-                    logger.warning(
-                        f"{operation_name} failed with non-retryable exception: {type(e).__name__}"
-                    )
+                if not self._handle_retry_failure(operation_name, attempt, e):
                     raise e
 
-                # If this was the last attempt, don't delay
                 if attempt == self.config.max_attempts:
                     break
 
-                # Calculate delay and wait
                 delay = self.calculate_delay(attempt)
                 logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
                 await asyncio.sleep(delay)
 
-        # All attempts exhausted - update stats (thread-safe)
         self._update_stats_failure(operation_name)
-
         logger.error(
             f"{operation_name} failed after {self.config.max_attempts} attempts"
         )
