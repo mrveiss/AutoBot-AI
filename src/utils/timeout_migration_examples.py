@@ -938,6 +938,48 @@ def _create_progress_wrapper(context: OperationExecutionContext):
 
 
 # Decorator-based migration helpers
+def _create_enhanced_operation(func, args, kwargs, progress_callback):
+    """
+    Create enhanced operation callable with progress tracking.
+
+    Wraps the original function to inject progress callbacks and handle
+    both sync and async functions appropriately. Issue #620.
+    """
+
+    async def enhanced_operation(context: OperationExecutionContext):
+        """Enhanced operation with progress tracking."""
+        # Inject progress callback if function expects it
+        if progress_callback or "progress_callback" in func.__code__.co_varnames:
+            kwargs["progress_callback"] = _create_progress_wrapper(context)
+
+        # Execute original function
+        if asyncio.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+        return await asyncio.to_thread(func, *args, **kwargs)
+
+    return enhanced_operation
+
+
+async def _execute_via_operation_manager(
+    enhanced_operation, operation_type, func, priority, items
+):
+    """
+    Execute operation through the operation manager.
+
+    Creates and tracks the operation, then waits for completion. Issue #620.
+    """
+    operation_id = await operation_integration_manager.operation_manager.create_operation(
+        operation_type=operation_type,
+        name=f"Migrated: {func.__name__}",
+        description=f"Auto-migrated operation from {func.__module__}.{func.__name__}",
+        operation_function=enhanced_operation,
+        priority=priority,
+        estimated_items=items,
+        execute_immediately=True,
+    )
+    return await _wait_for_operation_completion(operation_id)
+
+
 def migrate_timeout_operation(
     operation_type: OperationType,
     estimated_items: Optional[int] = None,
@@ -954,21 +996,9 @@ def migrate_timeout_operation(
         async def wrapper(*args, **kwargs):
             """Execute operation with enhanced progress and timeout handling."""
             progress_callback = kwargs.pop("progress_callback", None)
-
-            async def enhanced_operation(context: OperationExecutionContext):
-                """Enhanced operation with progress tracking."""
-                # Inject progress callback if function expects it
-                if (
-                    progress_callback
-                    or "progress_callback" in func.__code__.co_varnames
-                ):
-                    kwargs["progress_callback"] = _create_progress_wrapper(context)
-
-                # Execute original function
-                if asyncio.iscoroutinefunction(func):
-                    return await func(*args, **kwargs)
-                return await asyncio.to_thread(func, *args, **kwargs)
-
+            enhanced_op = _create_enhanced_operation(
+                func, args, kwargs, progress_callback
+            )
             items = _get_estimated_items(estimated_items, args)
 
             # Execute with operation manager if available
@@ -976,19 +1006,12 @@ def migrate_timeout_operation(
                 operation_integration_manager
                 and operation_integration_manager.operation_manager
             ):
-                operation_id = await operation_integration_manager.operation_manager.create_operation(
-                    operation_type=operation_type,
-                    name=f"Migrated: {func.__name__}",
-                    description=f"Auto-migrated operation from {func.__module__}.{func.__name__}",
-                    operation_function=enhanced_operation,
-                    priority=priority,
-                    estimated_items=items,
-                    execute_immediately=True,
+                return await _execute_via_operation_manager(
+                    enhanced_op, operation_type, func, priority, items
                 )
-                return await _wait_for_operation_completion(operation_id)
 
             # Fallback to direct execution
-            return await enhanced_operation(None)
+            return await enhanced_op(None)
 
         return wrapper
 
