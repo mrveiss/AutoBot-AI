@@ -5,11 +5,14 @@
 Backward Compatibility Wrappers - Drop-in replacements for legacy APIs
 """
 
+import asyncio
+import hashlib
 import logging
 import threading
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from .enums import MemoryCategory
+from .enums import MemoryCategory, TaskPriority, TaskStatus
 from .manager import UnifiedMemoryManager
 from .models import MemoryEntry, TaskExecutionRecord
 
@@ -47,6 +50,233 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
             await manager.log_task(record)
         """
         return self.log_task_sync(record)
+
+    def _run_sync(self, coro):
+        """
+        Run async coroutine synchronously (Issue #742 - backward compat helper).
+
+        Handles both sync and async contexts by detecting if an event loop
+        is already running and using a thread executor in that case.
+
+        Args:
+            coro: Coroutine to run synchronously
+
+        Returns:
+            Result of the coroutine
+        """
+        try:
+            asyncio.get_running_loop()
+            # Already in async context - use thread executor
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, coro)
+                return future.result()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run
+            return asyncio.run(coro)
+
+    def create_task_record(
+        self,
+        task_name: str,
+        description: str,
+        priority: TaskPriority = TaskPriority.MEDIUM,
+        agent_type: Optional[str] = None,
+        inputs: Optional[Dict] = None,
+        parent_task_id: Optional[str] = None,
+        metadata: Optional[Dict] = None,
+    ) -> str:
+        """
+        Create a new task with auto-generated task_id (Issue #742).
+
+        Args:
+            task_name: Name of the task
+            description: Task description
+            priority: Task priority (default: MEDIUM)
+            agent_type: Type of agent executing task
+            inputs: Task inputs dictionary
+            parent_task_id: Parent task ID if this is a subtask
+            metadata: Additional metadata
+
+        Returns:
+            Generated task_id
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        """
+        # Generate task_id using same pattern as enhanced_memory_manager.py
+        task_id = hashlib.sha256(
+            f"{task_name}_{datetime.now().isoformat()}".encode()
+        ).hexdigest()[:16]
+
+        # Create TaskExecutionRecord
+        record = TaskExecutionRecord(
+            task_id=task_id,
+            task_name=task_name,
+            description=description,
+            status=TaskStatus.PENDING,
+            priority=priority,
+            created_at=datetime.now(),
+            agent_type=agent_type,
+            inputs=inputs,
+            parent_task_id=parent_task_id,
+            metadata=metadata,
+        )
+
+        # Log task synchronously
+        self.log_task_sync(record)
+        logger.info("Created task record: %s - %s", task_id, task_name)
+        return task_id
+
+    def start_task(self, task_id: str) -> bool:
+        """
+        Mark task as started (Issue #742).
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            True if updated successfully, False otherwise
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        """
+        result = self._run_sync(
+            self.update_task_status(
+                task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now()
+            )
+        )
+        if result:
+            logger.info("Started task: %s", task_id)
+        else:
+            logger.warning("Task not found for start: %s", task_id)
+        return result
+
+    def complete_task(
+        self,
+        task_id: str,
+        outputs: Optional[Dict] = None,
+        status: TaskStatus = TaskStatus.COMPLETED,
+    ) -> bool:
+        """
+        Mark task as completed (Issue #742).
+
+        Args:
+            task_id: Task identifier
+            outputs: Optional task outputs
+            status: Task status (default: COMPLETED)
+
+        Returns:
+            True if updated successfully, False otherwise
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        """
+        # Calculate duration by fetching task and computing from started_at
+        task = self._run_sync(self.get_task(task_id))
+        if not task:
+            logger.warning("Task not found for completion: %s", task_id)
+            return False
+
+        completed_at = datetime.now()
+        duration = None
+        if task.started_at:
+            duration = (completed_at - task.started_at).total_seconds()
+
+        result = self._run_sync(
+            self.update_task_status(
+                task_id,
+                status,
+                completed_at=completed_at,
+                duration_seconds=duration,
+                outputs=outputs,
+            )
+        )
+
+        if result:
+            logger.info("Completed task: %s (duration: %ss)", task_id, duration)
+        return result
+
+    def fail_task(self, task_id: str, error_message: str, retry_count: int = 0) -> bool:
+        """
+        Mark task as failed (Issue #742).
+
+        Args:
+            task_id: Task identifier
+            error_message: Error description
+            retry_count: Number of retries attempted
+
+        Returns:
+            True if updated successfully, False otherwise
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        """
+        result = self._run_sync(
+            self.update_task_status(
+                task_id,
+                TaskStatus.FAILED,
+                completed_at=datetime.now(),
+                error_message=error_message,
+                retry_count=retry_count,
+            )
+        )
+
+        if result:
+            logger.error("Failed task: %s - %s", task_id, error_message)
+        else:
+            logger.warning("Task not found for failure: %s", task_id)
+        return result
+
+    def get_task_history_sync(
+        self,
+        agent_type: Optional[str] = None,
+        status: Optional[TaskStatus] = None,
+        limit: int = 100,
+        days_back: int = 30,
+    ) -> List[TaskExecutionRecord]:
+        """
+        Query task history synchronously (Issue #742).
+
+        Args:
+            agent_type: Filter by agent type
+            status: Filter by task status
+            limit: Maximum results
+            days_back: How many days back to search
+
+        Returns:
+            List of TaskExecutionRecord matching filters
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        """
+        # Convert days_back to start_date
+        start_date = datetime.now() - timedelta(days=days_back)
+
+        return self._run_sync(
+            self.get_task_history(
+                agent_type=agent_type,
+                status=status,
+                priority=None,
+                start_date=start_date,
+                end_date=None,
+                limit=limit,
+            )
+        )
+
+    def cleanup_old_data(self, days_to_keep: int = 90) -> Dict:
+        """
+        Cleanup old records (Issue #742).
+
+        Args:
+            days_to_keep: Retention period in days
+
+        Returns:
+            Dictionary with cleanup statistics:
+            - memories_deleted: Number of old memories deleted
+
+        ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
+        """
+        memories_deleted = self._run_sync(self.cleanup_old_memories(days_to_keep))
+
+        result = {"memories_deleted": memories_deleted}
+        logger.info("Cleanup completed: %s", result)
+        return result
 
 
 class LongTermMemoryManager:
