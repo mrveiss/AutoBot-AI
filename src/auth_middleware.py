@@ -459,11 +459,85 @@ class AuthenticationMiddleware:
         logger.debug("No valid authentication found, denying access")
         return None
 
+    def _log_file_access_denied(
+        self,
+        username: str,
+        operation: str,
+        user_role: str,
+        user_data: Dict,
+        request: Request,
+        ip_address: str,
+    ) -> None:
+        """
+        Log denied file access with comprehensive audit details.
+
+        Args:
+            username: Username attempting access
+            operation: File operation attempted
+            user_role: Role of the user
+            user_data: User data dictionary
+            request: FastAPI request object
+            ip_address: Client IP address
+
+        Issue #620.
+        """
+        self.security_layer.audit_log(
+            action="file_access_denied",
+            user=username,
+            outcome="denied",
+            details={
+                "operation": operation,
+                "permission_required": f"files.{operation}",
+                "user_role": user_role,
+                "auth_method": user_data.get("auth_method", "unknown"),
+                "user_agent": request.headers.get("User-Agent", "unknown"),
+                "ip": ip_address,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "request_path": (
+                    str(request.url.path) if hasattr(request, "url") else "unknown"
+                ),
+            },
+        )
+
+    def _log_file_access_granted(
+        self,
+        username: str,
+        operation: str,
+        user_role: str,
+        user_data: Dict,
+        ip_address: str,
+    ) -> None:
+        """
+        Log successful file access with audit details.
+
+        Args:
+            username: Username granted access
+            operation: File operation granted
+            user_role: Role of the user
+            user_data: User data dictionary
+            ip_address: Client IP address
+
+        Issue #620.
+        """
+        self.security_layer.audit_log(
+            action="file_access_granted",
+            user=username,
+            outcome="success",
+            details={
+                "operation": operation,
+                "user_role": user_role,
+                "auth_method": user_data.get("auth_method", "unknown"),
+                "ip": ip_address,
+            },
+        )
+
     def check_file_permissions(
         self, request: Request, operation: str
     ) -> Tuple[bool, Optional[Dict]]:
         """
-        Enhanced permission checking with comprehensive security measures
+        Enhanced permission checking with comprehensive security measures.
+
+        Issue #620: Refactored to use helper methods for audit logging.
 
         Returns:
             Tuple of (permission_granted: bool, user_data: Dict)
@@ -477,7 +551,6 @@ class AuthenticationMiddleware:
             username = user_data["username"]
             ip_address = request.client.host if request.client else "unknown"
 
-            # Check permission using SecurityLayer
             has_permission = self.security_layer.check_permission(
                 user_role=user_role,
                 action_type=f"files.{operation}",
@@ -485,48 +558,20 @@ class AuthenticationMiddleware:
             )
 
             if not has_permission:
-                # Enhanced audit logging for denied access
-                self.security_layer.audit_log(
-                    action="file_access_denied",
-                    user=username,
-                    outcome="denied",
-                    details={
-                        "operation": operation,
-                        "permission_required": f"files.{operation}",
-                        "user_role": user_role,
-                        "auth_method": user_data.get("auth_method", "unknown"),
-                        "user_agent": request.headers.get("User-Agent", "unknown"),
-                        "ip": ip_address,
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "request_path": (
-                            str(request.url.path)
-                            if hasattr(request, "url")
-                            else "unknown"
-                        ),
-                    },
+                self._log_file_access_denied(
+                    username, operation, user_role, user_data, request, ip_address
                 )
                 return False, user_data
 
-            # Log successful access
-            self.security_layer.audit_log(
-                action="file_access_granted",
-                user=username,
-                outcome="success",
-                details={
-                    "operation": operation,
-                    "user_role": user_role,
-                    "auth_method": user_data.get("auth_method", "unknown"),
-                    "ip": ip_address,
-                },
+            self._log_file_access_granted(
+                username, operation, user_role, user_data, ip_address
             )
-
             return True, user_data
 
         except Exception as e:
             logger.error(
                 f"Error checking file permissions for operation '{operation}': {e}"
             )
-            # Fail secure - deny access on error
             return False, None
 
 

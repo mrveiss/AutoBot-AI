@@ -138,6 +138,43 @@ class LLMSelfAwareness:
             "current_capabilities": {"active": [], "error": str(error)},
         }
 
+    def _build_contextual_information(self) -> Dict[str, Any]:
+        """
+        Build contextual information section of context.
+
+        Returns:
+            Dictionary with timestamp, environment, endpoints, and data sources.
+
+        Issue #620.
+        """
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
+            "api_endpoints_available": self._get_available_endpoints(),
+            "data_sources": [
+                "knowledge_base",
+                "memory_system",
+                "redis_cache",
+                "project_state",
+            ],
+        }
+
+    def _add_detailed_context(
+        self, context: Dict[str, Any], state_summary: Dict[str, Any]
+    ) -> None:
+        """
+        Add detailed capability information to context.
+
+        Args:
+            context: Context dictionary to augment
+            state_summary: State summary with recent changes
+
+        Issue #620.
+        """
+        context["detailed_capabilities"] = self._get_detailed_capabilities()
+        context["phase_progression_rules"] = self._get_progression_rules()
+        context["recent_activities"] = state_summary.get("recent_changes", [])[:5]
+
     async def get_system_context(
         self, include_detailed: bool = False
     ) -> Dict[str, Any]:
@@ -145,23 +182,20 @@ class LLMSelfAwareness:
         Get comprehensive system context for LLM awareness.
 
         Issue #281: Refactored from 116 lines to use extracted helper methods.
+        Issue #620: Further extraction of contextual info and detailed context.
         """
-        # Check cache (Issue #281: uses helper)
         if self._is_cache_valid():
             return self._context_cache
 
         try:
-            # Get current state data
             capabilities = self.progression_manager.get_current_system_capabilities()
             state_summary = await self.state_tracker.get_state_summary()
             project_status = self.project_state_manager.get_fast_project_status()
 
-            # Build phase and metrics (Issue #281: uses helper)
             phase_info, system_metrics = self._build_phase_and_metrics(
                 project_status, state_summary
             )
 
-            # Build context using helpers (Issue #281)
             context = {
                 "system_identity": self._build_system_identity(
                     project_status, capabilities
@@ -178,30 +212,14 @@ class LLMSelfAwareness:
                 "operational_status": self._build_operational_status(
                     capabilities, state_summary
                 ),
-                "contextual_information": {
-                    "timestamp": datetime.now().isoformat(),
-                    "environment": os.getenv("AUTOBOT_ENVIRONMENT", "production"),
-                    "api_endpoints_available": self._get_available_endpoints(),
-                    "data_sources": [
-                        "knowledge_base",
-                        "memory_system",
-                        "redis_cache",
-                        "project_state",
-                    ],
-                },
+                "contextual_information": self._build_contextual_information(),
             }
 
             if include_detailed:
-                context["detailed_capabilities"] = self._get_detailed_capabilities()
-                context["phase_progression_rules"] = self._get_progression_rules()
-                context["recent_activities"] = state_summary.get("recent_changes", [])[
-                    :5
-                ]
+                self._add_detailed_context(context, state_summary)
 
-            # Cache the context
             self._context_cache = context
             self._cache_timestamp = datetime.now()
-
             return context
 
         except Exception as e:
