@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for O(1) lookup
@@ -244,7 +243,10 @@ def _decode_chunk(chunk_bytes: bytes, chunk_count: int) -> Optional[str]:
 
 
 def _determine_completion_signal(
-    processor: StreamProcessor, chunk_data: str, content_parts: List[str], chunk_count: int
+    processor: StreamProcessor,
+    chunk_data: str,
+    content_parts: List[str],
+    chunk_count: int,
 ) -> StreamCompletionSignal:
     """Issue #665: Extracted from _process_stream_loop to reduce function length."""
     accumulated_content = "".join(content_parts)
@@ -255,7 +257,9 @@ def _determine_completion_signal(
     return StreamCompletionSignal.PROVIDER_SPECIFIC
 
 
-def _check_error_condition(processor: StreamProcessor, chunk_data: str) -> Optional[StreamCompletionSignal]:
+def _check_error_condition(
+    processor: StreamProcessor, chunk_data: str
+) -> Optional[StreamCompletionSignal]:
     """Issue #665: Extracted from _process_stream_loop to reduce function length."""
     error = processor.detect_error_condition(chunk_data)
     if error:
@@ -265,7 +269,10 @@ def _check_error_condition(processor: StreamProcessor, chunk_data: str) -> Optio
 
 
 async def _process_stream_loop(
-    response, processor: StreamProcessor, max_chunks: int, max_buffer_size: int = 10 * 1024 * 1024
+    response,
+    processor: StreamProcessor,
+    max_chunks: int,
+    max_buffer_size: int = 10 * 1024 * 1024,
 ) -> Tuple[List[str], int, Optional[StreamCompletionSignal]]:
     """Process stream chunks until completion or limit (Issue #281, #551, #665)."""
     content_parts: List[str] = []
@@ -278,7 +285,9 @@ async def _process_stream_loop(
         current_buffer_size += len(chunk_bytes)
 
         # Check stream limits
-        limit_signal = _check_stream_limits(chunk_count, max_chunks, current_buffer_size, max_buffer_size)
+        limit_signal = _check_stream_limits(
+            chunk_count, max_chunks, current_buffer_size, max_buffer_size
+        )
         if limit_signal:
             completion_signal = limit_signal
             break
@@ -299,7 +308,9 @@ async def _process_stream_loop(
         if content_to_add:
             content_parts.append(content_to_add)
         if is_complete:
-            completion_signal = _determine_completion_signal(processor, chunk_data, content_parts, chunk_count)
+            completion_signal = _determine_completion_signal(
+                processor, chunk_data, content_parts, chunk_count
+            )
             break
 
         # Brief yield to prevent blocking every 10 chunks
@@ -326,6 +337,44 @@ class StreamProcessorFactory:
             return StreamProcessor(provider, max_chunks)
 
 
+def _determine_stream_completion(
+    completion_signal: StreamCompletionSignal,
+) -> bool:
+    """
+    Determine if stream completed successfully based on signal.
+
+    Issue #620.
+    """
+    return completion_signal in [
+        StreamCompletionSignal.DONE_CHUNK_RECEIVED,
+        StreamCompletionSignal.JSON_COMPLETION,
+        StreamCompletionSignal.PROVIDER_SPECIFIC,
+    ]
+
+
+def _log_stream_completion(
+    chunk_count: int,
+    content_length: int,
+    completed_successfully: bool,
+    completion_signal: StreamCompletionSignal,
+    processing_time: float,
+) -> None:
+    """
+    Log stream processing completion details.
+
+    Issue #620.
+    """
+    logger.info(
+        "Stream processing complete: "
+        "chunks=%d, content_length=%d, success=%s, signal=%s, time=%.2fs",
+        chunk_count,
+        content_length,
+        completed_successfully,
+        completion_signal,
+        processing_time,
+    )
+
+
 async def process_llm_stream(
     response,
     provider: str = "ollama",
@@ -346,47 +395,37 @@ async def process_llm_stream(
     Returns:
         Tuple of (accumulated_content, completed_successfully)
     """
-
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
     processor.start_time = asyncio.get_event_loop().time()
 
     logger.info(
-        "🔄 Starting %s stream processing (max_chunks: %s, max_buffer: %d MB)",
+        "Starting %s stream processing (max_chunks: %s, max_buffer: %d MB)",
         provider,
         max_chunks,
         max_buffer_size // (1024 * 1024),
     )
 
-    # Issue #281: Use extracted helper for stream processing loop
-    # Issue #551: Pass max_buffer_size for memory protection
     try:
         content_parts, chunk_count, completion_signal = await _process_stream_loop(
             response, processor, max_chunks, max_buffer_size
         )
     except Exception as e:
         completion_signal = StreamCompletionSignal.ERROR_CONDITION
-        logger.error("❌ Stream processing error: %s", e)
+        logger.error("Stream processing error: %s", e)
         content_parts = []
         chunk_count = 0
 
-    # Final processing - join content parts
     accumulated_content = "".join(content_parts)
     processing_time = asyncio.get_event_loop().time() - processor.start_time
-    completed_successfully = completion_signal in [
-        StreamCompletionSignal.DONE_CHUNK_RECEIVED,
-        StreamCompletionSignal.JSON_COMPLETION,
-        StreamCompletionSignal.PROVIDER_SPECIFIC,
-    ]
+    completed_successfully = _determine_stream_completion(completion_signal)
 
-    logger.info(
-        "🏁 Stream processing complete: "
-        f"chunks={chunk_count}, "
-        f"content_length={len(accumulated_content)}, "
-        f"success={completed_successfully}, "
-        f"signal={completion_signal}, "
-        f"time={processing_time:.2f}s"
+    _log_stream_completion(
+        chunk_count,
+        len(accumulated_content),
+        completed_successfully,
+        completion_signal,
+        processing_time,
     )
-
     return accumulated_content, completed_successfully
 
 

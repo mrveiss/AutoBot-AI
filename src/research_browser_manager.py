@@ -65,6 +65,62 @@ _JS_EXTRACT_STRUCTURED = """
 }
 """
 
+# Issue #620: JavaScript snippet for CAPTCHA and interaction detection
+_JS_INTERACTION_DETECTION = """
+// Detect common CAPTCHA patterns
+const captchaSelectors = [
+    'iframe[src*="recaptcha"]',
+    '.g-recaptcha',
+    '[data-testid="captcha"]',
+    '.captcha',
+    '.hcaptcha',
+    '.cf-challenge-form',
+    '[class*="captcha"]'
+];
+
+function checkForInteraction() {
+    const hasCaptcha = captchaSelectors.some(selector =>
+        document.querySelector(selector) !== null
+    );
+
+    if (hasCaptcha) {
+        window.autobot_interaction_required = {
+            type: 'captcha',
+            message: 'CAPTCHA detected - user interaction required',
+            timestamp: Date.now()
+        };
+    }
+
+    // Check for other common interaction patterns
+    const commonInteractionTexts = [
+        'verify you are human',
+        'click to continue',
+        'press and hold',
+        'solve the puzzle',
+        'complete the challenge'
+    ];
+
+    const bodyText = document.body.innerText.toLowerCase();
+    for (const text of commonInteractionTexts) {
+        if (bodyText.includes(text)) {
+            window.autobot_interaction_required = {
+                type: 'verification',
+                message: `Interaction required: ${text}`,
+                timestamp: Date.now()
+            };
+            break;
+        }
+    }
+}
+
+// Check immediately and on DOM changes
+checkForInteraction();
+new MutationObserver(checkForInteraction).observe(document.body, {
+    childList: true,
+    subtree: true
+});
+"""
+
 
 class ResearchBrowserSession:
     """Manages a single research browser session with user interaction capability"""
@@ -145,67 +201,16 @@ class ResearchBrowserSession:
             return False
 
     async def _setup_interaction_detection(self):
-        """Set up detection for CAPTCHAs and other interactions"""
+        """
+        Set up detection for CAPTCHAs and other user interactions.
+
+        Injects JavaScript to detect common CAPTCHA patterns and verification
+        prompts, setting window.autobot_interaction_required when found. Issue #620.
+        """
         if not self.page:
             return
 
-        # Detect CAPTCHAs and other common interaction patterns
-        await self.page.add_init_script(
-            """
-            // Detect common CAPTCHA patterns
-            const captchaSelectors = [
-                'iframe[src*="recaptcha"]',
-                '.g-recaptcha',
-                '[data-testid="captcha"]',
-                '.captcha',
-                '.hcaptcha',
-                '.cf-challenge-form',
-                '[class*="captcha"]'
-            ];
-
-            function checkForInteraction() {
-                const hasCaptcha = captchaSelectors.some(selector =>
-                    document.querySelector(selector) !== null
-                );
-
-                if (hasCaptcha) {
-                    window.autobot_interaction_required = {
-                        type: 'captcha',
-                        message: 'CAPTCHA detected - user interaction required',
-                        timestamp: Date.now()
-                    };
-                }
-
-                // Check for other common interaction patterns
-                const commonInteractionTexts = [
-                    'verify you are human',
-                    'click to continue',
-                    'press and hold',
-                    'solve the puzzle',
-                    'complete the challenge'
-                ];
-
-                const bodyText = document.body.innerText.toLowerCase();
-                for (const text of commonInteractionTexts) {
-                    if (bodyText.includes(text)) {
-                        window.autobot_interaction_required = {
-                            type: 'verification',
-                            message: `Interaction required: ${text}`,
-                            timestamp: Date.now()
-                        };
-                        break;
-                    }
-                }
-            }
-
-            // Check immediately and on DOM changes
-            checkForInteraction();
-            new MutationObserver(checkForInteraction).observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        """
-        )
+        await self.page.add_init_script(_JS_INTERACTION_DETECTION)
 
     async def _check_interaction_required(self, url: str) -> Optional[Dict[str, Any]]:
         """

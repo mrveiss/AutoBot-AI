@@ -10,11 +10,11 @@ import asyncio
 import gc
 import logging
 import platform
-import subprocess
+import subprocess  # nosec B404 - controlled system diagnostics
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import psutil
 
@@ -101,7 +101,7 @@ class PerformanceOptimizedDiagnostics:
     def _get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information for performance monitoring"""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - nvidia-smi is safe
                 [
                     "nvidia-smi",
                     "--query-gpu=name,memory.total,memory.used,utilization.gpu",
@@ -368,62 +368,83 @@ class PerformanceOptimizedDiagnostics:
             logger.error("Performance analysis error: %s", e)
             return {"error": str(e)}
 
+    def _get_memory_recommendation(self) -> Optional[Dict[str, str]]:
+        """
+        Generate memory optimization recommendation if usage exceeds threshold.
+
+        Returns recommendation dict if memory usage is high, None otherwise. Issue #620.
+        """
+        memory_info = self.system_info.get("memory", {})
+        memory_warning_pct = ResourceThresholds.MEMORY_WARNING_THRESHOLD * 100
+        if memory_info.get("used_percent", 0) > memory_warning_pct:
+            return {
+                "category": "memory",
+                "priority": "high",
+                "recommendation": (
+                    "Consider implementing more aggressive memory "
+                    "cleanup in chat history and conversation managers"
+                ),
+                "action": "Add memory limits and periodic cleanup routines",
+            }
+        return None
+
+    def _get_gpu_recommendation(self) -> Optional[Dict[str, str]]:
+        """
+        Generate GPU optimization recommendation if utilization is low.
+
+        Returns recommendation dict if GPU is underutilized, None otherwise. Issue #620.
+        """
+        gpu_info = self.system_info.get("gpu", {})
+        gpu_util = gpu_info.get("utilization_percent")
+        gpu_rec_pct = ResourceThresholds.GPU_RECOMMENDATION_THRESHOLD * 100
+        if gpu_util is not None and gpu_util < gpu_rec_pct:
+            return {
+                "category": "gpu",
+                "priority": "medium",
+                "recommendation": (
+                    "GPU underutilized - verify semantic chunking "
+                    "and AI workloads are GPU-accelerated"
+                ),
+                "action": "Check CUDA availability and batch sizes in AI processing",
+            }
+        return None
+
+    def _get_cpu_recommendation(self) -> Optional[Dict[str, str]]:
+        """
+        Generate CPU optimization recommendation for high-core systems.
+
+        Returns recommendation dict if system has many cores, None otherwise. Issue #620.
+        """
+        cpu_cores = self.system_info.get("cpu", {}).get("logical_cores", 0)
+        if cpu_cores > ResourceThresholds.HIGH_CORE_COUNT:
+            return {
+                "category": "cpu",
+                "priority": "low",
+                "recommendation": (
+                    f"High-core system ({cpu_cores} cores) - ensure "
+                    f"parallel processing is optimized"
+                ),
+                "action": "Verify thread pool sizes and async concurrency limits",
+            }
+        return None
+
     def _generate_performance_recommendations(self) -> List[Dict[str, str]]:
-        """Generate performance optimization recommendations"""
+        """Generate performance optimization recommendations."""
         recommendations = []
 
         try:
-            # Memory recommendations (Issue #376 - use named constants)
-            memory_info = self.system_info.get("memory", {})
-            memory_warning_pct = ResourceThresholds.MEMORY_WARNING_THRESHOLD * 100
-            if memory_info.get("used_percent", 0) > memory_warning_pct:
-                recommendations.append(
-                    {
-                        "category": "memory",
-                        "priority": "high",
-                        "recommendation": (
-                            "Consider implementing more aggressive memory "
-                            "cleanup in chat history and conversation managers"
-                        ),
-                        "action": "Add memory limits and periodic cleanup routines",
-                    }
-                )
+            # Collect recommendations from each resource type (Issue #376)
+            memory_rec = self._get_memory_recommendation()
+            if memory_rec:
+                recommendations.append(memory_rec)
 
-            # GPU recommendations (Issue #376 - use named constants)
-            gpu_info = self.system_info.get("gpu", {})
-            gpu_util = gpu_info.get("utilization_percent")
-            gpu_rec_pct = ResourceThresholds.GPU_RECOMMENDATION_THRESHOLD * 100
-            if gpu_util is not None and gpu_util < gpu_rec_pct:
-                recommendations.append(
-                    {
-                        "category": "gpu",
-                        "priority": "medium",
-                        "recommendation": (
-                            "GPU underutilized - verify semantic chunking "
-                            "and AI workloads are GPU-accelerated"
-                        ),
-                        "action": (
-                            "Check CUDA availability and batch sizes in AI processing"
-                        ),
-                    }
-                )
+            gpu_rec = self._get_gpu_recommendation()
+            if gpu_rec:
+                recommendations.append(gpu_rec)
 
-            # CPU recommendations (Issue #376 - use named constants)
-            cpu_cores = self.system_info.get("cpu", {}).get("logical_cores", 0)
-            if cpu_cores > ResourceThresholds.HIGH_CORE_COUNT:
-                recommendations.append(
-                    {
-                        "category": "cpu",
-                        "priority": "low",
-                        "recommendation": (
-                            f"High-core system ({cpu_cores} cores) - ensure "
-                            f"parallel processing is optimized"
-                        ),
-                        "action": (
-                            "Verify thread pool sizes and async concurrency limits"
-                        ),
-                    }
-                )
+            cpu_rec = self._get_cpu_recommendation()
+            if cpu_rec:
+                recommendations.append(cpu_rec)
 
             return recommendations
 

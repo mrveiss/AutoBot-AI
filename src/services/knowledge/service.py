@@ -604,6 +604,38 @@ class ChatKnowledgeService:
         )
         return context_string, citations, intent_result, enhanced_query
 
+    def _search_and_format_documentation(
+        self,
+        query: str,
+        n_results: int,
+        score_threshold: float,
+        start_time: float,
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Search documentation and format results as context.
+
+        Issue #620.
+        """
+        results = self.doc_searcher.search(
+            query=query,
+            n_results=n_results,
+            score_threshold=score_threshold,
+        )
+
+        if not results:
+            logger.debug("[Doc Search] No results for: '%s...'", query[:50])
+            return "", []
+
+        context = self.doc_searcher.format_as_context(results)
+        retrieval_time = time.time() - start_time
+        logger.info(
+            "[Doc Search] Found %d documentation chunks in %.3fs for: '%s...'",
+            len(results),
+            retrieval_time,
+            query[:50],
+        )
+        return context, results
+
     async def retrieve_documentation(
         self,
         query: str,
@@ -632,36 +664,15 @@ class ChatKnowledgeService:
         try:
             start_time = time.time()
 
-            # Check if query is about documentation
             if not self.doc_searcher.is_documentation_query(query):
                 logger.debug(
                     "[Doc Search] Query not documentation-related: '%s...'", query[:50]
                 )
                 return "", []
 
-            # Search documentation
-            results = self.doc_searcher.search(
-                query=query,
-                n_results=n_results,
-                score_threshold=score_threshold,
+            return self._search_and_format_documentation(
+                query, n_results, score_threshold, start_time
             )
-
-            if not results:
-                logger.debug("[Doc Search] No results for: '%s...'", query[:50])
-                return "", []
-
-            # Format as context
-            context = self.doc_searcher.format_as_context(results)
-
-            retrieval_time = time.time() - start_time
-            logger.info(
-                "[Doc Search] Found %d documentation chunks in %.3fs for: '%s...'",
-                len(results),
-                retrieval_time,
-                query[:50],
-            )
-
-            return context, results
 
         except Exception as e:
             logger.error("Documentation retrieval failed: %s", e)

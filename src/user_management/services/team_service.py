@@ -416,6 +416,54 @@ class TeamService(BaseService):
         logger.info("Removed user %s from team %s", user_id, team_id)
         return True
 
+    async def _validate_role_change(
+        self,
+        team_id: uuid.UUID,
+        old_role: str,
+        new_role: str,
+    ) -> None:
+        """
+        Validate that a role change is allowed.
+
+        Issue #620.
+        """
+        if old_role == self.ROLE_OWNER and new_role != self.ROLE_OWNER:
+            owner_count = await self._count_owners(team_id)
+            if owner_count <= 1:
+                raise MembershipError(
+                    "Cannot demote the last owner. Add another owner first."
+                )
+
+    async def _log_role_change(
+        self,
+        team_id: uuid.UUID,
+        user_id: uuid.UUID,
+        old_role: str,
+        new_role: str,
+    ) -> None:
+        """
+        Log audit and info for role change.
+
+        Issue #620.
+        """
+        await self._audit_log(
+            action=AuditAction.TEAM_MEMBER_ROLE_CHANGED,
+            resource_type=AuditResourceType.TEAM,
+            resource_id=team_id,
+            details={
+                "user_id": str(user_id),
+                "old_role": old_role,
+                "new_role": new_role,
+            },
+        )
+        logger.info(
+            "Changed role for user %s in team %s: %s -> %s",
+            user_id,
+            team_id,
+            old_role,
+            new_role,
+        )
+
     async def change_member_role(
         self,
         team_id: uuid.UUID,
@@ -446,37 +494,13 @@ class TeamService(BaseService):
             raise MembershipError(f"User {user_id} is not a member of team {team_id}")
 
         old_role = membership.role
-
-        # Prevent removing the last owner
-        if old_role == self.ROLE_OWNER and new_role != self.ROLE_OWNER:
-            owner_count = await self._count_owners(team_id)
-            if owner_count <= 1:
-                raise MembershipError(
-                    "Cannot demote the last owner. Add another owner first."
-                )
+        await self._validate_role_change(team_id, old_role, new_role)
 
         membership.role = new_role
         membership.updated_at = datetime.now(timezone.utc)
         await self.session.flush()
 
-        await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_ROLE_CHANGED,
-            resource_type=AuditResourceType.TEAM,
-            resource_id=team_id,
-            details={
-                "user_id": str(user_id),
-                "old_role": old_role,
-                "new_role": new_role,
-            },
-        )
-
-        logger.info(
-            "Changed role for user %s in team %s: %s -> %s",
-            user_id,
-            team_id,
-            old_role,
-            new_role,
-        )
+        await self._log_role_change(team_id, user_id, old_role, new_role)
         return membership
 
     async def get_team_members(

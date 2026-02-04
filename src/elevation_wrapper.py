@@ -10,9 +10,8 @@ Provides secure sudo command execution with GUI elevation dialogs
 import asyncio
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404 - elevation wrapper requires subprocess
 from typing import Dict, Tuple
-
 
 logger = logging.getLogger(__name__)
 
@@ -51,44 +50,19 @@ class ElevationWrapper:
         self.active_session = None
         self.session_commands = {}
 
-    async def execute_command(
+    async def _request_and_execute_elevated(
         self,
-        command: str,
-        operation: str = None,
-        reason: str = None,
-        risk_level: str = "MEDIUM",
+        clean_command: str,
+        operation: str,
+        reason: str,
+        risk_level: str,
     ) -> Dict:
-        """Execute a command, requesting elevation if needed"""
+        """
+        Request elevation through GUI and execute command if approved.
 
-        # Check if command requires sudo
-        needs_elevation, clean_command = self._check_elevation_needed(command)
-
-        if not needs_elevation:
-            # Execute normally
-            return await self._execute_normal(command)
-
-        # Check if we have an active session
-        if self.active_session and self._is_session_valid():
-            # Use existing session
-            return await self._execute_elevated(clean_command, self.active_session)
-
-        # Request elevation through GUI
-        if not self.elevation_client:
-            logger.error("No elevation client configured - cannot request elevation")
-            return {
-                "success": False,
-                "error": "Elevation required but no GUI client available",
-                "needs_elevation": True,
-            }
-
-        # Prepare elevation request
-        if not operation:
-            operation = "Execute system command"
-        if not reason:
-            reason = f"This command requires administrator privileges: {clean_command[:50]}..."
-
+        Returns execution result dict with success status. Issue #620.
+        """
         try:
-            # Request elevation
             elevation_result = await self.elevation_client.request_elevation(
                 operation=operation,
                 command=clean_command,
@@ -113,6 +87,40 @@ class ElevationWrapper:
                 "error": f"Failed to request elevation: {str(e)}",
                 "needs_elevation": True,
             }
+
+    async def execute_command(
+        self,
+        command: str,
+        operation: str = None,
+        reason: str = None,
+        risk_level: str = "MEDIUM",
+    ) -> Dict:
+        """Execute a command, requesting elevation if needed."""
+        needs_elevation, clean_command = self._check_elevation_needed(command)
+
+        if not needs_elevation:
+            return await self._execute_normal(command)
+
+        if self.active_session and self._is_session_valid():
+            return await self._execute_elevated(clean_command, self.active_session)
+
+        if not self.elevation_client:
+            logger.error("No elevation client configured - cannot request elevation")
+            return {
+                "success": False,
+                "error": "Elevation required but no GUI client available",
+                "needs_elevation": True,
+            }
+
+        # Prepare elevation request parameters
+        if not operation:
+            operation = "Execute system command"
+        if not reason:
+            reason = f"This command requires administrator privileges: {clean_command[:50]}..."
+
+        return await self._request_and_execute_elevated(
+            clean_command, operation, reason, risk_level
+        )
 
     def _check_elevation_needed(self, command: str) -> Tuple[bool, str]:
         """Check if command needs elevation and extract clean command"""
@@ -213,7 +221,7 @@ def _elevation_aware_popen(cmd, *args, **kwargs):
         # In production, this should trigger elevation dialog
         # For now, pass through with warning
     elif isinstance(cmd, list) and "sudo" in cmd:
-        logger.warning("Direct sudo call intercepted: %s", ' '.join(cmd))
+        logger.warning("Direct sudo call intercepted: %s", " ".join(cmd))
 
     return _original_popen(cmd, *args, **kwargs)
 
