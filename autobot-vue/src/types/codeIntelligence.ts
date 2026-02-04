@@ -146,3 +146,41 @@ export interface ReportResponse {
   format: 'json' | 'markdown'
   report: string | object
 }
+
+// Redis optimization finding (from analyze endpoint)
+export interface RedisOptimizationFinding {
+  optimization_type: string
+  severity: Severity
+  file_path: string
+  line_number: number
+  message: string
+  recommendation: string
+  category: string
+}
+
+// Analysis response types
+export interface SecurityAnalysisResponse {
+  status: string
+  timestamp: string
+  path: string
+  summary: Record<string, unknown>
+  findings: SecurityFinding[]
+  total_findings: number
+}
+
+export interface PerformanceAnalysisResponse {
+  status: string
+  timestamp: string
+  path: string
+  summary: Record<string, unknown>
+  findings: PerformanceFinding[]
+  total_findings: number
+}
+
+export interface RedisAnalysisResponse {
+  status: string
+  timestamp: string
+  path: string
+  optimizations: RedisOptimizationFinding[]
+  summary: Record<string, unknown>
+}

@@ -19,7 +19,13 @@ import type {
   VulnerabilityType,
   PerformanceIssueType,
   RedisOptimizationType,
-  ReportResponse
+  ReportResponse,
+  SecurityFinding,
+  PerformanceFinding,
+  RedisOptimizationFinding,
+  SecurityAnalysisResponse,
+  PerformanceAnalysisResponse,
+  RedisAnalysisResponse
 } from '@/types/codeIntelligence'
 
 const logger = createLogger('useCodeIntelligence')
@@ -39,6 +45,11 @@ export function useCodeIntelligence() {
   const vulnerabilityTypes = ref<VulnerabilityType[] | null>(null)
   const performanceIssueTypes = ref<PerformanceIssueType[] | null>(null)
   const redisOptimizationTypes = ref<Record<string, RedisOptimizationType> | null>(null)
+
+  // Detailed findings
+  const securityFindings = ref<SecurityFinding[]>([])
+  const performanceFindings = ref<PerformanceFinding[]>([])
+  const redisFindings = ref<RedisOptimizationFinding[]>([])
 
   async function getBackendUrl(): Promise<string> {
     return await appConfig.getServiceUrl('backend')
@@ -111,6 +122,144 @@ export function useCodeIntelligence() {
     } catch (e) {
       error.value = `Failed to fetch Redis score: ${e}`
       logger.error('fetchRedisScore failed:', e)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchSecurityFindings(path: string): Promise<SecurityFinding[]> {
+    loading.value = true
+    error.value = null
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/code-intelligence/security/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data: SecurityAnalysisResponse = await response.json()
+      securityFindings.value = data.findings
+      return data.findings
+    } catch (e) {
+      error.value = `Failed to fetch security findings: ${e}`
+      logger.error('fetchSecurityFindings failed:', e)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchPerformanceFindings(path: string): Promise<PerformanceFinding[]> {
+    loading.value = true
+    error.value = null
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/code-intelligence/performance/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data: PerformanceAnalysisResponse = await response.json()
+      performanceFindings.value = data.findings
+      return data.findings
+    } catch (e) {
+      error.value = `Failed to fetch performance findings: ${e}`
+      logger.error('fetchPerformanceFindings failed:', e)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchRedisFindings(path: string): Promise<RedisOptimizationFinding[]> {
+    loading.value = true
+    error.value = null
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/code-intelligence/redis/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data: RedisAnalysisResponse = await response.json()
+      redisFindings.value = data.optimizations
+      return data.optimizations
+    } catch (e) {
+      error.value = `Failed to fetch Redis findings: ${e}`
+      logger.error('fetchRedisFindings failed:', e)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function scanFileSecurity(filePath: string): Promise<SecurityFinding[]> {
+    loading.value = true
+    error.value = null
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/code-intelligence/security/scan-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath })
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data: SecurityAnalysisResponse = await response.json()
+      securityFindings.value = data.findings
+      return data.findings
+    } catch (e) {
+      error.value = `Failed to scan file for security issues: ${e}`
+      logger.error('scanFileSecurity failed:', e)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function scanFilePerformance(filePath: string): Promise<PerformanceFinding[]> {
+    loading.value = true
+    error.value = null
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/code-intelligence/performance/scan-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath })
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data: PerformanceAnalysisResponse = await response.json()
+      performanceFindings.value = data.findings
+      return data.findings
+    } catch (e) {
+      error.value = `Failed to scan file for performance issues: ${e}`
+      logger.error('scanFilePerformance failed:', e)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function scanFileRedis(filePath: string): Promise<RedisOptimizationFinding[]> {
+    loading.value = true
+    error.value = null
+    try {
+      const backendUrl = await getBackendUrl()
+      const response = await fetch(`${backendUrl}/api/code-intelligence/redis/scan-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath })
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const data: RedisAnalysisResponse = await response.json()
+      redisFindings.value = data.optimizations
+      return data.optimizations
+    } catch (e) {
+      error.value = `Failed to scan file for Redis optimizations: ${e}`
+      logger.error('scanFileRedis failed:', e)
+      return []
     } finally {
       loading.value = false
     }
@@ -226,11 +375,20 @@ export function useCodeIntelligence() {
     vulnerabilityTypes,
     performanceIssueTypes,
     redisOptimizationTypes,
+    securityFindings,
+    performanceFindings,
+    redisFindings,
     // Actions
     fetchHealthScore,
     fetchSecurityScore,
     fetchPerformanceScore,
     fetchRedisScore,
+    fetchSecurityFindings,
+    fetchPerformanceFindings,
+    fetchRedisFindings,
+    scanFileSecurity,
+    scanFilePerformance,
+    scanFileRedis,
     fetchPatternTypes,
     fetchVulnerabilityTypes,
     fetchPerformanceIssueTypes,
