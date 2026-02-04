@@ -399,11 +399,27 @@ class HierarchicalAgent:
         # Execute in parallel
         results = await asyncio.gather(*coros, return_exceptions=True)
 
-        # Convert exceptions to failed results
-        processed_results = []
+        return self._process_parallel_results(results, tasks)
+
+    def _process_parallel_results(
+        self,
+        results: List[Any],
+        tasks: List[Dict[str, str]],
+    ) -> List[DelegationResult]:
+        """
+        Convert parallel execution results, handling exceptions. Issue #620.
+
+        Args:
+            results: Raw results from asyncio.gather (may include exceptions)
+            tasks: Original task list for error context
+
+        Returns:
+            List of DelegationResults with exceptions converted to failed results
+        """
+        processed = []
         for i, r in enumerate(results):
             if isinstance(r, Exception):
-                processed_results.append(
+                processed.append(
                     DelegationResult(
                         agent_id="error",
                         task=tasks[i].get("task", ""),
@@ -413,9 +429,8 @@ class HierarchicalAgent:
                     )
                 )
             else:
-                processed_results.append(r)
-
-        return processed_results
+                processed.append(r)
+        return processed
 
     def get_subordinate(self, agent_id: str) -> Optional["HierarchicalAgent"]:
         """Get a subordinate agent by ID."""

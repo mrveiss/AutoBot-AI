@@ -587,6 +587,67 @@ class BugPredictor(_BaseClass):
         high_risk = [a for a in result.file_assessments if a.risk_score >= threshold]
         return high_risk[:limit]
 
+    def _generate_flat_heatmap(
+        self, assessments: list[FileRiskAssessment]
+    ) -> list[dict[str, Any]]:
+        """
+        Generate flat heatmap data without grouping.
+
+        Args:
+            assessments: List of file risk assessments
+
+        Returns:
+            List of heatmap data entries. Issue #620.
+        """
+        return [
+            {
+                "name": a.file_path,
+                "value": a.risk_score,
+                "risk_level": a.risk_level.value,
+            }
+            for a in assessments
+        ]
+
+    def _generate_grouped_heatmap(
+        self, assessments: list[FileRiskAssessment]
+    ) -> list[dict[str, Any]]:
+        """
+        Generate directory-grouped heatmap data.
+
+        Args:
+            assessments: List of file risk assessments
+
+        Returns:
+            List of grouped heatmap data entries sorted by risk. Issue #620.
+        """
+        groups: dict[str, list[FileRiskAssessment]] = {}
+        for a in assessments:
+            parts = a.file_path.split("/")
+            group = parts[0] if len(parts) > 1 else "root"
+            if group not in groups:
+                groups[group] = []
+            groups[group].append(a)
+
+        heatmap_data = []
+        for group_name, group_assessments in groups.items():
+            avg_risk = sum(a.risk_score for a in group_assessments) / len(
+                group_assessments
+            )
+            heatmap_data.append(
+                {
+                    "name": group_name,
+                    "value": round(avg_risk, 1),
+                    "file_count": len(group_assessments),
+                    "risk_level": self._get_risk_level(avg_risk).value,
+                    "files": [
+                        {"path": a.file_path, "risk": a.risk_score}
+                        for a in group_assessments
+                    ],
+                }
+            )
+
+        return sorted(heatmap_data, key=lambda x: x["value"], reverse=True)
+
     def generate_heatmap(
         self,
         directory: Optional[str] = None,
@@ -605,46 +666,13 @@ class BugPredictor(_BaseClass):
         result = self.analyze_directory(directory)
 
         if grouping == "flat":
-            return {
-                "grouping": "flat",
-                "data": [
-                    {
-                        "name": a.file_path,
-                        "value": a.risk_score,
-                        "risk_level": a.risk_level.value,
-                    }
-                    for a in result.file_assessments
-                ],
-                "legend": self._get_heatmap_legend(),
-            }
-
-        # Group by directory
-        groups: dict[str, list[FileRiskAssessment]] = {}
-        for a in result.file_assessments:
-            parts = a.file_path.split("/")
-            group = parts[0] if len(parts) > 1 else "root"
-            if group not in groups:
-                groups[group] = []
-            groups[group].append(a)
-
-        heatmap_data = []
-        for group_name, assessments in groups.items():
-            avg_risk = sum(a.risk_score for a in assessments) / len(assessments)
-            heatmap_data.append(
-                {
-                    "name": group_name,
-                    "value": round(avg_risk, 1),
-                    "file_count": len(assessments),
-                    "risk_level": self._get_risk_level(avg_risk).value,
-                    "files": [
-                        {"path": a.file_path, "risk": a.risk_score} for a in assessments
-                    ],
-                }
-            )
+            data = self._generate_flat_heatmap(result.file_assessments)
+        else:
+            data = self._generate_grouped_heatmap(result.file_assessments)
 
         return {
             "grouping": grouping,
-            "data": sorted(heatmap_data, key=lambda x: x["value"], reverse=True),
+            "data": data,
             "legend": self._get_heatmap_legend(),
         }
 

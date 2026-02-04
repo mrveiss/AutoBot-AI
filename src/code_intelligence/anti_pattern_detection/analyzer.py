@@ -130,6 +130,32 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                 redis_database="analytics",
             )
 
+    def _analyze_single_file(
+        self, file_path: str, patterns: List[AntiPatternResult]
+    ) -> None:
+        """
+        Analyze a single file and append detected patterns.
+
+        Args:
+            file_path: Path to the Python file to analyze
+            patterns: List to append detected patterns to. Issue #620.
+        """
+        with open(file_path, "r", encoding="utf-8") as f:
+            source = f.read()
+            lines = source.split("\n")
+
+        result = self._bloater.check_large_file(file_path, len(lines))
+        if result:
+            patterns.append(result)
+
+        tree = ast.parse(source, filename=file_path)
+
+        if self.detect_circular:
+            self._coupler.collect_imports(file_path)
+
+        patterns.extend(self._analyze_ast_nodes(tree, file_path, lines))
+        patterns.extend(self._run_file_level_detections(tree, file_path))
+
     def analyze_directory(self, directory: str) -> AnalysisReport:
         """
         Analyze a directory for anti-patterns.
@@ -145,51 +171,20 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         self._total_functions = 0
 
         python_files = self._get_python_files(directory)
-
-        # Reset coupler detector's import graph
         self._coupler.reset_import_graph()
 
         for file_path in python_files:
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    source = f.read()
-                    lines = source.split("\n")
-
-                # Check for large file
-                result = self._bloater.check_large_file(file_path, len(lines))
-                if result:
-                    patterns.append(result)
-
-                tree = ast.parse(source, filename=file_path)
-
-                # Collect imports for circular dependency detection
-                if self.detect_circular:
-                    self._coupler.collect_imports(file_path)
-
-                # Analyze all nodes
-                patterns.extend(self._analyze_ast_nodes(tree, file_path, lines))
-
-                # File-level detections
-                patterns.extend(self._run_file_level_detections(tree, file_path))
-
+                self._analyze_single_file(file_path, patterns)
             except SyntaxError as e:
                 logger.debug("Syntax error in %s: %s", file_path, e)
             except Exception as e:
                 logger.debug("Error analyzing %s: %s", file_path, e)
 
-        # Detect circular dependencies across all files
         if self.detect_circular:
             patterns.extend(self._coupler.detect_circular_dependencies())
 
-        return AnalysisReport(
-            scan_path=directory,
-            total_files=len(python_files),
-            total_classes=self._total_classes,
-            total_functions=self._total_functions,
-            anti_patterns=patterns,
-            summary=self._calculate_summary(patterns),
-            severity_distribution=self._calculate_severity_distribution(patterns),
-        )
+        return self._create_analysis_report(directory, python_files, patterns)
 
     def _parse_file_source(
         self, file_path: str

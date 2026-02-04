@@ -339,6 +339,63 @@ class ChatHistoryManager:
             logging.error(f"Error loading chat session {session_id}: {str(e)}")
             return []
 
+    def _load_existing_chat_data(
+        self, chat_file: str, session_id: str
+    ) -> Dict[str, Any]:
+        """
+        Load existing chat data from file if it exists.
+
+        Args:
+            chat_file: Path to the chat file.
+            session_id: The session identifier for logging.
+
+        Returns:
+            Dict with existing chat data or empty dict if not found. Issue #620.
+        """
+        if not os.path.exists(chat_file):
+            return {}
+
+        try:
+            with open(chat_file, "r", encoding="utf-8") as f:
+                file_content = f.read()
+            return self._decrypt_data(file_content)
+        except Exception as e:
+            logging.warning(
+                "Could not load existing chat data for " f"{session_id}: {str(e)}"
+            )
+            return {}
+
+    def _build_chat_data(
+        self,
+        session_id: str,
+        name: str,
+        messages: List[Dict[str, Any]],
+        existing_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build chat data dict with updated fields.
+
+        Args:
+            session_id: The session identifier.
+            name: Optional name for the chat session.
+            messages: The messages to save.
+            existing_data: Previously loaded chat data.
+
+        Returns:
+            Updated chat data dict. Issue #620.
+        """
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        existing_data.update(
+            {
+                "chatId": session_id,
+                "name": name or existing_data.get("name", ""),
+                "messages": messages,
+                "last_modified": current_time,
+                "created_time": existing_data.get("created_time", current_time),
+            }
+        )
+        return existing_data
+
     def save_session(
         self,
         session_id: str,
@@ -355,44 +412,20 @@ class ChatHistoryManager:
             name (str): Optional name for the chat session.
         """
         try:
-            # Ensure chats directory exists
             chats_directory = self._get_chats_directory()
             if not os.path.exists(chats_directory):
                 os.makedirs(chats_directory, exist_ok=True)
 
             chat_file = f"{chats_directory}/chat_{session_id}.json"
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-
-            # Use provided messages or current history
             session_messages = self.history if messages is None else messages
 
-            # Load existing chat data if it exists to preserve metadata
-            chat_data = {}
-            if os.path.exists(chat_file):
-                try:
-                    with open(chat_file, "r") as f:
-                        file_content = f.read()
-                    chat_data = self._decrypt_data(file_content)
-                except Exception as e:
-                    logging.warning(
-                        "Could not load existing chat data for "
-                        f"{session_id}: {str(e)}"
-                    )
-
-            # Update chat data
-            chat_data.update(
-                {
-                    "chatId": session_id,
-                    "name": name or chat_data.get("name", ""),
-                    "messages": session_messages,
-                    "last_modified": current_time,
-                    "created_time": chat_data.get("created_time", current_time),
-                }
+            existing_data = self._load_existing_chat_data(chat_file, session_id)
+            chat_data = self._build_chat_data(
+                session_id, name, session_messages, existing_data
             )
 
-            # Save to file with encryption if enabled
             encrypted_data = self._encrypt_data(chat_data)
-            with open(chat_file, "w") as f:
+            with open(chat_file, "w", encoding="utf-8") as f:
                 f.write(encrypted_data)
 
             logging.info(f"Chat session '{session_id}' saved successfully")

@@ -494,24 +494,42 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             )
             research_results["content_extracted"] = extracted_content
 
-            if extracted_content:
-                research_results["summary"] = await self._create_research_summary(
-                    query, extracted_content
-                )
-                research_results["sources"] = [
-                    self._build_source_entry(c) for c in extracted_content
-                ]
-
-            logger.info(
-                "Research completed: %d sources analyzed, %d stored in KB",
-                len(extracted_content),
-                len(research_results["stored_in_kb"]),
+            await self._finalize_research_results(
+                query, extracted_content, research_results
             )
         except Exception as e:
             logger.error("Error during research: %s", e)
             research_results["error"] = str(e)
 
         return research_results
+
+    async def _finalize_research_results(
+        self,
+        query: str,
+        extracted_content: List[Dict[str, Any]],
+        research_results: Dict[str, Any],
+    ) -> None:
+        """
+        Finalize research results with summary and sources. Issue #620.
+
+        Args:
+            query: The original research query
+            extracted_content: List of extracted content items
+            research_results: Results dict to update in place
+        """
+        if extracted_content:
+            research_results["summary"] = await self._create_research_summary(
+                query, extracted_content
+            )
+            research_results["sources"] = [
+                self._build_source_entry(c) for c in extracted_content
+            ]
+
+        logger.info(
+            "Research completed: %d sources analyzed, %d stored in KB",
+            len(extracted_content),
+            len(research_results["stored_in_kb"]),
+        )
 
     async def _create_research_summary(
         self, query: str, content_list: List[Dict[str, Any]]

@@ -582,44 +582,83 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         integration_results["processed"] += 1
 
         try:
-            # Check if already cached (recent)
-            cached_info = await integrator.load_cached_man_page(command)
-            if cached_info and self._is_man_page_recent(cached_info):
-                integration_results["cached"] += 1
-                integration_results["commands"][command] = "cached"
+            if await self._try_use_cached_man_page(
+                command, integrator, integration_results
+            ):
                 return
 
-            # Check if man page exists
-            if not await integrator.check_man_page_exists(command):
-                integration_results["failed"] += 1
-                integration_results["commands"][command] = "no_man_page"
-                return
-
-            # Extract man page
-            man_info = await integrator.extract_man_page(command)
+            man_info = await self._extract_man_page_info(
+                command, integrator, integration_results
+            )
             if not man_info:
-                integration_results["failed"] += 1
-                integration_results["commands"][command] = "extraction_failed"
                 return
 
-            # Set machine ID for proper organization
-            man_info.machine_id = profile.machine_id
-
-            # Cache the result
-            await integrator.cache_man_page(man_info)
-
-            # Save as machine-specific knowledge
-            await self._save_man_page_knowledge(man_info, integrator)
-
-            integration_results["successful"] += 1
-            integration_results["commands"][command] = "success"
-
-            logger.debug("Integrated man page for %s", command)
+            await self._store_man_page(
+                command, man_info, integrator, profile, integration_results
+            )
 
         except Exception as e:
             integration_results["failed"] += 1
             integration_results["commands"][command] = f"error: {str(e)}"
             logger.error("Failed to integrate man page for %s: %s", command, e)
+
+    async def _try_use_cached_man_page(
+        self, command: str, integrator, integration_results: dict
+    ) -> bool:
+        """
+        Check for recent cached man page and use it if available. Issue #620.
+
+        Returns:
+            True if cached version was used, False otherwise
+        """
+        cached_info = await integrator.load_cached_man_page(command)
+        if cached_info and self._is_man_page_recent(cached_info):
+            integration_results["cached"] += 1
+            integration_results["commands"][command] = "cached"
+            return True
+        return False
+
+    async def _extract_man_page_info(
+        self, command: str, integrator, integration_results: dict
+    ):
+        """
+        Validate and extract man page information. Issue #620.
+
+        Returns:
+            ManPageInfo if successful, None if man page unavailable or extraction failed
+        """
+        if not await integrator.check_man_page_exists(command):
+            integration_results["failed"] += 1
+            integration_results["commands"][command] = "no_man_page"
+            return None
+
+        man_info = await integrator.extract_man_page(command)
+        if not man_info:
+            integration_results["failed"] += 1
+            integration_results["commands"][command] = "extraction_failed"
+            return None
+
+        return man_info
+
+    async def _store_man_page(
+        self, command: str, man_info, integrator, profile, integration_results: dict
+    ) -> None:
+        """
+        Store man page in cache and knowledge base. Issue #620.
+
+        Args:
+            command: Command name
+            man_info: Extracted man page information
+            integrator: Man page integrator instance
+            profile: Current machine profile
+            integration_results: Results dict to update
+        """
+        man_info.machine_id = profile.machine_id
+        await integrator.cache_man_page(man_info)
+        await self._save_man_page_knowledge(man_info, integrator)
+        integration_results["successful"] += 1
+        integration_results["commands"][command] = "success"
+        logger.debug("Integrated man page for %s", command)
 
     async def _setup_man_page_integrator(self, profile: MachineProfile):
         """
