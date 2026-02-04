@@ -977,6 +977,26 @@ class ChatWorkflowManager(
             tool_call_completed,
         )
 
+    def _build_chunk_iteration_context(
+        self,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build context dictionary for chunk iteration processing.
+
+        Issue #620.
+        """
+        return {
+            "streaming_msg": streaming_msg,
+            "selected_model": selected_model,
+            "terminal_session_id": terminal_session_id,
+            "used_knowledge": used_knowledge,
+            "rag_citations": rag_citations,
+        }
+
     async def _process_stream_chunk_iteration(
         self,
         chunk_data: Dict[str, Any],
@@ -1022,15 +1042,22 @@ class ChatWorkflowManager(
                 current_message_type,
             )
             return
-        yield self._process_chunk_with_messages(
-            chunk_text,
-            new_type,
-            current_message_type,
+        ctx = self._build_chunk_iteration_context(
             streaming_msg,
             selected_model,
             terminal_session_id,
             used_knowledge,
             rag_citations,
+        )
+        yield self._process_chunk_with_messages(
+            chunk_text,
+            new_type,
+            current_message_type,
+            ctx["streaming_msg"],
+            ctx["selected_model"],
+            ctx["terminal_session_id"],
+            ctx["used_knowledge"],
+            ctx["rag_citations"],
             llm_response,
             current_segment,
             tool_call_completed,

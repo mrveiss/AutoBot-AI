@@ -308,56 +308,79 @@ workflow complexity."""
         user_message: str,
     ) -> ClassificationResult:
         """Combine LLM and keyword-based classifications intelligently."""
-
         if not llm_result:
             # LLM failed, use keyword result
             logger.info("LLM classification failed, using keyword-based fallback")
             return self._create_fallback_result(user_message, keyword_result)
 
         try:
-            # Get LLM classification
-            llm_complexity_str = llm_result.get("complexity", "simple").lower()
-            llm_complexity = TaskComplexity(llm_complexity_str)
-
-            # Compare with keyword classification
-            confidence = float(llm_result.get("confidence", 0.7))
-
-            # If LLM confidence is low and keyword differs significantly, blend results
-            if confidence < 0.6:
-                # Use keyword as a sanity check
-                if (
-                    keyword_result == TaskComplexity.COMPLEX
-                    and llm_complexity == TaskComplexity.SIMPLE
-                ):
-                    llm_complexity = TaskComplexity.COMPLEX  # Use keyword result
-                    confidence = 0.6
-
-            # Create comprehensive result
-            return ClassificationResult(
-                complexity=llm_complexity,
-                confidence=confidence,
-                reasoning=llm_result.get("reasoning", "LLM-based analysis"),
-                suggested_agents=self._extract_agents(llm_result),
-                estimated_steps=int(llm_result.get("estimated_steps", 1)),
-                user_approval_needed=llm_result.get("user_approval_needed", False),
-                context_analysis={
-                    "domain": llm_result.get("domain", "general"),
-                    "intent": llm_result.get("intent", "unknown"),
-                    "scope": llm_result.get("scope", "single"),
-                    "risk_level": llm_result.get("risk_level", "low"),
-                    "system_changes": llm_result.get("system_changes", False),
-                    "requires_research": llm_result.get("requires_research", False),
-                    "requires_installation": llm_result.get(
-                        "requires_installation", False
-                    ),
-                    "keyword_classification": keyword_result.value,
-                    "llm_confidence": confidence,
-                },
+            llm_complexity, confidence = self._resolve_complexity_with_keyword_check(
+                llm_result, keyword_result
             )
-
+            return self._build_classification_result(
+                llm_result, llm_complexity, confidence, keyword_result
+            )
         except Exception as e:
             logger.error("Error combining classifications: %s", e)
             return self._create_fallback_result(user_message, keyword_result)
+
+    def _resolve_complexity_with_keyword_check(
+        self, llm_result: Dict[str, Any], keyword_result: TaskComplexity
+    ) -> tuple:
+        """Resolve complexity using LLM result with keyword sanity check. Issue #620."""
+        llm_complexity_str = llm_result.get("complexity", "simple").lower()
+        llm_complexity = TaskComplexity(llm_complexity_str)
+        confidence = float(llm_result.get("confidence", 0.7))
+
+        # If LLM confidence is low and keyword differs significantly, blend results
+        if confidence < 0.6:
+            if (
+                keyword_result == TaskComplexity.COMPLEX
+                and llm_complexity == TaskComplexity.SIMPLE
+            ):
+                llm_complexity = TaskComplexity.COMPLEX
+                confidence = 0.6
+
+        return llm_complexity, confidence
+
+    def _build_classification_result(
+        self,
+        llm_result: Dict[str, Any],
+        complexity: TaskComplexity,
+        confidence: float,
+        keyword_result: TaskComplexity,
+    ) -> ClassificationResult:
+        """Build the ClassificationResult from LLM data. Issue #620."""
+        return ClassificationResult(
+            complexity=complexity,
+            confidence=confidence,
+            reasoning=llm_result.get("reasoning", "LLM-based analysis"),
+            suggested_agents=self._extract_agents(llm_result),
+            estimated_steps=int(llm_result.get("estimated_steps", 1)),
+            user_approval_needed=llm_result.get("user_approval_needed", False),
+            context_analysis=self._build_context_analysis(
+                llm_result, keyword_result, confidence
+            ),
+        )
+
+    def _build_context_analysis(
+        self,
+        llm_result: Dict[str, Any],
+        keyword_result: TaskComplexity,
+        confidence: float,
+    ) -> Dict[str, Any]:
+        """Build context analysis dictionary from LLM result. Issue #620."""
+        return {
+            "domain": llm_result.get("domain", "general"),
+            "intent": llm_result.get("intent", "unknown"),
+            "scope": llm_result.get("scope", "single"),
+            "risk_level": llm_result.get("risk_level", "low"),
+            "system_changes": llm_result.get("system_changes", False),
+            "requires_research": llm_result.get("requires_research", False),
+            "requires_installation": llm_result.get("requires_installation", False),
+            "keyword_classification": keyword_result.value,
+            "llm_confidence": confidence,
+        }
 
     def _extract_agents(self, llm_result: Dict[str, Any]) -> List[str]:
         """Extract and map suggested agents from LLM result."""

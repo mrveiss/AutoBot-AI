@@ -581,6 +581,38 @@ class PerformanceMonitor:
 
         self.logger.info("Performance monitoring stopped")
 
+    def _fetch_redis_dashboard_data(self) -> tuple:
+        """Fetch performance metrics from Redis sorted sets.
+
+        Returns tuple of (gpu_data, npu_data, system_data, alerts_data).
+        Issue #620.
+        """
+        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -1, -1)
+        npu_data = self.redis_client.zrange("performance_metrics:npu", -1, -1)
+        system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
+        alerts_data = self.redis_client.zrange("performance_alerts", -10, -1)
+        return gpu_data, npu_data, system_data, alerts_data
+
+    def _populate_dashboard_from_redis(
+        self, dashboard: Dict[str, Any], redis_data: tuple
+    ) -> None:
+        """Populate dashboard dict with parsed Redis data.
+
+        Args:
+            dashboard: Dashboard dict to populate
+            redis_data: Tuple of (gpu_data, npu_data, system_data, alerts_data)
+
+        Issue #620.
+        """
+        gpu_data, npu_data, system_data, alerts_data = redis_data
+        if gpu_data:
+            dashboard["gpu"] = json.loads(gpu_data[0])
+        if npu_data:
+            dashboard["npu"] = json.loads(npu_data[0])
+        if system_data:
+            dashboard["system"] = json.loads(system_data[0])
+        dashboard["recent_alerts"] = [json.loads(a) for a in alerts_data]
+
     async def get_current_performance_dashboard(self) -> Dict[str, Any]:
         """Get comprehensive performance dashboard data."""
         try:
@@ -598,42 +630,14 @@ class PerformanceMonitor:
 
             if self.redis_client:
                 try:
-
-                    def _fetch_dashboard_data():
-                        gpu_data = self.redis_client.zrange(
-                            "performance_metrics:gpu", -1, -1
-                        )
-                        npu_data = self.redis_client.zrange(
-                            "performance_metrics:npu", -1, -1
-                        )
-                        system_data = self.redis_client.zrange(
-                            "performance_metrics:system", -1, -1
-                        )
-                        alerts_data = self.redis_client.zrange(
-                            "performance_alerts", -10, -1
-                        )
-                        return gpu_data, npu_data, system_data, alerts_data
-
-                    (
-                        gpu_data,
-                        npu_data,
-                        system_data,
-                        alerts_data,
-                    ) = await asyncio.to_thread(_fetch_dashboard_data)
-
-                    if gpu_data:
-                        dashboard["gpu"] = json.loads(gpu_data[0])
-                    if npu_data:
-                        dashboard["npu"] = json.loads(npu_data[0])
-                    if system_data:
-                        dashboard["system"] = json.loads(system_data[0])
-                    dashboard["recent_alerts"] = [json.loads(a) for a in alerts_data]
-
+                    redis_data = await asyncio.to_thread(
+                        self._fetch_redis_dashboard_data
+                    )
+                    self._populate_dashboard_from_redis(dashboard, redis_data)
                 except Exception as e:
                     self.logger.debug(f"Could not fetch dashboard data from Redis: {e}")
 
             dashboard["trends"] = await self._calculate_performance_trends()
-
             return dashboard
 
         except Exception as e:

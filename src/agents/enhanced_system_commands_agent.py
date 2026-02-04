@@ -39,16 +39,22 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
 
     def _init_allowed_commands(self) -> set:
         """Initialize set of allowed commands (Issue #398: extracted)."""
+        commands = set()
+        commands.update(self._get_filesystem_commands())
+        commands.update(self._get_system_info_commands())
+        commands.update(self._get_network_commands())
+        commands.update(self._get_service_commands())
+        commands.update(self._get_file_operation_commands())
+        commands.update(self._get_text_processing_commands())
+        return commands
+
+    def _get_filesystem_commands(self) -> set:
+        """Return filesystem navigation and viewing commands. Issue #620."""
+        return {"ls", "dir", "pwd", "cd", "cat", "head", "tail", "grep", "find"}
+
+    def _get_system_info_commands(self) -> set:
+        """Return system information commands. Issue #620."""
         return {
-            "ls",
-            "dir",
-            "pwd",
-            "cd",
-            "cat",
-            "head",
-            "tail",
-            "grep",
-            "find",
             "ps",
             "top",
             "htop",
@@ -57,23 +63,25 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
             "free",
             "lscpu",
             "lsblk",
-            "ifconfig",
-            "ip",
-            "netstat",
-            "ss",
-            "ping",
-            "curl",
-            "wget",
-            "systemctl",
-            "service",
-            "journalctl",
-            "dmesg",
             "uname",
             "whoami",
             "which",
             "whereis",
             "file",
             "stat",
+        }
+
+    def _get_network_commands(self) -> set:
+        """Return network-related commands. Issue #620."""
+        return {"ifconfig", "ip", "netstat", "ss", "ping", "curl", "wget"}
+
+    def _get_service_commands(self) -> set:
+        """Return service management commands. Issue #620."""
+        return {"systemctl", "service", "journalctl", "dmesg"}
+
+    def _get_file_operation_commands(self) -> set:
+        """Return file operation commands. Issue #620."""
+        return {
             "chmod",
             "chown",
             "mkdir",
@@ -87,13 +95,11 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
             "gunzip",
             "zip",
             "unzip",
-            "sort",
-            "uniq",
-            "wc",
-            "awk",
-            "sed",
-            "cut",
         }
+
+    def _get_text_processing_commands(self) -> set:
+        """Return text processing commands. Issue #620."""
+        return {"sort", "uniq", "wc", "awk", "sed", "cut"}
 
     def _init_dangerous_patterns(self) -> list:
         """Initialize list of dangerous command patterns (Issue #398: extracted)."""

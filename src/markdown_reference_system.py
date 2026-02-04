@@ -396,53 +396,81 @@ class MarkdownReferenceSystem:
             # Find markdown links [text](url) using pre-compiled pattern (Issue #380)
             link_matches = _MARKDOWN_LINK_RE.findall(line)
             for link_text, link_url in link_matches:
-                # Check if it's a reference to another markdown file
-                if link_url.endswith(".md") or "/docs/" in link_url:
-                    # Try to resolve the reference
-                    target_file = self._resolve_markdown_reference(
-                        link_url, source_file, all_files
-                    )
-                    if target_file:
-                        conn.execute(
-                            """
-                            INSERT INTO markdown_cross_references
-                            (source_file, target_file, reference_type, context_text,
-                             line_number, created_at)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                            (
-                                source_file,
-                                target_file,
-                                "link",
-                                line.strip(),
-                                line_num,
-                                datetime.now(),
-                            ),
-                        )
+                self._insert_link_reference(
+                    conn, source_file, link_url, line, line_num, all_files
+                )
 
             # Find file mentions using pre-compiled pattern (Issue #380)
             file_mentions = _MD_FILE_MENTION_RE.findall(line)
             for mentioned_file in file_mentions:
-                target_file = self._resolve_markdown_reference(
-                    mentioned_file, source_file, all_files
+                self._insert_mention_reference(
+                    conn, source_file, mentioned_file, line, line_num, all_files
                 )
-                if target_file and target_file != source_file:
-                    conn.execute(
-                        """
-                        INSERT INTO markdown_cross_references
-                        (source_file, target_file, reference_type, context_text,
-                         line_number, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            source_file,
-                            target_file,
-                            "mention",
-                            line.strip(),
-                            line_num,
-                            datetime.now(),
-                        ),
-                    )
+
+    def _insert_link_reference(
+        self,
+        conn,
+        source_file: str,
+        link_url: str,
+        line: str,
+        line_num: int,
+        all_files: List[str],
+    ) -> None:
+        """Insert a markdown link reference into the database. Issue #620."""
+        # Check if it's a reference to another markdown file
+        if not (link_url.endswith(".md") or "/docs/" in link_url):
+            return
+
+        # Try to resolve the reference
+        target_file = self._resolve_markdown_reference(link_url, source_file, all_files)
+        if target_file:
+            conn.execute(
+                """
+                INSERT INTO markdown_cross_references
+                (source_file, target_file, reference_type, context_text,
+                 line_number, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    source_file,
+                    target_file,
+                    "link",
+                    line.strip(),
+                    line_num,
+                    datetime.now(),
+                ),
+            )
+
+    def _insert_mention_reference(
+        self,
+        conn,
+        source_file: str,
+        mentioned_file: str,
+        line: str,
+        line_num: int,
+        all_files: List[str],
+    ) -> None:
+        """Insert a file mention reference into the database. Issue #620."""
+        target_file = self._resolve_markdown_reference(
+            mentioned_file, source_file, all_files
+        )
+        if target_file and target_file != source_file:
+            conn.execute(
+                """
+                INSERT INTO markdown_cross_references
+                (source_file, target_file, reference_type, context_text,
+                 line_number, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    source_file,
+                    target_file,
+                    "mention",
+                    line.strip(),
+                    line_num,
+                    datetime.now(),
+                ),
+            )
 
     def _resolve_markdown_reference(
         self, reference: str, source_file: str, all_files: List[str]

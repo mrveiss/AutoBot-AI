@@ -24,21 +24,96 @@ logger = logging.getLogger(__name__)
 SEARCHABLE_DOC_SOURCE_TYPES = {"autobot_docs", "readme"}
 
 # Issue #380: Module-level frozensets for command safety checks
-_SAFE_COMMANDS = frozenset({
-    "ls", "grep", "cat", "echo", "pwd", "date", "whoami", "id", "curl", "wget",
-    "git", "python", "python3", "pip", "pip3", "node", "npm", "yarn", "docker",
-    "kubectl", "terraform", "ansible", "ssh", "scp", "rsync", "find", "locate",
-    "which", "man", "info", "help", "type", "alias", "history", "env", "ps",
-    "top", "htop", "free", "df", "du", "mount", "lsblk", "systemctl", "service",
-    "journalctl", "awk", "sed", "sort", "uniq", "wc", "head", "tail", "tr",
-    "cut", "paste", "join",
-})
+_SAFE_COMMANDS = frozenset(
+    {
+        "ls",
+        "grep",
+        "cat",
+        "echo",
+        "pwd",
+        "date",
+        "whoami",
+        "id",
+        "curl",
+        "wget",
+        "git",
+        "python",
+        "python3",
+        "pip",
+        "pip3",
+        "node",
+        "npm",
+        "yarn",
+        "docker",
+        "kubectl",
+        "terraform",
+        "ansible",
+        "ssh",
+        "scp",
+        "rsync",
+        "find",
+        "locate",
+        "which",
+        "man",
+        "info",
+        "help",
+        "type",
+        "alias",
+        "history",
+        "env",
+        "ps",
+        "top",
+        "htop",
+        "free",
+        "df",
+        "du",
+        "mount",
+        "lsblk",
+        "systemctl",
+        "service",
+        "journalctl",
+        "awk",
+        "sed",
+        "sort",
+        "uniq",
+        "wc",
+        "head",
+        "tail",
+        "tr",
+        "cut",
+        "paste",
+        "join",
+    }
+)
 
-_DANGEROUS_COMMANDS = frozenset({
-    "rm", "rmdir", "mv", "cp", "dd", "mkfs", "fdisk", "parted", "shutdown",
-    "reboot", "halt", "init", "kill", "killall", "pkill", "chmod", "chown",
-    "chgrp", "su", "sudo", "passwd", "crontab", "at", "batch",
-})
+_DANGEROUS_COMMANDS = frozenset(
+    {
+        "rm",
+        "rmdir",
+        "mv",
+        "cp",
+        "dd",
+        "mkfs",
+        "fdisk",
+        "parted",
+        "shutdown",
+        "reboot",
+        "halt",
+        "init",
+        "kill",
+        "killall",
+        "pkill",
+        "chmod",
+        "chown",
+        "chgrp",
+        "su",
+        "sudo",
+        "passwd",
+        "crontab",
+        "at",
+        "batch",
+    }
+)
 
 _HELP_ARGS = frozenset({"--help", "-h", "help"})
 _HELP_COMMAND_PREFIXES = ("help", "man", "info")  # Tuple for startswith()
@@ -355,7 +430,7 @@ class MCPManualService:
                     process.communicate(), timeout=10.0
                 )
             except asyncio.TimeoutError:
-                logger.warning("Command %s timed out", ' '.join(cmd))
+                logger.warning("Command %s timed out", " ".join(cmd))
                 process.kill()
                 await process.wait()
                 return None
@@ -364,7 +439,9 @@ class MCPManualService:
                 return stdout.decode("utf-8", errors="ignore")
             else:
                 logger.warning(
-                    "Command %s failed with return code %d", ' '.join(cmd), process.returncode
+                    "Command %s failed with return code %d",
+                    " ".join(cmd),
+                    process.returncode,
                 )
                 return None
 
@@ -491,7 +568,7 @@ class MCPManualService:
         try:
             # Validate command arguments for safety
             if not self._is_safe_command(cmd_args):
-                logger.warning("Unsafe command rejected: %s", ' '.join(cmd_args))
+                logger.warning("Unsafe command rejected: %s", " ".join(cmd_args))
                 return None
 
             # Execute help command directly with timeout for safety
@@ -499,7 +576,7 @@ class MCPManualService:
             return result if result else None
 
         except Exception as e:
-            logger.error("Failed to execute help command %s: %s", ' '.join(cmd_args), e)
+            logger.error("Failed to execute help command %s: %s", " ".join(cmd_args), e)
             return None
 
     def _is_safe_command(self, cmd_args: List[str]) -> bool:
@@ -669,14 +746,20 @@ class MCPManualService:
                 try:
                     # Issue #358 - avoid blocking
                     dir_exists = await asyncio.to_thread(os.path.exists, doc_dir)
-                    is_dir = await asyncio.to_thread(os.path.isdir, doc_dir) if dir_exists else False
+                    is_dir = (
+                        await asyncio.to_thread(os.path.isdir, doc_dir)
+                        if dir_exists
+                        else False
+                    )
                     if dir_exists and is_dir:
                         sources.append(
                             {"name": doc_dir, "type": "directory", "searchable": True}
                         )
                 except Exception as e:
                     # Directory doesn't exist or not accessible
-                    logger.debug("Documentation directory %s not accessible: %s", doc_dir, e)
+                    logger.debug(
+                        "Documentation directory %s not accessible: %s", doc_dir, e
+                    )
 
         # Add AutoBot specific documentation
         autobot_docs = [
@@ -755,7 +838,9 @@ class MCPManualService:
             return await self._search_file_content(query, source_name)
 
         except Exception as e:
-            logger.warning("Failed to search documentation source %s: %s", source['name'], e)
+            logger.warning(
+                "Failed to search documentation source %s: %s", source["name"], e
+            )
 
         return results
 
@@ -874,13 +959,21 @@ class MCPManualService:
                 continue
 
             # Calculate relevance and create match entry
-            match_entry = self._create_match_entry(query, query_lower, line, i, lines, file_path)
+            match_entry = self._create_match_entry(
+                query, query_lower, line, i, lines, file_path
+            )
             matches.append(match_entry)
 
         return matches
 
     def _create_match_entry(
-        self, query: str, query_lower: str, line: str, line_index: int, all_lines: List[str], file_path: str
+        self,
+        query: str,
+        query_lower: str,
+        line: str,
+        line_index: int,
+        all_lines: List[str],
+        file_path: str,
     ) -> Dict[str, Any]:
         """Create a match entry with relevance and context (Issue #315 - extracted)."""
         # Calculate relevance based on exact match and context
@@ -973,63 +1066,65 @@ class MCPManualService:
 
         return results
 
-    async def _fallback_documentation_search(
-        self, query: str
-    ) -> Optional[Dict[str, Any]]:
-        """Fallback documentation search with basic results."""
-        fallback_docs = {
+    def _get_fallback_docs(self) -> Dict[str, Dict[str, Any]]:
+        """Return fallback documentation entries for common topics.
+
+        Issue #620.
+        """
+        return {
             "autobot": {
                 "title": "AutoBot Documentation",
-                "content": (
-                    "AutoBot is an intelligent automation platform with distributed VM architecture."
-                ),
+                "content": "AutoBot is an intelligent automation platform with distributed VM architecture.",
                 "source": "fallback",
                 "relevance": 0.9,
             },
             "linux": {
                 "title": "Linux Command Information",
-                "content": (
-                    "Use man command_name to get detailed manual pages for Linux commands."
-                ),
+                "content": "Use man command_name to get detailed manual pages for Linux commands.",
                 "source": "fallback",
                 "relevance": 0.7,
             },
             "help": {
                 "title": "Getting Help",
-                "content": (
-                    "Use --help flag with most commands to get usage information."
-                ),
+                "content": "Use --help flag with most commands to get usage information.",
                 "source": "fallback",
                 "relevance": 0.8,
             },
         }
 
-        # Find best match
-        for key, doc in fallback_docs.items():
-            if key in query.lower():
-                return {
-                    "query": query,
-                    "results": [doc],
-                    "total_found": 1,
-                    "sources_searched": ["fallback"],
-                }
+    def _build_fallback_response(
+        self, query: str, doc: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build standardized fallback search response.
 
-        # Generic response
+        Issue #620.
+        """
         return {
             "query": query,
-            "results": [
-                {
-                    "title": f"Documentation search for: {query}",
-                    "content": (
-                        f'Search performed for "{query}". Try using man command_name for manual pages.'
-                    ),
-                    "source": "fallback",
-                    "relevance": 0.5,
-                }
-            ],
+            "results": [doc],
             "total_found": 1,
             "sources_searched": ["fallback"],
         }
+
+    async def _fallback_documentation_search(
+        self, query: str
+    ) -> Optional[Dict[str, Any]]:
+        """Fallback documentation search with basic results."""
+        fallback_docs = self._get_fallback_docs()
+
+        # Find best match
+        for key, doc in fallback_docs.items():
+            if key in query.lower():
+                return self._build_fallback_response(query, doc)
+
+        # Generic response
+        generic_doc = {
+            "title": f"Documentation search for: {query}",
+            "content": f'Search performed for "{query}". Try using man command_name for manual pages.',
+            "source": "fallback",
+            "relevance": 0.5,
+        }
+        return self._build_fallback_response(query, generic_doc)
 
     def _check_cache(self, cache_key: str) -> bool:
         """Check if cached result is still valid"""
