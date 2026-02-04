@@ -167,6 +167,37 @@ class TeamService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    def _build_list_teams_base_query(
+        self, include_deleted: bool, search: Optional[str]
+    ):
+        """
+        Build base query for listing teams with filters applied.
+
+        Issue #620: Extracted from list_teams.
+
+        Args:
+            include_deleted: Whether to include soft-deleted teams
+            search: Optional search term for name/description
+
+        Returns:
+            SQLAlchemy select query with filters applied
+        """
+        base_query = select(Team)
+        base_query = self.apply_tenant_filter(base_query, Team)
+
+        if not include_deleted:
+            base_query = base_query.where(Team.deleted_at.is_(None))
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.where(
+                or_(
+                    Team.name.ilike(search_pattern),
+                    Team.description.ilike(search_pattern),
+                )
+            )
+        return base_query
+
     async def list_teams(
         self,
         limit: int = 50,
@@ -187,28 +218,12 @@ class TeamService(BaseService):
             Tuple of (teams list, total count)
         """
         self._require_org_context()
+        base_query = self._build_list_teams_base_query(include_deleted, search)
 
-        base_query = select(Team)
-        base_query = self.apply_tenant_filter(base_query, Team)
-
-        if not include_deleted:
-            base_query = base_query.where(Team.deleted_at.is_(None))
-
-        if search:
-            search_pattern = f"%{search}%"
-            base_query = base_query.where(
-                or_(
-                    Team.name.ilike(search_pattern),
-                    Team.description.ilike(search_pattern),
-                )
-            )
-
-        # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
         count_result = await self.session.execute(count_query)
         total = count_result.scalar() or 0
 
-        # Get paginated results with memberships
         query = (
             base_query.options(
                 selectinload(Team.memberships).selectinload(TeamMembership.user)
@@ -217,11 +232,34 @@ class TeamService(BaseService):
             .limit(limit)
             .offset(offset)
         )
-
         result = await self.session.execute(query)
         teams = list(result.scalars().all())
 
         return teams, total
+
+    async def _apply_team_name_update(
+        self, team: Team, name: str, team_id: uuid.UUID, changes: dict
+    ) -> None:
+        """
+        Apply name update to team if name has changed.
+
+        Issue #620: Extracted from update_team.
+
+        Args:
+            team: Team instance to update
+            name: New name value
+            team_id: Team UUID for duplicate check
+            changes: Dict to record changes for audit
+
+        Raises:
+            DuplicateTeamError: If new name already exists
+        """
+        if name and name != team.name:
+            existing = await self._find_team_by_name(name)
+            if existing and existing.id != team_id:
+                raise DuplicateTeamError(f"Team name '{name}' already exists")
+            changes["name"] = {"old": team.name, "new": name}
+            team.name = name
 
     async def update_team(
         self,
@@ -251,13 +289,7 @@ class TeamService(BaseService):
             raise TeamNotFoundError(f"Team {team_id} not found")
 
         changes = {}
-
-        if name and name != team.name:
-            existing = await self._find_team_by_name(name)
-            if existing and existing.id != team_id:
-                raise DuplicateTeamError(f"Team name '{name}' already exists")
-            changes["name"] = {"old": team.name, "new": name}
-            team.name = name
+        await self._apply_team_name_update(team, name, team_id, changes)
 
         if description is not None:
             changes["description"] = {"old": team.description, "new": description}
@@ -276,7 +308,6 @@ class TeamService(BaseService):
                 resource_id=team_id,
                 details={"changes": changes},
             )
-
         return team
 
     async def delete_team(self, team_id: uuid.UUID, hard_delete: bool = False) -> bool:

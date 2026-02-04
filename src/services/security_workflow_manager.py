@@ -1274,6 +1274,51 @@ class SecurityWorkflowManager:
             logger.error("Failed to delete assessment %s: %s", assessment_id, e)
             raise RuntimeError(f"Failed to delete assessment: {e}")
 
+    def _calculate_assessment_counts(
+        self, assessment: SecurityAssessment
+    ) -> dict[str, int]:
+        """
+        Calculate host, port, service, and vulnerability counts for an assessment.
+
+        Args:
+            assessment: The security assessment to analyze
+
+        Returns:
+            Dictionary with count metrics
+
+        Issue #620.
+        """
+        vuln_count = len(
+            [f for f in assessment.findings if f.get("type") == "vulnerability"]
+        )
+        return {
+            "hosts": len(assessment.hosts),
+            "ports": sum(len(h.ports) for h in assessment.hosts),
+            "services": sum(len(h.services) for h in assessment.hosts),
+            "vulnerabilities": vuln_count,
+        }
+
+    def _calculate_severity_distribution(
+        self, assessment: SecurityAssessment
+    ) -> dict[str, int]:
+        """
+        Calculate vulnerability severity distribution across all hosts.
+
+        Args:
+            assessment: The security assessment to analyze
+
+        Returns:
+            Dictionary mapping severity levels to counts
+
+        Issue #620.
+        """
+        severity_counts: dict[str, int] = {}
+        for host in assessment.hosts:
+            for vuln in host.vulnerabilities:
+                sev = vuln.get("severity", "unknown")
+                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        return severity_counts
+
     async def get_assessment_summary(
         self,
         assessment_id: str,
@@ -1291,20 +1336,8 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
-        # Count findings by type
-        vuln_count = len(
-            [f for f in assessment.findings if f.get("type") == "vulnerability"]
-        )
-        host_count = len(assessment.hosts)
-        port_count = sum(len(h.ports) for h in assessment.hosts)
-        service_count = sum(len(h.services) for h in assessment.hosts)
-
-        # Get severity distribution
-        severity_counts: dict[str, int] = {}
-        for host in assessment.hosts:
-            for vuln in host.vulnerabilities:
-                sev = vuln.get("severity", "unknown")
-                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        counts = self._calculate_assessment_counts(assessment)
+        severity_counts = self._calculate_severity_distribution(assessment)
 
         return {
             "id": assessment.id,
@@ -1316,10 +1349,7 @@ class SecurityWorkflowManager:
             ),
             "training_mode": assessment.training_mode,
             "stats": {
-                "hosts": host_count,
-                "ports": port_count,
-                "services": service_count,
-                "vulnerabilities": vuln_count,
+                **counts,
                 "severity_distribution": severity_counts,
                 "actions_taken": len(assessment.actions_taken),
             },

@@ -797,6 +797,46 @@ class Phase9PerformanceMonitor:
             return 70.0
         return 100.0
 
+    def _build_service_metrics_object(
+        self,
+        service_name: str,
+        host: str,
+        port: int,
+        status: str,
+        response_time_ms: float,
+        health_score: float,
+    ) -> ServicePerformanceMetrics:
+        """
+        Build ServicePerformanceMetrics object with collected data.
+
+        Issue #620: Extracted from _collect_single_service_metrics.
+
+        Args:
+            service_name: Name of the service
+            host: Service host address
+            port: Service port number
+            status: Service health status
+            response_time_ms: Response time in milliseconds
+            health_score: Calculated health score
+
+        Returns:
+            ServicePerformanceMetrics instance
+        """
+        return ServicePerformanceMetrics(
+            timestamp=time.time(),
+            service_name=service_name,
+            host=host,
+            port=port,
+            status=status,
+            response_time_ms=response_time_ms,
+            throughput_requests_per_second=0.0,
+            error_rate_percent=0.0,
+            uptime_hours=24.0,
+            memory_usage_mb=0.0,
+            cpu_usage_percent=0.0,
+            health_score=health_score,
+        )
+
     async def _collect_single_service_metrics(
         self, service_config: Dict[str, Any]
     ) -> Optional[ServicePerformanceMetrics]:
@@ -811,44 +851,20 @@ class Phase9PerformanceMonitor:
             port = service_config["port"]
             path = service_config.get("path")
 
-            # Measure response time and check health
             start_time = time.time()
-
-            # Issue #620: Use helpers for status checks
             if service_name == "Redis":
                 status = self._check_redis_service_status()
             else:
                 status = await self._check_http_service_status(host, port, path)
-
             response_time_ms = round((time.time() - start_time) * 1000, 1)
 
-            # Placeholder metrics (service-specific implementation needed)
-            throughput = 0.0
-            error_rate = 0.0
-            uptime_hours = 24.0
-            memory_usage_mb = 0.0
-            cpu_usage_percent = 0.0
-
-            # Issue #620: Use helper for health score
             health_score = self._calculate_service_health_score(
                 status, response_time_ms
             )
 
-            return ServicePerformanceMetrics(
-                timestamp=time.time(),
-                service_name=service_name,
-                host=host,
-                port=port,
-                status=status,
-                response_time_ms=response_time_ms,
-                throughput_requests_per_second=throughput,
-                error_rate_percent=error_rate,
-                uptime_hours=uptime_hours,
-                memory_usage_mb=memory_usage_mb,
-                cpu_usage_percent=cpu_usage_percent,
-                health_score=health_score,
+            return self._build_service_metrics_object(
+                service_name, host, port, status, response_time_ms, health_score
             )
-
         except Exception as e:
             self.logger.error(f"Error collecting single service metrics: {e}")
             return None

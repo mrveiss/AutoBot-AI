@@ -417,6 +417,38 @@ class FactExtractionService:
             logger.error("Error preparing fact for storage: %s", e)
             return False
 
+    async def _process_fact_batch(
+        self,
+        batch: List[AtomicFact],
+        metadata: Optional[Dict[str, Any]],
+    ) -> tuple[int, int]:
+        """
+        Process and store a single batch of facts to Redis.
+
+        Args:
+            batch: List of facts in this batch
+            metadata: Additional metadata for facts
+
+        Returns:
+            Tuple of (stored_count, error_count) for this batch
+
+        Issue #620.
+        """
+        pipe = self.redis_client.pipeline()
+        batch_errors = 0
+
+        for fact in batch:
+            if not self._prepare_fact_for_pipeline(pipe, fact, metadata):
+                batch_errors += 1
+
+        try:
+            await pipe.execute()
+            logger.debug("Stored batch of %s facts", len(batch))
+            return len(batch) - batch_errors, batch_errors
+        except Exception as e:
+            logger.error("Error executing batch storage: %s", e)
+            return 0, len(batch)
+
     async def _store_facts(
         self, facts: List[AtomicFact], metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -438,35 +470,20 @@ class FactExtractionService:
             return {"stored_count": 0, "error_count": len(facts)}
 
         try:
-            # Store facts in batches for better performance
             for i in range(0, len(facts), self.batch_size):
                 batch = facts[i : i + self.batch_size]
-                pipe = self.redis_client.pipeline()
-                batch_errors = 0
+                batch_stored, batch_errors = await self._process_fact_batch(
+                    batch, metadata
+                )
+                stored_count += batch_stored
+                error_count += batch_errors
 
-                # Prepare facts using helper (Issue #315: reduced nesting)
-                for fact in batch:
-                    if not self._prepare_fact_for_pipeline(pipe, fact, metadata):
-                        batch_errors += 1
-
-                # Execute batch operation
-                try:
-                    await pipe.execute()
-                    stored_count += len(batch) - batch_errors
-                    error_count += batch_errors
-                    logger.debug("Stored batch of %s facts", len(batch))
-                except Exception as e:
-                    logger.error("Error executing batch storage: %s", e)
-                    error_count += len(batch)
-
-            # Also store facts in the main knowledge base as structured content
             if self.knowledge_base and hasattr(self.knowledge_base, "store_fact"):
                 await self._store_facts_in_kb(facts, metadata)
 
             logger.info(
                 "Fact storage complete: %s stored, %s errors", stored_count, error_count
             )
-
         except Exception as e:
             logger.error("Error in fact storage: %s", e)
             error_count = len(facts)

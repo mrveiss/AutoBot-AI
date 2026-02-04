@@ -68,6 +68,69 @@ class SecureWebResearch:
         """Async context manager exit"""
         await self.domain_security.__aexit__(exc_type, exc_val, exc_tb)
 
+    async def _validate_domain_security(
+        self, result_url: str, research_result: Dict[str, Any]
+    ) -> bool:
+        """
+        Validate domain safety and update security statistics.
+
+        Args:
+            result_url: URL to validate
+            research_result: Research result to update with domain check info
+
+        Returns:
+            True if domain is safe, False if blocked
+
+        Issue #620.
+        """
+        domain_validation = await self.domain_security.validate_domain_safety(
+            result_url
+        )
+
+        self.security_stats["domains_checked"] += 1
+        research_result["security"]["domain_checks"].append(
+            {
+                "url": result_url,
+                "safe": domain_validation["safe"],
+                "reason": domain_validation["reason"],
+                "reputation_score": domain_validation["reputation_score"],
+            }
+        )
+
+        if not domain_validation["safe"]:
+            logger.warning(
+                "Domain blocked: %s - %s", result_url, domain_validation["reason"]
+            )
+            self.security_stats["domains_blocked"] += 1
+            self.security_stats["threats_detected"] += len(
+                domain_validation["threats_detected"]
+            )
+            return False
+        return True
+
+    def _apply_content_filtering(
+        self, result: Dict[str, Any], research_result: Dict[str, Any]
+    ) -> None:
+        """
+        Apply content filtering and sanitization to a result.
+
+        Args:
+            result: The result to filter (modified in place)
+            research_result: Research result to update with filtering info
+
+        Issue #620.
+        """
+        content_validation = self.input_validator.sanitize_web_content(
+            result["content"], result.get("content_type", "text/html")
+        )
+
+        if content_validation["threats_detected"]:
+            self.security_stats["content_filtered"] += 1
+            research_result["security"]["content_filtered"] = True
+            result["content"] = content_validation["sanitized_content"]
+            result["security_warnings"] = content_validation["warnings"]
+            result["threats_removed"] = content_validation["threats_detected"]
+
     async def _validate_result_security(
         self, result: Dict[str, Any], research_result: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -77,46 +140,13 @@ class SecureWebResearch:
         """
         result_url = result.get("url", "")
 
-        # Domain validation
         if result_url and self.enable_domain_validation:
-            domain_validation = await self.domain_security.validate_domain_safety(
-                result_url
-            )
-
-            self.security_stats["domains_checked"] += 1
-            research_result["security"]["domain_checks"].append(
-                {
-                    "url": result_url,
-                    "safe": domain_validation["safe"],
-                    "reason": domain_validation["reason"],
-                    "reputation_score": domain_validation["reputation_score"],
-                }
-            )
-
-            if not domain_validation["safe"]:
-                logger.warning(
-                    "Domain blocked: %s - %s", result_url, domain_validation["reason"]
-                )
-                self.security_stats["domains_blocked"] += 1
-                self.security_stats["threats_detected"] += len(
-                    domain_validation["threats_detected"]
-                )
+            if not await self._validate_domain_security(result_url, research_result):
                 return None
 
-        # Content filtering
         if self.enable_content_filtering and result.get("content"):
-            content_validation = self.input_validator.sanitize_web_content(
-                result["content"], result.get("content_type", "text/html")
-            )
+            self._apply_content_filtering(result, research_result)
 
-            if content_validation["threats_detected"]:
-                self.security_stats["content_filtered"] += 1
-                research_result["security"]["content_filtered"] = True
-                result["content"] = content_validation["sanitized_content"]
-                result["security_warnings"] = content_validation["warnings"]
-                result["threats_removed"] = content_validation["threats_detected"]
-
-        # Add security metadata
         result["security"] = {
             "domain_validated": self.enable_domain_validation,
             "content_filtered": self.enable_content_filtering,
