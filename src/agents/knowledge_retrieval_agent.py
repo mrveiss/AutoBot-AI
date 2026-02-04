@@ -320,6 +320,63 @@ class KnowledgeRetrievalAgent:
 
         return {"documents_found": len(processed_docs), "documents": processed_docs}
 
+    def _prepare_document_context(
+        self,
+        documents: List[Dict[str, Any]],
+        max_docs: int = 3,
+        max_content_len: int = 200,
+    ) -> str:
+        """Prepare context text from documents for summarization.
+
+        Extracts and truncates content from top documents. Issue #620.
+
+        Args:
+            documents: List of document dicts with 'content' key
+            max_docs: Maximum number of documents to include
+            max_content_len: Maximum length per document content
+
+        Returns:
+            Combined context text from documents
+        """
+        context_parts = []
+        for doc in documents[:max_docs]:
+            content = doc.get("content", "")
+            if len(content) > max_content_len:
+                content = content[:max_content_len] + "..."
+            context_parts.append(content)
+        return "\n\n".join(context_parts)
+
+    def _build_summary_messages(
+        self, query: str, context_text: str
+    ) -> List[Dict[str, str]]:
+        """Build messages for quick summary LLM request.
+
+        Constructs system prompt and user message for summarization. Issue #620.
+
+        Args:
+            query: The user's question
+            context_text: Prepared document context
+
+        Returns:
+            List of message dicts for LLM chat completion
+        """
+        system_prompt = (
+            "You are a fast fact retrieval assistant. Provide a brief, direct "
+            "answer based on the provided context.\n\n"
+            "Guidelines:\n"
+            "- Be concise and factual\n"
+            "- Answer directly without unnecessary elaboration\n"
+            "- If the context doesn't contain the answer, say so clearly\n"
+            "- Keep responses under 100 words"
+        )
+        return [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": f"Context:\n{context_text}\n\nQuestion: {query}\n\nProvide a brief answer:",
+            },
+        ]
+
     async def _generate_quick_summary(
         self, query: str, documents: List[Dict[str, Any]]
     ) -> str:
@@ -328,34 +385,11 @@ class KnowledgeRetrievalAgent:
             if not documents:
                 return "No relevant information found."
 
-            # Prepare context from documents
-            context_parts = []
-            for doc in documents[:3]:  # Limit to top 3 for speed
-                content = doc.get("content", "")
-                if len(content) > 200:  # Truncate for speed
-                    content = content[:200] + "..."
-                context_parts.append(content)
+            # Issue #620: Use helper to prepare document context
+            context_text = self._prepare_document_context(documents)
 
-            context_text = "\n\n".join(context_parts)
-
-            # Simple prompt for quick summarization
-            system_prompt = """You are a fast fact retrieval assistant. Provide a brief, direct answer based on the provided context.
-
-Guidelines:
-- Be concise and factual
-- Answer directly without unnecessary elaboration
-- If the context doesn't contain the answer, say so clearly
-- Keep responses under 100 words"""
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Context:\n{context_text}\n\nQuestion: {query}\n\nProvide a brief answer:"
-                    ),
-                },
-            ]
+            # Issue #620: Use helper to build messages
+            messages = self._build_summary_messages(query, context_text)
 
             # Use knowledge retrieval model for quick response
             response = await self.llm_interface.chat_completion(

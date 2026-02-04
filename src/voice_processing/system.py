@@ -67,7 +67,7 @@ class VoiceProcessingSystem:
         """
         self.voice_command_history.append(command_analysis)
         if len(self.voice_command_history) > self.max_history:
-            self.voice_command_history = self.voice_command_history[-self.max_history:]
+            self.voice_command_history = self.voice_command_history[-self.max_history :]
 
     def _build_task_outputs(
         self, speech_result, command_analysis: VoiceCommandAnalysis
@@ -101,7 +101,9 @@ class VoiceProcessingSystem:
         ) as task_context:
             try:
                 # Step 1: Speech Recognition
-                speech_result = await self.speech_recognition.transcribe_audio(audio_input)
+                speech_result = await self.speech_recognition.transcribe_audio(
+                    audio_input
+                )
 
                 if not speech_result.transcription or speech_result.confidence < 0.3:
                     return self._build_low_confidence_response(speech_result)
@@ -133,15 +135,22 @@ class VoiceProcessingSystem:
                 logger.error("Voice command processing failed: %s", e)
                 raise
 
-    async def _generate_command_response(
-        self,
-        command_analysis: VoiceCommandAnalysis,
-        speech_result,
-        context: Optional[Dict[str, Any]],
+    def _build_base_response(
+        self, command_analysis: VoiceCommandAnalysis, speech_result
     ) -> Dict[str, Any]:
-        """Generate comprehensive response to voice command"""
+        """Build base response structure for voice command.
 
-        response = {
+        Constructs the core response dictionary with speech recognition
+        and command analysis data. Issue #620.
+
+        Args:
+            command_analysis: Analyzed voice command
+            speech_result: Speech recognition result
+
+        Returns:
+            Base response dictionary
+        """
+        return {
             "success": True,
             "command_id": command_analysis.command_id,
             "speech_recognition": {
@@ -156,18 +165,20 @@ class VoiceProcessingSystem:
                 "parameters": command_analysis.parameters,
                 "confidence": command_analysis.confidence,
             },
-            "execution_plan": {
-                "suggested_actions": command_analysis.suggested_actions,
-                "requires_confirmation": command_analysis.requires_confirmation,
-                "context_needed": command_analysis.context_needed,
-                "estimated_duration": await self._estimate_execution_duration(
-                    command_analysis
-                ),
-            },
-            "next_steps": await self._determine_next_steps(command_analysis, context),
         }
 
-        # Add confirmation request if needed
+    async def _add_conditional_response_parts(
+        self, response: Dict[str, Any], command_analysis: VoiceCommandAnalysis
+    ) -> None:
+        """Add confirmation and context requirements to response.
+
+        Appends confirmation_required and context_required sections
+        when needed. Issue #620.
+
+        Args:
+            response: Response dictionary to modify in place
+            command_analysis: Analyzed voice command
+        """
         if command_analysis.requires_confirmation:
             response["confirmation_required"] = {
                 "message": f"Confirm execution of: {command_analysis.intent}",
@@ -175,7 +186,6 @@ class VoiceProcessingSystem:
                 "risk_level": await self._assess_risk_level(command_analysis),
             }
 
-        # Add context request if needed
         if command_analysis.context_needed:
             response["context_required"] = {
                 "message": "Additional context needed for command execution",
@@ -188,6 +198,35 @@ class VoiceProcessingSystem:
                     "Provide target element description",
                 ],
             }
+
+    async def _generate_command_response(
+        self,
+        command_analysis: VoiceCommandAnalysis,
+        speech_result,
+        context: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Generate comprehensive response to voice command.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        # Issue #620: Use helper for base response
+        response = self._build_base_response(command_analysis, speech_result)
+
+        # Add execution plan
+        response["execution_plan"] = {
+            "suggested_actions": command_analysis.suggested_actions,
+            "requires_confirmation": command_analysis.requires_confirmation,
+            "context_needed": command_analysis.context_needed,
+            "estimated_duration": await self._estimate_execution_duration(
+                command_analysis
+            ),
+        }
+        response["next_steps"] = await self._determine_next_steps(
+            command_analysis, context
+        )
+
+        # Issue #620: Use helper for conditional parts
+        await self._add_conditional_response_parts(response, command_analysis)
 
         return response
 

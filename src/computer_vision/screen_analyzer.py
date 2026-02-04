@@ -270,60 +270,75 @@ class ScreenAnalyzer:
             multimodal_analysis=extractor.to_multimodal_analysis(processing_results),
         )
 
+    async def _capture_from_session(self, session_id: str) -> Optional[np.ndarray]:
+        """Capture screenshot from VNC session. Issue #620."""
+        session_info = desktop_streaming.vnc_manager.get_session_info(session_id)
+        if not session_info:
+            return None
+        screenshot_base64 = await desktop_streaming._get_session_screenshot(session_id)
+        if not screenshot_base64:
+            return None
+        screenshot_bytes = base64.b64decode(screenshot_base64)
+        image = Image.open(io.BytesIO(screenshot_bytes))
+        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+    async def _capture_from_x11(self) -> Optional[np.ndarray]:
+        """Capture screenshot using X11 import command. Issue #620."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "import",
+                "-window",
+                "root",
+                "png:-",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+                if proc.returncode == 0:
+                    image = Image.open(io.BytesIO(stdout))
+                    return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning("X11 screenshot command timed out")
+        except Exception as e:
+            logger.warning("X11 screenshot failed: %s", e)
+        return None
+
+    def _generate_test_pattern(self) -> np.ndarray:
+        """Generate test pattern image when no screenshot available. Issue #620."""
+        logger.warning("Using test pattern instead of real screenshot")
+        test_image = np.zeros((600, 800, 3), dtype=np.uint8)
+        cv2.putText(
+            test_image,
+            "Test Screenshot",
+            (250, 300),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255, 255, 255),
+            2,
+        )
+        return test_image
+
     async def _capture_screenshot(
         self, session_id: Optional[str] = None
     ) -> Optional[np.ndarray]:
         """Capture screenshot from desktop streaming or system"""
         try:
+            # Try session-based capture first
             if session_id:
-                # Use desktop streaming to get screenshot
-                session_info = desktop_streaming.vnc_manager.get_session_info(
-                    session_id
-                )
-                if session_info:
-                    screenshot_base64 = await desktop_streaming._get_session_screenshot(
-                        session_id
-                    )
-                    if screenshot_base64:
-                        screenshot_bytes = base64.b64decode(screenshot_base64)
-                        image = Image.open(io.BytesIO(screenshot_bytes))
-                        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+                result = await self._capture_from_session(session_id)
+                if result is not None:
+                    return result
 
-            # Fallback to system screenshot using X11
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    "import",
-                    "-window",
-                    "root",
-                    "png:-",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                try:
-                    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-                    if proc.returncode == 0:
-                        image = Image.open(io.BytesIO(stdout))
-                        return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-                except asyncio.TimeoutError:
-                    proc.kill()
-                    await proc.wait()
-                    logger.warning("X11 screenshot command timed out")
-            except Exception as e:
-                logger.warning("X11 screenshot failed: %s", e)
+            # Fallback to X11 capture
+            result = await self._capture_from_x11()
+            if result is not None:
+                return result
 
-            # Generate test pattern if no screenshot available
-            logger.warning("Using test pattern instead of real screenshot")
-            test_image = np.zeros((600, 800, 3), dtype=np.uint8)
-            cv2.putText(
-                test_image,
-                "Test Screenshot",
-                (250, 300),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (255, 255, 255),
-                2,
-            )
-            return test_image
+            # Generate test pattern as last resort
+            return self._generate_test_pattern()
 
         except Exception as e:
             logger.error("Screenshot capture failed: %s", e)

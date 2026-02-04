@@ -788,34 +788,30 @@ class ToolHandlerMixin:
         ):
             yield msg
 
-    async def _process_single_command(
+    def _extract_command_params(
+        self, tool_call: Dict[str, Any]
+    ) -> tuple[str, str, str]:
+        """Extract command parameters from tool call dict. Issue #620."""
+        command = tool_call["params"].get("command")
+        host = tool_call["params"].get("host", "main")
+        description = tool_call.get("description", "")
+        return command, host, description
+
+    async def _dispatch_command_by_status(
         self,
-        tool_call: Dict[str, Any],
+        status: str,
         session_id: str,
         terminal_session_id: str,
+        command: str,
+        host: str,
+        result: Dict[str, Any],
+        description: str,
         ollama_endpoint: str,
         selected_model: str,
         execution_results: List,
         additional_response_parts: List,
     ):
-        """Process a single execute_command tool call. Issue #620.
-
-        Issue #655: Wraps common errors as RepairableException for retry.
-
-        Yields:
-            WorkflowMessage items
-        """
-        command = tool_call["params"].get("command")
-        host = tool_call["params"].get("host", "main")
-        description = tool_call.get("description", "")
-
-        logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
-
-        result = await self._execute_terminal_command(
-            session_id=session_id, command=command, host=host, description=description
-        )
-        status = result.get("status")
-
+        """Dispatch command handling based on execution status. Issue #620."""
         if status == "pending_approval":
             async for msg in self._handle_pending_approval_command(
                 session_id,
@@ -846,6 +842,45 @@ class ToolHandlerMixin:
                 command, result, additional_response_parts
             ):
                 yield msg
+
+    async def _process_single_command(
+        self,
+        tool_call: Dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: List,
+        additional_response_parts: List,
+    ):
+        """Process a single execute_command tool call. Issue #620.
+
+        Issue #655: Wraps common errors as RepairableException for retry.
+
+        Yields:
+            WorkflowMessage items
+        """
+        command, host, description = self._extract_command_params(tool_call)
+        logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
+
+        result = await self._execute_terminal_command(
+            session_id=session_id, command=command, host=host, description=description
+        )
+
+        async for msg in self._dispatch_command_by_status(
+            result.get("status"),
+            session_id,
+            terminal_session_id,
+            command,
+            host,
+            result,
+            description,
+            ollama_endpoint,
+            selected_model,
+            execution_results,
+            additional_response_parts,
+        ):
+            yield msg
 
     async def _handle_command_error(
         self,

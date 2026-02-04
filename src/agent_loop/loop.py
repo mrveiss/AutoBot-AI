@@ -139,8 +139,7 @@ class AgentLoop:
         self._consecutive_errors = 0
 
     async def _execute_main_loop(self) -> list[IterationResult]:
-        """
-        Execute the main iteration loop.
+        """Execute the main iteration loop.
 
         Issue #665: Extracted from run_task to reduce function length.
 
@@ -159,16 +158,52 @@ class AgentLoop:
 
         return results
 
+    async def _create_task_plan(
+        self, task_description: str, initial_context: Optional[dict]
+    ) -> None:
+        """Create execution plan if planner is available.
+
+        Issue #620: Extracted from run_task to reduce function length.
+
+        Args:
+            task_description: Description of the task
+            initial_context: Optional initial context/metadata
+        """
+        if self.planner:
+            plan = await self.planner.create_plan(
+                task_description,
+                context=initial_context,
+            )
+            self._current_context.plan_id = plan.plan_id
+            logger.info("AgentLoop: Plan created with %d steps", len(plan.steps))
+
+    async def _finalize_task(self, results: list[IterationResult]) -> dict[str, Any]:
+        """Finalize task execution and build result.
+
+        Issue #620: Extracted from run_task to reduce function length.
+
+        Args:
+            results: List of iteration results
+
+        Returns:
+            Dict with task results
+        """
+        self._state = LoopState.COMPLETING
+        if self.config.think_on_completion:
+            await self._think_before_completion()
+
+        self._state = LoopState.COMPLETED
+        return self._build_result(results)
+
     async def run_task(
         self,
         task_description: str,
         task_id: Optional[str] = None,
         initial_context: Optional[dict] = None,
     ) -> dict[str, Any]:
-        """
-        Run a complete task through the agent loop.
+        """Run a complete task through the agent loop.
 
-        Issue #665: Refactored to use extracted helper methods.
+        Issue #665, #620: Refactored to use extracted helper methods.
 
         Args:
             task_description: Description of the task to perform
@@ -181,29 +216,16 @@ class AgentLoop:
         task_id = task_id or f"task-{uuid.uuid4().hex[:12]}"
         logger.info("AgentLoop: Starting task %s: %s", task_id, task_description[:100])
 
-        # Issue #665: Use helper for context initialization
         self._init_task_context(task_id, task_description, initial_context)
 
         try:
-            # Phase 0: Create plan if planner available
-            if self.planner:
-                plan = await self.planner.create_plan(
-                    task_description,
-                    context=initial_context,
-                )
-                self._current_context.plan_id = plan.plan_id
-                logger.info("AgentLoop: Plan created with %d steps", len(plan.steps))
+            # Issue #620: Use helper for plan creation
+            await self._create_task_plan(task_description, initial_context)
 
-            # Issue #665: Use helper for main loop execution
             results = await self._execute_main_loop()
 
-            # Complete
-            self._state = LoopState.COMPLETING
-            if self.config.think_on_completion:
-                await self._think_before_completion()
-
-            self._state = LoopState.COMPLETED
-            return self._build_result(results)
+            # Issue #620: Use helper for task finalization
+            return await self._finalize_task(results)
 
         except asyncio.CancelledError:
             self._state = LoopState.CANCELLED

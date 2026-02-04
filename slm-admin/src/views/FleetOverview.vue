@@ -22,6 +22,7 @@ import NodeLifecyclePanel from '@/components/fleet/NodeLifecyclePanel.vue'
 import NodeServicesPanel from '@/components/fleet/NodeServicesPanel.vue'
 import FleetToolsTab from '@/components/fleet/FleetToolsTab.vue'
 import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
+import RoleManagementModal from '@/components/RoleManagementModal.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
@@ -50,6 +51,9 @@ const showConnectionTestResult = ref(false)
 // Selected node for actions
 const selectedNode = ref<SLMNode | null>(null)
 const editingNode = ref<SLMNode | null>(null)
+
+// Selected node for role management modal (Issue #779)
+const selectedNodeForRoles = ref<{ id: string; hostname: string } | null>(null)
 
 // Action states
 const isDeleting = ref(false)
@@ -261,59 +265,15 @@ function closeConnectionTestResult(): void {
   connectionTest.reset()
 }
 
-// Role Management - using shared constants (Issue #737 Phase 3)
-// Role metadata now comes from @/constants/node-roles.ts
-
-function formatRoleName(role: NodeRole): string {
-  // Use API data if available, fallback to constants
-  const apiRole = fleetStore.availableRoles.find(r => r.name === role)
-  if (apiRole) return apiRole.name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  return getRoleDisplayName(role)
-}
-
-function getRoleDescription(role: NodeRole): string {
-  const apiRole = fleetStore.availableRoles.find(r => r.name === role)
-  if (apiRole) return apiRole.description
-  return getSharedRoleDescription(role)
-}
-
-function getRoleTools(role: NodeRole): string[] {
-  const apiRole = fleetStore.availableRoles.find(r => r.name === role)
-  if (apiRole) return apiRole.tools
-  return getSharedRoleTools(role)
-}
-
+// Role Management - using RoleManagementModal component (Issue #779)
 function openRoleModal(node: SLMNode): void {
-  selectedRoles.value = [...node.roles]
+  selectedNodeForRoles.value = { id: node.node_id, hostname: node.hostname }
   showRoleModal.value = true
 }
 
 function closeRoleModal(): void {
   showRoleModal.value = false
-  selectedRoles.value = []
-}
-
-function toggleRole(role: NodeRole): void {
-  const index = selectedRoles.value.indexOf(role)
-  if (index === -1) {
-    selectedRoles.value.push(role)
-  } else {
-    selectedRoles.value.splice(index, 1)
-  }
-}
-
-async function saveRoles(): Promise<void> {
-  if (!selectedNode.value) return
-
-  isUpdatingRoles.value = true
-  try {
-    await fleetStore.updateNodeRoles(selectedNode.value.node_id, selectedRoles.value)
-    closeRoleModal()
-  } catch (err) {
-    logger.error('Failed to update roles:', err)
-  } finally {
-    isUpdatingRoles.value = false
-  }
+  selectedNodeForRoles.value = null
 }
 
 // Lifecycle Panel
@@ -572,75 +532,14 @@ function handleRestart(nodeId: string): void {
       </Transition>
     </Teleport>
 
-    <!-- Role Management Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showRoleModal"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeRoleModal"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">
-              Manage Roles - {{ selectedNode?.hostname }}
-            </h3>
-            <div class="space-y-3 mb-6">
-              <label
-                v-for="role in availableRoles"
-                :key="role"
-                class="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
-                :class="selectedRoles.includes(role)
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300'"
-              >
-                <input
-                  type="checkbox"
-                  :checked="selectedRoles.includes(role)"
-                  @change="toggleRole(role)"
-                  class="w-4 h-4 mt-1 text-primary-600 rounded focus:ring-primary-500"
-                />
-                <div class="flex-1">
-                  <div class="font-medium text-gray-900">{{ formatRoleName(role) }}</div>
-                  <div class="text-xs text-gray-500 mb-1">{{ getRoleDescription(role) }}</div>
-                  <div class="flex flex-wrap gap-1">
-                    <span
-                      v-for="tool in getRoleTools(role)"
-                      :key="tool"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600"
-                    >
-                      {{ tool }}
-                    </span>
-                  </div>
-                </div>
-              </label>
-            </div>
-            <div class="flex justify-end gap-3">
-              <button
-                @click="closeRoleModal"
-                :disabled="isUpdatingRoles"
-                class="btn btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                @click="saveRoles"
-                :disabled="isUpdatingRoles"
-                class="btn btn-primary"
-              >
-                {{ isUpdatingRoles ? 'Saving...' : 'Save Roles' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- Role Management Modal (Issue #779) -->
+    <RoleManagementModal
+      v-if="showRoleModal && selectedNodeForRoles"
+      :node-id="selectedNodeForRoles.id"
+      :hostname="selectedNodeForRoles.hostname"
+      @close="closeRoleModal"
+      @saved="refreshFleet"
+    />
 
     <!-- Connection Test Result Modal -->
     <Teleport to="body">

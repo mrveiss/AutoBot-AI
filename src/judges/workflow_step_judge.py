@@ -328,6 +328,38 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             logger.error("Error getting improvement suggestions: %s", e)
             return [f"Error generating suggestions: {str(e)}"]
 
+    async def _evaluate_alternative_steps(
+        self,
+        alternatives: List[Dict[str, Any]],
+        primary_step: Dict[str, Any],
+        workflow_context: Dict[str, Any],
+        user_context: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Evaluate each alternative step against the primary. Issue #620."""
+        evaluations = []
+        for i, alt_step in enumerate(alternatives):
+            alt_eval = await self.evaluate_workflow_step(
+                alt_step, workflow_context, user_context, [primary_step]
+            )
+            evaluations.append(
+                {"step": alt_step, "evaluation": alt_eval, "type": f"alternative_{i+1}"}
+            )
+        return evaluations
+
+    def _build_comparison_result(
+        self, evaluations: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Build ranked comparison result from evaluations. Issue #620."""
+        evaluations.sort(key=lambda x: x["evaluation"].overall_score, reverse=True)
+        return {
+            "best_option": evaluations[0],
+            "all_evaluations": evaluations,
+            "ranking_rationale": (
+                "Ranked by overall score considering safety, quality, and efficiency"
+            ),
+            "recommendation": evaluations[0]["evaluation"].recommendation,
+        }
+
     async def compare_alternatives(
         self,
         primary_step: Dict[str, Any],
@@ -342,41 +374,21 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
             Dict with ranked alternatives and recommendations
         """
         try:
-            # Evaluate all alternatives
-            evaluations = []
-
             # Evaluate primary step
             primary_eval = await self.evaluate_workflow_step(
                 primary_step, workflow_context, user_context, alternatives
             )
-            evaluations.append(
+            evaluations = [
                 {"step": primary_step, "evaluation": primary_eval, "type": "primary"}
+            ]
+
+            # Evaluate alternatives and build result
+            alt_evals = await self._evaluate_alternative_steps(
+                alternatives, primary_step, workflow_context, user_context
             )
+            evaluations.extend(alt_evals)
 
-            # Evaluate alternatives
-            for i, alt_step in enumerate(alternatives):
-                alt_eval = await self.evaluate_workflow_step(
-                    alt_step, workflow_context, user_context, [primary_step]
-                )
-                evaluations.append(
-                    {
-                        "step": alt_step,
-                        "evaluation": alt_eval,
-                        "type": f"alternative_{i+1}",
-                    }
-                )
-
-            # Rank by overall score
-            evaluations.sort(key=lambda x: x["evaluation"].overall_score, reverse=True)
-
-            return {
-                "best_option": evaluations[0],
-                "all_evaluations": evaluations,
-                "ranking_rationale": (
-                    "Ranked by overall score considering safety, quality, and efficiency"
-                ),
-                "recommendation": evaluations[0]["evaluation"].recommendation,
-            }
+            return self._build_comparison_result(evaluations)
 
         except Exception as e:
             logger.error("Error comparing alternatives: %s", e)
