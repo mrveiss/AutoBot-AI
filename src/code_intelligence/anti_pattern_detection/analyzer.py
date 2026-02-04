@@ -481,6 +481,62 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             dist[key] = dist.get(key, 0) + 1
         return dist
 
+    def _analyze_single_file_with_cache(
+        self,
+        file_path: str,
+        patterns: List[AntiPatternResult],
+    ) -> None:
+        """
+        Analyze a single file using cached AST and append patterns. Issue #620.
+
+        Args:
+            file_path: Path to the Python file to analyze
+            patterns: List to append detected patterns to
+        """
+        tree, source = get_ast_with_content(file_path)
+        if tree is None:
+            logger.debug("Skipping %s: failed to parse AST", file_path)
+            return
+
+        lines = source.split("\n") if source else []
+
+        result = self._bloater.check_large_file(file_path, len(lines))
+        if result:
+            patterns.append(result)
+
+        if self.detect_circular:
+            self._coupler.collect_imports(file_path)
+
+        patterns.extend(self._analyze_ast_nodes(tree, file_path, lines))
+        patterns.extend(self._run_file_level_detections(tree, file_path))
+
+    def _create_analysis_report(
+        self,
+        directory: str,
+        python_files: List[str],
+        patterns: List[AntiPatternResult],
+    ) -> AnalysisReport:
+        """
+        Create an AnalysisReport from collected patterns. Issue #620.
+
+        Args:
+            directory: Path that was analyzed
+            python_files: List of Python files that were analyzed
+            patterns: List of detected anti-patterns
+
+        Returns:
+            AnalysisReport with all detection results
+        """
+        return AnalysisReport(
+            scan_path=directory,
+            total_files=len(python_files),
+            total_classes=self._total_classes,
+            total_functions=self._total_functions,
+            anti_patterns=patterns,
+            summary=self._calculate_summary(patterns),
+            severity_distribution=self._calculate_severity_distribution(patterns),
+        )
+
     async def _analyze_directory_with_cache(self, directory: str) -> AnalysisReport:
         """
         Analyze directory using shared caches for performance.
@@ -498,53 +554,19 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         self._total_classes = 0
         self._total_functions = 0
 
-        # Use async file list cache
         python_files = await self._get_python_files_async(directory)
-
-        # Reset coupler detector's import graph
         self._coupler.reset_import_graph()
 
         for file_path in python_files:
             try:
-                # Use shared AST cache
-                tree, source = get_ast_with_content(file_path)
-                if tree is None:
-                    logger.debug("Skipping %s: failed to parse AST", file_path)
-                    continue
-
-                lines = source.split("\n") if source else []
-
-                # Check for large file
-                result = self._bloater.check_large_file(file_path, len(lines))
-                if result:
-                    patterns.append(result)
-
-                # Collect imports for circular dependency detection
-                if self.detect_circular:
-                    self._coupler.collect_imports(file_path)
-
-                # Analyze all nodes
-                patterns.extend(self._analyze_ast_nodes(tree, file_path, lines))
-
-                # File-level detections
-                patterns.extend(self._run_file_level_detections(tree, file_path))
-
+                self._analyze_single_file_with_cache(file_path, patterns)
             except Exception as e:
                 logger.debug("Error analyzing %s: %s", file_path, e)
 
-        # Detect circular dependencies across all files
         if self.detect_circular:
             patterns.extend(self._coupler.detect_circular_dependencies())
 
-        return AnalysisReport(
-            scan_path=directory,
-            total_files=len(python_files),
-            total_classes=self._total_classes,
-            total_functions=self._total_functions,
-            anti_patterns=patterns,
-            summary=self._calculate_summary(patterns),
-            severity_distribution=self._calculate_severity_distribution(patterns),
-        )
+        return self._create_analysis_report(directory, python_files, patterns)
 
     # Issue #554: Async semantic analysis methods
     # Issue #607: Enhanced with shared cache support

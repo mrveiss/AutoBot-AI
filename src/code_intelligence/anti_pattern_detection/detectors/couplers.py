@@ -251,6 +251,71 @@ class CouplerDetector:
     # Feature Envy Detection
     # =========================================================================
 
+    def _count_attribute_accesses(
+        self,
+        node: ast.FunctionDef,
+    ) -> tuple[int, Dict[str, int]]:
+        """
+        Count self and external attribute accesses in a function. Issue #620.
+
+        Args:
+            node: AST FunctionDef node to analyze
+
+        Returns:
+            Tuple of (self_accesses count, external_accesses dict)
+        """
+        self_accesses = 0
+        external_accesses: Dict[str, int] = {}
+
+        for child in ast.walk(node):
+            if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name):
+                if child.value.id == "self":
+                    self_accesses += 1
+                elif child.value.id.lower() not in _FEATURE_ENVY_EXCLUDED_LOWER:
+                    obj_name = child.value.id
+                    external_accesses[obj_name] = external_accesses.get(obj_name, 0) + 1
+
+        return self_accesses, external_accesses
+
+    def _create_feature_envy_result(
+        self,
+        node: ast.FunctionDef,
+        file_path: str,
+        obj_name: str,
+        count: int,
+        self_accesses: int,
+    ) -> AntiPatternResult:
+        """
+        Create an AntiPatternResult for feature envy detection. Issue #620.
+
+        Args:
+            node: AST FunctionDef node
+            file_path: Path to the source file
+            obj_name: Name of the external object being accessed
+            count: Number of times the external object is accessed
+            self_accesses: Number of self accesses
+
+        Returns:
+            AntiPatternResult for the detected feature envy
+        """
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.FEATURE_ENVY,
+            severity=get_feature_envy_severity(count),
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=node.name,
+            description=(
+                f"Method '{node.name}' accesses '{obj_name}' "
+                f"{count} times vs self {self_accesses} times"
+            ),
+            suggestion=f"Consider moving this method to the '{obj_name}' class",
+            metrics={
+                "self_accesses": self_accesses,
+                "external_object": obj_name,
+                "external_accesses": count,
+            },
+        )
+
     def detect_feature_envy(
         self,
         node: ast.FunctionDef,
@@ -272,45 +337,13 @@ class CouplerDetector:
             List of AntiPatternResult for detected feature envy
         """
         patterns: List[AntiPatternResult] = []
+        self_accesses, external_accesses = self._count_attribute_accesses(node)
 
-        self_accesses = 0
-        external_accesses: Dict[str, int] = {}
-
-        for child in ast.walk(node):
-            if isinstance(child, ast.Attribute):
-                if isinstance(child.value, ast.Name):
-                    if child.value.id == "self":
-                        self_accesses += 1
-                    else:
-                        obj_name = child.value.id
-                        # Skip excluded objects (stdlib, frameworks, params)
-                        if obj_name.lower() not in _FEATURE_ENVY_EXCLUDED_LOWER:
-                            external_accesses[obj_name] = (
-                                external_accesses.get(obj_name, 0) + 1
-                            )
-
-        # Check if any external object is accessed more than self
         for obj_name, count in external_accesses.items():
             if count > self_accesses and count >= self.feature_envy_threshold:
                 patterns.append(
-                    AntiPatternResult(
-                        pattern_type=AntiPatternType.FEATURE_ENVY,
-                        severity=get_feature_envy_severity(count),
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        entity_name=node.name,
-                        description=(
-                            f"Method '{node.name}' accesses '{obj_name}' "
-                            f"{count} times vs self {self_accesses} times"
-                        ),
-                        suggestion=(
-                            f"Consider moving this method to the '{obj_name}' class"
-                        ),
-                        metrics={
-                            "self_accesses": self_accesses,
-                            "external_object": obj_name,
-                            "external_accesses": count,
-                        },
+                    self._create_feature_envy_result(
+                        node, file_path, obj_name, count, self_accesses
                     )
                 )
 

@@ -451,6 +451,36 @@ def _deny_role_access(
     )
 
 
+def _deny_any_permission_access(
+    user_data: dict, perm_strs: List[str], request: Request
+) -> None:
+    """
+    Log denied permission access when none of required permissions match. Issue #620.
+
+    Args:
+        user_data: User data dict
+        perm_strs: List of permission strings that were required
+        request: FastAPI request object
+
+    Raises:
+        HTTPException via raise_auth_error
+    """
+    _security_layer.audit_log(
+        action="permission_denied",
+        user=user_data.get("username", "unknown"),
+        outcome="denied",
+        details={
+            "permissions_required_any": perm_strs,
+            "user_role": user_data.get("role"),
+            "endpoint": str(request.url.path),
+        },
+    )
+    raise_auth_error(
+        "AUTH_0003",
+        f"One of permissions {perm_strs} required for this operation",
+    )
+
+
 def require_role(
     *roles: Union[Role, str], allow_single_user_bypass: bool = True
 ) -> Callable:
@@ -523,40 +553,19 @@ def require_any_permission(
 
     def dependency(request: Request) -> bool:
         """Check at least one permission and return True or raise error."""
-        # Check for single user mode bypass
-        if allow_single_user_bypass:
-            from src.user_management.config import DeploymentMode, get_deployment_config
+        if allow_single_user_bypass and _check_single_user_bypass("any_permission"):
+            return True
 
-            deployment_config = get_deployment_config()
-            if deployment_config.mode == DeploymentMode.SINGLE_USER:
-                return True
-
-        # Get user from request
         user_data = auth_middleware.get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
-        # Check if user has any of the permissions
         for perm in permissions:
             if has_permission(user_data, perm):
                 return True
 
-        # None matched - deny access
         perm_strs = [p.value if isinstance(p, Permission) else p for p in permissions]
-        _security_layer.audit_log(
-            action="permission_denied",
-            user=user_data.get("username", "unknown"),
-            outcome="denied",
-            details={
-                "permissions_required_any": perm_strs,
-                "user_role": user_data.get("role"),
-                "endpoint": str(request.url.path),
-            },
-        )
-        raise_auth_error(
-            "AUTH_0003",
-            f"One of permissions {perm_strs} required for this operation",
-        )
+        _deny_any_permission_access(user_data, perm_strs, request)
 
     return dependency
 

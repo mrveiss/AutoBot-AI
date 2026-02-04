@@ -260,6 +260,56 @@ Focus on practical assessment that helps improve agent performance and user expe
             logger.error("Error in response quality assessment: %s", e)
             return False, 0.0, f"Assessment error: {str(e)}"
 
+    def _build_feedback_by_dimension(self, criterion_scores: List) -> Dict[str, Any]:
+        """
+        Build detailed feedback dictionary organized by evaluation dimension.
+
+        Args:
+            criterion_scores: List of criterion score objects from judgment.
+
+        Returns:
+            Dict mapping dimension names to their feedback details.
+
+        Issue #620.
+        """
+        feedback = {}
+        for score in criterion_scores:
+            feedback[score.dimension.value] = {
+                "score": score.score,
+                "confidence": score.confidence.value,
+                "reasoning": score.reasoning,
+                "evidence": score.evidence,
+            }
+        return feedback
+
+    def _categorize_scores_by_threshold(
+        self, criterion_scores: List, threshold: float, above: bool = True
+    ) -> List[str]:
+        """
+        Categorize dimension scores based on a threshold.
+
+        Args:
+            criterion_scores: List of criterion score objects from judgment.
+            threshold: Score threshold for categorization.
+            above: If True, return dimensions >= threshold; otherwise < threshold.
+
+        Returns:
+            List of dimension names matching the criteria.
+
+        Issue #620.
+        """
+        if above:
+            return [
+                score.dimension.value
+                for score in criterion_scores
+                if score.score >= threshold
+            ]
+        return [
+            score.dimension.value
+            for score in criterion_scores
+            if score.score < threshold
+        ]
+
     async def get_improvement_feedback(
         self,
         request: Dict[str, Any],
@@ -278,42 +328,25 @@ Focus on practical assessment that helps improve agent performance and user expe
                 request, response, agent_type, context
             )
 
-            # Extract specific feedback by dimension
-            feedback_by_dimension = {}
-            for score in judgment.criterion_scores:
-                feedback_by_dimension[score.dimension.value] = {
-                    "score": score.score,
-                    "confidence": score.confidence.value,
-                    "reasoning": score.reasoning,
-                    "evidence": score.evidence,
-                }
-
-            # Identify priority improvement areas (scores < 0.7)
-            priority_improvements = [
-                score.dimension.value
-                for score in judgment.criterion_scores
-                if score.score < 0.7
-            ]
-
             return {
                 "overall_assessment": {
                     "score": judgment.overall_score,
                     "recommendation": judgment.recommendation,
                     "confidence": judgment.confidence.value,
                 },
-                "detailed_feedback": feedback_by_dimension,
-                "priority_improvements": priority_improvements,
+                "detailed_feedback": self._build_feedback_by_dimension(
+                    judgment.criterion_scores
+                ),
+                "priority_improvements": self._categorize_scores_by_threshold(
+                    judgment.criterion_scores, 0.7, above=False
+                ),
                 "improvement_suggestions": judgment.improvement_suggestions,
-                "strengths": [
-                    score.dimension.value
-                    for score in judgment.criterion_scores
-                    if score.score >= 0.8
-                ],
-                "areas_for_improvement": [
-                    score.dimension.value
-                    for score in judgment.criterion_scores
-                    if score.score < 0.7
-                ],
+                "strengths": self._categorize_scores_by_threshold(
+                    judgment.criterion_scores, 0.8, above=True
+                ),
+                "areas_for_improvement": self._categorize_scores_by_threshold(
+                    judgment.criterion_scores, 0.7, above=False
+                ),
                 "reasoning": judgment.reasoning,
             }
 
