@@ -378,6 +378,48 @@ class VoiceInterface:
 
         return self._coqui_tts
 
+    def _create_speech_error_response(
+        self, status: str, message: str
+    ) -> Dict[str, Any]:
+        """
+        Create a standardized error response for speech recognition.
+
+        Args:
+            status: Error status code (error, timeout, no_match)
+            message: Human-readable error message
+
+        Returns:
+            Dict with status and message keys. Issue #620.
+        """
+        return {"status": status, "message": message}
+
+    def _handle_recognition_exception(self, exc: Exception) -> Dict[str, Any]:
+        """
+        Handle speech recognition exceptions and return appropriate response.
+
+        Args:
+            exc: The exception that occurred during recognition
+
+        Returns:
+            Dict with status and error message. Issue #620.
+        """
+        if isinstance(exc, sr.WaitTimeoutError):
+            return self._create_speech_error_response(
+                "timeout", "No speech detected within timeout."
+            )
+        if isinstance(exc, sr.UnknownValueError):
+            return self._create_speech_error_response(
+                "no_match", "Could not understand audio."
+            )
+        if isinstance(exc, sr.RequestError):
+            return self._create_speech_error_response(
+                "error",
+                f"Could not request results from Google Speech Recognition service; {exc}",
+            )
+        return self._create_speech_error_response(
+            "error", f"An unexpected error occurred during speech recognition: {exc}"
+        )
+
     async def listen_and_convert_to_text(
         self, timeout: Optional[int] = 5, phrase_time_limit: Optional[int] = 5
     ) -> Dict[str, Any]:
@@ -393,55 +435,24 @@ class VoiceInterface:
             Dict[str, Any]: Status and recognized text or error message.
         """
         if not SPEECH_RECOGNITION_AVAILABLE or not self.recognizer:
-            return {
-                "status": "error",
-                "message": (
-                    "Speech recognition not available. Install speech_recognition "
-                    "and pyaudio."
-                ),
-            }
+            return self._create_speech_error_response(
+                "error",
+                "Speech recognition not available. Install speech_recognition and pyaudio.",
+            )
 
         with sr.Microphone() as source:
-            # Adjust for ambient noise
             self.recognizer.adjust_for_ambient_noise(source)
             logger.info("Listening for speech...")
             try:
                 audio = self.recognizer.listen(
-                    source,
-                    timeout=timeout,
-                    phrase_time_limit=phrase_time_limit,
+                    source, timeout=timeout, phrase_time_limit=phrase_time_limit
                 )
                 logger.info("Processing speech...")
-                # Use Google Web Speech API for recognition
                 text = self.recognizer.recognize_google(audio)
                 logger.info("Recognized: %s", text)
                 return {"status": "success", "text": text}
-            except sr.WaitTimeoutError:
-                return {
-                    "status": "timeout",
-                    "message": "No speech detected within timeout.",
-                }
-            except sr.UnknownValueError:
-                return {
-                    "status": "no_match",
-                    "message": "Could not understand audio.",
-                }
-            except sr.RequestError as e:
-                return {
-                    "status": "error",
-                    "message": (
-                        "Could not request results from Google "
-                        f"Speech Recognition service; {e}"
-                    ),
-                }
             except Exception as e:
-                return {
-                    "status": "error",
-                    "message": (
-                        "An unexpected error occurred during "
-                        f"speech recognition: {e}"
-                    ),
-                }
+                return self._handle_recognition_exception(e)
 
     async def speak_text(self, text: str) -> Dict[str, Any]:
         """

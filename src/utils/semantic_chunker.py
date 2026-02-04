@@ -691,6 +691,55 @@ class AutoBotSemanticChunker:
 
         return chunks
 
+    def _create_size_constrained_chunk(
+        self,
+        sentences: List[str],
+        sentence_idx: int,
+        is_final: bool = False,
+    ) -> SemanticChunk:
+        """
+        Create a semantic chunk for size-constrained splitting.
+
+        Args:
+            sentences: List of sentences for this chunk
+            sentence_idx: Current sentence index (end of chunk)
+            is_final: Whether this is the final chunk in the split
+
+        Returns:
+            A SemanticChunk with size_constraint metadata. Issue #620.
+        """
+        chunk_content = " ".join(sentences)
+        metadata = {"split_type": "size_constraint"}
+        if is_final:
+            metadata["final_chunk"] = True
+
+        return SemanticChunk(
+            content=chunk_content,
+            start_index=sentence_idx - len(sentences),
+            end_index=sentence_idx,
+            sentences=sentences if is_final else sentences.copy(),
+            semantic_score=0.7,
+            metadata=metadata,
+        )
+
+    def _apply_overlap_reset(
+        self, current_sentences: List[str]
+    ) -> tuple[List[str], int]:
+        """
+        Reset sentence accumulator with overlap for next chunk.
+
+        Args:
+            current_sentences: Current accumulated sentences
+
+        Returns:
+            Tuple of (new sentence list, new length). Issue #620.
+        """
+        if self.overlap_sentences > 0:
+            overlap_start = -self.overlap_sentences
+            new_sentences = current_sentences[overlap_start:]
+            return new_sentences, sum(len(s) for s in new_sentences)
+        return [], 0
+
     def _split_large_chunk(
         self, sentences: List[str], start_idx: int
     ) -> List[SemanticChunk]:
@@ -716,41 +765,21 @@ class AutoBotSemanticChunker:
                 current_length + sentence_len > self.max_chunk_size
                 and current_sentences
             ):
-                # Create chunk from current sentences
-                chunk_content = " ".join(current_sentences)
-                chunk = SemanticChunk(
-                    content=chunk_content,
-                    start_index=sentence_idx - len(current_sentences),
-                    end_index=sentence_idx,
-                    sentences=current_sentences.copy(),
-                    semantic_score=0.7,  # Default coherence for size-constrained chunks
-                    metadata={"split_type": "size_constraint"},
+                chunk = self._create_size_constrained_chunk(
+                    current_sentences, sentence_idx
                 )
                 chunks.append(chunk)
-
-                # Reset for next chunk with overlap
-                if self.overlap_sentences > 0:
-                    overlap_start = -self.overlap_sentences
-                    current_sentences = current_sentences[overlap_start:]
-                    current_length = sum(len(s) for s in current_sentences)
-                else:
-                    current_sentences = []
-                    current_length = 0
+                current_sentences, current_length = self._apply_overlap_reset(
+                    current_sentences
+                )
 
             current_sentences.append(sentence)
             current_length += sentence_len
             sentence_idx += 1
 
-        # Add final chunk if there are remaining sentences
         if current_sentences:
-            chunk_content = " ".join(current_sentences)
-            chunk = SemanticChunk(
-                content=chunk_content,
-                start_index=sentence_idx - len(current_sentences),
-                end_index=sentence_idx,
-                sentences=current_sentences,
-                semantic_score=0.7,  # Default coherence for final size-constrained chunks
-                metadata={"split_type": "size_constraint", "final_chunk": True},
+            chunk = self._create_size_constrained_chunk(
+                current_sentences, sentence_idx, is_final=True
             )
             chunks.append(chunk)
 

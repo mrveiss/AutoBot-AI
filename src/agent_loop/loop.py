@@ -240,59 +240,64 @@ class AgentLoop:
     # Iteration Logic
     # =========================================================================
 
-    async def _run_iteration(self) -> IterationResult:
-        """Run a single iteration of the agent loop."""
-        self._iteration_count += 1
-        start_time = time.monotonic()
+    async def _execute_iteration_phases(
+        self, result: IterationResult
+    ) -> IterationResult:
+        """
+        Execute all phases of an iteration.
 
-        logger.debug("AgentLoop: Starting iteration %d", self._iteration_count)
+        Args:
+            result: The IterationResult to populate
 
-        result = IterationResult(iteration_number=self._iteration_count)
+        Returns:
+            Updated IterationResult with phase outcomes. Issue #620.
+        """
+        # Phase 1: Analyze Events
+        self._current_phase = LoopPhase.ANALYZE_EVENTS
+        events_context = await self._analyze_events()
+        result.events_analyzed = len(events_context.get("events", []))
 
-        try:
-            # Phase 1: Analyze Events
-            self._current_phase = LoopPhase.ANALYZE_EVENTS
-            events_context = await self._analyze_events()
-            result.events_analyzed = len(events_context.get("events", []))
+        # Phase 2: Select Tools
+        self._current_phase = LoopPhase.SELECT_TOOLS
+        tools_to_execute = await self._select_tools(events_context)
 
-            # Phase 2: Select Tools
-            self._current_phase = LoopPhase.SELECT_TOOLS
-            tools_to_execute = await self._select_tools(events_context)
+        if not tools_to_execute:
+            result.phase_completed = LoopPhase.SELECT_TOOLS
+            result.should_continue = False
+            return result
 
-            if not tools_to_execute:
-                # No tools to execute - task may be complete
-                result.phase_completed = LoopPhase.SELECT_TOOLS
-                result.should_continue = False
-                return result
+        # Phase 3: Execute Tools
+        self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
+        tool_results = await self._execute_tools(tools_to_execute)
+        result.tools_executed = [
+            t.get("tool_name", "unknown") for t in tools_to_execute
+        ]
+        result.tool_results = tool_results
 
-            # Phase 3: Wait for Execution
-            self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
-            tool_results = await self._execute_tools(tools_to_execute)
-            result.tools_executed = [
-                t.get("tool_name", "unknown") for t in tools_to_execute
-            ]
-            result.tool_results = tool_results
+        for tool_name in result.tools_executed:
+            self._current_context.add_tool(tool_name)
 
-            # Record tools in context
-            for tool_name in result.tools_executed:
-                self._current_context.add_tool(tool_name)
+        # Phase 4: Iterate
+        self._current_phase = LoopPhase.ITERATE
+        result.should_continue = await self._should_iterate(tool_results)
 
-            # Phase 4: Iterate
-            self._current_phase = LoopPhase.ITERATE
-            result.should_continue = await self._should_iterate(tool_results)
+        if self._current_context.plan_id and self.planner:
+            result.plan_progress = await self._get_plan_progress()
 
-            # Update plan progress if available
-            if self._current_context.plan_id and self.planner:
-                result.plan_progress = await self._get_plan_progress()
+        result.phase_completed = LoopPhase.ITERATE
+        self._consecutive_errors = 0
+        return result
 
-            result.phase_completed = LoopPhase.ITERATE
-            self._consecutive_errors = 0  # Reset on success
+    def _log_iteration_completion(
+        self, start_time: float, result: IterationResult
+    ) -> None:
+        """
+        Log iteration completion details if configured.
 
-        except Exception as e:
-            result.error = str(e)
-            result.should_continue = await self._handle_iteration_error(e)
-            self._current_context.add_error(str(e))
-
+        Args:
+            start_time: Monotonic time when iteration started
+            result: The completed IterationResult. Issue #620.
+        """
         if self.config.log_iterations:
             duration = (time.monotonic() - start_time) * 1000
             logger.info(
@@ -302,6 +307,22 @@ class AgentLoop:
                 result.tools_executed,
             )
 
+    async def _run_iteration(self) -> IterationResult:
+        """Run a single iteration of the agent loop."""
+        self._iteration_count += 1
+        start_time = time.monotonic()
+        logger.debug("AgentLoop: Starting iteration %d", self._iteration_count)
+
+        result = IterationResult(iteration_number=self._iteration_count)
+
+        try:
+            result = await self._execute_iteration_phases(result)
+        except Exception as e:
+            result.error = str(e)
+            result.should_continue = await self._handle_iteration_error(e)
+            self._current_context.add_error(str(e))
+
+        self._log_iteration_completion(start_time, result)
         return result
 
     # =========================================================================

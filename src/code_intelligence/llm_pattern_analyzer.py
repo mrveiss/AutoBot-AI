@@ -213,6 +213,23 @@ class LLMPatternAnalyzer:
             exclude_patterns = ["**/test*", "**/__pycache__", "**/venv"]
         return directories, exclude_patterns
 
+    def _generate_recommendations(
+        self,
+        all_patterns: List[UsagePattern],
+        cache_opportunities: List[CacheOpportunity],
+        batching_opportunities: List[BatchingOpportunity],
+        all_retry_patterns: List[RetryPattern],
+        cost_estimates: List[CostEstimate],
+    ) -> List[OptimizationRecommendation]:
+        """Generate optimization recommendations from analysis data. Issue #620."""
+        return RecommendationEngine.generate_recommendations(
+            patterns=all_patterns,
+            cache_opportunities=cache_opportunities,
+            batching_opportunities=batching_opportunities,
+            retry_patterns=all_retry_patterns,
+            cost_estimates=cost_estimates,
+        )
+
     def _build_analysis_result(
         self,
         analysis_id: str,
@@ -225,21 +242,16 @@ class LLMPatternAnalyzer:
         cost_estimates: List[CostEstimate],
         recommendations: List[OptimizationRecommendation],
     ) -> AnalysisResult:
-        """
-        Build the final AnalysisResult object from collected data.
-
-        Issue #620.
-        """
+        """Build the final AnalysisResult object from collected data. Issue #620."""
         total_savings = sum(r.estimated_savings_percent for r in recommendations) / max(
             len(recommendations), 1
         )
-
         return AnalysisResult(
             analysis_id=analysis_id,
             analysis_timestamp=datetime.now(),
             files_analyzed=len(python_files),
             patterns_found=all_patterns,
-            prompt_templates=[],  # Populated by separate analysis
+            prompt_templates=[],
             cache_opportunities=cache_opportunities,
             batching_opportunities=batching_opportunities,
             retry_patterns=all_retry_patterns,
@@ -261,65 +273,39 @@ class LLMPatternAnalyzer:
         directories: Optional[List[Path]] = None,
         exclude_patterns: Optional[List[str]] = None,
     ) -> AnalysisResult:
-        """
-        Analyze the codebase for LLM patterns.
-
-        Issue #620: Refactored with extracted helper methods.
-
-        Args:
-            directories: Specific directories to analyze (default: src/)
-            exclude_patterns: Glob patterns to exclude
-
-        Returns:
-            Complete analysis result
-        """
+        """Analyze the codebase for LLM patterns. Issue #620."""
         start_time = time.time()
         analysis_id = f"analysis_{int(start_time)}"
 
-        # Get defaults (Issue #620: uses helper)
         directories, exclude_patterns = self._get_default_directories_and_exclusions(
             directories, exclude_patterns
         )
-
-        # Collect and scan files
         python_files = self._collect_files(directories, exclude_patterns)
         all_patterns, all_retry_patterns = self._scan_files_for_patterns(python_files)
-
-        # Detect opportunities and costs
-        (
-            cache_opportunities,
-            batching_opportunities,
-            cost_estimates,
-        ) = self._detect_opportunities_and_costs(all_patterns)
-
-        # Generate recommendations
-        recommendations = RecommendationEngine.generate_recommendations(
-            patterns=all_patterns,
-            cache_opportunities=cache_opportunities,
-            batching_opportunities=batching_opportunities,
-            retry_patterns=all_retry_patterns,
-            cost_estimates=cost_estimates,
+        cache_opps, batch_opps, costs = self._detect_opportunities_and_costs(
+            all_patterns
         )
-
-        # Build result (Issue #620: uses helper)
+        recommendations = self._generate_recommendations(
+            all_patterns, cache_opps, batch_opps, all_retry_patterns, costs
+        )
         result = self._build_analysis_result(
             analysis_id,
             start_time,
             python_files,
             all_patterns,
             all_retry_patterns,
-            cache_opportunities,
-            batching_opportunities,
-            cost_estimates,
+            cache_opps,
+            batch_opps,
+            costs,
             recommendations,
         )
 
         self.analysis_history.append(result)
         logger.info(
-            f"Analysis complete: {len(all_patterns)} patterns, "
-            f"{len(recommendations)} recommendations"
+            "Analysis complete: %d patterns, %d recommendations",
+            len(all_patterns),
+            len(recommendations),
         )
-
         return result
 
     def _collect_files(

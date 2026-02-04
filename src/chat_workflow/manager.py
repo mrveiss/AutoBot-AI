@@ -920,6 +920,25 @@ class ChatWorkflowManager(
             current_message_type,
         )
 
+    def _handle_empty_chunk(
+        self,
+        llm_response: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        current_segment: str,
+        current_message_type: str,
+    ) -> tuple:
+        """Build state tuple for empty chunk case. Issue #620."""
+        return self._build_stream_state_tuple(
+            "no_chunk",
+            None,
+            llm_response,
+            tool_call_completed,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        )
+
     async def _process_stream_chunk_iteration(
         self,
         chunk_data: Dict[str, Any],
@@ -962,9 +981,7 @@ class ChatWorkflowManager(
             yield early_exit
             return
         if not chunk_text:
-            yield self._build_stream_state_tuple(
-                "no_chunk",
-                None,
+            yield self._handle_empty_chunk(
                 llm_response,
                 tool_call_completed,
                 streaming_msg,

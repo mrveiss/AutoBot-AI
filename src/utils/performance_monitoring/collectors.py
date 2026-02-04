@@ -285,67 +285,77 @@ class SystemCollector:
         except Exception:
             return 999.0
 
-    async def collect(self) -> SystemPerformanceMetrics:
-        """Collect comprehensive system performance metrics."""
-        try:
-            # CPU metrics
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            cpu_per_core = psutil.cpu_percent(interval=0.1, percpu=True)
-            cpu_freq = psutil.cpu_freq()
-            load_avg = os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0]
+    def _collect_cpu_metrics(self) -> Dict[str, Any]:
+        """Collect CPU-related metrics. Issue #620."""
+        cpu_freq = psutil.cpu_freq()
+        return {
+            "percent": psutil.cpu_percent(interval=0.1),
+            "per_core": psutil.cpu_percent(interval=0.1, percpu=True),
+            "freq_mhz": cpu_freq.current if cpu_freq else 0,
+            "load_avg": os.getloadavg() if hasattr(os, "getloadavg") else [0, 0, 0],
+            "cores_physical": psutil.cpu_count(logical=False),
+            "cores_logical": psutil.cpu_count(logical=True),
+        }
 
-            # Memory metrics
+    def _collect_io_metrics(self) -> Dict[str, float]:
+        """Collect disk and network I/O metrics. Issue #620."""
+        disk_io = psutil.disk_io_counters()
+        network_io = psutil.net_io_counters()
+        disk_usage = psutil.disk_usage("/")
+        return {
+            "disk_read_mb": getattr(disk_io, "read_bytes", 0) / (1024 * 1024),
+            "disk_write_mb": getattr(disk_io, "write_bytes", 0) / (1024 * 1024),
+            "disk_usage_pct": round((disk_usage.used / disk_usage.total) * 100, 1),
+            "net_upload_mb": getattr(network_io, "bytes_sent", 0) / (1024 * 1024),
+            "net_download_mb": getattr(network_io, "bytes_recv", 0) / (1024 * 1024),
+        }
+
+    async def _build_system_metrics(
+        self, cpu: Dict, io: Dict, memory, swap, autobot_procs: List[Dict]
+    ) -> SystemPerformanceMetrics:
+        """Build SystemPerformanceMetrics from collected data. Issue #620."""
+        return SystemPerformanceMetrics(
+            timestamp=time.time(),
+            cpu_usage_percent=cpu["percent"],
+            cpu_cores_physical=cpu["cores_physical"],
+            cpu_cores_logical=cpu["cores_logical"],
+            cpu_frequency_mhz=cpu["freq_mhz"],
+            cpu_load_1m=cpu["load_avg"][0],
+            cpu_load_5m=cpu["load_avg"][1],
+            cpu_load_15m=cpu["load_avg"][2],
+            per_core_usage=cpu["per_core"],
+            memory_total_gb=round(memory.total / (1024**3), 2),
+            memory_used_gb=round(memory.used / (1024**3), 2),
+            memory_available_gb=round(memory.available / (1024**3), 2),
+            memory_usage_percent=memory.percent,
+            swap_usage_percent=swap.percent,
+            disk_read_mb_s=io["disk_read_mb"],
+            disk_write_mb_s=io["disk_write_mb"],
+            disk_usage_percent=io["disk_usage_pct"],
+            disk_queue_depth=0,
+            network_upload_mb_s=io["net_upload_mb"],
+            network_download_mb_s=io["net_download_mb"],
+            network_latency_ms=await self._measure_network_latency(),
+            network_packet_loss_percent=0,
+            autobot_processes=autobot_procs,
+            autobot_memory_usage_mb=sum(p.get("memory_mb", 0) for p in autobot_procs),
+            autobot_cpu_usage_percent=sum(
+                p.get("cpu_percent", 0) for p in autobot_procs
+            ),
+        )
+
+    async def collect(self) -> SystemPerformanceMetrics:
+        """Collect comprehensive system performance metrics. Issue #620."""
+        try:
+            cpu_metrics = self._collect_cpu_metrics()
+            io_metrics = self._collect_io_metrics()
             memory = psutil.virtual_memory()
             swap = psutil.swap_memory()
-
-            # Disk I/O metrics
-            disk_io = psutil.disk_io_counters()
-            disk_usage = psutil.disk_usage("/")
-
-            # Network metrics
-            network_io = psutil.net_io_counters()
-
-            # Get AutoBot process metrics
             autobot_processes = self._get_autobot_processes()
-            autobot_memory = sum(p.get("memory_mb", 0) for p in autobot_processes)
-            autobot_cpu = sum(p.get("cpu_percent", 0) for p in autobot_processes)
 
-            # Calculate derived metrics
-            disk_read_speed = getattr(disk_io, "read_bytes", 0) / (1024 * 1024)
-            disk_write_speed = getattr(disk_io, "write_bytes", 0) / (1024 * 1024)
-            network_upload_speed = getattr(network_io, "bytes_sent", 0) / (1024 * 1024)
-            network_download_speed = getattr(network_io, "bytes_recv", 0) / (
-                1024 * 1024
+            return await self._build_system_metrics(
+                cpu_metrics, io_metrics, memory, swap, autobot_processes
             )
-
-            return SystemPerformanceMetrics(
-                timestamp=time.time(),
-                cpu_usage_percent=cpu_percent,
-                cpu_cores_physical=psutil.cpu_count(logical=False),
-                cpu_cores_logical=psutil.cpu_count(logical=True),
-                cpu_frequency_mhz=cpu_freq.current if cpu_freq else 0,
-                cpu_load_1m=load_avg[0],
-                cpu_load_5m=load_avg[1],
-                cpu_load_15m=load_avg[2],
-                per_core_usage=cpu_per_core,
-                memory_total_gb=round(memory.total / (1024**3), 2),
-                memory_used_gb=round(memory.used / (1024**3), 2),
-                memory_available_gb=round(memory.available / (1024**3), 2),
-                memory_usage_percent=memory.percent,
-                swap_usage_percent=swap.percent,
-                disk_read_mb_s=disk_read_speed,
-                disk_write_mb_s=disk_write_speed,
-                disk_usage_percent=round((disk_usage.used / disk_usage.total) * 100, 1),
-                disk_queue_depth=0,
-                network_upload_mb_s=network_upload_speed,
-                network_download_mb_s=network_download_speed,
-                network_latency_ms=await self._measure_network_latency(),
-                network_packet_loss_percent=0,
-                autobot_processes=autobot_processes,
-                autobot_memory_usage_mb=autobot_memory,
-                autobot_cpu_usage_percent=autobot_cpu,
-            )
-
         except Exception as e:
             logger.error("Error collecting system performance metrics: %s", e)
             return self._empty_metrics()
