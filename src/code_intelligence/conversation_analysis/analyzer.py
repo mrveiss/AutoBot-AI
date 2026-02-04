@@ -540,21 +540,18 @@ class ConversationFlowAnalyzer:
             )
         return None
 
-    def _detect_bottlenecks(self) -> List[Bottleneck]:
-        """Detect conversation bottlenecks.
+    def _detect_slow_response_bottleneck(self) -> Optional[Bottleneck]:
+        """Detect slow response bottleneck from flows.
 
-        Issue #665: Refactored to use _create_bottleneck_if_significant helper.
+        Issue #620.
         """
-        bottlenecks: List[Bottleneck] = []
-
-        # Slow response detection
         slow_sessions = [
             f.session_id
             for f in self._flows
             if f.total_latency_ms > self.slow_response_threshold_ms * f.turn_count
         ]
         slow_severity = "medium" if len(slow_sessions) < 10 else "high"
-        bottleneck = self._create_bottleneck_if_significant(
+        return self._create_bottleneck_if_significant(
             slow_sessions,
             BottleneckType.SLOW_RESPONSE,
             "High latency detected in {count} sessions",
@@ -565,16 +562,18 @@ class ConversationFlowAnalyzer:
                 "Review tool call latency",
             ],
         )
-        if bottleneck:
-            bottlenecks.append(bottleneck)
 
-        # Repeated clarification detection
+    def _detect_clarification_bottleneck(self) -> Optional[Bottleneck]:
+        """Detect repeated clarification bottleneck from flows.
+
+        Issue #620.
+        """
         confused_sessions = [
             f.session_id
             for f in self._flows
             if f.clarification_count >= self.clarification_threshold
         ]
-        bottleneck = self._create_bottleneck_if_significant(
+        return self._create_bottleneck_if_significant(
             confused_sessions,
             BottleneckType.REPEATED_CLARIFICATION,
             "Excessive clarifications in {count} sessions",
@@ -585,12 +584,14 @@ class ConversationFlowAnalyzer:
                 "Enhance context gathering",
             ],
         )
-        if bottleneck:
-            bottlenecks.append(bottleneck)
 
-        # Error loop detection
+    def _detect_error_loop_bottleneck(self) -> Optional[Bottleneck]:
+        """Detect error loop bottleneck from flows.
+
+        Issue #620.
+        """
         error_sessions = [f.session_id for f in self._flows if f.error_count > 2]
-        bottleneck = self._create_bottleneck_if_significant(
+        return self._create_bottleneck_if_significant(
             error_sessions,
             BottleneckType.ERROR_LOOP,
             "Multiple errors in {count} sessions",
@@ -601,14 +602,16 @@ class ConversationFlowAnalyzer:
                 "Implement graceful degradation",
             ],
         )
-        if bottleneck:
-            bottlenecks.append(bottleneck)
 
-        # Excessive turns detection
+    def _detect_excessive_turns_bottleneck(self) -> Optional[Bottleneck]:
+        """Detect excessive turns bottleneck from flows.
+
+        Issue #620.
+        """
         long_sessions = [
             f.session_id for f in self._flows if f.turn_count > self.max_turns_threshold
         ]
-        bottleneck = self._create_bottleneck_if_significant(
+        return self._create_bottleneck_if_significant(
             long_sessions,
             BottleneckType.EXCESSIVE_TURNS,
             "Excessive turns in {count} sessions",
@@ -619,8 +622,25 @@ class ConversationFlowAnalyzer:
                 "Reduce back-and-forth",
             ],
         )
-        if bottleneck:
-            bottlenecks.append(bottleneck)
+
+    def _detect_bottlenecks(self) -> List[Bottleneck]:
+        """Detect conversation bottlenecks.
+
+        Issue #620.
+        """
+        bottlenecks: List[Bottleneck] = []
+
+        detectors = [
+            self._detect_slow_response_bottleneck,
+            self._detect_clarification_bottleneck,
+            self._detect_error_loop_bottleneck,
+            self._detect_excessive_turns_bottleneck,
+        ]
+
+        for detector in detectors:
+            bottleneck = detector()
+            if bottleneck:
+                bottlenecks.append(bottleneck)
 
         return bottlenecks
 

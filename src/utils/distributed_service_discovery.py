@@ -14,7 +14,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
 
@@ -541,6 +541,131 @@ def _get_sync_config_value(
     return val or system_defaults.get(default_key, default_val)
 
 
+def _create_service_endpoint_dict(
+    host: str,
+    port: int,
+    protocol: str,
+) -> Dict[str, Any]:
+    """Create a service endpoint dictionary with host, port, and protocol.
+
+    Issue #620.
+    """
+    return {"host": host, "port": port, "protocol": protocol}
+
+
+def _build_core_service_endpoints(
+    get_val_fn,
+) -> Dict[str, Dict]:
+    """Build core service endpoints (redis, backend, frontend).
+
+    Issue #620.
+    """
+    return {
+        "redis": _create_service_endpoint_dict(
+            get_val_fn("redis", "host", "redis_host", NetworkConstants.LOCALHOST_NAME),
+            int(get_val_fn("redis", "port", "redis_port", NetworkConstants.REDIS_PORT)),
+            "redis",
+        ),
+        "backend": _create_service_endpoint_dict(
+            get_val_fn(
+                "backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            int(
+                get_val_fn(
+                    "backend", "port", "backend_port", NetworkConstants.BACKEND_PORT
+                )
+            ),
+            "http",
+        ),
+        "frontend": _create_service_endpoint_dict(
+            get_val_fn(
+                "frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            int(
+                get_val_fn(
+                    "frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT
+                )
+            ),
+            "http",
+        ),
+    }
+
+
+def _build_worker_service_endpoints(
+    get_val_fn,
+) -> Dict[str, Dict]:
+    """Build worker service endpoints (npu_worker, ai_stack).
+
+    Issue #620.
+    """
+    return {
+        "npu_worker": _create_service_endpoint_dict(
+            get_val_fn(
+                "npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            int(
+                get_val_fn(
+                    "npu_worker",
+                    "port",
+                    "npu_worker_port",
+                    NetworkConstants.NPU_WORKER_PORT,
+                )
+            ),
+            "http",
+        ),
+        "ai_stack": _create_service_endpoint_dict(
+            get_val_fn(
+                "ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            int(
+                get_val_fn(
+                    "ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT
+                )
+            ),
+            "http",
+        ),
+    }
+
+
+def _build_auxiliary_service_endpoints(
+    get_val_fn,
+) -> Dict[str, Dict]:
+    """Build auxiliary service endpoints (browser, ollama).
+
+    Issue #620.
+    """
+    return {
+        "browser": _create_service_endpoint_dict(
+            get_val_fn(
+                "browser_service",
+                "host",
+                "browser_service_host",
+                NetworkConstants.LOCALHOST_NAME,
+            ),
+            int(
+                get_val_fn(
+                    "browser_service",
+                    "port",
+                    "browser_service_port",
+                    NetworkConstants.BROWSER_SERVICE_PORT,
+                )
+            ),
+            "http",
+        ),
+        "ollama": _create_service_endpoint_dict(
+            get_val_fn(
+                "ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME
+            ),
+            int(
+                get_val_fn(
+                    "ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT
+                )
+            ),
+            "http",
+        ),
+    }
+
+
 def _build_service_endpoints_map(
     services_config: Dict,
     backend_config: Dict,
@@ -564,90 +689,11 @@ def _build_service_endpoints_map(
             system_defaults,
         )
 
-    return {
-        "redis": {
-            "host": get_val(
-                "redis", "host", "redis_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_val("redis", "port", "redis_port", NetworkConstants.REDIS_PORT)
-            ),
-            "protocol": "redis",
-        },
-        "backend": {
-            "host": get_val(
-                "backend", "host", "backend_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_val(
-                    "backend", "port", "backend_port", NetworkConstants.BACKEND_PORT
-                )
-            ),
-            "protocol": "http",
-        },
-        "frontend": {
-            "host": get_val(
-                "frontend", "host", "frontend_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_val(
-                    "frontend", "port", "frontend_port", NetworkConstants.FRONTEND_PORT
-                )
-            ),
-            "protocol": "http",
-        },
-        "npu_worker": {
-            "host": get_val(
-                "npu_worker", "host", "npu_worker_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_val(
-                    "npu_worker",
-                    "port",
-                    "npu_worker_port",
-                    NetworkConstants.NPU_WORKER_PORT,
-                )
-            ),
-            "protocol": "http",
-        },
-        "ai_stack": {
-            "host": get_val(
-                "ai_stack", "host", "ai_stack_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_val(
-                    "ai_stack", "port", "ai_stack_port", NetworkConstants.AI_STACK_PORT
-                )
-            ),
-            "protocol": "http",
-        },
-        "browser": {
-            "host": get_val(
-                "browser_service",
-                "host",
-                "browser_service_host",
-                NetworkConstants.LOCALHOST_NAME,
-            ),
-            "port": int(
-                get_val(
-                    "browser_service",
-                    "port",
-                    "browser_service_port",
-                    NetworkConstants.BROWSER_SERVICE_PORT,
-                )
-            ),
-            "protocol": "http",
-        },
-        "ollama": {
-            "host": get_val(
-                "ollama", "host", "ollama_host", NetworkConstants.LOCALHOST_NAME
-            ),
-            "port": int(
-                get_val("ollama", "port", "ollama_port", NetworkConstants.OLLAMA_PORT)
-            ),
-            "protocol": "http",
-        },
-    }
+    endpoints: Dict[str, Dict] = {}
+    endpoints.update(_build_core_service_endpoints(get_val))
+    endpoints.update(_build_worker_service_endpoints(get_val))
+    endpoints.update(_build_auxiliary_service_endpoints(get_val))
+    return endpoints
 
 
 def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
