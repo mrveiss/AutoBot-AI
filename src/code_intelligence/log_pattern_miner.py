@@ -777,40 +777,104 @@ class LogPatternMiner:
 
     def _detect_anomalies(self) -> None:
         """Detect anomalies in log patterns."""
-        # Detect request duration anomalies
+        self._detect_duration_anomalies()
+        self._detect_error_rate_anomalies()
+
+    def _detect_duration_anomalies(self) -> None:
+        """
+        Detect request duration anomalies using statistical deviation.
+
+        Identifies entries with durations that deviate significantly
+        from the average, flagging them as spikes or drops.
+
+        Issue #620.
+        """
         entries_with_duration = [e for e in self.entries if e.duration_ms]
 
-        if len(entries_with_duration) >= 10:
-            durations = [e.duration_ms for e in entries_with_duration]
-            avg = mean(durations)
-            std = stdev(durations) if len(durations) > 1 else 0
+        if len(entries_with_duration) < 10:
+            return
 
-            if std > 0:
-                for entry in entries_with_duration:
-                    deviation = (entry.duration_ms - avg) / std
-                    if abs(deviation) > self.anomaly_deviation_threshold:
-                        anomaly_type = (
-                            AnomalyType.SPIKE if deviation > 0 else AnomalyType.DROP
-                        )
-                        self.anomalies.append(
-                            Anomaly(
-                                id=f"ANOM-{len(self.anomalies) + 1}",
-                                anomaly_type=anomaly_type,
-                                description=(
-                                    f"Unusual duration: {entry.duration_ms:.1f}ms "
-                                    f"(expected: {avg:.1f}ms)"
-                                ),
-                                detected_at=entry.timestamp,
-                                severity=LogLevel.WARNING,
-                                metric_name="request_duration",
-                                expected_value=avg,
-                                actual_value=entry.duration_ms,
-                                deviation_percent=abs(deviation) * 100,
-                                related_entries=[entry],
-                            )
-                        )
+        durations = [e.duration_ms for e in entries_with_duration]
+        avg = mean(durations)
+        std = stdev(durations) if len(durations) > 1 else 0
 
-        # Detect error rate anomalies by hour
+        if std <= 0:
+            return
+
+        for entry in entries_with_duration:
+            deviation = (entry.duration_ms - avg) / std
+            if abs(deviation) > self.anomaly_deviation_threshold:
+                anomaly_type = AnomalyType.SPIKE if deviation > 0 else AnomalyType.DROP
+                self.anomalies.append(
+                    Anomaly(
+                        id=f"ANOM-{len(self.anomalies) + 1}",
+                        anomaly_type=anomaly_type,
+                        description=(
+                            f"Unusual duration: {entry.duration_ms:.1f}ms "
+                            f"(expected: {avg:.1f}ms)"
+                        ),
+                        detected_at=entry.timestamp,
+                        severity=LogLevel.WARNING,
+                        metric_name="request_duration",
+                        expected_value=avg,
+                        actual_value=entry.duration_ms,
+                        deviation_percent=abs(deviation) * 100,
+                        related_entries=[entry],
+                    )
+                )
+
+    def _detect_error_rate_anomalies(self) -> None:
+        """
+        Detect hourly error rate anomalies using statistical deviation.
+
+        Identifies hours with error rates that deviate significantly
+        from the average hourly error rate.
+
+        Issue #620.
+        """
+        hourly_errors, hourly_total = self._compute_hourly_error_counts()
+
+        if len(hourly_errors) < 3:
+            return
+
+        error_rates = [
+            hourly_errors[h] / hourly_total[h] * 100
+            for h in hourly_total
+            if hourly_total[h] > 0
+        ]
+        avg_rate = mean(error_rates)
+        std_rate = stdev(error_rates) if len(error_rates) > 1 else 0
+
+        if std_rate <= 0:
+            return
+
+        for hour, total in hourly_total.items():
+            rate = hourly_errors[hour] / total * 100 if total > 0 else 0
+            deviation = (rate - avg_rate) / std_rate
+            if deviation > self.anomaly_deviation_threshold:
+                self.anomalies.append(
+                    Anomaly(
+                        id=f"ANOM-{len(self.anomalies) + 1}",
+                        anomaly_type=AnomalyType.SPIKE,
+                        description=f"High error rate: {rate:.1f}% at {hour}",
+                        detected_at=datetime.strptime(hour, "%Y-%m-%d %H:00"),
+                        severity=LogLevel.ERROR,
+                        metric_name="error_rate",
+                        expected_value=avg_rate,
+                        actual_value=rate,
+                        deviation_percent=abs(deviation) * 100,
+                    )
+                )
+
+    def _compute_hourly_error_counts(self) -> tuple[dict[str, int], dict[str, int]]:
+        """
+        Compute hourly error and total entry counts.
+
+        Returns:
+            Tuple of (hourly_errors, hourly_total) dictionaries.
+
+        Issue #620.
+        """
         hourly_errors: dict[str, int] = defaultdict(int)
         hourly_total: dict[str, int] = defaultdict(int)
 
@@ -820,33 +884,7 @@ class LogPatternMiner:
             if entry.level in _ERROR_CRITICAL_LEVELS:
                 hourly_errors[hour_key] += 1
 
-        if len(hourly_errors) >= 3:
-            error_rates = [
-                hourly_errors[h] / hourly_total[h] * 100
-                for h in hourly_total
-                if hourly_total[h] > 0
-            ]
-            avg_rate = mean(error_rates)
-            std_rate = stdev(error_rates) if len(error_rates) > 1 else 0
-
-            if std_rate > 0:
-                for hour, total in hourly_total.items():
-                    rate = hourly_errors[hour] / total * 100 if total > 0 else 0
-                    deviation = (rate - avg_rate) / std_rate
-                    if deviation > self.anomaly_deviation_threshold:
-                        self.anomalies.append(
-                            Anomaly(
-                                id=f"ANOM-{len(self.anomalies) + 1}",
-                                anomaly_type=AnomalyType.SPIKE,
-                                description=f"High error rate: {rate:.1f}% at {hour}",
-                                detected_at=datetime.strptime(hour, "%Y-%m-%d %H:00"),
-                                severity=LogLevel.ERROR,
-                                metric_name="error_rate",
-                                expected_value=avg_rate,
-                                actual_value=rate,
-                                deviation_percent=abs(deviation) * 100,
-                            )
-                        )
+        return hourly_errors, hourly_total
 
     def _normalize_error_message(self, message: str) -> str:
         """Normalize error message by removing variable parts."""

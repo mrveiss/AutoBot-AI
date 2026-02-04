@@ -12,7 +12,6 @@ import time
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -104,6 +103,59 @@ class AdaptiveTimeout:
         self.start_time = None
         self.warning_sent = False
 
+    async def _execute_operation_with_timeout(
+        self,
+        operation: Callable,
+        timeout_duration: float,
+    ) -> Any:
+        """
+        Execute an operation with the specified timeout duration.
+
+        Handles both sync and async operations, running sync operations
+        in a thread pool to avoid blocking. Issue #620.
+
+        Args:
+            operation: The callable to execute
+            timeout_duration: Maximum time to wait in seconds
+
+        Returns:
+            The result of the operation
+
+        Raises:
+            asyncio.TimeoutError: If operation exceeds timeout_duration
+        """
+        if asyncio.iscoroutinefunction(operation):
+            return await asyncio.wait_for(operation(), timeout=timeout_duration)
+        else:
+            # Run sync operation in thread pool
+            return await asyncio.wait_for(
+                asyncio.to_thread(operation), timeout=timeout_duration
+            )
+
+    def _log_operation_start(
+        self,
+        timeout_duration: float,
+        context: Optional[Dict[str, Any]],
+    ) -> str:
+        """
+        Log the start of an operation and return the context string.
+
+        Formats and logs operation details including category,
+        context, and timeout duration. Issue #620.
+
+        Args:
+            timeout_duration: The timeout configured for this operation
+            context: Optional context dictionary for logging
+
+        Returns:
+            Formatted context string for use in subsequent logs
+        """
+        context_str = f" ({context})" if context else ""
+        logger.info(
+            f"Starting {self.category.value} operation{context_str} with {timeout_duration}s timeout"
+        )
+        return context_str
+
     async def execute_with_intelligent_timeout(
         self,
         operation: Callable,
@@ -128,34 +180,22 @@ class AdaptiveTimeout:
             self.category, "warning", timeout_duration * 0.7
         )
 
-        context_str = f" ({context})" if context else ""
-        logger.info(
-            f"Starting {self.category.value} operation{context_str} with {timeout_duration}s timeout"
+        context_str = self._log_operation_start(timeout_duration, context)
+
+        warning_task = asyncio.create_task(
+            self._send_timeout_warning(warning_threshold, operation_type)
         )
 
         try:
-            # Create warning task
-            warning_task = asyncio.create_task(
-                self._send_timeout_warning(warning_threshold, operation_type)
+            result = await self._execute_operation_with_timeout(
+                operation, timeout_duration
             )
-
-            # Execute main operation
-            if asyncio.iscoroutinefunction(operation):
-                result = await asyncio.wait_for(operation(), timeout=timeout_duration)
-            else:
-                # Run sync operation in thread pool
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(operation), timeout=timeout_duration
-                )
-
-            # Cancel warning task if operation completed
             warning_task.cancel()
 
             elapsed = time.time() - self.start_time
             logger.info(
                 f"Operation completed in {elapsed:.2f}s (timeout was {timeout_duration}s)"
             )
-
             return result
 
         except asyncio.TimeoutError:
@@ -167,7 +207,6 @@ class AdaptiveTimeout:
                 f"after {elapsed:.2f}s (limit: {timeout_duration}s){context_str}"
             )
 
-            # Handle timeout based on category
             return await self._handle_timeout_fallback(
                 operation, operation_type, elapsed, background_allowed, fallback_result
             )

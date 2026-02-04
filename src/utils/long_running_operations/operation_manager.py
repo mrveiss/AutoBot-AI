@@ -48,7 +48,9 @@ class OperationExecutionContext:
         message: str = "",
     ) -> None:
         """Update operation progress."""
-        total_items = total if total is not None else self.operation.progress.total_items
+        total_items = (
+            total if total is not None else self.operation.progress.total_items
+        )
         await self.progress_tracker.update_progress(
             self.operation,
             current_step=step,
@@ -65,7 +67,7 @@ class OperationExecutionContext:
         context_data: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Save operation checkpoint."""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         checkpoint_id = f"chk_{self.operation.operation_id}_{timestamp}"
         await self.checkpoint_manager.save_checkpoint(
             operation_id=self.operation.operation_id,
@@ -238,47 +240,19 @@ class LongRunningOperationManager:
             timeout_seconds,
         )
 
+        checkpoint_task = None
+        progress_task = None
+
         try:
-            # Set up periodic tasks
-            checkpoint_task = asyncio.create_task(
-                self._periodic_checkpoint(operation, checkpoint_interval)
-            )
-            progress_task = asyncio.create_task(
-                self._periodic_progress_report(operation, progress_interval)
+            checkpoint_task, progress_task = self._start_periodic_tasks(
+                operation, checkpoint_interval, progress_interval
             )
 
-            # Get operation function
-            operation_function = operation.get_operation_function()
+            result = await self._run_operation_with_timeout(operation, timeout_seconds)
 
-            # Create execution context
-            context = OperationExecutionContext(
-                operation=operation,
-                progress_tracker=self.progress_tracker,
-                checkpoint_manager=self.checkpoint_manager,
-                logger=logger,
-            )
+            self._cancel_periodic_tasks(checkpoint_task, progress_task)
+            await self._mark_operation_completed(operation, result)
 
-            # Execute with timeout
-            result = await asyncio.wait_for(
-                self._execute_with_context(operation_function, context),
-                timeout=timeout_seconds,
-            )
-
-            # Cleanup
-            checkpoint_task.cancel()
-            progress_task.cancel()
-
-            operation.mark_completed(result)
-
-            await self.progress_tracker.update_progress(
-                operation,
-                "Completed",
-                100.0,
-                operation.progress.total_items,
-                operation.progress.total_items,
-            )
-
-            logger.info("Operation %s completed successfully", operation.operation_id)
             return result
 
         except asyncio.TimeoutError:
@@ -294,6 +268,101 @@ class LongRunningOperationManager:
         finally:
             async with self._lock:
                 self.operation_tasks.pop(operation.operation_id, None)
+
+    def _start_periodic_tasks(
+        self,
+        operation: LongRunningOperation,
+        checkpoint_interval: float,
+        progress_interval: float,
+    ) -> tuple:
+        """
+        Start periodic checkpoint and progress tasks.
+
+        Args:
+            operation: The operation to monitor.
+            checkpoint_interval: Interval for checkpoint saves.
+            progress_interval: Interval for progress reports.
+
+        Returns:
+            Tuple of (checkpoint_task, progress_task).
+
+        Issue #620.
+        """
+        checkpoint_task = asyncio.create_task(
+            self._periodic_checkpoint(operation, checkpoint_interval)
+        )
+        progress_task = asyncio.create_task(
+            self._periodic_progress_report(operation, progress_interval)
+        )
+        return checkpoint_task, progress_task
+
+    def _cancel_periodic_tasks(
+        self, checkpoint_task: asyncio.Task, progress_task: asyncio.Task
+    ) -> None:
+        """
+        Cancel periodic monitoring tasks.
+
+        Args:
+            checkpoint_task: The checkpoint task to cancel.
+            progress_task: The progress task to cancel.
+
+        Issue #620.
+        """
+        checkpoint_task.cancel()
+        progress_task.cancel()
+
+    async def _run_operation_with_timeout(
+        self, operation: LongRunningOperation, timeout_seconds: int
+    ) -> Any:
+        """
+        Execute operation function with timeout.
+
+        Args:
+            operation: The operation to execute.
+            timeout_seconds: Maximum execution time.
+
+        Returns:
+            Result from the operation function.
+
+        Issue #620.
+        """
+        operation_function = operation.get_operation_function()
+
+        context = OperationExecutionContext(
+            operation=operation,
+            progress_tracker=self.progress_tracker,
+            checkpoint_manager=self.checkpoint_manager,
+            logger=logger,
+        )
+
+        return await asyncio.wait_for(
+            self._execute_with_context(operation_function, context),
+            timeout=timeout_seconds,
+        )
+
+    async def _mark_operation_completed(
+        self, operation: LongRunningOperation, result: Any
+    ) -> None:
+        """
+        Mark operation as completed and update progress.
+
+        Args:
+            operation: The completed operation.
+            result: The operation result.
+
+        Issue #620.
+        """
+        operation.mark_completed(result)
+
+        await self.progress_tracker.update_progress(
+            operation,
+            "Completed",
+            100.0,
+            operation.progress.total_items,
+            operation.progress.total_items,
+        )
+
+        logger.info("Operation %s completed successfully", operation.operation_id)
 
     async def _execute_with_context(
         self, operation_function: Callable, context: OperationExecutionContext
@@ -388,9 +457,7 @@ class LongRunningOperationManager:
         await self.background_queue.put(new_operation_id)
         return new_operation_id
 
-    async def get_operation(
-        self, operation_id: str
-    ) -> Optional[LongRunningOperation]:
+    async def get_operation(self, operation_id: str) -> Optional[LongRunningOperation]:
         """Get operation by ID."""
         async with self._lock:
             return self.operations.get(operation_id)

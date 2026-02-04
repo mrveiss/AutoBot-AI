@@ -197,6 +197,74 @@ def find_best_agent_for_task(
     return _select_best_agent_from_candidates(suitable_agents, task_type)
 
 
+def _update_success_rate(
+    agent: Any,
+    success: bool,
+    performance_metrics_attr: str,
+    success_rate_attr: str,
+) -> float:
+    """
+    Update agent success rate based on task outcome.
+
+    Calculates and sets the new success rate using a running average
+    of total attempts and successes. Issue #620.
+
+    Args:
+        agent: Agent object to update
+        success: Whether the task was successful
+        performance_metrics_attr: Attribute name for performance metrics dict
+        success_rate_attr: Attribute name for success rate
+
+    Returns:
+        The newly calculated success rate
+    """
+    performance_metrics = getattr(agent, performance_metrics_attr, {})
+
+    current_attempts = performance_metrics.get("total_attempts", 0)
+    current_successes = performance_metrics.get("total_successes", 0)
+
+    new_attempts = current_attempts + 1
+    new_successes = current_successes + (1 if success else 0)
+
+    new_success_rate = new_successes / new_attempts if new_attempts > 0 else 1.0
+    setattr(agent, success_rate_attr, new_success_rate)
+
+    performance_metrics["total_attempts"] = new_attempts
+    performance_metrics["total_successes"] = new_successes
+    setattr(agent, performance_metrics_attr, performance_metrics)
+
+    return new_success_rate
+
+
+def _update_average_completion_time(
+    agent: Any,
+    execution_time: float,
+    average_completion_time_attr: str,
+) -> float:
+    """
+    Update agent average completion time with weighted average.
+
+    Uses a weighted average favoring recent performance (30% weight
+    for new time, 70% for historical). Issue #620.
+
+    Args:
+        agent: Agent object to update
+        execution_time: Time taken to complete the task in seconds
+        average_completion_time_attr: Attribute name for average completion time
+
+    Returns:
+        The newly calculated average completion time
+    """
+    current_avg_time = getattr(agent, average_completion_time_attr, 0.0)
+    if current_avg_time == 0:
+        new_avg_time = execution_time
+    else:
+        # Weighted average (give more weight to recent performance)
+        new_avg_time = (current_avg_time * 0.7) + (execution_time * 0.3)
+    setattr(agent, average_completion_time_attr, new_avg_time)
+    return new_avg_time
+
+
 def update_agent_performance(
     agent_registry: Dict[str, Any],
     agent_id: str,
@@ -238,31 +306,13 @@ def update_agent_performance(
 
     agent = agent_registry[agent_id]
 
-    # Get performance metrics dict
-    performance_metrics = getattr(agent, performance_metrics_attr, {})
+    new_success_rate = _update_success_rate(
+        agent, success, performance_metrics_attr, success_rate_attr
+    )
 
-    # Update success rate
-    current_attempts = performance_metrics.get("total_attempts", 0)
-    current_successes = performance_metrics.get("total_successes", 0)
-
-    new_attempts = current_attempts + 1
-    new_successes = current_successes + (1 if success else 0)
-
-    new_success_rate = new_successes / new_attempts if new_attempts > 0 else 1.0
-    setattr(agent, success_rate_attr, new_success_rate)
-
-    performance_metrics["total_attempts"] = new_attempts
-    performance_metrics["total_successes"] = new_successes
-    setattr(agent, performance_metrics_attr, performance_metrics)
-
-    # Update average completion time with weighted average
-    current_avg_time = getattr(agent, average_completion_time_attr, 0.0)
-    if current_avg_time == 0:
-        new_avg_time = execution_time
-    else:
-        # Weighted average (give more weight to recent performance)
-        new_avg_time = (current_avg_time * 0.7) + (execution_time * 0.3)
-    setattr(agent, average_completion_time_attr, new_avg_time)
+    new_avg_time = _update_average_completion_time(
+        agent, execution_time, average_completion_time_attr
+    )
 
     logger.debug(
         f"Updated agent {agent_id} performance: "

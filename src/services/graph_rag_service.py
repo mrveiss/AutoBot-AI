@@ -308,7 +308,6 @@ class GraphRAGService:
         Returns:
             List of SearchResult objects from graph expansion
         """
-        expanded_results = []
         start_points = self._get_graph_starting_points(start_entity, entity_matches)
 
         logger.info(
@@ -317,8 +316,35 @@ class GraphRAGService:
             max_depth,
         )
 
-        # Traverse graph from all starting points in parallel
-        all_related_results = await asyncio.gather(
+        all_related_results = await self._fetch_related_entities_parallel(
+            start_points, max_depth
+        )
+
+        expanded_results = self._process_graph_traversal_results(
+            start_points, all_related_results, max_depth
+        )
+
+        logger.info("Graph expansion yielded %s results", len(expanded_results))
+        return expanded_results[:max_results]
+
+    async def _fetch_related_entities_parallel(
+        self,
+        start_points: List[Tuple[str, float]],
+        max_depth: int,
+    ) -> List[Any]:
+        """
+        Fetch related entities from graph in parallel.
+
+        Args:
+            start_points: List of (entity_name, base_score) tuples.
+            max_depth: Maximum traversal depth.
+
+        Returns:
+            List of results or exceptions from parallel traversal.
+
+        Issue #620.
+        """
+        return await asyncio.gather(
             *[
                 self.graph.get_related_entities(
                     entity_name=entity_name,
@@ -330,6 +356,27 @@ class GraphRAGService:
             ],
             return_exceptions=True,
         )
+
+    def _process_graph_traversal_results(
+        self,
+        start_points: List[Tuple[str, float]],
+        all_related_results: List[Any],
+        max_depth: int,
+    ) -> List[SearchResult]:
+        """
+        Process graph traversal results into SearchResult objects.
+
+        Args:
+            start_points: List of (entity_name, base_score) tuples.
+            all_related_results: Results from parallel graph traversal.
+            max_depth: Maximum traversal depth for scoring.
+
+        Returns:
+            List of SearchResult objects from expanded entities.
+
+        Issue #620.
+        """
+        expanded_results = []
 
         for (entity_name, base_score), related in zip(
             start_points, all_related_results
@@ -355,8 +402,7 @@ class GraphRAGService:
                 if result:
                     expanded_results.append(result)
 
-        logger.info("Graph expansion yielded %s results", len(expanded_results))
-        return expanded_results[:max_results]
+        return expanded_results
 
     async def _deduplicate_and_rank(
         self, results: List[SearchResult], max_results: int
