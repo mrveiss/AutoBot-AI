@@ -110,6 +110,54 @@ class TracedHttpClient:
                 return service
         return "unknown-service"
 
+    def _prepare_request_headers(self, kwargs: dict) -> dict:
+        """
+        Prepare request headers by merging trace headers with existing headers.
+
+        Issue #620.
+
+        Args:
+            kwargs: Original request kwargs
+
+        Returns:
+            Updated kwargs with merged headers
+        """
+        trace_headers = self._get_trace_headers()
+        existing_headers = kwargs.get("headers", {}) or {}
+        kwargs["headers"] = {**existing_headers, **trace_headers}
+        return kwargs
+
+    def _record_response_attributes(self, span, response: httpx.Response) -> None:
+        """
+        Record response attributes on the span.
+
+        Issue #620.
+
+        Args:
+            span: The current trace span
+            response: HTTP response object
+        """
+        if span.is_recording():
+            span.set_attribute("http.status_code", response.status_code)
+            span.set_attribute(
+                "http.response_content_length",
+                len(response.content) if response.content else 0,
+            )
+
+    def _record_exception_attributes(self, span, error: Exception) -> None:
+        """
+        Record exception attributes on the span.
+
+        Issue #620.
+
+        Args:
+            span: The current trace span
+            error: The exception that occurred
+        """
+        if span.is_recording():
+            span.record_exception(error)
+            span.set_attribute("error.type", type(error).__name__)
+
     async def _request(
         self,
         method: str,
@@ -118,6 +166,8 @@ class TracedHttpClient:
     ) -> httpx.Response:
         """
         Execute traced HTTP request.
+
+        Issue #620: Refactored to use extracted helper methods.
 
         Args:
             method: HTTP method (GET, POST, etc.)
@@ -130,15 +180,7 @@ class TracedHttpClient:
         if not self._client:
             raise RuntimeError("TracedHttpClient must be used as async context manager")
 
-        # Get trace headers
-        trace_headers = self._get_trace_headers()
-
-        # Merge with existing headers
-        existing_headers = kwargs.get("headers", {}) or {}
-        merged_headers = {**existing_headers, **trace_headers}
-        kwargs["headers"] = merged_headers
-
-        # Create span for this request
+        kwargs = self._prepare_request_headers(kwargs)
         tracer = trace.get_tracer(__name__)
         target_service = self._get_target_service(url)
 
@@ -153,21 +195,10 @@ class TracedHttpClient:
         ) as span:
             try:
                 response = await self._client.request(method, url, **kwargs)
-
-                # Record response info
-                if span.is_recording():
-                    span.set_attribute("http.status_code", response.status_code)
-                    span.set_attribute(
-                        "http.response_content_length",
-                        len(response.content) if response.content else 0,
-                    )
-
+                self._record_response_attributes(span, response)
                 return response
-
             except Exception as e:
-                if span.is_recording():
-                    span.record_exception(e)
-                    span.set_attribute("error.type", type(e).__name__)
+                self._record_exception_attributes(span, e)
                 raise
 
     async def get(self, url: str, **kwargs) -> httpx.Response:

@@ -44,9 +44,7 @@ class ExecuteShellCommandHandler(TaskHandler):
         """
         result = {
             "status": "error",
-            "message": (
-                f"Command blocked for security: {validation_result['reason']}"
-            ),
+            "message": (f"Command blocked for security: {validation_result['reason']}"),
         }
         ctx.audit_log(
             "execute_shell_command",
@@ -101,6 +99,81 @@ class ExecuteShellCommandHandler(TaskHandler):
             stderr.decode().strip(),
         )
 
+    def _build_success_result(
+        self,
+        ctx: TaskExecutionContext,
+        output: str,
+        command: str,
+        use_shell: bool,
+    ) -> Dict[str, Any]:
+        """
+        Build success result dict and log audit entry.
+
+        Issue #620.
+
+        Args:
+            ctx: TaskExecutionContext with worker, user_role, task_id
+            output: Stdout content
+            command: Original command
+            use_shell: Whether shell was used
+
+        Returns:
+            Success result dict
+        """
+        ctx.audit_log(
+            "execute_shell_command",
+            "success",
+            {"command": command, "validation_passed": True, "shell_used": use_shell},
+        )
+        return {
+            "status": "success",
+            "message": "Command executed securely.",
+            "output": output,
+        }
+
+    def _build_error_result(
+        self,
+        ctx: TaskExecutionContext,
+        output: str,
+        error: str,
+        returncode: int,
+        command: str,
+        use_shell: bool,
+    ) -> Dict[str, Any]:
+        """
+        Build error result dict and log audit entry.
+
+        Issue #620.
+
+        Args:
+            ctx: TaskExecutionContext with worker, user_role, task_id
+            output: Stdout content
+            error: Stderr content
+            returncode: Process return code
+            command: Original command
+            use_shell: Whether shell was used
+
+        Returns:
+            Error result dict
+        """
+        ctx.audit_log(
+            "execute_shell_command",
+            "failure",
+            {
+                "command": command,
+                "error": error,
+                "validation_passed": True,
+                "shell_used": use_shell,
+            },
+        )
+        return {
+            "status": "error",
+            "message": "Command failed.",
+            "error": error,
+            "output": output,
+            "returncode": returncode,
+        }
+
     def _build_result_and_log(
         self,
         ctx: TaskExecutionContext,
@@ -115,6 +188,7 @@ class ExecuteShellCommandHandler(TaskHandler):
 
         Issue #281: Extracted helper for result building and audit logging.
         Issue #322: Refactored to use TaskExecutionContext.
+        Issue #620: Further extraction to _build_success_result/_build_error_result.
 
         Args:
             ctx: TaskExecutionContext with worker, user_role, task_id
@@ -128,39 +202,10 @@ class ExecuteShellCommandHandler(TaskHandler):
             Result dict with status and output
         """
         if returncode == 0:
-            result = {
-                "status": "success",
-                "message": "Command executed securely.",
-                "output": output,
-            }
-            ctx.audit_log(
-                "execute_shell_command",
-                "success",
-                {
-                    "command": command,
-                    "validation_passed": True,
-                    "shell_used": use_shell,
-                },
-            )
-        else:
-            result = {
-                "status": "error",
-                "message": "Command failed.",
-                "error": error,
-                "output": output,
-                "returncode": returncode,
-            }
-            ctx.audit_log(
-                "execute_shell_command",
-                "failure",
-                {
-                    "command": command,
-                    "error": error,
-                    "validation_passed": True,
-                    "shell_used": use_shell,
-                },
-            )
-        return result
+            return self._build_success_result(ctx, output, command, use_shell)
+        return self._build_error_result(
+            ctx, output, error, returncode, command, use_shell
+        )
 
     async def execute(self, ctx: TaskExecutionContext) -> Dict[str, Any]:
         """

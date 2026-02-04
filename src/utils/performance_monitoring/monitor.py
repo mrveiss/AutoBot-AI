@@ -671,61 +671,61 @@ class PerformanceMonitor:
         """
         Calculate performance trends from recent metrics.
 
-        (Issue #398: refactored to use extracted helpers)
+        Issue #398: refactored to use extracted helpers.
+        Issue #620: further refactored using Extract Method pattern.
         """
         try:
-            trends = {}
-
             if not self.redis_client:
                 return {
                     "note": "Trends require Redis. Use Prometheus PromQL for historical analysis."
                 }
 
             try:
-
-                def _fetch_trend_data():
-                    gpu_data = self.redis_client.zrange(
-                        "performance_metrics:gpu", -5, -1
-                    )
-                    system_data = self.redis_client.zrange(
-                        "performance_metrics:system", -5, -1
-                    )
-                    return gpu_data, system_data
-
-                gpu_data, system_data = await asyncio.to_thread(_fetch_trend_data)
-
-                if gpu_data and len(gpu_data) >= 2:
-                    gpu_metrics = [json.loads(d) for d in gpu_data]
-                    utilizations = [
-                        g.get("utilization_percent", 0) for g in gpu_metrics
-                    ]
-                    trends["gpu_utilization"] = self._compute_metric_trend(
-                        utilizations, "gpu"
-                    )
-
-                if system_data and len(system_data) >= 2:
-                    system_metrics = [json.loads(d) for d in system_data]
-
-                    loads = [s.get("cpu_load_1m", 0) for s in system_metrics]
-                    trends["cpu_load"] = self._compute_metric_trend(
-                        loads, "cpu", decimals=2
-                    )
-
-                    memory_usage = [
-                        s.get("memory_usage_percent", 0) for s in system_metrics
-                    ]
-                    trends["memory_usage"] = self._compute_metric_trend(
-                        memory_usage, "memory"
-                    )
+                gpu_data, system_data = await asyncio.to_thread(
+                    self._fetch_performance_trend_data
+                )
+                trends = self._process_trend_data(gpu_data, system_data)
+                return trends
 
             except Exception as e:
                 self.logger.debug("Could not calculate trends from Redis: %s", e)
-
-            return trends
+                return {}
 
         except Exception as e:
             self.logger.error("Error calculating performance trends: %s", e)
             return {}
+
+    def _fetch_performance_trend_data(self) -> tuple:
+        """
+        Fetch GPU and system trend data from Redis.
+
+        Issue #620: Extracted from _calculate_performance_trends. Issue #620.
+        """
+        gpu_data = self.redis_client.zrange("performance_metrics:gpu", -5, -1)
+        system_data = self.redis_client.zrange("performance_metrics:system", -5, -1)
+        return gpu_data, system_data
+
+    def _process_trend_data(self, gpu_data: list, system_data: list) -> Dict[str, Any]:
+        """
+        Process GPU and system data into trend metrics.
+
+        Issue #620: Extracted from _calculate_performance_trends. Issue #620.
+        """
+        trends = {}
+
+        if gpu_data and len(gpu_data) >= 2:
+            gpu_metrics = [json.loads(d) for d in gpu_data]
+            utilizations = [g.get("utilization_percent", 0) for g in gpu_metrics]
+            trends["gpu_utilization"] = self._compute_metric_trend(utilizations, "gpu")
+
+        if system_data and len(system_data) >= 2:
+            system_metrics = [json.loads(d) for d in system_data]
+            loads = [s.get("cpu_load_1m", 0) for s in system_metrics]
+            trends["cpu_load"] = self._compute_metric_trend(loads, "cpu", decimals=2)
+            memory_usage = [s.get("memory_usage_percent", 0) for s in system_metrics]
+            trends["memory_usage"] = self._compute_metric_trend(memory_usage, "memory")
+
+        return trends
 
     async def add_alert_callback(self, callback: Callable):
         """Add callback function for performance alerts (thread-safe)."""

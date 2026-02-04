@@ -658,16 +658,40 @@ class Phase9PerformanceMonitor:
     async def collect_service_performance_metrics(
         self,
     ) -> List[ServicePerformanceMetrics]:
-        """Collect performance metrics for all distributed services. Issue #694."""
-        services = []
+        """
+        Collect performance metrics for all distributed services.
 
-        # Use SSOT config for service endpoints
+        Issue #694: Original implementation.
+        Issue #620: Refactored using Extract Method pattern.
+        """
+        services = []
+        service_configs = self._get_service_configurations()
+
+        for service_config in service_configs:
+            try:
+                service_metrics = await self._collect_single_service_metrics(
+                    service_config
+                )
+                if service_metrics:
+                    services.append(service_metrics)
+            except Exception as e:
+                self.logger.error(
+                    "Error collecting metrics for %s: %s", service_config["name"], e
+                )
+
+        return services
+
+    def _get_service_configurations(self) -> List[Dict[str, Any]]:
+        """
+        Get service endpoint configurations from SSOT config.
+
+        Issue #620: Extracted from collect_service_performance_metrics. Issue #620.
+        """
         from src.config.ssot_config import get_config
 
         ssot_config = get_config()
 
-        # Define services to monitor
-        service_configs = [
+        return [
             {
                 "name": "Backend API",
                 "host": ssot_config.vm.main,
@@ -700,20 +724,6 @@ class Phase9PerformanceMonitor:
                 "path": "/health",
             },
         ]
-
-        for service_config in service_configs:
-            try:
-                service_metrics = await self._collect_single_service_metrics(
-                    service_config
-                )
-                if service_metrics:
-                    services.append(service_metrics)
-            except Exception as e:
-                self.logger.error(
-                    f"Error collecting metrics for {service_config['name']}: {e}"
-                )
-
-        return services
 
     def _check_redis_service_status(self) -> str:
         """

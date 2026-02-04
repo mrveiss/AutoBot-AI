@@ -232,6 +232,78 @@ class AgentOrchestrator:
         """Stop distributed agent management."""
         await self._distributed_manager.stop()
 
+    async def _try_distributed_processing(
+        self,
+        request: str,
+        context: Optional[Dict[str, Any]],
+        chat_history: Optional[List[Dict[str, Any]]],
+        preferred_agents: Optional[List[str]],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Attempt to process request with distributed agents.
+
+        Issue #620.
+
+        Args:
+            request: User's request
+            context: Optional context information
+            chat_history: Optional chat history
+            preferred_agents: Optional list of preferred agents
+
+        Returns:
+            Response dict if successful, None if should fall back to legacy
+        """
+        if not (self.is_running and len(self.distributed_agents) > 0):
+            return None
+        try:
+            return await self._executor.process_with_distributed_agents(
+                request, context, chat_history, preferred_agents
+            )
+        except Exception as e:
+            logger.warning(
+                "Distributed processing failed: %s, falling back to legacy", e
+            )
+            return None
+
+    def _build_no_agents_response(self) -> Dict[str, Any]:
+        """
+        Build response when no agents are available.
+
+        Issue #620.
+
+        Returns:
+            Error response dict
+        """
+        return {
+            "status": "error",
+            "response": "No agents available for processing",
+            "agent_used": "none",
+            "routing_strategy": "no_agents_available",
+        }
+
+    def _build_error_response(self, error: Exception) -> Dict[str, Any]:
+        """
+        Build response for orchestrator errors.
+
+        Issue #620.
+
+        Args:
+            error: The exception that occurred
+
+        Returns:
+            Error response dict
+        """
+        return {
+            "status": "error",
+            "response": (
+                "I encountered an error while processing your request. "
+                "Please try rephrasing it."
+            ),
+            "error": str(error),
+            "agent_used": "orchestrator",
+            "routing_strategy": "error_fallback",
+        }
+
     async def process_request(
         self,
         request: str,
@@ -241,6 +313,8 @@ class AgentOrchestrator:
     ) -> Dict[str, Any]:
         """
         Enhanced request processing supporting both legacy and distributed agents.
+
+        Issue #620: Refactored to use extracted helper methods.
 
         Args:
             request: User's request
@@ -253,45 +327,26 @@ class AgentOrchestrator:
         """
         try:
             logger.info(
-                f"Enhanced Agent Orchestrator processing request: {request[:50]}..."
+                "Enhanced Agent Orchestrator processing request: %s...", request[:50]
             )
 
             # Try distributed agents first if available and running
-            if self.is_running and len(self.distributed_agents) > 0:
-                try:
-                    return await self._executor.process_with_distributed_agents(
-                        request, context, chat_history, preferred_agents
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Distributed processing failed: {e}, falling back to legacy"
-                    )
+            distributed_result = await self._try_distributed_processing(
+                request, context, chat_history, preferred_agents
+            )
+            if distributed_result is not None:
+                return distributed_result
 
             # Fallback to legacy agent processing
             if LEGACY_AGENTS_AVAILABLE:
                 return await self._executor.process_with_legacy_agents(
                     request, context, chat_history
                 )
-            else:
-                return {
-                    "status": "error",
-                    "response": "No agents available for processing",
-                    "agent_used": "none",
-                    "routing_strategy": "no_agents_available",
-                }
+            return self._build_no_agents_response()
 
         except Exception as e:
             logger.error("Agent Orchestrator error: %s", e)
-            return {
-                "status": "error",
-                "response": (
-                    "I encountered an error while processing your request. "
-                    "Please try rephrasing it."
-                ),
-                "error": str(e),
-                "agent_used": "orchestrator",
-                "routing_strategy": "error_fallback",
-            }
+            return self._build_error_response(e)
 
     # Agent instance getters (lazy loading)
     def _get_chat_agent(self):

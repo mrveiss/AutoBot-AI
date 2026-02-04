@@ -402,8 +402,8 @@ class ExistingOperationMigrator:
         """
         Migrate comprehensive test suite to long-running framework.
 
-        Issue #665: Refactored to delegate to phase-specific helper methods
-        to reduce function length from 131 lines to under 50 lines.
+        Issue #665: Refactored to delegate to phase-specific helper methods.
+        Issue #620: Further refactored using Extract Method pattern.
 
         BEFORE:
         - Fixed 10-minute timeout regardless of test count
@@ -417,37 +417,11 @@ class ExistingOperationMigrator:
         - Resume from last completed test
         - Parallel execution with resource management
         """
-
-        async def enhanced_test_suite_operation(context: OperationExecutionContext):
-            """Enhanced test suite with checkpoint/resume and parallel execution."""
-            # Setup phase: discover tests
-            test_files = self._discover_test_files()
-            total_tests = len(test_files)
-            await context.update_progress("Test discovery", 0, total_tests)
-
-            # Resume phase: check for checkpoint data
-            completed_tests, failed_tests, start_index = self._get_resume_state(context)
-
-            # Execution phase: run tests with resource management
-            completed_tests, failed_tests = await self._execute_tests(
-                context,
-                test_files,
-                total_tests,
-                completed_tests,
-                failed_tests,
-                start_index,
-            )
-
-            # Validation phase: calculate and return results
-            return self._calculate_test_results(
-                total_tests, completed_tests, failed_tests, context.should_resume()
-            )
-
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.COMPREHENSIVE_TEST_SUITE,
             name="Enhanced Comprehensive Test Suite",
             description="Migrate from fixed timeout to dynamic checkpoint-based testing",
-            operation_function=enhanced_test_suite_operation,
+            operation_function=self._enhanced_test_suite_operation,
             priority=OperationPriority.HIGH,
             estimated_items=len(
                 list(Path(f"{PATH.PROJECT_ROOT}/tests").rglob("test_*.py"))
@@ -457,6 +431,38 @@ class ExistingOperationMigrator:
 
         logger.info("Migrated comprehensive test suite operation: %s", operation_id)
         return operation_id
+
+    async def _enhanced_test_suite_operation(
+        self, context: OperationExecutionContext
+    ) -> Dict[str, Any]:
+        """
+        Enhanced test suite with checkpoint/resume and parallel execution.
+
+        Issue #620: Extracted from migrate_comprehensive_test_suite to reduce
+        function length using Extract Method pattern. Issue #620.
+        """
+        # Setup phase: discover tests
+        test_files = self._discover_test_files()
+        total_tests = len(test_files)
+        await context.update_progress("Test discovery", 0, total_tests)
+
+        # Resume phase: check for checkpoint data
+        completed_tests, failed_tests, start_index = self._get_resume_state(context)
+
+        # Execution phase: run tests with resource management
+        completed_tests, failed_tests = await self._execute_tests(
+            context,
+            test_files,
+            total_tests,
+            completed_tests,
+            failed_tests,
+            start_index,
+        )
+
+        # Validation phase: calculate and return results
+        return self._calculate_test_results(
+            total_tests, completed_tests, failed_tests, context.should_resume()
+        )
 
     def _discover_test_files(self) -> List[Path]:
         """Discover all test files in the tests directory.
