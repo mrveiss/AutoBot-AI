@@ -661,7 +661,7 @@ class AnalyticsInfrastructureMixin:
         if self._redis_client:
             try:
                 await self._redis_client.close()
-            except Exception:
+            except Exception:  # nosec B110 - cleanup ignores close errors
                 pass
             self._redis_client = None
         logger.info("Infrastructure resources cleaned up")
@@ -838,6 +838,44 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
 
         return duplicates
 
+    def _extract_code_and_metadata(
+        self,
+        item: Any,
+        code_extractors: List[str],
+        metadata_keys: Dict[str, str],
+        min_code_length: int,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract code and metadata from an item for duplicate detection.
+
+        Issue #620.
+
+        Args:
+            item: Object with code content
+            code_extractors: Attribute names to try for code extraction
+            metadata_keys: Dict mapping output keys to object attributes
+            min_code_length: Minimum code length to consider
+
+        Returns:
+            Dict with code and metadata, or None if extraction fails
+        """
+        code = None
+        for extractor in code_extractors:
+            code = getattr(item, extractor, "") or ""
+            if code and len(code) >= min_code_length:
+                break
+
+        if not code or len(code) < min_code_length:
+            return None
+
+        item_data: Dict[str, Any] = {"code": code, "_original": item}
+        for out_key, attr_name in metadata_keys.items():
+            value = getattr(item, attr_name, None)
+            if hasattr(value, "value"):
+                value = value.value
+            item_data[out_key] = value
+        return item_data
+
     async def _find_semantic_duplicates_with_extraction(
         self,
         items: List[Any],
@@ -855,22 +893,12 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
         Args:
             items: List of objects with code content (e.g., AntiPatternResult)
             code_extractors: Attribute names to try for code extraction
-                            (e.g., ["current_code", "code_snippet"])
             metadata_keys: Dict mapping output keys to object attributes
-                          (e.g., {"type": "pattern_type", "path": "file_path"})
             min_code_length: Minimum code length to consider (default 20)
             min_similarity: Minimum similarity threshold (default SIMILARITY_MEDIUM)
 
         Returns:
             List of duplicate pairs with similarity scores
-
-        Example:
-            # In AntiPatternDetector
-            duplicates = await self._find_semantic_duplicates_with_extraction(
-                items=patterns,
-                code_extractors=["current_code", "code_snippet"],
-                metadata_keys={"pattern_type": "pattern_type", "file_path": "file_path"},
-            )
         """
         if not hasattr(self, "use_semantic_analysis") or not self.use_semantic_analysis:
             return []
@@ -880,29 +908,15 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
 
         items_with_code = []
         for item in items:
-            # Try each extractor until we find code
-            code = None
-            for extractor in code_extractors:
-                code = getattr(item, extractor, "") or ""
-                if code and len(code) >= min_code_length:
-                    break
-
-            if code and len(code) >= min_code_length:
-                # Build metadata from object attributes
-                item_data = {"code": code, "_original": item}
-                for out_key, attr_name in metadata_keys.items():
-                    value = getattr(item, attr_name, None)
-                    # Handle enums
-                    if hasattr(value, "value"):
-                        value = value.value
-                    item_data[out_key] = value
-                items_with_code.append(item_data)
+            extracted = self._extract_code_and_metadata(
+                item, code_extractors, metadata_keys, min_code_length
+            )
+            if extracted:
+                items_with_code.append(extracted)
 
         if len(items_with_code) < 2:
             return []
 
         return await self._find_semantic_duplicates(
-            items_with_code,
-            code_key="code",
-            min_similarity=min_similarity,
+            items_with_code, code_key="code", min_similarity=min_similarity
         )

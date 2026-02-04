@@ -255,18 +255,13 @@ For complex technical tasks, analysis, or system commands, you should "
             logger.error("Error extracting response content: %s", e)
             return "I had trouble generating a proper response. Please try again."
 
-    def is_chat_appropriate(self, message: str) -> bool:
+    def _get_chat_patterns(self) -> List[str]:
         """
-        Determine if a message is appropriate for the chat agent.
+        Return list of simple conversational patterns for chat routing.
 
-        Args:
-            message: The user's message
-
-        Returns:
-            bool: True if chat agent should handle it, False if needs routing
+        Issue #620.
         """
-        # Simple conversational patterns
-        chat_patterns = [
+        return [
             "hello",
             "hi",
             "hey",
@@ -292,8 +287,13 @@ For complex technical tasks, analysis, or system commands, you should "
             "could you",
         ]
 
-        # Complex task patterns that should be routed elsewhere
-        complex_patterns = [
+    def _get_complex_patterns(self) -> List[str]:
+        """
+        Return list of complex task patterns that should be routed elsewhere.
+
+        Issue #620.
+        """
+        return [
             "execute",
             "run command",
             "system",
@@ -311,14 +311,26 @@ For complex technical tasks, analysis, or system commands, you should "
             "program",
         ]
 
+    def is_chat_appropriate(self, message: str) -> bool:
+        """
+        Determine if a message is appropriate for the chat agent.
+
+        Args:
+            message: The user's message
+
+        Returns:
+            bool: True if chat agent should handle it, False if needs routing
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
         message_lower = message.lower()
 
         # Check if it's a complex task
-        if any(pattern in message_lower for pattern in complex_patterns):
+        if any(pattern in message_lower for pattern in self._get_complex_patterns()):
             return False
 
         # Check if it's conversational
-        if any(pattern in message_lower for pattern in chat_patterns):
+        if any(pattern in message_lower for pattern in self._get_chat_patterns()):
             return True
 
         # Default to chat for short, simple messages

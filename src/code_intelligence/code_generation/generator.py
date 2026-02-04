@@ -39,7 +39,9 @@ try:
 except ImportError:
     LLM_INTERFACE_AVAILABLE = False
     LLMInterface = None
-    logger.warning("LLMInterface not available - code generation will fail without LLM client")
+    logger.warning(
+        "LLMInterface not available - code generation will fail without LLM client"
+    )
 
 
 class LLMCodeGenerator:
@@ -216,13 +218,52 @@ class LLMCodeGenerator:
             model_used=self.model_name,
         )
 
-    async def generate(
-        self, request: RefactoringRequest
+    def _build_success_result(
+        self,
+        request_id: str,
+        request: RefactoringRequest,
+        generated_code: GeneratedCode,
+        validation: ValidationResult,
+        cache_key: str,
     ) -> RefactoringResult:
+        """
+        Build successful refactoring result and update cache.
+
+        Issue #620.
+
+        Args:
+            request_id: Unique request identifier
+            request: Original refactoring request
+            generated_code: The generated code object
+            validation: Validation result
+            cache_key: Cache key for storing result
+
+        Returns:
+            RefactoringResult with success or validation failed status
+        """
+        if validation.is_valid:
+            self._cache[cache_key] = generated_code
+
+        status = (
+            GenerationStatus.SUCCESS
+            if validation.is_valid
+            else GenerationStatus.VALIDATION_FAILED
+        )
+
+        return RefactoringResult(
+            request_id=request_id,
+            status=status,
+            request=request,
+            generated_code=generated_code,
+            rollback_code=request.context.code_snippet,
+            suggestions=self._generate_suggestions(validation),
+        )
+
+    async def generate(self, request: RefactoringRequest) -> RefactoringResult:
         """
         Generate refactored code based on the request.
 
-        Issue #281: Refactored from 113 lines to use extracted helper methods.
+        Issue #620: Refactored using Extract Method pattern for maintainability.
 
         Args:
             request: The refactoring request
@@ -231,48 +272,28 @@ class LLMCodeGenerator:
             RefactoringResult with generated code or error
         """
         import time
+
         start_time = time.time()
         request_id = await self._generate_request_id()
         cache_key = self._get_cache_key(request)
 
-        # Check cache (Issue #281: uses helper)
         cached_result = self._get_cached_result(request, request_id, cache_key)
         if cached_result:
             return cached_result
 
         try:
-            # Format the prompt and call LLM
             system_prompt, user_prompt = self._format_prompt(request)
             generated_text = await self._call_llm(system_prompt, user_prompt)
-
             generation_time = (time.time() - start_time) * 1000
             code = self._extract_code(generated_text)
 
-            # Validate code (Issue #281: uses helper)
             validation = self._validate_and_check_behavior(code, request)
-
-            # Build generated code object (Issue #281: uses helper)
             generated_code = self._build_generated_code(
                 code, request, validation, generated_text, generation_time
             )
 
-            # Cache successful results
-            if validation.is_valid:
-                self._cache[cache_key] = generated_code
-
-            status = (
-                GenerationStatus.SUCCESS
-                if validation.is_valid
-                else GenerationStatus.VALIDATION_FAILED
-            )
-
-            return RefactoringResult(
-                request_id=request_id,
-                status=status,
-                request=request,
-                generated_code=generated_code,
-                rollback_code=request.context.code_snippet,
-                suggestions=self._generate_suggestions(validation),
+            return self._build_success_result(
+                request_id, request, generated_code, validation, cache_key
             )
 
         except Exception as e:
@@ -293,7 +314,9 @@ class LLMCodeGenerator:
             "target_name": request.target_name or "",
             "new_name": request.new_name or "",
             "pattern_template": request.pattern_template or "",
-            "constraints": "\n".join(request.constraints) if request.constraints else "",
+            "constraints": "\n".join(request.constraints)
+            if request.constraints
+            else "",
             "target_code": "",  # Could be enhanced
         }
 
@@ -373,7 +396,7 @@ class LLMCodeGenerator:
         elif validation.errors:
             score *= 0.5
         elif validation.warnings:
-            score *= (1.0 - 0.05 * len(validation.warnings))
+            score *= 1.0 - 0.05 * len(validation.warnings)
 
         # Reduce for high complexity
         if validation.complexity_score > 20:
@@ -398,7 +421,9 @@ class LLMCodeGenerator:
             suggestions.append(f"Consider: {warning}")
 
         if validation.complexity_score > 15:
-            suggestions.append("Consider breaking down complex logic into smaller functions")
+            suggestions.append(
+                "Consider breaking down complex logic into smaller functions"
+            )
 
         return suggestions
 

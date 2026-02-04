@@ -601,18 +601,40 @@ class VoiceInterface:
             if os.path.exists(output_path):
                 os.unlink(output_path)
 
-    async def _speak_gtts(self, text: str) -> Dict[str, Any]:
+    def _gtts_synthesize_and_play_blocking(self, text: str) -> Dict[str, Any]:
         """
-        gTTS (Google Text-to-Speech) synthesis and playback.
+        Blocking gTTS synthesis and playback helper.
 
-        Uses gTTS as an online fallback for text-to-speech.
-        Requires gtts package and sounddevice for playback.
+        Issue #620.
+        """
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_file:
+            output_path = tmp_file.name
 
-        Args:
-            text: Text to convert to speech.
+        try:
+            # Synthesize speech to file
+            logger.debug("gTTS synthesizing: %s", text[:50])
+            lang = self.voice_config.get("gtts_lang", "en")
+            tts_obj = gTTS(text=text, lang=lang)
+            tts_obj.save(output_path)
 
-        Returns:
-            Dict with status and message.
+            # Read and play the audio
+            data, samplerate = sf.read(output_path)
+            sd.play(data, samplerate)
+            sd.wait()
+
+            return {
+                "status": "success",
+                "message": "Text spoken successfully via gTTS.",
+            }
+        finally:
+            if os.path.exists(output_path):
+                os.unlink(output_path)
+
+    def _check_gtts_dependencies(self) -> Optional[Dict[str, Any]]:
+        """
+        Check gTTS dependencies and return error dict if not available.
+
+        Issue #620.
         """
         if not GTTS_AVAILABLE:
             return {
@@ -628,38 +650,32 @@ class VoiceInterface:
                     "Install with: pip install sounddevice soundfile"
                 ),
             }
+        return None
+
+    async def _speak_gtts(self, text: str) -> Dict[str, Any]:
+        """
+        gTTS (Google Text-to-Speech) synthesis and playback.
+
+        Uses gTTS as an online fallback for text-to-speech.
+        Requires gtts package and sounddevice for playback.
+
+        Args:
+            text: Text to convert to speech.
+
+        Returns:
+            Dict with status and message.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        dep_error = self._check_gtts_dependencies()
+        if dep_error:
+            return dep_error
 
         try:
             loop = asyncio.get_running_loop()
-
-            def _synthesize_and_play():
-                """Blocking gTTS synthesis and playback in executor."""
-                with tempfile.NamedTemporaryFile(
-                    suffix=".mp3", delete=False
-                ) as tmp_file:
-                    output_path = tmp_file.name
-
-                try:
-                    # Synthesize speech to file
-                    logger.debug("gTTS synthesizing: %s", text[:50])
-                    lang = self.voice_config.get("gtts_lang", "en")
-                    tts_obj = gTTS(text=text, lang=lang)
-                    tts_obj.save(output_path)
-
-                    # Read and play the audio
-                    data, samplerate = sf.read(output_path)
-                    sd.play(data, samplerate)
-                    sd.wait()
-
-                    return {
-                        "status": "success",
-                        "message": "Text spoken successfully via gTTS.",
-                    }
-                finally:
-                    if os.path.exists(output_path):
-                        os.unlink(output_path)
-
-            result = await loop.run_in_executor(None, _synthesize_and_play)
+            result = await loop.run_in_executor(
+                None, self._gtts_synthesize_and_play_blocking, text
+            )
             return result
 
         except Exception as e:

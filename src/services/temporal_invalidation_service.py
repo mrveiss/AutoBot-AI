@@ -816,64 +816,80 @@ class TemporalInvalidationService:
             logger.error("Error in contradiction invalidation: %s", e)
             return {"status": "error", "message": str(e)}
 
+    def _aggregate_history_statistics(
+        self, recent_history: List[str]
+    ) -> Tuple[int, int, float, Dict[str, int]]:
+        """
+        Aggregate statistics from invalidation history entries.
+
+        Issue #620.
+
+        Args:
+            recent_history: List of JSON-encoded history entries
+
+        Returns:
+            Tuple of (facts_processed, facts_invalidated, processing_time, rule_usage)
+        """
+        total_facts_processed = 0
+        total_facts_invalidated = 0
+        total_processing_time = 0.0
+        rule_usage: Dict[str, int] = {}
+
+        for history_json in recent_history:
+            try:
+                history = json.loads(history_json)
+                total_facts_processed += history.get("facts_processed", 0)
+                total_facts_invalidated += history.get("facts_invalidated", 0)
+                total_processing_time += history.get("processing_time", 0)
+
+                for rule_id, count in history.get("rule_statistics", {}).items():
+                    rule_usage[rule_id] = rule_usage.get(rule_id, 0) + count
+            except json.JSONDecodeError:
+                continue
+
+        return (
+            total_facts_processed,
+            total_facts_invalidated,
+            total_processing_time,
+            rule_usage,
+        )
+
     async def get_invalidation_statistics(self) -> Dict[str, Any]:
         """Get statistics about temporal invalidation operations."""
         try:
             if not self.redis_client:
                 return {"error": "Redis client not available"}
 
-            # Get total invalidated facts
             total_invalidated = await self.redis_client.scard(
                 self.invalidated_facts_key
             )
-
-            # Get recent invalidation history
             recent_history = await self.redis_client.lrange(
                 self.invalidation_history_key, 0, 49
             )
 
-            # Calculate statistics from history
             total_sweeps = len(recent_history)
-            total_facts_processed = 0
-            total_facts_invalidated = 0
-            total_processing_time = 0.0
+            (
+                facts_processed,
+                facts_invalidated,
+                processing_time,
+                rule_usage,
+            ) = self._aggregate_history_statistics(recent_history)
 
-            rule_usage = {}
-
-            for history_json in recent_history:
-                try:
-                    history = json.loads(history_json)
-                    total_facts_processed += history.get("facts_processed", 0)
-                    total_facts_invalidated += history.get("facts_invalidated", 0)
-                    total_processing_time += history.get("processing_time", 0)
-
-                    # Aggregate rule statistics
-                    for rule_id, count in history.get("rule_statistics", {}).items():
-                        rule_usage[rule_id] = rule_usage.get(rule_id, 0) + count
-
-                except json.JSONDecodeError:
-                    continue
-
-            # Get current rules
             rules = await self._load_invalidation_rules()
             enabled_rules = sum(1 for r in rules.values() if r.enabled)
 
-            avg_processing_time = (
-                total_processing_time / total_sweeps if total_sweeps > 0 else 0
-            )
-            invalidation_rate = (
-                total_facts_invalidated / total_facts_processed * 100
-                if total_facts_processed > 0
-                else 0
+            avg_time = processing_time / total_sweeps if total_sweeps > 0 else 0
+            inv_rate = (
+                facts_invalidated / facts_processed * 100 if facts_processed > 0 else 0
             )
 
             return {
                 "total_invalidated_facts": total_invalidated,
                 "recent_sweeps": total_sweeps,
-                "total_facts_processed": total_facts_processed,
-                "total_facts_invalidated_recent": total_facts_invalidated,
-                "average_processing_time": round(avg_processing_time, 2),
-                "invalidation_rate": round(invalidation_rate, 2),
+                "total_facts_processed": facts_processed,
+                "total_facts_invalidated_recent": facts_invalidated,
+                "average_processing_time": round(avg_time, 2),
+                "invalidation_rate": round(inv_rate, 2),
                 "total_rules": len(rules),
                 "enabled_rules": enabled_rules,
                 "rule_usage_statistics": rule_usage,

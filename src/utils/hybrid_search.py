@@ -331,12 +331,26 @@ class HybridSearchEngine:
             ],
         }
 
+    async def _fallback_semantic_search(
+        self, query: str, top_k: int, filters: Optional[Dict], error: Exception
+    ) -> List[Dict[str, Any]]:
+        """
+        Fallback to regular semantic search when hybrid search fails.
+
+        Issue #620.
+        """
+        self.logger.error("Error in hybrid search: %s", error)
+        try:
+            return await self.knowledge_base.search(query, top_k, filters)
+        except Exception as fallback_error:
+            self.logger.error("Fallback search also failed: %s", fallback_error)
+            return []
+
     async def search(
         self, query: str, top_k: int = 10, filters: Optional[Dict] = None
     ) -> List[Dict[str, Any]]:
         """
         Perform hybrid search combining semantic and keyword-based approaches.
-        Issue #665: Refactored to use _enhance_result_with_scores helper.
 
         Args:
             query: Search query string
@@ -345,6 +359,8 @@ class HybridSearchEngine:
 
         Returns:
             List of search results with hybrid scores
+
+        Issue #620: Refactored to use extracted helper methods.
         """
         if not self.knowledge_base:
             self.logger.error("Knowledge base not available for hybrid search")
@@ -364,7 +380,7 @@ class HybridSearchEngine:
                 self.logger.warning("No semantic results found for query: '%s'", query)
                 return []
 
-            # Enhance results with keyword scoring (Issue #665: uses helper)
+            # Enhance results with keyword scoring
             enhanced_results = [
                 self._enhance_result_with_scores(result, query_keywords)
                 for result in semantic_results
@@ -383,20 +399,14 @@ class HybridSearchEngine:
 
             self.logger.info(
                 f"Hybrid search for '{query}': "
-                f"{len(semantic_results)} semantic → {len(unique_results)} unique → "
+                f"{len(semantic_results)} semantic -> {len(unique_results)} unique -> "
                 f"{len(final_results)} final results"
             )
 
             return final_results
 
         except Exception as e:
-            self.logger.error("Error in hybrid search: %s", e)
-            # Fallback to regular semantic search
-            try:
-                return await self.knowledge_base.search(query, top_k, filters)
-            except Exception as fallback_error:
-                self.logger.error("Fallback search also failed: %s", fallback_error)
-                return []
+            return await self._fallback_semantic_search(query, top_k, filters, e)
 
     async def explain_search(self, query: str, top_k: int = 5) -> Dict[str, Any]:
         """
