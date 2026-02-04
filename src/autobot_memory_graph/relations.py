@@ -74,6 +74,20 @@ class RelationOperationsMixin:
 
         return relation, reverse_rel
 
+    async def _resolve_entity_ids(
+        self: AutoBotMemoryGraphCore,
+        from_entity: str,
+        to_entity: str,
+    ) -> tuple:
+        """Resolve entity names to IDs, raising if not found. Issue #620."""
+        from_entity_data, to_entity_data = await asyncio.gather(
+            self.get_entity(entity_name=from_entity),
+            self.get_entity(entity_name=to_entity),
+        )
+        if not from_entity_data or not to_entity_data:
+            raise ValueError("Source or target entity not found")
+        return from_entity_data["id"], to_entity_data["id"]
+
     async def create_relation(
         self: AutoBotMemoryGraphCore,
         from_entity: str,
@@ -83,11 +97,7 @@ class RelationOperationsMixin:
         strength: float = 1.0,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Create relationship between two entities.
-
-        Issue #665: Refactored to use _store_outgoing_relation and
-        _store_incoming_relation helpers for maintainability.
+        """Create relationship between two entities.
 
         Args:
             from_entity: Source entity name
@@ -101,26 +111,14 @@ class RelationOperationsMixin:
             Created relation data
         """
         self.ensure_initialized()
-
         if relation_type not in RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
         try:
-            from_entity_data, to_entity_data = await asyncio.gather(
-                self.get_entity(entity_name=from_entity),
-                self.get_entity(entity_name=to_entity),
-            )
-
-            if not from_entity_data or not to_entity_data:
-                raise ValueError("Source or target entity not found")
-
-            from_id = from_entity_data["id"]
-            to_id = to_entity_data["id"]
-
+            from_id, to_id = await self._resolve_entity_ids(from_entity, to_entity)
             relation, reverse_rel = self._build_relation_objects(
                 from_id, to_id, relation_type, strength, metadata
             )
-
             await self._store_outgoing_relation(from_id, relation)
             await self._store_incoming_relation(to_id, reverse_rel)
 

@@ -169,6 +169,32 @@ class CodePatternAnalyzer:
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
 
+    def _build_analysis_tasks(self, directory: str) -> List:
+        """Build list of analysis tasks based on enabled features. Issue #620."""
+        tasks = []
+        if self.enable_clone_detection:
+            tasks.append(self._run_clone_detection(directory))
+        if self.enable_regex_detection:
+            tasks.append(self._run_regex_detection(directory))
+        if self.enable_complexity_analysis:
+            tasks.append(self._run_complexity_analysis(directory))
+        if self.enable_anti_pattern_detection:
+            tasks.append(self._run_anti_pattern_detection(directory))
+        return tasks
+
+    async def _execute_and_merge_results(
+        self, tasks: List, report: PatternAnalysisReport
+    ) -> None:
+        """Execute analysis tasks concurrently and merge results. Issue #620."""
+        if not tasks:
+            return
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error("Analysis task failed: %s", result)
+                continue
+            self._merge_results(report, result)
+
     async def analyze_directory(self, directory: str) -> PatternAnalysisReport:
         """Analyze a directory for code patterns.
 
@@ -181,46 +207,17 @@ class CodePatternAnalyzer:
         logger.info("Starting code pattern analysis for: %s", directory)
         start_time = time.time()
 
-        # Initialize report
         report = PatternAnalysisReport(scan_path=directory)
-
-        # Count files and lines
         file_count, line_count = self._count_files_and_lines(directory)
         report.total_files_analyzed = file_count
         report.total_lines_analyzed = line_count
 
-        # Run analyzers (can be parallelized)
-        tasks = []
+        tasks = self._build_analysis_tasks(directory)
+        await self._execute_and_merge_results(tasks, report)
 
-        if self.enable_clone_detection:
-            tasks.append(self._run_clone_detection(directory))
-        if self.enable_regex_detection:
-            tasks.append(self._run_regex_detection(directory))
-        if self.enable_complexity_analysis:
-            tasks.append(self._run_complexity_analysis(directory))
-        if self.enable_anti_pattern_detection:
-            tasks.append(self._run_anti_pattern_detection(directory))
-
-        # Run all tasks concurrently
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Process results
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.error("Analysis task failed: %s", result)
-                    continue
-
-                self._merge_results(report, result)
-
-        # Store patterns in ChromaDB if enabled
         if self.enable_embedding_storage:
             await self._store_patterns(report)
 
-        # Generate refactoring suggestions (available via API endpoint)
-        # Suggestions are generated on-demand via get_refactoring_suggestions endpoint
-
-        # Calculate final metrics
         report.analysis_duration_seconds = time.time() - start_time
         report.calculate_metrics()
 

@@ -24,9 +24,9 @@ from src.code_intelligence.base_analyzer import (
     Language,
     MultiLanguageAnalyzer,
 )
+from src.code_intelligence.shell_analyzer import ShellAnalyzer
 from src.code_intelligence.typescript_analyzer import TypeScriptAnalyzer
 from src.code_intelligence.vue_analyzer import VueAnalyzer
-from src.code_intelligence.shell_analyzer import ShellAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,8 @@ def create_multi_language_scanner() -> MultiLanguageAnalyzer:
 
     logger.info(
         "Multi-language scanner initialized with %d analyzers covering %d languages",
-        len(scanner.analyzers), len(scanner.get_supported_languages())
+        len(scanner.analyzers),
+        len(scanner.get_supported_languages()),
     )
 
     return scanner
@@ -80,15 +81,52 @@ class CodebaseScanner:
         result.analysis_time_ms = (time.time() - start_time) * 1000
 
         # Log scan
-        self._scan_history.append({
-            "type": "file",
-            "path": str(file_path),
-            "timestamp": time.time(),
-            "issues_found": len(result.issues),
-            "time_ms": result.analysis_time_ms,
-        })
+        self._scan_history.append(
+            {
+                "type": "file",
+                "path": str(file_path),
+                "timestamp": time.time(),
+                "issues_found": len(result.issues),
+                "time_ms": result.analysis_time_ms,
+            }
+        )
 
         return result
+
+    def _filter_issues_by_language(
+        self, result: AnalysisResult, languages: Set[Language]
+    ) -> AnalysisResult:
+        """Filter analysis result to only include specified languages. Issue #620."""
+        filtered_issues = [
+            issue for issue in result.issues if issue.language in languages
+        ]
+        new_result = AnalysisResult(
+            files_analyzed=result.files_analyzed,
+            errors=result.errors,
+            analysis_time_ms=result.analysis_time_ms,
+        )
+        for issue in filtered_issues:
+            new_result.add_issue(issue)
+        return new_result
+
+    def _log_directory_scan(self, directory: Path, result: AnalysisResult) -> None:
+        """Log directory scan to history and emit log message. Issue #620."""
+        self._scan_history.append(
+            {
+                "type": "directory",
+                "path": str(directory),
+                "timestamp": time.time(),
+                "files_scanned": result.files_analyzed,
+                "issues_found": len(result.issues),
+                "time_ms": result.analysis_time_ms,
+            }
+        )
+        logger.info(
+            "Directory scan complete: %d files, %d issues in %.2fms",
+            result.files_analyzed,
+            len(result.issues),
+            result.analysis_time_ms,
+        )
 
     def scan_directory(
         self,
@@ -110,45 +148,15 @@ class CodebaseScanner:
         """
         start_time = time.time()
 
-        # Use the analyzer's built-in directory scanning
         result = self.multi_lang_analyzer.analyze_directory(
-            directory,
-            recursive=recursive,
-            exclude_patterns=exclude_patterns,
+            directory, recursive=recursive, exclude_patterns=exclude_patterns
         )
 
-        # Filter by language if specified
         if languages:
-            filtered_issues = [
-                issue for issue in result.issues
-                if issue.language in languages
-            ]
-            # Recalculate statistics
-            new_result = AnalysisResult(
-                files_analyzed=result.files_analyzed,
-                errors=result.errors,
-                analysis_time_ms=result.analysis_time_ms,
-            )
-            for issue in filtered_issues:
-                new_result.add_issue(issue)
-            result = new_result
+            result = self._filter_issues_by_language(result, languages)
 
         result.analysis_time_ms = (time.time() - start_time) * 1000
-
-        # Log scan
-        self._scan_history.append({
-            "type": "directory",
-            "path": str(directory),
-            "timestamp": time.time(),
-            "files_scanned": result.files_analyzed,
-            "issues_found": len(result.issues),
-            "time_ms": result.analysis_time_ms,
-        })
-
-        logger.info(
-            f"Directory scan complete: {result.files_analyzed} files, "
-            f"{len(result.issues)} issues in {result.analysis_time_ms:.2f}ms"
-        )
+        self._log_directory_scan(directory, result)
 
         return result
 
@@ -214,7 +222,8 @@ class CodebaseScanner:
         from src.code_intelligence.base_analyzer import IssueSeverity
 
         return [
-            issue for issue in result.issues
+            issue
+            for issue in result.issues
             if issue.severity in {IssueSeverity.HIGH, IssueSeverity.CRITICAL}
             and issue.confidence >= min_confidence
             and not issue.potential_false_positive
@@ -232,8 +241,7 @@ class CodebaseScanner:
         from src.code_intelligence.base_analyzer import IssueCategory
 
         return [
-            issue for issue in result.issues
-            if issue.category == IssueCategory.SECURITY
+            issue for issue in result.issues if issue.category == IssueCategory.SECURITY
         ]
 
     def get_performance_issues(self, result: AnalysisResult) -> List[AnalysisIssue]:
@@ -248,7 +256,8 @@ class CodebaseScanner:
         from src.code_intelligence.base_analyzer import IssueCategory
 
         return [
-            issue for issue in result.issues
+            issue
+            for issue in result.issues
             if issue.category == IssueCategory.PERFORMANCE
         ]
 
@@ -295,9 +304,7 @@ class CodebaseScanner:
             "by_severity": severity_counts,
             "by_category": category_counts,
             "by_language": result.issues_by_language,
-            "top_files": [
-                {"file": f, "issues": c} for f, c in top_files
-            ],
+            "top_files": [{"file": f, "issues": c} for f, c in top_files],
             "high_priority": [
                 issue.to_dict() for issue in self.get_high_severity_issues(result)[:20]
             ],

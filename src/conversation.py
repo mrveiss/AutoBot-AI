@@ -502,56 +502,53 @@ class Conversation:
         )
         self.messages.append(utility_msg)
 
+    def _track_llm_source(self, llm_response) -> None:
+        """Track LLM as a source for attribution. Issue #620."""
+        track_source(
+            SourceType.LLM_TRAINING,
+            "Generated response using LLM",
+            reliability="medium",
+            metadata={
+                "tier_used": llm_response.tier_used.value,
+                "model": getattr(llm_response, "model_used", "unknown"),
+                "warnings": llm_response.warnings,
+            },
+        )
+
+    def _build_llm_context(self, kb_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build context dictionary for LLM request. Issue #620."""
+        return {
+            "conversation_id": self.conversation_id,
+            "classification": (
+                self.state.classification.complexity.value
+                if self.state.classification
+                else "simple"
+            ),
+            "kb_results_count": len(kb_results),
+        }
+
     async def _generate_response(
         self,
         user_message: str,
         kb_results: List[Dict[str, Any]],
         research_results: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """
-        Generate response with KB context and source attribution.
-
-        Issue #281: Refactored from 129 lines to use extracted helper methods.
-        """
+        """Generate response with KB context and source attribution. Issue #620."""
         try:
-            # Build context strings
             kb_context = self._build_kb_context(kb_results)
             research_context = self._build_research_context(research_results)
-
-            # Build prompts
             system_prompt = self._get_system_prompt()
             user_prompt = self._build_user_prompt(
                 user_message, kb_context, research_context
             )
 
-            # Add planning message and get LLM response
             self._add_planning_message()
             llm_response = await get_robust_llm_response(
                 f"{system_prompt}\n\n{user_prompt}",
-                context={
-                    "conversation_id": self.conversation_id,
-                    "classification": (
-                        self.state.classification.complexity.value
-                        if self.state.classification
-                        else "simple"
-                    ),
-                    "kb_results_count": len(kb_results),
-                },
+                context=self._build_llm_context(kb_results),
             )
 
-            # Track LLM as a source
-            track_source(
-                SourceType.LLM_TRAINING,
-                "Generated response using LLM",
-                reliability="medium",
-                metadata={
-                    "tier_used": llm_response.tier_used.value,
-                    "model": getattr(llm_response, "model_used", "unknown"),
-                    "warnings": llm_response.warnings,
-                },
-            )
-
-            # Add utility message and return response
+            self._track_llm_source(llm_response)
             self._add_utility_message(llm_response)
             logger.info(
                 "Response generated using %s tier", llm_response.tier_used.value

@@ -20,12 +20,12 @@ from typing import List, Optional, Tuple
 
 from ..models import AntiPatternResult
 from ..severity_utils import (
+    get_data_clump_severity,
     get_god_class_severity,
     get_large_file_severity,
     get_long_method_severity,
     get_nesting_severity,
     get_param_severity,
-    get_data_clump_severity,
 )
 from ..types import AntiPatternSeverity, AntiPatternType, Thresholds
 
@@ -350,13 +350,51 @@ class BloaterDetector:
     # Data Clumps Detection
     # =========================================================================
 
+    def _collect_param_groups(self, tree: ast.AST) -> dict:
+        """Collect parameter combination groups from all functions. Issue #620."""
+        param_groups: dict[tuple, list] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                params = self._extract_param_names(node)
+                if len(params) >= 3:
+                    for combo in self._get_combinations(params, 3):
+                        key = tuple(sorted(combo))
+                        if key not in param_groups:
+                            param_groups[key] = []
+                        param_groups[key].append((node.name, node.lineno))
+        return param_groups
+
+    def _build_clump_result(
+        self, param_combo: tuple, occurrences: list, file_path: str
+    ) -> AntiPatternResult:
+        """Build AntiPatternResult for a detected data clump. Issue #620."""
+        func_names = [occ[0] for occ in occurrences]
+        first_line = occurrences[0][1]
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.DATA_CLUMPS,
+            severity=get_data_clump_severity(len(occurrences)),
+            file_path=file_path,
+            line_number=first_line,
+            entity_name=", ".join(param_combo),
+            description=(
+                f"Parameters ({', '.join(param_combo)}) appear together "
+                f"in {len(occurrences)} functions: {', '.join(func_names[:3])}"
+                f"{'...' if len(func_names) > 3 else ''}"
+            ),
+            suggestion=(
+                "Consider grouping these parameters into a dataclass " "or named tuple"
+            ),
+            metrics={
+                "parameters": list(param_combo),
+                "occurrence_count": len(occurrences),
+                "functions": func_names,
+            },
+        )
+
     def detect_data_clumps(
-        self,
-        tree: ast.AST,
-        file_path: str,
+        self, tree: ast.AST, file_path: str
     ) -> List[AntiPatternResult]:
-        """
-        Detect data clumps - groups of parameters that appear together frequently.
+        """Detect data clumps - groups of parameters that appear together.
 
         Args:
             tree: AST tree to analyze
@@ -365,51 +403,13 @@ class BloaterDetector:
         Returns:
             List of AntiPatternResult for detected data clumps
         """
+        param_groups = self._collect_param_groups(tree)
         results: List[AntiPatternResult] = []
-        param_groups: dict[tuple, list] = {}
-
-        # Collect parameter groups from all functions
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                params = self._extract_param_names(node)
-                if len(params) >= 3:
-                    # Check all 3-param combinations
-                    for combo in self._get_combinations(params, 3):
-                        key = tuple(sorted(combo))
-                        if key not in param_groups:
-                            param_groups[key] = []
-                        param_groups[key].append((node.name, node.lineno))
-
-        # Report clumps that appear frequently
         for param_combo, occurrences in param_groups.items():
             if len(occurrences) >= self.data_clump_threshold:
-                func_names = [occ[0] for occ in occurrences]
-                first_line = occurrences[0][1]
-
                 results.append(
-                    AntiPatternResult(
-                        pattern_type=AntiPatternType.DATA_CLUMPS,
-                        severity=get_data_clump_severity(len(occurrences)),
-                        file_path=file_path,
-                        line_number=first_line,
-                        entity_name=", ".join(param_combo),
-                        description=(
-                            f"Parameters ({', '.join(param_combo)}) appear together "
-                            f"in {len(occurrences)} functions: {', '.join(func_names[:3])}"
-                            f"{'...' if len(func_names) > 3 else ''}"
-                        ),
-                        suggestion=(
-                            "Consider grouping these parameters into a dataclass "
-                            "or named tuple"
-                        ),
-                        metrics={
-                            "parameters": list(param_combo),
-                            "occurrence_count": len(occurrences),
-                            "functions": func_names,
-                        },
-                    )
+                    self._build_clump_result(param_combo, occurrences, file_path)
                 )
-
         return results
 
     def _extract_param_names(self, node: ast.FunctionDef) -> List[str]:

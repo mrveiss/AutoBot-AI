@@ -242,14 +242,30 @@ class RedisEventStreamManager(EventStreamManager):
             await pubsub.unsubscribe(self.config.pubsub_channel)
             await pubsub.close()
 
+    def _decode_entry_data(self, entry_data: dict) -> dict:
+        """Decode bytes keys/values in stream entry data. Issue #620."""
+        if not isinstance(entry_data, dict):
+            return entry_data
+        return {
+            (k.decode("utf-8") if isinstance(k, bytes) else k): (
+                v.decode("utf-8") if isinstance(v, bytes) else v
+            )
+            for k, v in entry_data.items()
+        }
+
+    def _get_stream_key(self, task_id: Optional[str]) -> str:
+        """Get the appropriate stream key based on task_id. Issue #620."""
+        if task_id:
+            return f"{self.config.task_stream_prefix}{task_id}"
+        return self.config.stream_key
+
     async def get_latest(
         self,
         count: int = 10,
         event_types: Optional[list[EventType]] = None,
         task_id: Optional[str] = None,
     ) -> list[AgentEvent]:
-        """
-        Get most recent events from stream.
+        """Get most recent events from stream.
 
         Args:
             count: Maximum number of events to return
@@ -260,16 +276,7 @@ class RedisEventStreamManager(EventStreamManager):
             List of events (newest first)
         """
         redis_client = await self._get_redis()
-
-        # Choose stream based on task_id
-        stream_key = (
-            f"{self.config.task_stream_prefix}{task_id}"
-            if task_id
-            else self.config.stream_key
-        )
-
-        # Read from stream (newest first)
-        # Fetch more than needed to allow for filtering
+        stream_key = self._get_stream_key(task_id)
         fetch_count = count * 3 if event_types else count
         entries = await redis_client.xrevrange(stream_key, count=fetch_count)
 
@@ -280,24 +287,14 @@ class RedisEventStreamManager(EventStreamManager):
             if len(events) >= count:
                 break
 
-            # Handle bytes keys
-            if isinstance(entry_data, dict):
-                entry_data = {
-                    (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                        v.decode("utf-8") if isinstance(v, bytes) else v
-                    )
-                    for k, v in entry_data.items()
-                }
-
+            entry_data = self._decode_entry_data(entry_data)
             event_id = entry_data.get("event_id")
             if not event_id:
                 continue
 
-            # Filter by type if needed
             if type_filter and entry_data.get("type") not in type_filter:
                 continue
 
-            # Fetch full event data
             event = await self.get_event(event_id)
             if event:
                 events.append(event)
@@ -326,15 +323,7 @@ class RedisEventStreamManager(EventStreamManager):
         events = []
 
         for entry_id, entry_data in entries:
-            # Handle bytes keys
-            if isinstance(entry_data, dict):
-                entry_data = {
-                    (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                        v.decode("utf-8") if isinstance(v, bytes) else v
-                    )
-                    for k, v in entry_data.items()
-                }
-
+            entry_data = self._decode_entry_data(entry_data)
             event_id = entry_data.get("event_id")
             if not event_id:
                 continue
@@ -470,14 +459,7 @@ class RedisEventStreamManager(EventStreamManager):
 
         entries = await redis_client.xrange(stream_key)
         for entry_id, entry_data in entries:
-            if isinstance(entry_data, dict):
-                entry_data = {
-                    (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                        v.decode("utf-8") if isinstance(v, bytes) else v
-                    )
-                    for k, v in entry_data.items()
-                }
-
+            entry_data = self._decode_entry_data(entry_data)
             if entry_data.get("type") in type_filter:
                 count += 1
 
@@ -501,13 +483,7 @@ class RedisEventStreamManager(EventStreamManager):
         event_ids = []
 
         for entry_id, entry_data in entries:
-            if isinstance(entry_data, dict):
-                entry_data = {
-                    (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                        v.decode("utf-8") if isinstance(v, bytes) else v
-                    )
-                    for k, v in entry_data.items()
-                }
+            entry_data = self._decode_entry_data(entry_data)
             event_id = entry_data.get("event_id")
             if event_id:
                 event_ids.append(event_id)
