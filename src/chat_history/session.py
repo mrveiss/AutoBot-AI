@@ -438,6 +438,70 @@ class SessionMixin:
         except Exception as e:
             logger.error("Error saving chat session %s: %s", session_id, e)
 
+    def _build_memory_graph_observations(
+        self,
+        metadata: Dict[str, Any],
+        current_time: str,
+    ) -> List[str]:
+        """
+        Build observation strings from conversation metadata.
+
+        Args:
+            metadata: Extracted conversation metadata with summary, topics, etc.
+            current_time: Timestamp for the last updated observation.
+
+        Returns:
+            List of formatted observation strings for Memory Graph.
+
+        Issue #620.
+        """
+        observations = [
+            f"Summary: {metadata['summary']}",
+            f"Topics: {', '.join(metadata['topics'])}",
+            f"Message count: {metadata['message_count']}",
+            f"Last updated: {current_time}",
+        ]
+
+        if metadata["entity_mentions"]:
+            observations.append(f"Mentions: {', '.join(metadata['entity_mentions'])}")
+
+        return observations
+
+    async def _create_memory_graph_entity_on_missing(
+        self,
+        session_id: str,
+        name: str,
+        metadata: Dict[str, Any],
+        observations: List[str],
+    ) -> None:
+        """
+        Create a new Memory Graph entity when one does not exist.
+
+        Args:
+            session_id: The session identifier.
+            name: Session name or title.
+            metadata: Extracted conversation metadata.
+            observations: Pre-built observation strings.
+
+        Issue #620.
+        """
+        entity_metadata = {
+            "session_id": session_id,
+            "title": name or session_id,
+            "status": "active",
+            "priority": "medium",
+            "topics": metadata["topics"],
+            "entity_mentions": metadata["entity_mentions"],
+        }
+
+        await self.memory_graph.create_conversation_entity(
+            session_id=session_id,
+            metadata=entity_metadata,
+            observations=observations,
+        )
+
+        logger.info("Created Memory Graph entity for session: %s", session_id)
+
     async def _update_memory_graph_entity(
         self,
         session_id: str,
@@ -445,29 +509,12 @@ class SessionMixin:
         name: str,
         current_time: str,
     ):
-        """Update Memory Graph entity with conversation observations."""
+        """Update Memory Graph entity with conversation observations. Issue #620."""
         try:
-            # Extract metadata from conversation
             metadata = self._extract_conversation_metadata(session_messages)
-
-            # Find entity by session_id
             entity_name = f"Conversation {session_id[:8]}"
+            observations = self._build_memory_graph_observations(metadata, current_time)
 
-            # Create observations from metadata
-            observations = [
-                f"Summary: {metadata['summary']}",
-                f"Topics: {', '.join(metadata['topics'])}",
-                f"Message count: {metadata['message_count']}",
-                f"Last updated: {current_time}",
-            ]
-
-            # Add entity mentions if any
-            if metadata["entity_mentions"]:
-                observations.append(
-                    f"Mentions: {', '.join(metadata['entity_mentions'])}"
-                )
-
-            # Update entity with new observations
             try:
                 await self.memory_graph.add_observations(
                     entity_name=entity_name, observations=observations
@@ -475,31 +522,13 @@ class SessionMixin:
                 logger.debug("Updated Memory Graph entity for session: %s", session_id)
 
             except (ValueError, RuntimeError) as e:
-                # Entity doesn't exist yet - create it
                 if "Entity not found" in str(e):
                     logger.debug(
                         "Entity not found, creating new entity for session: %s",
                         session_id,
                     )
-
-                    entity_metadata = {
-                        "session_id": session_id,
-                        "title": name or session_id,
-                        "status": "active",
-                        "priority": "medium",
-                        "topics": metadata["topics"],
-                        "entity_mentions": metadata["entity_mentions"],
-                    }
-
-                    # Create entity with observations included
-                    await self.memory_graph.create_conversation_entity(
-                        session_id=session_id,
-                        metadata=entity_metadata,
-                        observations=observations,
-                    )
-
-                    logger.info(
-                        "Created Memory Graph entity for session: %s", session_id
+                    await self._create_memory_graph_entity_on_missing(
+                        session_id, name, metadata, observations
                     )
                 else:
                     raise

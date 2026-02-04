@@ -42,15 +42,16 @@ _REMOTE_ACCESS_PORTS = frozenset({22, 3389})  # SSH and RDP ports for auth requi
 class SecurityRiskJudge(BaseLLMJudge):
     """Judge for evaluating security risks, command safety, and compliance"""
 
-    def __init__(self, llm_interface=None):
-        """Initialize security judge with risk thresholds and dangerous patterns."""
-        super().__init__("security_risk", llm_interface)
-        # Issue #318: Use centralized constants instead of magic numbers
-        self.high_risk_threshold = SecurityThresholds.HIGH_RISK_THRESHOLD
-        self.block_threshold = SecurityThresholds.BLOCK_THRESHOLD
+    def _get_dangerous_patterns(self) -> Dict[str, List[str]]:
+        """
+        Return dangerous command patterns organized by risk category.
 
-        # Define dangerous command patterns
-        self.dangerous_patterns = {
+        Returns:
+            Dict mapping category names to lists of regex patterns.
+
+        Issue #620.
+        """
+        return {
             "destructive": [
                 r"\brm\s+(-rf?|\-\-recursive)\s+/",
                 r"\bformat\s+[a-zA-Z]:",
@@ -96,8 +97,16 @@ class SecurityRiskJudge(BaseLLMJudge):
             ],
         }
 
-        # Safe command whitelist patterns
-        self.safe_patterns = [
+    def _get_safe_patterns(self) -> List[str]:
+        """
+        Return safe command whitelist patterns.
+
+        Returns:
+            List of regex patterns for commands considered safe.
+
+        Issue #620.
+        """
+        return [
             r"^ls\s+",
             r"^pwd\s*$",
             r"^whoami\s*$",
@@ -112,6 +121,17 @@ class SecurityRiskJudge(BaseLLMJudge):
             r"^python\s+",
             r"^node\s+",
         ]
+
+    def __init__(self, llm_interface=None):
+        """Initialize security judge with risk thresholds. Issue #620."""
+        super().__init__("security_risk", llm_interface)
+        # Issue #318: Use centralized constants instead of magic numbers
+        self.high_risk_threshold = SecurityThresholds.HIGH_RISK_THRESHOLD
+        self.block_threshold = SecurityThresholds.BLOCK_THRESHOLD
+
+        # Issue #620: Use extracted helper methods for pattern definitions
+        self.dangerous_patterns = self._get_dangerous_patterns()
+        self.safe_patterns = self._get_safe_patterns()
 
     async def evaluate_command_security(
         self,
