@@ -906,11 +906,38 @@ class Phase9PerformanceMonitor:
                 service_metric
             )
 
-    async def collect_all_metrics(self) -> Dict[str, Any]:
-        """Collect all performance metrics in parallel.
+    def _build_metrics_response(
+        self,
+        gpu_metrics: Optional["GPUMetrics"],
+        npu_metrics: Optional["NPUMetrics"],
+        multimodal_metrics: Optional["MultiModalMetrics"],
+        system_metrics: Optional["SystemPerformanceMetrics"],
+        service_metrics: Optional[List["ServicePerformanceMetrics"]],
+    ) -> Dict[str, Any]:
+        """Build the metrics response dictionary. Issue #620.
 
-        Issue #620: Refactored to extract _handle_gather_exceptions and _store_metrics_in_buffers.
+        Args:
+            gpu_metrics: GPU metrics or None
+            npu_metrics: NPU metrics or None
+            multimodal_metrics: Multimodal metrics or None
+            system_metrics: System metrics or None
+            service_metrics: List of service metrics or None
+
+        Returns:
+            Dictionary containing all metrics in serializable format
         """
+        return {
+            "timestamp": time.time(),
+            "gpu": asdict(gpu_metrics) if gpu_metrics else None,
+            "npu": asdict(npu_metrics) if npu_metrics else None,
+            "multimodal": asdict(multimodal_metrics) if multimodal_metrics else None,
+            "system": asdict(system_metrics) if system_metrics else None,
+            "services": [asdict(s) for s in (service_metrics or [])],
+            "collection_successful": True,
+        }
+
+    async def collect_all_metrics(self) -> Dict[str, Any]:
+        """Collect all performance metrics in parallel. Issue #620."""
         try:
             # Collect all metrics concurrently
             tasks = [
@@ -942,28 +969,24 @@ class Phase9PerformanceMonitor:
             )
 
             # Persist to Redis if available
-            if self.redis_client:
-                await self._persist_metrics_to_redis(
-                    {
-                        "gpu": gpu_metrics,
-                        "npu": npu_metrics,
-                        "multimodal": multimodal_metrics,
-                        "system": system_metrics,
-                        "services": service_metrics,
-                    }
-                )
-
-            return {
-                "timestamp": time.time(),
-                "gpu": asdict(gpu_metrics) if gpu_metrics else None,
-                "npu": asdict(npu_metrics) if npu_metrics else None,
-                "multimodal": (
-                    asdict(multimodal_metrics) if multimodal_metrics else None
-                ),
-                "system": asdict(system_metrics) if system_metrics else None,
-                "services": [asdict(s) for s in (service_metrics or [])],
-                "collection_successful": True,
+            metrics_dict = {
+                "gpu": gpu_metrics,
+                "npu": npu_metrics,
+                "multimodal": multimodal_metrics,
+                "system": system_metrics,
+                "services": service_metrics,
             }
+            if self.redis_client:
+                await self._persist_metrics_to_redis(metrics_dict)
+
+            # Build response (Issue #620: uses helper)
+            return self._build_metrics_response(
+                gpu_metrics,
+                npu_metrics,
+                multimodal_metrics,
+                system_metrics,
+                service_metrics,
+            )
 
         except Exception as e:
             self.logger.error(f"Error collecting all metrics: {e}")

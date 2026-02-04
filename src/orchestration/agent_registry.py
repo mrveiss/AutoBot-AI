@@ -16,71 +16,84 @@ from .types import AgentCapability, AgentProfile
 logger = logging.getLogger(__name__)
 
 
+def _create_research_agent() -> AgentProfile:
+    """Create the research agent profile. Issue #620."""
+    return AgentProfile(
+        agent_id="research_agent",
+        agent_type="research",
+        capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
+        specializations=["web_search", "data_analysis", "information_synthesis"],
+        max_concurrent_tasks=5,
+        preferred_task_types=["research", "information_gathering", "analysis"],
+    )
+
+
+def _create_documentation_agent() -> AgentProfile:
+    """Create the documentation agent profile. Issue #620."""
+    return AgentProfile(
+        agent_id="documentation_agent",
+        agent_type="librarian",
+        capabilities={
+            AgentCapability.DOCUMENTATION,
+            AgentCapability.KNOWLEDGE_MANAGEMENT,
+        },
+        specializations=[
+            "auto_documentation",
+            "knowledge_extraction",
+            "content_organization",
+        ],
+        max_concurrent_tasks=3,
+        preferred_task_types=["documentation", "knowledge_management"],
+    )
+
+
+def _create_system_agent() -> AgentProfile:
+    """Create the system agent profile. Issue #620."""
+    return AgentProfile(
+        agent_id="system_agent",
+        agent_type="system_commands",
+        capabilities={
+            AgentCapability.SYSTEM_OPERATIONS,
+            AgentCapability.CODE_GENERATION,
+        },
+        specializations=["command_execution", "system_administration", "automation"],
+        max_concurrent_tasks=2,
+        preferred_task_types=["system_operations", "command_execution"],
+    )
+
+
+def _create_coordination_agent() -> AgentProfile:
+    """Create the coordination agent profile. Issue #620."""
+    return AgentProfile(
+        agent_id="coordination_agent",
+        agent_type="orchestrator",
+        capabilities={
+            AgentCapability.WORKFLOW_COORDINATION,
+            AgentCapability.ANALYSIS,
+        },
+        specializations=[
+            "workflow_management",
+            "resource_allocation",
+            "decision_making",
+        ],
+        max_concurrent_tasks=10,
+        preferred_task_types=["coordination", "planning", "optimization"],
+    )
+
+
 def get_default_agents() -> List[AgentProfile]:
     """
     Get the list of default agent profiles.
 
     Returns:
-        List of pre-configured AgentProfile instances
+        List of pre-configured AgentProfile instances.
+        Issue #620: Refactored to use helper functions for each agent.
     """
     return [
-        AgentProfile(
-            agent_id="research_agent",
-            agent_type="research",
-            capabilities={AgentCapability.RESEARCH, AgentCapability.ANALYSIS},
-            specializations=[
-                "web_search",
-                "data_analysis",
-                "information_synthesis",
-            ],
-            max_concurrent_tasks=5,
-            preferred_task_types=["research", "information_gathering", "analysis"],
-        ),
-        AgentProfile(
-            agent_id="documentation_agent",
-            agent_type="librarian",
-            capabilities={
-                AgentCapability.DOCUMENTATION,
-                AgentCapability.KNOWLEDGE_MANAGEMENT,
-            },
-            specializations=[
-                "auto_documentation",
-                "knowledge_extraction",
-                "content_organization",
-            ],
-            max_concurrent_tasks=3,
-            preferred_task_types=["documentation", "knowledge_management"],
-        ),
-        AgentProfile(
-            agent_id="system_agent",
-            agent_type="system_commands",
-            capabilities={
-                AgentCapability.SYSTEM_OPERATIONS,
-                AgentCapability.CODE_GENERATION,
-            },
-            specializations=[
-                "command_execution",
-                "system_administration",
-                "automation",
-            ],
-            max_concurrent_tasks=2,
-            preferred_task_types=["system_operations", "command_execution"],
-        ),
-        AgentProfile(
-            agent_id="coordination_agent",
-            agent_type="orchestrator",
-            capabilities={
-                AgentCapability.WORKFLOW_COORDINATION,
-                AgentCapability.ANALYSIS,
-            },
-            specializations=[
-                "workflow_management",
-                "resource_allocation",
-                "decision_making",
-            ],
-            max_concurrent_tasks=10,
-            preferred_task_types=["coordination", "planning", "optimization"],
-        ),
+        _create_research_agent(),
+        _create_documentation_agent(),
+        _create_system_agent(),
+        _create_coordination_agent(),
     ]
 
 
@@ -123,14 +136,14 @@ class AgentRegistry:
             if agent_profile.agent_id in self._agents:
                 logger.warning(
                     "Agent %s already registered, updating profile",
-                    agent_profile.agent_id
+                    agent_profile.agent_id,
                 )
 
             self._agents[agent_profile.agent_id] = agent_profile
             logger.info(
                 "Agent %s registered with capabilities: %s",
                 agent_profile.agent_id,
-                agent_profile.capabilities
+                agent_profile.capabilities,
             )
             return True
 
@@ -146,19 +159,17 @@ class AgentRegistry:
         """Get all registered agents."""
         return self._agents.copy()
 
-    def find_by_capability(
-        self, capability: AgentCapability
-    ) -> List[AgentProfile]:
+    def find_by_capability(self, capability: AgentCapability) -> List[AgentProfile]:
         """Find all agents with a specific capability."""
         return [
-            agent for agent in self._agents.values()
-            if capability in agent.capabilities
+            agent for agent in self._agents.values() if capability in agent.capabilities
         ]
 
     def find_available(self) -> List[AgentProfile]:
         """Find all available agents (not at max capacity)."""
         return [
-            agent for agent in self._agents.values()
+            agent
+            for agent in self._agents.values()
             if agent.current_workload < agent.max_concurrent_tasks
             and agent.availability_status == "available"
         ]
@@ -203,9 +214,7 @@ class AgentRegistry:
             score += agent.success_rate * 5.0
 
             # Factor in available capacity
-            capacity_ratio = 1.0 - (
-                agent.current_workload / agent.max_concurrent_tasks
-            )
+            capacity_ratio = 1.0 - (agent.current_workload / agent.max_concurrent_tasks)
             score += capacity_ratio * 3.0
 
             if score > best_score:
@@ -274,17 +283,14 @@ class AgentRegistry:
         # Update success rate (exponential moving average)
         alpha = 0.1
         success_value = 1.0 if success else 0.0
-        agent.success_rate = (
-            alpha * success_value + (1 - alpha) * agent.success_rate
-        )
+        agent.success_rate = alpha * success_value + (1 - alpha) * agent.success_rate
 
         # Update average completion time
         if agent.average_completion_time == 0:
             agent.average_completion_time = execution_time
         else:
             agent.average_completion_time = (
-                alpha * execution_time
-                + (1 - alpha) * agent.average_completion_time
+                alpha * execution_time + (1 - alpha) * agent.average_completion_time
             )
 
     def __len__(self) -> int:

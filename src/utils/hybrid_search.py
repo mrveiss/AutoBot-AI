@@ -20,6 +20,49 @@ config = UnifiedConfigManager()
 # Issue #380: Pre-compiled regex for word extraction
 _WORD_BOUNDARY_RE = re.compile(r"\b[a-zA-Z0-9]+\b")
 
+# Issue #620: Default stop words extracted to module constant for cleaner __init__
+_DEFAULT_STOP_WORDS = [
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "up",
+    "about",
+    "into",
+    "through",
+    "during",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+]
+
 
 def _build_word_frequency_map(text: str) -> Dict[str, int]:
     """
@@ -97,12 +140,8 @@ class HybridSearchEngine:
     Uses weighted scoring to balance between semantic similarity and keyword relevance.
     """
 
-    def __init__(self, knowledge_base=None):
-        """Initialize hybrid search with knowledge base and weighted scoring config."""
-        self.logger = logging.getLogger(__name__)
-        self.knowledge_base = knowledge_base
-
-        # Configuration from config files
+    def _load_scoring_config(self) -> None:
+        """Load scoring weights and thresholds from configuration. Issue #620."""
         self.semantic_weight = config.get("search.hybrid.semantic_weight", 0.7)
         self.keyword_weight = config.get("search.hybrid.keyword_weight", 0.3)
         self.min_keyword_score = config.get("search.hybrid.min_keyword_score", 0.1)
@@ -110,59 +149,26 @@ class HybridSearchEngine:
             "search.hybrid.keyword_boost_factor", 1.5
         )
 
-        # Search parameters
+    def _load_search_config(self) -> None:
+        """Load search parameters from configuration. Issue #620."""
         self.semantic_top_k = config.get("search.hybrid.semantic_top_k", 15)
         self.final_top_k = config.get("search.hybrid.final_top_k", 10)
-
-        # Keyword extraction settings
         self.stop_words = set(
-            config.get(
-                "search.hybrid.stop_words",
-                [
-                    "the",
-                    "a",
-                    "an",
-                    "and",
-                    "or",
-                    "but",
-                    "in",
-                    "on",
-                    "at",
-                    "to",
-                    "for",
-                    "of",
-                    "with",
-                    "by",
-                    "from",
-                    "up",
-                    "about",
-                    "into",
-                    "through",
-                    "during",
-                    "is",
-                    "are",
-                    "was",
-                    "were",
-                    "be",
-                    "been",
-                    "being",
-                    "have",
-                    "has",
-                    "had",
-                    "do",
-                    "does",
-                    "did",
-                    "will",
-                    "would",
-                    "could",
-                    "should",
-                    "may",
-                    "might",
-                ],
-            )
+            config.get("search.hybrid.stop_words", _DEFAULT_STOP_WORDS)
         )
-
         self.min_keyword_length = config.get("search.hybrid.min_keyword_length", 3)
+
+    def __init__(self, knowledge_base=None):
+        """Initialize hybrid search with knowledge base and weighted scoring config.
+
+        Issue #620: Refactored to use _load_scoring_config and _load_search_config helpers.
+        """
+        self.logger = logging.getLogger(__name__)
+        self.knowledge_base = knowledge_base
+
+        # Load configuration using helpers (Issue #620)
+        self._load_scoring_config()
+        self._load_search_config()
 
     def extract_keywords(self, text: str) -> List[str]:
         """Extract meaningful keywords from text."""

@@ -13,11 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .types import (
-    AgentProfile,
-    DocumentationType,
-    WorkflowDocumentation,
-)
+from .types import AgentProfile, DocumentationType, WorkflowDocumentation
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +163,7 @@ class WorkflowDocumenter:
 
                 summary_result = await self.llm_interface.chat_completion(
                     model="default",
-                    messages=[{"role": "user", "content": summary_prompt}]
+                    messages=[{"role": "user", "content": summary_prompt}],
                 )
 
                 if summary_result:
@@ -179,6 +175,83 @@ class WorkflowDocumenter:
                 logger.warning("Failed to generate workflow summary: %s", e)
 
         self._metrics["documentation_generated"] += 1
+
+    def _extract_success_pattern(
+        self,
+        user_request: str,
+        execution_result: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract success pattern if workflow had high success rate.
+
+        Args:
+            user_request: Original user request
+            execution_result: Results from execution
+
+        Returns:
+            Success pattern dict if success_rate > 0.8, else None. Issue #620.
+        """
+        if execution_result.get("success_rate", 0) > 0.8:
+            return {
+                "type": "success_pattern",
+                "content": f"Successful workflow pattern for: {user_request[:100]}",
+                "agents_used": execution_result.get("agents_involved", []),
+                "success_rate": execution_result.get("success_rate", 0),
+            }
+        return None
+
+    def _extract_agent_performance(
+        self,
+        execution_result: Dict[str, Any],
+        agent_registry: Dict[str, AgentProfile],
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract performance insights for involved agents.
+
+        Args:
+            execution_result: Results from execution
+            agent_registry: Registry of agent profiles
+
+        Returns:
+            List of agent performance insight dicts. Issue #620.
+        """
+        items = []
+        for agent_id in execution_result.get("agents_involved", []):
+            if agent_id in agent_registry:
+                agent = agent_registry[agent_id]
+                items.append(
+                    {
+                        "type": "agent_performance",
+                        "agent_id": agent_id,
+                        "success_rate": agent.success_rate,
+                        "avg_completion_time": agent.average_completion_time,
+                        "capabilities": [cap.value for cap in agent.capabilities],
+                    }
+                )
+        return items
+
+    async def _store_knowledge_items(
+        self, knowledge_items: List[Dict[str, Any]]
+    ) -> None:
+        """
+        Store extracted knowledge items in the knowledge base.
+
+        Args:
+            knowledge_items: List of knowledge items to store. Issue #620.
+        """
+        if knowledge_items and self.knowledge_base:
+            if hasattr(self.knowledge_base, "add_document"):
+                await asyncio.gather(
+                    *[
+                        self.knowledge_base.add_document(
+                            content=f"Workflow Knowledge: {item['type']}",
+                            metadata=item,
+                            doc_type="workflow_knowledge",
+                        )
+                        for item in knowledge_items
+                    ],
+                    return_exceptions=True,
+                )
 
     async def extract_workflow_knowledge(
         self,
@@ -194,54 +267,23 @@ class WorkflowDocumenter:
             workflow_id: Workflow identifier
             user_request: Original user request
             execution_result: Results from execution
-            agent_registry: Registry of agent profiles
+            agent_registry: Registry of agent profiles.
+            Issue #620: Refactored to use helper methods.
         """
         try:
-            # Extract key learnings from workflow
             knowledge_items: List[Dict[str, Any]] = []
 
-            # Success patterns
-            if execution_result.get("success_rate", 0) > 0.8:
-                knowledge_items.append(
-                    {
-                        "type": "success_pattern",
-                        "content": (
-                            f"Successful workflow pattern for: {user_request[:100]}"
-                        ),
-                        "agents_used": execution_result.get("agents_involved", []),
-                        "success_rate": execution_result.get("success_rate", 0),
-                    }
-                )
+            success_pattern = self._extract_success_pattern(
+                user_request, execution_result
+            )
+            if success_pattern:
+                knowledge_items.append(success_pattern)
 
-            # Agent performance insights
-            for agent_id in execution_result.get("agents_involved", []):
-                if agent_id in agent_registry:
-                    agent = agent_registry[agent_id]
-                    knowledge_items.append(
-                        {
-                            "type": "agent_performance",
-                            "agent_id": agent_id,
-                            "success_rate": agent.success_rate,
-                            "avg_completion_time": agent.average_completion_time,
-                            "capabilities": [cap.value for cap in agent.capabilities],
-                        }
-                    )
+            knowledge_items.extend(
+                self._extract_agent_performance(execution_result, agent_registry)
+            )
 
-            # Store extracted knowledge in parallel
-            if knowledge_items and self.knowledge_base:
-                if hasattr(self.knowledge_base, "add_document"):
-                    await asyncio.gather(
-                        *[
-                            self.knowledge_base.add_document(
-                                content=f"Workflow Knowledge: {item['type']}",
-                                metadata=item,
-                                doc_type="workflow_knowledge",
-                            )
-                            for item in knowledge_items
-                        ],
-                        return_exceptions=True,
-                    )
-
+            await self._store_knowledge_items(knowledge_items)
             self._metrics["knowledge_extracted"] += len(knowledge_items)
 
         except Exception as e:

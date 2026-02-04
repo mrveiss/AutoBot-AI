@@ -28,8 +28,8 @@ class SecretRequirement(Enum):
 
     SSH_KEY = "ssh_key"
     API_KEY = "api_key"
-    PASSWORD = "password"
-    TOKEN = "token"
+    PASSWORD = "password"  # nosec B105 - secret type enum, not actual password
+    TOKEN = "token"  # nosec B105 - secret type enum, not actual token
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     ANY = "any"  # Agent can use any available secrets
@@ -314,6 +314,44 @@ class AgentSecretsIntegration:
 
         return secrets_dict
 
+    def _fetch_ssh_keys_by_scope(
+        self,
+        scope: str,
+        chat_id: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """Fetch SSH keys from secrets service for a specific scope. Issue #620.
+
+        Args:
+            scope: Secret scope ('chat' or 'general')
+            chat_id: Chat ID for chat-scoped secrets (required if scope='chat')
+
+        Returns:
+            List of SSH key dictionaries with id, name, value, scope, description
+        """
+        ssh_keys = []
+        keys = self.secrets_service.list_secrets(  # nosec B106 - secret type filter
+            scope=scope,
+            chat_id=chat_id,
+            secret_type="ssh_key",
+        )
+        for key in keys:
+            full_key = self.secrets_service.get_secret(
+                secret_id=key["id"],
+                include_value=True,
+                accessed_by="terminal_session",
+            )
+            if full_key and "value" in full_key:
+                ssh_keys.append(
+                    {
+                        "id": full_key["id"],
+                        "name": full_key["name"],
+                        "value": full_key["value"],
+                        "scope": scope,
+                        "description": full_key.get("description", ""),
+                    }
+                )
+        return ssh_keys
+
     async def get_ssh_keys_for_terminal(
         self,
         chat_id: Optional[str] = None,
@@ -327,51 +365,18 @@ class AgentSecretsIntegration:
 
         Returns:
             List of SSH key dictionaries with 'name' and 'value' keys
+
+        Issue #620: Refactored to use _fetch_ssh_keys_by_scope helper.
         """
         ssh_keys = []
 
-        # Get chat-scoped SSH keys
+        # Get chat-scoped SSH keys (Issue #620: uses helper)
         if chat_id:
-            chat_keys = self.secrets_service.list_secrets(
-                scope="chat",
-                chat_id=chat_id,
-                secret_type="ssh_key",
-            )
-            for key in chat_keys:
-                full_key = self.secrets_service.get_secret(
-                    secret_id=key["id"],
-                    include_value=True,
-                    accessed_by="terminal_session",
-                )
-                if full_key and "value" in full_key:
-                    ssh_keys.append({
-                        "id": full_key["id"],
-                        "name": full_key["name"],
-                        "value": full_key["value"],
-                        "scope": "chat",
-                        "description": full_key.get("description", ""),
-                    })
+            ssh_keys.extend(self._fetch_ssh_keys_by_scope("chat", chat_id))
 
-        # Get general SSH keys
+        # Get general SSH keys (Issue #620: uses helper)
         if include_general:
-            general_keys = self.secrets_service.list_secrets(
-                scope="general",
-                secret_type="ssh_key",
-            )
-            for key in general_keys:
-                full_key = self.secrets_service.get_secret(
-                    secret_id=key["id"],
-                    include_value=True,
-                    accessed_by="terminal_session",
-                )
-                if full_key and "value" in full_key:
-                    ssh_keys.append({
-                        "id": full_key["id"],
-                        "name": full_key["name"],
-                        "value": full_key["value"],
-                        "scope": "general",
-                        "description": full_key.get("description", ""),
-                    })
+            ssh_keys.extend(self._fetch_ssh_keys_by_scope("general"))
 
         logger.info(
             "Retrieved %d SSH keys for terminal (chat_id=%s)",
@@ -397,7 +402,7 @@ class AgentSecretsIntegration:
         """
         # Try chat-scoped first
         if chat_id:
-            secrets = self.secrets_service.list_secrets(
+            secrets = self.secrets_service.list_secrets(  # nosec B106
                 scope="chat",
                 chat_id=chat_id,
                 secret_type="api_key",
@@ -413,7 +418,7 @@ class AgentSecretsIntegration:
                         return full_secret["value"]
 
         # Try general scope
-        secrets = self.secrets_service.list_secrets(
+        secrets = self.secrets_service.list_secrets(  # nosec B106 - secret type filter
             scope="general",
             secret_type="api_key",
         )

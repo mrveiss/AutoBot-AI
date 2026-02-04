@@ -14,7 +14,6 @@ from typing import Any, Dict, List
 
 import psutil
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -67,9 +66,9 @@ class SystemResourceMonitor:
             ["pid", "name", "cpu_percent", "memory_percent", "memory_info"]
         ):
             try:
-                if "python" in proc.info[
-                    "name"
-                ].lower() or "autobot" in proc.info.get("cmdline", []):
+                if "python" in proc.info["name"].lower() or "autobot" in proc.info.get(
+                    "cmdline", []
+                ):
                     autobot_processes.append(
                         {
                             "pid": proc.info["pid"],
@@ -88,8 +87,16 @@ class SystemResourceMonitor:
         return autobot_processes
 
     def _build_metrics_dict(
-        self, cpu_percent, cpu_count, cpu_freq, memory, swap,
-        disk_usage, disk_io, network_io, autobot_processes
+        self,
+        cpu_percent,
+        cpu_count,
+        cpu_freq,
+        memory,
+        swap,
+        disk_usage,
+        disk_io,
+        network_io,
+        autobot_processes,
     ) -> Dict[str, Any]:
         """
         Build the metrics dictionary from collected data.
@@ -135,9 +142,7 @@ class SystemResourceMonitor:
                 "packets_recv": network_io.packets_recv if network_io else 0,
             },
             "autobot_processes": autobot_processes,
-            "total_autobot_memory_mb": sum(
-                p["memory_mb"] for p in autobot_processes
-            ),
+            "total_autobot_memory_mb": sum(p["memory_mb"] for p in autobot_processes),
             "total_autobot_cpu_percent": sum(
                 p["cpu_percent"] for p in autobot_processes if p["cpu_percent"]
             ),
@@ -161,8 +166,15 @@ class SystemResourceMonitor:
 
             # Build and return metrics dict
             return self._build_metrics_dict(
-                cpu_percent, cpu_count, cpu_freq, memory, swap,
-                disk_usage, disk_io, network_io, autobot_processes
+                cpu_percent,
+                cpu_count,
+                cpu_freq,
+                memory,
+                swap,
+                disk_usage,
+                disk_io,
+                network_io,
+                autobot_processes,
             )
 
         except Exception as e:
@@ -243,68 +255,101 @@ class SystemResourceMonitor:
             "min_percent": min(values),
         }
 
+    def _extract_metric_values(
+        self, recent_data: List[Dict[str, Any]]
+    ) -> Dict[str, List[float]]:
+        """
+        Extract metric value arrays from recent data points.
+
+        Args:
+            recent_data: List of resource data dictionaries
+
+        Returns:
+            Dict containing cpu, memory, disk, autobot_memory, autobot_cpu value lists.
+            Issue #620.
+        """
+        return {
+            "cpu": [
+                d["cpu"]["percent"]
+                for d in recent_data
+                if "cpu" in d and "percent" in d["cpu"]
+            ],
+            "memory": [
+                d["memory"]["percent"]
+                for d in recent_data
+                if "memory" in d and "percent" in d["memory"]
+            ],
+            "disk": [
+                d["disk"]["percent"]
+                for d in recent_data
+                if "disk" in d and "percent" in d["disk"]
+            ],
+            "autobot_memory": [
+                d.get("total_autobot_memory_mb", 0) for d in recent_data
+            ],
+            "autobot_cpu": [d.get("total_autobot_cpu_percent", 0) for d in recent_data],
+        }
+
+    def _build_resource_summary(
+        self, minutes: int, recent_data: List[Dict[str, Any]], values: Dict[str, List]
+    ) -> Dict[str, Any]:
+        """
+        Build the resource summary dictionary from extracted values.
+
+        Args:
+            minutes: Time window in minutes
+            recent_data: List of recent data points
+            values: Dict of extracted metric value lists
+
+        Returns:
+            Formatted resource summary dictionary. Issue #620.
+        """
+        autobot_memory = values["autobot_memory"]
+        autobot_cpu = values["autobot_cpu"]
+
+        return {
+            "time_window_minutes": minutes,
+            "data_points": len(recent_data),
+            "system": {
+                "cpu": self._calculate_resource_stats(values["cpu"]),
+                "memory": self._calculate_resource_stats(values["memory"]),
+                "disk": self._calculate_resource_stats(values["disk"]),
+            },
+            "autobot": {
+                "memory": {
+                    "avg_mb": (
+                        sum(autobot_memory) / len(autobot_memory)
+                        if autobot_memory
+                        else 0
+                    ),
+                    "max_mb": max(autobot_memory) if autobot_memory else 0,
+                },
+                "cpu": {
+                    "avg_percent": (
+                        sum(autobot_cpu) / len(autobot_cpu) if autobot_cpu else 0
+                    ),
+                    "max_percent": max(autobot_cpu) if autobot_cpu else 0,
+                },
+            },
+        }
+
     def get_resource_summary(self, minutes: int = 10) -> Dict[str, Any]:
         """
         Get resource usage summary for the last N minutes.
 
-        Issue #665: Refactored to use extracted helper methods for
-        data filtering and statistics calculation.
+        Issue #665: Refactored to use extracted helper methods.
+        Issue #620: Further extraction of value extraction and summary building.
         """
         try:
             if not self.resource_history:
                 return {"message": "No resource history available"}
 
-            # Filter recent data (Issue #665: uses helper)
             recent_data = self._filter_recent_data(minutes)
-
             if not recent_data:
                 return {"message": f"No data available for last {minutes} minutes"}
 
-            # Extract value arrays
-            cpu_values = [
-                d["cpu"]["percent"]
-                for d in recent_data
-                if "cpu" in d and "percent" in d["cpu"]
-            ]
-            memory_values = [
-                d["memory"]["percent"]
-                for d in recent_data
-                if "memory" in d and "percent" in d["memory"]
-            ]
-            disk_values = [
-                d["disk"]["percent"]
-                for d in recent_data
-                if "disk" in d and "percent" in d["disk"]
-            ]
-            autobot_memory = [d.get("total_autobot_memory_mb", 0) for d in recent_data]
-            autobot_cpu = [d.get("total_autobot_cpu_percent", 0) for d in recent_data]
-
-            # Build summary using helper (Issue #665: uses helper)
-            return {
-                "time_window_minutes": minutes,
-                "data_points": len(recent_data),
-                "system": {
-                    "cpu": self._calculate_resource_stats(cpu_values),
-                    "memory": self._calculate_resource_stats(memory_values),
-                    "disk": self._calculate_resource_stats(disk_values),
-                },
-                "autobot": {
-                    "memory": {
-                        "avg_mb": (
-                            sum(autobot_memory) / len(autobot_memory)
-                            if autobot_memory
-                            else 0
-                        ),
-                        "max_mb": max(autobot_memory) if autobot_memory else 0,
-                    },
-                    "cpu": {
-                        "avg_percent": (
-                            sum(autobot_cpu) / len(autobot_cpu) if autobot_cpu else 0
-                        ),
-                        "max_percent": max(autobot_cpu) if autobot_cpu else 0,
-                    },
-                },
-            }
+            values = self._extract_metric_values(recent_data)
+            return self._build_resource_summary(minutes, recent_data, values)
 
         except Exception as e:
             logger.error("Failed to generate resource summary: %s", e)
