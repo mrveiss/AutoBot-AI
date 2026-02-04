@@ -621,9 +621,42 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             integration_results["commands"][command] = f"error: {str(e)}"
             logger.error("Failed to integrate man page for %s: %s", command, e)
 
+    async def _setup_man_page_integrator(self, profile: MachineProfile):
+        """
+        Initialize man page integrator and determine commands to process. Issue #620.
+
+        Args:
+            profile: Current machine profile
+
+        Returns:
+            Tuple of (integrator, commands_to_integrate) or (None, []) if unavailable
+        """
+        from src.agents.man_page_knowledge_integrator import get_man_page_integrator
+
+        integrator = await get_man_page_integrator()
+        machine_dir = self._get_machine_knowledge_dir()
+        integrator.knowledge_base_dir = machine_dir.parent.parent
+
+        commands_to_integrate = [
+            cmd
+            for cmd in integrator.priority_commands
+            if cmd in profile.available_tools
+        ]
+        logger.info("Integrating man pages for %d commands", len(commands_to_integrate))
+        return integrator, commands_to_integrate
+
+    def _create_integration_results_dict(self) -> dict:
+        """Create initial integration results dictionary. Issue #620."""
+        return {
+            "processed": 0,
+            "successful": 0,
+            "failed": 0,
+            "cached": 0,
+            "commands": {},
+        }
+
     async def _integrate_man_pages(self):
-        """Integrate man pages for tools available on this machine"""
-        # Get snapshot of profile under lock
+        """Integrate man pages for tools available on this machine. Issue #620."""
         async with self._profile_lock:
             profile = self._current_machine_profile
 
@@ -631,58 +664,28 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             logger.warning("No machine profile available for man page integration")
             return
 
-        # Only integrate man pages on Linux systems
         if profile.os_type.value != "linux":
-            logger.info(f"Man page integration skipped for {profile.os_type.value}")
+            logger.info("Man page integration skipped for %s", profile.os_type.value)
             return
 
         logger.info("Integrating man pages for available tools...")
 
         try:
-            from src.agents.man_page_knowledge_integrator import get_man_page_integrator
+            integrator, commands = await self._setup_man_page_integrator(profile)
+            results = self._create_integration_results_dict()
 
-            integrator = await get_man_page_integrator()
-
-            # Set the machine ID for proper knowledge organization
-            machine_dir = self._get_machine_knowledge_dir()
-            integrator.knowledge_base_dir = (
-                machine_dir.parent.parent
-            )  # Point to data/system_knowledge
-
-            # Get intersection of available tools and priority commands
-            available_tools = profile.available_tools
-            priority_commands = integrator.priority_commands
-
-            commands_to_integrate = [
-                cmd for cmd in priority_commands if cmd in available_tools
-            ]
-
-            logger.info(
-                f"Integrating man pages for {len(commands_to_integrate)} commands"
-            )
-
-            # Integrate man pages for available commands
-            integration_results = {
-                "processed": 0,
-                "successful": 0,
-                "failed": 0,
-                "cached": 0,
-                "commands": {},
-            }
-
-            # Issue #281: Use extracted helper for individual command processing
-            for command in commands_to_integrate:
+            for command in commands:
                 await self._process_single_man_page(
-                    command, integrator, profile, integration_results
+                    command, integrator, profile, results
                 )
 
             logger.info(
-                f"Man page integration complete: {integration_results['successful']} successful, "
-                f"{integration_results['failed']} failed, {integration_results['cached']} cached"
+                "Man page integration complete: %d successful, %d failed, %d cached",
+                results["successful"],
+                results["failed"],
+                results["cached"],
             )
-
-            # Store integration summary
-            await self._save_man_page_integration_summary(integration_results)
+            await self._save_man_page_integration_summary(results)
 
         except ImportError:
             logger.warning("Man page integrator not available")

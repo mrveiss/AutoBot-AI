@@ -927,6 +927,42 @@ class SecurityWorkflowManager:
             {"type": "vulnerability", "host": host_ip, "data": vuln}
         )
 
+    async def _log_and_store_vulnerability(
+        self,
+        assessment_id: str,
+        host_ip: str,
+        is_new_host: bool,
+        vuln: dict[str, Any],
+    ) -> None:
+        """
+        Log vulnerability addition and store in Memory MCP. Issue #620.
+
+        Args:
+            assessment_id: Assessment UUID
+            host_ip: Affected host IP
+            is_new_host: Whether this is a newly discovered host
+            vuln: Vulnerability record dictionary
+        """
+        logger.info(
+            "Added vulnerability %s to %s in assessment %s",
+            vuln.get("cve_id") or vuln.get("title"),
+            host_ip,
+            assessment_id,
+        )
+        await self._create_vulnerability_memory_entity(
+            assessment_id,
+            host_ip,
+            is_new_host,
+            vuln.get("cve_id"),
+            vuln.get("title", ""),
+            vuln.get("severity", "unknown"),
+            vuln.get("description", ""),
+            vuln.get("affected_port"),
+            vuln.get("affected_service"),
+            vuln.get("references"),
+            vuln.get("metadata"),
+        )
+
     async def add_vulnerability(
         self,
         assessment_id: str,
@@ -940,24 +976,7 @@ class SecurityWorkflowManager:
         references: Optional[list[str]] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[SecurityAssessment]:
-        """
-        Add a discovered vulnerability. Issue #620.
-
-        Args:
-            assessment_id: Assessment UUID
-            host_ip: Affected host IP
-            cve_id: CVE identifier (e.g., CVE-2024-1234)
-            title: Vulnerability title
-            severity: Severity (critical/high/medium/low/info)
-            description: Vulnerability description
-            affected_service: Affected service name
-            affected_port: Affected port number
-            references: Reference URLs
-            metadata: Additional vulnerability data
-
-        Returns:
-            Updated SecurityAssessment
-        """
+        """Add a discovered vulnerability to an assessment. Issue #620."""
         assessment = await self.get_assessment(assessment_id)
         if not assessment:
             return None
@@ -975,24 +994,8 @@ class SecurityWorkflowManager:
         )
         self._add_vulnerability_to_host(assessment, host, host_ip, vuln)
         await self._save_assessment(assessment)
-        logger.info(
-            "Added vulnerability %s to %s in assessment %s",
-            cve_id or title,
-            host_ip,
-            assessment_id,
-        )
-        await self._create_vulnerability_memory_entity(
-            assessment_id,
-            host_ip,
-            is_new_host,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
+        await self._log_and_store_vulnerability(
+            assessment_id, host_ip, is_new_host, vuln
         )
         return assessment
 

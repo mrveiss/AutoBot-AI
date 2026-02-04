@@ -141,6 +141,42 @@ class MessagesMixin:
         messages = await self.load_session(session_id)
         return len(messages)
 
+    def _message_matches_filter(
+        self, message: Dict[str, Any], metadata_filter: Dict[str, Any]
+    ) -> bool:
+        """
+        Check if a message matches all filter criteria.
+
+        Args:
+            message: Message dictionary to check.
+            metadata_filter: Dict of metadata key-value pairs to match.
+
+        Returns:
+            True if all filter criteria match, False otherwise.
+
+        Issue #620.
+        """
+        msg_metadata = message.get("metadata", {})
+        return all(
+            msg_metadata.get(key) == value for key, value in metadata_filter.items()
+        )
+
+    def _apply_metadata_updates(
+        self, message: Dict[str, Any], metadata_updates: Dict[str, Any]
+    ) -> None:
+        """
+        Apply metadata updates to a message in-place.
+
+        Args:
+            message: Message dictionary to update.
+            metadata_updates: Dict of metadata key-value pairs to apply.
+
+        Issue #620.
+        """
+        if "metadata" not in message:
+            message["metadata"] = {}
+        message["metadata"].update(metadata_updates)
+
     async def update_message_metadata(
         self,
         session_id: str,
@@ -171,26 +207,10 @@ class MessagesMixin:
         try:
             messages = await self.load_session(session_id)
 
-            # Find message matching all filter criteria
             for message in messages:
-                msg_metadata = message.get("metadata", {})
-
-                # Check if all filter criteria match
-                matches = all(
-                    msg_metadata.get(key) == value
-                    for key, value in metadata_filter.items()
-                )
-
-                if matches:
-                    # Update metadata
-                    if "metadata" not in message:
-                        message["metadata"] = {}
-
-                    message["metadata"].update(metadata_updates)
-
-                    # Save updated messages
+                if self._message_matches_filter(message, metadata_filter):
+                    self._apply_metadata_updates(message, metadata_updates)
                     await self.save_session(session_id, messages=messages)
-
                     logger.info(
                         f"Updated message metadata in session {session_id}: "
                         f"filter={metadata_filter}, updates={metadata_updates}"

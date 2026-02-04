@@ -24,7 +24,9 @@ _BOT_SENDER_TYPES = frozenset({"bot", "assistant"})
 TOPIC_PATTERNS = {
     "installation": frozenset(["install", "setup", "configure", "deployment"]),
     "troubleshooting": frozenset(["error", "issue", "problem", "fix", "debug"]),
-    "architecture": frozenset(["architecture", "design", "vm", "distributed", "service"]),
+    "architecture": frozenset(
+        ["architecture", "design", "vm", "distributed", "service"]
+    ),
     "api": frozenset(["api", "endpoint", "request", "integration"]),
     "knowledge_base": frozenset(["knowledge", "document", "upload", "vectorize"]),
     "chat": frozenset(["chat", "conversation", "message", "response"]),
@@ -42,6 +44,69 @@ class AnalysisMixin:
     This mixin is stateless and doesn't require any base class attributes.
     """
 
+    def _categorize_messages_by_sender(self, messages: List[Dict[str, Any]]) -> tuple:
+        """
+        Categorize messages into user and bot message lists.
+
+        Args:
+            messages: List of conversation messages.
+
+        Returns:
+            Tuple of (all_text, user_messages, bot_messages).
+
+        Issue #620.
+        """
+        all_text = []
+        user_messages = []
+        bot_messages = []
+
+        for msg in messages:
+            sender = msg.get("sender", "")
+            text = msg.get("text", "")
+
+            all_text.append(text)
+
+            if sender == "user":
+                user_messages.append(text)
+            elif sender in _BOT_SENDER_TYPES:
+                bot_messages.append(text)
+
+        return all_text, user_messages, bot_messages
+
+    def _build_metadata_result(
+        self,
+        topics: List[str],
+        entity_mentions: List[str],
+        summary: str,
+        message_count: int,
+        user_message_count: int,
+        bot_message_count: int,
+    ) -> Dict[str, Any]:
+        """
+        Build the metadata result dictionary.
+
+        Args:
+            topics: List of detected topics.
+            entity_mentions: List of entity mentions.
+            summary: Conversation summary.
+            message_count: Total message count.
+            user_message_count: User message count.
+            bot_message_count: Bot message count.
+
+        Returns:
+            Dictionary with all metadata fields.
+
+        Issue #620.
+        """
+        return {
+            "topics": topics,
+            "entity_mentions": entity_mentions,
+            "summary": summary,
+            "message_count": message_count,
+            "user_message_count": user_message_count,
+            "bot_message_count": bot_message_count,
+        }
+
     def _extract_conversation_metadata(
         self, messages: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -56,59 +121,37 @@ class AnalysisMixin:
         """
         try:
             if not messages:
-                return {
-                    "topics": [],
-                    "entity_mentions": [],
-                    "summary": "Empty conversation",
-                    "message_count": 0,
-                    "user_message_count": 0,
-                    "bot_message_count": 0,
-                }
+                return self._build_metadata_result(
+                    [], [], "Empty conversation", 0, 0, 0
+                )
 
-            # Extract text from all messages
-            all_text = []
-            user_messages = []
-            bot_messages = []
+            all_text, user_messages, bot_messages = self._categorize_messages_by_sender(
+                messages
+            )
 
-            for msg in messages:
-                sender = msg.get("sender", "")
-                text = msg.get("text", "")
-
-                all_text.append(text)
-
-                if sender == "user":
-                    user_messages.append(text)
-                elif sender in _BOT_SENDER_TYPES:
-                    bot_messages.append(text)
-
-            # Topic extraction
             topics = self._extract_topics(all_text)
-
-            # Entity mention detection
             entity_mentions = self._detect_entity_mentions(all_text)
-
-            # Generate summary
             summary = self._generate_conversation_summary(user_messages, bot_messages)
 
-            return {
-                "topics": topics,
-                "entity_mentions": entity_mentions,
-                "summary": summary,
-                "message_count": len(messages),
-                "user_message_count": len(user_messages),
-                "bot_message_count": len(bot_messages),
-            }
+            return self._build_metadata_result(
+                topics,
+                entity_mentions,
+                summary,
+                len(messages),
+                len(user_messages),
+                len(bot_messages),
+            )
 
         except Exception as e:
             logger.warning("Failed to extract conversation metadata: %s", e)
-            return {
-                "topics": [],
-                "entity_mentions": [],
-                "summary": "Metadata extraction failed",
-                "message_count": len(messages) if messages else 0,
-                "user_message_count": 0,
-                "bot_message_count": 0,
-            }
+            return self._build_metadata_result(
+                [],
+                [],
+                "Metadata extraction failed",
+                len(messages) if messages else 0,
+                0,
+                0,
+            )
 
     def _extract_topics(self, text_list: List[str]) -> List[str]:
         """

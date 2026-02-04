@@ -272,6 +272,48 @@ def detect_exit_intent(message: str) -> bool:
     return False
 
 
+def _calculate_intent_scores(message_lower: str) -> Dict[str, float]:
+    """
+    Calculate initial intent scores based on keyword matches.
+
+    Args:
+        message_lower: Lowercase message to analyze.
+
+    Returns:
+        Dict mapping intent names to their match scores.
+
+    Issue #620.
+    """
+    return {
+        intent: sum(1 for kw in keywords if kw in message_lower)
+        for intent, keywords in INTENT_KEYWORDS.items()
+    }
+
+
+def _boost_scores_from_context(
+    intent_scores: Dict[str, float],
+    conversation_history: Optional[List[Dict[str, str]]],
+) -> None:
+    """
+    Boost intent scores based on conversation context (in-place).
+
+    Args:
+        intent_scores: Dict of intent scores to modify.
+        conversation_history: Previous conversation messages for context.
+
+    Issue #620.
+    """
+    if not conversation_history or len(conversation_history) == 0:
+        return
+
+    last_responses = [msg.get("assistant", "") for msg in conversation_history[-2:]]
+    context = " ".join(last_responses).lower()
+
+    for intent, keywords in INTENT_KEYWORDS.items():
+        if any(kw in context for kw in keywords):
+            intent_scores[intent] += 0.5
+
+
 def detect_user_intent(
     message: str, conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> str:
@@ -306,25 +348,9 @@ def detect_user_intent(
         'troubleshooting'
     """
     message_lower = message.lower().strip()
+    intent_scores = _calculate_intent_scores(message_lower)
+    _boost_scores_from_context(intent_scores, conversation_history)
 
-    # Count keyword matches for each intent
-    intent_scores = {
-        intent: sum(1 for kw in keywords if kw in message_lower)
-        for intent, keywords in INTENT_KEYWORDS.items()
-    }
-
-    # Check conversation context for intent continuation
-    if conversation_history and len(conversation_history) > 0:
-        # Get last assistant response to maintain context
-        last_responses = [msg.get("assistant", "") for msg in conversation_history[-2:]]
-        context = " ".join(last_responses).lower()
-
-        # Boost scores based on conversation context
-        for intent, keywords in INTENT_KEYWORDS.items():
-            if any(kw in context for kw in keywords):
-                intent_scores[intent] += 0.5
-
-    # Find highest scoring intent
     max_score = max(intent_scores.values())
 
     if max_score > 0:
@@ -334,7 +360,6 @@ def detect_user_intent(
         )
         return detected_intent
 
-    # Default to general if no specific intent detected
     logger.debug(
         f"No specific intent detected, using general context for: {message[:50]}..."
     )

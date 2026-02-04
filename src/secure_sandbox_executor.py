@@ -166,60 +166,65 @@ class SecureSandboxExecutor:
             metadata={"validation_failed": True},
         )
 
-    async def _run_container_and_collect_results(
-        self,
-        container,
-        container_id: str,
-        config: SandboxConfig,
-        start_time: float,
-    ) -> SandboxResult:
+    def _execute_container_with_timeout(
+        self, container, config: SandboxConfig
+    ) -> Tuple[int, str, str, Dict[str, Any]]:
         """
-        Run container, wait for completion, and collect results.
-
-        Issue #281: Extracted helper for container execution and result collection.
+        Execute container and collect raw output data. Issue #620.
 
         Args:
             container: Docker container instance
-            container_id: Container identifier
             config: Sandbox configuration
-            start_time: Execution start timestamp
+
+        Returns:
+            Tuple of (exit_code, stdout, stderr, resource_usage)
+        """
+        container.start()
+        try:
+            exit_code = container.wait(timeout=config.timeout)["StatusCode"]
+        except Exception:
+            container.kill()
+            exit_code = -9
+
+        logs = container.logs(stdout=True, stderr=True, stream=False)
+        stdout_logs, stderr_logs = self._parse_logs(logs)
+        stats = container.stats(stream=False)
+        resource_usage = self._parse_resource_usage(stats)
+
+        return exit_code, stdout_logs, stderr_logs, resource_usage
+
+    def _build_sandbox_result(
+        self,
+        exit_code: int,
+        stdout: str,
+        stderr: str,
+        execution_time: float,
+        container_id: str,
+        security_events: List[Dict[str, Any]],
+        resource_usage: Dict[str, Any],
+        config: SandboxConfig,
+    ) -> SandboxResult:
+        """
+        Build SandboxResult from execution data. Issue #620.
+
+        Args:
+            exit_code: Container exit code
+            stdout: Standard output
+            stderr: Standard error
+            execution_time: Total execution time
+            container_id: Container identifier
+            security_events: Collected security events
+            resource_usage: Resource usage metrics
+            config: Sandbox configuration
 
         Returns:
             SandboxResult with execution details
         """
-        # Start monitoring if enabled
-        if config.enable_monitoring:
-            asyncio.create_task(self._monitor_container(container.id, container_id))
-
-        # Start container and wait for completion
-        container.start()
-
-        # Wait with timeout
-        try:
-            exit_code = container.wait(timeout=config.timeout)["StatusCode"]
-        except Exception:
-            # Timeout reached, kill container
-            container.kill()
-            exit_code = -9
-
-        # Get logs
-        logs = container.logs(stdout=True, stderr=True, stream=False)
-        stdout_logs, stderr_logs = self._parse_logs(logs)
-
-        # Get container stats
-        stats = container.stats(stream=False)
-        resource_usage = self._parse_resource_usage(stats)
-
-        # Collect security events
-        security_events = await self._collect_security_events(container_id)
-
-        execution_time = time.time() - start_time
-
-        result = SandboxResult(
+        return SandboxResult(
             success=(exit_code == 0),
             exit_code=exit_code,
-            stdout=stdout_logs,
-            stderr=stderr_logs,
+            stdout=stdout,
+            stderr=stderr,
             execution_time=execution_time,
             container_id=container_id,
             security_events=security_events,
@@ -230,9 +235,48 @@ class SecureSandboxExecutor:
             },
         )
 
-        # Log execution metrics
-        await self._log_execution_metrics(container_id, result)
+    async def _run_container_and_collect_results(
+        self,
+        container,
+        container_id: str,
+        config: SandboxConfig,
+        start_time: float,
+    ) -> SandboxResult:
+        """
+        Run container, wait for completion, and collect results. Issue #620.
 
+        Args:
+            container: Docker container instance
+            container_id: Container identifier
+            config: Sandbox configuration
+            start_time: Execution start timestamp
+
+        Returns:
+            SandboxResult with execution details
+        """
+        if config.enable_monitoring:
+            asyncio.create_task(self._monitor_container(container.id, container_id))
+
+        (
+            exit_code,
+            stdout,
+            stderr,
+            resource_usage,
+        ) = self._execute_container_with_timeout(container, config)
+        security_events = await self._collect_security_events(container_id)
+        execution_time = time.time() - start_time
+
+        result = self._build_sandbox_result(
+            exit_code,
+            stdout,
+            stderr,
+            execution_time,
+            container_id,
+            security_events,
+            resource_usage,
+            config,
+        )
+        await self._log_execution_metrics(container_id, result)
         return result
 
     async def execute_command(
@@ -340,7 +384,9 @@ class SecureSandboxExecutor:
             try:
                 await asyncio.to_thread(os.unlink, script_path)
             except Exception as e:
-                self.logger.debug("Failed to cleanup script file %s: %s", script_path, e)
+                self.logger.debug(
+                    "Failed to cleanup script file %s: %s", script_path, e
+                )
 
     def _validate_command(
         self, command: Union[str, List[str]], config: SandboxConfig
@@ -456,7 +502,7 @@ class SecureSandboxExecutor:
             container_config["volumes"] = config.volumes
         else:
             # Default volumes
-            container_config["tmpfs"] = {
+            container_config["tmpfs"] = {  # nosec B108 - container tmpfs mounts
                 "/tmp": "size=50M,mode=1777",
                 "/sandbox/tmp": "size=50M,mode=1777",
             }
