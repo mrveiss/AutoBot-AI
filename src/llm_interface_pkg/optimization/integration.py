@@ -162,40 +162,26 @@ class OptimizedLLMMiddleware:
 
         return request
 
-    async def _compress_request_prompts(self, request: LLMRequest) -> LLMRequest:
-        """Compress prompts in request messages."""
-        if not request.messages:
-            return request
+    def _compress_single_message(
+        self, msg: Dict[str, Any]
+    ) -> tuple[Dict[str, Any], int, int]:
+        """Compress a single message and return compressed message with token counts. Issue #620."""
+        content = msg.get("content", "")
+        if not content:
+            return msg, 0, 0
 
-        original_tokens = 0
-        compressed_tokens = 0
+        result = self._compressor.compress(content)
+        compressed_msg = {**msg, "content": result.compressed_text}
+        return compressed_msg, result.original_tokens, result.compressed_tokens
 
-        compressed_messages = []
-        for msg in request.messages:
-            content = msg.get("content", "")
-            if not content:
-                compressed_messages.append(msg)
-                continue
-
-            result = self._compressor.compress(content)
-            original_tokens += result.original_tokens
-            compressed_tokens += result.compressed_tokens
-
-            compressed_messages.append(
-                {
-                    **msg,
-                    "content": result.compressed_text,
-                }
-            )
-
-        # Update metrics
-        tokens_saved = original_tokens - compressed_tokens
-        if tokens_saved > 0:
-            async with self._lock:
-                self._metrics.requests_with_compression += 1
-                self._metrics.compression_tokens_saved += tokens_saved
-
-        # Create new request with compressed messages
+    def _build_compressed_request(
+        self,
+        request: LLMRequest,
+        compressed_messages: list,
+        original_tokens: int,
+        compressed_tokens: int,
+    ) -> LLMRequest:
+        """Build new LLMRequest with compressed messages and updated metadata. Issue #620."""
         return LLMRequest(
             messages=compressed_messages,
             llm_type=request.llm_type,
@@ -218,6 +204,32 @@ class OptimizedLLMMiddleware:
                 "compressed_tokens": compressed_tokens,
             },
             request_id=request.request_id,
+        )
+
+    async def _compress_request_prompts(self, request: LLMRequest) -> LLMRequest:
+        """Compress prompts in request messages."""
+        if not request.messages:
+            return request
+
+        original_tokens = 0
+        compressed_tokens = 0
+        compressed_messages = []
+
+        for msg in request.messages:
+            compressed_msg, orig, comp = self._compress_single_message(msg)
+            compressed_messages.append(compressed_msg)
+            original_tokens += orig
+            compressed_tokens += comp
+
+        # Update metrics
+        tokens_saved = original_tokens - compressed_tokens
+        if tokens_saved > 0:
+            async with self._lock:
+                self._metrics.requests_with_compression += 1
+                self._metrics.compression_tokens_saved += tokens_saved
+
+        return self._build_compressed_request(
+            request, compressed_messages, original_tokens, compressed_tokens
         )
 
     async def _execute_cloud_optimized(

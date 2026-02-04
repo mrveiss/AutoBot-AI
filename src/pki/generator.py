@@ -249,21 +249,18 @@ class CertificateGenerator:
         logger.info("All certificates generated successfully")
         return True
 
-    def _generate_ca(self, force: bool = False) -> bool:
-        """Generate CA certificate and key."""
-        ca_cert = self.config.ca_cert_path
-        ca_key = self.config.ca_key_path
+    def _generate_ca_private_key(self, ca_key: Path) -> bool:
+        """
+        Generate CA private key using OpenSSL.
 
-        if ca_cert.exists() and ca_key.exists() and not force:
-            logger.info("CA certificate already exists, skipping generation")
-            return True
+        Args:
+            ca_key: Path to write the CA private key
 
-        logger.info("Generating CA certificate")
+        Returns:
+            True if key generation succeeded
 
-        # Create directory
-        ca_cert.parent.mkdir(parents=True, exist_ok=True)
-
-        # Generate CA private key
+        Issue #620.
+        """
         key_cmd = [
             "openssl",
             "genrsa",
@@ -275,11 +272,24 @@ class CertificateGenerator:
         try:
             subprocess.run(key_cmd, check=True, capture_output=True)
             os.chmod(ca_key, 0o600)
+            return True
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to generate CA key: {e.stderr.decode()}")
             return False
 
-        # Generate CA certificate
+    def _generate_ca_certificate(self, ca_key: Path, ca_cert: Path) -> bool:
+        """
+        Generate self-signed CA certificate using OpenSSL.
+
+        Args:
+            ca_key: Path to the CA private key
+            ca_cert: Path to write the CA certificate
+
+        Returns:
+            True if certificate generation succeeded
+
+        Issue #620.
+        """
         subject = f"/C={self.config.country}/O={self.config.organization}/CN=AutoBot CA"
 
         cert_cmd = [
@@ -306,6 +316,28 @@ class CertificateGenerator:
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to generate CA certificate: {e.stderr.decode()}")
             return False
+
+    def _generate_ca(self, force: bool = False) -> bool:
+        """
+        Generate CA certificate and key.
+
+        Issue #620: Refactored using Extract Method pattern to use
+        _generate_ca_private_key() and _generate_ca_certificate() helpers.
+        """
+        ca_cert = self.config.ca_cert_path
+        ca_key = self.config.ca_key_path
+
+        if ca_cert.exists() and ca_key.exists() and not force:
+            logger.info("CA certificate already exists, skipping generation")
+            return True
+
+        logger.info("Generating CA certificate")
+        ca_cert.parent.mkdir(parents=True, exist_ok=True)
+
+        if not self._generate_ca_private_key(ca_key):
+            return False
+
+        return self._generate_ca_certificate(ca_key, ca_cert)
 
     def _generate_service_cert(
         self, vm_info: VMCertificateInfo, force: bool = False

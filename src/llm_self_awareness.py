@@ -524,60 +524,106 @@ You should be aware of your current capabilities and limitations based on the sy
             logger.error("Error creating capability summary: %s", e)
             return f"Error creating capability summary: {str(e)}"
 
+    def _find_relevant_capabilities(
+        self, query_lower: str, categories: Dict[str, List[str]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Find capabilities relevant to the query from category data.
+
+        Args:
+            query_lower: Lowercase query string
+            categories: Capability categories from system context
+
+        Returns:
+            List of relevant capability dicts with capability, category, active keys
+
+        Issue #620.
+        """
+        relevant = []
+        for category, caps in categories.items():
+            for cap in caps:
+                if cap.replace("_", " ") in query_lower or cap in query_lower:
+                    relevant.append(
+                        {"capability": cap, "category": category, "active": True}
+                    )
+        return relevant
+
+    def _build_progression_recommendation(
+        self, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build phase progression recommendation from context.
+
+        Args:
+            context: System context dictionary
+
+        Returns:
+            Progression recommendation dict
+
+        Issue #620.
+        """
+        return {
+            "type": "phase_progression",
+            "current_phase": context["phase_information"]["current_phase"],
+            "completion": (
+                f"{context['phase_information']['completed_phases']}/10 phases complete"
+            ),
+            "next_action": "Run phase validation to check progression eligibility",
+        }
+
+    def _build_capability_recommendation(
+        self, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build capability info recommendation from context.
+
+        Args:
+            context: System context dictionary
+
+        Returns:
+            Capability recommendation dict
+
+        Issue #620.
+        """
+        return {
+            "type": "capability_info",
+            "total_capabilities": context["current_capabilities"]["count"],
+            "categories": list(context["current_capabilities"]["categories"].keys()),
+            "suggestion": "Use capability summary for detailed information",
+        }
+
     async def get_phase_aware_response(self, query: str) -> Dict[str, Any]:
-        """Get a response that includes phase-aware context"""
+        """
+        Get a response that includes phase-aware context.
+
+        Issue #620: Refactored using Extract Method pattern to use
+        _find_relevant_capabilities(), _build_progression_recommendation(),
+        and _build_capability_recommendation() helpers.
+        """
         context = await self.get_system_context(include_detailed=True)
+        query_lower = query.lower()
 
         response = {
             "query": query,
             "context": {
                 "current_phase": context["system_identity"]["current_phase"],
                 "system_maturity": context["system_identity"]["system_maturity"],
-                "relevant_capabilities": [],
+                "relevant_capabilities": self._find_relevant_capabilities(
+                    query_lower, context["current_capabilities"]["categories"]
+                ),
             },
             "recommendations": [],
         }
 
-        # Analyze query for relevant capabilities
-        query_lower = query.lower()
-
-        # Check for capability-related queries
-        for category, caps in context["current_capabilities"]["categories"].items():
-            for cap in caps:
-                if cap.replace("_", " ") in query_lower or cap in query_lower:
-                    response["context"]["relevant_capabilities"].append(
-                        {"capability": cap, "category": category, "active": True}
-                    )
-
-        # Add phase-specific recommendations
-        if any(
-            word in query_lower for word in PROGRESSION_QUERIES
-        ):  # O(1) lookup (Issue #326)
+        # Add phase-specific recommendations using O(1) lookups (Issue #326)
+        if any(word in query_lower for word in PROGRESSION_QUERIES):
             response["recommendations"].append(
-                {
-                    "type": "phase_progression",
-                    "current_phase": context["phase_information"]["current_phase"],
-                    "completion": (
-                        f"{context['phase_information']['completed_phases']}/10 phases complete"
-                    ),
-                    "next_action": (
-                        "Run phase validation to check progression eligibility"
-                    ),
-                }
+                self._build_progression_recommendation(context)
             )
 
-        if any(
-            word in query_lower for word in CAPABILITY_QUERIES
-        ):  # O(1) lookup (Issue #326)
+        if any(word in query_lower for word in CAPABILITY_QUERIES):
             response["recommendations"].append(
-                {
-                    "type": "capability_info",
-                    "total_capabilities": context["current_capabilities"]["count"],
-                    "categories": list(
-                        context["current_capabilities"]["categories"].keys()
-                    ),
-                    "suggestion": "Use capability summary for detailed information",
-                }
+                self._build_capability_recommendation(context)
             )
 
         return response

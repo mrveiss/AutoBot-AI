@@ -334,19 +334,62 @@ class TagsMixin:
         )
         return True
 
+    def _validate_rename_tags(
+        self, old_tag: str, new_tag: str
+    ) -> tuple[str, str, Dict[str, Any] | None]:
+        """Validate and normalize tag names for rename operation. Issue #620."""
+        old_tag = old_tag.lower().strip()
+        new_tag = new_tag.lower().strip()
+
+        if not old_tag or not new_tag:
+            return (
+                old_tag,
+                new_tag,
+                {"success": False, "message": "Tags cannot be empty"},
+            )
+        if old_tag == new_tag:
+            return (
+                old_tag,
+                new_tag,
+                {
+                    "success": False,
+                    "message": "Old and new tag names are identical",
+                },
+            )
+        return old_tag, new_tag, None
+
+    async def _finalize_tag_rename(
+        self, old_tag: str, new_tag: str, fact_ids: set, updated_count: int
+    ) -> Dict[str, Any]:
+        """Finalize tag rename by updating Redis keys and returning result. Issue #620."""
+        new_tag_key = f"tag:{new_tag}"
+        old_tag_key = f"tag:{old_tag}"
+
+        if fact_ids:
+            await asyncio.to_thread(self.redis_client.sadd, new_tag_key, *fact_ids)
+        await asyncio.to_thread(self.redis_client.delete, old_tag_key)
+
+        logger.info(
+            "Renamed tag '%s' to '%s', updated %d facts",
+            old_tag,
+            new_tag,
+            updated_count,
+        )
+
+        return {
+            "success": True,
+            "old_tag": old_tag,
+            "new_tag": new_tag,
+            "affected_count": updated_count,
+            "message": f"Tag renamed successfully, {updated_count} facts updated",
+        }
+
     async def rename_tag(self, old_tag: str, new_tag: str) -> Dict[str, Any]:
         """Rename a tag globally across all facts (Issue #398: refactored)."""
         try:
-            old_tag = old_tag.lower().strip()
-            new_tag = new_tag.lower().strip()
-
-            if not old_tag or not new_tag:
-                return {"success": False, "message": "Tags cannot be empty"}
-            if old_tag == new_tag:
-                return {
-                    "success": False,
-                    "message": "Old and new tag names are identical",
-                }
+            old_tag, new_tag, error = self._validate_rename_tags(old_tag, new_tag)
+            if error:
+                return error
 
             old_tag_key = f"tag:{old_tag}"
             exists = await asyncio.to_thread(self.redis_client.exists, old_tag_key)
@@ -368,25 +411,9 @@ class TagsMixin:
                 if await self._update_fact_tag_rename(fact_id, old_tag, new_tag):
                     updated_count += 1
 
-            new_tag_key = f"tag:{new_tag}"
-            if fact_ids:
-                await asyncio.to_thread(self.redis_client.sadd, new_tag_key, *fact_ids)
-            await asyncio.to_thread(self.redis_client.delete, old_tag_key)
-
-            logger.info(
-                "Renamed tag '%s' to '%s', updated %d facts",
-                old_tag,
-                new_tag,
-                updated_count,
+            return await self._finalize_tag_rename(
+                old_tag, new_tag, fact_ids, updated_count
             )
-
-            return {
-                "success": True,
-                "old_tag": old_tag,
-                "new_tag": new_tag,
-                "affected_count": updated_count,
-                "message": f"Tag renamed successfully, {updated_count} facts updated",
-            }
 
         except Exception as e:
             logger.error("Failed to rename tag '%s' to '%s': %s", old_tag, new_tag, e)
