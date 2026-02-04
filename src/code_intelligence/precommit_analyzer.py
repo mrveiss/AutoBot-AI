@@ -18,7 +18,7 @@ Parent Epic: #217 - Advanced Code Intelligence
 import concurrent.futures
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404 - controlled git process execution
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -181,7 +181,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         name="Hardcoded IP Address",
         category=CheckCategory.SECURITY,
         severity=CheckSeverity.WARN,
-        pattern=r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b',
+        pattern=r"\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b",
         description="Hardcoded IP address detected",
         suggestion="Use configuration or NetworkConstants for IP addresses",
         file_patterns=["*.py", "*.js", "*.ts"],
@@ -283,7 +283,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         name="Hardcoded Port",
         category=CheckCategory.QUALITY,
         severity=CheckSeverity.WARN,
-        pattern=r'(?<![a-zA-Z_])port\s*[=:]\s*\d{4,5}(?![0-9])',
+        pattern=r"(?<![a-zA-Z_])port\s*[=:]\s*\d{4,5}(?![0-9])",
         description="Hardcoded port number detected",
         suggestion="Use NetworkConstants for port numbers",
         file_patterns=["*.py", "*.js", "*.ts"],
@@ -371,7 +371,7 @@ class PrecommitAnalyzer:
     def get_staged_files(self) -> List[str]:
         """Get list of files staged for commit."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - git command is safe
                 ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
                 capture_output=True,
                 text=True,
@@ -389,7 +389,7 @@ class PrecommitAnalyzer:
         """Get content of a staged file."""
         try:
             # Try to get staged content first (what will be committed)
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - git command is safe
                 ["git", "show", f":{filepath}"],
                 capture_output=True,
                 text=True,
@@ -436,51 +436,74 @@ class PrecommitAnalyzer:
             lines = content.split("\n")
 
             if check.multiline:
-                # For multiline patterns, search entire content
-                for match in pattern.finditer(content):
-                    # Calculate line number from match position
-                    line_num = content[: match.start()].count("\n") + 1
-                    snippet = self._get_snippet(lines, line_num)
-
-                    results.append(
-                        CheckResult(
-                            check_id=check.id,
-                            name=check.name,
-                            category=check.category,
-                            severity=check.severity,
-                            passed=False,
-                            message=check.description,
-                            file_path=filepath,
-                            line=line_num,
-                            snippet=snippet,
-                            suggestion=check.suggestion,
-                        )
-                    )
+                self._run_multiline_check(
+                    check, filepath, content, lines, pattern, results
+                )
             else:
-                # For single-line patterns, check each line
-                for i, line in enumerate(lines, 1):
-                    for match in pattern.finditer(line):
-                        snippet = self._get_snippet(lines, i)
-                        results.append(
-                            CheckResult(
-                                check_id=check.id,
-                                name=check.name,
-                                category=check.category,
-                                severity=check.severity,
-                                passed=False,
-                                message=check.description,
-                                file_path=filepath,
-                                line=i,
-                                column=match.start() + 1,
-                                snippet=snippet,
-                                suggestion=check.suggestion,
-                            )
-                        )
+                self._run_singleline_check(check, filepath, lines, pattern, results)
 
         except re.error as e:
             logger.warning("Invalid regex in check %s: %s", check.id, e)
 
         return results
+
+    def _run_multiline_check(
+        self,
+        check: CheckDefinition,
+        filepath: str,
+        content: str,
+        lines: List[str],
+        pattern: re.Pattern,
+        results: List[CheckResult],
+    ) -> None:
+        """Run multiline pattern matching against entire file content. Issue #620."""
+        for match in pattern.finditer(content):
+            line_num = content[: match.start()].count("\n") + 1
+            snippet = self._get_snippet(lines, line_num)
+            results.append(
+                self._create_check_result(check, filepath, line_num, snippet)
+            )
+
+    def _run_singleline_check(
+        self,
+        check: CheckDefinition,
+        filepath: str,
+        lines: List[str],
+        pattern: re.Pattern,
+        results: List[CheckResult],
+    ) -> None:
+        """Run single-line pattern matching against each line. Issue #620."""
+        for i, line in enumerate(lines, 1):
+            for match in pattern.finditer(line):
+                snippet = self._get_snippet(lines, i)
+                results.append(
+                    self._create_check_result(
+                        check, filepath, i, snippet, match.start() + 1
+                    )
+                )
+
+    def _create_check_result(
+        self,
+        check: CheckDefinition,
+        filepath: str,
+        line_num: int,
+        snippet: str,
+        column: Optional[int] = None,
+    ) -> CheckResult:
+        """Create a CheckResult instance for a pattern match. Issue #620."""
+        return CheckResult(
+            check_id=check.id,
+            name=check.name,
+            category=check.category,
+            severity=check.severity,
+            passed=False,
+            message=check.description,
+            file_path=filepath,
+            line=line_num,
+            column=column,
+            snippet=snippet,
+            suggestion=check.suggestion,
+        )
 
     def _get_snippet(self, lines: List[str], line_num: int, context: int = 2) -> str:
         """Get code snippet with context around the specified line."""
@@ -524,9 +547,7 @@ class PrecommitAnalyzer:
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.max_workers
         ) as executor:
-            future_to_file = {
-                executor.submit(self.analyze_file, f): f for f in files
-            }
+            future_to_file = {executor.submit(self.analyze_file, f): f for f in files}
             for future in concurrent.futures.as_completed(future_to_file):
                 try:
                     results = future.result()

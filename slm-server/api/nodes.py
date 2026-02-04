@@ -179,7 +179,14 @@ async def create_node(
             detail="Node with this IP address already exists",
         )
 
-    node_id = str(uuid.uuid4())[:8]
+    # Use provided node_id, or derive a deterministic one from hostname
+    if node_data.node_id:
+        node_id = node_data.node_id
+    else:
+        # Generate deterministic ID from hostname (first 8 chars of SHA256)
+        import hashlib
+
+        node_id = hashlib.sha256(node_data.hostname.encode()).hexdigest()[:8]
 
     # If importing an existing node, mark as online immediately
     # Otherwise, mark as pending for enrollment

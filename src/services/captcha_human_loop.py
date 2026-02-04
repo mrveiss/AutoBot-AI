@@ -303,6 +303,55 @@ class CaptchaHumanLoop:
         )
         return resolution_event
 
+    async def _capture_screenshot_b64(self, page: Page) -> str:
+        """Capture page screenshot and encode as base64.
+
+        Args:
+            page: Playwright page to capture
+
+        Returns:
+            Base64-encoded screenshot string. Issue #620.
+        """
+        screenshot = await page.screenshot(full_page=False)
+        return base64.b64encode(screenshot).decode("utf-8")
+
+    def _cleanup_captcha_tracking(self, captcha_id: str) -> None:
+        """Remove CAPTCHA from pending tracking dictionaries.
+
+        Args:
+            captcha_id: ID of CAPTCHA to clean up. Issue #620.
+        """
+        self._pending_resolutions.pop(captcha_id, None)
+        self._resolution_results.pop(captcha_id, None)
+
+    def _build_final_result(
+        self,
+        success: bool,
+        status: CaptchaResolutionStatus,
+        captcha_id: str,
+        url: str,
+        start_time: datetime,
+    ) -> CaptchaResolutionResult:
+        """Build final CAPTCHA resolution result.
+
+        Args:
+            success: Whether resolution was successful
+            status: Resolution status
+            captcha_id: CAPTCHA identifier
+            url: URL where CAPTCHA was encountered
+            start_time: When intervention started
+
+        Returns:
+            CaptchaResolutionResult with final status. Issue #620.
+        """
+        return CaptchaResolutionResult(
+            success=success,
+            status=status,
+            captcha_id=captcha_id,
+            url=url,
+            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
+        )
+
     async def request_human_intervention(
         self,
         page: Page,
@@ -326,10 +375,10 @@ class CaptchaHumanLoop:
         logger.info("Handling CAPTCHA at %s (type: %s)", url, captcha_type)
 
         try:
-            screenshot = await page.screenshot(full_page=False)
-            screenshot_b64 = base64.b64encode(screenshot).decode("utf-8")
+            screenshot_b64 = await self._capture_screenshot_b64(page)
+            screenshot = base64.b64decode(screenshot_b64)
 
-            # Step 1: Attempt automatic solving
+            # Attempt automatic solving (Issue #620: uses helper)
             auto_result = await self._handle_auto_solve(
                 page,
                 screenshot,
@@ -342,7 +391,7 @@ class CaptchaHumanLoop:
             if auto_result:
                 return auto_result
 
-            # Step 2: Fall back to human intervention
+            # Fall back to human intervention (Issue #620: uses helpers)
             logger.info("Requesting human intervention for CAPTCHA at %s", url)
             resolution_event = await self._setup_human_intervention(
                 captcha_id, url, captcha_type, screenshot_b64
@@ -356,16 +405,9 @@ class CaptchaHumanLoop:
             return self._build_error_result(captcha_id, url, start_time, str(e))
 
         finally:
-            self._pending_resolutions.pop(captcha_id, None)
-            self._resolution_results.pop(captcha_id, None)
+            self._cleanup_captcha_tracking(captcha_id)
 
-        return CaptchaResolutionResult(
-            success=success,
-            status=status,
-            captcha_id=captcha_id,
-            url=url,
-            duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
-        )
+        return self._build_final_result(success, status, captcha_id, url, start_time)
 
     async def mark_captcha_resolved(
         self,

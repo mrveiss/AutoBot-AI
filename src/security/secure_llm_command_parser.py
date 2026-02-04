@@ -145,7 +145,9 @@ class SecureLLMCommandParser:
             else:
                 self.stats["blocked_commands"] += 1
 
-        logger.info("✅ Validated %s/%s commands", len(validated_commands), len(raw_commands))
+        logger.info(
+            "✅ Validated %s/%s commands", len(validated_commands), len(raw_commands)
+        )
 
         return validated_commands
 
@@ -243,6 +245,7 @@ class SecureLLMCommandParser:
         Validate a single command for security.
 
         Issue #665: Refactored to use _check_and_block_command helper.
+        Issue #620: Extracted helper methods for validation steps.
 
         Args:
             command_dict: Command dictionary with 'command', 'explanation', 'next' keys
@@ -263,29 +266,59 @@ class SecureLLMCommandParser:
             command, context="extracted_command"
         )
         if self._check_and_block_command(
-            command, user_goal, "command_blocked",
-            command_validation, "Command contains injection patterns"
+            command,
+            user_goal,
+            "command_blocked",
+            command_validation,
+            "Command contains injection patterns",
         ):
             return None
 
         # Step 2: Validate with existing CommandValidator
         validator_result = self.command_validator.validate_command(command)
         if self._check_and_block_command(
-            command, user_goal, "command_validator_blocked",
-            validator_result, "Command failed CommandValidator"
+            command,
+            user_goal,
+            "command_validator_blocked",
+            validator_result,
+            "Command failed CommandValidator",
         ):
             return None
 
         # Step 3: Check explanation for injection patterns (informational)
-        if explanation:
-            explanation_validation = self.injection_detector.detect_injection(
-                explanation, context="command_explanation"
-            )
-            if explanation_validation.risk_level in {InjectionRisk.HIGH, InjectionRisk.CRITICAL}:
-                logger.warning("⚠️ Suspicious explanation detected for command: %s", command)
-                logger.warning("Explanation patterns: %s", explanation_validation.detected_patterns)
+        self._check_explanation_for_injection(command, explanation)
 
         # Command passed all validation
+        return self._build_validated_command(
+            command, explanation, next_step, command_validation, user_goal
+        )
+
+    def _check_explanation_for_injection(self, command: str, explanation: str) -> None:
+        """Log warning if explanation contains suspicious injection patterns. Issue #620."""
+        if not explanation:
+            return
+
+        explanation_validation = self.injection_detector.detect_injection(
+            explanation, context="command_explanation"
+        )
+        if explanation_validation.risk_level in {
+            InjectionRisk.HIGH,
+            InjectionRisk.CRITICAL,
+        }:
+            logger.warning("Suspicious explanation detected for command: %s", command)
+            logger.warning(
+                "Explanation patterns: %s", explanation_validation.detected_patterns
+            )
+
+    def _build_validated_command(
+        self,
+        command: str,
+        explanation: str,
+        next_step: Optional[str],
+        command_validation: Any,
+        user_goal: str,
+    ) -> ValidatedCommand:
+        """Build a ValidatedCommand with validation metadata. Issue #620."""
         return ValidatedCommand(
             command=command,
             explanation=explanation,

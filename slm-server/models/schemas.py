@@ -121,6 +121,9 @@ class NodeCreate(BaseModel):
 
     hostname: str
     ip_address: str
+    node_id: Optional[
+        str
+    ] = None  # Custom node_id; if not provided, derived from hostname
     roles: List[str] = Field(default_factory=list)
     ssh_user: Optional[str] = "autobot"
     ssh_port: Optional[int] = 22

@@ -391,19 +391,25 @@ class SecureSandboxExecutor:
     def _validate_command(
         self, command: Union[str, List[str]], config: SandboxConfig
     ) -> bool:
-        """Validate command against security policies"""
-        # Convert to list if string
-        if isinstance(command, str):
-            command_parts = command.split()
-        else:
-            command_parts = command
+        """Validate command against security policies."""
+        command_parts = command.split() if isinstance(command, str) else command
 
         if not command_parts:
             return False
 
         command_name = command_parts[0]
 
-        # Check blocked commands
+        if self._is_command_blocked(command_name, config):
+            return False
+
+        if config.security_level == SandboxSecurityLevel.HIGH:
+            if not self._is_command_allowed(command_name, config):
+                return False
+
+        return True
+
+    def _is_command_blocked(self, command_name: str, config: SandboxConfig) -> bool:
+        """Check if a command is in the blocked list. Issue #620."""
         default_blocked = [
             "sudo",
             "su",
@@ -424,32 +430,32 @@ class SecureSandboxExecutor:
         blocked = config.blocked_commands or default_blocked
         if command_name in blocked:
             self.logger.warning("Command blocked by security policy: %s", command_name)
+            return True
+        return False
+
+    def _is_command_allowed(self, command_name: str, config: SandboxConfig) -> bool:
+        """Check if a command is in the whitelist for high security mode. Issue #620."""
+        default_allowed = [
+            "bash",
+            "sh",
+            "python3",
+            "python",
+            "ls",
+            "cat",
+            "echo",
+            "grep",
+            "sed",
+            "awk",
+            "find",
+            "which",
+            "env",
+            "printenv",
+        ]
+
+        allowed = config.allowed_commands or default_allowed
+        if command_name not in allowed:
+            self.logger.warning("Command not in whitelist: %s", command_name)
             return False
-
-        # Check allowed commands for high security
-        if config.security_level == SandboxSecurityLevel.HIGH:
-            default_allowed = [
-                "bash",
-                "sh",
-                "python3",
-                "python",
-                "ls",
-                "cat",
-                "echo",
-                "grep",
-                "sed",
-                "awk",
-                "find",
-                "which",
-                "env",
-                "printenv",
-            ]
-
-            allowed = config.allowed_commands or default_allowed
-            if command_name not in allowed:
-                self.logger.warning("Command not in whitelist: %s", command_name)
-                return False
-
         return True
 
     def _prepare_container_config(

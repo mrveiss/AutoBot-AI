@@ -52,6 +52,78 @@ class TaskExecutionTracker:
 
         logger.info("Task Execution Tracker initialized")
 
+    def _create_and_start_task(
+        self,
+        task_name: str,
+        description: str,
+        priority: TaskPriority,
+        agent_type: Optional[str],
+        inputs: Optional[Dict[str, Any]],
+        parent_task_id: Optional[str],
+        metadata: Optional[Dict[str, Any]],
+    ) -> str:
+        """Create task record and mark as started.
+
+        Args:
+            task_name: Name of the task
+            description: Task description
+            priority: Task priority level
+            agent_type: Type of agent executing task
+            inputs: Task input parameters
+            parent_task_id: Parent task ID if subtask
+            metadata: Additional metadata
+
+        Returns:
+            Created task ID. Issue #620.
+        """
+        task_id = self.memory_manager.create_task_record(
+            task_name=task_name,
+            description=description,
+            priority=priority,
+            agent_type=agent_type,
+            inputs=inputs,
+            parent_task_id=parent_task_id,
+            metadata=metadata,
+        )
+        self.memory_manager.start_task(task_id)
+        return task_id
+
+    def _register_active_task(
+        self,
+        task_id: str,
+        task_name: str,
+        agent_type: Optional[str],
+        inputs: Optional[Dict[str, Any]],
+    ) -> None:
+        """Register task in active tasks tracking dictionary.
+
+        Args:
+            task_id: Task identifier
+            task_name: Name of the task
+            agent_type: Type of agent executing task
+            inputs: Task input parameters. Issue #620.
+        """
+        self.active_tasks[task_id] = {
+            "task_name": task_name,
+            "agent_type": agent_type,
+            "started_at": datetime.now(),
+            "inputs": inputs,
+        }
+
+    async def _finalize_task(
+        self, task_id: str, task_context: "TaskExecutionContext"
+    ) -> None:
+        """Complete task and execute callbacks.
+
+        Args:
+            task_id: Task identifier
+            task_context: Execution context with outputs. Issue #620.
+        """
+        if task_id in self.active_tasks:
+            self.memory_manager.complete_task(task_id, outputs=task_context.outputs)
+        self.active_tasks.pop(task_id, None)
+        await self._execute_task_callbacks(task_id, "completed")
+
     @asynccontextmanager
     async def track_task(
         self,
@@ -63,59 +135,41 @@ class TaskExecutionTracker:
         parent_task_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ):
-        """
-        Context manager for automatic task tracking with proper cleanup
+        """Context manager for automatic task tracking with proper cleanup.
+
+        Issue #620: Refactored to use extracted helpers for task creation,
+        registration, and finalization.
 
         Usage:
             async with tracker.track_task("Agent Communication", "Chat with user") as task_id:
-                # Task execution code here
                 result = await some_agent_operation()
                 return result
         """
-        # Create task record
-        task_id = self.memory_manager.create_task_record(
-            task_name=task_name,
-            description=description,
-            priority=priority,
-            agent_type=agent_type,
-            inputs=inputs,
-            parent_task_id=parent_task_id,
-            metadata=metadata,
+        # Create and start task (Issue #620: uses helper)
+        task_id = self._create_and_start_task(
+            task_name,
+            description,
+            priority,
+            agent_type,
+            inputs,
+            parent_task_id,
+            metadata,
         )
-
-        # Mark task as started
-        self.memory_manager.start_task(task_id)
-
-        # Track active task
-        self.active_tasks[task_id] = {
-            "task_name": task_name,
-            "agent_type": agent_type,
-            "started_at": datetime.now(),
-            "inputs": inputs,
-        }
-
+        self._register_active_task(task_id, task_name, agent_type, inputs)
         task_context = TaskExecutionContext(self, task_id)
 
         try:
             yield task_context
-
-            # Mark as completed if not already marked
-            if task_id in self.active_tasks:
-                self.memory_manager.complete_task(task_id, outputs=task_context.outputs)
+            # Complete task if still active (Issue #620: uses helper)
+            await self._finalize_task(task_id, task_context)
 
         except Exception as e:
-            # Mark as failed
             error_msg = f"{type(e).__name__}: {str(e)}"
             self.memory_manager.fail_task(task_id, error_msg)
             logger.error("Task %s failed: %s", task_id, error_msg)
-            raise
-
-        finally:
-            # Cleanup active task tracking
             self.active_tasks.pop(task_id, None)
-
-            # Execute callbacks
             await self._execute_task_callbacks(task_id, "completed")
+            raise
 
     def create_subtask(
         self,
@@ -245,9 +299,9 @@ class TaskExecutionTracker:
             return {"message": "No task history available for analysis"}
 
         # Issue #317: Single-pass aggregation using defaultdict (O(2n) → O(n))
-        agent_stats = defaultdict(lambda: {
-            "total": 0, "successful": 0, "durations": [], "retries": []
-        })
+        agent_stats = defaultdict(
+            lambda: {"total": 0, "successful": 0, "durations": [], "retries": []}
+        )
 
         for task in history:
             agent = task.agent_type or "unknown"
@@ -275,11 +329,13 @@ class TaskExecutionTracker:
                     "total_tasks": data["total"],
                     "avg_duration_seconds": (
                         round(sum(data["durations"]) / len(data["durations"]), 2)
-                        if data["durations"] else None
+                        if data["durations"]
+                        else None
                     ),
                     "avg_retry_count": (
                         round(sum(data["retries"]) / len(data["retries"]), 2)
-                        if data["retries"] else 0
+                        if data["retries"]
+                        else 0
                     ),
                 }
                 for agent, data in agent_stats.items()
