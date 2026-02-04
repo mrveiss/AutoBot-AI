@@ -737,52 +737,81 @@ class SessionMixin:
             name: The new name for the session
 
         Returns:
-            True if update was successful, False otherwise
+            True if update was successful, False otherwise.
+            Issue #620: Refactored to use existing helpers.
         """
         try:
             chats_directory = self._get_chats_directory()
 
-            # Try new format first
-            chat_file = f"{chats_directory}/{session_id}_chat.json"
-            file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-            if not file_exists:
-                # Try old format
-                chat_file = f"{chats_directory}/chat_{session_id}.json"
-                old_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
-                if not old_exists:
-                    logger.warning(
-                        "Chat session %s not found for name update", session_id
-                    )
-                    return False
+            # Resolve file path using existing helper
+            chat_file = await self._resolve_session_file_path(
+                session_id, chats_directory
+            )
+            if not chat_file:
+                logger.warning("Chat session %s not found for name update", session_id)
+                return False
 
-            # Load existing chat data
-            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                file_content = await f.read()
-            chat_data = json.loads(file_content)
+            # Load and update session data (Issue #620: extracted helper)
+            chat_data = await self._load_and_update_session_name(chat_file, name)
 
-            # Update name and last modified time
-            chat_data["name"] = name
-            chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            # Save and cache updated data (Issue #620: extracted helper)
+            await self._save_session_name_update(
+                session_id, chats_directory, chat_data, name
+            )
 
-            # Save updated data (always use new format)
-            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
-            async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
-
-            # Update Redis cache
-            if self.redis_client:
-                try:
-                    cache_key = f"chat:session:{session_id}"
-                    await self._async_cache_session(cache_key, chat_data)
-                except Exception as e:
-                    logger.error("Failed to update Redis cache: %s", e)
-
-            logger.info("Chat session '%s' name updated to '%s'", session_id, name)
             return True
 
         except Exception as e:
             logger.error("Error updating chat session %s name: %s", session_id, e)
             return False
+
+    async def _load_and_update_session_name(
+        self, chat_file: str, name: str
+    ) -> Dict[str, Any]:
+        """
+        Load session data and update the name field.
+
+        Args:
+            chat_file: Path to the chat session file
+            name: New name for the session
+
+        Returns:
+            Updated chat data dictionary. Issue #620.
+        """
+        async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+            file_content = await f.read()
+        chat_data = json.loads(file_content)
+
+        chat_data["name"] = name
+        chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        return chat_data
+
+    async def _save_session_name_update(
+        self,
+        session_id: str,
+        chats_directory: str,
+        chat_data: Dict[str, Any],
+        name: str,
+    ) -> None:
+        """
+        Save updated session data and update Redis cache.
+
+        Args:
+            session_id: Session identifier
+            chats_directory: Directory containing chat files
+            chat_data: Updated chat data to save
+            name: New session name (for logging). Issue #620.
+        """
+        # Save updated data (always use new format)
+        chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+        async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
+
+        # Update Redis cache using existing helper
+        await self._update_redis_session_cache(session_id, chat_data)
+
+        logger.info("Chat session '%s' name updated to '%s'", session_id, name)
 
     async def get_session_owner(self, session_id: str) -> Optional[str]:
         """

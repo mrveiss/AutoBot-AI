@@ -193,6 +193,7 @@ class EnhancedProjectStateTracker:
 
         Issue #665: Refactored to use extracted helpers for phase extraction
         and metrics calculation.
+        Issue #620: Further refactored to extract snapshot creation and history.
         """
         try:
             # Get phase validation results and capabilities
@@ -205,31 +206,11 @@ class EnhancedProjectStateTracker:
                 phase_states, capabilities, validation_results
             )
 
-            # Get configuration
-            config = self.progression_manager.config.copy()
+            # Create snapshot (Issue #620: extracted helper)
+            snapshot = self._create_state_snapshot(phase_states, capabilities, metrics)
 
-            # Create snapshot
-            snapshot = StateSnapshot(
-                timestamp=datetime.now(),
-                phase_states=phase_states,
-                active_capabilities=set(capabilities["active_capabilities"]),
-                system_metrics=metrics,
-                configuration=config,
-                validation_results={
-                    phase: data["completion_percentage"]
-                    for phase, data in phase_states.items()
-                },
-                metadata={
-                    "total_phases": len(phase_states),
-                    "completed_phases": metrics[TrackingMetric.PHASE_COMPLETION],
-                    "snapshot_source": "automated_capture",
-                },
-            )
-
-            # Save to history
-            self.state_history.append(snapshot)
-            if len(self.state_history) > 1000:
-                self.state_history = self.state_history[-1000:]
+            # Update history and persist (Issue #620: extracted helper)
+            self._update_state_history(snapshot)
 
             # Issue #379: Parallelize independent snapshot operations
             await asyncio.gather(
@@ -242,6 +223,53 @@ class EnhancedProjectStateTracker:
         except Exception as e:
             logger.error("Error capturing state snapshot: %s", e)
             raise
+
+    def _create_state_snapshot(
+        self,
+        phase_states: Dict[str, Any],
+        capabilities: Dict[str, Any],
+        metrics: Dict[TrackingMetric, float],
+    ) -> StateSnapshot:
+        """
+        Create a StateSnapshot object from collected state data.
+
+        Args:
+            phase_states: Dictionary of phase validation states
+            capabilities: System capabilities dictionary
+            metrics: Calculated tracking metrics
+
+        Returns:
+            StateSnapshot object with current system state. Issue #620.
+        """
+        config = self.progression_manager.config.copy()
+
+        return StateSnapshot(
+            timestamp=datetime.now(),
+            phase_states=phase_states,
+            active_capabilities=set(capabilities["active_capabilities"]),
+            system_metrics=metrics,
+            configuration=config,
+            validation_results={
+                phase: data["completion_percentage"]
+                for phase, data in phase_states.items()
+            },
+            metadata={
+                "total_phases": len(phase_states),
+                "completed_phases": metrics[TrackingMetric.PHASE_COMPLETION],
+                "snapshot_source": "automated_capture",
+            },
+        )
+
+    def _update_state_history(self, snapshot: StateSnapshot) -> None:
+        """
+        Add snapshot to history and maintain history size limit.
+
+        Args:
+            snapshot: The snapshot to add to history. Issue #620.
+        """
+        self.state_history.append(snapshot)
+        if len(self.state_history) > 1000:
+            self.state_history = self.state_history[-1000:]
 
     async def _save_snapshot(self, snapshot: StateSnapshot):
         """Save snapshot to database using asyncio.to_thread()."""
