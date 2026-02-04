@@ -11,6 +11,7 @@
 
 import { ref, computed, readonly } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
+import { useRoles, type Role, type SyncResult } from './useRoles'
 
 // SLM Admin uses the local SLM backend API
 const API_BASE = '/api'
@@ -141,6 +142,9 @@ export interface ScheduleRunResponse {
   job_id: string | null
 }
 
+// Re-export role types for consumers (Issue #779)
+export type { Role, SyncResult }
+
 // =============================================================================
 // Composable
 // =============================================================================
@@ -162,6 +166,9 @@ export function useCodeSync() {
     }
     return config
   })
+
+  // Initialize roles composable (Issue #779)
+  const rolesComposable = useRoles()
 
   // =============================================================================
   // Reactive State
@@ -598,5 +605,11 @@ export function useCodeSync() {
     deleteSchedule,
     toggleSchedule,
     runSchedule,
+
+    // Role-based sync methods (Issue #779)
+    roles: rolesComposable.roles,
+    fetchRoles: rolesComposable.fetchRoles,
+    syncRole: rolesComposable.syncRole,
+    pullFromSource: rolesComposable.pullFromSource,
   }
 }

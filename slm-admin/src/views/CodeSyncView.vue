@@ -4,10 +4,11 @@
 // Author: mrveiss
 
 /**
- * Code Sync View (Issue #741)
+ * Code Sync View (Issue #741, #779)
  *
  * Dedicated page for managing code version updates across the fleet.
- * Provides status overview, pending updates table, and sync actions.
+ * Provides status overview, pending updates table, role-based sync,
+ * and scheduled update management.
  */
 
 import { ref, onMounted, computed } from 'vue'
@@ -37,6 +38,10 @@ const syncingNodeId = ref<string | null>(null)
 const showScheduleModal = ref(false)
 const editingSchedule = ref<UpdateSchedule | null>(null)
 const runningScheduleId = ref<number | null>(null)
+
+// Role-based sync state (Issue #779)
+const syncingRole = ref<string | null>(null)
+const isPulling = ref(false)
 
 // =============================================================================
 // Computed Properties
@@ -139,6 +144,35 @@ async function handleSyncAll(): Promise<void> {
 }
 
 // =============================================================================
+// Role-Based Sync Methods (Issue #779)
+// =============================================================================
+
+async function handlePullFromSource(): Promise<void> {
+  isPulling.value = true
+  const result = await codeSync.pullFromSource()
+  isPulling.value = false
+
+  if (result.success) {
+    logger.info('Pulled from source:', result.commit)
+  } else {
+    logger.error('Pull failed:', result.message)
+  }
+}
+
+async function handleSyncRole(roleName: string): Promise<void> {
+  syncingRole.value = roleName
+  const result = await codeSync.syncRole(roleName)
+  syncingRole.value = null
+
+  if (result.success) {
+    logger.info('Role sync completed:', roleName, result.nodes_synced)
+    await handleRefresh()
+  } else {
+    logger.error('Role sync failed:', result.message)
+  }
+}
+
+// =============================================================================
 // Schedule Methods (Issue #741 - Phase 7)
 // =============================================================================
 
@@ -221,9 +255,12 @@ function describeCron(expression: string): string {
 
 onMounted(async () => {
   logger.info('CodeSyncView mounted')
-  await codeSync.fetchStatus()
-  await codeSync.fetchPendingNodes()
-  await codeSync.fetchSchedules()
+  await Promise.all([
+    codeSync.fetchStatus(),
+    codeSync.fetchPendingNodes(),
+    codeSync.fetchSchedules(),
+    codeSync.fetchRoles(),
+  ])
 })
 </script>
 
@@ -458,6 +495,52 @@ onMounted(async () => {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Role-Based Sync Section (Issue #779) -->
+    <div class="card p-5 mt-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Role-Based Sync</h2>
+        <button
+          @click="handlePullFromSource"
+          :disabled="isPulling"
+          class="btn btn-secondary text-sm"
+        >
+          {{ isPulling ? 'Pulling...' : 'Pull from Source' }}
+        </button>
+      </div>
+
+      <div v-if="codeSync.roles.value.length === 0" class="text-gray-500">
+        No roles configured. Add roles via the API.
+      </div>
+
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          v-for="role in codeSync.roles.value"
+          :key="role.name"
+          class="p-4 bg-gray-50 rounded-lg border border-gray-200"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-medium text-gray-900">{{ role.display_name || role.name }}</span>
+            <span
+              v-if="role.auto_restart"
+              class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded"
+            >
+              auto-restart
+            </span>
+          </div>
+          <p class="text-sm text-gray-500 mb-3 truncate" :title="role.target_path">
+            {{ role.target_path }}
+          </p>
+          <button
+            @click="handleSyncRole(role.name)"
+            :disabled="syncingRole === role.name"
+            class="btn btn-primary btn-sm w-full"
+          >
+            {{ syncingRole === role.name ? 'Syncing...' : 'Sync All Nodes' }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Schedules Section (Issue #741 - Phase 7) -->
