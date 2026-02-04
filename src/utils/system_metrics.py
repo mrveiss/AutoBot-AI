@@ -264,16 +264,16 @@ class SystemMetricsCollector:
         if response_time is not None:
             self.prometheus.record_service_response_time(service_name, response_time)
 
-    async def collect_service_health(self) -> Dict[str, SystemMetric]:
-        """Collect health metrics for AutoBot services.
-
-        Issue #315: Refactored to use helper methods for reduced nesting.
+    def _get_service_endpoints(self) -> Dict[str, str | None]:
         """
-        metrics = {}
-        timestamp = time.time()
+        Get service endpoints for health checks.
 
-        # Service endpoints to check
-        services = {
+        Issue #620.
+
+        Returns:
+            Dictionary mapping service names to their health check URLs
+        """
+        return {
             "backend": (
                 f"http://{config.get_host('backend')}:{config.get_port('backend')}/api/health"
             ),
@@ -283,47 +283,72 @@ class SystemMetricsCollector:
             ),
         }
 
-        # HTTP timeout for health checks
-        timeout = aiohttp.ClientTimeout(total=5)
+    async def _check_single_service(
+        self,
+        service_name: str,
+        url: str | None,
+        http_client,
+        timeout: aiohttp.ClientTimeout,
+        timestamp: float,
+        metrics: Dict[str, SystemMetric],
+    ) -> None:
+        """
+        Check health of a single service and update metrics.
 
-        # Use singleton HTTP client for connection pooling
+        Issue #620.
+
+        Args:
+            service_name: Name of the service
+            url: Health check URL (None for Redis)
+            http_client: HTTP client instance
+            timeout: Request timeout
+            timestamp: Metric timestamp
+            metrics: Dictionary to add metrics to
+        """
+        health_value = 0.0
+        response_time_ms = None
+        error_msg = None
+
+        try:
+            if service_name == "redis":
+                health_value = await self._check_redis_health()
+            else:
+                health_value, response_time_ms = await self._check_http_service_health(
+                    http_client, url, timeout
+                )
+                metrics[f"{service_name}_response_time"] = SystemMetric(
+                    timestamp=timestamp,
+                    name=f"{service_name}_response_time",
+                    value=response_time_ms,
+                    unit="ms",
+                    category="performance",
+                )
+        except Exception as e:
+            self.logger.warning("Health check failed for %s: %s", service_name, e)
+            error_msg = str(e)
+
+        metrics[f"{service_name}_health"] = self._create_health_metric(
+            service_name, health_value, timestamp, error_msg
+        )
+
+        response_time_sec = response_time_ms / 1000 if response_time_ms else None
+        self._update_prometheus_health(service_name, health_value, response_time_sec)
+
+    async def collect_service_health(self) -> Dict[str, SystemMetric]:
+        """
+        Collect health metrics for AutoBot services.
+
+        Issue #620: Refactored to use helper methods for reduced function length.
+        """
+        metrics = {}
+        timestamp = time.time()
+        services = self._get_service_endpoints()
+        timeout = aiohttp.ClientTimeout(total=5)
         http_client = get_http_client()
 
         for service_name, url in services.items():
-            health_value = 0.0
-            response_time_ms = None
-            error_msg = None
-
-            try:
-                if service_name == "redis":
-                    health_value = await self._check_redis_health()
-                else:
-                    (
-                        health_value,
-                        response_time_ms,
-                    ) = await self._check_http_service_health(http_client, url, timeout)
-                    # Add response time metric for HTTP services
-                    metrics[f"{service_name}_response_time"] = SystemMetric(
-                        timestamp=timestamp,
-                        name=f"{service_name}_response_time",
-                        value=response_time_ms,
-                        unit="ms",
-                        category="performance",
-                    )
-
-            except Exception as e:
-                self.logger.warning("Health check failed for %s: %s", service_name, e)
-                error_msg = str(e)
-
-            # Create health metric (success or failure)
-            metrics[f"{service_name}_health"] = self._create_health_metric(
-                service_name, health_value, timestamp, error_msg
-            )
-
-            # Update Prometheus
-            response_time_sec = response_time_ms / 1000 if response_time_ms else None
-            self._update_prometheus_health(
-                service_name, health_value, response_time_sec
+            await self._check_single_service(
+                service_name, url, http_client, timeout, timestamp, metrics
             )
 
         return metrics

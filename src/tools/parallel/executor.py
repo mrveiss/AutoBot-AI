@@ -278,64 +278,85 @@ class ParallelToolExecutor:
         async with semaphore:
             return await self._execute_single(call, task_id)
 
-    async def _execute_single(
-        self,
-        call: ToolCall,
-        task_id: Optional[str],
-    ) -> Any:
-        """Execute a single tool call with event tracking"""
-        call.status = TaskStatus.RUNNING.value
+    async def _publish_action_event(
+        self, call: ToolCall, task_id: Optional[str]
+    ) -> Optional[Any]:
+        """Publish ACTION event to event stream. Issue #620."""
+        if not self.event_stream:
+            return None
 
-        # Publish ACTION event
-        action_event = None
-        if self.event_stream:
-            action_event = create_action_event(
-                tool_name=call.tool_name,
-                arguments=call.arguments,
-                task_id=task_id,
-                is_parallel=call.parallel_group_id is not None,
-                parallel_group_id=call.parallel_group_id,
-                depends_on=call.depends_on,
-            )
-            # Override tool_id to match call_id
-            action_event.content["tool_id"] = call.call_id
-            await self.event_stream.publish(action_event)
+        action_event = create_action_event(
+            tool_name=call.tool_name,
+            arguments=call.arguments,
+            task_id=task_id,
+            is_parallel=call.parallel_group_id is not None,
+            parallel_group_id=call.parallel_group_id,
+            depends_on=call.depends_on,
+        )
+        action_event.content["tool_id"] = call.call_id
+        await self.event_stream.publish(action_event)
+        return action_event
 
-        # Execute with timeout
-        start_time = time.monotonic()
+    async def _execute_tool_with_timeout(
+        self, call: ToolCall
+    ) -> tuple[Any, bool, Optional[str]]:
+        """Execute tool dispatch with timeout handling. Issue #620."""
         try:
             result = await asyncio.wait_for(
                 self.dispatch(call.tool_name, call.arguments),
                 timeout=self.config.per_call_timeout_ms / 1000,
             )
-            success = True
-            error = None
+            return result, True, None
         except asyncio.TimeoutError:
-            result = None
-            success = False
             error = f"Tool {call.tool_name} timed out after {self.config.per_call_timeout_ms}ms"
             logger.warning(error)
+            return None, False, error
         except Exception as e:
-            result = None
-            success = False
-            error = str(e)
             logger.error("Tool %s failed: %s", call.tool_name, e)
+            return None, False, str(e)
 
+    async def _publish_observation_event(
+        self,
+        action_event: Any,
+        call: ToolCall,
+        success: bool,
+        result: Any,
+        error: Optional[str],
+        execution_time: float,
+        task_id: Optional[str],
+    ) -> None:
+        """Publish OBSERVATION event to event stream. Issue #620."""
+        if not self.event_stream or not action_event:
+            return
+
+        observation_event = create_observation_event(
+            action_id=action_event.event_id,
+            tool_name=call.tool_name,
+            success=success,
+            result=result if success else None,
+            error=error,
+            execution_time_ms=execution_time,
+            task_id=task_id,
+        )
+        await self.event_stream.publish(observation_event)
+
+    async def _execute_single(
+        self,
+        call: ToolCall,
+        task_id: Optional[str],
+    ) -> Any:
+        """Execute a single tool call with event tracking."""
+        call.status = TaskStatus.RUNNING.value
+        action_event = await self._publish_action_event(call, task_id)
+
+        start_time = time.monotonic()
+        result, success, error = await self._execute_tool_with_timeout(call)
         execution_time = (time.monotonic() - start_time) * 1000
         call.execution_time_ms = execution_time
 
-        # Publish OBSERVATION event
-        if self.event_stream and action_event:
-            observation_event = create_observation_event(
-                action_id=action_event.event_id,
-                tool_name=call.tool_name,
-                success=success,
-                result=result if success else None,
-                error=error,
-                execution_time_ms=execution_time,
-                task_id=task_id,
-            )
-            await self.event_stream.publish(observation_event)
+        await self._publish_observation_event(
+            action_event, call, success, result, error, execution_time, task_id
+        )
 
         if not success:
             raise RuntimeError(error)

@@ -63,6 +63,50 @@ class TeamService(BaseService):
     # Team CRUD Operations
     # -------------------------------------------------------------------------
 
+    async def _validate_unique_team_name(self, name: str) -> None:
+        """Validate team name is unique within organization. Issue #620."""
+        existing = await self._find_team_by_name(name)
+        if existing:
+            raise DuplicateTeamError(
+                f"Team with name '{name}' already exists in this organization"
+            )
+
+    def _build_team_object(
+        self,
+        name: str,
+        description: Optional[str],
+        settings: Optional[dict],
+        is_default: bool,
+    ) -> Team:
+        """Build Team model instance with provided attributes. Issue #620."""
+        return Team(
+            id=uuid.uuid4(),
+            org_id=self.context.org_id,
+            name=name,
+            description=description,
+            settings=settings or {},
+            is_default=is_default,
+        )
+
+    async def _log_team_creation(
+        self,
+        team: Team,
+        name: str,
+        is_default: bool,
+        effective_owner: Optional[uuid.UUID],
+    ) -> None:
+        """Log audit entry for team creation. Issue #620."""
+        await self._audit_log(
+            action=AuditAction.TEAM_CREATED,
+            resource_type=AuditResourceType.TEAM,
+            resource_id=team.id,
+            details={
+                "name": name,
+                "is_default": is_default,
+                "owner_id": str(effective_owner) if effective_owner else None,
+            },
+        )
+
     async def create_team(
         self,
         name: str,
@@ -88,42 +132,17 @@ class TeamService(BaseService):
             DuplicateTeamError: If team name already exists in org
         """
         self._require_org_context()
+        await self._validate_unique_team_name(name)
 
-        # Check for duplicate name within organization
-        existing = await self._find_team_by_name(name)
-        if existing:
-            raise DuplicateTeamError(
-                f"Team with name '{name}' already exists in this organization"
-            )
-
-        team = Team(
-            id=uuid.uuid4(),
-            org_id=self.context.org_id,
-            name=name,
-            description=description,
-            settings=settings or {},
-            is_default=is_default,
-        )
-
+        team = self._build_team_object(name, description, settings, is_default)
         self.session.add(team)
         await self.session.flush()
 
-        # Add owner as first member
         effective_owner = owner_id or self.context.user_id
         if effective_owner:
             await self.add_member(team.id, effective_owner, role=self.ROLE_OWNER)
 
-        await self._audit_log(
-            action=AuditAction.TEAM_CREATED,
-            resource_type=AuditResourceType.TEAM,
-            resource_id=team.id,
-            details={
-                "name": name,
-                "is_default": is_default,
-                "owner_id": str(effective_owner) if effective_owner else None,
-            },
-        )
-
+        await self._log_team_creation(team, name, is_default, effective_owner)
         logger.info("Created team: %s (id=%s)", name, team.id)
         return team
 

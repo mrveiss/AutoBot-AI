@@ -259,6 +259,70 @@ class GPUVectorIndex:
             # Default to flat IP
             return faiss.IndexFlatIP(dim)
 
+    def _prepare_embeddings(
+        self, embeddings: np.ndarray, normalize: bool
+    ) -> np.ndarray:
+        """
+        Prepare embeddings for indexing by ensuring correct dtype and normalizing.
+
+        Issue #620.
+
+        Args:
+            embeddings: Raw embedding array
+            normalize: Whether to L2-normalize for cosine similarity
+
+        Returns:
+            Prepared embeddings array
+        """
+        embeddings = np.ascontiguousarray(embeddings.astype(np.float32))
+
+        if normalize:
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms[norms == 0] = 1  # Avoid division by zero
+            embeddings = embeddings / norms
+
+        return embeddings
+
+    async def _train_index_if_needed(self, embeddings: np.ndarray) -> None:
+        """
+        Train the index if it requires training (e.g., IVF indices).
+
+        Issue #620.
+
+        Args:
+            embeddings: Training data
+        """
+        if self.is_trained or not hasattr(self.index, "train"):
+            return
+
+        if self.index.is_trained:
+            self.is_trained = True
+            return
+
+        if len(embeddings) >= self.config.nlist:
+            await asyncio.to_thread(self.index.train, embeddings)
+            self.is_trained = True
+        else:
+            logger.warning(
+                f"Not enough vectors to train IVF index "
+                f"(need {self.config.nlist}, have {len(embeddings)})"
+            )
+
+    def _update_id_mappings(self, doc_ids: List[str]) -> None:
+        """
+        Update internal ID mappings for new documents.
+
+        Issue #620.
+
+        Args:
+            doc_ids: List of document IDs to map
+        """
+        for doc_id in doc_ids:
+            internal_id = self.next_id
+            self.id_map[internal_id] = doc_id
+            self.reverse_id_map[doc_id] = internal_id
+            self.next_id += 1
+
     async def add_vectors(
         self,
         embeddings: np.ndarray,
@@ -267,6 +331,8 @@ class GPUVectorIndex:
     ) -> int:
         """
         Add vectors to the index.
+
+        Issue #620: Refactored to use helper methods.
 
         Args:
             embeddings: Numpy array of shape (n, dim)
@@ -283,41 +349,11 @@ class GPUVectorIndex:
             raise ValueError("Number of embeddings must match number of doc_ids")
 
         async with self._lock:
-            # Ensure correct dtype and shape
-            embeddings = np.ascontiguousarray(embeddings.astype(np.float32))
-
-            # Normalize for cosine similarity
-            if normalize:
-                norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-                norms[norms == 0] = 1  # Avoid division by zero
-                embeddings = embeddings / norms
-
-            # Train index if needed (IVF indices require training)
-            if not self.is_trained and hasattr(self.index, "train"):
-                if self.index.is_trained:
-                    self.is_trained = True
-                else:
-                    # Need training data
-                    if len(embeddings) >= self.config.nlist:
-                        await asyncio.to_thread(self.index.train, embeddings)
-                        self.is_trained = True
-                    else:
-                        logger.warning(
-                            f"Not enough vectors to train IVF index "
-                            f"(need {self.config.nlist}, have {len(embeddings)})"
-                        )
-
-            # Add to index
+            embeddings = self._prepare_embeddings(embeddings, normalize)
+            await self._train_index_if_needed(embeddings)
             await asyncio.to_thread(self.index.add, embeddings)
+            self._update_id_mappings(doc_ids)
 
-            # Update ID mappings
-            for doc_id in doc_ids:
-                internal_id = self.next_id
-                self.id_map[internal_id] = doc_id
-                self.reverse_id_map[doc_id] = internal_id
-                self.next_id += 1
-
-            # Auto-save if configured
             if self.config.auto_save and self.config.index_path:
                 await self._maybe_save()
 

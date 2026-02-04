@@ -124,7 +124,7 @@ class UserService(BaseService):
         effective_org_id: Optional[uuid.UUID],
         is_platform_admin: bool,
     ) -> User:
-        """Issue #665: Extracted from create_user to reduce function length."""
+        """Build User model instance with provided attributes. Issue #620."""
         return User(
             id=uuid.uuid4(),
             email=email_lower,
@@ -137,6 +137,27 @@ class UserService(BaseService):
             is_verified=False,
             mfa_enabled=False,
             preferences={},
+        )
+
+    async def _log_user_creation(
+        self,
+        user: User,
+        email: str,
+        username: str,
+        effective_org_id: Optional[uuid.UUID],
+        is_platform_admin: bool,
+    ) -> None:
+        """Log audit entry for user creation. Issue #620."""
+        await self._audit_log(
+            action=AuditAction.USER_CREATED,
+            resource_type=AuditResourceType.USER,
+            resource_id=user.id,
+            details={
+                "email": email,
+                "username": username,
+                "org_id": str(effective_org_id) if effective_org_id else None,
+                "is_platform_admin": is_platform_admin,
+            },
         )
 
     async def create_user(
@@ -188,18 +209,9 @@ class UserService(BaseService):
         if role_ids:
             await self._assign_roles(user.id, role_ids)
 
-        await self._audit_log(
-            action=AuditAction.USER_CREATED,
-            resource_type=AuditResourceType.USER,
-            resource_id=user.id,
-            details={
-                "email": email,
-                "username": username,
-                "org_id": str(effective_org_id) if effective_org_id else None,
-                "is_platform_admin": is_platform_admin,
-            },
+        await self._log_user_creation(
+            user, email, username, effective_org_id, is_platform_admin
         )
-
         logger.info("Created user: %s (id=%s)", username, user.id)
         return user
 
