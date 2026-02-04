@@ -207,6 +207,40 @@ class EntityOperationsMixin:
             logger.error("Failed to get entity: %s", e)
             return None
 
+    async def _append_observations_to_entity(
+        self: AutoBotMemoryGraphCore,
+        entity_key: str,
+        observations: List[str],
+    ) -> None:
+        """
+        Append observations to entity and update timestamp in Redis.
+
+        Uses asyncio.gather for parallel appends. Issue #620.
+        """
+        await asyncio.gather(
+            *[
+                self.redis_client.json().arrappend(entity_key, "$.observations", obs)
+                for obs in observations
+            ]
+        )
+        await self.redis_client.json().set(
+            entity_key, "$.updated_at", int(datetime.now().timestamp() * 1000)
+        )
+
+    async def _refresh_entity_embedding(
+        self: AutoBotMemoryGraphCore,
+        entity_id: str,
+        entity_key: str,
+    ) -> None:
+        """
+        Regenerate embedding for entity if knowledge base is available.
+
+        Issue #620.
+        """
+        if self.knowledge_base:
+            updated_entity = await self.redis_client.json().get(entity_key)
+            await self._generate_entity_embedding(entity_id, updated_entity)
+
     async def add_observations(
         self: AutoBotMemoryGraphCore,
         entity_name: str,
@@ -235,33 +269,13 @@ class EntityOperationsMixin:
             entity_id = entity["id"]
             entity_key = f"memory:entity:{entity_id}"
 
-            # Append all observations in parallel
-            await asyncio.gather(
-                *[
-                    self.redis_client.json().arrappend(
-                        entity_key, "$.observations", obs
-                    )
-                    for obs in observations
-                ]
-            )
+            await self._append_observations_to_entity(entity_key, observations)
+            await self._refresh_entity_embedding(entity_id, entity_key)
 
-            # Update timestamp
-            await self.redis_client.json().set(
-                entity_key, "$.updated_at", int(datetime.now().timestamp() * 1000)
-            )
-
-            # Update embedding
-            if self.knowledge_base:
-                updated_entity = await self.redis_client.json().get(entity_key)
-                await self._generate_entity_embedding(entity_id, updated_entity)
-
-            # Invalidate cache
             self.search_cache.clear()
-
             logger.info(
                 "Added %d observations to entity: %s", len(observations), entity_name
             )
-
             return await self.redis_client.json().get(entity_key)
 
         except Exception as e:

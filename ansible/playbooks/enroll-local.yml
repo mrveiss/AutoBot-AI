@@ -21,8 +21,39 @@
     slm_admin_url: "{{ lookup('env', 'SLM_ADMIN_URL') | default('http://172.16.168.19:8000', true) }}"
     # SLM server's public key - will be fetched dynamically
     slm_server_pubkey: "{{ lookup('env', 'SLM_PUBKEY') | default('', true) }}"
+    # Emergency admin user - fallback access when SSH keys fail
+    emergency_admin_user: autobot_admin
+    # Password hash for emergency admin (AutoBot!Admin2025)
+    # Generated with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('AutoBot!Admin2025'))"
+    emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
 
   tasks:
+    # ==========================================================
+    # Emergency Admin Setup (MUST come first for safety)
+    # ==========================================================
+    - name: Create emergency admin user (fallback access)
+      user:
+        name: "{{ emergency_admin_user }}"
+        comment: "Emergency Admin User (fallback access)"
+        shell: /bin/bash
+        create_home: yes
+        groups: sudo
+        append: yes
+        password: "{{ emergency_admin_password_hash }}"
+        state: present
+
+    - name: Configure passwordless sudo for emergency admin
+      copy:
+        dest: "/etc/sudoers.d/90-{{ emergency_admin_user }}"
+        content: |
+          # Emergency Admin - fallback access when SSH keys fail
+          # AutoBot Infrastructure - DO NOT REMOVE
+          {{ emergency_admin_user }} ALL=(ALL) NOPASSWD: ALL
+        owner: root
+        group: root
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+
     # ==========================================================
     # User Setup
     # ==========================================================
@@ -103,9 +134,14 @@
           - "========================================"
           - "Local Enrollment Complete"
           - "========================================"
-          - "User: {{ autobot_user }}"
+          - "Users configured:"
+          - "  - {{ autobot_user }} (SSH key auth, passwordless sudo)"
+          - "  - {{ emergency_admin_user }} (password auth, passwordless sudo)"
+          - ""
           - "SSH Key: {{ 'Deployed' if slm_server_pubkey | length > 0 else 'Not deployed (no key provided)' }}"
-          - "Sudo: Passwordless configured"
           - ""
           - "Test SSH from SLM server:"
           - "  ssh autobot@{{ ansible_default_ipv4.address | default('localhost') }} hostname"
+          - ""
+          - "Emergency access (if SSH keys fail):"
+          - "  ssh {{ emergency_admin_user }}@{{ ansible_default_ipv4.address | default('localhost') }}"

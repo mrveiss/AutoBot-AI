@@ -538,6 +538,27 @@ export const useFleetStore = defineStore('fleet', () => {
   // ============================================================
 
   /**
+   * Fetch all NPU nodes with their status from the backend.
+   * This is more efficient than fetching status individually.
+   */
+  async function fetchNpuNodes(): Promise<NPUNodeStatus[]> {
+    try {
+      const npuStatuses = await api.getNpuNodes()
+      // Update cache with all NPU statuses
+      npuCapabilities.value.clear()
+      for (const status of npuStatuses) {
+        npuCapabilities.value.set(status.node_id, status)
+      }
+      return npuStatuses
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : 'Failed to fetch NPU nodes'
+      return []
+    }
+  }
+
+  /**
    * Fetch NPU status for a specific node
    */
   async function fetchNpuStatus(nodeId: string): Promise<NPUNodeStatus | null> {
@@ -564,6 +585,32 @@ export const useFleetStore = defineStore('fleet', () => {
   }
 
   /**
+   * Trigger NPU capability detection for a node.
+   */
+  async function triggerNpuDetection(nodeId: string, force: boolean = false): Promise<boolean> {
+    try {
+      const result = await api.triggerNpuDetection(nodeId, force)
+      if (result.success && result.capabilities) {
+        // Update cache if capabilities were returned immediately
+        const existing = npuCapabilities.value.get(nodeId)
+        if (existing) {
+          npuCapabilities.value.set(nodeId, {
+            ...existing,
+            capabilities: result.capabilities,
+            detectionStatus: 'detected',
+          })
+        }
+      }
+      return result.success
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to trigger NPU detection for node ${nodeId}`
+      return false
+    }
+  }
+
+  /**
    * Get cached NPU status for a node
    */
   function getNpuStatus(nodeId: string): NPUNodeStatus | undefined {
@@ -571,7 +618,8 @@ export const useFleetStore = defineStore('fleet', () => {
   }
 
   /**
-   * Assign npu-worker role to a node and trigger capability detection
+   * Assign npu-worker role to a node and trigger capability detection.
+   * Uses dedicated NPU API endpoint which handles role assignment and detection.
    */
   async function assignNpuRole(nodeId: string): Promise<SLMNode> {
     const node = nodes.value.get(nodeId)
@@ -579,18 +627,37 @@ export const useFleetStore = defineStore('fleet', () => {
       throw new Error(`Node ${nodeId} not found`)
     }
 
-    // Add npu-worker role
-    const newRoles: NodeRole[] = [...node.roles, 'npu-worker']
-    const updatedNode = await updateNodeRoles(nodeId, newRoles)
+    try {
+      // Use dedicated NPU API endpoint for proper role assignment and detection
+      const result = await api.assignNpuRole(nodeId)
+      if (!result.success) {
+        throw new Error(result.message)
+      }
 
-    // Trigger capability detection
-    await fetchNpuStatus(nodeId)
+      // Update local node state with the new role
+      const updatedNode: SLMNode = {
+        ...node,
+        roles: [...node.roles, 'npu-worker'] as NodeRole[],
+      }
+      nodes.value.set(nodeId, updatedNode)
 
-    return updatedNode
+      // Fetch NPU status if detection was triggered
+      if (result.detection_triggered) {
+        await fetchNpuStatus(nodeId)
+      }
+
+      return updatedNode
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to assign NPU role to node ${nodeId}`
+      throw err
+    }
   }
 
   /**
-   * Remove npu-worker role from a node
+   * Remove npu-worker role from a node.
+   * Uses dedicated NPU API endpoint which cleans up NPU-specific data.
    */
   async function removeNpuRole(nodeId: string): Promise<SLMNode> {
     const node = nodes.value.get(nodeId)
@@ -598,14 +665,30 @@ export const useFleetStore = defineStore('fleet', () => {
       throw new Error(`Node ${nodeId} not found`)
     }
 
-    // Remove npu-worker role
-    const newRoles = node.roles.filter(r => r !== 'npu-worker')
-    const updatedNode = await updateNodeRoles(nodeId, newRoles)
+    try {
+      // Use dedicated NPU API endpoint for proper cleanup
+      const result = await api.removeNpuRole(nodeId)
+      if (!result.success) {
+        throw new Error(result.message)
+      }
 
-    // Clear cached NPU data
-    npuCapabilities.value.delete(nodeId)
+      // Update local node state to remove the role
+      const updatedNode: SLMNode = {
+        ...node,
+        roles: node.roles.filter(r => r !== 'npu-worker') as NodeRole[],
+      }
+      nodes.value.set(nodeId, updatedNode)
 
-    return updatedNode
+      // Clear cached NPU data
+      npuCapabilities.value.delete(nodeId)
+
+      return updatedNode
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to remove NPU role from node ${nodeId}`
+      throw err
+    }
   }
 
   /**
@@ -739,8 +822,10 @@ export const useFleetStore = defineStore('fleet', () => {
     applyNodeUpdates,
 
     // Actions - NPU Management
+    fetchNpuNodes,
     fetchNpuStatus,
     fetchAllNpuStatus,
+    triggerNpuDetection,
     getNpuStatus,
     assignNpuRole,
     removeNpuRole,

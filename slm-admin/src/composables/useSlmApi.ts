@@ -1158,8 +1158,47 @@ export function useSlmApi() {
   // NPU Management API (Issue #255 - NPU Fleet Integration)
   // =============================================================================
 
+  interface NPUNodesResponse {
+    nodes: NPUNodeStatus[]
+    total: number
+  }
+
+  interface NPURoleResponse {
+    success: boolean
+    message: string
+    node_id: string
+    detection_triggered?: boolean
+  }
+
+  interface NPUDetectionResponse {
+    success: boolean
+    message: string
+    node_id: string
+    capabilities: NPUNodeStatus['capabilities'] | null
+  }
+
+  async function getNpuNodes(): Promise<NPUNodeStatus[]> {
+    const response = await client.get<NPUNodesResponse>('/npu/nodes')
+    return response.data.nodes
+  }
+
   async function getNpuStatus(nodeId: string): Promise<NPUNodeStatus> {
-    const response = await client.get<NPUNodeStatus>(`/nodes/${nodeId}/npu/status`)
+    const response = await client.get<NPUNodeStatus>(`/npu/nodes/${nodeId}/status`)
+    return response.data
+  }
+
+  async function triggerNpuDetection(nodeId: string, force: boolean = false): Promise<NPUDetectionResponse> {
+    const response = await client.post<NPUDetectionResponse>(`/npu/nodes/${nodeId}/detect`, { force })
+    return response.data
+  }
+
+  async function assignNpuRole(nodeId: string): Promise<NPURoleResponse> {
+    const response = await client.post<NPURoleResponse>(`/npu/nodes/${nodeId}/assign-role`)
+    return response.data
+  }
+
+  async function removeNpuRole(nodeId: string): Promise<{ success: boolean; message: string }> {
+    const response = await client.delete<{ success: boolean; message: string }>(`/npu/nodes/${nodeId}/role`)
     return response.data
   }
 
@@ -1279,7 +1318,11 @@ export function useSlmApi() {
     getEligibleNodes,
     purgeRoles,
     // NPU Management (Issue #255)
+    getNpuNodes,
     getNpuStatus,
+    triggerNpuDetection,
+    assignNpuRole,
+    removeNpuRole,
     getNpuLoadBalancing,
     updateNpuLoadBalancing,
   }

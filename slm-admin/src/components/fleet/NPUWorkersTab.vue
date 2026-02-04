@@ -75,11 +75,12 @@ async function refreshAll(): Promise<void> {
 
   try {
     await fleetStore.fetchNodes()
-    await fleetStore.fetchAllNpuStatus()
+    // Use fetchNpuNodes for efficiency - single API call for all NPU status
+    await fleetStore.fetchNpuNodes()
     await fleetStore.fetchNpuLoadBalancing()
 
     if (fleetStore.npuLoadBalancingConfig) {
-      loadBalancingStrategy.value = fleetStore.npuLoadBalancingConfig.strategy
+      loadBalancingStrategy.value = fleetStore.npuLoadBalancingConfig.strategy as NPULoadBalancingStrategy
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to refresh NPU status'
@@ -121,7 +122,7 @@ onMounted(() => {
 // Watch for node list changes
 watch(() => fleetStore.nodeList, () => {
   // Refresh NPU status when node list changes
-  fleetStore.fetchAllNpuStatus()
+  fleetStore.fetchNpuNodes()
 }, { deep: true })
 </script>
 

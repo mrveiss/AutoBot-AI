@@ -26,7 +26,7 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404 - code review tools require subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -45,6 +45,7 @@ try:
     from src.code_intelligence.analytics_infrastructure import (
         SemanticAnalysisMixin as _SemanticAnalysisMixin,
     )
+
     SemanticAnalysisMixin = _SemanticAnalysisMixin
     SEMANTIC_ANALYSIS_AVAILABLE = True
 except ImportError:
@@ -229,7 +230,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Unsafe eval",
         category=ReviewCategory.SECURITY,
         severity=ReviewSeverity.CRITICAL,
-        pattern=r'\beval\s*\(',
+        pattern=r"\beval\s*\(",
         message="Use of eval() is a security risk. Avoid if possible.",
         suggestion="Use ast.literal_eval() for safe evaluation or refactor.",
     ),
@@ -250,7 +251,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Shell Injection Risk",
         category=ReviewCategory.SECURITY,
         severity=ReviewSeverity.CRITICAL,
-        pattern=r'subprocess\.\w+\([^)]*shell\s*=\s*True',
+        pattern=r"subprocess\.\w+\([^)]*shell\s*=\s*True",
         message="shell=True with subprocess can lead to injection attacks.",
         suggestion="Use shell=False and pass arguments as a list.",
     ),
@@ -260,7 +261,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="N+1 Query Pattern",
         category=ReviewCategory.PERFORMANCE,
         severity=ReviewSeverity.WARNING,
-        pattern=r'for\s+\w+\s+in\s+\w+:\s*\n\s+.*\.(get|filter|select|query)',
+        pattern=r"for\s+\w+\s+in\s+\w+:\s*\n\s+.*\.(get|filter|select|query)",
         message="Potential N+1 query pattern. Consider using bulk operations.",
         suggestion="Use prefetch_related, select_related, or batch fetching.",
     ),
@@ -278,7 +279,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Synchronous I/O in Async Function",
         category=ReviewCategory.PERFORMANCE,
         severity=ReviewSeverity.WARNING,
-        pattern=r'async\s+def\s+\w+[^}]+open\s*\([^)]+\)',
+        pattern=r"async\s+def\s+\w+[^}]+open\s*\([^)]+\)",
         message="Synchronous file I/O in async function blocks event loop.",
         suggestion="Use aiofiles for async file operations.",
     ),
@@ -288,7 +289,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Empty except block",
         category=ReviewCategory.BUG_RISK,
         severity=ReviewSeverity.WARNING,
-        pattern=r'except\s*:\s*\n\s*(pass|\.\.\.)',
+        pattern=r"except\s*:\s*\n\s*(pass|\.\.\.)",
         message="Empty except block silently swallows all exceptions.",
         suggestion="Log the exception or handle it explicitly.",
     ),
@@ -297,7 +298,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Mutable default argument",
         category=ReviewCategory.BUG_RISK,
         severity=ReviewSeverity.WARNING,
-        pattern=r'def\s+\w+\s*\([^)]*=\s*(\[\]|\{\}|set\(\))',
+        pattern=r"def\s+\w+\s*\([^)]*=\s*(\[\]|\{\}|set\(\))",
         message="Mutable default argument can cause unexpected behavior.",
         suggestion="Use None as default and initialize inside the function.",
     ),
@@ -306,7 +307,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Comparison to None",
         category=ReviewCategory.BUG_RISK,
         severity=ReviewSeverity.INFO,
-        pattern=r'\b\w+\s*[!=]=\s*None\b',
+        pattern=r"\b\w+\s*[!=]=\s*None\b",
         message="Use 'is None' or 'is not None' for None comparisons.",
         suggestion="Replace '== None' with 'is None'.",
     ),
@@ -315,7 +316,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Bare raise without exception",
         category=ReviewCategory.BUG_RISK,
         severity=ReviewSeverity.INFO,
-        pattern=r'^\s*raise\s*$',
+        pattern=r"^\s*raise\s*$",
         message="Bare 'raise' should only be used inside except blocks.",
         suggestion="Ensure 'raise' is only used inside except blocks.",
     ),
@@ -325,7 +326,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Magic Number",
         category=ReviewCategory.STYLE,
         severity=ReviewSeverity.SUGGESTION,
-        pattern=r'(?<![\w])(?:if|elif|while|for|return)\s+.*[^0-9_]\d{3,}[^0-9]',
+        pattern=r"(?<![\w])(?:if|elif|while|for|return)\s+.*[^0-9_]\d{3,}[^0-9]",
         message="Magic number detected. Consider using a named constant.",
         suggestion="Extract this value to a named constant for readability.",
     ),
@@ -382,7 +383,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Print statement",
         category=ReviewCategory.BEST_PRACTICE,
         severity=ReviewSeverity.SUGGESTION,
-        pattern=r'^[^#]*\bprint\s*\(',
+        pattern=r"^[^#]*\bprint\s*\(",
         message="Print statement found. Use logging for production code.",
         suggestion="Replace with logger.info() or logger.debug().",
     ),
@@ -391,7 +392,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="TODO comment",
         category=ReviewCategory.BEST_PRACTICE,
         severity=ReviewSeverity.INFO,
-        pattern=r'#\s*TODO',
+        pattern=r"#\s*TODO",
         message="TODO comment found. Consider creating an issue.",
         suggestion="Create a GitHub issue to track this work.",
     ),
@@ -400,7 +401,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Commented-out code",
         category=ReviewCategory.BEST_PRACTICE,
         severity=ReviewSeverity.SUGGESTION,
-        pattern=r'#\s*(def |class |import |from |if |for |while )',
+        pattern=r"#\s*(def |class |import |from |if |for |while )",
         message="Commented-out code detected. Remove if no longer needed.",
         suggestion="Delete dead code or move to version control history.",
     ),
@@ -409,7 +410,7 @@ BUILTIN_PATTERNS: dict[str, ReviewPattern] = {
         name="Star import",
         category=ReviewCategory.BEST_PRACTICE,
         severity=ReviewSeverity.WARNING,
-        pattern=r'from\s+\w+\s+import\s+\*',
+        pattern=r"from\s+\w+\s+import\s+\*",
         message="Star import pollutes namespace and hinders analysis.",
         suggestion="Import specific names instead of using *.",
     ),
@@ -476,7 +477,9 @@ class CodeReviewEngine(_BaseClass):
             use_semantic_analysis: Enable LLM-based semantic review (Issue #554)
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
-        self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+        self.use_semantic_analysis = (
+            use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
+        )
 
         if self.use_semantic_analysis:
             super().__init__()
@@ -504,7 +507,73 @@ class CodeReviewEngine(_BaseClass):
                 except re.error as e:
                     logger.warning("Invalid pattern %s: %s", pid, e)
 
-    def review_file(self, file_path: str, content: Optional[str] = None) -> list[ReviewComment]:
+    def _create_pattern_comment(
+        self,
+        pattern_id: str,
+        pattern_def: ReviewPattern,
+        file_path: str,
+        line_num: int,
+        lines: list[str],
+        content: str,
+        match: re.Match,
+    ) -> ReviewComment:
+        """
+        Create a ReviewComment from a pattern match.
+
+        Extracts code snippet and context lines around the match. Issue #620.
+        """
+        code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
+        ctx_before = lines[max(0, line_num - 1 - self.context_lines) : line_num - 1]
+        ctx_after = lines[line_num : min(len(lines), line_num + self.context_lines)]
+
+        return ReviewComment(
+            id=f"{pattern_id}-{line_num}",
+            file_path=str(file_path),
+            line_number=line_num,
+            severity=pattern_def.severity,
+            category=pattern_def.category,
+            message=pattern_def.message,
+            suggestion=pattern_def.suggestion,
+            code_snippet=code_snippet.strip(),
+            pattern_id=pattern_id,
+            context_before=ctx_before,
+            context_after=ctx_after,
+        )
+
+    def _check_pattern_matches(
+        self, path: Path, content: str, lines: list[str], file_path: str
+    ) -> list[ReviewComment]:
+        """
+        Check all compiled patterns against file content.
+
+        Returns list of comments for all pattern violations found. Issue #620.
+        """
+        comments = []
+        for pattern_id, pattern in self._compiled_patterns.items():
+            pattern_def = self.patterns[pattern_id]
+
+            if path.suffix not in pattern_def.file_extensions:
+                if not (path.suffix == "" and ".py" in pattern_def.file_extensions):
+                    continue
+
+            for match in pattern.finditer(content):
+                line_num = content[: match.start()].count("\n") + 1
+                comments.append(
+                    self._create_pattern_comment(
+                        pattern_id,
+                        pattern_def,
+                        file_path,
+                        line_num,
+                        lines,
+                        content,
+                        match,
+                    )
+                )
+        return comments
+
+    def review_file(
+        self, file_path: str, content: Optional[str] = None
+    ) -> list[ReviewComment]:
         """
         Review a single file for issues.
 
@@ -525,40 +594,8 @@ class CodeReviewEngine(_BaseClass):
                 return []
 
         lines = content.split("\n")
-        comments = []
 
-        # Check regex patterns
-        for pattern_id, pattern in self._compiled_patterns.items():
-            pattern_def = self.patterns[pattern_id]
-
-            # Check file extension
-            if path.suffix not in pattern_def.file_extensions:
-                if not (path.suffix == "" and ".py" in pattern_def.file_extensions):
-                    continue
-
-            for match in pattern.finditer(content):
-                line_num = content[:match.start()].count("\n") + 1
-                code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
-
-                # Get context
-                ctx_before = lines[max(0, line_num - 1 - self.context_lines):line_num - 1]
-                ctx_after = lines[line_num:min(len(lines), line_num + self.context_lines)]
-
-                comments.append(ReviewComment(
-                    id=f"{pattern_id}-{line_num}",
-                    file_path=str(file_path),
-                    line_number=line_num,
-                    severity=pattern_def.severity,
-                    category=pattern_def.category,
-                    message=pattern_def.message,
-                    suggestion=pattern_def.suggestion,
-                    code_snippet=code_snippet.strip(),
-                    pattern_id=pattern_id,
-                    context_before=ctx_before,
-                    context_after=ctx_after,
-                ))
-
-        # Programmatic checks
+        comments = self._check_pattern_matches(path, content, lines, file_path)
         comments.extend(self._check_function_length(file_path, lines))
         comments.extend(self._check_nesting_depth(file_path, lines))
         comments.extend(self._check_test_assertions(file_path, content, lines))
@@ -615,7 +652,10 @@ class CodeReviewEngine(_BaseClass):
 
             # Get full file content (Issue #380: use module-level constant)
             file_path = self.project_root / diff_file.path
-            if not file_path.exists() or file_path.suffix not in _SUPPORTED_CODE_SUFFIXES:
+            if (
+                not file_path.exists()
+                or file_path.suffix not in _SUPPORTED_CODE_SUFFIXES
+            ):
                 continue
 
             comments = self.review_file(str(file_path))
@@ -715,7 +755,10 @@ class CodeReviewEngine(_BaseClass):
     # =========================================================================
 
     def _finalize_current_file(
-        self, current_file: Optional[DiffFile], current_hunk: Optional[DiffHunk], files: list
+        self,
+        current_file: Optional[DiffFile],
+        current_hunk: Optional[DiffHunk],
+        files: list,
     ) -> None:
         """Finalize current file and add to files list (Issue #335 - extracted helper)."""
         if not current_file:
@@ -758,10 +801,12 @@ class CodeReviewEngine(_BaseClass):
             if current_file:
                 current_file.deletions += 1
         elif line.startswith(" ") or line == "":
-            current_hunk.lines.append({
-                "type": "context",
-                "content": line[1:] if line.startswith(" ") else "",
-            })
+            current_hunk.lines.append(
+                {
+                    "type": "context",
+                    "content": line[1:] if line.startswith(" ") else "",
+                }
+            )
 
     def _handle_file_metadata(
         self, line: str, current_file: Optional[DiffFile]
@@ -869,17 +914,19 @@ class CodeReviewEngine(_BaseClass):
             func_length = func_end - func_start
 
             if func_length > self.max_function_lines:
-                comments.append(ReviewComment(
-                    id=f"STYLE002-{func_start}",
-                    file_path=str(file_path),
-                    line_number=func_start,
-                    severity=ReviewSeverity.WARNING,
-                    category=ReviewCategory.MAINTAINABILITY,
-                    message=f"Function '{func_name}' is {func_length} lines. "
-                            f"Consider refactoring (max: {self.max_function_lines}).",
-                    suggestion="Break into smaller, focused functions.",
-                    pattern_id="STYLE002",
-                ))
+                comments.append(
+                    ReviewComment(
+                        id=f"STYLE002-{func_start}",
+                        file_path=str(file_path),
+                        line_number=func_start,
+                        severity=ReviewSeverity.WARNING,
+                        category=ReviewCategory.MAINTAINABILITY,
+                        message=f"Function '{func_name}' is {func_length} lines. "
+                        f"Consider refactoring (max: {self.max_function_lines}).",
+                        suggestion="Break into smaller, focused functions.",
+                        pattern_id="STYLE002",
+                    )
+                )
             i += 1
 
         return comments
@@ -897,18 +944,20 @@ class CodeReviewEngine(_BaseClass):
                 depth = indent // 4  # Assuming 4-space indent
 
                 if depth > self.max_nesting_depth and i not in reported_lines:
-                    comments.append(ReviewComment(
-                        id=f"STYLE003-{i}",
-                        file_path=str(file_path),
-                        line_number=i,
-                        severity=ReviewSeverity.WARNING,
-                        category=ReviewCategory.MAINTAINABILITY,
-                        message=f"Deep nesting ({depth} levels). "
-                                f"Consider refactoring (max: {self.max_nesting_depth}).",
-                        suggestion="Use early returns or extract to helper functions.",
-                        code_snippet=line.strip(),
-                        pattern_id="STYLE003",
-                    ))
+                    comments.append(
+                        ReviewComment(
+                            id=f"STYLE003-{i}",
+                            file_path=str(file_path),
+                            line_number=i,
+                            severity=ReviewSeverity.WARNING,
+                            category=ReviewCategory.MAINTAINABILITY,
+                            message=f"Deep nesting ({depth} levels). "
+                            f"Consider refactoring (max: {self.max_nesting_depth}).",
+                            suggestion="Use early returns or extract to helper functions.",
+                            code_snippet=line.strip(),
+                            pattern_id="STYLE003",
+                        )
+                    )
                     reported_lines.add(i)
 
         return comments
@@ -935,23 +984,27 @@ class CodeReviewEngine(_BaseClass):
                 has_assertion = False
                 for j in range(i + 1, len(lines)):
                     test_line = lines[j]
-                    if test_line.strip() and not test_line.startswith(" " * (indent + 1)):
+                    if test_line.strip() and not test_line.startswith(
+                        " " * (indent + 1)
+                    ):
                         break
                     if "assert" in test_line.lower() or "pytest.raises" in test_line:
                         has_assertion = True
                         break
 
                 if not has_assertion:
-                    comments.append(ReviewComment(
-                        id=f"TEST001-{test_start + 1}",
-                        file_path=str(file_path),
-                        line_number=test_start + 1,
-                        severity=ReviewSeverity.WARNING,
-                        category=ReviewCategory.TESTING,
-                        message=f"Test '{test_name}' may lack assertions.",
-                        suggestion="Add assert statements to verify expected behavior.",
-                        pattern_id="TEST001",
-                    ))
+                    comments.append(
+                        ReviewComment(
+                            id=f"TEST001-{test_start + 1}",
+                            file_path=str(file_path),
+                            line_number=test_start + 1,
+                            severity=ReviewSeverity.WARNING,
+                            category=ReviewCategory.TESTING,
+                            message=f"Test '{test_name}' may lack assertions.",
+                            suggestion="Add assert statements to verify expected behavior.",
+                            pattern_id="TEST001",
+                        )
+                    )
 
         return comments
 

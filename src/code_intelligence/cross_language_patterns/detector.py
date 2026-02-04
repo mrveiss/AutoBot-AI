@@ -563,15 +563,53 @@ class CrossLanguagePatternDetector:
             recommendation=recommendation,
         )
 
+    def _group_validations_by_type(
+        self, validations: List[Dict]
+    ) -> Dict[str, List[Dict]]:
+        """
+        Group validation patterns by their validation type.
+
+        Issue #620.
+        """
+        by_type: Dict[str, List[Dict]] = {}
+        for v in validations:
+            vtype = v.get("validation_type", "custom")
+            if vtype:
+                by_type.setdefault(vtype, []).append(v)
+        return by_type
+
+    def _create_validation_duplication(
+        self, vtype: str, py_v: Dict, ts_v: Dict
+    ) -> ValidationDuplication:
+        """
+        Create a ValidationDuplication object for a matched pair.
+
+        Issue #620.
+        """
+        return ValidationDuplication(
+            duplication_id=f"val_{vtype}_{uuid.uuid4().hex[:8]}",
+            validation_type=vtype,
+            python_location=py_v.get("location"),
+            typescript_location=ts_v.get("location"),
+            python_code=py_v.get("code", "")[:200],
+            typescript_code=ts_v.get("code", "")[:200],
+            similarity_score=0.8,  # Assume high similarity for same type
+            severity=PatternSeverity.MEDIUM,
+            recommendation=(
+                f"Consider consolidating '{vtype}' validation logic "
+                "into a shared schema or specification"
+            ),
+        )
+
     async def _find_validation_duplications(
         self,
         python_patterns: List[Dict],
         typescript_patterns: List[Dict],
     ) -> List[ValidationDuplication]:
-        """Find duplicated validation logic across languages."""
+        """Find duplicated validation logic across languages. Issue #620."""
         duplications = []
 
-        # Get all validation patterns
+        # Filter validation patterns
         py_validations = [
             p for p in python_patterns if p.get("type") == PatternType.VALIDATION_RULE
         ]
@@ -582,44 +620,17 @@ class CrossLanguagePatternDetector:
         ]
 
         # Group by validation type
-        py_by_type: Dict[str, List[Dict]] = {}
-        for v in py_validations:
-            vtype = v.get("validation_type", "custom")
-            if vtype:
-                py_by_type.setdefault(vtype, []).append(v)
+        py_by_type = self._group_validations_by_type(py_validations)
+        ts_by_type = self._group_validations_by_type(ts_validations)
 
-        ts_by_type: Dict[str, List[Dict]] = {}
-        for v in ts_validations:
-            vtype = v.get("validation_type", "custom")
-            if vtype:
-                ts_by_type.setdefault(vtype, []).append(v)
-
-        # Find duplications
+        # Find duplications in common types
         common_types = set(py_by_type.keys()) & set(ts_by_type.keys())
-
         for vtype in common_types:
-            py_validators = py_by_type[vtype]
-            ts_validators = ts_by_type[vtype]
-
-            # Issue #616: O(n²) pairwise comparison is BOUNDED to max 9 pairs per type
-            # (3 py × 3 ts) to prevent combinatorial explosion while still finding matches
-            for py_v in py_validators[:3]:
-                for ts_v in ts_validators[:3]:
+            # Issue #616: O(n^2) bounded to max 9 pairs (3 py x 3 ts) per type
+            for py_v in py_by_type[vtype][:3]:
+                for ts_v in ts_by_type[vtype][:3]:
                     duplications.append(
-                        ValidationDuplication(
-                            duplication_id=f"val_{vtype}_{uuid.uuid4().hex[:8]}",
-                            validation_type=vtype,
-                            python_location=py_v.get("location"),
-                            typescript_location=ts_v.get("location"),
-                            python_code=py_v.get("code", "")[:200],
-                            typescript_code=ts_v.get("code", "")[:200],
-                            similarity_score=0.8,  # Assume high similarity for same type
-                            severity=PatternSeverity.MEDIUM,
-                            recommendation=(
-                                f"Consider consolidating '{vtype}' validation logic "
-                                "into a shared schema or specification"
-                            ),
-                        )
+                        self._create_validation_duplication(vtype, py_v, ts_v)
                     )
 
         return duplications

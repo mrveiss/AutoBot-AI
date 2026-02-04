@@ -846,6 +846,46 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 "message": f"Error reading integration summary: {e}",
             }
 
+    def _build_tool_searchable_text(self, tool: Dict[str, Any]) -> str:
+        """
+        Build searchable text from tool data for man page search.
+
+        Combines tool name, purpose, usage, options, and examples into
+        a single searchable string. Issue #620.
+        """
+        usage_basic = tool.get("usage", {}).get("basic", "")
+        # Build searchable text using list + join (O(n)) instead of += (O(n²))
+        text_parts = [f"{tool.get('name', '')} {tool.get('purpose', '')} {usage_basic}"]
+        # Add options text
+        text_parts.extend(option.lower() for option in tool.get("options", []))
+        # Add examples
+        text_parts.extend(
+            f"{example.get('description', '')} {example.get('command', '')}".lower()
+            for example in tool.get("common_examples", [])
+        )
+        return " ".join(text_parts)
+
+    def _create_search_result(
+        self,
+        tool: Dict[str, Any],
+        knowledge_data: Dict[str, Any],
+        yaml_file: Path,
+        relevance_score: int,
+    ) -> Dict[str, Any]:
+        """
+        Create a search result dict from tool and metadata.
+
+        Returns formatted result with command, purpose, source, and score. Issue #620.
+        """
+        return {
+            "command": tool.get("name"),
+            "purpose": tool.get("purpose"),
+            "source": "man_page",
+            "machine_id": knowledge_data.get("metadata", {}).get("machine_id"),
+            "file_path": str(yaml_file),
+            "relevance_score": relevance_score,
+        }
+
     async def search_man_page_knowledge(self, query: str) -> List[Dict[str, Any]]:
         """Search through integrated man page knowledge"""
         machine_dir = self._get_machine_knowledge_dir()
@@ -856,6 +896,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return []
 
         results = []
+        query_lower = query.lower()
 
         # Issue #358 - use lambda to avoid calling glob() in main thread
         yaml_files = await asyncio.to_thread(lambda: list(man_pages_dir.glob("*.yaml")))
@@ -865,36 +906,14 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                     content = await f.read()
                     knowledge_data = yaml.safe_load(content)
 
-                # Search in tool data
                 for tool in knowledge_data.get("tools", []):
-                    usage_basic = tool.get("usage", {}).get("basic", "")
-                    # Build searchable text using list + join (O(n)) instead of += (O(n²))
-                    text_parts = [
-                        f"{tool.get('name', '')} {tool.get('purpose', '')} {usage_basic}"
-                    ]
-                    # Add options text
-                    text_parts.extend(
-                        option.lower() for option in tool.get("options", [])
-                    )
-                    # Add examples
-                    text_parts.extend(
-                        f"{example.get('description', '')} {example.get('command', '')}".lower()
-                        for example in tool.get("common_examples", [])
-                    )
-                    searchable_text = " ".join(text_parts)
-
-                    if query.lower() in searchable_text:
+                    searchable_text = self._build_tool_searchable_text(tool)
+                    if query_lower in searchable_text:
+                        score = searchable_text.count(query_lower)
                         results.append(
-                            {
-                                "command": tool.get("name"),
-                                "purpose": tool.get("purpose"),
-                                "source": "man_page",
-                                "machine_id": (
-                                    knowledge_data.get("metadata", {}).get("machine_id")
-                                ),
-                                "file_path": str(yaml_file),
-                                "relevance_score": searchable_text.count(query.lower()),
-                            }
+                            self._create_search_result(
+                                tool, knowledge_data, yaml_file, score
+                            )
                         )
 
             except Exception as e:
@@ -902,7 +921,5 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                     f"Error searching man page knowledge file {yaml_file}: {e}"
                 )
 
-        # Sort by relevance score (descending)
         results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-
         return results
