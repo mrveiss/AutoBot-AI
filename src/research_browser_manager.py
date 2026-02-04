@@ -143,51 +143,62 @@ class ResearchBrowserSession:
         self.research_data = {}
         self.mhtml_files = []
 
+    async def _connect_or_launch_browser(
+        self, headless: bool, browser_args: list
+    ) -> None:
+        """
+        Connect to existing browser via CDP or launch a new one.
+
+        Tries CDP connection first, falls back to launching new browser. Issue #620.
+        """
+        try:
+            self.browser = await self.playwright.chromium.connect_over_cdp(
+                config.get_service_url("chrome", "/devtools")
+                or ServiceURLs.CHROME_DEBUGGER_LOCAL
+            )
+            logger.info(
+                "Connected to existing browser via CDP for session %s",
+                self.session_id,
+            )
+        except Exception:
+            self.browser = await self.playwright.chromium.launch(
+                headless=headless,
+                args=browser_args,
+            )
+            logger.info("Launched new browser for session %s", self.session_id)
+
+    async def _create_browser_context(self, viewport: dict) -> None:
+        """
+        Create browser context and page with specified viewport.
+
+        Sets up context with viewport and user agent, creates initial page. Issue #620.
+        """
+        self.context = await self.browser.new_context(
+            viewport=viewport,
+            user_agent=SecurityConstants.DEFAULT_USER_AGENT,
+        )
+        self.page = await self.context.new_page()
+        self.status = "active"
+
     async def initialize(self, headless: bool = False):
-        """Initialize the browser session"""
+        """Initialize the browser session."""
         try:
             self.playwright = await async_playwright().start()
 
-            # Get optimal configuration for current display
-            config = get_playwright_config()
-            viewport = config["viewport"]
-            browser_args = config["browser_args"]
+            pw_config = get_playwright_config()
+            viewport = pw_config["viewport"]
+            browser_args = pw_config["browser_args"]
 
             logger.info(
-                f"Using dynamic resolution: {viewport['width']}x{viewport['height']} "
-                f"(detected: {config['detected_resolution']['width']}x{config['detected_resolution']['height']})"
+                "Using dynamic resolution: %dx%d (detected: %dx%d)",
+                viewport["width"],
+                viewport["height"],
+                pw_config["detected_resolution"]["width"],
+                pw_config["detected_resolution"]["height"],
             )
 
-            # Use existing browser if available (Docker container)
-            # Note: The Playwright container runs an Express API server on port 3000,
-            # not a CDP endpoint. We'll use local browser instead.
-            try:
-                # Try to connect to CDP if available (for future use)
-                self.browser = await self.playwright.chromium.connect_over_cdp(
-                    config.get_service_url("chrome", "/devtools")
-                    or ServiceURLs.CHROME_DEBUGGER_LOCAL
-                )
-                logger.info(
-                    f"Connected to existing browser via CDP for session "
-                    f"{self.session_id}"
-                )
-            except Exception:
-                # Fall back to launching new browser with dynamic configuration
-                self.browser = await self.playwright.chromium.launch(
-                    headless=headless,
-                    args=browser_args,
-                )
-                logger.info("Launched new browser for session %s", self.session_id)
-
-            self.context = await self.browser.new_context(
-                viewport=viewport,
-                user_agent=SecurityConstants.DEFAULT_USER_AGENT,
-            )
-
-            self.page = await self.context.new_page()
-            self.status = "active"
-
-            # Set up event listeners for interaction detection
+            await self._connect_or_launch_browser(headless, browser_args)
+            await self._create_browser_context(viewport)
             await self._setup_interaction_detection()
 
             logger.info("Browser session %s initialized successfully", self.session_id)

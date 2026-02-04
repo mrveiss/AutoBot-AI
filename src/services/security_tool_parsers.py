@@ -12,7 +12,7 @@ Issue: #260
 
 import logging
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 - parsing trusted nmap output
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -170,9 +170,7 @@ class NmapParser(BaseToolParser):
 
     # Patterns for text output parsing
     HOST_PATTERN = re.compile(r"Nmap scan report for (?:(\S+) \()?(\d+\.\d+\.\d+\.\d+)")
-    PORT_PATTERN = re.compile(
-        r"(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)(?:\s+(.+))?"
-    )
+    PORT_PATTERN = re.compile(r"(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)(?:\s+(.+))?")
     OS_PATTERN = re.compile(r"OS details?: (.+)")
     MAC_PATTERN = re.compile(r"MAC Address: ([0-9A-F:]+)(?: \((.+)\))?", re.IGNORECASE)
 
@@ -185,7 +183,8 @@ class NmapParser(BaseToolParser):
         output_lower = output.lower()
         return (
             "nmap" in output_lower
-            or "<?xml" in output and "nmaprun" in output
+            or "<?xml" in output
+            and "nmaprun" in output
             or "Nmap scan report" in output
             or output.startswith("Host:")
         )
@@ -207,7 +206,7 @@ class NmapParser(BaseToolParser):
         result = self._create_output(scan_type="xml")
 
         try:
-            root = ET.fromstring(xml_output)
+            root = ET.fromstring(xml_output)  # nosec B314 - parsing trusted nmap output
 
             # Get scan info
             if root.get("args"):
@@ -230,11 +229,13 @@ class NmapParser(BaseToolParser):
 
             hosts_elem = root.find(".//runstats/hosts")
             if hosts_elem is not None:
-                result.scan_stats.update({
-                    "hosts_up": int(hosts_elem.get("up", 0)),
-                    "hosts_down": int(hosts_elem.get("down", 0)),
-                    "hosts_total": int(hosts_elem.get("total", 0)),
-                })
+                result.scan_stats.update(
+                    {
+                        "hosts_up": int(hosts_elem.get("up", 0)),
+                        "hosts_down": int(hosts_elem.get("down", 0)),
+                        "hosts_total": int(hosts_elem.get("total", 0)),
+                    }
+                )
 
         except ET.ParseError as e:
             result.errors.append(f"XML parse error: {e}")
@@ -293,7 +294,9 @@ class NmapParser(BaseToolParser):
             return None
 
         state_elem = port_elem.find("state")
-        state = state_elem.get("state", "unknown") if state_elem is not None else "unknown"
+        state = (
+            state_elem.get("state", "unknown") if state_elem is not None else "unknown"
+        )
 
         service_elem = port_elem.find("service")
         service = None
@@ -310,10 +313,12 @@ class NmapParser(BaseToolParser):
         # Parse scripts
         scripts = []
         for script_elem in port_elem.findall("script"):
-            scripts.append({
-                "id": script_elem.get("id"),
-                "output": script_elem.get("output"),
-            })
+            scripts.append(
+                {
+                    "id": script_elem.get("id"),
+                    "output": script_elem.get("output"),
+                }
+            )
 
         return {
             "port": int(port_num),
@@ -357,54 +362,77 @@ class NmapParser(BaseToolParser):
 
         return result
 
+    def _parse_text_host_line(self, line: str) -> Optional[ParsedHost]:
+        """
+        Parse a host line from nmap text output.
+
+        Returns a new ParsedHost if line matches host pattern, None otherwise. Issue #620.
+        """
+        host_match = self.HOST_PATTERN.search(line)
+        if host_match:
+            hostname = host_match.group(1)
+            ip = host_match.group(2)
+            return ParsedHost(ip=ip, hostname=hostname, status="up")
+        return None
+
+    def _parse_text_port_line(self, line: str, host: ParsedHost) -> bool:
+        """
+        Parse a port line and add to host if matched.
+
+        Returns True if line was a port line, False otherwise. Issue #620.
+        """
+        port_match = self.PORT_PATTERN.match(line)
+        if port_match:
+            port_data = {
+                "port": int(port_match.group(1)),
+                "protocol": port_match.group(2),
+                "state": port_match.group(3),
+                "service": port_match.group(4),
+                "version": port_match.group(5),
+            }
+            host.ports.append(port_data)
+            return True
+        return False
+
+    def _parse_text_extra_info(self, line: str, host: ParsedHost) -> bool:
+        """
+        Parse OS and MAC address info from nmap text output.
+
+        Updates host with OS guess or MAC address if matched. Issue #620.
+        """
+        os_match = self.OS_PATTERN.search(line)
+        if os_match:
+            host.os_guess = os_match.group(1)
+            return True
+
+        mac_match = self.MAC_PATTERN.search(line)
+        if mac_match:
+            host.mac_address = mac_match.group(1)
+            host.vendor = mac_match.group(2)
+            return True
+
+        return False
+
     def _parse_text(self, output: str) -> ParsedToolOutput:
         """Parse nmap normal text output."""
         result = self._create_output(scan_type="text")
-
         current_host: Optional[ParsedHost] = None
-        lines = output.split("\n")
 
-        for line in lines:
+        for line in output.split("\n"):
             line = line.strip()
 
             # Check for host line
-            host_match = self.HOST_PATTERN.search(line)
-            if host_match:
-                # Save previous host
+            new_host = self._parse_text_host_line(line)
+            if new_host:
                 if current_host:
                     result.hosts.append(current_host)
-
-                hostname = host_match.group(1)
-                ip = host_match.group(2)
-                current_host = ParsedHost(ip=ip, hostname=hostname, status="up")
+                current_host = new_host
                 continue
 
             if current_host:
-                # Check for port line
-                port_match = self.PORT_PATTERN.match(line)
-                if port_match:
-                    port_data = {
-                        "port": int(port_match.group(1)),
-                        "protocol": port_match.group(2),
-                        "state": port_match.group(3),
-                        "service": port_match.group(4),
-                        "version": port_match.group(5),
-                    }
-                    current_host.ports.append(port_data)
+                if self._parse_text_port_line(line, current_host):
                     continue
-
-                # Check for OS
-                os_match = self.OS_PATTERN.search(line)
-                if os_match:
-                    current_host.os_guess = os_match.group(1)
-                    continue
-
-                # Check for MAC
-                mac_match = self.MAC_PATTERN.search(line)
-                if mac_match:
-                    current_host.mac_address = mac_match.group(1)
-                    current_host.vendor = mac_match.group(2)
-                    continue
+                self._parse_text_extra_info(line, current_host)
 
         # Don't forget the last host
         if current_host:
@@ -451,11 +479,13 @@ class MasscanParser(BaseToolParser):
                 if ip not in hosts_map:
                     hosts_map[ip] = ParsedHost(ip=ip, status="up")
 
-                hosts_map[ip].ports.append({
-                    "port": port,
-                    "protocol": protocol,
-                    "state": "open",
-                })
+                hosts_map[ip].ports.append(
+                    {
+                        "port": port,
+                        "protocol": protocol,
+                        "state": "open",
+                    }
+                )
 
         result.hosts = list(hosts_map.values())
         return result
@@ -468,14 +498,14 @@ class NucleiParser(BaseToolParser):
 
     # Pattern for nuclei output
     # [severity] [template-id] [protocol] url [matcher]
-    LINE_PATTERN = re.compile(
-        r"\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(\S+)"
-    )
+    LINE_PATTERN = re.compile(r"\[(\w+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(\S+)")
 
     def can_parse(self, output: str) -> bool:
         """Check if output is from nuclei."""
         # Issue #380: use pre-compiled pattern
-        return "nuclei" in output.lower() or _NUCLEI_FORMAT_RE.search(output) is not None
+        return (
+            "nuclei" in output.lower() or _NUCLEI_FORMAT_RE.search(output) is not None
+        )
 
     def parse(self, output: str) -> ParsedToolOutput:
         """Parse nuclei output."""

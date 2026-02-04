@@ -115,12 +115,11 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-    def _init_npu_worker_metrics(self) -> None:
+    def _init_npu_worker_status_metrics(self) -> None:
         """
-        Initialize per-worker NPU metrics.
+        Initialize NPU worker status and health gauge metrics.
 
-        Issue #665: Extracted from _init_metrics to reduce function length.
-        Issue #68: Per-worker NPU metrics for distributed NPU processing.
+        Creates gauges for worker status, load, uptime, and heartbeat. Issue #620.
         """
         self.npu_worker_status = Gauge(
             "autobot_npu_worker_status",
@@ -136,6 +135,26 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
+        self.npu_worker_uptime = Gauge(
+            "autobot_npu_worker_uptime_seconds",
+            "NPU worker uptime in seconds",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+        self.npu_worker_heartbeat_timestamp = Gauge(
+            "autobot_npu_worker_last_heartbeat_timestamp",
+            "Unix timestamp of last heartbeat from NPU worker",
+            ["worker_id"],
+            registry=self.registry,
+        )
+
+    def _init_npu_worker_task_metrics(self) -> None:
+        """
+        Initialize NPU worker task counters and response time histogram.
+
+        Creates counters for completed/failed tasks and response time histogram. Issue #620.
+        """
         self.npu_worker_tasks_completed = Counter(
             "autobot_npu_worker_tasks_completed_total",
             "Total tasks completed by NPU worker",
@@ -150,13 +169,6 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        self.npu_worker_uptime = Gauge(
-            "autobot_npu_worker_uptime_seconds",
-            "NPU worker uptime in seconds",
-            ["worker_id"],
-            registry=self.registry,
-        )
-
         self.npu_worker_response_time = Histogram(
             "autobot_npu_worker_response_time_seconds",
             "NPU worker response time in seconds",
@@ -165,12 +177,15 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
             registry=self.registry,
         )
 
-        self.npu_worker_heartbeat_timestamp = Gauge(
-            "autobot_npu_worker_last_heartbeat_timestamp",
-            "Unix timestamp of last heartbeat from NPU worker",
-            ["worker_id"],
-            registry=self.registry,
-        )
+    def _init_npu_worker_metrics(self) -> None:
+        """
+        Initialize per-worker NPU metrics.
+
+        Issue #665: Extracted from _init_metrics to reduce function length.
+        Issue #68: Per-worker NPU metrics for distributed NPU processing.
+        """
+        self._init_npu_worker_status_metrics()
+        self._init_npu_worker_task_metrics()
 
     def _init_performance_score_metrics(self) -> None:
         """
@@ -360,9 +375,7 @@ class PerformanceMetricsRecorder(BaseMetricsRecorder):
         """Set bottleneck detection status for a category."""
         self.bottleneck_detected.labels(category=category).set(1 if detected else 0)
 
-    def record_optimization_recommendation(
-        self, category: str, priority: str
-    ) -> None:
+    def record_optimization_recommendation(self, category: str, priority: str) -> None:
         """Record an optimization recommendation."""
         self.optimization_recommendations.labels(
             category=category, priority=priority

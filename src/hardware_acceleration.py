@@ -434,6 +434,58 @@ class HardwareAccelerationManager:
         # Final fallback
         return AccelerationType.CPU
 
+    def _apply_npu_config(self, config: Dict[str, Any]) -> None:
+        """
+        Apply NPU-specific Ollama configuration.
+
+        Args:
+            config: Configuration dict to update in-place. Issue #620.
+        """
+        config["ollama_options"].update(
+            {
+                "numa": False,  # NPU doesn't use NUMA
+                "num_thread": 1,  # NPU uses specialized threads
+            }
+        )
+        config["environment_vars"].update(
+            {"OLLAMA_DEVICE": "npu", "OPENVINO_DEVICE": "NPU"}
+        )
+
+    def _apply_gpu_config(self, config: Dict[str, Any]) -> None:
+        """
+        Apply GPU-specific Ollama configuration.
+
+        Args:
+            config: Configuration dict to update in-place. Issue #620.
+        """
+        config["ollama_options"].update(
+            {
+                "numa": False,
+                "num_gpu": 1,  # Use one GPU
+            }
+        )
+        config["environment_vars"].update(
+            {"OLLAMA_DEVICE": "gpu", "CUDA_VISIBLE_DEVICES": "0"}
+        )
+
+    def _apply_cpu_config(self, config: Dict[str, Any]) -> None:
+        """
+        Apply CPU-specific Ollama configuration optimized for efficiency.
+
+        Args:
+            config: Configuration dict to update in-place. Issue #620.
+        """
+        optimal_threads = min(self.cpu_cores, 4)  # Don't use all cores
+        config["ollama_options"].update(
+            {
+                "numa": True,
+                "num_thread": optimal_threads,
+            }
+        )
+        config["environment_vars"].update(
+            {"OLLAMA_DEVICE": "cpu", "OMP_NUM_THREADS": str(optimal_threads)}
+        )
+
     def get_ollama_device_config(self, agent_type: str) -> Dict[str, Any]:
         """
         Get Ollama-specific device configuration for an agent.
@@ -442,7 +494,7 @@ class HardwareAccelerationManager:
             agent_type: Type of agent
 
         Returns:
-            Dict containing Ollama device configuration
+            Dict containing Ollama device configuration. Issue #620.
         """
         optimal_device = self.get_optimal_device_for_agent(agent_type)
 
@@ -453,98 +505,90 @@ class HardwareAccelerationManager:
         }
 
         if optimal_device == AccelerationType.NPU:
-            # NPU configuration
-            config["ollama_options"].update(
-                {
-                    "numa": False,  # NPU doesn't use NUMA
-                    "num_thread": 1,  # NPU uses specialized threads
-                }
-            )
-            config["environment_vars"].update(
-                {"OLLAMA_DEVICE": "npu", "OPENVINO_DEVICE": "NPU"}
-            )
-
+            self._apply_npu_config(config)
         elif optimal_device == AccelerationType.GPU:
-            # GPU configuration
-            config["ollama_options"].update(
-                {
-                    "numa": False,
-                    "num_gpu": 1,  # Use one GPU
-                }
-            )
-            config["environment_vars"].update(
-                {"OLLAMA_DEVICE": "gpu", "CUDA_VISIBLE_DEVICES": "0"}
-            )
-
+            self._apply_gpu_config(config)
         else:  # CPU
-            # CPU configuration - optimized for efficiency
-            optimal_threads = min(self.cpu_cores, 4)  # Don't use all cores
-            config["ollama_options"].update(
-                {
-                    "numa": True,
-                    "num_thread": optimal_threads,
-                }
-            )
-            config["environment_vars"].update(
-                {"OLLAMA_DEVICE": "cpu", "OMP_NUM_THREADS": str(optimal_threads)}
-            )
+            self._apply_cpu_config(config)
 
         return config
 
-    def get_hardware_recommendations(self) -> Dict[str, Any]:
-        """Get hardware optimization recommendations."""
-        recommendations = {
-            "current_setup": {},
-            "optimizations": [],
-            "agent_assignments": self.current_config["device_assignments"],
-            "performance_tips": [],
-        }
+    def _build_current_setup_summary(self) -> Dict[str, Any]:
+        """
+        Build current hardware setup summary.
 
-        # Current setup summary
-        recommendations["current_setup"] = {
+        Returns:
+            Dict with current hardware configuration. Issue #620.
+        """
+        return {
             "npu_available": self.npu_available,
             "gpu_available": self.gpu_available,
             "cpu_cores": self.cpu_cores,
             "priority_order": [d.value for d in self.current_config["priority_order"]],
         }
 
-        # Generate optimizations
+    def _generate_hardware_optimizations(self) -> list:
+        """
+        Generate hardware optimization recommendations based on current setup.
+
+        Returns:
+            List of optimization suggestions. Issue #620.
+        """
+        optimizations = []
         if not self.npu_available:
-            recommendations["optimizations"].append(
+            optimizations.append(
                 "Consider Intel NPU for efficient small model execution (1B models)"
             )
-
         if not self.gpu_available:
-            recommendations["optimizations"].append(
+            optimizations.append(
                 "Consider GPU for faster large model execution (3B+ models)"
             )
-
         if self.cpu_cores < 8:
-            recommendations["optimizations"].append(
+            optimizations.append(
                 "Consider upgrading to 8+ CPU cores for better multi-agent performance"
             )
+        return optimizations
 
-        # Performance tips
+    def _generate_performance_tips(self) -> list:
+        """
+        Generate performance tips based on available hardware.
+
+        Returns:
+            List of performance tips. Issue #620.
+        """
+        tips = []
         if self.npu_available:
-            recommendations["performance_tips"].append(
+            tips.append(
                 "NPU excels at 1B models - use for Chat, Knowledge Retrieval, "
                 "System Commands agents"
             )
-
         if self.gpu_available:
-            recommendations["performance_tips"].append(
+            tips.append(
                 "GPU optimal for 3B models - use for RAG, Orchestrator, Research agents"
             )
-
-        recommendations["performance_tips"].extend(
+        tips.extend(
             [
                 "Reserve CPU for Redis, system operations, and fallback processing",
                 "Monitor hardware utilization and adjust agent distribution as needed",
                 "Use quantized models (q4_K_M) for optimal hardware efficiency",
             ]
         )
+        return tips
 
-        return recommendations
+    def get_hardware_recommendations(self) -> Dict[str, Any]:
+        """
+        Get hardware optimization recommendations.
+
+        Returns:
+            Dict with current setup, optimizations, agent assignments,
+            and performance tips. Issue #620.
+        """
+        return {
+            "current_setup": self._build_current_setup_summary(),
+            "optimizations": self._generate_hardware_optimizations(),
+            "agent_assignments": self.current_config["device_assignments"],
+            "performance_tips": self._generate_performance_tips(),
+        }
 
     def configure_system_environment(self):
         """Configure system environment variables for optimal hardware usage."""
