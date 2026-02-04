@@ -23,10 +23,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
 from src.autobot_types import TaskComplexity
-from src.constants.threshold_constants import (
-    RetryConfig,
-    WorkflowConfig,
-)
+from src.constants.threshold_constants import RetryConfig, WorkflowConfig
 
 
 class WorkflowPriority(Enum):
@@ -331,7 +328,10 @@ class WorkflowQueue:
         # Add estimated duration factor (shorter workflows get slight priority)
         duration_factor = max(
             WorkflowConfig.MIN_DURATION_FACTOR,
-            1.0 - (workflow.estimated_duration_minutes / WorkflowConfig.DEFAULT_TIMEOUT_MIN),
+            1.0
+            - (
+                workflow.estimated_duration_minutes / WorkflowConfig.DEFAULT_TIMEOUT_MIN
+            ),
         )
 
         return base_score * complexity_factor * duration_factor
@@ -393,9 +393,10 @@ class WorkflowScheduler:
         self._save_workflows()
 
     def _parse_schedule_params(
-        self, scheduled_time: Union[datetime, str],
+        self,
+        scheduled_time: Union[datetime, str],
         priority: Union[WorkflowPriority, str],
-        complexity: Union[TaskComplexity, str]
+        complexity: Union[TaskComplexity, str],
     ) -> tuple:
         """Parse and normalize schedule parameters (Issue #398: extracted).
 
@@ -422,6 +423,76 @@ class WorkflowScheduler:
 
         return scheduled_time, priority, complexity
 
+    def _extract_request_params(
+        self, request: WorkflowScheduleRequest, kwargs: Dict[str, Any]
+    ) -> tuple:
+        """
+        Extract parameters from WorkflowScheduleRequest object. Issue #620.
+
+        Args:
+            request: WorkflowScheduleRequest object
+            kwargs: Additional keyword arguments dict to update
+
+        Returns:
+            Tuple of extracted parameters
+        """
+        kwargs.setdefault(
+            "estimated_duration_minutes", request.estimated_duration_minutes
+        )
+        kwargs.setdefault("timeout_minutes", request.timeout_minutes)
+        kwargs.setdefault("max_retries", request.max_retries)
+        return (
+            request.user_message,
+            request.scheduled_time,
+            request.priority,
+            request.complexity,
+            request.template_id,
+            request.variables,
+            request.auto_approve,
+            request.tags,
+            request.dependencies,
+            request.user_id,
+        )
+
+    def _create_scheduled_workflow(
+        self,
+        workflow_id: str,
+        user_message: str,
+        scheduled_time: datetime,
+        priority: WorkflowPriority,
+        complexity: TaskComplexity,
+        template_id: Optional[str],
+        variables: Optional[Dict[str, Any]],
+        auto_approve: bool,
+        tags: Optional[List[str]],
+        dependencies: Optional[List[str]],
+        user_id: Optional[str],
+        **kwargs,
+    ) -> ScheduledWorkflow:
+        """
+        Create a ScheduledWorkflow instance with provided parameters. Issue #620.
+
+        Returns:
+            ScheduledWorkflow instance
+        """
+        return ScheduledWorkflow(
+            id=workflow_id,
+            name=f"Workflow {workflow_id[:8]}",
+            template_id=template_id,
+            user_message=user_message,
+            scheduled_time=scheduled_time,
+            priority=priority,
+            status=WorkflowStatus.SCHEDULED,
+            created_at=datetime.now(),
+            complexity=complexity,
+            user_id=user_id,
+            variables=variables or {},
+            auto_approve=auto_approve,
+            tags=tags or [],
+            dependencies=dependencies or [],
+            **kwargs,
+        )
+
     def schedule_workflow(
         self,
         request: Optional[WorkflowScheduleRequest] = None,
@@ -441,49 +512,46 @@ class WorkflowScheduler:
         """Schedule a workflow for future execution (Issue #398: refactored).
 
         Issue #319: Supports both request object and individual parameters.
+        Issue #620: Refactored to use helper methods.
 
         Returns:
             Workflow ID string
         """
-        # Issue #319: Extract from request object if provided
         if request is not None:
-            user_message = request.user_message
-            scheduled_time = request.scheduled_time
-            priority = request.priority
-            complexity = request.complexity
-            template_id = request.template_id
-            variables = request.variables
-            auto_approve = request.auto_approve
-            tags = request.tags
-            dependencies = request.dependencies
-            user_id = request.user_id
-            kwargs.setdefault("estimated_duration_minutes", request.estimated_duration_minutes)
-            kwargs.setdefault("timeout_minutes", request.timeout_minutes)
-            kwargs.setdefault("max_retries", request.max_retries)
+            (
+                user_message,
+                scheduled_time,
+                priority,
+                complexity,
+                template_id,
+                variables,
+                auto_approve,
+                tags,
+                dependencies,
+                user_id,
+            ) = self._extract_request_params(request, kwargs)
         elif user_message is None or scheduled_time is None:
-            raise ValueError("Either 'request' object or 'user_message' and 'scheduled_time' required")
+            raise ValueError(
+                "Either 'request' or 'user_message'/'scheduled_time' required"
+            )
 
-        # Issue #398: Use helper for parameter parsing
         scheduled_time, priority, complexity = self._parse_schedule_params(
             scheduled_time, priority, complexity
         )
 
         workflow_id = str(uuid4())
-        workflow = ScheduledWorkflow(
-            id=workflow_id,
-            name=f"Workflow {workflow_id[:8]}",
-            template_id=template_id,
-            user_message=user_message,
-            scheduled_time=scheduled_time,
-            priority=priority,
-            status=WorkflowStatus.SCHEDULED,
-            created_at=datetime.now(),
-            complexity=complexity,
-            user_id=user_id,
-            variables=variables or {},
-            auto_approve=auto_approve,
-            tags=tags or [],
-            dependencies=dependencies or [],
+        workflow = self._create_scheduled_workflow(
+            workflow_id,
+            user_message,
+            scheduled_time,
+            priority,
+            complexity,
+            template_id,
+            variables,
+            auto_approve,
+            tags,
+            dependencies,
+            user_id,
             **kwargs,
         )
 
@@ -671,7 +739,9 @@ class WorkflowScheduler:
             # Mark as failed
             self.queue.complete_workflow(workflow.id, WorkflowStatus.FAILED)
             self._move_to_completed(workflow)
-            logger.warning("Workflow %s failed after %s retries", workflow.id, workflow.retry_count)
+            logger.warning(
+                "Workflow %s failed after %s retries", workflow.id, workflow.retry_count
+            )
 
     def _move_to_completed(self, workflow: ScheduledWorkflow) -> None:
         """Move workflow to completed storage"""

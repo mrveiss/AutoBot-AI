@@ -325,6 +325,56 @@ def has_permission(user_data: dict, permission: Union[Permission, str]) -> bool:
     return _security_layer.check_permission(user_role, perm_str)
 
 
+def _check_single_user_bypass(permission: Union[Permission, str]) -> bool:
+    """
+    Check if single-user mode bypass should apply. Issue #620.
+
+    Args:
+        permission: The permission being checked
+
+    Returns:
+        True if bypass applies, False otherwise
+    """
+    from src.user_management.config import DeploymentMode, get_deployment_config
+
+    deployment_config = get_deployment_config()
+    if deployment_config.mode == DeploymentMode.SINGLE_USER:
+        logger.debug(
+            "Single user mode: bypassing permission check for %s",
+            permission,
+        )
+        return True
+    return False
+
+
+def _deny_permission_access(user_data: dict, perm_str: str, request: Request) -> None:
+    """
+    Log denied access and raise auth error. Issue #620.
+
+    Args:
+        user_data: User data dict
+        perm_str: Permission string
+        request: FastAPI request object
+
+    Raises:
+        HTTPException via raise_auth_error
+    """
+    _security_layer.audit_log(
+        action="permission_denied",
+        user=user_data.get("username", "unknown"),
+        outcome="denied",
+        details={
+            "permission_required": perm_str,
+            "user_role": user_data.get("role"),
+            "endpoint": str(request.url.path),
+        },
+    )
+    raise_auth_error(
+        "AUTH_0003",
+        f"Permission '{perm_str}' required for this operation",
+    )
+
+
 def require_permission(
     permission: Union[Permission, str],
     allow_single_user_bypass: bool = True,
@@ -352,47 +402,53 @@ def require_permission(
 
     def dependency(request: Request) -> bool:
         """Check permission and return True or raise error."""
-        # Check for single user mode bypass
-        if allow_single_user_bypass:
-            from src.user_management.config import DeploymentMode, get_deployment_config
+        if allow_single_user_bypass and _check_single_user_bypass(permission):
+            return True
 
-            deployment_config = get_deployment_config()
-            if deployment_config.mode == DeploymentMode.SINGLE_USER:
-                logger.debug(
-                    "Single user mode: bypassing permission check for %s",
-                    permission,
-                )
-                return True
-
-        # Get user from request
         user_data = auth_middleware.get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
-        # Check permission
         perm_str = (
             permission.value if isinstance(permission, Permission) else permission
         )
         if not has_permission(user_data, permission):
-            # Audit log the denied access
-            _security_layer.audit_log(
-                action="permission_denied",
-                user=user_data.get("username", "unknown"),
-                outcome="denied",
-                details={
-                    "permission_required": perm_str,
-                    "user_role": user_data.get("role"),
-                    "endpoint": str(request.url.path),
-                },
-            )
-            raise_auth_error(
-                "AUTH_0003",
-                f"Permission '{perm_str}' required for this operation",
-            )
+            _deny_permission_access(user_data, perm_str, request)
 
         return True
 
     return dependency
+
+
+def _deny_role_access(
+    user_data: dict, allowed_roles: List[str], user_role: str, request: Request
+) -> None:
+    """
+    Log denied role access and raise auth error. Issue #620.
+
+    Args:
+        user_data: User data dict
+        allowed_roles: List of allowed role strings
+        user_role: User's actual role
+        request: FastAPI request object
+
+    Raises:
+        HTTPException via raise_auth_error
+    """
+    _security_layer.audit_log(
+        action="role_denied",
+        user=user_data.get("username", "unknown"),
+        outcome="denied",
+        details={
+            "roles_required": allowed_roles,
+            "user_role": user_role,
+            "endpoint": str(request.url.path),
+        },
+    )
+    raise_auth_error(
+        "AUTH_0003",
+        f"One of roles {allowed_roles} required for this operation",
+    )
 
 
 def require_role(
@@ -421,41 +477,18 @@ def require_role(
 
     def dependency(request: Request) -> bool:
         """Check role and return True or raise error."""
-        # Check for single user mode bypass
-        if allow_single_user_bypass:
-            from src.user_management.config import DeploymentMode, get_deployment_config
+        if allow_single_user_bypass and _check_single_user_bypass("role_check"):
+            return True
 
-            deployment_config = get_deployment_config()
-            if deployment_config.mode == DeploymentMode.SINGLE_USER:
-                logger.debug("Single user mode: bypassing role check")
-                return True
-
-        # Get user from request
         user_data = auth_middleware.get_user_from_request(request)
         if not user_data:
             raise_auth_error("AUTH_0002", "Authentication required")
 
         user_role = user_data.get("role", "").lower()
-
-        # Convert Role enums to strings for comparison
         allowed_roles = [r.value if isinstance(r, Role) else r.lower() for r in roles]
 
         if user_role not in allowed_roles:
-            # Audit log the denied access
-            _security_layer.audit_log(
-                action="role_denied",
-                user=user_data.get("username", "unknown"),
-                outcome="denied",
-                details={
-                    "roles_required": allowed_roles,
-                    "user_role": user_role,
-                    "endpoint": str(request.url.path),
-                },
-            )
-            raise_auth_error(
-                "AUTH_0003",
-                f"One of roles {allowed_roles} required for this operation",
-            )
+            _deny_role_access(user_data, allowed_roles, user_role, request)
 
         return True
 
