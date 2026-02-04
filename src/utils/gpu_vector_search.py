@@ -439,31 +439,19 @@ class GPUVectorIndex:
 
         return results, metrics
 
-    async def batch_search(
-        self,
-        query_embeddings: np.ndarray,
-        top_k: int = 10,
-        normalize: bool = True,
-    ) -> Tuple[List[List[SearchResult]], SearchMetrics]:
+    def _prepare_batch_queries(
+        self, query_embeddings: np.ndarray, normalize: bool
+    ) -> np.ndarray:
         """
-        Batch search for multiple query vectors.
-
-        Much more efficient than individual searches on GPU.
+        Prepare batch query vectors for FAISS search.
 
         Args:
-            query_embeddings: Query vectors of shape (n, dim)
-            top_k: Number of results per query
-            normalize: Whether to normalize query vectors
+            query_embeddings: Raw query vectors of shape (n, dim)
+            normalize: Whether to L2 normalize vectors
 
         Returns:
-            Tuple of (list of results per query, aggregate metrics)
+            Prepared queries array. Issue #620.
         """
-        if self.index is None:
-            raise RuntimeError("Index not initialized. Call initialize() first.")
-
-        start_time = time.perf_counter()
-
-        # Prepare queries
         queries = np.ascontiguousarray(query_embeddings.astype(np.float32))
 
         if normalize:
@@ -471,16 +459,24 @@ class GPUVectorIndex:
             norms[norms == 0] = 1
             queries = queries / norms
 
-        # Set search parameters
-        if hasattr(self.index, "nprobe"):
-            self.index.nprobe = self.config.nprobe
+        return queries
 
-        # Execute batch search
-        distances, indices = await asyncio.to_thread(self.index.search, queries, top_k)
+    def _convert_batch_search_results(
+        self, distances: np.ndarray, indices: np.ndarray, num_queries: int
+    ) -> List[List["SearchResult"]]:
+        """
+        Convert FAISS batch search output to lists of SearchResult objects.
 
-        # Convert results
+        Args:
+            distances: Distance array from FAISS of shape (n, k)
+            indices: Index array from FAISS of shape (n, k)
+            num_queries: Number of queries processed
+
+        Returns:
+            List of SearchResult lists, one per query. Issue #620.
+        """
         all_results = []
-        for q_idx in range(len(queries)):
+        for q_idx in range(num_queries):
             results = []
             for dist, idx in zip(distances[q_idx], indices[q_idx]):
                 if idx == -1:
@@ -498,6 +494,48 @@ class GPUVectorIndex:
                 )
 
             all_results.append(results)
+
+        return all_results
+
+    async def batch_search(
+        self,
+        query_embeddings: np.ndarray,
+        top_k: int = 10,
+        normalize: bool = True,
+    ) -> Tuple[List[List[SearchResult]], SearchMetrics]:
+        """
+        Batch search for multiple query vectors.
+
+        Much more efficient than individual searches on GPU.
+        Issue #620: Refactored to use extracted helper methods.
+
+        Args:
+            query_embeddings: Query vectors of shape (n, dim)
+            top_k: Number of results per query
+            normalize: Whether to normalize query vectors
+
+        Returns:
+            Tuple of (list of results per query, aggregate metrics)
+        """
+        if self.index is None:
+            raise RuntimeError("Index not initialized. Call initialize() first.")
+
+        start_time = time.perf_counter()
+
+        # Issue #620: Use helper for query preparation
+        queries = self._prepare_batch_queries(query_embeddings, normalize)
+
+        # Set search parameters
+        if hasattr(self.index, "nprobe"):
+            self.index.nprobe = self.config.nprobe
+
+        # Execute batch search
+        distances, indices = await asyncio.to_thread(self.index.search, queries, top_k)
+
+        # Issue #620: Use helper for result conversion
+        all_results = self._convert_batch_search_results(
+            distances, indices, len(queries)
+        )
 
         query_time = (time.perf_counter() - start_time) * 1000
 

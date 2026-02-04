@@ -15,8 +15,12 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
-def get_network_security_scan_steps() -> List[WorkflowStep]:
-    """Get workflow steps for network security scan."""
+def _get_network_scan_discovery_steps() -> List[WorkflowStep]:
+    """Get initial discovery steps for network security scan.
+
+    Returns the KB search, research, options presentation, and network discovery steps.
+    Issue #620.
+    """
     return [
         WorkflowStep(
             id="kb_search",
@@ -51,6 +55,16 @@ def get_network_security_scan_steps() -> List[WorkflowStep]:
             inputs={"task_type": "network_scan"},
             expected_duration_ms=20000,
         ),
+    ]
+
+
+def _get_network_scan_assessment_steps() -> List[WorkflowStep]:
+    """Get security assessment steps for network security scan.
+
+    Returns the security scan, vulnerability check, report, and storage steps.
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="security_scan",
             agent_type="security_scanner",
@@ -87,6 +101,14 @@ def get_network_security_scan_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def get_network_security_scan_steps() -> List[WorkflowStep]:
+    """Get workflow steps for network security scan.
+
+    Issue #620: Refactored to use helper functions for reduced function length.
+    """
+    return _get_network_scan_discovery_steps() + _get_network_scan_assessment_steps()
 
 
 def create_network_security_scan_template() -> WorkflowTemplate:

@@ -15,7 +15,6 @@ Optimizations implemented:
 
 import os
 
-
 # CRITICAL FIX: Force tf-keras usage before importing transformers/sentence-transformers
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -251,20 +250,63 @@ class GPUSemanticChunker:
         )
         logger.warning("Using basic model fallback")
 
+    def _add_chunk_metadata(
+        self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]
+    ) -> None:
+        """Add optimization metadata to each chunk.
+
+        Args:
+            chunks: List of SemanticChunk objects to update.
+            metadata: Optional source metadata to include.
+
+        Issue #620.
+        """
+        for i, chunk in enumerate(chunks):
+            chunk.metadata.update(
+                {
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                    "source_metadata": metadata or {},
+                    "chunking_method": "gpu_optimized_semantic",
+                    "embedding_model": self.embedding_model_name,
+                    "gpu_batch_size": self.gpu_batch_size,
+                    "optimization_version": "rtx4070_gpu",
+                }
+            )
+
+    def _log_chunking_results(
+        self, start_time: float, sentence_count: int, chunk_count: int
+    ) -> None:
+        """Log chunking performance results.
+
+        Args:
+            start_time: Time when chunking started.
+            sentence_count: Number of sentences processed.
+            chunk_count: Number of chunks created.
+
+        Issue #620.
+        """
+        total_time = time.time() - start_time
+        sentences_per_sec = sentence_count / total_time if total_time > 0 else 0
+
+        logger.info("GPU chunking completed:")
+        logger.info("  - Total time: %.3fs", total_time)
+        logger.info("  - Performance: %.1f sentences/sec", sentences_per_sec)
+        logger.info("  - Chunks created: %s", chunk_count)
+
     async def chunk_text(
         self, text: str, metadata: Optional[Dict[str, Any]] = None
     ) -> List[SemanticChunk]:
-        """
-        Main GPU-accelerated chunking method with performance monitoring.
+        """Main GPU-accelerated chunking method with performance monitoring.
 
         Target: 3x performance improvement over basic implementation.
+        Issue #620: Refactored to use helper methods for reduced function length.
         """
         start_time = time.time()
 
         try:
             logger.info("Starting GPU semantic chunking (%s characters)", len(text))
 
-            # For testing, create simple chunks based on paragraphs/sentences
             sentences = self._basic_sentence_split(text)
 
             if len(sentences) <= 1:
@@ -278,50 +320,21 @@ class GPUSemanticChunker:
                 )
                 return [chunk]
 
-            # Initialize model for GPU processing
             await self._initialize_model()
-
-            # Process embeddings with GPU acceleration
             embeddings = await self._compute_embeddings(sentences)
-
-            # Compute semantic distances
             distances = self._compute_semantic_distances(embeddings)
-
-            # Find boundaries
             boundaries = self._find_chunk_boundaries(distances)
-
-            # Create chunks
             chunks = self._create_chunks_with_boundaries(
                 sentences, boundaries, distances
             )
 
-            # Add optimization metadata
-            for i, chunk in enumerate(chunks):
-                chunk.metadata.update(
-                    {
-                        "chunk_index": i,
-                        "total_chunks": len(chunks),
-                        "source_metadata": metadata or {},
-                        "chunking_method": "gpu_optimized_semantic",
-                        "embedding_model": self.embedding_model_name,
-                        "gpu_batch_size": self.gpu_batch_size,
-                        "optimization_version": "rtx4070_gpu",
-                    }
-                )
-
-            total_time = time.time() - start_time
-            sentences_per_sec = len(sentences) / total_time if total_time > 0 else 0
-
-            logger.info("GPU chunking completed:")
-            logger.info("  - Total time: %.3fs", total_time)
-            logger.info("  - Performance: %.1f sentences/sec", sentences_per_sec)
-            logger.info("  - Chunks created: %s", len(chunks))
+            self._add_chunk_metadata(chunks, metadata)
+            self._log_chunking_results(start_time, len(sentences), len(chunks))
 
             return chunks
 
         except Exception as e:
             logger.error("GPU chunking failed: %s", e)
-            # Fallback to basic chunking
             return await self._fallback_basic_chunking(text, metadata)
 
     async def _compute_embeddings(self, sentences: List[str]) -> np.ndarray:

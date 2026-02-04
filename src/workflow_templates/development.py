@@ -73,8 +73,69 @@ def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
     ]
 
 
+def _create_code_review_steps() -> List[WorkflowStep]:
+    """Create workflow steps for the code review template.
+
+    Returns the analysis, security scan, research, assessment, report, and storage steps.
+    Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="code_analysis",
+            agent_type="system_commands",
+            action="Perform static code analysis and metrics collection",
+            description="System_Commands: Static Code Analysis",
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="security_scan",
+            agent_type="security_scanner",
+            action="Scan code for security vulnerabilities",
+            description="Security_Scanner: Code Security Scan",
+            dependencies=["code_analysis"],
+            inputs={"scan_type": "code_security"},
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="best_practices_research",
+            agent_type="research",
+            action="Research current coding best practices and standards",
+            description="Research: Coding Best Practices",
+            dependencies=["code_analysis"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="quality_assessment",
+            agent_type="orchestrator",
+            action="Assess code quality against industry standards",
+            description="Orchestrator: Quality Assessment",
+            dependencies=["security_scan", "best_practices_research"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="review_report",
+            agent_type="orchestrator",
+            action="Generate comprehensive code review report",
+            description="Orchestrator: Code Review Report",
+            dependencies=["quality_assessment"],
+            expected_duration_ms=12000,
+        ),
+        WorkflowStep(
+            id="store_review",
+            agent_type="knowledge_manager",
+            action="Store code review findings and recommendations",
+            description="Knowledge_Manager: Store Review Results",
+            dependencies=["review_report"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
 def create_code_review_template() -> WorkflowTemplate:
-    """Create code review workflow template."""
+    """Create code review workflow template.
+
+    Issue #620: Refactored to use helper function for reduced function length.
+    """
     return WorkflowTemplate(
         id="code_review",
         name="Code Review",
@@ -94,56 +155,7 @@ def create_code_review_template() -> WorkflowTemplate:
             "repository": "Code repository or directory path",
             "review_scope": "Scope of review (security, quality, performance)",
         },
-        steps=[
-            WorkflowStep(
-                id="code_analysis",
-                agent_type="system_commands",
-                action="Perform static code analysis and metrics collection",
-                description="System_Commands: Static Code Analysis",
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="security_scan",
-                agent_type="security_scanner",
-                action="Scan code for security vulnerabilities",
-                description="Security_Scanner: Code Security Scan",
-                dependencies=["code_analysis"],
-                inputs={"scan_type": "code_security"},
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="best_practices_research",
-                agent_type="research",
-                action="Research current coding best practices and standards",
-                description="Research: Coding Best Practices",
-                dependencies=["code_analysis"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="quality_assessment",
-                agent_type="orchestrator",
-                action="Assess code quality against industry standards",
-                description="Orchestrator: Quality Assessment",
-                dependencies=["security_scan", "best_practices_research"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="review_report",
-                agent_type="orchestrator",
-                action="Generate comprehensive code review report",
-                description="Orchestrator: Code Review Report",
-                dependencies=["quality_assessment"],
-                expected_duration_ms=12000,
-            ),
-            WorkflowStep(
-                id="store_review",
-                agent_type="knowledge_manager",
-                action="Store code review findings and recommendations",
-                description="Knowledge_Manager: Store Review Results",
-                dependencies=["review_report"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_code_review_steps(),
     )
 
 
