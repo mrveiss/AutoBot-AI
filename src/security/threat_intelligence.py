@@ -517,23 +517,20 @@ class ThreatIntelligenceService:
         """Check if at least one service is configured."""
         return self._virustotal.is_configured or self._urlvoid.is_configured
 
-    async def check_url_reputation(self, url: str) -> ThreatScore:
+    async def _collect_threat_scores(
+        self, url: str
+    ) -> tuple[Dict[str, Any], list[float], int]:
         """
-        Check URL reputation using all configured threat intelligence services.
+        Collect threat scores from all configured services.
 
         Args:
-            url: URL to check
+            url: URL to check.
 
         Returns:
-            ThreatScore with aggregated results
-        """
-        # Check cache first
-        cached_result = await self._cache.get(url)
-        if cached_result:
-            logger.debug("Using cached threat score for URL: %s", url)
-            return cached_result
+            Tuple of (results dict, scores list, sources_checked count).
 
-        # Collect results from configured services
+        Issue #620.
+        """
         results: Dict[str, Any] = {}
         scores: list[float] = []
         sources_checked = 0
@@ -554,6 +551,27 @@ class ThreatIntelligenceService:
                 scores.append(uv_result["score"])
                 sources_checked += 1
 
+        return results, scores, sources_checked
+
+    def _build_threat_score(
+        self,
+        results: Dict[str, Any],
+        scores: list[float],
+        sources_checked: int,
+    ) -> ThreatScore:
+        """
+        Build ThreatScore from collected results.
+
+        Args:
+            results: Results dict from threat services.
+            scores: List of scores collected.
+            sources_checked: Number of sources checked.
+
+        Returns:
+            ThreatScore with aggregated results.
+
+        Issue #620.
+        """
         # Calculate overall score
         if scores:
             # Use minimum score (most conservative approach)
@@ -565,8 +583,7 @@ class ThreatIntelligenceService:
         # Determine threat level
         threat_level = self._calculate_threat_level(overall_score)
 
-        # Build result
-        threat_score = ThreatScore(
+        return ThreatScore(
             virustotal_score=results.get("virustotal", {}).get("score"),
             urlvoid_score=results.get("urlvoid", {}).get("score"),
             overall_score=overall_score,
@@ -576,14 +593,36 @@ class ThreatIntelligenceService:
             cached=False,
         )
 
+    async def check_url_reputation(self, url: str) -> ThreatScore:
+        """
+        Check URL reputation using all configured threat intelligence services.
+
+        Args:
+            url: URL to check
+
+        Returns:
+            ThreatScore with aggregated results
+        """
+        # Check cache first
+        cached_result = await self._cache.get(url)
+        if cached_result:
+            logger.debug("Using cached threat score for URL: %s", url)
+            return cached_result
+
+        # Collect results from configured services
+        results, scores, sources_checked = await self._collect_threat_scores(url)
+
+        # Build result
+        threat_score = self._build_threat_score(results, scores, sources_checked)
+
         # Cache the result
         await self._cache.set(url, threat_score)
 
         logger.info(
             "Threat check for %s: score=%.2f, level=%s, sources=%d",
             url,
-            overall_score,
-            threat_level.value,
+            threat_score.overall_score,
+            threat_score.threat_level.value,
             sources_checked,
         )
 

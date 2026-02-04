@@ -134,6 +134,93 @@ CONTEXT_PROMPT_MAP = {
 }
 
 # =============================================================================
+# Private Helper Functions
+# =============================================================================
+
+
+def _get_non_exit_context_phrases() -> set:
+    """
+    Return phrases that indicate the user is asking ABOUT exit concepts, not trying to exit.
+
+    These are compound terms where exit/quit/etc are part of technical concepts
+    rather than conversation termination requests.
+
+    Returns:
+        set: Phrases that should not trigger exit intent detection.
+
+    Issue #620.
+    """
+    return {
+        "exit code",
+        "exit status",
+        "exit signal",
+        "exit value",
+        "exit point",
+        "quit command",
+        "quit signal",
+        "stop signal",
+        "stop command",
+        "about exit",
+        "about the exit",
+        "the exit",
+        "what exit",
+        "which exit",
+        "bye command",
+        "the bye",
+        "how to quit",
+        "explain how",
+        "tell me about",
+    }
+
+
+def _check_non_exit_context(message_lower: str) -> bool:
+    """
+    Check if message contains non-exit context phrases.
+
+    Args:
+        message_lower: Lowercase message to check.
+
+    Returns:
+        bool: True if message contains a non-exit context phrase.
+
+    Issue #620.
+    """
+    non_exit_context_phrases = _get_non_exit_context_phrases()
+    for phrase in non_exit_context_phrases:
+        if phrase in message_lower:
+            logger.debug("Exit keyword found but in non-exit context: '%s'", phrase)
+            return True
+    return False
+
+
+def _combine_prompts(base_prompt: str, context_prompt: str, intent: str) -> str:
+    """
+    Combine base prompt with context-specific prompt.
+
+    Args:
+        base_prompt: Base system prompt to use as foundation.
+        context_prompt: Context-specific prompt to append.
+        intent: The detected intent for logging.
+
+    Returns:
+        str: Combined prompt with base + context-specific instructions.
+
+    Issue #620.
+    """
+    return f"""{base_prompt}
+
+---
+
+## CONTEXT-SPECIFIC GUIDANCE
+
+{context_prompt}
+
+---
+
+**Remember**: Follow both the general conversation management rules above AND the context-specific guidance for this {intent} conversation."""
+
+
+# =============================================================================
 # Public Functions
 # =============================================================================
 
@@ -171,35 +258,9 @@ def detect_exit_intent(message: str) -> bool:
     # Check for exit keywords in message (with word boundaries)
     words = message_lower.split()
 
-    # Context phrases that indicate the user is asking ABOUT exit, not trying to exit
-    # These are compound terms where exit/quit/etc are part of technical concepts
-    non_exit_context_phrases = {
-        "exit code",
-        "exit status",
-        "exit signal",
-        "exit value",
-        "exit point",
-        "quit command",
-        "quit signal",
-        "stop signal",
-        "stop command",
-        "about exit",
-        "about the exit",
-        "the exit",
-        "what exit",
-        "which exit",
-        "bye command",
-        "the bye",
-        "how to quit",
-        "explain how",
-        "tell me about",
-    }
-
     # If message contains any non-exit context phrase, don't trigger exit
-    for phrase in non_exit_context_phrases:
-        if phrase in message_lower:
-            logger.debug("Exit keyword found but in non-exit context: '%s'", phrase)
-            return False
+    if _check_non_exit_context(message_lower):
+        return False
 
     for exit_word in EXIT_KEYWORDS:
         if exit_word in words:
@@ -331,22 +392,7 @@ def select_context_prompt(intent: str, base_prompt: str) -> str:
         context_key = CONTEXT_PROMPT_MAP[intent]
         context_prompt = get_prompt(context_key)
         logger.info("Loaded context prompt: %s for intent: %s", context_key, intent)
-
-        # Combine base prompt with context-specific prompt
-        combined_prompt = f"""{base_prompt}
-
----
-
-## CONTEXT-SPECIFIC GUIDANCE
-
-{context_prompt}
-
----
-
-**Remember**: Follow both the general conversation management rules above AND the context-specific guidance for this {intent} conversation."""
-
-        return combined_prompt
-
+        return _combine_prompts(base_prompt, context_prompt, intent)
     except Exception as e:
         logger.warning("Failed to load context prompt for intent '%s': %s", intent, e)
         logger.warning("Falling back to base system prompt")

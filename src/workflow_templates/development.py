@@ -184,8 +184,69 @@ def create_deployment_pipeline_template() -> WorkflowTemplate:
     )
 
 
+def _create_testing_strategy_steps() -> List[WorkflowStep]:
+    """Create workflow steps for the testing strategy template.
+
+    Returns the research, strategy, setup, test creation, execution, and documentation steps.
+    Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="testing_research",
+            agent_type="research",
+            action="Research testing frameworks and methodologies",
+            description="Research: Testing Methodologies",
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="test_strategy",
+            agent_type="orchestrator",
+            action="Design comprehensive testing strategy",
+            description="Orchestrator: Testing Strategy",
+            dependencies=["testing_research"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="setup_frameworks",
+            agent_type="system_commands",
+            action="Setup testing frameworks and tools",
+            description="System_Commands: Framework Setup (requires your approval)",
+            requires_approval=True,
+            dependencies=["test_strategy"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="create_tests",
+            agent_type="system_commands",
+            action="Create initial test suites and examples",
+            description="System_Commands: Create Test Suites",
+            dependencies=["setup_frameworks"],
+            expected_duration_ms=40000,
+        ),
+        WorkflowStep(
+            id="run_tests",
+            agent_type="system_commands",
+            action="Execute test suites and generate reports",
+            description="System_Commands: Execute Tests",
+            dependencies=["create_tests"],
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="document_testing",
+            agent_type="knowledge_manager",
+            action="Document testing strategy and procedures",
+            description="Knowledge_Manager: Document Testing Strategy",
+            dependencies=["run_tests"],
+            expected_duration_ms=8000,
+        ),
+    ]
+
+
 def create_testing_strategy_template() -> WorkflowTemplate:
-    """Create testing strategy workflow template."""
+    """Create testing strategy workflow template.
+
+    Issue #620: Refactored to use helper function for reduced function length.
+    """
     return WorkflowTemplate(
         id="testing_strategy",
         name="Testing Strategy",
@@ -204,56 +265,7 @@ def create_testing_strategy_template() -> WorkflowTemplate:
             "application_type": "Type of application or system to test",
             "testing_scope": "Scope of testing (unit, integration, e2e, performance)",
         },
-        steps=[
-            WorkflowStep(
-                id="testing_research",
-                agent_type="research",
-                action="Research testing frameworks and methodologies",
-                description="Research: Testing Methodologies",
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="test_strategy",
-                agent_type="orchestrator",
-                action="Design comprehensive testing strategy",
-                description="Orchestrator: Testing Strategy",
-                dependencies=["testing_research"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="setup_frameworks",
-                agent_type="system_commands",
-                action="Setup testing frameworks and tools",
-                description="System_Commands: Framework Setup (requires your approval)",
-                requires_approval=True,
-                dependencies=["test_strategy"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="create_tests",
-                agent_type="system_commands",
-                action="Create initial test suites and examples",
-                description="System_Commands: Create Test Suites",
-                dependencies=["setup_frameworks"],
-                expected_duration_ms=40000,
-            ),
-            WorkflowStep(
-                id="run_tests",
-                agent_type="system_commands",
-                action="Execute test suites and generate reports",
-                description="System_Commands: Execute Tests",
-                dependencies=["create_tests"],
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="document_testing",
-                agent_type="knowledge_manager",
-                action="Document testing strategy and procedures",
-                description="Knowledge_Manager: Document Testing Strategy",
-                dependencies=["run_tests"],
-                expected_duration_ms=8000,
-            ),
-        ],
+        steps=_create_testing_strategy_steps(),
     )
 
 

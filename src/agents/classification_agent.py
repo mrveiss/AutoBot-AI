@@ -116,17 +116,13 @@ class ClassificationAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
-    def _initialize_classification_prompt(self):
-        """Initialize the classification prompt template"""
-        # noqa: E501 - Prompt content must remain human-readable
-        self.classification_prompt = """
-You are an intelligent classification agent for AutoBot, a multi-agent
-workflow orchestration system.
+    def _get_complexity_levels_prompt(self) -> str:
+        """
+        Return the workflow complexity levels section of the classification prompt.
 
-Your task is to analyze user requests and determine the appropriate
-workflow complexity.
-
-WORKFLOW COMPLEXITY LEVELS:
+        Issue #620.
+        """
+        return """WORKFLOW COMPLEXITY LEVELS:
 
 1. SIMPLE: Regular conversational requests that can be answered using
    Knowledge Base + LLM
@@ -152,11 +148,15 @@ IMPORTANT NOTES:
   requests actions/tools
 - ALWAYS use Knowledge Base first to ground responses and prevent
   hallucination
-- Source attribution is required for all responses regardless of complexity
+- Source attribution is required for all responses regardless of complexity"""
 
-USER REQUEST: "{user_message}"
+    def _get_context_analysis_prompt(self) -> str:
+        """
+        Return the context analysis and JSON format section of the classification prompt.
 
-CONTEXT ANALYSIS:
+        Issue #620.
+        """
+        return """CONTEXT ANALYSIS:
 - Intent: What does the user want to accomplish?
 - Tools Needed: Does this require system commands, external APIs,
   or file operations?
@@ -186,7 +186,27 @@ Please provide your analysis in the following JSON format:
 }}
 
 Be thorough in your analysis and reasoning. Consider the implications
-and requirements of the request.
+and requirements of the request."""
+
+    def _initialize_classification_prompt(self):
+        """Initialize the classification prompt template"""
+        # noqa: E501 - Prompt content must remain human-readable
+        intro = """You are an intelligent classification agent for AutoBot, a multi-agent
+workflow orchestration system.
+
+Your task is to analyze user requests and determine the appropriate
+workflow complexity."""
+        complexity_levels = self._get_complexity_levels_prompt()
+        user_request = 'USER REQUEST: "{user_message}"'
+        context_analysis = self._get_context_analysis_prompt()
+        self.classification_prompt = f"""
+{intro}
+
+{complexity_levels}
+
+{user_request}
+
+{context_analysis}
 """
 
     async def classify_request(self, user_message: str) -> ClassificationResult:

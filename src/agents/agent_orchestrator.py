@@ -120,18 +120,18 @@ class AgentOrchestrator:
     # Agent identifier for SSOT config lookup
     AGENT_ID = "orchestrator"
 
-    def __init__(self):
-        """Initialize the Enhanced Agent Orchestrator with explicit LLM configuration."""
-        self.llm_interface = LLMInterface()
+    def _init_llm_config(self) -> None:
+        """
+        Initialize LLM interface and SSOT configuration.
 
-        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        Issue #620.
+        """
+        self.llm_interface = LLMInterface()
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
-
         self.agent_type = "orchestrator"
         self.orchestrator_id = f"orchestrator_{uuid.uuid4().hex[:8]}"
-
         logger.info(
             "Agent Orchestrator initialized with provider=%s, endpoint=%s, model=%s",
             self.llm_provider,
@@ -139,37 +139,39 @@ class AgentOrchestrator:
             self.model_name,
         )
 
-        # Initialize agent capabilities map
-        self.agent_capabilities = DEFAULT_AGENT_CAPABILITIES.copy()
+    def _init_legacy_agents(self) -> None:
+        """
+        Initialize legacy agent instance placeholders for lazy loading.
 
-        # Legacy agent instances (lazy loaded)
+        Issue #620.
+        """
+        self.agent_capabilities = DEFAULT_AGENT_CAPABILITIES.copy()
         self._chat_agent = None
         self._system_commands_agent = None
         self._rag_agent = None
         self._kb_librarian = None
         self._research_agent = None
 
-        # Build distributed agents config
+    def _init_distributed_components(self) -> None:
+        """
+        Initialize distributed agent manager, router, and executor.
+
+        Issue #620.
+        """
         builtin_distributed_agents = {}
         if DISTRIBUTED_AGENTS_AVAILABLE:
             builtin_distributed_agents = {
                 "classification": ClassificationAgent,
                 "npu_code_search": get_npu_code_search,
             }
-
-        # Initialize distributed agent manager (delegates to package)
         self._distributed_manager = DistributedAgentManager(
             builtin_agents=builtin_distributed_agents,
             health_check_interval=30.0,
         )
-
-        # Initialize router (delegates to package)
         self._router = AgentRouter(
             agent_capabilities=self.agent_capabilities,
             llm_interface=self.llm_interface,
         )
-
-        # Initialize executor (delegates to package)
         self._executor = AgentExecutor(
             distributed_manager=self._distributed_manager,
             router=self._router,
@@ -180,18 +182,29 @@ class AgentOrchestrator:
             get_research_agent=self._get_research_agent,
         )
 
-        # Initialize communication if available
+    def _init_communication(self) -> None:
+        """
+        Initialize communication manager if available.
+
+        Issue #620.
+        """
         self.communication_manager = None
         if COMMUNICATION_AVAILABLE:
             try:
                 self.communication_manager = get_communication_manager()
             except Exception as e:
                 logger.warning("Could not initialize communication manager: %s", e)
-
         logger.info("Enhanced Agent Orchestrator initialized: %s", self.orchestrator_id)
         logger.info("Communication available: %s", COMMUNICATION_AVAILABLE)
         logger.info("Legacy agents available: %s", LEGACY_AGENTS_AVAILABLE)
         logger.info("Distributed agents available: %s", DISTRIBUTED_AGENTS_AVAILABLE)
+
+    def __init__(self):
+        """Initialize the Enhanced Agent Orchestrator with explicit LLM configuration."""
+        self._init_llm_config()
+        self._init_legacy_agents()
+        self._init_distributed_components()
+        self._init_communication()
 
     @property
     def is_running(self) -> bool:

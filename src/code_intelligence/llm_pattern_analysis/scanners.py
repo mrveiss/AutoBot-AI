@@ -26,11 +26,11 @@ from src.code_intelligence.llm_pattern_analysis.data_models import (
     UsagePattern,
 )
 from src.code_intelligence.llm_pattern_analysis.types import (
-    CacheOpportunityType,
-    OptimizationPriority,
     RETRY_COUNT_PATTERNS,
     RETRY_LOGIC_PATTERNS,
     SIMPLE_LLM_MODELS,
+    CacheOpportunityType,
+    OptimizationPriority,
     UsagePatternType,
 )
 
@@ -86,7 +86,9 @@ class CodePatternScanner:
     RETRY_PATTERNS = RETRY_LOGIC_PATTERNS
 
     @classmethod
-    def scan_file(cls, file_path: Path) -> Tuple[List[UsagePattern], List[RetryPattern]]:
+    def scan_file(
+        cls, file_path: Path
+    ) -> Tuple[List[UsagePattern], List[RetryPattern]]:
         """
         Scan a Python file for LLM patterns.
 
@@ -125,11 +127,15 @@ class CodePatternScanner:
             for pattern in cls.RETRY_PATTERNS:
                 if pattern.search(line):
                     retry_pattern = RetryPattern(
-                        pattern_id=cls._generate_pattern_id(file_path, line_num, "retry"),
+                        pattern_id=cls._generate_pattern_id(
+                            file_path, line_num, "retry"
+                        ),
                         file_path=str(file_path),
                         line_number=line_num,
                         max_retries=cls._extract_retry_count(content, line_num),
-                        backoff_strategy=cls._detect_backoff_strategy(content, line_num),
+                        backoff_strategy=cls._detect_backoff_strategy(
+                            content, line_num
+                        ),
                     )
                     retry_patterns.append(retry_pattern)
                     break  # Only one retry pattern per line
@@ -216,6 +222,77 @@ class CacheOpportunityDetector:
     """
 
     @classmethod
+    def _create_embedding_opportunity(
+        cls, embeddings: List[UsagePattern]
+    ) -> Optional[CacheOpportunity]:
+        """
+        Create embedding cache opportunity if embeddings exist.
+
+        Issue #620.
+        """
+        if not embeddings:
+            return None
+        return CacheOpportunity(
+            opportunity_id=cls._generate_id("embed"),
+            cache_type=CacheOpportunityType.EMBEDDING_CACHE,
+            description="Cache embedding results for repeated text",
+            estimated_hit_rate=0.60,
+            estimated_savings_percent=40.0,
+            affected_calls_per_hour=len(embeddings) * 10,
+            implementation_effort="low",
+            priority=OptimizationPriority.HIGH,
+        )
+
+    @classmethod
+    def _create_static_prompt_opportunity(
+        cls, patterns: List[UsagePattern]
+    ) -> Optional[CacheOpportunity]:
+        """
+        Create static prompt cache opportunity if cacheable prompts exist.
+
+        Issue #620.
+        """
+        static_prompts = [
+            p
+            for p in patterns
+            if p.is_cacheable() and p.pattern_type == UsagePatternType.CHAT_COMPLETION
+        ]
+        if not static_prompts:
+            return None
+        return CacheOpportunity(
+            opportunity_id=cls._generate_id("static"),
+            cache_type=CacheOpportunityType.STATIC_PROMPT,
+            description="Cache responses for frequently-used static prompts",
+            estimated_hit_rate=0.30,
+            estimated_savings_percent=25.0,
+            affected_calls_per_hour=len(static_prompts) * 5,
+            implementation_effort="medium",
+            priority=OptimizationPriority.MEDIUM,
+        )
+
+    @classmethod
+    def _create_analysis_opportunity(
+        cls, analysis: List[UsagePattern]
+    ) -> Optional[CacheOpportunity]:
+        """
+        Create analysis response cache opportunity if analysis patterns exist.
+
+        Issue #620.
+        """
+        if not analysis:
+            return None
+        return CacheOpportunity(
+            opportunity_id=cls._generate_id("analysis"),
+            cache_type=CacheOpportunityType.RESPONSE_CACHE,
+            description="Cache analysis results with content-based keys",
+            estimated_hit_rate=0.45,
+            estimated_savings_percent=35.0,
+            affected_calls_per_hour=len(analysis) * 8,
+            implementation_effort="medium",
+            priority=OptimizationPriority.HIGH,
+        )
+
+    @classmethod
     def detect_opportunities(
         cls,
         patterns: List[UsagePattern],
@@ -240,52 +317,20 @@ class CacheOpportunityDetector:
 
         # Embedding caching opportunity
         embeddings = patterns_by_type.get(UsagePatternType.EMBEDDING, [])
-        if embeddings:
-            opportunity = CacheOpportunity(
-                opportunity_id=cls._generate_id("embed"),
-                cache_type=CacheOpportunityType.EMBEDDING_CACHE,
-                description="Cache embedding results for repeated text",
-                estimated_hit_rate=0.60,
-                estimated_savings_percent=40.0,
-                affected_calls_per_hour=len(embeddings) * 10,
-                implementation_effort="low",
-                priority=OptimizationPriority.HIGH,
-            )
-            opportunities.append(opportunity)
+        embed_opp = cls._create_embedding_opportunity(embeddings)
+        if embed_opp:
+            opportunities.append(embed_opp)
 
         # Static prompt caching
-        static_prompts = [
-            p
-            for p in patterns
-            if p.is_cacheable() and p.pattern_type == UsagePatternType.CHAT_COMPLETION
-        ]
-        if static_prompts:
-            opportunity = CacheOpportunity(
-                opportunity_id=cls._generate_id("static"),
-                cache_type=CacheOpportunityType.STATIC_PROMPT,
-                description="Cache responses for frequently-used static prompts",
-                estimated_hit_rate=0.30,
-                estimated_savings_percent=25.0,
-                affected_calls_per_hour=len(static_prompts) * 5,
-                implementation_effort="medium",
-                priority=OptimizationPriority.MEDIUM,
-            )
-            opportunities.append(opportunity)
+        static_opp = cls._create_static_prompt_opportunity(patterns)
+        if static_opp:
+            opportunities.append(static_opp)
 
         # Response caching for analysis tasks
         analysis = patterns_by_type.get(UsagePatternType.ANALYSIS, [])
-        if analysis:
-            opportunity = CacheOpportunity(
-                opportunity_id=cls._generate_id("analysis"),
-                cache_type=CacheOpportunityType.RESPONSE_CACHE,
-                description="Cache analysis results with content-based keys",
-                estimated_hit_rate=0.45,
-                estimated_savings_percent=35.0,
-                affected_calls_per_hour=len(analysis) * 8,
-                implementation_effort="medium",
-                priority=OptimizationPriority.HIGH,
-            )
-            opportunities.append(opportunity)
+        analysis_opp = cls._create_analysis_opportunity(analysis)
+        if analysis_opp:
+            opportunities.append(analysis_opp)
 
         return opportunities
 
