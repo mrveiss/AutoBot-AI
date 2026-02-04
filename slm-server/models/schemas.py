@@ -658,6 +658,17 @@ class ServiceActionResponse(BaseModel):
     job_id: Optional[str] = None
 
 
+class ServiceScanResponse(BaseModel):
+    """Response for manual service scan/discovery."""
+
+    node_id: str
+    success: bool
+    message: str
+    services_discovered: int
+    services_updated: int
+    services_created: int
+
+
 class ServiceLogsRequest(BaseModel):
     """Service logs request."""
 
