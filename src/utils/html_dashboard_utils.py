@@ -61,14 +61,11 @@ def _get_dark_header_styles() -> str:
         .status-error { background: #da3633; color: #fff; }"""
 
 
-def _get_dark_component_styles() -> str:
+def _get_dark_container_styles() -> str:
     """
-    Generate component styles for dark theme (cards, metrics, charts).
+    Generate container and grid layout styles for dark theme.
 
-    Issue #665: Extracted from get_dark_theme_css
-
-    Returns:
-        str: CSS for containers, metric cards, and chart containers
+    Issue #620.
     """
     return """
         .container {
@@ -81,7 +78,16 @@ def _get_dark_component_styles() -> str:
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
-        }
+        }"""
+
+
+def _get_dark_metric_card_styles() -> str:
+    """
+    Generate metric card styles for dark theme.
+
+    Issue #620.
+    """
+    return """
         .metric-card {
             background: #161b22;
             border: 1px solid #30363d;
@@ -106,7 +112,16 @@ def _get_dark_component_styles() -> str:
         .metric-change {
             font-size: 0.875rem;
             opacity: 0.8;
-        }
+        }"""
+
+
+def _get_dark_chart_styles() -> str:
+    """
+    Generate chart container and loading styles for dark theme.
+
+    Issue #620.
+    """
+    return """
         .chart-container {
             background: #161b22;
             border: 1px solid #30363d;
@@ -119,6 +134,21 @@ def _get_dark_component_styles() -> str:
             padding: 2rem;
             color: #8b949e;
         }"""
+
+
+def _get_dark_component_styles() -> str:
+    """
+    Generate component styles for dark theme (cards, metrics, charts).
+
+    Issue #620.
+
+    Returns:
+        str: CSS for containers, metric cards, and chart containers
+    """
+    container_styles = _get_dark_container_styles()
+    metric_card_styles = _get_dark_metric_card_styles()
+    chart_styles = _get_dark_chart_styles()
+    return f"{container_styles}{metric_card_styles}{chart_styles}"
 
 
 def get_dark_theme_css() -> str:
@@ -141,7 +171,7 @@ def get_dark_theme_css() -> str:
     header_styles = _get_dark_header_styles()
     component_styles = _get_dark_component_styles()
 
-    return f"{base_styles}\n{header_styles}\n{component_styles}\n    """
+    return f"{base_styles}\n{header_styles}\n{component_styles}\n    " ""
 
 
 def _get_light_base_styles() -> str:

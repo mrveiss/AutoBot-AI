@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import platform
-import subprocess
+import subprocess  # nosec B404 - required for system commands
 from typing import Any, Dict, List, Optional
 
 import aiohttp  # Import aiohttp for async web fetching
@@ -171,7 +171,14 @@ class SystemIntegration:
 
     def _list_linux_services(self) -> Dict[str, Any]:
         """List services on Linux (Issue #315 - extracted helper)."""
-        cmd = ["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--output=json"]
+        cmd = [
+            "systemctl",
+            "list-units",
+            "--type=service",
+            "--all",
+            "--no-pager",
+            "--output=json",
+        ]
         result = self._run_command(cmd)
         if result["status"] != "success":
             return result
@@ -222,9 +229,7 @@ class SystemIntegration:
                 "message": "Unsupported OS for service management.",
             }
 
-    def _manage_windows_service(
-        self, service_name: str, action: str
-    ) -> Dict[str, Any]:
+    def _manage_windows_service(self, service_name: str, action: str) -> Dict[str, Any]:
         """Manage Windows service (Issue #665: extracted helper)."""
         # Map action to PowerShell cmdlet
         action_map = {
@@ -232,7 +237,10 @@ class SystemIntegration:
             "stop": f"Stop-Service -Name '{service_name}'",
             "restart": f"Restart-Service -Name '{service_name}'",
         }
-        cmd = ["powershell", action_map.get(action, f"Start-Service -Name '{service_name}'")]
+        cmd = [
+            "powershell",
+            action_map.get(action, f"Start-Service -Name '{service_name}'"),
+        ]
 
         result = self._run_command(cmd)
         if result["status"] == "success":
@@ -299,7 +307,9 @@ class SystemIntegration:
         # This is similar to execute_shell_command in worker_node,
         # but kept here for abstraction and potential future OS-specific
         # enhancements (e.g., direct API calls instead of shell)
-        return self._run_command([command], shell=True)
+        return self._run_command(
+            [command], shell=True
+        )  # nosec B604 - internal command execution
 
     # --- Windows-specific (pywin32/COM - placeholders) ---
     def _windows_interact_com_app(
@@ -409,7 +419,11 @@ class SystemIntegration:
                 pinfo = proc.info
                 if _matches_search_criteria(pinfo):
                     processes_info.append(pinfo)
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+            except (
+                psutil.NoSuchProcess,
+                psutil.AccessDenied,
+                psutil.ZombieProcess,
+            ) as e:
                 logger.debug("Process access error: %s", e)
 
         if not processes_info and (process_name or pid):
@@ -450,51 +464,62 @@ class SystemIntegration:
                 "message": f"Error terminating process {pid}: {e}",
             }
 
+    def _normalize_url(self, url: str) -> str:
+        """
+        Normalize URL by ensuring it has a valid scheme.
+
+        Adds https:// prefix if no http:// or https:// scheme present. Issue #620.
+        """
+        if not url.startswith("http://") and not url.startswith("https://"):
+            return "https://" + url
+        return url
+
+    def _process_web_content(
+        self, url: str, content_type: str, content: str
+    ) -> Dict[str, Any]:
+        """
+        Process web content based on its content type.
+
+        Converts HTML to markdown, passes through text/plain and JSON. Issue #620.
+        """
+        if "text/html" in content_type:
+            return {
+                "status": "success",
+                "url": url,
+                "content_type": "text/markdown",
+                "content": md(content),
+            }
+        elif "text/plain" in content_type or "application/json" in content_type:
+            return {
+                "status": "success",
+                "url": url,
+                "content_type": content_type,
+                "content": content,
+            }
+        else:
+            return {
+                "status": "error",
+                "message": (
+                    "Unsupported content type for direct text "
+                    f"extraction: {content_type}"
+                ),
+                "url": url,
+            }
+
     async def web_fetch(self, url: str) -> Dict[str, Any]:
         """
         Fetches content from a specified URL and processes it into markdown.
         """
         try:
-            # Ensure URL starts with http:// or https://
-            if not url.startswith("http://") and not url.startswith("https://"):
-                url = "https://" + url  # Default to HTTPS
-
-            # Use singleton HTTP client for connection pooling
+            url = self._normalize_url(url)
             http_client = get_http_client()
             async with await http_client.get(
                 url, timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
-                # Raise an exception for HTTP errors (4xx or 5xx)
                 response.raise_for_status()
-
                 content_type = response.headers.get("Content-Type", "").lower()
                 content = await response.text()
-
-                if "text/html" in content_type:
-                    markdown_content = md(content)
-                    return {
-                        "status": "success",
-                        "url": url,
-                        "content_type": "text/markdown",
-                        "content": markdown_content,
-                    }
-                elif "text/plain" in content_type or "application/json" in content_type:
-                    return {
-                        "status": "success",
-                        "url": url,
-                        "content_type": content_type,
-                        "content": content,
-                    }
-                else:
-                    # For other content types, return a message indicating it's not text
-                    return {
-                        "status": "error",
-                        "message": (
-                            "Unsupported content type for direct text "
-                            f"extraction: {content_type}"
-                        ),
-                        "url": url,
-                    }
+                return self._process_web_content(url, content_type, content)
 
         except aiohttp.ClientError as e:
             return {

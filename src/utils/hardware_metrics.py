@@ -906,7 +906,7 @@ class Phase9PerformanceMonitor:
                 service_metric
             )
 
-    def _build_metrics_response(
+    def _build_metrics_dict(
         self,
         gpu_metrics: Optional["GPUMetrics"],
         npu_metrics: Optional["NPUMetrics"],
@@ -914,87 +914,68 @@ class Phase9PerformanceMonitor:
         system_metrics: Optional["SystemPerformanceMetrics"],
         service_metrics: Optional[List["ServicePerformanceMetrics"]],
     ) -> Dict[str, Any]:
-        """Build the metrics response dictionary. Issue #620.
+        """Build raw metrics dictionary for Redis persistence. Issue #620."""
+        return {
+            "gpu": gpu_metrics,
+            "npu": npu_metrics,
+            "multimodal": multimodal_metrics,
+            "system": system_metrics,
+            "services": service_metrics,
+        }
 
-        Args:
-            gpu_metrics: GPU metrics or None
-            npu_metrics: NPU metrics or None
-            multimodal_metrics: Multimodal metrics or None
-            system_metrics: System metrics or None
-            service_metrics: List of service metrics or None
-
-        Returns:
-            Dictionary containing all metrics in serializable format
-        """
+    def _build_metrics_response(self, metrics_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the metrics response dictionary. Issue #620."""
         return {
             "timestamp": time.time(),
-            "gpu": asdict(gpu_metrics) if gpu_metrics else None,
-            "npu": asdict(npu_metrics) if npu_metrics else None,
-            "multimodal": asdict(multimodal_metrics) if multimodal_metrics else None,
-            "system": asdict(system_metrics) if system_metrics else None,
-            "services": [asdict(s) for s in (service_metrics or [])],
+            "gpu": asdict(metrics_dict["gpu"]) if metrics_dict["gpu"] else None,
+            "npu": asdict(metrics_dict["npu"]) if metrics_dict["npu"] else None,
+            "multimodal": (
+                asdict(metrics_dict["multimodal"])
+                if metrics_dict["multimodal"]
+                else None
+            ),
+            "system": (
+                asdict(metrics_dict["system"]) if metrics_dict["system"] else None
+            ),
+            "services": [asdict(s) for s in (metrics_dict["services"] or [])],
             "collection_successful": True,
         }
+
+    def _build_error_response(self, error: Exception) -> Dict[str, Any]:
+        """Build error response for failed metrics collection. Issue #620."""
+        return {
+            "timestamp": time.time(),
+            "collection_successful": False,
+            "error": str(error),
+        }
+
+    async def _collect_and_process_metrics(self) -> Dict[str, Any]:
+        """Collect, store, and persist all metrics. Issue #620."""
+        tasks = [
+            self.collect_gpu_metrics(),
+            self.collect_npu_metrics(),
+            self.collect_multimodal_metrics(),
+            self.collect_system_performance_metrics(),
+            self.collect_service_performance_metrics(),
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        processed = self._handle_gather_exceptions(results)
+
+        self._store_metrics_in_buffers(*processed)
+
+        metrics_dict = self._build_metrics_dict(*processed)
+        if self.redis_client:
+            await self._persist_metrics_to_redis(metrics_dict)
+
+        return self._build_metrics_response(metrics_dict)
 
     async def collect_all_metrics(self) -> Dict[str, Any]:
         """Collect all performance metrics in parallel. Issue #620."""
         try:
-            # Collect all metrics concurrently
-            tasks = [
-                self.collect_gpu_metrics(),
-                self.collect_npu_metrics(),
-                self.collect_multimodal_metrics(),
-                self.collect_system_performance_metrics(),
-                self.collect_service_performance_metrics(),
-            ]
-
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Handle exceptions (Issue #620: uses helper)
-            (
-                gpu_metrics,
-                npu_metrics,
-                multimodal_metrics,
-                system_metrics,
-                service_metrics,
-            ) = self._handle_gather_exceptions(results)
-
-            # Store metrics in buffers (Issue #620: uses helper)
-            self._store_metrics_in_buffers(
-                gpu_metrics,
-                npu_metrics,
-                multimodal_metrics,
-                system_metrics,
-                service_metrics,
-            )
-
-            # Persist to Redis if available
-            metrics_dict = {
-                "gpu": gpu_metrics,
-                "npu": npu_metrics,
-                "multimodal": multimodal_metrics,
-                "system": system_metrics,
-                "services": service_metrics,
-            }
-            if self.redis_client:
-                await self._persist_metrics_to_redis(metrics_dict)
-
-            # Build response (Issue #620: uses helper)
-            return self._build_metrics_response(
-                gpu_metrics,
-                npu_metrics,
-                multimodal_metrics,
-                system_metrics,
-                service_metrics,
-            )
-
+            return await self._collect_and_process_metrics()
         except Exception as e:
             self.logger.error(f"Error collecting all metrics: {e}")
-            return {
-                "timestamp": time.time(),
-                "collection_successful": False,
-                "error": str(e),
-            }
+            return self._build_error_response(e)
 
     async def _persist_metrics_to_redis(self, metrics: Dict[str, Any]):
         """Persist metrics to Redis for historical analysis"""

@@ -767,63 +767,77 @@ class EnterpriseFeatureManager:
 
         return sorted_features
 
+    def _build_feature_summary(self) -> Dict[str, int]:
+        """
+        Build summary statistics for enterprise features.
+
+        Counts total, enabled, degraded, and failed features. Issue #620.
+        """
+        return {
+            "total_features": len(self.features),
+            "enabled_features": sum(
+                1 for f in self.features.values() if f.status == FeatureStatus.ENABLED
+            ),
+            "degraded_features": sum(
+                1 for f in self.features.values() if f.status == FeatureStatus.DEGRADED
+            ),
+            "failed_features": sum(
+                1 for f in self.features.values() if f.status == FeatureStatus.ERROR
+            ),
+        }
+
+    def _build_capabilities_status(self) -> Dict[str, Any]:
+        """
+        Build capabilities status from all capability checkers.
+
+        Aggregates status of research, load balancing, resource, health,
+        and failover capabilities. Issue #620.
+        """
+        return {
+            "research_orchestration": self._check_research_capabilities(),
+            "load_balancing": self._check_load_balancing_capabilities(),
+            "resource_optimization": self._check_resource_capabilities(),
+            "health_monitoring": self._check_health_capabilities(),
+            "failover_recovery": self._check_failover_capabilities(),
+        }
+
+    async def _build_feature_detail(
+        self, name: str, feature: "EnterpriseFeature"
+    ) -> Dict[str, Any]:
+        """
+        Build detailed status for a single feature.
+
+        Includes status, category, enabled time, description, and health check. Issue #620.
+        """
+        return {
+            "status": feature.status.value,
+            "category": feature.category.value,
+            "enabled_at": (
+                feature.enabled_at.isoformat() if feature.enabled_at else None
+            ),
+            "description": feature.description,
+            "health_check": (
+                await self._check_feature_health(name)
+                if feature.status == FeatureStatus.ENABLED
+                else None
+            ),
+        }
+
     async def get_enterprise_status(self) -> Dict[str, Any]:
-        """Get comprehensive enterprise feature status"""
+        """Get comprehensive enterprise feature status."""
         status = {
             "timestamp": datetime.now().isoformat(),
-            "feature_summary": {
-                "total_features": len(self.features),
-                "enabled_features": len(
-                    [
-                        f
-                        for f in self.features.values()
-                        if f.status == FeatureStatus.ENABLED
-                    ]
-                ),
-                "degraded_features": len(
-                    [
-                        f
-                        for f in self.features.values()
-                        if f.status == FeatureStatus.DEGRADED
-                    ]
-                ),
-                "failed_features": len(
-                    [
-                        f
-                        for f in self.features.values()
-                        if f.status == FeatureStatus.ERROR
-                    ]
-                ),
-            },
+            "feature_summary": self._build_feature_summary(),
             "features": {},
-            "capabilities": {
-                "research_orchestration": self._check_research_capabilities(),
-                "load_balancing": self._check_load_balancing_capabilities(),
-                "resource_optimization": self._check_resource_capabilities(),
-                "health_monitoring": self._check_health_capabilities(),
-                "failover_recovery": self._check_failover_capabilities(),
-            },
+            "capabilities": self._build_capabilities_status(),
             "infrastructure": {
                 "vm_topology": self.vm_topology,
                 "resource_pools": self.resource_pools,
             },
         }
 
-        # Add detailed feature status
         for name, feature in self.features.items():
-            status["features"][name] = {
-                "status": feature.status.value,
-                "category": feature.category.value,
-                "enabled_at": (
-                    feature.enabled_at.isoformat() if feature.enabled_at else None
-                ),
-                "description": feature.description,
-                "health_check": (
-                    await self._check_feature_health(name)
-                    if feature.status == FeatureStatus.ENABLED
-                    else None
-                ),
-            }
+            status["features"][name] = await self._build_feature_detail(name, feature)
 
         return status
 

@@ -153,12 +153,10 @@ def create_competitive_analysis_template() -> WorkflowTemplate:
     )
 
 
-def _create_technology_research_steps() -> List[WorkflowStep]:
+def _create_tech_research_initial_steps() -> List[WorkflowStep]:
     """
-    Create workflow steps for technology research template.
+    Create initial steps for technology research: knowledge search and overview.
 
-    Returns list of WorkflowStep objects for knowledge search, technology overview,
-    alternatives research, pros/cons analysis, recommendation, and storing results.
     Issue #620.
     """
     return [
@@ -177,6 +175,16 @@ def _create_technology_research_steps() -> List[WorkflowStep]:
             dependencies=["existing_knowledge"],
             expected_duration_ms=30000,
         ),
+    ]
+
+
+def _create_tech_research_analysis_steps() -> List[WorkflowStep]:
+    """
+    Create analysis steps for technology research: alternatives and pros/cons.
+
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="alternatives_research",
             agent_type="research",
@@ -193,6 +201,16 @@ def _create_technology_research_steps() -> List[WorkflowStep]:
             dependencies=["alternatives_research"],
             expected_duration_ms=20000,
         ),
+    ]
+
+
+def _create_tech_research_final_steps() -> List[WorkflowStep]:
+    """
+    Create final steps for technology research: recommendation and storage.
+
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="recommendation",
             agent_type="orchestrator",
@@ -211,6 +229,21 @@ def _create_technology_research_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _create_technology_research_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for technology research template.
+
+    Returns list of WorkflowStep objects for knowledge search, technology overview,
+    alternatives research, pros/cons analysis, recommendation, and storing results.
+    Issue #620.
+    """
+    steps = []
+    steps.extend(_create_tech_research_initial_steps())
+    steps.extend(_create_tech_research_analysis_steps())
+    steps.extend(_create_tech_research_final_steps())
+    return steps
 
 
 def create_technology_research_template() -> WorkflowTemplate:
