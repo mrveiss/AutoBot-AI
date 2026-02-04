@@ -118,6 +118,30 @@ async def _check_redis_service_status(conn) -> Optional[ConfigurationResult]:
     return None
 
 
+def _create_redis_error_result(
+    error: Exception, is_ssh_error: bool = False
+) -> ConfigurationResult:
+    """
+    Create an error ConfigurationResult for Redis TLS configuration.
+
+    Issue #620.
+
+    Args:
+        error: The exception that occurred
+        is_ssh_error: Whether this is an SSH-specific error
+
+    Returns:
+        ConfigurationResult with failure status and error message
+    """
+    message = f"SSH error: {error}" if is_ssh_error else str(error)
+    return ConfigurationResult(
+        service_name="redis-stack-server",
+        vm_name="redis",
+        success=False,
+        message=message,
+    )
+
+
 async def _apply_redis_tls_config(
     conn,
     remote_cert_dir: str,
@@ -204,12 +228,7 @@ class ServiceConfigurator:
         """
         Configure Redis Stack for TLS connections.
 
-        Issue #665: Refactored to use extracted helpers for config building
-        and SFTP operations.
-        Issue #725: Added auth_clients and disable_plain_port parameters.
-        Issue #694: Use SSOT config for Redis IP.
-        Issue #620: Further refactored with _check_redis_service_status and
-        _apply_redis_tls_config helpers to reduce function length.
+        Issue #620: Uses extracted helpers for config, SFTP, and error handling.
 
         Args:
             auth_clients: Client authentication mode ("optional", "yes", "no")
@@ -243,20 +262,10 @@ class ServiceConfigurator:
 
         except asyncssh.Error as e:
             logger.error("SSH error configuring Redis: %s", e)
-            return ConfigurationResult(
-                service_name="redis-stack-server",
-                vm_name="redis",
-                success=False,
-                message=f"SSH error: {e}",
-            )
+            return _create_redis_error_result(e, is_ssh_error=True)
         except Exception as e:
             logger.error("Error configuring Redis: %s", e)
-            return ConfigurationResult(
-                service_name="redis-stack-server",
-                vm_name="redis",
-                success=False,
-                message=str(e),
-            )
+            return _create_redis_error_result(e)
 
     async def restart_service(self, vm_name: str, service_name: str) -> bool:
         """Restart a service on a VM."""

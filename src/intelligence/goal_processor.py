@@ -16,7 +16,6 @@ from difflib import SequenceMatcher
 from enum import Enum
 from typing import Dict, List
 
-
 logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for warning generation
@@ -87,8 +86,11 @@ class GoalProcessor:
         return {
             "get_ip_address": {
                 "patterns": [
-                    r"what.{0,10}my.{0,10}ip", r"show.{0,10}ip.{0,10}address",
-                    r"get.{0,10}ip", r"find.{0,10}ip", r"current.{0,10}ip",
+                    r"what.{0,10}my.{0,10}ip",
+                    r"show.{0,10}ip.{0,10}address",
+                    r"get.{0,10}ip",
+                    r"find.{0,10}ip",
+                    r"current.{0,10}ip",
                 ],
                 "category": GoalCategory.NETWORK,
                 "explanation": "Get your current IP address",
@@ -96,8 +98,10 @@ class GoalProcessor:
             },
             "network_scan": {
                 "patterns": [
-                    r"scan.{0,10}network", r"find.{0,10}devices",
-                    r"network.{0,10}devices", r"what.{0,10}devices.{0,10}network",
+                    r"scan.{0,10}network",
+                    r"find.{0,10}devices",
+                    r"network.{0,10}devices",
+                    r"what.{0,10}devices.{0,10}network",
                     r"discover.{0,10}hosts",
                 ],
                 "category": GoalCategory.NETWORK,
@@ -106,8 +110,10 @@ class GoalProcessor:
             },
             "port_scan": {
                 "patterns": [
-                    r"scan.{0,10}ports?", r"open.{0,10}ports?",
-                    r"check.{0,10}ports?", r"port.{0,10}scan",
+                    r"scan.{0,10}ports?",
+                    r"open.{0,10}ports?",
+                    r"check.{0,10}ports?",
+                    r"port.{0,10}scan",
                 ],
                 "category": GoalCategory.SECURITY,
                 "explanation": "Scan for open ports on a target",
@@ -120,8 +126,10 @@ class GoalProcessor:
         return {
             "system_info": {
                 "patterns": [
-                    r"system.{0,10}info", r"show.{0,10}system",
-                    r"system.{0,10}details", r"computer.{0,10}info",
+                    r"system.{0,10}info",
+                    r"show.{0,10}system",
+                    r"system.{0,10}details",
+                    r"computer.{0,10}info",
                     r"hardware.{0,10}info",
                 ],
                 "category": GoalCategory.SYSTEM,
@@ -130,8 +138,10 @@ class GoalProcessor:
             },
             "system_update": {
                 "patterns": [
-                    r"update.{0,10}system", r"system.{0,10}update",
-                    r"os.{0,10}update", r"upgrade.{0,10}system",
+                    r"update.{0,10}system",
+                    r"system.{0,10}update",
+                    r"os.{0,10}update",
+                    r"upgrade.{0,10}system",
                     r"install.{0,10}updates",
                 ],
                 "category": GoalCategory.SYSTEM,
@@ -140,8 +150,11 @@ class GoalProcessor:
             },
             "disk_usage": {
                 "patterns": [
-                    r"disk.{0,10}usage", r"storage.{0,10}space",
-                    r"check.{0,10}disk", r"free.{0,10}space", r"disk.{0,10}space",
+                    r"disk.{0,10}usage",
+                    r"storage.{0,10}space",
+                    r"check.{0,10}disk",
+                    r"free.{0,10}space",
+                    r"disk.{0,10}space",
                 ],
                 "category": GoalCategory.SYSTEM,
                 "explanation": "Check disk usage and available storage",
@@ -149,8 +162,10 @@ class GoalProcessor:
             },
             "list_processes": {
                 "patterns": [
-                    r"list.{0,10}processes", r"show.{0,10}processes",
-                    r"running.{0,10}processes", r"ps.{0,10}list",
+                    r"list.{0,10}processes",
+                    r"show.{0,10}processes",
+                    r"running.{0,10}processes",
+                    r"ps.{0,10}list",
                     r"find.{0,10}python.{0,10}processes",
                 ],
                 "category": GoalCategory.SYSTEM,
@@ -164,8 +179,10 @@ class GoalProcessor:
         return {
             "list_files": {
                 "patterns": [
-                    r"list.{0,10}files", r"show.{0,10}files",
-                    r"ls.{0,10}directory", r"directory.{0,10}contents",
+                    r"list.{0,10}files",
+                    r"show.{0,10}files",
+                    r"ls.{0,10}directory",
+                    r"directory.{0,10}contents",
                     r"files.{0,10}current.{0,10}directory",
                 ],
                 "category": GoalCategory.FILES,
@@ -174,8 +191,10 @@ class GoalProcessor:
             },
             "find_files": {
                 "patterns": [
-                    r"find.{0,10}files?", r"search.{0,10}files?",
-                    r"locate.{0,10}files?", r"grep.{0,10}files?",
+                    r"find.{0,10}files?",
+                    r"search.{0,10}files?",
+                    r"locate.{0,10}files?",
+                    r"grep.{0,10}files?",
                 ],
                 "category": GoalCategory.FILES,
                 "explanation": "Search for files matching criteria",
@@ -184,7 +203,8 @@ class GoalProcessor:
             "backup_files": {
                 "patterns": [
                     r"backup.{0,20}(home|directory|files?)",
-                    r"create.{0,10}backup", r"archive.{0,10}files?",
+                    r"create.{0,10}backup",
+                    r"archive.{0,10}files?",
                 ],
                 "category": GoalCategory.FILES,
                 "explanation": "Create backup of files or directories",
@@ -212,8 +232,10 @@ class GoalProcessor:
         return {
             "system_monitoring": {
                 "patterns": [
-                    r"monitor.{0,10}system", r"performance.{0,10}monitor",
-                    r"system.{0,10}performance", r"cpu.{0,10}usage",
+                    r"monitor.{0,10}system",
+                    r"performance.{0,10}monitor",
+                    r"system.{0,10}performance",
+                    r"cpu.{0,10}usage",
                     r"memory.{0,10}usage",
                 ],
                 "category": GoalCategory.MONITORING,
@@ -242,6 +264,93 @@ class GoalProcessor:
             # Low risk patterns are default
         }
 
+    def _find_best_intent_match(
+        self, user_input_lower: str
+    ) -> tuple[tuple[str, Dict] | None, float]:
+        """
+        Find the best matching intent for user input.
+
+        Args:
+            user_input_lower: Lowercase user input string
+
+        Returns:
+            Tuple of (best_match, best_confidence). Issue #620.
+        """
+        best_match = None
+        best_confidence = 0.0
+
+        for intent_name, intent_data in self._intent_patterns.items():
+            for pattern in intent_data["patterns"]:
+                if re.search(pattern, user_input_lower):
+                    confidence = self._calculate_pattern_confidence(
+                        pattern, user_input_lower
+                    )
+                    if confidence > best_confidence:
+                        best_confidence = confidence
+                        best_match = (intent_name, intent_data)
+
+        return best_match, best_confidence
+
+    def _build_matched_goal(
+        self,
+        user_input: str,
+        user_input_lower: str,
+        intent_name: str,
+        intent_data: Dict,
+        confidence: float,
+    ) -> ProcessedGoal:
+        """
+        Build ProcessedGoal for a matched intent.
+
+        Args:
+            user_input: Original user input
+            user_input_lower: Lowercase user input
+            intent_name: Name of matched intent
+            intent_data: Intent pattern data
+            confidence: Match confidence score
+
+        Returns:
+            ProcessedGoal for matched intent. Issue #620.
+        """
+        risk_level = self._assess_risk_level(user_input_lower, intent_data["risk"])
+        warnings = self._generate_warnings(user_input_lower, risk_level)
+
+        return ProcessedGoal(
+            original_goal=user_input,
+            intent=intent_name,
+            explanation=intent_data["explanation"],
+            category=intent_data["category"],
+            confidence=confidence,
+            risk_level=risk_level,
+            warnings=warnings,
+        )
+
+    def _build_unknown_goal(
+        self, user_input: str, user_input_lower: str
+    ) -> ProcessedGoal:
+        """
+        Build ProcessedGoal for an unknown/unmatched intent.
+
+        Args:
+            user_input: Original user input
+            user_input_lower: Lowercase user input
+
+        Returns:
+            ProcessedGoal for unknown intent. Issue #620.
+        """
+        category = self._guess_category(user_input_lower)
+        risk_level = self._assess_risk_level(user_input_lower, RiskLevel.LOW)
+
+        return ProcessedGoal(
+            original_goal=user_input,
+            intent="unknown_goal",
+            explanation=f"Unknown request: {user_input}",
+            category=category,
+            confidence=0.1,
+            risk_level=risk_level,
+            warnings=self._generate_warnings(user_input_lower, risk_level),
+        )
+
     async def process_goal(self, user_input: str) -> ProcessedGoal:
         """
         Process a natural language goal into structured intent.
@@ -253,56 +362,17 @@ class GoalProcessor:
             ProcessedGoal: Processed goal with structured information
         """
         user_input_lower = user_input.lower().strip()
-
         logger.info("Processing goal: %s", user_input)
 
-        # Find matching intent
-        best_match = None
-        best_confidence = 0.0
-
-        for intent_name, intent_data in self._intent_patterns.items():
-            for pattern in intent_data["patterns"]:
-                if re.search(pattern, user_input_lower):
-                    # Calculate confidence based on pattern match quality
-                    confidence = self._calculate_pattern_confidence(
-                        pattern, user_input_lower
-                    )
-                    if confidence > best_confidence:
-                        best_confidence = confidence
-                        best_match = (intent_name, intent_data)
+        best_match, best_confidence = self._find_best_intent_match(user_input_lower)
 
         if best_match:
             intent_name, intent_data = best_match
-
-            # Assess risk level
-            risk_level = self._assess_risk_level(user_input_lower, intent_data["risk"])
-
-            # Generate warnings if needed
-            warnings = self._generate_warnings(user_input_lower, risk_level)
-
-            return ProcessedGoal(
-                original_goal=user_input,
-                intent=intent_name,
-                explanation=intent_data["explanation"],
-                category=intent_data["category"],
-                confidence=best_confidence,
-                risk_level=risk_level,
-                warnings=warnings,
+            return self._build_matched_goal(
+                user_input, user_input_lower, intent_name, intent_data, best_confidence
             )
         else:
-            # Unknown goal - try to extract some meaning
-            category = self._guess_category(user_input_lower)
-            risk_level = self._assess_risk_level(user_input_lower, RiskLevel.LOW)
-
-            return ProcessedGoal(
-                original_goal=user_input,
-                intent="unknown_goal",
-                explanation=f"Unknown request: {user_input}",
-                category=category,
-                confidence=0.1,
-                risk_level=risk_level,
-                warnings=self._generate_warnings(user_input_lower, risk_level),
-            )
+            return self._build_unknown_goal(user_input, user_input_lower)
 
     def _calculate_pattern_confidence(self, pattern: str, user_input: str) -> float:
         """Calculate confidence score for pattern match."""

@@ -664,6 +664,40 @@ class FactExtractionService:
             logger.error("Error deserializing fact %s: %s", fact_id, e)
             return None
 
+    def _collect_filtered_facts(
+        self,
+        fact_ids_list: List[str],
+        fact_data_list: List[Optional[str]],
+        active_only: bool,
+        min_confidence: Optional[float],
+        limit: int,
+    ) -> List[AtomicFact]:
+        """
+        Collect and filter facts from retrieved data up to the limit.
+
+        Issue #620.
+
+        Args:
+            fact_ids_list: List of fact IDs
+            fact_data_list: List of serialized fact data
+            active_only: Whether to filter inactive facts
+            min_confidence: Minimum confidence threshold
+            limit: Maximum number of facts to return
+
+        Returns:
+            List of filtered AtomicFact objects
+        """
+        facts = []
+        for fact_id, fact_data in zip(fact_ids_list, fact_data_list):
+            fact = self._filter_and_deserialize_fact(
+                fact_id, fact_data, active_only, min_confidence
+            )
+            if fact:
+                facts.append(fact)
+                if len(facts) >= limit:
+                    break
+        return facts
+
     async def get_facts_by_criteria(
         self,
         source: Optional[str] = None,
@@ -674,9 +708,7 @@ class FactExtractionService:
         limit: int = 100,
     ) -> List[AtomicFact]:
         """
-        Retrieve facts based on various criteria.
-
-        Issue #665: Refactored to use extracted helper methods.
+        Retrieve facts based on various criteria. Issue #620.
 
         Args:
             source: Filter by source
@@ -702,23 +734,12 @@ class FactExtractionService:
             if not fact_ids:
                 return []
 
-            # Get more IDs to account for filtering
             fact_ids_list = list(fact_ids)[: limit * 2]
-
-            # Issue #665: Use helper for batch retrieval
             fact_data_list = await self._batch_retrieve_facts(fact_ids_list)
 
-            # Issue #665: Use helper for filtering
-            facts = []
-            for fact_id, fact_data in zip(fact_ids_list, fact_data_list):
-                fact = self._filter_and_deserialize_fact(
-                    fact_id, fact_data, active_only, min_confidence
-                )
-                if fact:
-                    facts.append(fact)
-                    if len(facts) >= limit:
-                        break
-
+            facts = self._collect_filtered_facts(
+                fact_ids_list, fact_data_list, active_only, min_confidence, limit
+            )
             logger.debug("Retrieved %s facts matching criteria", len(facts))
             return facts
 

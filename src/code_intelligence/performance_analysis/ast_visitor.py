@@ -167,67 +167,94 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                     )
                 )
 
-    def _check_loop_patterns(self, node) -> None:
-        """Check for performance issues in loops."""
-        # Check for nested loop complexity
-        if self.loop_depth >= 2:
-            complexity = COMPLEXITY_LEVELS.get(self.loop_depth + 1, "O(n⁴+)")
+    def _check_nested_loop_complexity(self, node) -> None:
+        """
+        Check for nested loop complexity and add performance issue if detected.
+
+        Issue #620.
+        """
+        if self.loop_depth < 2:
+            return
+
+        complexity = COMPLEXITY_LEVELS.get(self.loop_depth + 1, "O(n^4+)")
+        severity = (
+            PerformanceSeverity.HIGH
+            if self.loop_depth >= 3
+            else PerformanceSeverity.MEDIUM
+        )
+
+        code = self._get_source_segment(
+            node.lineno, min(node.lineno + 5, len(self.source_lines))
+        )
+        self.findings.append(
+            PerformanceIssue(
+                issue_type=PerformanceIssueType.NESTED_LOOP_COMPLEXITY,
+                severity=severity,
+                file_path=self.file_path,
+                line_start=node.lineno,
+                line_end=node.end_lineno or node.lineno,
+                description=f"Nested loop depth {self.loop_depth} has {complexity} complexity",
+                recommendation="Consider using hash-based lookups, caching, or algorithm optimization",
+                estimated_complexity=complexity,
+                estimated_impact="Significant slowdown with large inputs",
+                current_code=code,
+                confidence=0.9,
+                metrics={"loop_depth": self.loop_depth},
+            )
+        )
+
+    def _check_db_operations_in_loop(self, node) -> None:
+        """
+        Check for database operations inside loops (N+1 query pattern).
+
+        Issue #371: Uses refined patterns for database operation detection.
+        Issue #620.
+        """
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+
+            call_name = self._get_call_name(child)
+            if not call_name:
+                continue
+
+            is_db_op, confidence = self._is_database_operation(call_name)
+            if not is_db_op:
+                continue
+
+            code = self._get_source_segment(child.lineno, child.lineno)
             severity = (
                 PerformanceSeverity.HIGH
-                if self.loop_depth >= 3
+                if confidence >= 0.8
                 else PerformanceSeverity.MEDIUM
-            )
-
-            code = self._get_source_segment(
-                node.lineno, min(node.lineno + 5, len(self.source_lines))
             )
             self.findings.append(
                 PerformanceIssue(
-                    issue_type=PerformanceIssueType.NESTED_LOOP_COMPLEXITY,
+                    issue_type=PerformanceIssueType.N_PLUS_ONE_QUERY,
                     severity=severity,
                     file_path=self.file_path,
-                    line_start=node.lineno,
-                    line_end=node.end_lineno or node.lineno,
-                    description=f"Nested loop depth {self.loop_depth} has {complexity} complexity",
-                    recommendation="Consider using hash-based lookups, caching, or algorithm optimization",
-                    estimated_complexity=complexity,
-                    estimated_impact="Significant slowdown with large inputs",
+                    line_start=child.lineno,
+                    line_end=child.lineno,
+                    description=f"Database operation '{call_name}' inside loop (N+1 pattern)",
+                    recommendation="Batch queries or use bulk operations",
+                    estimated_complexity="O(n) database calls",
+                    estimated_impact="Major database bottleneck",
                     current_code=code,
-                    confidence=0.9,
-                    metrics={"loop_depth": self.loop_depth},
+                    optimized_code="Use batch fetch: db.query(...).filter(id.in_(ids))",
+                    confidence=confidence,
+                    potential_false_positive=confidence < 0.7,
                 )
             )
+            break  # Only report once per loop
 
-        # Issue #371: Check for database operations in loop using refined patterns
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                call_name = self._get_call_name(child)
-                if call_name:
-                    is_db_op, confidence = self._is_database_operation(call_name)
-                    if is_db_op:
-                        code = self._get_source_segment(child.lineno, child.lineno)
-                        self.findings.append(
-                            PerformanceIssue(
-                                issue_type=PerformanceIssueType.N_PLUS_ONE_QUERY,
-                                severity=(
-                                    PerformanceSeverity.HIGH
-                                    if confidence >= 0.8
-                                    else PerformanceSeverity.MEDIUM
-                                ),
-                                file_path=self.file_path,
-                                line_start=child.lineno,
-                                line_end=child.lineno,
-                                description=f"Database operation '{call_name}' inside loop (N+1 pattern)",
-                                recommendation="Batch queries or use bulk operations",
-                                estimated_complexity="O(n) database calls",
-                                estimated_impact="Major database bottleneck",
-                                current_code=code,
-                                optimized_code="Use batch fetch: db.query(...).filter(id.in_(ids))",
-                                confidence=confidence,
-                                potential_false_positive=confidence < 0.7,
-                            )
-                        )
-                        break  # Only report once per loop
+    def _check_loop_patterns(self, node) -> None:
+        """
+        Check for performance issues in loops.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        self._check_nested_loop_complexity(node)
+        self._check_db_operations_in_loop(node)
 
     def _is_database_operation(self, call_name: str) -> tuple:
         """Issue #371: Determine if a call is a database operation with confidence score.

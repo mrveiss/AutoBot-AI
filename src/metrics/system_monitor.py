@@ -86,6 +86,45 @@ class SystemResourceMonitor:
                 continue
         return autobot_processes
 
+    def _build_disk_metrics(self, disk_usage, disk_io) -> Dict[str, Any]:
+        """
+        Build disk metrics sub-dictionary.
+
+        Args:
+            disk_usage: psutil disk_usage result
+            disk_io: psutil disk_io_counters result
+
+        Returns:
+            Disk metrics dictionary. Issue #620.
+        """
+        return {
+            "total_gb": disk_usage.total / 1024 / 1024 / 1024,
+            "used_gb": disk_usage.used / 1024 / 1024 / 1024,
+            "free_gb": disk_usage.free / 1024 / 1024 / 1024,
+            "percent": (disk_usage.used / disk_usage.total) * 100,
+            "io": {
+                "read_mb": disk_io.read_bytes / 1024 / 1024 if disk_io else 0,
+                "write_mb": disk_io.write_bytes / 1024 / 1024 if disk_io else 0,
+            },
+        }
+
+    def _build_network_metrics(self, network_io) -> Dict[str, Any]:
+        """
+        Build network metrics sub-dictionary.
+
+        Args:
+            network_io: psutil net_io_counters result
+
+        Returns:
+            Network metrics dictionary. Issue #620.
+        """
+        return {
+            "bytes_sent_mb": network_io.bytes_sent / 1024 / 1024 if network_io else 0,
+            "bytes_recv_mb": network_io.bytes_recv / 1024 / 1024 if network_io else 0,
+            "packets_sent": network_io.packets_sent if network_io else 0,
+            "packets_recv": network_io.packets_recv if network_io else 0,
+        }
+
     def _build_metrics_dict(
         self,
         cpu_percent,
@@ -102,6 +141,7 @@ class SystemResourceMonitor:
         Build the metrics dictionary from collected data.
 
         Issue #281: Extracted from collect_system_metrics to reduce function length.
+        Issue #620: Further extraction of disk and network metrics builders.
         """
         return {
             "timestamp": datetime.now().isoformat(),
@@ -121,26 +161,8 @@ class SystemResourceMonitor:
                 "used_mb": swap.used / 1024 / 1024,
                 "percent": swap.percent,
             },
-            "disk": {
-                "total_gb": disk_usage.total / 1024 / 1024 / 1024,
-                "used_gb": disk_usage.used / 1024 / 1024 / 1024,
-                "free_gb": disk_usage.free / 1024 / 1024 / 1024,
-                "percent": (disk_usage.used / disk_usage.total) * 100,
-                "io": {
-                    "read_mb": disk_io.read_bytes / 1024 / 1024 if disk_io else 0,
-                    "write_mb": disk_io.write_bytes / 1024 / 1024 if disk_io else 0,
-                },
-            },
-            "network": {
-                "bytes_sent_mb": (
-                    network_io.bytes_sent / 1024 / 1024 if network_io else 0
-                ),
-                "bytes_recv_mb": (
-                    network_io.bytes_recv / 1024 / 1024 if network_io else 0
-                ),
-                "packets_sent": network_io.packets_sent if network_io else 0,
-                "packets_recv": network_io.packets_recv if network_io else 0,
-            },
+            "disk": self._build_disk_metrics(disk_usage, disk_io),
+            "network": self._build_network_metrics(network_io),
             "autobot_processes": autobot_processes,
             "total_autobot_memory_mb": sum(p["memory_mb"] for p in autobot_processes),
             "total_autobot_cpu_percent": sum(
