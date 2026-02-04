@@ -11,7 +11,7 @@ import logging
 import os
 import pty
 import queue
-import subprocess
+import subprocess  # nosec B404 - required for PTY shell process management
 import threading
 import time
 from enum import Enum
@@ -167,9 +167,7 @@ class TerminalWebSocketManager:
         try:
             # Run blocking PTY creation in thread pool to avoid blocking event loop
             # Issue #291: Convert blocking I/O to async
-            master_fd, _, process = await asyncio.to_thread(
-                self._sync_create_pty
-            )
+            master_fd, _, process = await asyncio.to_thread(self._sync_create_pty)
             self.pty_fd = master_fd
             self.process = process
 
@@ -179,36 +177,51 @@ class TerminalWebSocketManager:
             logger.error("Failed to create PTY: %s", e)
             raise
 
+    def _configure_pty_attrs(self, slave_fd: int) -> None:
+        """Configure PTY terminal attributes for shell operation. Issue #620."""
+        import termios
+
+        attrs = termios.tcgetattr(slave_fd)
+        # Disable auto CR/LF and XON/XOFF
+        attrs[0] &= ~(termios.ICRNL | termios.IXON)
+        attrs[3] &= ~termios.ECHO  # Disable echo
+        termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
+
+    def _cleanup_pty_fds(
+        self, master_fd: Optional[int], slave_fd: Optional[int]
+    ) -> None:
+        """Clean up PTY file descriptors on error. Issue #620."""
+        if master_fd is not None:
+            try:
+                os.close(master_fd)
+            except OSError as close_err:
+                logger.debug("Master fd close error: %s", close_err)
+        if slave_fd is not None:
+            try:
+                os.close(slave_fd)
+            except OSError as close_err:
+                logger.debug("Slave fd close error: %s", close_err)
+
     def _sync_create_pty(self):
         """Synchronous PTY creation - runs in thread pool.
 
         This is separated from _create_pty to run blocking operations
         (pty.openpty, termios, subprocess.Popen) in a thread pool.
         """
-        import termios
-
-        # Create PTY pair
         master_fd, slave_fd = pty.openpty()
 
         try:
-            # Configure PTY settings
-            attrs = termios.tcgetattr(slave_fd)
-            # Disable auto CR/LF and XON/XOFF
-            attrs[0] &= ~(termios.ICRNL | termios.IXON)
-            attrs[3] &= ~termios.ECHO  # Disable echo
-            termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
+            self._configure_pty_attrs(slave_fd)
 
-            # Start shell process with safer preexec_fn
             def safe_preexec():
                 """Safe preexec function that handles errors gracefully"""
                 try:
                     os.setsid()
                 except OSError as e:
-                    # Log but don't fail - some environments don't support setsid
                     logger.warning("setsid failed in preexec_fn: %s", e)
 
             process = subprocess.Popen(
-                ["/bin/bash", "-i"],  # Interactive bash
+                ["/bin/bash", "-i"],
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,
@@ -218,26 +231,16 @@ class TerminalWebSocketManager:
                 start_new_session=True,
             )
 
-            # Close slave fd (process owns it now)
             os.close(slave_fd)
+            slave_fd = None  # Mark as closed for cleanup
 
-            # Verify process started
             if process.poll() is not None:
                 raise RuntimeError("Shell process failed to start")
 
-            return master_fd, None, process  # slave_fd is closed after Popen
+            return master_fd, None, process
 
         except Exception as e:
-            if "master_fd" in locals():
-                try:
-                    os.close(master_fd)
-                except OSError as close_err:
-                    logger.debug("Master fd close error: %s", close_err)
-            if "slave_fd" in locals():
-                try:
-                    os.close(slave_fd)
-                except OSError as close_err:
-                    logger.debug("Slave fd close error: %s", close_err)
+            self._cleanup_pty_fds(master_fd, slave_fd)
             raise RuntimeError(f"PTY creation failed: {e}")
 
     async def _start_background_tasks(self):
@@ -338,14 +341,18 @@ class TerminalWebSocketManager:
             except queue.Empty:
                 logger.debug("Queue empty during overflow handling")
 
-    async def _send_websocket_message(self, message: Dict[str, Any], state: TerminalState) -> None:
+    async def _send_websocket_message(
+        self, message: Dict[str, Any], state: TerminalState
+    ) -> None:
         """Send message via WebSocket if conditions are met (Issue #315: extracted).
 
         Args:
             message: Message to send
             state: Current terminal state
         """
-        if not (self.message_sender and self.websocket and state == TerminalState.RUNNING):
+        if not (
+            self.message_sender and self.websocket and state == TerminalState.RUNNING
+        ):
             return
 
         try:

@@ -10,7 +10,7 @@ Contains model performance tracking and persistence to Redis.
 
 import logging
 import time
-from typing import Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from .types import ModelInfo
@@ -46,8 +46,7 @@ class ModelPerformanceTracker:
                     or perf_data.get("avg_response_time", 0)
                 )
                 model_info.success_rate = float(
-                    perf_data.get(b"success_rate")
-                    or perf_data.get("success_rate", 1.0)
+                    perf_data.get(b"success_rate") or perf_data.get("success_rate", 1.0)
                 )
                 model_info.last_used = float(
                     perf_data.get(b"last_used") or perf_data.get("last_used", 0)
@@ -83,7 +82,9 @@ class ModelPerformanceTracker:
             await self._redis_client.expire(key, self._cache_ttl)
 
         except Exception as e:
-            self._logger.error("Error saving performance for %s: %s", model_info.name, e)
+            self._logger.error(
+                "Error saving performance for %s: %s", model_info.name, e
+            )
 
     async def update_and_save(
         self,
@@ -108,6 +109,65 @@ class ModelPerformanceTracker:
                 model_name, response_time, tokens_per_second, success
             )
 
+    def _parse_existing_redis_metrics(self, existing: Dict) -> tuple:
+        """
+        Parse existing Redis metrics and return previous values.
+
+        Handles both bytes and string keys from Redis hgetall responses.
+        Returns tuple of (avg_response, avg_tokens, success_rate, use_count).
+        Issue #620.
+        """
+        prev_avg_response = float(
+            existing.get(b"avg_response_time") or existing.get("avg_response_time", 0)
+        )
+        prev_avg_tokens = float(
+            existing.get(b"avg_tokens_per_second")
+            or existing.get("avg_tokens_per_second", 0)
+        )
+        prev_success_rate = float(
+            existing.get(b"success_rate") or existing.get("success_rate", 1.0)
+        )
+        use_count = int(existing.get(b"use_count") or existing.get("use_count", 0))
+        return prev_avg_response, prev_avg_tokens, prev_success_rate, use_count
+
+    def _calculate_updated_metrics(
+        self,
+        existing: Dict,
+        response_time: float,
+        tokens_per_second: float,
+        success: bool,
+    ) -> tuple:
+        """
+        Calculate updated performance metrics based on existing data.
+
+        Returns tuple of (new_avg_response, new_avg_tokens, new_success_rate, new_count).
+        Issue #620.
+        """
+        if existing:
+            (
+                prev_avg_response,
+                prev_avg_tokens,
+                prev_success_rate,
+                use_count,
+            ) = self._parse_existing_redis_metrics(existing)
+            new_count = use_count + 1
+            new_avg_response = (
+                prev_avg_response * use_count + response_time
+            ) / new_count
+            new_avg_tokens = (
+                prev_avg_tokens * use_count + tokens_per_second
+            ) / new_count
+            new_success_rate = (
+                prev_success_rate * use_count + (1.0 if success else 0.0)
+            ) / new_count
+        else:
+            new_count = 1
+            new_avg_response = response_time
+            new_avg_tokens = tokens_per_second
+            new_success_rate = 1.0 if success else 0.0
+
+        return new_avg_response, new_avg_tokens, new_success_rate, new_count
+
     async def _update_redis_directly(
         self,
         model_name: str,
@@ -123,37 +183,14 @@ class ModelPerformanceTracker:
             key = f"model_perf:{model_name}"
             existing = await self._redis_client.hgetall(key)
 
-            if existing:
-                prev_avg_response = float(
-                    existing.get(b"avg_response_time")
-                    or existing.get("avg_response_time", 0)
-                )
-                prev_avg_tokens = float(
-                    existing.get(b"avg_tokens_per_second")
-                    or existing.get("avg_tokens_per_second", 0)
-                )
-                prev_success_rate = float(
-                    existing.get(b"success_rate") or existing.get("success_rate", 1.0)
-                )
-                use_count = int(
-                    existing.get(b"use_count") or existing.get("use_count", 0)
-                )
-
-                new_count = use_count + 1
-                new_avg_response = (
-                    prev_avg_response * use_count + response_time
-                ) / new_count
-                new_avg_tokens = (
-                    prev_avg_tokens * use_count + tokens_per_second
-                ) / new_count
-                new_success_rate = (
-                    prev_success_rate * use_count + (1.0 if success else 0.0)
-                ) / new_count
-            else:
-                new_count = 1
-                new_avg_response = response_time
-                new_avg_tokens = tokens_per_second
-                new_success_rate = 1.0 if success else 0.0
+            (
+                new_avg_response,
+                new_avg_tokens,
+                new_success_rate,
+                new_count,
+            ) = self._calculate_updated_metrics(
+                existing, response_time, tokens_per_second, success
+            )
 
             await self._redis_client.hset(
                 key,

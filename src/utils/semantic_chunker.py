@@ -910,6 +910,24 @@ class AutoBotSemanticChunker:
             logger.error("Error in semantic chunking: %s", e)
             return await self._fallback_chunking(text, metadata)
 
+    def _create_fallback_chunk(
+        self,
+        sentences: List[str],
+        start_index: int,
+        end_index: int,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> SemanticChunk:
+        """Create a fallback chunk from a list of sentences. Issue #620."""
+        chunk_content = " ".join(sentences)
+        return SemanticChunk(
+            content=chunk_content,
+            start_index=start_index,
+            end_index=end_index,
+            sentences=sentences.copy() if sentences else [],
+            semantic_score=0.5,
+            metadata={"fallback_chunking": True, **(metadata or {})},
+        )
+
     async def _fallback_chunking(
         self, text: str, metadata: Optional[Dict[str, Any]] = None
     ) -> List[SemanticChunk]:
@@ -925,11 +943,9 @@ class AutoBotSemanticChunker:
         """
         logger.warning("Using fallback chunking method")
 
-        # Simple sentence-based chunking
         sentences = self._split_into_sentences(text)
-        chunks = []
-
-        current_sentences = []
+        chunks: List[SemanticChunk] = []
+        current_sentences: List[str] = []
         current_length = 0
 
         for i, sentence in enumerate(sentences):
@@ -939,15 +955,8 @@ class AutoBotSemanticChunker:
                 current_length + sentence_len > self.max_chunk_size
                 and current_sentences
             ):
-                # Create chunk
-                chunk_content = " ".join(current_sentences)
-                chunk = SemanticChunk(
-                    content=chunk_content,
-                    start_index=i - len(current_sentences),
-                    end_index=i,
-                    sentences=current_sentences.copy(),
-                    semantic_score=0.5,  # Default score
-                    metadata={"fallback_chunking": True, **(metadata or {})},
+                chunk = self._create_fallback_chunk(
+                    current_sentences, i - len(current_sentences), i, metadata
                 )
                 chunks.append(chunk)
                 current_sentences = []
@@ -956,16 +965,12 @@ class AutoBotSemanticChunker:
             current_sentences.append(sentence)
             current_length += sentence_len
 
-        # Add final chunk
         if current_sentences:
-            chunk_content = " ".join(current_sentences)
-            chunk = SemanticChunk(
-                content=chunk_content,
-                start_index=len(sentences) - len(current_sentences),
-                end_index=len(sentences),
-                sentences=current_sentences,
-                semantic_score=0.5,
-                metadata={"fallback_chunking": True, **(metadata or {})},
+            chunk = self._create_fallback_chunk(
+                current_sentences,
+                len(sentences) - len(current_sentences),
+                len(sentences),
+                metadata,
             )
             chunks.append(chunk)
 

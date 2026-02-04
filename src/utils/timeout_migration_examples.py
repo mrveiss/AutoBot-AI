@@ -782,52 +782,59 @@ class ExistingOperationMigrator:
                 "timestamp": datetime.now().isoformat(),
             }
 
+    def _check_vulnerability_patterns(
+        self, content: str, vulnerabilities: List[Dict[str, Any]]
+    ) -> None:
+        """Check for common vulnerability patterns in file content. Issue #620."""
+        if "password" in content.lower() and "=" in content:
+            vulnerabilities.append(
+                {
+                    "type": "hardcoded_credential",
+                    "severity": "high",
+                    "description": "Potential hardcoded password detected",
+                }
+            )
+
+        if "api_key" in content.lower() and "=" in content:
+            vulnerabilities.append(
+                {
+                    "type": "hardcoded_api_key",
+                    "severity": "high",
+                    "description": "Potential hardcoded API key detected",
+                }
+            )
+
+    def _check_secret_patterns(
+        self, content: str, vulnerabilities: List[Dict[str, Any]]
+    ) -> None:
+        """Check for potential secret patterns in file content. Issue #620."""
+        import re
+
+        if re.search(r"[A-Za-z0-9]{20,}", content):
+            vulnerabilities.append(
+                {
+                    "type": "potential_secret",
+                    "severity": "medium",
+                    "description": "Long string detected, might be a secret",
+                }
+            )
+
     async def _scan_file_for_security(
         self, file_path: Path, scan_types: List[str]
     ) -> Dict[str, Any]:
         """Scan a single file for security issues (placeholder implementation)"""
         await asyncio.sleep(0.02)  # Simulate scan time
 
-        vulnerabilities = []
+        vulnerabilities: List[Dict[str, Any]] = []
 
         try:
             content = file_path.read_text(encoding="utf-8", errors="ignore")
 
-            # Simple pattern matching for demonstration
             if "vulnerability" in scan_types:
-                # Check for common vulnerability patterns
-                if "password" in content.lower() and "=" in content:
-                    vulnerabilities.append(
-                        {
-                            "type": "hardcoded_credential",
-                            "severity": "high",
-                            "description": "Potential hardcoded password detected",
-                        }
-                    )
-
-                if "api_key" in content.lower() and "=" in content:
-                    vulnerabilities.append(
-                        {
-                            "type": "hardcoded_api_key",
-                            "severity": "high",
-                            "description": "Potential hardcoded API key detected",
-                        }
-                    )
+                self._check_vulnerability_patterns(content, vulnerabilities)
 
             if "secrets" in scan_types:
-                # Check for secret patterns
-                import re
-
-                if re.search(
-                    r"[A-Za-z0-9]{20,}", content
-                ):  # Long strings that might be secrets
-                    vulnerabilities.append(
-                        {
-                            "type": "potential_secret",
-                            "severity": "medium",
-                            "description": "Long string detected, might be a secret",
-                        }
-                    )
+                self._check_secret_patterns(content, vulnerabilities)
 
             return {
                 "file": str(file_path),
