@@ -1022,12 +1022,48 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
         await redis.set(key, value, ex=ttl)
         return value"""
 
+    def _count_results_by_category(self) -> tuple[Dict[str, int], Dict[str, int]]:
+        """Count optimization results by severity and type.
+
+        Aggregates results into dictionaries keyed by severity level
+        and optimization type for summary reporting. Issue #620.
+
+        Returns:
+            Tuple of (by_severity dict, by_type dict)
+        """
+        by_severity: Dict[str, int] = {}
+        by_type: Dict[str, int] = {}
+
+        for result in self.results:
+            sev = result.severity.value
+            opt_type = result.optimization_type.value
+            by_severity[sev] = by_severity.get(sev, 0) + 1
+            by_type[opt_type] = by_type.get(opt_type, 0) + 1
+
+        return by_severity, by_type
+
+    def _get_priority_findings(
+        self, severity: OptimizationSeverity
+    ) -> List[Dict[str, Any]]:
+        """Get findings filtered by severity level.
+
+        Filters optimization results to return only those matching
+        the specified severity level. Issue #620.
+
+        Args:
+            severity: The severity level to filter by
+
+        Returns:
+            List of finding dictionaries matching the severity
+        """
+        return [r.to_dict() for r in self.results if r.severity == severity]
+
     def get_summary(self) -> Dict[str, Any]:
         """
         Get summary of optimization findings.
 
+        Issue #620: Refactored with extracted helper methods.
         Issue #686: Uses exponential decay scoring to prevent score overflow.
-        Scores now degrade gracefully instead of immediately hitting 0.
         """
         # Import scoring utilities
         from src.code_intelligence.shared.scoring import (
@@ -1047,18 +1083,10 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
                 "files_with_issues": 0,
             }
 
-        by_severity: Dict[str, int] = {}
-        by_type: Dict[str, int] = {}
+        # Count by category (Issue #620: extracted helper)
+        by_severity, by_type = self._count_results_by_category()
 
-        for result in self.results:
-            sev = result.severity.value
-            opt_type = result.optimization_type.value
-
-            by_severity[sev] = by_severity.get(sev, 0) + 1
-            by_type[opt_type] = by_type.get(opt_type, 0) + 1
-
-        # Issue #686: Use exponential decay scoring instead of linear deduction
-        # This prevents scores from immediately collapsing to 0 with many issues
+        # Issue #686: Use exponential decay scoring
         redis_health_score = calculate_score_from_severity_counts(by_severity)
 
         # Issue #686: Use total_files_scanned instead of files with issues
@@ -1076,16 +1104,10 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
             "grade": get_grade_from_score(redis_health_score),
             "files_analyzed": files_analyzed,
             "files_with_issues": len(set(r.file_path for r in self.results)),
-            "critical_findings": [
-                r.to_dict()
-                for r in self.results
-                if r.severity == OptimizationSeverity.CRITICAL
-            ],
-            "high_priority": [
-                r.to_dict()
-                for r in self.results
-                if r.severity == OptimizationSeverity.HIGH
-            ],
+            "critical_findings": self._get_priority_findings(
+                OptimizationSeverity.CRITICAL
+            ),
+            "high_priority": self._get_priority_findings(OptimizationSeverity.HIGH),
         }
 
 

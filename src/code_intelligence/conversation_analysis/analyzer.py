@@ -67,37 +67,36 @@ class ConversationFlowAnalyzer:
         self._bottlenecks: List[Bottleneck] = []
         self._optimizations: List[Optimization] = []
 
-    def _parse_single_message(
-        self,
-        msg: Dict[str, Any],
-    ) -> Tuple[ConversationMessage, Optional[IntentCategory], int, int, Optional[str]]:
-        """
-        Parse a single message from raw dict into ConversationMessage.
-
-        Issue #281: Extracted from parse_conversation to reduce function length.
+    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
+        """Parse timestamp from raw message data. Issue #620.
 
         Args:
-            msg: Raw message dict with role, content, etc.
+            timestamp: Raw timestamp value (string or None)
 
         Returns:
-            Tuple of:
-            - ConversationMessage
-            - Intent (if user message)
-            - Error increment (0 or 1)
-            - Clarification increment (0 or 1)
-            - Satisfaction signal (or None)
+            Parsed datetime or None if invalid
         """
-        role = msg.get("role", "unknown")
-        content = msg.get("content", "")
-        timestamp = msg.get("timestamp")
-        latency = msg.get("latency_ms", 0.0)
-
         if timestamp and isinstance(timestamp, str):
             try:
-                timestamp = datetime.fromisoformat(timestamp)
+                return datetime.fromisoformat(timestamp)
             except ValueError:
-                timestamp = None
+                return None
+        return None
 
+    def _classify_message_role(
+        self, role: str, content: str
+    ) -> Tuple[
+        Optional[IntentCategory], Optional[ResponseType], int, int, Optional[str]
+    ]:
+        """Classify message based on role and extract metrics. Issue #620.
+
+        Args:
+            role: Message role (user/assistant)
+            content: Message content
+
+        Returns:
+            Tuple of (intent, response_type, error_inc, clarification_inc, satisfaction_signal)
+        """
         intent = None
         response_type = None
         error_inc = 0
@@ -108,13 +107,39 @@ class ConversationFlowAnalyzer:
             intent, _ = IntentClassifier.classify(content)
             if intent == IntentCategory.CLARIFICATION:
                 clarification_inc = 1
-            # Issue #380: Use module-level frozenset for O(1) lookup
             if any(word in content.lower() for word in SATISFACTION_SIGNALS):
                 satisfaction_signal = content[:100]
         elif role == "assistant":
             response_type = ResponseClassifier.classify(content)
             if response_type == ResponseType.ERROR_MESSAGE:
                 error_inc = 1
+
+        return intent, response_type, error_inc, clarification_inc, satisfaction_signal
+
+    def _parse_single_message(
+        self,
+        msg: Dict[str, Any],
+    ) -> Tuple[ConversationMessage, Optional[IntentCategory], int, int, Optional[str]]:
+        """Parse a single message from raw dict into ConversationMessage. Issue #620.
+
+        Args:
+            msg: Raw message dict with role, content, etc.
+
+        Returns:
+            Tuple of (ConversationMessage, intent, error_inc, clarification_inc, satisfaction_signal)
+        """
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        timestamp = self._parse_timestamp(msg.get("timestamp"))
+        latency = msg.get("latency_ms", 0.0)
+
+        (
+            intent,
+            response_type,
+            error_inc,
+            clarification_inc,
+            satisfaction_signal,
+        ) = self._classify_message_role(role, content)
 
         has_tool_call = bool(msg.get("tool_calls")) or "using the" in content.lower()
 

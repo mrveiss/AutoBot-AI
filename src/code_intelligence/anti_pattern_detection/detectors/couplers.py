@@ -26,24 +26,64 @@ logger = logging.getLogger(__name__)
 
 
 # Issue #380: Pre-computed excluded objects for feature envy detection
-FEATURE_ENVY_EXCLUDED_OBJECTS = frozenset({
-    # Standard library modules
-    "os", "sys", "time", "datetime", "json", "re", "ast", "math",
-    "pathlib", "logging", "typing", "collections", "functools",
-    "itertools", "io", "tempfile", "shutil", "glob", "fnmatch",
-    "subprocess", "threading", "asyncio", "uuid",
-
-    # Common framework/library objects
-    "logger", "log", "request", "response", "session", "app",
-    "db", "cache", "redis", "client", "conn", "connection",
-    "cursor", "query", "model", "config", "settings", "env",
-
-    # Pytest and testing
-    "pytest", "mock", "mocker", "fixture", "tmp_path",
-})
+FEATURE_ENVY_EXCLUDED_OBJECTS = frozenset(
+    {
+        # Standard library modules
+        "os",
+        "sys",
+        "time",
+        "datetime",
+        "json",
+        "re",
+        "ast",
+        "math",
+        "pathlib",
+        "logging",
+        "typing",
+        "collections",
+        "functools",
+        "itertools",
+        "io",
+        "tempfile",
+        "shutil",
+        "glob",
+        "fnmatch",
+        "subprocess",
+        "threading",
+        "asyncio",
+        "uuid",
+        # Common framework/library objects
+        "logger",
+        "log",
+        "request",
+        "response",
+        "session",
+        "app",
+        "db",
+        "cache",
+        "redis",
+        "client",
+        "conn",
+        "connection",
+        "cursor",
+        "query",
+        "model",
+        "config",
+        "settings",
+        "env",
+        # Pytest and testing
+        "pytest",
+        "mock",
+        "mocker",
+        "fixture",
+        "tmp_path",
+    }
+)
 
 # Pre-computed lowercase version for case-insensitive lookups
-_FEATURE_ENVY_EXCLUDED_LOWER = frozenset(x.lower() for x in FEATURE_ENVY_EXCLUDED_OBJECTS)
+_FEATURE_ENVY_EXCLUDED_LOWER = frozenset(
+    x.lower() for x in FEATURE_ENVY_EXCLUDED_OBJECTS
+)
 
 
 class CouplerDetector:
@@ -115,9 +155,71 @@ class CouplerDetector:
             parts[-1] = parts[-1][:-3]
         return ".".join(parts[-3:]) if len(parts) >= 3 else ".".join(parts)
 
-    def detect_circular_dependencies(self) -> List[AntiPatternResult]:
+    def _create_cycle_result(self, cycle: List[str]) -> AntiPatternResult:
+        """Create an AntiPatternResult for a detected cycle. Issue #620.
+
+        Args:
+            cycle: List of module names forming the cycle
+
+        Returns:
+            AntiPatternResult describing the circular dependency
         """
-        Detect circular dependencies in the import graph.
+        file_path = self._module_to_file.get(cycle[0], "unknown")
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.CIRCULAR_DEPENDENCY,
+            severity=AntiPatternSeverity.HIGH,
+            file_path=file_path,
+            line_number=1,
+            entity_name=" -> ".join(cycle),
+            description=f"Circular dependency detected: {' -> '.join(cycle)}",
+            suggestion=(
+                "Refactor to break the cycle using "
+                "dependency injection, interfaces, or restructuring"
+            ),
+            metrics={
+                "cycle_length": len(cycle),
+                "modules": list(cycle),
+            },
+        )
+
+    def _find_cycle_dfs(
+        self,
+        module: str,
+        path: List[str],
+        visited: Set[str],
+        rec_stack: Set[str],
+    ) -> Optional[List[str]]:
+        """Recursively find circular dependency cycle using DFS. Issue #620.
+
+        Args:
+            module: Current module being visited
+            path: Current path of modules
+            visited: Set of all visited modules
+            rec_stack: Set of modules in current recursion stack
+
+        Returns:
+            List of modules forming a cycle, or None if no cycle found
+        """
+        visited.add(module)
+        rec_stack.add(module)
+
+        for imported in self._import_graph.get(module, []):
+            if imported in self._import_graph:
+                if imported not in visited:
+                    cycle = self._find_cycle_dfs(
+                        imported, path + [imported], visited, rec_stack
+                    )
+                    if cycle:
+                        return cycle
+                elif imported in rec_stack:
+                    cycle_start = path.index(imported) if imported in path else 0
+                    return path[cycle_start:] + [imported]
+
+        rec_stack.remove(module)
+        return None
+
+    def detect_circular_dependencies(self) -> List[AntiPatternResult]:
+        """Detect circular dependencies in the import graph. Issue #620.
 
         Must call collect_imports() for each file first.
 
@@ -129,55 +231,14 @@ class CouplerDetector:
         rec_stack: Set[str] = set()
         cycles_found: Set[Tuple[str, ...]] = set()
 
-        def find_cycle(module: str, path: List[str]) -> Optional[List[str]]:
-            """Recursively find circular dependency cycle in import graph."""
-            visited.add(module)
-            rec_stack.add(module)
-
-            for imported in self._import_graph.get(module, []):
-                if imported in self._import_graph:
-                    if imported not in visited:
-                        cycle = find_cycle(imported, path + [imported])
-                        if cycle:
-                            return cycle
-                    elif imported in rec_stack:
-                        cycle_start = (
-                            path.index(imported) if imported in path else 0
-                        )
-                        return path[cycle_start:] + [imported]
-
-            rec_stack.remove(module)
-            return None
-
         for module in self._import_graph:
             if module not in visited:
-                cycle = find_cycle(module, [module])
+                cycle = self._find_cycle_dfs(module, [module], visited, rec_stack)
                 if cycle:
                     cycle_tuple = tuple(sorted(cycle))
                     if cycle_tuple not in cycles_found:
                         cycles_found.add(cycle_tuple)
-                        file_path = self._module_to_file.get(cycle[0], "unknown")
-                        patterns.append(
-                            AntiPatternResult(
-                                pattern_type=AntiPatternType.CIRCULAR_DEPENDENCY,
-                                severity=AntiPatternSeverity.HIGH,
-                                file_path=file_path,
-                                line_number=1,
-                                entity_name=" -> ".join(cycle),
-                                description=(
-                                    f"Circular dependency detected: "
-                                    f"{' -> '.join(cycle)}"
-                                ),
-                                suggestion=(
-                                    "Refactor to break the cycle using "
-                                    "dependency injection, interfaces, or restructuring"
-                                ),
-                                metrics={
-                                    "cycle_length": len(cycle),
-                                    "modules": list(cycle),
-                                },
-                            )
-                        )
+                        patterns.append(self._create_cycle_result(cycle))
 
         return patterns
 

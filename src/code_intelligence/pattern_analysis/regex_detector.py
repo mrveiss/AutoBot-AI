@@ -15,15 +15,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .types import (
-    CodeLocation,
-    PatternSeverity,
-    RegexOpportunity,
-)
+from .types import CodeLocation, PatternSeverity, RegexOpportunity
 
 # Issue #607: Import shared caches for performance optimization
 try:
     from src.code_intelligence.shared.ast_cache import get_ast_with_content
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -306,10 +303,69 @@ class RegexPatternDetector:
 
         return opportunities
 
+    def _determine_optimization_details(
+        self, chain: StringOperationChain
+    ) -> tuple[str, str, str]:
+        """Determine optimization description, regex, and performance gain.
+
+        Analyzes the chain operations to provide appropriate optimization
+        suggestions based on the type of string operations detected.
+        Issue #620.
+
+        Args:
+            chain: The detected operation chain
+
+        Returns:
+            Tuple of (description, suggested_regex, performance_gain)
+        """
+        replace_count = sum(1 for op in chain.operations if op == "replace")
+        strip_count = sum(
+            1 for op in chain.operations if op in ("strip", "lstrip", "rstrip")
+        )
+
+        if replace_count >= 2:
+            return (
+                f"Chain of {replace_count} .replace() calls",
+                self._suggest_replace_regex(chain),
+                f"~{replace_count}x faster for long strings",
+            )
+        elif strip_count >= 2:
+            return (
+                f"Chain of {strip_count} strip operations",
+                "text.strip() or re.sub(r'^\\s+|\\s+$', '', text)",
+                "Minor improvement, better readability",
+            )
+        else:
+            return (
+                f"Chain of {len(chain.operations)} string operations",
+                "Consider re.sub() for complex transformations",
+                "Potential improvement",
+            )
+
+    def _determine_chain_severity(self, chain: StringOperationChain) -> PatternSeverity:
+        """Determine severity level based on chain length.
+
+        Longer chains indicate more complex string manipulation that
+        would benefit more from regex consolidation. Issue #620.
+
+        Args:
+            chain: The detected operation chain
+
+        Returns:
+            PatternSeverity level (HIGH, MEDIUM, or LOW)
+        """
+        if len(chain.operations) >= 5:
+            return PatternSeverity.HIGH
+        elif len(chain.operations) >= 3:
+            return PatternSeverity.MEDIUM
+        return PatternSeverity.LOW
+
     def _chain_to_opportunity(
         self, chain: StringOperationChain
     ) -> Optional[RegexOpportunity]:
         """Convert a string operation chain to a RegexOpportunity.
+
+        Issue #620: Refactored with extracted helper methods.
 
         Args:
             chain: The detected operation chain
@@ -320,28 +376,12 @@ class RegexPatternDetector:
         if len(chain.operations) < self.min_chain_length:
             return None
 
-        # Determine the type of optimization
-        replace_count = sum(1 for op in chain.operations if op == "replace")
-        strip_count = sum(
-            1 for op in chain.operations if op in ("strip", "lstrip", "rstrip")
-        )
-
-        description = ""
-        suggested_regex = ""
-        performance_gain = ""
-
-        if replace_count >= 2:
-            description = f"Chain of {replace_count} .replace() calls"
-            suggested_regex = self._suggest_replace_regex(chain)
-            performance_gain = f"~{replace_count}x faster for long strings"
-        elif strip_count >= 2:
-            description = f"Chain of {strip_count} strip operations"
-            suggested_regex = "text.strip() or re.sub(r'^\\s+|\\s+$', '', text)"
-            performance_gain = "Minor improvement, better readability"
-        else:
-            description = f"Chain of {len(chain.operations)} string operations"
-            suggested_regex = "Consider re.sub() for complex transformations"
-            performance_gain = "Potential improvement"
+        # Get optimization details (Issue #620: extracted helper)
+        (
+            description,
+            suggested_regex,
+            performance_gain,
+        ) = self._determine_optimization_details(chain)
 
         location = CodeLocation(
             file_path=chain.file_path,
@@ -351,17 +391,9 @@ class RegexPatternDetector:
             class_name=chain.class_name,
         )
 
-        # Determine severity based on chain length
-        if len(chain.operations) >= 5:
-            severity = PatternSeverity.HIGH
-        elif len(chain.operations) >= 3:
-            severity = PatternSeverity.MEDIUM
-        else:
-            severity = PatternSeverity.LOW
-
         return RegexOpportunity(
             pattern_type=None,  # Will be set by __post_init__
-            severity=severity,
+            severity=self._determine_chain_severity(chain),
             description=description,
             locations=[location],
             suggestion=f"Replace with: {suggested_regex}",
@@ -395,7 +427,7 @@ class RegexPatternDetector:
                 # Pattern substitution
                 return "re.sub(r'pattern', 'replacement', text)"
 
-        except Exception:
+        except Exception:  # nosec B110 - fallback to default suggestion
             pass
 
         return "re.sub(r'pattern', 'replacement', text)"
@@ -452,9 +484,7 @@ class RegexPatternDetector:
 
         return opportunities
 
-    def generate_report(
-        self, opportunities: List[RegexOpportunity]
-    ) -> Dict[str, Any]:
+    def generate_report(self, opportunities: List[RegexOpportunity]) -> Dict[str, Any]:
         """Generate a summary report of regex opportunities.
 
         Args:

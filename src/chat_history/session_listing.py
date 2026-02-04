@@ -68,65 +68,74 @@ class SessionListingMixin:
     - self._cleanup_old_session_files(): method
     """
 
+    async def _ensure_chats_directory_exists(self, chats_directory: str) -> bool:
+        """Ensure chats directory exists, creating if necessary. Issue #620.
+
+        Args:
+            chats_directory: Path to the chats directory
+
+        Returns:
+            True if directory existed or was created, False if newly created
+        """
+        dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
+        if not dir_exists:
+            await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+            return False
+        return True
+
+    async def _process_chat_file_for_listing(
+        self, chat_path: str, chat_id: str, filename: str
+    ) -> Dict[str, Any] | None:
+        """Process a single chat file and extract session metadata. Issue #620.
+
+        Args:
+            chat_path: Full path to the chat file
+            chat_id: The chat identifier
+            filename: Filename for error logging
+
+        Returns:
+            Session dict or None on error
+        """
+        try:
+            async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                file_content = await f.read()
+                chat_data = self._decrypt_data(file_content)
+
+                return {
+                    "chatId": chat_id,
+                    "name": chat_data.get("name", ""),
+                    "messageCount": len(chat_data.get("messages", [])),
+                    "createdTime": chat_data.get("created_time", ""),
+                    "lastModified": chat_data.get("last_modified", ""),
+                }
+        except Exception as e:
+            logger.error("Error reading chat file %s: %s", filename, str(e))
+            return None
+
     async def list_sessions(self) -> List[Dict[str, Any]]:
         """List available chat sessions with their metadata."""
         try:
             sessions = []
             chats_directory = self._get_chats_directory()
 
-            # Ensure chats directory exists
-            dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
-            if not dir_exists:
-                await run_in_chat_io_executor(
-                    os.makedirs, chats_directory, exist_ok=True
-                )
+            if not await self._ensure_chats_directory_exists(chats_directory):
                 return sessions
 
-            # Clean up old session files if needed
             await self._cleanup_old_session_files()
 
-            # Look for chat files in the chats directory (both old and new formats)
             filenames = await run_in_chat_io_executor(os.listdir, chats_directory)
             for filename in filenames:
-                # Support both formats: chat_{uuid}.json and {uuid}_chat.json
-                chat_id = None
-                if filename.startswith("chat_") and filename.endswith(".json"):
-                    # Old format: chat_{uuid}.json
-                    chat_id = filename.replace("chat_", "").replace(".json", "")
-                elif filename.endswith("_chat.json"):
-                    # New format: {uuid}_chat.json
-                    chat_id = filename.replace("_chat.json", "")
-
+                chat_id = _extract_chat_id_from_filename(filename)
                 if not chat_id:
                     continue
 
                 chat_path = os.path.join(chats_directory, filename)
+                session = await self._process_chat_file_for_listing(
+                    chat_path, chat_id, filename
+                )
+                if session:
+                    sessions.append(session)
 
-                try:
-                    async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
-                        file_content = await f.read()
-                        chat_data = self._decrypt_data(file_content)
-
-                        # Get chat metadata
-                        chat_name = chat_data.get("name", "")
-                        chat_messages = chat_data.get("messages", [])
-                        created_time = chat_data.get("created_time", "")
-                        last_modified = chat_data.get("last_modified", "")
-
-                        sessions.append(
-                            {
-                                "chatId": chat_id,
-                                "name": chat_name,
-                                "messageCount": len(chat_messages),
-                                "createdTime": created_time,
-                                "lastModified": last_modified,
-                            }
-                        )
-                except Exception as e:
-                    logger.error("Error reading chat file %s: %s", filename, str(e))
-                    continue
-
-            # Sort by last modified time (most recent first)
             sessions.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
             return sessions
 
