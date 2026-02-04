@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .core import AutoBotMemoryGraphCore, ENTITY_TYPES
+from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +48,17 @@ class EntityOperationsMixin:
             Enriched metadata dictionary
         """
         entity_metadata = metadata or {}
-        entity_metadata.update({
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-            "created_by": "autobot",
-            "tags": tags or [],
-            "priority": entity_metadata.get("priority", "medium"),
-            "status": entity_metadata.get("status", "active"),
-            "version": 1,
-        })
+        entity_metadata.update(
+            {
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "created_by": "autobot",
+                "tags": tags or [],
+                "priority": entity_metadata.get("priority", "medium"),
+                "status": entity_metadata.get("status", "active"),
+                "version": 1,
+            }
+        )
         return entity_metadata
 
     def _build_entity_document(
@@ -234,10 +236,14 @@ class EntityOperationsMixin:
             entity_key = f"memory:entity:{entity_id}"
 
             # Append all observations in parallel
-            await asyncio.gather(*[
-                self.redis_client.json().arrappend(entity_key, "$.observations", obs)
-                for obs in observations
-            ])
+            await asyncio.gather(
+                *[
+                    self.redis_client.json().arrappend(
+                        entity_key, "$.observations", obs
+                    )
+                    for obs in observations
+                ]
+            )
 
             # Update timestamp
             await self.redis_client.json().set(
@@ -367,11 +373,13 @@ class EntityOperationsMixin:
                 tags = ["conversation"]
 
             conv_metadata = metadata or {}
-            conv_metadata.update({
-                "session_id": session_id,
-                "priority": "low",
-                "status": "active",
-            })
+            conv_metadata.update(
+                {
+                    "session_id": session_id,
+                    "priority": "low",
+                    "status": "active",
+                }
+            )
 
             entity = await self.create_entity(
                 entity_type="conversation",

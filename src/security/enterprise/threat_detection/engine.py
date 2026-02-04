@@ -66,28 +66,45 @@ class ThreatDetectionEngine:
         self.config_path = config_path
         self.config = self._load_config()
 
-        # Initialize detection models
+        self._initialize_ml_models()
+        self._initialize_profile_storage()
+        self._initialize_threat_patterns()
+        self._initialize_monitoring_structures()
+        self._initialize_stats()
+        self._initialize_analyzers()
+
+        self._load_user_profiles()
+        self._start_background_tasks()
+
+        logger.info("Threat Detection Engine initialized")
+
+    def _initialize_ml_models(self) -> None:
+        """Initialize ML detection models. Issue #620."""
         self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
         self.scaler = StandardScaler()
         self.clustering_model = DBSCAN(eps=0.5, min_samples=5)
 
-        # User behavioral profiles
+    def _initialize_profile_storage(self) -> None:
+        """Initialize user profile storage paths. Issue #620."""
         self.user_profiles: Dict[str, UserProfile] = {}
         self.profile_storage_path = PATH.get_data_path("security", "user_profiles.pkl")
         self.profile_storage_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Threat intelligence and patterns
+    def _initialize_threat_patterns(self) -> None:
+        """Load threat intelligence and detection patterns. Issue #620."""
         self.command_injection_patterns = self._load_injection_patterns()
         self.malicious_file_signatures = self._load_file_signatures()
         self.suspicious_api_patterns = self._load_api_patterns()
 
-        # Real-time monitoring data structures
+    def _initialize_monitoring_structures(self) -> None:
+        """Initialize real-time monitoring data structures. Issue #620."""
         self.recent_events = deque(maxlen=10000)  # Last 10k events for analysis
         self.event_history = EventHistory(events=self.recent_events)
         self.user_sessions = defaultdict(dict)  # Active user session tracking
         self.ip_reputation = defaultdict(float)  # IP reputation scores
 
-        # Statistics and metrics
+    def _initialize_stats(self) -> None:
+        """Initialize statistics and metrics tracking. Issue #620."""
         self.stats = {
             "total_events_processed": 0,
             "threats_detected": 0,
@@ -98,7 +115,8 @@ class ThreatDetectionEngine:
             "models_trained": 0,
         }
 
-        # Initialize threat analyzers
+    def _initialize_analyzers(self) -> None:
+        """Initialize threat analyzer instances. Issue #620."""
         self.analyzers: List[ThreatAnalyzer] = [
             CommandInjectionAnalyzer(),
             BehavioralAnomalyAnalyzer(),
@@ -107,14 +125,6 @@ class ThreatDetectionEngine:
             APIAbuseAnalyzer(),
             InsiderThreatAnalyzer(),
         ]
-
-        # Load existing profiles
-        self._load_user_profiles()
-
-        # Initialize background tasks
-        self._start_background_tasks()
-
-        logger.info("Threat Detection Engine initialized")
 
     def _load_config(self) -> Dict:
         """Load threat detection configuration"""

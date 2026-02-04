@@ -135,9 +135,17 @@ class ClaudeAPIOptimizationSuite:
         )
 
     def _initialize_components(self):
-        """Initialize all optimization components based on configuration"""
+        """Initialize all optimization components based on configuration. Issue #620."""
+        self._init_rate_limiter()
+        self._init_payload_optimizer()
+        self._init_request_batcher()
+        self._init_degradation_manager()
+        self._init_todowrite_optimizer()
+        self._init_pattern_analyzer()
+        self.api_monitor = ClaudeAPIMonitor()
 
-        # Rate limiter
+    def _init_rate_limiter(self) -> None:
+        """Initialize rate limiter component if enabled. Issue #620."""
         if self.config.enable_rate_limiting:
             self.rate_limiter = ConversationRateLimiter(
                 max_requests_per_minute=self.config.max_requests_per_minute,
@@ -146,7 +154,8 @@ class ClaudeAPIOptimizationSuite:
         else:
             self.rate_limiter = None
 
-        # Payload optimizer
+    def _init_payload_optimizer(self) -> None:
+        """Initialize payload optimizer component if enabled. Issue #620."""
         if self.config.enable_payload_optimization:
             self.payload_optimizer = PayloadOptimizer(
                 max_size=self.config.max_payload_size,
@@ -155,7 +164,8 @@ class ClaudeAPIOptimizationSuite:
         else:
             self.payload_optimizer = None
 
-        # Request batcher
+    def _init_request_batcher(self) -> None:
+        """Initialize request batcher component if enabled. Issue #620."""
         if self.config.enable_request_batching:
             self.request_batcher = IntelligentRequestBatcher(
                 max_batch_size=self.config.max_batch_size,
@@ -164,7 +174,8 @@ class ClaudeAPIOptimizationSuite:
         else:
             self.request_batcher = None
 
-        # Graceful degradation manager
+    def _init_degradation_manager(self) -> None:
+        """Initialize graceful degradation manager if enabled. Issue #620."""
         if self.config.enable_graceful_degradation:
             self.degradation_manager = GracefulDegradationManager(
                 {
@@ -175,7 +186,8 @@ class ClaudeAPIOptimizationSuite:
         else:
             self.degradation_manager = None
 
-        # TodoWrite optimizer
+    def _init_todowrite_optimizer(self) -> None:
+        """Initialize TodoWrite optimizer component if enabled. Issue #620."""
         if self.config.enable_todowrite_optimization:
             self.todowrite_optimizer = get_todowrite_optimizer(
                 {
@@ -186,16 +198,14 @@ class ClaudeAPIOptimizationSuite:
         else:
             self.todowrite_optimizer = None
 
-        # Tool pattern analyzer
+    def _init_pattern_analyzer(self) -> None:
+        """Initialize tool pattern analyzer component if enabled. Issue #620."""
         if self.config.enable_pattern_analysis:
             self.pattern_analyzer = get_tool_pattern_analyzer(
                 {"analysis_window": self.config.pattern_analysis_interval}
             )
         else:
             self.pattern_analyzer = None
-
-        # API monitor
-        self.api_monitor = ClaudeAPIMonitor()
 
     async def start_optimization(self) -> bool:
         """Start the optimization suite"""

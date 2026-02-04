@@ -465,67 +465,76 @@ class PerformanceMonitor:
                 await asyncio.sleep(self.collection_interval)
 
     async def _analyze_performance_and_generate_alerts(self, metrics: Dict[str, Any]):
-        """Analyze metrics and generate performance alerts."""
+        """Analyze metrics and generate performance alerts. Issue #620."""
         try:
             alerts = self._alert_analyzer.analyze_all(metrics)
 
-            # Update performance_alerts buffer for backward compatibility (Issue #427)
-            # Keep last 100 alerts to prevent unbounded memory growth
-            if alerts:
-                self.performance_alerts.extend(alerts)
-                if len(self.performance_alerts) > 100:
-                    self.performance_alerts = self.performance_alerts[-100:]
-
-            # Store alerts in Redis
-            if self.redis_client and alerts:
-                try:
-
-                    def _store_alerts():
-                        key = "performance_alerts"
-                        for alert in alerts:
-                            self.redis_client.zadd(
-                                key, {json.dumps(alert): time.time()}
-                            )
-                        self.redis_client.expire(key, 3600)
-
-                    await asyncio.to_thread(_store_alerts)
-                except Exception as e:
-                    self.logger.debug("Could not store alerts in Redis: %s", e)
-
-            # Issue #469: Push alerts to Prometheus for unified monitoring
-            if alerts:
-                for alert in alerts:
-                    category = alert.get("category", "unknown")
-                    severity = alert.get("severity", "info")
-                    self._prometheus.record_performance_alert(category, severity)
-
-            # Update active alert counts in Prometheus
-            critical_count = sum(
-                1 for a in self.performance_alerts if a.get("severity") == "critical"
-            )
-            warning_count = sum(
-                1 for a in self.performance_alerts if a.get("severity") == "warning"
-            )
-            info_count = sum(
-                1 for a in self.performance_alerts if a.get("severity") == "info"
-            )
-            self._prometheus.update_active_alerts("critical", critical_count)
-            self._prometheus.update_active_alerts("warning", warning_count)
-            self._prometheus.update_active_alerts("info", info_count)
-
-            # Get callbacks under lock
-            async with self._lock:
-                callbacks = list(self.alert_callbacks)
-
-            # Trigger alert callbacks outside lock
-            for callback in callbacks:
-                try:
-                    await callback(alerts)
-                except Exception as e:
-                    self.logger.error("Error in alert callback: %s", e)
+            self._update_alerts_buffer(alerts)
+            await self._store_alerts_to_redis(alerts)
+            self._push_alerts_to_prometheus(alerts)
+            self._update_prometheus_alert_counts()
+            await self._trigger_alert_callbacks(alerts)
 
         except Exception as e:
             self.logger.error("Error analyzing performance: %s", e)
+
+    def _update_alerts_buffer(self, alerts: List[Dict[str, Any]]) -> None:
+        """Update performance alerts buffer with size limit. Issue #620."""
+        if alerts:
+            self.performance_alerts.extend(alerts)
+            if len(self.performance_alerts) > 100:
+                self.performance_alerts = self.performance_alerts[-100:]
+
+    async def _store_alerts_to_redis(self, alerts: List[Dict[str, Any]]) -> None:
+        """Store alerts to Redis for persistence. Issue #620."""
+        if not self.redis_client or not alerts:
+            return
+        try:
+
+            def _store_alerts():
+                key = "performance_alerts"
+                for alert in alerts:
+                    self.redis_client.zadd(key, {json.dumps(alert): time.time()})
+                self.redis_client.expire(key, 3600)
+
+            await asyncio.to_thread(_store_alerts)
+        except Exception as e:
+            self.logger.debug("Could not store alerts in Redis: %s", e)
+
+    def _push_alerts_to_prometheus(self, alerts: List[Dict[str, Any]]) -> None:
+        """Push alerts to Prometheus for unified monitoring. Issue #620."""
+        if not alerts:
+            return
+        for alert in alerts:
+            category = alert.get("category", "unknown")
+            severity = alert.get("severity", "info")
+            self._prometheus.record_performance_alert(category, severity)
+
+    def _update_prometheus_alert_counts(self) -> None:
+        """Update active alert counts in Prometheus. Issue #620."""
+        critical_count = sum(
+            1 for a in self.performance_alerts if a.get("severity") == "critical"
+        )
+        warning_count = sum(
+            1 for a in self.performance_alerts if a.get("severity") == "warning"
+        )
+        info_count = sum(
+            1 for a in self.performance_alerts if a.get("severity") == "info"
+        )
+        self._prometheus.update_active_alerts("critical", critical_count)
+        self._prometheus.update_active_alerts("warning", warning_count)
+        self._prometheus.update_active_alerts("info", info_count)
+
+    async def _trigger_alert_callbacks(self, alerts: List[Dict[str, Any]]) -> None:
+        """Trigger registered alert callbacks. Issue #620."""
+        async with self._lock:
+            callbacks = list(self.alert_callbacks)
+
+        for callback in callbacks:
+            try:
+                await callback(alerts)
+            except Exception as e:
+                self.logger.error("Error in alert callback: %s", e)
 
     def _log_performance_summary(self, metrics: Dict[str, Any]):
         """Log comprehensive performance summary."""

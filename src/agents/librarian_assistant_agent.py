@@ -43,17 +43,16 @@ class LibrarianAssistantAgent:
     # Agent identifier for SSOT config lookup
     AGENT_ID = "librarian_assistant"
 
-    def __init__(self):
-        """Initialize the Librarian Assistant Agent with explicit LLM configuration."""
-        self.config = config
-        self.knowledge_base = KnowledgeBase()
-        self.llm = LLMInterface()
+    def _init_llm_config(self) -> None:
+        """
+        Initialize LLM configuration from SSOT config.
 
-        # Use explicit SSOT config - raises AgentConfigurationError if not set
+        Sets up llm_provider, llm_endpoint, and model_name attributes
+        using explicit SSOT configuration. Issue #620.
+        """
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
-
         logger.info(
             "Librarian Assistant Agent initialized with provider=%s, endpoint=%s, model=%s",
             self.llm_provider,
@@ -61,7 +60,13 @@ class LibrarianAssistantAgent:
             self.model_name,
         )
 
-        # Configuration
+    def _init_agent_config(self) -> None:
+        """
+        Initialize agent-specific configuration settings.
+
+        Sets up search limits, quality thresholds, search engines,
+        and trusted domains from config. Issue #620.
+        """
         self.enabled = self.config.get_nested("librarian_assistant.enabled", True)
         self.max_search_results = self.config.get_nested(
             "librarian_assistant.max_search_results", 5
@@ -75,8 +80,6 @@ class LibrarianAssistantAgent:
         self.auto_store_quality = self.config.get_nested(
             "librarian_assistant.auto_store_quality", True
         )
-
-        # Search engines configuration
         self.search_engines = self.config.get_nested(
             "librarian_assistant.search_engines",
             {
@@ -85,8 +88,6 @@ class LibrarianAssistantAgent:
                 "google": "https://www.google.com/search?q={query}",
             },
         )
-
-        # Trusted domains for content extraction
         self.trusted_domains = self.config.get_nested(
             "librarian_assistant.trusted_domains",
             [
@@ -101,6 +102,15 @@ class LibrarianAssistantAgent:
                 "acm.org",
             ],
         )
+
+    def __init__(self):
+        """Initialize the Librarian Assistant Agent with explicit LLM configuration."""
+        self.config = config
+        self.knowledge_base = KnowledgeBase()
+        self.llm = LLMInterface()
+
+        self._init_llm_config()
+        self._init_agent_config()
 
         self.playwright = None
         self.browser = None
@@ -319,7 +329,7 @@ class LibrarianAssistantAgent:
             desc_element = await page.query_selector('meta[name="description"]')
             if desc_element:
                 description = await desc_element.get_attribute("content") or ""
-        except Exception:
+        except Exception:  # nosec B110 - optional metadata extraction
             pass
         domain = urlparse(url).netloc.lower()
         is_trusted = any(trusted in domain for trusted in self.trusted_domains)
@@ -406,7 +416,7 @@ class LibrarianAssistantAgent:
                     content = await element.inner_text()
                     if content and len(content.strip()) > 100:
                         return content.strip()
-            except Exception:
+            except Exception:  # nosec B112 - retry on selector failures
                 continue
         return None
 
