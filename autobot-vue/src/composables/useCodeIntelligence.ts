@@ -50,7 +50,7 @@ export function useCodeIntelligence() {
     try {
       const backendUrl = await getBackendUrl()
       const response = await fetch(
-        `${backendUrl}/api/code_intelligence/health-score?path=${encodeURIComponent(path)}`
+        `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(path)}`
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       healthScore.value = await response.json()
@@ -68,7 +68,7 @@ export function useCodeIntelligence() {
     try {
       const backendUrl = await getBackendUrl()
       const response = await fetch(
-        `${backendUrl}/api/code_intelligence/security/score?path=${encodeURIComponent(path)}`
+        `${backendUrl}/api/code-intelligence/security/score?path=${encodeURIComponent(path)}`
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       securityScore.value = await response.json()
@@ -86,7 +86,7 @@ export function useCodeIntelligence() {
     try {
       const backendUrl = await getBackendUrl()
       const response = await fetch(
-        `${backendUrl}/api/code_intelligence/performance/score?path=${encodeURIComponent(path)}`
+        `${backendUrl}/api/code-intelligence/performance/score?path=${encodeURIComponent(path)}`
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       performanceScore.value = await response.json()
@@ -104,7 +104,7 @@ export function useCodeIntelligence() {
     try {
       const backendUrl = await getBackendUrl()
       const response = await fetch(
-        `${backendUrl}/api/code_intelligence/redis/health-score?path=${encodeURIComponent(path)}`
+        `${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(path)}`
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       redisScore.value = await response.json()
@@ -119,7 +119,7 @@ export function useCodeIntelligence() {
   async function fetchPatternTypes(): Promise<void> {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code_intelligence/pattern-types`)
+      const response = await fetch(`${backendUrl}/api/code-intelligence/pattern-types`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       patternTypes.value = data.pattern_types
@@ -131,7 +131,7 @@ export function useCodeIntelligence() {
   async function fetchVulnerabilityTypes(): Promise<void> {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code_intelligence/security/vulnerability-types`)
+      const response = await fetch(`${backendUrl}/api/code-intelligence/security/vulnerability-types`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       vulnerabilityTypes.value = data.vulnerability_types
@@ -143,7 +143,7 @@ export function useCodeIntelligence() {
   async function fetchPerformanceIssueTypes(): Promise<void> {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code_intelligence/performance/issue-types`)
+      const response = await fetch(`${backendUrl}/api/code-intelligence/performance/issue-types`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       performanceIssueTypes.value = data.issue_types
@@ -155,7 +155,7 @@ export function useCodeIntelligence() {
   async function fetchRedisOptimizationTypes(): Promise<void> {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code_intelligence/redis/optimization-types`)
+      const response = await fetch(`${backendUrl}/api/code-intelligence/redis/optimization-types`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       redisOptimizationTypes.value = data.optimization_types
@@ -172,7 +172,7 @@ export function useCodeIntelligence() {
     try {
       const backendUrl = await getBackendUrl()
       const response = await fetch(
-        `${backendUrl}/api/code_intelligence/${type}/report?path=${encodeURIComponent(path)}&format=${format}`
+        `${backendUrl}/api/code-intelligence/${type}/report?path=${encodeURIComponent(path)}&format=${format}`
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data: ReportResponse = await response.json()
