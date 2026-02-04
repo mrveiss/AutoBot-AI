@@ -186,6 +186,7 @@ class NPUSemanticSearch:
             "image": "autobot_image_embeddings",
             "audio": "autobot_audio_embeddings",
             "multimodal": "autobot_multimodal_fused",
+            "code": "autobot_code_embeddings",  # Issue #207: Code semantic search
         }
 
         # Issue #387: GPU-accelerated hybrid vector search
@@ -1116,6 +1117,178 @@ class NPUSemanticSearch:
         except Exception as e:
             logger.error("Failed to store multimodal embedding: %s", e)
             return False
+
+    async def store_code_embedding(
+        self,
+        embedding: np.ndarray,
+        code_content: str,
+        file_path: str,
+        line_number: int,
+        element_type: str,
+        element_name: str,
+        language: str,
+        content_hash: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """
+        Store code element embedding in ChromaDB collection.
+
+        Issue #207: NPU-accelerated semantic code search.
+
+        Args:
+            embedding: Pre-computed embedding vector (768-dim for CodeBERT)
+            code_content: Source code content
+            file_path: Path to the source file
+            line_number: Line number of the element
+            element_type: Type of element ('function', 'class', 'module')
+            element_name: Name of the element
+            language: Programming language
+            content_hash: Hash of the code content for change detection
+            metadata: Additional metadata
+
+        Returns:
+            Document ID if successful, None otherwise
+        """
+        if not self.chroma_client or "code" not in self.collections:
+            logger.warning("ChromaDB code collection not available")
+            return None
+
+        try:
+            # Generate unique document ID
+            doc_id = f"code_{element_type}_{language}_{content_hash[:16]}_{int(time.time() * 1000)}"
+
+            # Prepare metadata
+            doc_metadata = {
+                "file_path": file_path,
+                "line_number": line_number,
+                "element_type": element_type,
+                "element_name": element_name,
+                "language": language,
+                "content_hash": content_hash,
+                "indexed_at": time.time(),
+                **(metadata or {}),
+            }
+
+            # Store in code collection
+            collection = self.collections["code"]
+            collection.add(
+                embeddings=[embedding.tolist()],
+                metadatas=[doc_metadata],
+                documents=[code_content],
+                ids=[doc_id],
+            )
+
+            logger.debug(
+                "Stored code embedding: %s:%s (%s)",
+                file_path,
+                element_name,
+                element_type,
+            )
+            return doc_id
+
+        except Exception as e:
+            logger.error("Failed to store code embedding: %s", e)
+            return None
+
+    async def search_code_embeddings(
+        self,
+        query_embedding: np.ndarray,
+        language: Optional[str] = None,
+        element_type: Optional[str] = None,
+        max_results: int = 20,
+        similarity_threshold: float = 0.5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search code embeddings collection.
+
+        Issue #207: NPU-accelerated semantic code search.
+
+        Args:
+            query_embedding: Query embedding vector
+            language: Filter by programming language
+            element_type: Filter by element type
+            max_results: Maximum number of results
+            similarity_threshold: Minimum similarity score
+
+        Returns:
+            List of search results with metadata
+        """
+        if not self.chroma_client or "code" not in self.collections:
+            logger.warning("ChromaDB code collection not available")
+            return []
+
+        try:
+            collection = self.collections["code"]
+
+            # Build where filter
+            where_filter = None
+            if language or element_type:
+                conditions = []
+                if language:
+                    conditions.append({"language": language})
+                if element_type:
+                    conditions.append({"element_type": element_type})
+
+                if len(conditions) == 1:
+                    where_filter = conditions[0]
+                else:
+                    where_filter = {"$and": conditions}
+
+            # Query ChromaDB
+            search_results = collection.query(
+                query_embeddings=[query_embedding.tolist()],
+                n_results=max_results,
+                where=where_filter,
+                include=["metadatas", "documents", "distances"],
+            )
+
+            # Convert to result format
+            results = []
+            if search_results["ids"] and len(search_results["ids"][0]) > 0:
+                for i, doc_id in enumerate(search_results["ids"][0]):
+                    distance = search_results["distances"][0][i]
+                    # Convert L2 distance to similarity score
+                    similarity = 1.0 / (1.0 + distance)
+
+                    if similarity < similarity_threshold:
+                        continue
+
+                    result = {
+                        "doc_id": doc_id,
+                        "content": search_results["documents"][0][i],
+                        "metadata": search_results["metadatas"][0][i],
+                        "score": similarity,
+                        "distance": distance,
+                    }
+                    results.append(result)
+
+            logger.info(
+                "Code search found %d results (threshold=%.2f)",
+                len(results),
+                similarity_threshold,
+            )
+            return results
+
+        except Exception as e:
+            logger.error("Code embedding search failed: %s", e)
+            return []
+
+    async def get_code_collection_stats(self) -> Dict[str, Any]:
+        """Get statistics for the code embeddings collection."""
+        if not self.chroma_client or "code" not in self.collections:
+            return {"available": False}
+
+        try:
+            collection = self.collections["code"]
+            count = collection.count()
+            return {
+                "available": True,
+                "collection_name": self.collection_names["code"],
+                "document_count": count,
+            }
+        except Exception as e:
+            logger.error("Failed to get code collection stats: %s", e)
+            return {"available": False, "error": str(e)}
 
     def _search_single_modality(
         self,
