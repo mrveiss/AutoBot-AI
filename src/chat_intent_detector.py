@@ -367,45 +367,25 @@ def detect_user_intent(
 
 
 def select_context_prompt(intent: str, base_prompt: str) -> str:
-    """
-    Select and combine appropriate context prompt based on detected intent.
+    """Select and combine appropriate context prompt based on detected intent.
 
-    This function loads intent-specific context prompts and combines them
-    with the base system prompt to provide tailored responses based on
-    the user's needs.
+    Loads intent-specific context prompts and combines them with the base
+    system prompt to provide tailored responses based on user needs.
 
     Args:
         intent: Detected user intent ('installation', 'architecture', etc.)
         base_prompt: Base system prompt to use as foundation
 
     Returns:
-        str: Combined prompt with base + context-specific instructions
-
-    Prompt Structure:
-        {base_prompt}
-
-        ---
-
-        ## CONTEXT-SPECIFIC GUIDANCE
-
-        {context_prompt}
-
-        ---
-
-        **Remember**: Follow both the general conversation management rules above
-        AND the context-specific guidance for this {intent} conversation.
+        str: Combined prompt with base + context-specific instructions.
+             Falls back to base_prompt if intent is 'general', not in mapping,
+             or context prompt fails to load.
 
     Example:
         >>> base = "You are AutoBot, a helpful assistant."
         >>> enhanced = select_context_prompt("installation", base)
         >>> "installation" in enhanced.lower()
         True
-
-    Note:
-        Falls back to base_prompt if:
-        - Intent is 'general'
-        - Intent not in mapping
-        - Context prompt fails to load
     """
     # If general intent, return base prompt only
     if intent == "general" or intent not in CONTEXT_PROMPT_MAP:

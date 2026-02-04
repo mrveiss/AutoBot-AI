@@ -240,6 +240,45 @@ class RetryMechanism:
         )
         raise RetryExhaustedError(self.config.max_attempts, last_exception)
 
+    def _execute_sync_attempt(
+        self, func: Callable, operation_name: str, attempt: int, *args, **kwargs
+    ) -> Any:
+        """Execute a single sync attempt and return result on success. Issue #620.
+
+        Args:
+            func: The function to execute
+            operation_name: Name for logging
+            attempt: Current attempt number
+            *args, **kwargs: Arguments to pass to func
+
+        Returns:
+            Result from func if successful
+
+        Raises:
+            Exception: Re-raises any exception from func
+        """
+        logger.debug(
+            f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}"
+        )
+        result = func(*args, **kwargs)
+
+        if attempt > 1:
+            logger.info("%s succeeded on attempt %s", operation_name, attempt)
+
+        self._update_stats_success(operation_name, attempt)
+        return result
+
+    def _handle_sync_retry_delay(self, operation_name: str, attempt: int) -> None:
+        """Handle delay between sync retry attempts. Issue #620.
+
+        Args:
+            operation_name: Name for logging
+            attempt: Current attempt number
+        """
+        delay = self.calculate_delay(attempt)
+        logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
+        time.sleep(delay)
+
     def execute_sync(
         self, func: Callable, *args, operation_name: str = None, **kwargs
     ) -> Any:
@@ -251,47 +290,18 @@ class RetryMechanism:
             self._update_stats_attempt()
 
             try:
-                logger.debug(
-                    f"Executing {operation_name}, attempt {attempt}/{self.config.max_attempts}"
+                return self._execute_sync_attempt(
+                    func, operation_name, attempt, *args, **kwargs
                 )
-
-                result = func(*args, **kwargs)
-
-                # Success!
-                if attempt > 1:
-                    logger.info("%s succeeded on attempt %s", operation_name, attempt)
-
-                # Update operation stats (thread-safe)
-                self._update_stats_success(operation_name, attempt)
-
-                return result
-
             except Exception as e:
                 last_exception = e
-
-                logger.debug(
-                    f"{operation_name} failed on attempt {attempt}: {type(e).__name__}: {e}"
-                )
-
-                # Check if we should retry this exception
-                if not self.is_retryable_exception(e):
-                    logger.warning(
-                        f"{operation_name} failed with non-retryable exception: {type(e).__name__}"
-                    )
+                if not self._handle_retry_failure(operation_name, attempt, e):
                     raise e
 
-                # If this was the last attempt, don't delay
-                if attempt == self.config.max_attempts:
-                    break
+                if attempt < self.config.max_attempts:
+                    self._handle_sync_retry_delay(operation_name, attempt)
 
-                # Calculate delay and wait
-                delay = self.calculate_delay(attempt)
-                logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
-                time.sleep(delay)
-
-        # All attempts exhausted - update stats (thread-safe)
         self._update_stats_failure(operation_name)
-
         logger.error(
             f"{operation_name} failed after {self.config.max_attempts} attempts"
         )

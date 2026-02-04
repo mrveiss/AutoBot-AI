@@ -141,6 +141,72 @@ class SecureWebResearch:
             "from_cache": False,
         }
 
+    def _handle_unsafe_query(
+        self,
+        query_validation: Dict[str, Any],
+        research_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Handle unsafe query by updating stats and result with block status.
+
+        Updates security statistics and modifies research_result in-place
+        to reflect the blocked query status. Issue #620.
+
+        Args:
+            query_validation: Validation result from input validator
+            research_result: Research result dict to update
+
+        Returns:
+            The updated research_result dict
+        """
+        logger.warning(
+            "Query blocked due to security concerns: %s",
+            query_validation["threats_detected"],
+        )
+        self.security_stats["queries_blocked"] += 1
+        self.security_stats["threats_detected"] += len(
+            query_validation["threats_detected"]
+        )
+
+        research_result.update(
+            {
+                "status": "blocked_unsafe_query",
+                "message": f"Query blocked for security: {', '.join(query_validation['threats_detected'])}",
+                "security": {
+                    **research_result["security"],
+                    "threats_detected": query_validation["threats_detected"],
+                    "risk_level": query_validation["risk_level"],
+                },
+            }
+        )
+        return research_result
+
+    def _handle_confirmation_required(
+        self,
+        query_validation: Dict[str, Any],
+        research_result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Handle query requiring user confirmation due to risk level.
+
+        Updates research_result to indicate confirmation is needed
+        before proceeding with the query. Issue #620.
+
+        Args:
+            query_validation: Validation result from input validator
+            research_result: Research result dict to update
+
+        Returns:
+            The updated research_result dict
+        """
+        research_result.update(
+            {
+                "status": "requires_confirmation",
+                "message": f"Query requires user confirmation due to {query_validation['risk_level']} risk level",
+                "confirmation_required": True,
+                "risk_factors": query_validation.get("warnings", []),
+            }
+        )
+        return research_result
+
     def _validate_query(
         self,
         query: str,
@@ -158,27 +224,7 @@ class SecureWebResearch:
         research_result["security"]["query_validation"] = query_validation
 
         if not query_validation["safe"]:
-            logger.warning(
-                "Query blocked due to security concerns: %s",
-                query_validation["threats_detected"],
-            )
-            self.security_stats["queries_blocked"] += 1
-            self.security_stats["threats_detected"] += len(
-                query_validation["threats_detected"]
-            )
-
-            research_result.update(
-                {
-                    "status": "blocked_unsafe_query",
-                    "message": f"Query blocked for security: {', '.join(query_validation['threats_detected'])}",
-                    "security": {
-                        **research_result["security"],
-                        "threats_detected": query_validation["threats_detected"],
-                        "risk_level": query_validation["risk_level"],
-                    },
-                }
-            )
-            return None, research_result
+            return None, self._handle_unsafe_query(query_validation, research_result)
 
         research_result["security"]["warnings"] = query_validation["warnings"]
         research_result["security"]["risk_level"] = query_validation["risk_level"]
@@ -187,15 +233,9 @@ class SecureWebResearch:
             require_user_confirmation
             and query_validation["risk_level"] in _CONFIRMATION_REQUIRED_RISK_LEVELS
         ):
-            research_result.update(
-                {
-                    "status": "requires_confirmation",
-                    "message": f"Query requires user confirmation due to {query_validation['risk_level']} risk level",
-                    "confirmation_required": True,
-                    "risk_factors": query_validation.get("warnings", []),
-                }
+            return None, self._handle_confirmation_required(
+                query_validation, research_result
             )
-            return None, research_result
 
         return query_validation["sanitized_query"], None
 

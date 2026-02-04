@@ -576,6 +576,48 @@ class ConfigManager:
             task_type, self.AGENT_MODEL_DEFAULTS["default"]
         )
 
+    def _build_hardware_acceleration_base_config(
+        self, device_config: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Build base hardware acceleration configuration dict. Issue #620.
+
+        Args:
+            device_config: Device configuration from hardware manager
+
+        Returns:
+            Dict containing base hardware acceleration settings
+        """
+        return {
+            "hardware_acceleration": {
+                "enabled": os.getenv("AUTOBOT_HARDWARE_ACCELERATION", "true").lower()
+                == "true",
+                "priority_order": ["npu", "gpu", "cpu"],
+                "device_assignments": device_config,
+                "cpu_reserved_cores": int(os.getenv("AUTOBOT_CPU_RESERVED_CORES", "2")),
+                "memory_optimization": os.getenv(
+                    "AUTOBOT_MEMORY_OPTIMIZATION", "enabled"
+                )
+                == "enabled",
+            }
+        }
+
+    def _get_hardware_fallback_config(self, error: Exception) -> Dict[str, Any]:
+        """Get fallback CPU-only configuration when hardware detection fails. Issue #620.
+
+        Args:
+            error: The exception that caused the fallback
+
+        Returns:
+            Dict containing fallback CPU-only configuration
+        """
+        return {
+            "hardware_acceleration": {
+                "enabled": False,
+                "device_type": "cpu",
+                "fallback_reason": str(error),
+            }
+        }
+
     def get_hardware_acceleration_config(
         self, task_type: str = "default"
     ) -> Dict[str, Any]:
@@ -588,30 +630,11 @@ class ConfigManager:
             Dict containing hardware acceleration settings
         """
         try:
-            # Import here to avoid circular dependency
             from src.hardware_acceleration import get_hardware_acceleration_manager
 
             hw_manager = get_hardware_acceleration_manager()
             device_config = hw_manager.get_ollama_device_config(task_type)
-
-            # Add configuration override support
-            base_config = {
-                "hardware_acceleration": {
-                    "enabled": os.getenv(
-                        "AUTOBOT_HARDWARE_ACCELERATION", "true"
-                    ).lower()
-                    == "true",
-                    "priority_order": ["npu", "gpu", "cpu"],
-                    "device_assignments": device_config,
-                    "cpu_reserved_cores": int(
-                        os.getenv("AUTOBOT_CPU_RESERVED_CORES", "2")
-                    ),
-                    "memory_optimization": os.getenv(
-                        "AUTOBOT_MEMORY_OPTIMIZATION", "enabled"
-                    )
-                    == "enabled",
-                }
-            }
+            base_config = self._build_hardware_acceleration_base_config(device_config)
 
             # Allow per-task overrides
             task_override_key = f"AUTOBOT_DEVICE_{task_type.upper()}"
@@ -624,14 +647,7 @@ class ConfigManager:
 
         except Exception as e:
             logger.warning(f"Failed to get hardware acceleration config: {e}")
-            # Fallback to CPU-only configuration
-            return {
-                "hardware_acceleration": {
-                    "enabled": False,
-                    "device_type": "cpu",
-                    "fallback_reason": str(e),
-                }
-            }
+            return self._get_hardware_fallback_config(e)
 
     def _apply_ollama_env_overrides(self, config: Dict[str, Any]) -> None:
         """
