@@ -5,20 +5,30 @@
 """
 NPU Worker Integration
 Provides high-performance processing using NPU worker for heavy computational tasks
+
+Issue #255: Updated to use ServiceHTTPClient for authenticated service-to-service
+communication with HMAC-SHA256 signatures.
 """
 
 import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+
+if TYPE_CHECKING:
+    from backend.utils.service_client import ServiceHTTPClient
 
 from src.constants.threshold_constants import LLMDefaults, TimingConstants
-from src.utils.http_client import get_http_client
+from src.utils.http_client import HTTPClientManager, get_http_client
 
 from .utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
+
+# Issue #255: Enable authenticated client for service-to-service communication
+# Set to False to fall back to unauthenticated mode (for development/testing)
+USE_AUTHENTICATED_CLIENT = True
 
 
 @dataclass
@@ -33,21 +43,70 @@ class NPUInferenceRequest:
 
 
 class NPUWorkerClient:
-    """Client for communicating with NPU inference worker"""
+    """
+    Client for communicating with NPU inference worker.
 
-    def __init__(self, npu_endpoint: str = None):
-        """Initialize NPU client with endpoint and HTTP client."""
+    Issue #255: Supports authenticated service-to-service communication using
+    HMAC-SHA256 signatures via ServiceHTTPClient.
+    """
+
+    def __init__(
+        self,
+        npu_endpoint: str = None,
+        use_auth: bool = None,
+    ):
+        """
+        Initialize NPU client with endpoint and HTTP client.
+
+        Args:
+            npu_endpoint: NPU worker endpoint URL (default from service registry)
+            use_auth: Use authenticated client (default from USE_AUTHENTICATED_CLIENT)
+        """
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
-        self._http_client = get_http_client()
+        self._use_auth = use_auth if use_auth is not None else USE_AUTHENTICATED_CLIENT
+        self._http_client: Optional[
+            Union[HTTPClientManager, "ServiceHTTPClient"]
+        ] = None
+        self._auth_client_initialized = False
         self.available = False
         self._check_availability_task = None
+
+    async def _get_http_client(self):
+        """
+        Get HTTP client, initializing authenticated client if needed.
+
+        Issue #255: Uses ServiceHTTPClient for authenticated requests.
+        """
+        if self._http_client is not None:
+            return self._http_client
+
+        if self._use_auth and not self._auth_client_initialized:
+            try:
+                # Import here to avoid circular imports
+                from backend.utils.service_client import create_service_client
+
+                self._http_client = await create_service_client("main-backend")
+                self._auth_client_initialized = True
+                logger.info(
+                    "NPU client using authenticated ServiceHTTPClient (Issue #255)"
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to create authenticated client, falling back to "
+                    "unauthenticated mode: %s",
+                    e,
+                )
+                self._http_client = get_http_client()
+        else:
+            self._http_client = get_http_client()
+
+        return self._http_client
 
     async def check_health(self) -> Dict[str, Any]:
         """Check NPU worker health and capabilities"""
         try:
-            async with await self._http_client.get(
-                f"{self.npu_endpoint}/health"
-            ) as response:
+            http_client = await self._get_http_client()
+            async with await http_client.get(f"{self.npu_endpoint}/health") as response:
                 if response.status == 200:
                     health_data = await response.json()
                     self.available = True
@@ -67,9 +126,8 @@ class NPUWorkerClient:
     async def get_available_models(self) -> Dict[str, Any]:
         """Get list of available models on NPU worker"""
         try:
-            async with await self._http_client.get(
-                f"{self.npu_endpoint}/models"
-            ) as response:
+            http_client = await self._get_http_client()
+            async with await http_client.get(f"{self.npu_endpoint}/models") as response:
                 if response.status == 200:
                     return await response.json()
                 else:
@@ -81,8 +139,9 @@ class NPUWorkerClient:
     async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
         """Load a model on the NPU worker"""
         try:
+            http_client = await self._get_http_client()
             payload = {"model_id": model_id, "device": device}
-            async with await self._http_client.post(
+            async with await http_client.post(
                 f"{self.npu_endpoint}/models/load", json=payload
             ) as response:
                 return await response.json()
@@ -100,6 +159,7 @@ class NPUWorkerClient:
     ) -> Dict[str, Any]:
         """Run inference on NPU worker"""
         try:
+            http_client = await self._get_http_client()
             payload = {
                 "model_id": model_id,
                 "input_text": input_text,
@@ -108,7 +168,7 @@ class NPUWorkerClient:
                 "top_p": top_p,
             }
 
-            async with await self._http_client.post(
+            async with await http_client.post(
                 f"{self.npu_endpoint}/inference", json=payload
             ) as response:
                 result = await response.json()
