@@ -639,43 +639,50 @@ class TaskQueue:
         await self.redis.zrem(self.running_key, task.id)
 
         if result.status == TaskStatus.FAILED and result.retry_count < task.max_retries:
-            # Retry task
-            result.retry_count += 1
-            result.status = TaskStatus.RETRY
-
-            # Schedule retry with exponential backoff
-            retry_delay = task.retry_delay * (2**result.retry_count)
-            retry_time = datetime.utcnow() + timedelta(seconds=retry_delay)
-
-            # Update task with retry info
-            if task.metadata:
-                task.metadata["retry_count"] = result.retry_count
-                task.metadata["last_error"] = result.error
-            await self._store_task(task)
-
-            # Schedule retry
-            await self.redis.zadd(self.scheduled_key, {task.id: retry_time.timestamp()})
-
-            self.logger.info(
-                f"Scheduling retry {result.retry_count}/{task.max_retries} "
-                f"for task {task.id} in {retry_delay}s"
-            )
-
+            await self._schedule_task_retry(task, result)
         else:
-            # Task is complete (success or final failure)
-            if result.status == TaskStatus.COMPLETED:
-                await self.redis.zadd(self.completed_key, {task.id: time.time()})
-            else:
-                await self.redis.zadd(self.failed_key, {task.id: time.time()})
-                async with self._stats_lock:
-                    self.stats["tasks_failed"] += 1
+            await self._finalize_task_completion(task, result)
 
-        # Store result
+        await self._store_task_result(task, result)
+        self._log_task_performance(task, result)
+
+    async def _schedule_task_retry(self, task: Task, result: TaskResult) -> None:
+        """Schedule a failed task for retry with exponential backoff. Issue #620."""
+        result.retry_count += 1
+        result.status = TaskStatus.RETRY
+
+        retry_delay = task.retry_delay * (2**result.retry_count)
+        retry_time = datetime.utcnow() + timedelta(seconds=retry_delay)
+
+        if task.metadata:
+            task.metadata["retry_count"] = result.retry_count
+            task.metadata["last_error"] = result.error
+        await self._store_task(task)
+
+        await self.redis.zadd(self.scheduled_key, {task.id: retry_time.timestamp()})
+
+        self.logger.info(
+            f"Scheduling retry {result.retry_count}/{task.max_retries} "
+            f"for task {task.id} in {retry_delay}s"
+        )
+
+    async def _finalize_task_completion(self, task: Task, result: TaskResult) -> None:
+        """Move task to completed or failed queue. Issue #620."""
+        if result.status == TaskStatus.COMPLETED:
+            await self.redis.zadd(self.completed_key, {task.id: time.time()})
+        else:
+            await self.redis.zadd(self.failed_key, {task.id: time.time()})
+            async with self._stats_lock:
+                self.stats["tasks_failed"] += 1
+
+    async def _store_task_result(self, task: Task, result: TaskResult) -> None:
+        """Store task result in Redis. Issue #620."""
         result_data = json.dumps(result.to_dict())
         # Issue #361 - avoid blocking
         await asyncio.to_thread(self.redis.hset, self.results_key, task.id, result_data)
 
-        # Log performance metrics
+    def _log_task_performance(self, task: Task, result: TaskResult) -> None:
+        """Log task execution performance metrics. Issue #620."""
         if result.execution_time:
             log_performance_metric(
                 "task_execution_time",

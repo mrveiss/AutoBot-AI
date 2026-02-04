@@ -150,6 +150,48 @@ def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
+def _build_single_pattern_data(
+    pattern_type: str, code_content: str, metadata: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Build pattern data dict for single pattern ID generation. Issue #620.
+
+    Args:
+        pattern_type: Type of pattern
+        code_content: The code content
+        metadata: Pattern metadata
+
+    Returns:
+        Pattern data dictionary for generate_pattern_id
+    """
+    return {
+        "pattern_type": pattern_type,
+        "file_path": metadata.get("file_path", ""),
+        "start_line": metadata.get("start_line", 0),
+        "code_hash": hashlib.sha256(code_content.encode()).hexdigest()[:16],
+    }
+
+
+def _build_single_pattern_metadata(
+    pattern_type: str, code_content: str, metadata: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Build and sanitize metadata for single pattern storage. Issue #620.
+
+    Args:
+        pattern_type: Type of pattern
+        code_content: The code content
+        metadata: Raw pattern metadata
+
+    Returns:
+        Sanitized metadata dictionary
+    """
+    full_metadata = {
+        "pattern_type": pattern_type,
+        "code_length": len(code_content),
+        **metadata,
+    }
+    return sanitize_metadata(full_metadata)
+
+
 async def store_pattern(
     pattern_type: str,
     code_content: str,
@@ -176,28 +218,16 @@ async def store_pattern(
                 logger.error("Could not get pattern collection")
                 return None
 
-        # Generate pattern ID
-        pattern_data = {
-            "pattern_type": pattern_type,
-            "file_path": metadata.get("file_path", ""),
-            "start_line": metadata.get("start_line", 0),
-            "code_hash": hashlib.sha256(code_content.encode()).hexdigest()[:16],
-        }
+        pattern_data = _build_single_pattern_data(pattern_type, code_content, metadata)
         pattern_id = generate_pattern_id(pattern_data)
+        sanitized_metadata = _build_single_pattern_metadata(
+            pattern_type, code_content, metadata
+        )
 
-        # Prepare metadata
-        full_metadata = {
-            "pattern_type": pattern_type,
-            "code_length": len(code_content),
-            **metadata,
-        }
-        sanitized_metadata = sanitize_metadata(full_metadata)
-
-        # Store in ChromaDB
         await collection.add(
             ids=[pattern_id],
             embeddings=[embedding],
-            documents=[code_content[:10000]],  # Limit document size
+            documents=[code_content[:10000]],
             metadatas=[sanitized_metadata],
         )
 

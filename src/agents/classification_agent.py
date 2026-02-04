@@ -241,57 +241,64 @@ workflow complexity."""
         prompt = self.classification_prompt.format(user_message=user_message)
 
         try:
-            # Use failsafe LLM system for guaranteed response
-            system_prompt = (
-                "You are an expert classification agent. Respond only with valid JSON."
+            failsafe_response = await self._get_llm_classification_response(
+                prompt, user_message
             )
-            full_prompt = f"{system_prompt}\n\n{prompt}"
-
-            # Get robust LLM response with failover
-            failsafe_response = await get_robust_llm_response(
-                full_prompt,
-                context={"task": "classification", "user_message": user_message},
-            )
-
-            logger.info(
-                f"Classification LLM response using tier: {failsafe_response.tier_used.value}"
-            )
-            if failsafe_response.warnings:
-                logger.warning(
-                    f"Classification LLM warnings: {failsafe_response.warnings}"
-                )
-
-            response = failsafe_response.content
-
-            # Parse JSON response - response is now just the content string
-            if isinstance(response, str):
-                # Use the JSON formatter agent to handle parsing
-                parse_result = json_formatter.parse_llm_response(
-                    response, CLASSIFICATION_SCHEMA
-                )
-
-                if parse_result.success:
-                    logger.info(
-                        f"JSON parsed using method: {parse_result.method_used} "
-                        f"(confidence: {parse_result.confidence:.2f})"
-                    )
-                    if parse_result.warnings:
-                        logger.warning(
-                            f"JSON parsing warnings: {parse_result.warnings}"
-                        )
-                    return parse_result.data
-                else:
-                    logger.warning("JSON parsing failed: %s", parse_result.warnings)
-                    return {}
-            elif isinstance(response, dict):
-                # Response is already a dict
-                return response
-            else:
-                logger.warning("Unexpected response type: %s", type(response))
-                return {}
+            self._log_llm_response_info(failsafe_response)
+            return self._parse_classification_response(failsafe_response.content)
 
         except Exception as e:
             logger.error("LLM classification failed: %s", e)
+            return {}
+
+    async def _get_llm_classification_response(
+        self, prompt: str, user_message: str
+    ) -> Any:
+        """Get robust LLM response for classification. Issue #620."""
+        system_prompt = (
+            "You are an expert classification agent. Respond only with valid JSON."
+        )
+        full_prompt = f"{system_prompt}\n\n{prompt}"
+
+        return await get_robust_llm_response(
+            full_prompt,
+            context={"task": "classification", "user_message": user_message},
+        )
+
+    def _log_llm_response_info(self, failsafe_response: Any) -> None:
+        """Log LLM response tier and any warnings. Issue #620."""
+        logger.info(
+            f"Classification LLM response using tier: {failsafe_response.tier_used.value}"
+        )
+        if failsafe_response.warnings:
+            logger.warning(f"Classification LLM warnings: {failsafe_response.warnings}")
+
+    def _parse_classification_response(self, response: Any) -> Dict[str, Any]:
+        """Parse LLM response into classification dict. Issue #620."""
+        if isinstance(response, str):
+            return self._parse_string_response(response)
+        elif isinstance(response, dict):
+            return response
+        else:
+            logger.warning("Unexpected response type: %s", type(response))
+            return {}
+
+    def _parse_string_response(self, response: str) -> Dict[str, Any]:
+        """Parse string LLM response using JSON formatter. Issue #620."""
+        parse_result = json_formatter.parse_llm_response(
+            response, CLASSIFICATION_SCHEMA
+        )
+
+        if parse_result.success:
+            logger.info(
+                f"JSON parsed using method: {parse_result.method_used} "
+                f"(confidence: {parse_result.confidence:.2f})"
+            )
+            if parse_result.warnings:
+                logger.warning(f"JSON parsing warnings: {parse_result.warnings}")
+            return parse_result.data
+        else:
+            logger.warning("JSON parsing failed: %s", parse_result.warnings)
             return {}
 
     def _combine_classifications(

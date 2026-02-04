@@ -241,6 +241,29 @@ class KnowledgeBaseCore:
         else:
             raise ValueError(f"Unsupported LlamaIndex embedding provider: {provider}")
 
+    async def _resolve_embedding_model_name(self, ssot_config) -> str:
+        """Resolve embedding model name from stored or config. Issue #620.
+
+        Checks for a stored embedding model first (for consistency with
+        existing data), then falls back to config setting.
+
+        Args:
+            ssot_config: SSOT configuration object
+
+        Returns:
+            Resolved embedding model name
+        """
+        stored_model = await self._detect_stored_embedding_model()
+        if stored_model:
+            logger.info(
+                "Using stored embedding model for consistency: %s", stored_model
+            )
+            return stored_model
+
+        embed_model_name = ssot_config.llm.embedding_model
+        logger.info("Using embedding model from config: %s", embed_model_name)
+        return embed_model_name
+
     async def _configure_llama_index(self):
         """Configure LlamaIndex with explicit SSOT settings.
 
@@ -250,7 +273,6 @@ class KnowledgeBaseCore:
         """
         from src.config.ssot_config import config as ssot_config
 
-        # Get LlamaIndex-specific settings (no fallbacks)
         llm_provider = ssot_config.llm.llamaindex_llm_provider.lower()
         llm_endpoint = ssot_config.llm.llamaindex_llm_endpoint
         llm_model = ssot_config.llm.llamaindex_llm_model
@@ -265,28 +287,16 @@ class KnowledgeBaseCore:
             embed_endpoint,
         )
 
-        # Configure LLM (Issue #665: uses helper)
         self._configure_llm_provider(
             llm_provider, llm_model, llm_endpoint, kb_timeouts.llm_default, ssot_config
         )
 
-        # Determine embedding model (stored or config)
-        stored_model = await self._detect_stored_embedding_model()
-        if stored_model:
-            embed_model_name = stored_model
-            logger.info(
-                "Using stored embedding model for consistency: %s", embed_model_name
-            )
-        else:
-            embed_model_name = ssot_config.llm.embedding_model
-            logger.info("Using embedding model from config: %s", embed_model_name)
+        embed_model_name = await self._resolve_embedding_model_name(ssot_config)
 
-        # Configure embeddings (Issue #665: uses helper)
         self.embedding_dimensions = self._configure_embedding_provider(
             embed_provider, embed_model_name, embed_endpoint, ssot_config
         )
 
-        # Store model configuration
         self.embedding_model_name = embed_model_name
         self.llama_index_configured = True
 

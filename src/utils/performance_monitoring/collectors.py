@@ -473,11 +473,9 @@ class ServiceCollector:
             logger.error("Error collecting single service metrics: %s", e)
             return None
 
-    async def collect(self) -> List[ServicePerformanceMetrics]:
-        """Collect performance metrics for all distributed services."""
-        services = []
-
-        service_configs = [
+    def _get_service_configs(self) -> List[Dict[str, Any]]:
+        """Get configuration list for all monitored services. Issue #620."""
+        return [
             {
                 "name": "Backend API",
                 "host": config.get_host("backend"),
@@ -516,14 +514,18 @@ class ServiceCollector:
             },
         ]
 
-        for service_config in service_configs:
+    async def collect(self) -> List[ServicePerformanceMetrics]:
+        """Collect performance metrics for all distributed services."""
+        services = []
+
+        for service_config in self._get_service_configs():
             try:
                 service_metrics = await self._collect_single_service(service_config)
                 if service_metrics:
                     services.append(service_metrics)
             except Exception as e:
                 logger.error(
-                    f"Error collecting metrics for {service_config['name']}: {e}"
+                    "Error collecting metrics for %s: %s", service_config["name"], e
                 )
 
         return services

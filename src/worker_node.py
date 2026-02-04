@@ -359,7 +359,18 @@ class WorkerNode:
         if perm_error:
             return perm_error
 
-        # Publish task start event
+        await self._publish_task_start(task_id, task_type, user_role)
+
+        # Delegate to TaskExecutor - Strategy Pattern dispatch
+        result = await self.task_executor.execute(task_payload, user_role, task_id)
+
+        await self._publish_task_completion(task_id, result)
+        return result
+
+    async def _publish_task_start(
+        self, task_id: str, task_type: str, user_role: str
+    ) -> None:
+        """Publish task start event and log execution start. Issue #620."""
         await event_manager.publish(
             "worker_task_start",
             {"worker_id": self.worker_id, "task_id": task_id, "type": task_type},
@@ -372,10 +383,10 @@ class WorkerNode:
             user_role,
         )
 
-        # Delegate to TaskExecutor - Strategy Pattern dispatch
-        result = await self.task_executor.execute(task_payload, user_role, task_id)
-
-        # Publish task completion event
+    async def _publish_task_completion(
+        self, task_id: str, result: Dict[str, Any]
+    ) -> None:
+        """Publish task completion event and log result. Issue #620."""
         await event_manager.publish(
             "worker_task_end",
             {"worker_id": self.worker_id, "task_id": task_id, "result": result},
@@ -386,7 +397,6 @@ class WorkerNode:
             task_id,
             result["status"],
         )
-        return result
 
     async def listen_for_tasks(self):
         """

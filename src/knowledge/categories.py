@@ -83,6 +83,44 @@ class CategoriesMixin:
         else:
             await self.aioredis_client.sadd("category:root", category_id)
 
+    def _build_category_data(
+        self,
+        category_id: str,
+        name: str,
+        path: str,
+        parent_id: Optional[str],
+        description: Optional[str],
+        icon: Optional[str],
+        color: Optional[str],
+    ) -> Dict[str, Any]:
+        """Build category data dictionary for storage. Issue #620.
+
+        Args:
+            category_id: Unique category identifier
+            name: Category name (normalized)
+            path: Full category path
+            parent_id: Optional parent category ID
+            description: Optional description
+            icon: Optional icon identifier
+            color: Optional color code
+
+        Returns:
+            Category data dictionary ready for Redis storage
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        return {
+            "id": category_id,
+            "name": name,
+            "parent_id": parent_id or "",
+            "path": path,
+            "description": description or "",
+            "icon": icon or "",
+            "color": color or "",
+            "created_at": now,
+            "updated_at": now,
+            "fact_count": 0,
+        }
+
     async def create_category(
         self,
         name: str,
@@ -111,19 +149,9 @@ class CategoriesMixin:
                 }
 
             category_id = str(uuid.uuid4())
-            now = datetime.now(timezone.utc).isoformat()
-            category_data = {
-                "id": category_id,
-                "name": name,
-                "parent_id": parent_id or "",
-                "path": path,
-                "description": description or "",
-                "icon": icon or "",
-                "color": color or "",
-                "created_at": now,
-                "updated_at": now,
-                "fact_count": 0,
-            }
+            category_data = self._build_category_data(
+                category_id, name, path, parent_id, description, icon, color
+            )
 
             await self._store_category(category_id, category_data, parent_id)
             logger.info(
@@ -230,6 +258,21 @@ class CategoriesMixin:
         updates["path"] = new_path
         return None
 
+    def _apply_metadata_updates(
+        self,
+        updates: Dict[str, Any],
+        description: Optional[str],
+        icon: Optional[str],
+        color: Optional[str],
+    ) -> None:
+        """Apply optional metadata fields to updates dict. Issue #620."""
+        if description is not None:
+            updates["description"] = description
+        if icon is not None:
+            updates["icon"] = icon
+        if color is not None:
+            updates["color"] = color
+
     async def update_category(
         self,
         category_id: str,
@@ -261,17 +304,12 @@ class CategoriesMixin:
                 if error:
                     return {"success": False, "message": error}
 
-            if description is not None:
-                updates["description"] = description
-            if icon is not None:
-                updates["icon"] = icon
-            if color is not None:
-                updates["color"] = color
+            self._apply_metadata_updates(updates, description, icon, color)
 
             await self.aioredis_client.hset(f"category:{category_id}", mapping=updates)
             updated = await self._get_category_data(category_id)
-
             logger.info("Updated category '%s'", category_id)
+
             return {
                 "success": True,
                 "category": updated,
@@ -318,6 +356,34 @@ class CategoriesMixin:
         await self.aioredis_client.delete(f"category:facts:{cat_id}")
         await self.aioredis_client.delete(f"category:{cat_id}")
 
+    async def _build_deletion_list(
+        self, category_id: str, recursive: bool
+    ) -> tuple[List[str], Optional[Dict[str, Any]]]:
+        """Build list of categories to delete. Issue #620.
+
+        Args:
+            category_id: Root category to delete
+            recursive: Whether to include descendants
+
+        Returns:
+            Tuple of (categories_to_delete, error_response)
+            error_response is None if successful
+        """
+        children = await self.aioredis_client.smembers(
+            f"category:children:{category_id}"
+        )
+        if children and not recursive:
+            return [], {
+                "success": False,
+                "message": "Category has children. Use recursive=True to delete.",
+            }
+
+        categories_to_delete = [category_id]
+        if recursive and children:
+            categories_to_delete.extend(await self._get_all_descendants(category_id))
+
+        return categories_to_delete, None
+
     async def delete_category(
         self,
         category_id: str,
@@ -336,20 +402,11 @@ class CategoriesMixin:
                     "message": f"Category not found: {category_id}",
                 }
 
-            children = await self.aioredis_client.smembers(
-                f"category:children:{category_id}"
+            categories_to_delete, error = await self._build_deletion_list(
+                category_id, recursive
             )
-            if children and not recursive:
-                return {
-                    "success": False,
-                    "message": "Category has children. Use recursive=True to delete.",
-                }
-
-            categories_to_delete = [category_id]
-            if recursive and children:
-                categories_to_delete.extend(
-                    await self._get_all_descendants(category_id)
-                )
+            if error:
+                return error
 
             facts_reassigned = await self._reassign_category_facts(
                 categories_to_delete, reassign_to
@@ -662,28 +719,66 @@ class CategoriesMixin:
             return f"category:path:{pattern}"
         return f"category:path:{pattern}*"
 
-    async def _scan_matching_categories(
-        self, redis_pattern: str, limit: int
-    ) -> List[Dict[str, Any]]:
-        """Scan Redis for categories matching pattern (Issue #398: extracted)."""
-        # Issue #614: Fix N+1 pattern - collect keys first, then batch fetch
+    async def _collect_matching_keys(
+        self, redis_pattern: str, max_keys: int
+    ) -> List[str]:
+        """Collect Redis keys matching pattern. Issue #620.
+
+        Args:
+            redis_pattern: Redis key pattern to match
+            max_keys: Maximum number of keys to collect
+
+        Returns:
+            List of matching key strings
+        """
         keys = []
         async for key in self.aioredis_client.scan_iter(match=redis_pattern, count=100):
             key = key.decode("utf-8") if isinstance(key, bytes) else key
             keys.append(key)
-            if len(keys) >= limit * 2:  # Over-fetch to account for nulls
+            if len(keys) >= max_keys:
                 break
+        return keys
 
+    async def _batch_fetch_category_data(
+        self, category_ids: List[str], limit: int
+    ) -> List[Dict[str, Any]]:
+        """Batch fetch and decode category data. Issue #620.
+
+        Args:
+            category_ids: List of category IDs to fetch
+            limit: Maximum number of results
+
+        Returns:
+            List of decoded category data dicts
+        """
+        pipe = self.aioredis_client.pipeline()
+        for cat_id in category_ids:
+            pipe.hgetall(f"category:{cat_id}")
+        results = await pipe.execute()
+
+        matching = []
+        for result in results:
+            if result:
+                cat_data = self._decode_category_data(result)
+                if cat_data:
+                    matching.append(cat_data)
+            if len(matching) >= limit:
+                break
+        return matching
+
+    async def _scan_matching_categories(
+        self, redis_pattern: str, limit: int
+    ) -> List[Dict[str, Any]]:
+        """Scan Redis for categories matching pattern (Issue #398: extracted)."""
+        keys = await self._collect_matching_keys(redis_pattern, limit * 2)
         if not keys:
             return []
 
-        # Batch fetch all category IDs using pipeline
         pipe = self.aioredis_client.pipeline()
         for key in keys:
             pipe.get(key)
         category_ids = await pipe.execute()
 
-        # Collect valid category IDs
         valid_ids = []
         for cat_id in category_ids:
             if cat_id:
@@ -695,22 +790,7 @@ class CategoriesMixin:
         if not valid_ids:
             return []
 
-        # Batch fetch all category data using pipeline
-        pipe = self.aioredis_client.pipeline()
-        for cat_id in valid_ids:
-            pipe.hgetall(f"category:{cat_id}")
-        results = await pipe.execute()
-
-        # Process results
-        matching = []
-        for result in results:
-            if result:
-                cat_data = self._decode_category_data(result)
-                if cat_data:
-                    matching.append(cat_data)
-            if len(matching) >= limit:
-                break
-
+        matching = await self._batch_fetch_category_data(valid_ids, limit)
         matching.sort(key=lambda x: x.get("path", ""))
         return matching
 
