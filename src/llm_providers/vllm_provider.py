@@ -11,7 +11,6 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-
 try:
     from vllm import LLM, SamplingParams
     from vllm.model_executor.parallel_utils.parallel_state import destroy_model_parallel
@@ -93,6 +92,35 @@ class VLLMProvider:
             enable_chunked_prefill=self.enable_chunked_prefill,
         )
 
+    def _format_completion_response(
+        self, output: Any, generation_time: float
+    ) -> Dict[str, Any]:
+        """
+        Format vLLM output into standardized response dict.
+
+        Args:
+            output: vLLM generation output object
+            generation_time: Time taken for generation in seconds
+
+        Returns:
+            Formatted response dictionary. Issue #620.
+        """
+        generated_text = output.outputs[0].text
+        return {
+            "message": {"role": "assistant", "content": generated_text.strip()},
+            "usage": {
+                "prompt_tokens": len(output.prompt_token_ids),
+                "completion_tokens": len(output.outputs[0].token_ids),
+                "total_tokens": (
+                    len(output.prompt_token_ids) + len(output.outputs[0].token_ids)
+                ),
+            },
+            "model": self.model_name,
+            "provider": "vllm",
+            "generation_time": generation_time,
+            "finish_reason": output.outputs[0].finish_reason,
+        }
+
     async def chat_completion(
         self, messages: List[Dict[str, str]], **kwargs
     ) -> Dict[str, Any]:
@@ -110,45 +138,21 @@ class VLLMProvider:
             await self.initialize()
 
         try:
-            # Convert messages to prompt
             prompt = self._messages_to_prompt(messages)
-
-            # Create sampling parameters
             sampling_params = self._create_sampling_params(**kwargs)
-
-            # Generate completion
             start_time = time.time()
 
-            # Run generation in thread to avoid blocking
             loop = asyncio.get_event_loop()
             outputs = await loop.run_in_executor(
                 None, self._generate_completion, prompt, sampling_params
             )
 
-            generation_time = time.time() - start_time
-
-            # Format response
-            if outputs:
-                output = outputs[0]
-                generated_text = output.outputs[0].text
-
-                return {
-                    "message": {"role": "assistant", "content": generated_text.strip()},
-                    "usage": {
-                        "prompt_tokens": len(output.prompt_token_ids),
-                        "completion_tokens": len(output.outputs[0].token_ids),
-                        "total_tokens": (
-                            len(output.prompt_token_ids)
-                            + len(output.outputs[0].token_ids)
-                        ),
-                    },
-                    "model": self.model_name,
-                    "provider": "vllm",
-                    "generation_time": generation_time,
-                    "finish_reason": output.outputs[0].finish_reason,
-                }
-            else:
+            if not outputs:
                 raise RuntimeError("No output generated")
+
+            return self._format_completion_response(
+                outputs[0], time.time() - start_time
+            )
 
         except Exception as e:
             logger.error("vLLM completion error: %s", e)

@@ -304,6 +304,29 @@ class WorkflowExecutor:
             "simulated": True,
         }
 
+    def _log_plan_details(self, workflow_id: str, plan_summary: Dict[str, Any]) -> None:
+        """
+        Log workflow plan details for visibility.
+
+        Args:
+            workflow_id: ID of the workflow
+            plan_summary: Plan summary containing steps and estimates. Issue #620.
+        """
+        logger.info(
+            "Workflow %s plan: %d steps, estimated %.1fs total",
+            workflow_id,
+            plan_summary["total_steps"],
+            plan_summary["estimated_total_duration"],
+        )
+        for step in plan_summary["steps"]:
+            logger.info(
+                "  Step %s: %s (agent: %s, ~%.1fs)",
+                step["id"],
+                step["action"],
+                step["assigned_agent"],
+                step["estimated_duration"],
+            )
+
     async def request_plan_approval(
         self,
         workflow_id: str,
@@ -323,15 +346,10 @@ class WorkflowExecutor:
         Returns:
             Dict with 'approved' (bool), 'reason' (str), and 'plan' (dict)
         """
-        # If callback provided, use it to get approval
         if approval_callback:
             try:
                 approved, reason = await approval_callback(plan_summary)
-                return {
-                    "approved": approved,
-                    "reason": reason,
-                    "plan": plan_summary,
-                }
+                return {"approved": approved, "reason": reason, "plan": plan_summary}
             except Exception as e:
                 logger.error("Plan approval callback failed: %s", e)
                 return {
@@ -340,25 +358,7 @@ class WorkflowExecutor:
                     "plan": plan_summary,
                 }
 
-        # Default behavior: log plan and auto-approve (for backward compatibility)
-        logger.info(
-            "Workflow %s plan: %d steps, estimated %.1fs total",
-            workflow_id,
-            plan_summary["total_steps"],
-            plan_summary["estimated_total_duration"],
-        )
-
-        # Log each step for visibility
-        for step in plan_summary["steps"]:
-            logger.info(
-                "  Step %s: %s (agent: %s, ~%.1fs)",
-                step["id"],
-                step["action"],
-                step["assigned_agent"],
-                step["estimated_duration"],
-            )
-
-        # Auto-approve if no callback (backward compatibility)
+        self._log_plan_details(workflow_id, plan_summary)
         return {
             "approved": True,
             "reason": "Auto-approved (no approval callback provided)",
