@@ -352,31 +352,80 @@ class TemporalKnowledgeManager:
 
         return refresh_candidates
 
-    async def get_temporal_analytics(self) -> Dict[str, Any]:
-        """Get temporal analytics and insights."""
-        # Status distribution
+    def _collect_distribution_stats(
+        self,
+    ) -> tuple[Dict[str, int], Dict[str, int], List[float], List[int], List[float]]:
+        """Collect status/priority distributions and raw statistics lists.
+
+        Returns:
+            Tuple of (status_distribution, priority_distribution, ages,
+            access_counts, freshness_scores).
+
+        Issue #620.
+        """
         status_distribution = {status.value: 0 for status in FreshnessStatus}
         priority_distribution = {priority.value: 0 for priority in KnowledgePriority}
-
-        total_content = len(self.temporal_metadata)
-        if total_content == 0:
-            return {"total_content": 0, "message": "No temporal metadata available"}
-
-        # Calculate statistics
-        ages = []
-        access_counts = []
-        freshness_scores = []
+        ages: List[float] = []
+        access_counts: List[int] = []
+        freshness_scores: List[float] = []
 
         for meta in self.temporal_metadata.values():
             status = meta.get_freshness_status()
             status_distribution[status.value] += 1
             priority_distribution[meta.priority.value] += 1
-
             ages.append(meta.get_age_hours())
             access_counts.append(meta.access_count)
             freshness_scores.append(meta.freshness_score)
 
-        # Calculate averages
+        return (
+            status_distribution,
+            priority_distribution,
+            ages,
+            access_counts,
+            freshness_scores,
+        )
+
+    def _build_most_accessed_list(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Build list of most accessed content items.
+
+        Args:
+            limit: Maximum number of items to return.
+
+        Returns:
+            List of dictionaries with content_id, access_count, age_hours, priority.
+
+        Issue #620.
+        """
+        most_accessed = sorted(
+            self.temporal_metadata.items(),
+            key=lambda x: x[1].access_count,
+            reverse=True,
+        )[:limit]
+
+        return [
+            {
+                "content_id": content_id,
+                "access_count": meta.access_count,
+                "age_hours": meta.get_age_hours(),
+                "priority": meta.priority.value,
+            }
+            for content_id, meta in most_accessed
+        ]
+
+    async def get_temporal_analytics(self) -> Dict[str, Any]:
+        """Get temporal analytics and insights. Issue #620."""
+        total_content = len(self.temporal_metadata)
+        if total_content == 0:
+            return {"total_content": 0, "message": "No temporal metadata available"}
+
+        (
+            status_distribution,
+            priority_distribution,
+            ages,
+            access_counts,
+            freshness_scores,
+        ) = self._collect_distribution_stats()
+
         avg_age = sum(ages) / len(ages) if ages else 0
         avg_access_count = (
             sum(access_counts) / len(access_counts) if access_counts else 0
@@ -384,13 +433,6 @@ class TemporalKnowledgeManager:
         avg_freshness = (
             sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0
         )
-
-        # Find most accessed content
-        most_accessed = sorted(
-            self.temporal_metadata.items(),
-            key=lambda x: x[1].access_count,
-            reverse=True,
-        )[:5]
 
         return {
             "total_content": total_content,
@@ -401,15 +443,7 @@ class TemporalKnowledgeManager:
                 "access_count": avg_access_count,
                 "freshness_score": avg_freshness,
             },
-            "most_accessed_content": [
-                {
-                    "content_id": content_id,
-                    "access_count": meta.access_count,
-                    "age_hours": meta.get_age_hours(),
-                    "priority": meta.priority.value,
-                }
-                for content_id, meta in most_accessed
-            ],
+            "most_accessed_content": self._build_most_accessed_list(),
             "analytics": self.temporal_analytics,
             "analysis_timestamp": datetime.now().isoformat(),
         }
