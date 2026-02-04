@@ -18,11 +18,12 @@ Use PrometheusMetricsManager instead:
 """
 
 import warnings
+
 warnings.warn(
     "workflow_metrics module is deprecated and will be removed in Phase 5. "
     "Use PrometheusMetricsManager at src/monitoring/prometheus_metrics.py instead.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 import json
@@ -33,7 +34,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -155,10 +155,36 @@ class WorkflowMetricsCollector:
         except Exception as e:
             logger.error("Failed to start step timing: %s", e)
 
+    def _update_workflow_step_tracking(
+        self,
+        workflow_id: str,
+        step_id: str,
+        duration_ms: float,
+        success: bool,
+        error: str,
+    ) -> None:
+        """Update workflow tracking with step completion data. Issue #620."""
+        if workflow_id not in self.active_workflows:
+            return
+        workflow = self.active_workflows[workflow_id]
+        workflow["step_timings"][step_id] = duration_ms
+        if success:
+            workflow["completed_steps"] += 1
+        else:
+            workflow["failed_steps"] += 1
+            if error:
+                workflow["errors"].append(
+                    {
+                        "step_id": step_id,
+                        "error": error,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
     def end_step_timing(
         self, workflow_id: str, step_id: str, success: bool = True, error: str = None
     ):
-        """End timing a workflow step and record metrics"""
+        """End timing a workflow step and record metrics. Issue #620."""
         try:
             if (
                 workflow_id not in self.step_timers
@@ -172,25 +198,9 @@ class WorkflowMetricsCollector:
             step_data = self.step_timers[workflow_id][step_id]
             duration_ms = (time.time() - step_data["start_time"]) * 1000
 
-            # Update workflow tracking
-            if workflow_id in self.active_workflows:
-                workflow = self.active_workflows[workflow_id]
-                workflow["step_timings"][step_id] = duration_ms
-
-                if success:
-                    workflow["completed_steps"] += 1
-                else:
-                    workflow["failed_steps"] += 1
-                    if error:
-                        workflow["errors"].append(
-                            {
-                                "step_id": step_id,
-                                "error": error,
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        )
-
-            # Record step performance metric
+            self._update_workflow_step_tracking(
+                workflow_id, step_id, duration_ms, success, error
+            )
             self._record_metric(
                 workflow_id=workflow_id,
                 metric_type=MetricType.TIMER.value,
@@ -202,8 +212,6 @@ class WorkflowMetricsCollector:
                     "success": str(success),
                 },
             )
-
-            # Clean up timer
             del self.step_timers[workflow_id][step_id]
 
         except Exception as e:
@@ -277,8 +285,14 @@ class WorkflowMetricsCollector:
         """
         total_duration_ms = (end_time - workflow["start_time"]).total_seconds() * 1000
         step_durations = list(workflow["step_timings"].values())
-        avg_step_duration = sum(step_durations) / len(step_durations) if step_durations else 0
-        total_approval_wait = sum(workflow["approval_wait_times"]) if workflow["approval_wait_times"] else 0
+        avg_step_duration = (
+            sum(step_durations) / len(step_durations) if step_durations else 0
+        )
+        total_approval_wait = (
+            sum(workflow["approval_wait_times"])
+            if workflow["approval_wait_times"]
+            else 0
+        )
         success_rate = (
             workflow["completed_steps"]
             / max(workflow["completed_steps"] + workflow["failed_steps"], 1)
@@ -300,7 +314,9 @@ class WorkflowMetricsCollector:
             approval_wait_time_ms=total_approval_wait,
             error_count=len(workflow["errors"]),
             success_rate=success_rate,
-            resource_usage=self._aggregate_resource_usage(workflow["resource_snapshots"]),
+            resource_usage=self._aggregate_resource_usage(
+                workflow["resource_snapshots"]
+            ),
             status=final_status,
         )
 
@@ -318,7 +334,9 @@ class WorkflowMetricsCollector:
             end_time = datetime.now()
 
             # Build stats using helper
-            stats = self._build_workflow_stats(workflow_id, workflow, end_time, final_status)
+            stats = self._build_workflow_stats(
+                workflow_id, workflow, end_time, final_status
+            )
 
             # Record final metrics
             self._record_metric(
@@ -337,7 +355,10 @@ class WorkflowMetricsCollector:
                 metric_type=MetricType.GAUGE.value,
                 metric_name="workflow_success_rate",
                 value=stats.success_rate,
-                labels={"complexity": workflow["complexity"], "workflow_id": workflow_id},
+                labels={
+                    "complexity": workflow["complexity"],
+                    "workflow_id": workflow_id,
+                },
             )
 
             self._update_aggregated_stats(stats)

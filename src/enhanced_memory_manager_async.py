@@ -587,58 +587,68 @@ class AsyncEnhancedMemoryManager:
             logger.error("Failed to store memory entry: %s", e)
             raise RuntimeError(f"Failed to store memory: {e}")
 
+    async def _gather_task_counts(self, conn) -> Dict[str, Any]:
+        """Gather task counts by status and priority. Issue #620."""
+        counts = {}
+        cursor = await conn.execute(
+            "SELECT status, COUNT(*) FROM tasks GROUP BY status"
+        )
+        counts["tasks_by_status"] = dict(await cursor.fetchall())
+
+        cursor = await conn.execute(
+            "SELECT priority, COUNT(*) FROM tasks GROUP BY priority"
+        )
+        counts["tasks_by_priority"] = dict(await cursor.fetchall())
+        return counts
+
+    async def _gather_execution_metrics(self, conn) -> Dict[str, Any]:
+        """Gather execution time and success rate metrics. Issue #620."""
+        metrics = {}
+        cursor = await conn.execute(
+            "SELECT AVG(duration_ms) FROM execution_records WHERE success = 1"
+        )
+        result = await cursor.fetchone()
+        metrics["avg_execution_time_ms"] = result[0] if result[0] else 0
+
+        cursor = await conn.execute(
+            "SELECT success, COUNT(*) FROM execution_records GROUP BY success"
+        )
+        success_data = dict(await cursor.fetchall())
+        total_executions = sum(success_data.values())
+        if total_executions > 0:
+            metrics["success_rate"] = success_data.get(1, 0) / total_executions
+        else:
+            metrics["success_rate"] = 0
+        return metrics
+
+    async def _gather_recent_activity(self, conn) -> Dict[str, Any]:
+        """Gather recent activity counts (last 24 hours). Issue #620."""
+        recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
+        activity = {}
+
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE created_at > ?",
+            (recent_timestamp,),
+        )
+        activity["recent_tasks"] = (await cursor.fetchone())[0]
+
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM execution_records WHERE timestamp > ?",
+            (recent_timestamp,),
+        )
+        activity["recent_executions"] = (await cursor.fetchone())[0]
+        return activity
+
     async def get_task_statistics(self) -> Dict[str, Any]:
-        """Get comprehensive task statistics with async performance"""
+        """Get comprehensive task statistics with async performance."""
         await self._init_database()
 
         try:
             async with aiosqlite.connect(self.db_path) as conn:
                 stats = {}
-
-                # Task counts by status
-                cursor = await conn.execute(
-                    "SELECT status, COUNT(*) FROM tasks GROUP BY status"
-                )
-                stats["tasks_by_status"] = dict(await cursor.fetchall())
-
-                # Task counts by priority
-                cursor = await conn.execute(
-                    "SELECT priority, COUNT(*) FROM tasks GROUP BY priority"
-                )
-                stats["tasks_by_priority"] = dict(await cursor.fetchall())
-
-                # Average execution time
-                cursor = await conn.execute(
-                    "SELECT AVG(duration_ms) FROM execution_records WHERE success = 1"
-                )
-                result = await cursor.fetchone()
-                stats["avg_execution_time_ms"] = result[0] if result[0] else 0
-
-                # Success rate
-                cursor = await conn.execute(
-                    "SELECT success, COUNT(*) FROM execution_records GROUP BY success"
-                )
-                success_data = dict(await cursor.fetchall())
-                total_executions = sum(success_data.values())
-                if total_executions > 0:
-                    stats["success_rate"] = success_data.get(1, 0) / total_executions
-                else:
-                    stats["success_rate"] = 0
-
-                # Recent activity (last 24 hours)
-                recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
-                cursor = await conn.execute(
-                    "SELECT COUNT(*) FROM tasks WHERE created_at > ?",
-                    (recent_timestamp,),
-                )
-                stats["recent_tasks"] = (await cursor.fetchone())[0]
-
-                cursor = await conn.execute(
-                    "SELECT COUNT(*) FROM execution_records WHERE timestamp > ?",
-                    (recent_timestamp,),
-                )
-                stats["recent_executions"] = (await cursor.fetchone())[0]
-
+                stats.update(await self._gather_task_counts(conn))
+                stats.update(await self._gather_execution_metrics(conn))
+                stats.update(await self._gather_recent_activity(conn))
                 return stats
         except aiosqlite.Error as e:
             logger.error("Failed to get task statistics: %s", e)

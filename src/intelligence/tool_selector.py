@@ -57,12 +57,20 @@ class OSAwareToolSelector:
                 OSType.WINDOWS: ["ipconfig", "Get-NetIPAddress"],
             },
             "scan_network": {
-                OSType.LINUX: ["nmap -sn {network}", "arp-scan -l", "ping -c 1 {target}"],
+                OSType.LINUX: [
+                    "nmap -sn {network}",
+                    "arp-scan -l",
+                    "ping -c 1 {target}",
+                ],
                 OSType.MACOS: ["nmap -sn {network}", "ping -c 1 {target}"],
                 OSType.WINDOWS: ["nmap -sn {network}", "ping {target}"],
             },
             "discover_devices": {
-                OSType.LINUX: ["nmap -sn {network}", "arp-scan {network}", "ping -c 1 {target}"],
+                OSType.LINUX: [
+                    "nmap -sn {network}",
+                    "arp-scan {network}",
+                    "ping -c 1 {target}",
+                ],
                 OSType.MACOS: ["nmap -sn {network}", "ping -c 1 {target}"],
                 OSType.WINDOWS: ["nmap -sn {network}", "ping {target}"],
             },
@@ -74,7 +82,10 @@ class OSAwareToolSelector:
             "port_scan": {
                 OSType.LINUX: ["nmap -p- {target}", "nc -zv {target} {port}"],
                 OSType.MACOS: ["nmap -p- {target}", "nc -zv {target} {port}"],
-                OSType.WINDOWS: ["nmap -p- {target}", "Test-NetConnection {target} -Port {port}"],
+                OSType.WINDOWS: [
+                    "nmap -p- {target}",
+                    "Test-NetConnection {target} -Port {port}",
+                ],
             },
             "vulnerability_scan": {
                 OSType.LINUX: ["nmap -sV --script vuln {target}", "nikto -h {target}"],
@@ -161,9 +172,7 @@ class OSAwareToolSelector:
             },
         }
 
-    def _get_tools_for_os(
-        self, intent_tools: Dict, os_info
-    ) -> Optional[List[str]]:
+    def _get_tools_for_os(self, intent_tools: Dict, os_info) -> Optional[List[str]]:
         """Get tools for the current OS/distro (Issue #315 - extracted helper)."""
         if os_info.os_type not in intent_tools:
             return None
@@ -217,54 +226,58 @@ class OSAwareToolSelector:
             explanation=f"No specific tools mapped for: {goal.intent}",
         )
 
-    async def _select_best_available_tool(
-        self, tools: List[str], goal: ProcessedGoal
-    ) -> ToolSelection:
-        """Select the best available tool from a list."""
+    def _categorize_tools(self, tools: List[str]) -> tuple[List[str], List[tuple]]:
+        """Categorize tools by availability. Issue #620."""
         available_tools = []
         unavailable_tools = []
-
         for tool_cmd in tools:
-            # Extract tool name from command
             tool_name = tool_cmd.split()[0]
-
             if self.os_detector.has_capability(tool_name):
                 available_tools.append(tool_cmd)
             else:
                 unavailable_tools.append((tool_cmd, tool_name))
+        return available_tools, unavailable_tools
+
+    def _build_available_tool_selection(
+        self, available_tools: List[str], goal: ProcessedGoal
+    ) -> ToolSelection:
+        """Build ToolSelection for available tools. Issue #620."""
+        primary = available_tools[0]
+        fallbacks = available_tools[1:]
+        return ToolSelection(
+            primary_command=self._format_command(primary, goal.parameters),
+            fallback_commands=[
+                self._format_command(cmd, goal.parameters) for cmd in fallbacks
+            ],
+            install_command=None,
+            requires_install=False,
+            explanation=f"Using available tool: {primary.split()[0]}",
+        )
+
+    async def _build_install_tool_selection(
+        self, unavailable_tools: List[tuple], goal: ProcessedGoal
+    ) -> ToolSelection:
+        """Build ToolSelection for unavailable tools needing install. Issue #620."""
+        tool_cmd, tool_name = unavailable_tools[0]
+        install_cmd = await self.os_detector.get_install_command(tool_name)
+        return ToolSelection(
+            primary_command=self._format_command(tool_cmd, goal.parameters),
+            fallback_commands=[],
+            install_command=install_cmd,
+            requires_install=True,
+            explanation=f"Tool '{tool_name}' needs to be installed",
+        )
+
+    async def _select_best_available_tool(
+        self, tools: List[str], goal: ProcessedGoal
+    ) -> ToolSelection:
+        """Select the best available tool from a list. Issue #620."""
+        available_tools, unavailable_tools = self._categorize_tools(tools)
 
         if available_tools:
-            # Use first available tool as primary
-            primary = available_tools[0]
-            fallbacks = available_tools[1:]
-
-            # Format command with parameters
-            formatted_primary = self._format_command(primary, goal.parameters)
-
-            return ToolSelection(
-                primary_command=formatted_primary,
-                fallback_commands=[
-                    self._format_command(cmd, goal.parameters) for cmd in fallbacks
-                ],
-                install_command=None,
-                requires_install=False,
-                explanation=f"Using available tool: {primary.split()[0]}",
-            )
-
+            return self._build_available_tool_selection(available_tools, goal)
         elif unavailable_tools:
-            # Need to install a tool
-            tool_cmd, tool_name = unavailable_tools[0]
-            install_cmd = await self.os_detector.get_install_command(tool_name)
-
-            formatted_cmd = self._format_command(tool_cmd, goal.parameters)
-
-            return ToolSelection(
-                primary_command=formatted_cmd,
-                fallback_commands=[],
-                install_command=install_cmd,
-                requires_install=True,
-                explanation=f"Tool '{tool_name}' needs to be installed",
-            )
+            return await self._build_install_tool_selection(unavailable_tools, goal)
 
         return ToolSelection(
             primary_command="",

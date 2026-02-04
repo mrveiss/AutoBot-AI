@@ -219,6 +219,41 @@ class SessionMixin:
         logger.info("Created new chat session: %s", session_id)
         return session_data
 
+    async def _load_session_from_file(
+        self, session_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Load and decrypt session data from file. Issue #620."""
+        chats_directory = self._get_chats_directory()
+        chat_file = await self._resolve_session_file_path(session_id, chats_directory)
+        if not chat_file:
+            return None
+
+        async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+            file_content = await f.read()
+
+        return self._decrypt_data(file_content)
+
+    async def _process_loaded_messages(
+        self, session_id: str, chat_data: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Deduplicate messages and save cleaned version if needed. Issue #620."""
+        messages = chat_data.get("messages", [])
+        cleaned_messages = self._dedupe_streaming_messages(messages)
+
+        if len(cleaned_messages) < len(messages):
+            logger.info(
+                "Cleaned %d duplicate streaming messages from session %s",
+                len(messages) - len(cleaned_messages),
+                session_id,
+            )
+            chat_data["messages"] = cleaned_messages
+            try:
+                await self.save_session(session_id, messages=cleaned_messages)
+            except Exception as save_err:
+                logger.warning("Could not save cleaned session: %s", save_err)
+
+        return cleaned_messages
+
     async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
         """
         Load a specific chat session with Redis cache-first strategy.
@@ -237,35 +272,15 @@ class SessionMixin:
 
             logger.debug("Cache MISS for session %s", session_id)
 
-            # Cache miss - resolve file path (Issue #315 - uses helper)
-            chats_directory = self._get_chats_directory()
-            chat_file = await self._resolve_session_file_path(
-                session_id, chats_directory
-            )
-            if not chat_file:
+            # Load from file (Issue #620 - uses helper)
+            chat_data = await self._load_session_from_file(session_id)
+            if chat_data is None:
                 return []
 
-            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
-                file_content = await f.read()
-
-            # Decrypt data if encryption is enabled
-            chat_data = self._decrypt_data(file_content)
-
-            # Deduplicate streaming messages on load (Issue #259)
-            messages = chat_data.get("messages", [])
-            cleaned_messages = self._dedupe_streaming_messages(messages)
-
-            # If cleanup happened, save the cleaned version
-            if len(cleaned_messages) < len(messages):
-                logger.info(
-                    f"Cleaned {len(messages) - len(cleaned_messages)} duplicate "
-                    f"streaming messages from session {session_id}"
-                )
-                chat_data["messages"] = cleaned_messages
-                try:
-                    await self.save_session(session_id, messages=cleaned_messages)
-                except Exception as save_err:
-                    logger.warning("Could not save cleaned session: %s", save_err)
+            # Process messages (Issue #620 - uses helper)
+            cleaned_messages = await self._process_loaded_messages(
+                session_id, chat_data
+            )
 
             # Warm up Redis cache with cleaned data
             await self._warm_cache_safe(session_id, chat_data)

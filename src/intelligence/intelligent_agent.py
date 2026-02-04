@@ -320,21 +320,51 @@ class IntelligentAgent:
         async for chunk in self._handle_complex_goal(user_input):
             yield chunk
 
+    def _create_not_initialized_chunk(self) -> StreamChunk:
+        """Create chunk for uninitialized agent error. Issue #620."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content="❌ Agent not initialized. Please initialize first.",
+            metadata={"initialization_required": True},
+        )
+
+    def _create_processing_error_chunk(self, error: Exception) -> StreamChunk:
+        """Create chunk for processing error. Issue #620."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content=f"❌ Error processing request: {str(error)}",
+            metadata={"error": True, "exception": str(error)},
+        )
+
+    async def _route_goal_by_confidence(
+        self, processed_goal: ProcessedGoal, user_input: str
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Route goal to handler based on confidence level. Issue #620."""
+        if processed_goal.confidence > 0.5:
+            async for chunk in self._handle_high_confidence_goal(
+                processed_goal, user_input
+            ):
+                yield chunk
+        elif processed_goal.confidence > 0.2:
+            async for chunk in self._handle_partial_confidence_goal(
+                processed_goal, user_input
+            ):
+                yield chunk
+        else:
+            async for chunk in self._handle_low_confidence_goal(user_input):
+                yield chunk
+
     async def process_natural_language_goal(
         self, user_input: str, context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Process natural language input and execute appropriate commands."""
+        """Process natural language input and execute appropriate commands. Issue #620."""
         if not self.state.initialized:
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.ERROR,
-                content="❌ Agent not initialized. Please initialize first.",
-                metadata={"initialization_required": True},
-            )
+            yield self._create_not_initialized_chunk()
             return
 
         logger.info("Processing natural language goal: %s", user_input)
-        # Issue #321: Use helper method to reduce message chains
         self.state.add_to_context("user_input", user_input, context=context or {})
 
         try:
@@ -346,31 +376,15 @@ class IntelligentAgent:
             )
 
             processed_goal = await self.goal_processor.process_goal(user_input)
-            # Issue #321: Use helper method to reduce message chains
             self.state.add_to_context("processed_goal", processed_goal)
-
-            if processed_goal.confidence > 0.5:
-                async for chunk in self._handle_high_confidence_goal(
-                    processed_goal, user_input
-                ):
-                    yield chunk
-            elif processed_goal.confidence > 0.2:
-                async for chunk in self._handle_partial_confidence_goal(
-                    processed_goal, user_input
-                ):
-                    yield chunk
-            else:
-                async for chunk in self._handle_low_confidence_goal(user_input):
-                    yield chunk
+            async for chunk in self._route_goal_by_confidence(
+                processed_goal, user_input
+            ):
+                yield chunk
 
         except Exception as e:
             logger.error("Error processing goal: %s", e)
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.ERROR,
-                content=f"❌ Error processing request: {str(e)}",
-                metadata={"error": True, "exception": str(e)},
-            )
+            yield self._create_processing_error_chunk(e)
 
     def _create_install_required_chunk(self) -> StreamChunk:
         """Create chunk indicating tool installation is required. Issue #620."""
@@ -568,19 +582,33 @@ class IntelligentAgent:
                 metadata={"security_blocked": True},
             )
 
+    def _prepare_install_command(self, install_command: str) -> str:
+        """Prepare install command with sudo if needed. Issue #620."""
+        if not self.state.os_info.is_root and "sudo" not in install_command:
+            if any(pm in install_command for pm in _SUDO_PACKAGE_MANAGERS):
+                return f"sudo {install_command}"
+        return install_command
+
+    def _create_install_result_chunk(self, success: bool) -> StreamChunk:
+        """Create chunk for installation result. Issue #620."""
+        if success:
+            return StreamChunk(
+                timestamp=self._get_timestamp(),
+                chunk_type=ChunkType.STATUS,
+                content="✅ Tool installed successfully",
+                metadata={"installation_success": True},
+            )
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content="❌ Tool installation failed",
+            metadata={"installation_failed": True},
+        )
+
     async def _install_tool(
         self, install_command: str, goal: ProcessedGoal
     ) -> AsyncGenerator[StreamChunk, None]:
-        """
-        Install a required tool.
-
-        Args:
-            install_command: Command to install the tool
-            goal: Original processed goal
-
-        Yields:
-            StreamChunk: Installation progress
-        """
+        """Install a required tool. Issue #620."""
         yield StreamChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.STATUS,
@@ -588,37 +616,16 @@ class IntelligentAgent:
             metadata={"installing": True, "install_command": install_command},
         )
 
-        # Check if installation requires root and we don't have it
-        if not self.state.os_info.is_root and "sudo" not in install_command:
-            # Add sudo if needed for common package managers
-            if any(pm in install_command for pm in _SUDO_PACKAGE_MANAGERS):
-                install_command = f"sudo {install_command}"
-
-        # Execute installation command
+        install_command = self._prepare_install_command(install_command)
         async for chunk in self.streaming_executor.execute_with_streaming(
             install_command,
             f"Install tool for: {goal.original_goal}",
-            timeout=600,  # Longer timeout for installations
+            timeout=600,
         ):
             yield chunk
-
             if chunk.chunk_type == ChunkType.COMPLETE:
-                # Check if installation was successful
                 success = chunk.metadata.get("success", False)
-                if success:
-                    yield StreamChunk(
-                        timestamp=self._get_timestamp(),
-                        chunk_type=ChunkType.STATUS,
-                        content="✅ Tool installed successfully",
-                        metadata={"installation_success": True},
-                    )
-                else:
-                    yield StreamChunk(
-                        timestamp=self._get_timestamp(),
-                        chunk_type=ChunkType.ERROR,
-                        content="❌ Tool installation failed",
-                        metadata={"installation_failed": True},
-                    )
+                yield self._create_install_result_chunk(success)
                 break
 
     def _build_llm_system_prompt(self, user_input: str) -> str:

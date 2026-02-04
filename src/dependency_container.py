@@ -15,8 +15,8 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
 import redis.asyncio as async_redis
 
-from src.llm_interface import LLMInterface, get_llm_interface
 from src.config import UnifiedConfigManager, unified_config_manager
+from src.llm_interface import LLMInterface, get_llm_interface
 from src.utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -125,8 +125,48 @@ class AsyncServiceContainer:
 
         logger.debug("Registered instance: %s (%s)", name, service_type.__name__)
 
+    async def _resolve_dependencies(
+        self, descriptor: ServiceDescriptor
+    ) -> Dict[str, Any]:
+        """Resolve service dependencies recursively. Issue #620."""
+        resolved_deps = {}
+        for dep_name in descriptor.dependencies:
+            resolved_deps[dep_name] = await self.get_service(dep_name)
+        return resolved_deps
+
+    async def _create_service_instance(self, descriptor: ServiceDescriptor) -> Any:
+        """Create service instance from factory or direct instantiation. Issue #620."""
+        if descriptor.factory:
+            if asyncio.iscoroutinefunction(descriptor.factory):
+                return await descriptor.factory()
+            return descriptor.factory()
+        if descriptor.instance:
+            return descriptor.instance
+        return descriptor.service_type()
+
+    def _store_singleton_instance(
+        self, name: str, descriptor: ServiceDescriptor, instance: Any
+    ) -> None:
+        """Store singleton instance in cache and registry. Issue #620."""
+        if descriptor.singleton:
+            descriptor.instance = instance
+            descriptor.initialized = True
+            self._instances[name] = instance
+            self._initialized_services.add(name)
+
+    async def _run_init_hook(
+        self, descriptor: ServiceDescriptor, instance: Any
+    ) -> None:
+        """Run initialization lifecycle hook if defined. Issue #620."""
+        if "on_init" in descriptor.lifecycle_hooks:
+            hook = descriptor.lifecycle_hooks["on_init"]
+            if asyncio.iscoroutinefunction(hook):
+                await hook(instance)
+            else:
+                hook(instance)
+
     async def get_service(self, name: str) -> Any:
-        """Get service instance with dependency resolution"""
+        """Get service instance with dependency resolution."""
         if name not in self._services:
             raise ValueError(f"Service '{name}' not registered")
 
@@ -146,37 +186,10 @@ class AsyncServiceContainer:
             if name in self._instances:
                 return self._instances[name]
 
-            # Resolve dependencies first
-            resolved_deps = {}
-            for dep_name in descriptor.dependencies:
-                resolved_deps[dep_name] = await self.get_service(dep_name)
-
-            # Create instance
-            if descriptor.factory:
-                if asyncio.iscoroutinefunction(descriptor.factory):
-                    instance = await descriptor.factory()
-                else:
-                    instance = descriptor.factory()
-            elif descriptor.instance:
-                instance = descriptor.instance
-            else:
-                # Try to instantiate directly
-                instance = descriptor.service_type()
-
-            # Store instance
-            if descriptor.singleton:
-                descriptor.instance = instance
-                descriptor.initialized = True
-                self._instances[name] = instance
-                self._initialized_services.add(name)
-
-            # Run initialization hook if exists
-            if "on_init" in descriptor.lifecycle_hooks:
-                hook = descriptor.lifecycle_hooks["on_init"]
-                if asyncio.iscoroutinefunction(hook):
-                    await hook(instance)
-                else:
-                    hook(instance)
+            await self._resolve_dependencies(descriptor)
+            instance = await self._create_service_instance(descriptor)
+            self._store_singleton_instance(name, descriptor, instance)
+            await self._run_init_hook(descriptor, instance)
 
             logger.info("Initialized service: %s", name)
             return instance
@@ -382,7 +395,9 @@ async def service_context():
         ]
 
         if failed_critical:
-            logger.warning("Critical services failed to initialize: %s", failed_critical)
+            logger.warning(
+                "Critical services failed to initialize: %s", failed_critical
+            )
 
         logger.info(
             f"Service container initialized: {len(initialization_results)} services"

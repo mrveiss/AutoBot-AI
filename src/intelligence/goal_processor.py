@@ -121,57 +121,73 @@ class GoalProcessor:
             },
         }
 
-    def _get_system_intents(self) -> Dict[str, Dict]:
-        """System operation intent patterns. Issue #281: Extracted helper."""
+    def _system_info_intent(self) -> Dict:
+        """System info intent definition. Issue #620."""
         return {
-            "system_info": {
-                "patterns": [
-                    r"system.{0,10}info",
-                    r"show.{0,10}system",
-                    r"system.{0,10}details",
-                    r"computer.{0,10}info",
-                    r"hardware.{0,10}info",
-                ],
-                "category": GoalCategory.SYSTEM,
-                "explanation": "Display system information and specifications",
-                "risk": RiskLevel.LOW,
-            },
-            "system_update": {
-                "patterns": [
-                    r"update.{0,10}system",
-                    r"system.{0,10}update",
-                    r"os.{0,10}update",
-                    r"upgrade.{0,10}system",
-                    r"install.{0,10}updates",
-                ],
-                "category": GoalCategory.SYSTEM,
-                "explanation": "Update the operating system",
-                "risk": RiskLevel.HIGH,
-            },
-            "disk_usage": {
-                "patterns": [
-                    r"disk.{0,10}usage",
-                    r"storage.{0,10}space",
-                    r"check.{0,10}disk",
-                    r"free.{0,10}space",
-                    r"disk.{0,10}space",
-                ],
-                "category": GoalCategory.SYSTEM,
-                "explanation": "Check disk usage and available storage",
-                "risk": RiskLevel.LOW,
-            },
-            "list_processes": {
-                "patterns": [
-                    r"list.{0,10}processes",
-                    r"show.{0,10}processes",
-                    r"running.{0,10}processes",
-                    r"ps.{0,10}list",
-                    r"find.{0,10}python.{0,10}processes",
-                ],
-                "category": GoalCategory.SYSTEM,
-                "explanation": "List running processes",
-                "risk": RiskLevel.LOW,
-            },
+            "patterns": [
+                r"system.{0,10}info",
+                r"show.{0,10}system",
+                r"system.{0,10}details",
+                r"computer.{0,10}info",
+                r"hardware.{0,10}info",
+            ],
+            "category": GoalCategory.SYSTEM,
+            "explanation": "Display system information and specifications",
+            "risk": RiskLevel.LOW,
+        }
+
+    def _system_update_intent(self) -> Dict:
+        """System update intent definition. Issue #620."""
+        return {
+            "patterns": [
+                r"update.{0,10}system",
+                r"system.{0,10}update",
+                r"os.{0,10}update",
+                r"upgrade.{0,10}system",
+                r"install.{0,10}updates",
+            ],
+            "category": GoalCategory.SYSTEM,
+            "explanation": "Update the operating system",
+            "risk": RiskLevel.HIGH,
+        }
+
+    def _disk_usage_intent(self) -> Dict:
+        """Disk usage intent definition. Issue #620."""
+        return {
+            "patterns": [
+                r"disk.{0,10}usage",
+                r"storage.{0,10}space",
+                r"check.{0,10}disk",
+                r"free.{0,10}space",
+                r"disk.{0,10}space",
+            ],
+            "category": GoalCategory.SYSTEM,
+            "explanation": "Check disk usage and available storage",
+            "risk": RiskLevel.LOW,
+        }
+
+    def _list_processes_intent(self) -> Dict:
+        """List processes intent definition. Issue #620."""
+        return {
+            "patterns": [
+                r"list.{0,10}processes",
+                r"show.{0,10}processes",
+                r"running.{0,10}processes",
+                r"ps.{0,10}list",
+                r"find.{0,10}python.{0,10}processes",
+            ],
+            "category": GoalCategory.SYSTEM,
+            "explanation": "List running processes",
+            "risk": RiskLevel.LOW,
+        }
+
+    def _get_system_intents(self) -> Dict[str, Dict]:
+        """System operation intent patterns. Issue #620."""
+        return {
+            "system_info": self._system_info_intent(),
+            "system_update": self._system_update_intent(),
+            "disk_usage": self._disk_usage_intent(),
+            "list_processes": self._list_processes_intent(),
         }
 
     def _get_file_intents(self) -> Dict[str, Dict]:
@@ -435,9 +451,9 @@ class GoalProcessor:
 
         return warnings
 
-    def _guess_category(self, user_input: str) -> GoalCategory:
-        """Guess the category for unknown goals."""
-        category_keywords = {
+    def _get_category_keywords(self) -> Dict[GoalCategory, List[str]]:
+        """Return category to keywords mapping for category guessing. Issue #620."""
+        return {
             GoalCategory.NETWORK: [
                 "network",
                 "ip",
@@ -481,10 +497,12 @@ class GoalProcessor:
             GoalCategory.MONITORING: ["monitor", "performance", "cpu", "memory", "log"],
         }
 
+    def _guess_category(self, user_input: str) -> GoalCategory:
+        """Guess the category for unknown goals. Issue #620."""
+        category_keywords = self._get_category_keywords()
         for category, keywords in category_keywords.items():
             if any(keyword in user_input for keyword in keywords):
                 return category
-
         return GoalCategory.UNKNOWN
 
     async def get_similar_intents(

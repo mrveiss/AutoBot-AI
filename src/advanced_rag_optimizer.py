@@ -86,18 +86,29 @@ class AdvancedRAGOptimizer:
     """
 
     def __init__(self):
-        """Initialize RAG optimizer with search configuration."""
+        """Initialize RAG optimizer with search configuration. Issue #620."""
         self.kb = None
         self.semantic_chunker = None
+        self._init_search_config()
+        self._init_query_patterns()
+        self._init_performance_tracking()
+        logger.info("AdvancedRAGOptimizer initialized")
 
-        # Search configuration
+    def _init_search_config(self) -> None:
+        """Initialize search configuration parameters. Issue #620."""
         self.hybrid_weight_semantic = 0.7  # Weight for semantic similarity
         self.hybrid_weight_keyword = 0.3  # Weight for keyword matching
         self.max_results_per_stage = 20  # Results to consider in each stage
         self.diversity_threshold = 0.85  # Similarity threshold for diversification
 
-        # Query analysis patterns
-        self.technical_keywords = {
+    def _init_query_patterns(self) -> None:
+        """Initialize query analysis keyword patterns. Issue #620."""
+        self.technical_keywords = self._get_technical_keywords()
+        self.procedural_keywords = self._get_procedural_keywords()
+
+    def _get_technical_keywords(self) -> set:
+        """Return set of technical keywords for query classification. Issue #620."""
+        return {
             "install",
             "configure",
             "setup",
@@ -123,7 +134,9 @@ class AdvancedRAGOptimizer:
             "client",
         }
 
-        self.procedural_keywords = {
+    def _get_procedural_keywords(self) -> set:
+        """Return set of procedural keywords for query classification. Issue #620."""
+        return {
             "how to",
             "step by",
             "tutorial",
@@ -136,11 +149,10 @@ class AdvancedRAGOptimizer:
             "getting started",
         }
 
-        # Performance tracking
+    def _init_performance_tracking(self) -> None:
+        """Initialize performance tracking components. Issue #620."""
         self.query_cache = {}
         self.cache_ttl_seconds = 300  # 5 minutes
-
-        logger.info("AdvancedRAGOptimizer initialized")
 
     async def initialize(self):
         """Initialize knowledge base and components."""
@@ -275,12 +287,38 @@ class AdvancedRAGOptimizer:
             logger.error("Semantic search failed: %s", e)
             return []
 
+    def _calculate_keyword_score(
+        self, query_lower: str, query_terms: set, combined_text: str
+    ) -> float:
+        """Calculate keyword score for a fact. Issue #620."""
+        matches = sum(1 for term in query_terms if term in combined_text)
+        if matches == 0:
+            return 0.0
+        keyword_score = matches / len(query_terms)
+        # Boost score for exact phrase matches
+        if query_lower in combined_text:
+            keyword_score *= 1.5
+        return keyword_score
+
+    def _create_keyword_result(self, fact: Dict, keyword_score: float) -> SearchResult:
+        """Create SearchResult from fact with keyword score. Issue #620."""
+        metadata = fact.get("metadata", {})
+        return SearchResult(
+            content=fact.get("content", ""),
+            metadata=metadata,
+            semantic_score=0.0,
+            keyword_score=keyword_score,
+            hybrid_score=0.0,
+            relevance_rank=0,
+            source_path=metadata.get("relative_path", "unknown"),
+            chunk_index=metadata.get("chunk_index", 0),
+        )
+
     def _perform_keyword_search(
         self, query: str, all_facts: List[Dict]
     ) -> List[SearchResult]:
-        """Perform keyword-based search with TF-IDF-like scoring."""
+        """Perform keyword-based search with TF-IDF-like scoring. Issue #620."""
         try:
-            # Cache query.lower() to avoid repeated calls (Issue #624)
             query_lower = query.lower()
             query_terms = set(query_lower.split())
             keyword_results = []
@@ -290,40 +328,18 @@ class AdvancedRAGOptimizer:
                 metadata_str = json.dumps(fact.get("metadata", {})).lower()
                 combined_text = f"{content} {metadata_str}"
 
-                # Simple keyword scoring
-                matches = sum(1 for term in query_terms if term in combined_text)
-                if matches > 0:
-                    keyword_score = matches / len(query_terms)
+                score = self._calculate_keyword_score(
+                    query_lower, query_terms, combined_text
+                )
+                if score > 0:
+                    keyword_results.append(self._create_keyword_result(fact, score))
 
-                    # Boost score for exact phrase matches
-                    if query_lower in combined_text:
-                        keyword_score *= 1.5
-
-                    # Extract metadata - already a dict from get_all_facts()
-                    # Issue #429: Fixed - metadata is already parsed, no need for json.loads
-                    metadata = fact.get("metadata", {})
-
-                    result = SearchResult(
-                        content=fact.get("content", ""),
-                        metadata=metadata,
-                        semantic_score=0.0,  # Will be computed if needed
-                        keyword_score=keyword_score,
-                        hybrid_score=0.0,  # Will be computed later
-                        relevance_rank=0,  # Will be updated
-                        source_path=metadata.get("relative_path", "unknown"),
-                        chunk_index=metadata.get("chunk_index", 0),
-                    )
-                    keyword_results.append(result)
-
-            # Sort by keyword score
             keyword_results.sort(key=lambda x: x.keyword_score, reverse=True)
-
-            # Update ranks
             for i, result in enumerate(keyword_results):
                 result.relevance_rank = i + 1
 
             logger.debug("Keyword search returned %s results", len(keyword_results))
-            return keyword_results[:20]  # Limit results
+            return keyword_results[:20]
 
         except Exception as e:
             logger.error("Keyword search failed: %s", e)
