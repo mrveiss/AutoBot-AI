@@ -372,57 +372,75 @@ class IntelligentAgent:
                 metadata={"error": True, "exception": str(e)},
             )
 
+    def _create_install_required_chunk(self) -> StreamChunk:
+        """Create chunk indicating tool installation is required. Issue #620."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.COMMENTARY,
+            content="📦 Need to install required tool first",
+            metadata={"install_required": True},
+        )
+
+    def _create_install_failed_chunk(self) -> StreamChunk:
+        """Create chunk indicating tool installation cannot proceed. Issue #620."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content="❌ Required tool cannot be installed on this system",
+            metadata={"installation_failed": True},
+        )
+
+    def _create_no_command_chunk(self) -> StreamChunk:
+        """Create chunk indicating no suitable command was found. Issue #620."""
+        return StreamChunk(
+            timestamp=self._get_timestamp(),
+            chunk_type=ChunkType.ERROR,
+            content="❌ No suitable command found for this goal",
+            metadata={"no_command_found": True},
+        )
+
+    def _yield_tool_warnings(self, tool_selection) -> List[StreamChunk]:
+        """Generate warning chunks for tool selection warnings. Issue #620."""
+        chunks = []
+        chunks.append(
+            StreamChunk(
+                timestamp=self._get_timestamp(),
+                chunk_type=ChunkType.COMMENTARY,
+                content=f"🛠️ {tool_selection.explanation}",
+                metadata={"tool_explanation": True},
+            )
+        )
+        for warning in tool_selection.warnings:
+            chunks.append(
+                StreamChunk(
+                    timestamp=self._get_timestamp(),
+                    chunk_type=ChunkType.COMMENTARY,
+                    content=f"⚠️ {warning}",
+                    metadata={"type": "tool_warning"},
+                )
+            )
+        return chunks
+
     async def _execute_tool_selection(
         self, tool_selection, processed_goal: ProcessedGoal, user_input: str
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Execute tool with optional installation (Issue #315 - extracted helper)."""
-        # Handle tool installation if needed
+        """Execute tool with optional installation. Issue #620."""
         if tool_selection.requires_install:
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.COMMENTARY,
-                content="📦 Need to install required tool first",
-                metadata={"install_required": True},
-            )
-
+            yield self._create_install_required_chunk()
             if not tool_selection.install_command:
-                yield StreamChunk(
-                    timestamp=self._get_timestamp(),
-                    chunk_type=ChunkType.ERROR,
-                    content="❌ Required tool cannot be installed on this system",
-                    metadata={"installation_failed": True},
-                )
+                yield self._create_install_failed_chunk()
                 return
-
             async for chunk in self._install_tool(
                 tool_selection.install_command, processed_goal
             ):
                 yield chunk
 
-        # Execute the command
         if not tool_selection.primary_command:
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.ERROR,
-                content="❌ No suitable command found for this goal",
-                metadata={"no_command_found": True},
-            )
+            yield self._create_no_command_chunk()
             return
 
-        yield StreamChunk(
-            timestamp=self._get_timestamp(),
-            chunk_type=ChunkType.COMMENTARY,
-            content=f"🛠️ {tool_selection.explanation}",
-            metadata={"tool_explanation": True},
-        )
-
-        for warning in tool_selection.warnings:
-            yield StreamChunk(
-                timestamp=self._get_timestamp(),
-                chunk_type=ChunkType.COMMENTARY,
-                content=f"⚠️ {warning}",
-                metadata={"type": "tool_warning"},
-            )
+        for chunk in self._yield_tool_warnings(tool_selection):
+            yield chunk
 
         async for chunk in self.streaming_executor.execute_with_streaming(
             tool_selection.primary_command,
@@ -431,7 +449,6 @@ class IntelligentAgent:
         ):
             yield chunk
             if chunk.chunk_type == ChunkType.COMPLETE:
-                # Issue #321: Use helper method to reduce message chains
                 self.state.add_to_context(
                     "command_result",
                     tool_selection.primary_command,

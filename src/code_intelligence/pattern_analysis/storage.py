@@ -13,10 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.utils.chromadb_client import (
-    get_async_chromadb_client,
-    get_chromadb_client,
-)
+from src.utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +209,40 @@ async def store_pattern(
         return None
 
 
+def _prepare_pattern_data(pattern: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare pattern data dictionary for ID generation. Issue #620.
+
+    Args:
+        pattern: Raw pattern dictionary with pattern_type, code_content, metadata
+
+    Returns:
+        Pattern data dictionary suitable for generate_pattern_id
+    """
+    return {
+        "pattern_type": pattern["pattern_type"],
+        "file_path": pattern.get("metadata", {}).get("file_path", ""),
+        "start_line": pattern.get("metadata", {}).get("start_line", 0),
+        "code_hash": hashlib.sha256(pattern["code_content"].encode()).hexdigest()[:16],
+    }
+
+
+def _prepare_pattern_metadata(pattern: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare and sanitize metadata for a pattern. Issue #620.
+
+    Args:
+        pattern: Raw pattern dictionary with pattern_type, code_content, metadata
+
+    Returns:
+        Sanitized metadata dictionary ready for ChromaDB storage
+    """
+    full_metadata = {
+        "pattern_type": pattern["pattern_type"],
+        "code_length": len(pattern["code_content"]),
+        **pattern.get("metadata", {}),
+    }
+    return sanitize_metadata(full_metadata)
+
+
 async def store_patterns_batch(
     patterns: List[Dict[str, Any]],
     collection=None,
@@ -239,38 +270,16 @@ async def store_patterns_batch(
                 logger.error("Could not get pattern collection")
                 return 0
 
-        ids = []
-        embeddings = []
-        documents = []
-        metadatas = []
+        ids, embeddings, documents, metadatas = [], [], [], []
 
         for pattern in patterns:
-            pattern_data = {
-                "pattern_type": pattern["pattern_type"],
-                "file_path": pattern.get("metadata", {}).get("file_path", ""),
-                "start_line": pattern.get("metadata", {}).get("start_line", 0),
-                "code_hash": hashlib.sha256(
-                    pattern["code_content"].encode()
-                ).hexdigest()[:16],
-            }
-            pattern_id = generate_pattern_id(pattern_data)
-
-            full_metadata = {
-                "pattern_type": pattern["pattern_type"],
-                "code_length": len(pattern["code_content"]),
-                **pattern.get("metadata", {}),
-            }
-
-            ids.append(pattern_id)
+            ids.append(generate_pattern_id(_prepare_pattern_data(pattern)))
             embeddings.append(pattern["embedding"])
             documents.append(pattern["code_content"][:10000])
-            metadatas.append(sanitize_metadata(full_metadata))
+            metadatas.append(_prepare_pattern_metadata(pattern))
 
         await collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=metadatas,
+            ids=ids, embeddings=embeddings, documents=documents, metadatas=metadatas
         )
 
         logger.info("Stored %d patterns in batch", len(patterns))

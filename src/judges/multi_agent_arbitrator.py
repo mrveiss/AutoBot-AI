@@ -132,6 +132,38 @@ class MultiAgentArbitrator(BaseLLMJudge):
             alternatives=agent_responses,
         )
 
+    def _get_consistency_score(self, judgment: JudgmentResult) -> float:
+        """Extract consistency score from judgment criterion scores. Issue #620."""
+        return next(
+            (
+                s.score
+                for s in judgment.criterion_scores
+                if s.dimension == JudgmentDimension.CONSISTENCY
+            ),
+            0.0,
+        )
+
+    def _determine_conflict_severity(self, consistency_score: float) -> str:
+        """Determine conflict severity based on consistency score. Issue #620."""
+        if consistency_score < 0.5:
+            return "high"
+        elif consistency_score < 0.7:
+            return "medium"
+        return "low"
+
+    def _build_conflict_result(
+        self, judgment: JudgmentResult, consistency_score: float
+    ) -> Dict[str, Any]:
+        """Build conflict detection result dictionary. Issue #620."""
+        return {
+            "has_conflicts": consistency_score < self.consensus_threshold,
+            "consistency_score": consistency_score,
+            "conflict_severity": self._determine_conflict_severity(consistency_score),
+            "conflicting_areas": self._identify_conflicting_areas(judgment),
+            "resolution_suggestions": judgment.improvement_suggestions,
+            "detailed_analysis": judgment.reasoning,
+        }
+
     async def detect_agent_conflicts(
         self,
         agent_responses: List[Dict[str, Any]],
@@ -139,19 +171,17 @@ class MultiAgentArbitrator(BaseLLMJudge):
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Detect conflicts and contradictions between agent responses
+        Detect conflicts and contradictions between agent responses. Issue #620.
 
         Returns:
             Dict with conflict analysis and resolution suggestions
         """
         try:
-            # Define criteria for conflict detection
             criteria = [
                 JudgmentDimension.CONSISTENCY,
                 JudgmentDimension.ACCURACY,
                 JudgmentDimension.COMPLETENESS,
             ]
-
             conflict_context = {
                 "agent_types": agent_types,
                 "context": context,
@@ -165,32 +195,8 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 context=conflict_context,
             )
 
-            # Extract conflict information
-            consistency_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.CONSISTENCY
-                ),
-                0.0,
-            )
-
-            has_conflicts = consistency_score < self.consensus_threshold
-
-            return {
-                "has_conflicts": has_conflicts,
-                "consistency_score": consistency_score,
-                "conflict_severity": (
-                    "high"
-                    if consistency_score < 0.5
-                    else "medium"
-                    if consistency_score < 0.7
-                    else "low"
-                ),
-                "conflicting_areas": self._identify_conflicting_areas(judgment),
-                "resolution_suggestions": judgment.improvement_suggestions,
-                "detailed_analysis": judgment.reasoning,
-            }
+            consistency_score = self._get_consistency_score(judgment)
+            return self._build_conflict_result(judgment, consistency_score)
 
         except Exception as e:
             logger.error("Error detecting agent conflicts: %s", e)

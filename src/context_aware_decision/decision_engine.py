@@ -385,73 +385,95 @@ class DecisionEngine:
             context, best_score, prioritized_task, scored_tasks, len(task_actions)
         )
 
+    def _build_high_risk_decision(
+        self, context: DecisionContext, high_risk_factors: List[Dict[str, Any]]
+    ) -> Decision:
+        """Build decision for high-risk escalation. Issue #620.
+
+        Args:
+            context: Decision context
+            high_risk_factors: List of high severity risk factors
+
+        Returns:
+            Decision recommending human review escalation
+        """
+        escalation_action = {
+            "action_type": "escalation",
+            "action": "request_human_review",
+            "reason": "high_risk_factors_detected",
+            "confidence": 0.9,
+        }
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action=escalation_action,
+            alternative_actions=[],
+            confidence=0.9,
+            confidence_level=ConfidenceLevel.HIGH,
+            reasoning=(
+                f"High risk factors detected: "
+                f"{[rf['risk_type'] for rf in high_risk_factors]}"
+            ),
+            supporting_evidence=[
+                {"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}
+            ],
+            risk_assessment={"risk_level": "high", "factors": high_risk_factors},
+            expected_outcomes=[
+                {"outcome": "human_review_requested", "probability": 0.9}
+            ],
+            monitoring_criteria=["human_response", "risk_mitigation_status"],
+            fallback_plan=None,
+            requires_approval=False,
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={"algorithm": "risk_assessment"},
+        )
+
+    def _build_acceptable_risk_decision(
+        self, context: DecisionContext, risk_factors: List[Dict[str, Any]]
+    ) -> Decision:
+        """Build decision for acceptable risk levels. Issue #620.
+
+        Args:
+            context: Decision context
+            risk_factors: All risk factors (low/medium severity)
+
+        Returns:
+            Decision to continue normal operations
+        """
+        continue_action = {
+            "action_type": "monitoring",
+            "action": "continue_operations",
+            "confidence": 0.8,
+        }
+
+        return Decision(
+            decision_id=context.decision_id,
+            decision_type=context.decision_type,
+            chosen_action=continue_action,
+            alternative_actions=[],
+            confidence=0.8,
+            confidence_level=ConfidenceLevel.HIGH,
+            reasoning="Risk factors within acceptable limits",
+            supporting_evidence=[{"type": "risk_analysis", "risk_level": "acceptable"}],
+            risk_assessment={"risk_level": "low", "factors": risk_factors},
+            expected_outcomes=[{"outcome": "continued_operation", "probability": 0.8}],
+            monitoring_criteria=["risk_factor_changes", "system_performance"],
+            fallback_plan=None,
+            requires_approval=False,
+            timestamp=self.time_provider.current_timestamp(),
+            metadata={"algorithm": "risk_assessment"},
+        )
+
     async def _decide_risk_assessment(self, context: DecisionContext) -> Decision:
         """Decide on risk assessment actions."""
         risk_factors = context.risk_factors
         high_risk_factors = [rf for rf in risk_factors if rf.get("severity") == "high"]
 
         if high_risk_factors:
-            # High risk detected - recommend escalation
-            escalation_action = {
-                "action_type": "escalation",
-                "action": "request_human_review",
-                "reason": "high_risk_factors_detected",
-                "confidence": 0.9,
-            }
-
-            return Decision(
-                decision_id=context.decision_id,
-                decision_type=context.decision_type,
-                chosen_action=escalation_action,
-                alternative_actions=[],
-                confidence=0.9,
-                confidence_level=ConfidenceLevel.HIGH,
-                reasoning=(
-                    f"High risk factors detected: "
-                    f"{[rf['risk_type'] for rf in high_risk_factors]}"
-                ),
-                supporting_evidence=[
-                    {"type": "risk_analysis", "high_risk_count": len(high_risk_factors)}
-                ],
-                risk_assessment={"risk_level": "high", "factors": high_risk_factors},
-                expected_outcomes=[
-                    {"outcome": "human_review_requested", "probability": 0.9}
-                ],
-                monitoring_criteria=["human_response", "risk_mitigation_status"],
-                fallback_plan=None,
-                requires_approval=False,
-                timestamp=self.time_provider.current_timestamp(),
-                metadata={"algorithm": "risk_assessment"},
-            )
+            return self._build_high_risk_decision(context, high_risk_factors)
         else:
-            # Low/medium risk - continue normal operations
-            continue_action = {
-                "action_type": "monitoring",
-                "action": "continue_operations",
-                "confidence": 0.8,
-            }
-
-            return Decision(
-                decision_id=context.decision_id,
-                decision_type=context.decision_type,
-                chosen_action=continue_action,
-                alternative_actions=[],
-                confidence=0.8,
-                confidence_level=ConfidenceLevel.HIGH,
-                reasoning="Risk factors within acceptable limits",
-                supporting_evidence=[
-                    {"type": "risk_analysis", "risk_level": "acceptable"}
-                ],
-                risk_assessment={"risk_level": "low", "factors": risk_factors},
-                expected_outcomes=[
-                    {"outcome": "continued_operation", "probability": 0.8}
-                ],
-                monitoring_criteria=["risk_factor_changes", "system_performance"],
-                fallback_plan=None,
-                requires_approval=False,
-                timestamp=self.time_provider.current_timestamp(),
-                metadata={"algorithm": "risk_assessment"},
-            )
+            return self._build_acceptable_risk_decision(context, risk_factors)
 
     def _analyze_escalation_urgency(self, context: DecisionContext) -> List[str]:
         """Analyze context elements to determine escalation urgency factors (Issue #398: extracted).

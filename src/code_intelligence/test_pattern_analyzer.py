@@ -769,12 +769,15 @@ class TestPatternAnalyzer:
     # Quality Metrics
     # =========================================================================
 
-    def _calculate_quality_metrics(
-        self,
-        test_files: List[str],
-        anti_patterns: List[TestAntiPatternResult],
-    ) -> Dict[TestQualityMetric, float]:
-        """Calculate overall test quality metrics."""
+    def _aggregate_test_file_stats(self, test_files: List[str]) -> tuple[int, int, int]:
+        """Aggregate statistics from test files. Issue #620.
+
+        Args:
+            test_files: List of test file paths to analyze
+
+        Returns:
+            Tuple of (total_tests, total_assertions, total_lines)
+        """
         total_tests = 0
         total_assertions = 0
         total_lines = 0
@@ -793,8 +796,27 @@ class TestPatternAnalyzer:
             except Exception as e:
                 logger.debug("Could not analyze %s: %s", test_file, e)
 
-        # Calculate metrics
-        metrics = {}
+        return total_tests, total_assertions, total_lines
+
+    def _compute_individual_metrics(
+        self,
+        total_tests: int,
+        total_assertions: int,
+        total_lines: int,
+        anti_patterns: List[TestAntiPatternResult],
+    ) -> Dict[TestQualityMetric, float]:
+        """Compute individual quality metrics. Issue #620.
+
+        Args:
+            total_tests: Total number of test functions
+            total_assertions: Total assertion count across all tests
+            total_lines: Total lines across all test functions
+            anti_patterns: List of detected anti-patterns
+
+        Returns:
+            Dictionary of individual metrics (excluding overall score)
+        """
+        metrics: Dict[TestQualityMetric, float] = {}
 
         # Assertion density (assertions per test)
         if total_tests > 0:
@@ -818,7 +840,17 @@ class TestPatternAnalyzer:
         issue_penalty = len(anti_patterns) * 5
         metrics[TestQualityMetric.MAINTAINABILITY_SCORE] = max(0, 100 - issue_penalty)
 
-        # Calculate overall score
+        return metrics
+
+    def _compute_overall_score(self, metrics: Dict[TestQualityMetric, float]) -> float:
+        """Compute weighted overall quality score. Issue #620.
+
+        Args:
+            metrics: Dictionary of individual metrics
+
+        Returns:
+            Overall quality score (0-100)
+        """
         weights = {
             TestQualityMetric.ASSERTION_DENSITY: 0.25,
             TestQualityMetric.COMPLEXITY_SCORE: 0.35,
@@ -833,7 +865,23 @@ class TestPatternAnalyzer:
                 value = min(100, value * 25)  # 4 assertions per test = 100
             overall += value * weight
 
-        metrics[TestQualityMetric.OVERALL_SCORE] = overall
+        return overall
+
+    def _calculate_quality_metrics(
+        self,
+        test_files: List[str],
+        anti_patterns: List[TestAntiPatternResult],
+    ) -> Dict[TestQualityMetric, float]:
+        """Calculate overall test quality metrics."""
+        total_tests, total_assertions, total_lines = self._aggregate_test_file_stats(
+            test_files
+        )
+
+        metrics = self._compute_individual_metrics(
+            total_tests, total_assertions, total_lines, anti_patterns
+        )
+
+        metrics[TestQualityMetric.OVERALL_SCORE] = self._compute_overall_score(metrics)
 
         return metrics
 

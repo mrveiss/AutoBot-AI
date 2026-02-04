@@ -438,6 +438,50 @@ class EnhancedSecurityLayer:
 
         return default_role_permissions.get(user_role, [])
 
+    def _log_command_attempt(
+        self, command: str, user: str, user_role: str, force_approval: bool
+    ) -> None:
+        """Log command execution attempt to audit log. Issue #620."""
+        self.audit_log(
+            action="command_execution_attempt",
+            user=user,
+            outcome="pending",
+            details={
+                "command": command,
+                "role": user_role,
+                "force_approval": force_approval,
+            },
+        )
+
+    async def _execute_basic_command(self, command: str) -> Dict[str, Any]:
+        """Execute command without security controls (fallback mode). Issue #620."""
+        process = await asyncio.create_subprocess_shell(
+            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        return {
+            "stdout": stdout.decode().strip(),
+            "stderr": stderr.decode().strip(),
+            "return_code": process.returncode,
+            "status": "success" if process.returncode == 0 else "error",
+            "security": {"enabled": False},
+        }
+
+    def _log_command_complete(
+        self, command: str, user: str, result: Dict[str, Any]
+    ) -> None:
+        """Log command execution completion to audit log. Issue #620."""
+        self.audit_log(
+            action="command_execution_complete",
+            user=user,
+            outcome=result["status"],
+            details={
+                "command": command,
+                "return_code": result["return_code"],
+                "security": result.get("security", {}),
+            },
+        )
+
     async def execute_command(
         self, command: str, user: str, user_role: str
     ) -> Dict[str, Any]:
@@ -452,58 +496,20 @@ class EnhancedSecurityLayer:
         Returns:
             Execution result with security information
         """
-        # Issue #281: Use extracted helper for permission check
         if not self.check_permission(user_role, "allow_shell_execute"):
             return self._create_permission_denied_result(command, user, user_role)
 
-        # Issue #281: Use extracted helper for approval logic
         force_approval = self._should_force_approval(command, user_role)
+        self._log_command_attempt(command, user, user_role, force_approval)
 
-        # Log command attempt
-        self.audit_log(
-            action="command_execution_attempt",
-            user=user,
-            outcome="pending",
-            details={
-                "command": command,
-                "role": user_role,
-                "force_approval": force_approval,
-            },
-        )
-
-        # Execute command with security controls
         if self.enable_command_security:
             result = await self.command_executor.run_shell_command(
                 command, force_approval=force_approval
             )
         else:
-            # Fallback to basic execution if security is disabled
-            import asyncio
+            result = await self._execute_basic_command(command)
 
-            process = await asyncio.create_subprocess_shell(
-                command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            result = {
-                "stdout": stdout.decode().strip(),
-                "stderr": stderr.decode().strip(),
-                "return_code": process.returncode,
-                "status": "success" if process.returncode == 0 else "error",
-                "security": {"enabled": False},
-            }
-
-        # Log execution result
-        self.audit_log(
-            action="command_execution_complete",
-            user=user,
-            outcome=result["status"],
-            details={
-                "command": command,
-                "return_code": result["return_code"],
-                "security": result.get("security", {}),
-            },
-        )
-
+        self._log_command_complete(command, user, result)
         return result
 
     def audit_log(self, action: str, user: str, outcome: str, details: Dict[str, Any]):
