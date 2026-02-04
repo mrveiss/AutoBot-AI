@@ -226,8 +226,8 @@ class LLMSelfAwareness:
             logger.error("Error building system context: %s", e)
             return self._get_error_context(e)
 
-    def _get_categorization_rules(self) -> Dict[str, List[str]]:
-        """Get explicit capability-to-category mapping (Issue #315)."""
+    def _get_core_ai_security_rules(self) -> Dict[str, List[str]]:
+        """Get core, AI, and security category rules. Issue #620."""
         return {
             "core": ["basic_api", "configuration_management", "logging"],
             "ai": [
@@ -245,6 +245,11 @@ class LLMSelfAwareness:
                 "access_control",
                 "audit_logging",
             ],
+        }
+
+    def _get_interface_data_rules(self) -> Dict[str, List[str]]:
+        """Get interface and data category rules. Issue #620."""
+        return {
             "interface": [
                 "web_interface",
                 "user_interaction",
@@ -261,6 +266,11 @@ class LLMSelfAwareness:
                 "embedding_storage",
                 "knowledge_enhancement",
             ],
+        }
+
+    def _get_automation_monitoring_dev_rules(self) -> Dict[str, List[str]]:
+        """Get automation, monitoring, and development category rules. Issue #620."""
+        return {
             "automation": [
                 "agent_coordination",
                 "workflow_management",
@@ -284,6 +294,14 @@ class LLMSelfAwareness:
                 "openvino_acceleration",
             ],
         }
+
+    def _get_categorization_rules(self) -> Dict[str, List[str]]:
+        """Get explicit capability-to-category mapping (Issue #315). Issue #620."""
+        rules = {}
+        rules.update(self._get_core_ai_security_rules())
+        rules.update(self._get_interface_data_rules())
+        rules.update(self._get_automation_monitoring_dev_rules())
+        return rules
 
     def _get_keyword_category_mapping(self) -> List[tuple]:
         """Get keyword sets to category mapping for inference (Issue #315)."""

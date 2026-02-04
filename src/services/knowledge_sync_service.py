@@ -324,52 +324,86 @@ class KnowledgeSyncService:
 
         return recommendations
 
+    def _extract_sync_metrics_data(self, recent_history: list) -> tuple:
+        """
+        Extract durations and file counts from sync history.
+
+        Returns tuple of (durations, file_counts, total_files, avg_files_per_sync).
+        Issue #620.
+        """
+        durations = [s["duration"] for s in recent_history]
+        file_counts = [
+            s["metrics"]["files_changed"] + s["metrics"]["files_added"]
+            for s in recent_history
+        ]
+        total_files = sum(file_counts)
+        avg_files_per_sync = total_files / len(file_counts) if file_counts else 0
+        return durations, file_counts, total_files, avg_files_per_sync
+
+    def _build_performance_stats(
+        self, durations: list, total_files: int, avg_files_per_sync: float
+    ) -> Dict[str, Any]:
+        """
+        Build performance statistics dictionary from extracted metrics.
+
+        Issue #620.
+        """
+        avg_duration, min_duration, max_duration = self._calculate_duration_stats(
+            durations
+        )
+        return {
+            "avg_sync_duration": avg_duration,
+            "min_sync_duration": min_duration,
+            "max_sync_duration": max_duration,
+            "total_syncs_analyzed": len(durations),
+            "avg_files_per_sync": avg_files_per_sync,
+            "total_files_processed": total_files,
+        }
+
+    def _calculate_improvement_factor(
+        self, total_files: int, durations: list
+    ) -> Dict[str, Any]:
+        """
+        Calculate performance improvement metrics.
+
+        Issue #620.
+        """
+        estimated_full_sync_time = total_files * 0.5  # Conservative estimate
+        actual_time = sum(durations)
+        improvement_factor = estimated_full_sync_time / max(actual_time, 0.1)
+        return {
+            "estimated_improvement_factor": improvement_factor,
+            "target_met": improvement_factor >= 10,
+            "target_range": "10-50x improvement",
+        }
+
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get detailed performance metrics and recommendations."""
         try:
             if not self.sync_history:
                 return {"message": "No sync history available"}
 
-            # Analyze performance trends from last 20 syncs
             recent_history = self.sync_history[-20:]
-            durations = [s["duration"] for s in recent_history]
-            file_counts = [
-                s["metrics"]["files_changed"] + s["metrics"]["files_added"]
-                for s in recent_history
-            ]
-
-            # Calculate statistics
-            avg_duration, min_duration, max_duration = self._calculate_duration_stats(
-                durations
-            )
-            total_files = sum(file_counts)
-            avg_files_per_sync = total_files / len(file_counts) if file_counts else 0
-
-            # Generate recommendations
-            recommendations = self._generate_performance_recommendations(
-                avg_duration, avg_files_per_sync, max_duration
-            )
-
-            # Estimate performance improvement
-            estimated_full_sync_time = total_files * 0.5  # Conservative estimate
-            actual_time = sum(durations)
-            improvement_factor = estimated_full_sync_time / max(actual_time, 0.1)
+            (
+                durations,
+                _,
+                total_files,
+                avg_files_per_sync,
+            ) = self._extract_sync_metrics_data(recent_history)
+            _, _, max_duration = self._calculate_duration_stats(durations)
 
             return {
-                "performance_stats": {
-                    "avg_sync_duration": avg_duration,
-                    "min_sync_duration": min_duration,
-                    "max_sync_duration": max_duration,
-                    "total_syncs_analyzed": len(durations),
-                    "avg_files_per_sync": avg_files_per_sync,
-                    "total_files_processed": total_files,
-                },
-                "performance_improvement": {
-                    "estimated_improvement_factor": improvement_factor,
-                    "target_met": improvement_factor >= 10,
-                    "target_range": "10-50x improvement",
-                },
-                "recommendations": recommendations,
+                "performance_stats": self._build_performance_stats(
+                    durations, total_files, avg_files_per_sync
+                ),
+                "performance_improvement": self._calculate_improvement_factor(
+                    total_files, durations
+                ),
+                "recommendations": self._generate_performance_recommendations(
+                    sum(durations) / len(durations) if durations else 0,
+                    avg_files_per_sync,
+                    max_duration,
+                ),
                 "analysis_timestamp": datetime.now().isoformat(),
             }
 

@@ -25,7 +25,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -77,11 +76,12 @@ class UsageTracker:
         self.total_response_time = 0.0
 
         import warnings
+
         warnings.warn(
             "UsageTracker is deprecated. All in-memory tracking removed. "
             "Use PrometheusMetricsManager for metrics. Will be removed in v3.0.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
     def add_call(self, record: APICallRecord):
@@ -176,20 +176,19 @@ class AlertManager:
         self.alert_callbacks: List[Callable] = []
 
         import warnings
+
         warnings.warn(
             "AlertManager is deprecated. All in-memory alerting removed. "
             "Use Prometheus Alertmanager for alerts. Will be removed in v3.0.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
 
     def add_alert_callback(self, callback: Callable[[UsageAlert], None]):
         """Add a callback function for alerts"""
         self.alert_callbacks.append(callback)
 
-    def _check_rate_alerts(
-        self, tracker: UsageTracker
-    ) -> Optional[UsageAlert]:
+    def _check_rate_alerts(self, tracker: UsageTracker) -> Optional[UsageAlert]:
         """Check rate limit alerts (Issue #315: extracted helper)."""
         rate_1min = tracker.calculate_usage_rate(1)
         rate_60min = tracker.calculate_usage_rate(60)
@@ -229,7 +228,9 @@ class AlertManager:
         if not recent_calls:
             return None
 
-        error_rate = sum(1 for call in recent_calls if not call.success) / len(recent_calls)
+        error_rate = sum(1 for call in recent_calls if not call.success) / len(
+            recent_calls
+        )
         if error_rate > 0.1:
             return self._create_alert(
                 "critical",
@@ -333,6 +334,7 @@ class ClaudeAPIMonitor:
         # Phase 2 (Issue #345): Add Prometheus integration for dual-write migration
         try:
             from src.monitoring.prometheus_metrics import get_metrics_manager
+
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:
             logger.warning("Prometheus metrics not available: %s", e)
@@ -370,10 +372,7 @@ class ClaudeAPIMonitor:
 
         # Phase 2 (Issue #345): Push to Prometheus
         if self.prometheus:
-            self.prometheus.record_claude_api_request(
-                tool_name or "unknown",
-                success
-            )
+            self.prometheus.record_claude_api_request(tool_name or "unknown", success)
             if payload_size > 0:
                 self.prometheus.record_claude_api_payload(payload_size)
             if response_time > 0:
@@ -485,36 +484,37 @@ class ClaudeAPIMonitor:
             "error_patterns": dict(self.usage_tracker.error_patterns),
         }
 
-    def get_optimization_recommendations(self) -> List[Dict[str, str]]:
-        """Get recommendations for optimizing API usage"""
-        recommendations = []
-        stats = self.get_comprehensive_stats()
-
-        # Rate limit recommendations
+    def _check_rate_limit_recommendation(
+        self, stats: Dict[str, Any]
+    ) -> Optional[Dict[str, str]]:
+        """Check if rate limit recommendation is needed. Issue #620."""
         if stats["risk_prediction"]["risk_score"] > 70:
-            recommendations.append(
-                {
-                    "type": "rate_limit",
-                    "priority": "high",
-                    "message": "API usage approaching limits",
-                    "action": (
-                        "Implement request batching or increase delays between calls"
-                    ),
-                }
-            )
+            return {
+                "type": "rate_limit",
+                "priority": "high",
+                "message": "API usage approaching limits",
+                "action": "Implement request batching or increase delays between calls",
+            }
+        return None
 
-        # Payload size recommendations
+    def _check_payload_size_recommendation(
+        self, stats: Dict[str, Any]
+    ) -> Optional[Dict[str, str]]:
+        """Check if payload size recommendation is needed. Issue #620."""
         if stats["payload_analysis"]["average"] > self.payload_warning_size:
-            recommendations.append(
-                {
-                    "type": "payload_size",
-                    "priority": "medium",
-                    "message": "Large average payload size detected",
-                    "action": "Use payload optimization to reduce request sizes",
-                }
-            )
+            return {
+                "type": "payload_size",
+                "priority": "medium",
+                "message": "Large average payload size detected",
+                "action": "Use payload optimization to reduce request sizes",
+            }
+        return None
 
-        # Tool usage recommendations
+    def _get_tool_usage_recommendations(
+        self, stats: Dict[str, Any]
+    ) -> List[Dict[str, str]]:
+        """Get recommendations for tools with large payloads. Issue #620."""
+        recommendations = []
         for tool_name, tool_stats in stats["tool_usage"].items():
             if tool_stats["avg_payload_size"] > self.payload_warning_size:
                 recommendations.append(
@@ -525,22 +525,43 @@ class ClaudeAPIMonitor:
                         "action": f"Optimize {tool_name} usage patterns",
                     }
                 )
+        return recommendations
 
-        # Error rate recommendations
+    def _check_error_rate_recommendation(self) -> Optional[Dict[str, str]]:
+        """Check if error rate recommendation is needed. Issue #620."""
         recent_calls = self.usage_tracker.get_recent_calls(60)
-        if recent_calls:
-            error_rate = sum(1 for call in recent_calls if not call.success) / len(
-                recent_calls
-            )
-            if error_rate > 0.05:  # More than 5% errors
-                recommendations.append(
-                    {
-                        "type": "error_rate",
-                        "priority": "high",
-                        "message": f"High error rate: {error_rate*100:.1f}%",
-                        "action": "Investigate and fix recurring API errors",
-                    }
-                )
+        if not recent_calls:
+            return None
+        error_rate = sum(1 for call in recent_calls if not call.success) / len(
+            recent_calls
+        )
+        if error_rate > 0.05:  # More than 5% errors
+            return {
+                "type": "error_rate",
+                "priority": "high",
+                "message": f"High error rate: {error_rate*100:.1f}%",
+                "action": "Investigate and fix recurring API errors",
+            }
+        return None
+
+    def get_optimization_recommendations(self) -> List[Dict[str, str]]:
+        """Get recommendations for optimizing API usage. Issue #620."""
+        recommendations = []
+        stats = self.get_comprehensive_stats()
+
+        rate_limit_rec = self._check_rate_limit_recommendation(stats)
+        if rate_limit_rec:
+            recommendations.append(rate_limit_rec)
+
+        payload_rec = self._check_payload_size_recommendation(stats)
+        if payload_rec:
+            recommendations.append(payload_rec)
+
+        recommendations.extend(self._get_tool_usage_recommendations(stats))
+
+        error_rec = self._check_error_rate_recommendation()
+        if error_rec:
+            recommendations.append(error_rec)
 
         return recommendations
 
@@ -600,11 +621,12 @@ def get_api_monitor() -> ClaudeAPIMonitor:
     This function and the ClaudeAPIMonitor class will be removed in v3.0.
     """
     import warnings
+
     warnings.warn(
         "get_api_monitor() is deprecated. Use PrometheusMetricsManager for "
         "Claude API metrics. This will be removed in v3.0.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
     global _global_monitor
@@ -623,11 +645,12 @@ def record_api_call(payload_size: int, **kwargs):
     DEPRECATED (Phase 5, Issue #348): Use PrometheusMetricsManager.record_claude_api_request()
     """
     import warnings
+
     warnings.warn(
         "record_api_call() is deprecated. Use PrometheusMetricsManager for "
         "Claude API metrics. This will be removed in v3.0.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     monitor = get_api_monitor()
     monitor.record_api_call(payload_size, **kwargs)

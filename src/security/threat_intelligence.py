@@ -189,6 +189,36 @@ class VirusTotalClient:
 
         return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
 
+    def _build_error_response(
+        self, error_msg: str, score: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Build a standardized error response dictionary.
+
+        Issue #620.
+        """
+        return {"success": False, "error": error_msg, "score": score}
+
+    async def _handle_url_response(
+        self, response: aiohttp.ClientResponse, url: str
+    ) -> Dict[str, Any]:
+        """
+        Handle the HTTP response from VirusTotal URL check.
+
+        Issue #620.
+        """
+        if response.status == 200:
+            data = await response.json()
+            return self._parse_url_response(data)
+        elif response.status == 404:
+            return await self._submit_url_for_analysis(url)
+        elif response.status == 429:
+            return self._build_error_response("VirusTotal rate limit exceeded")
+        else:
+            return self._build_error_response(
+                f"VirusTotal API error: HTTP {response.status}"
+            )
+
     async def check_url(self, url: str) -> Dict[str, Any]:
         """
         Check URL reputation using VirusTotal API.
@@ -200,53 +230,28 @@ class VirusTotalClient:
             Dict with reputation data or error information
         """
         if not self.is_configured:
-            return {
-                "success": False,
-                "error": "VirusTotal API key not configured",
-                "score": None,
-            }
+            return self._build_error_response("VirusTotal API key not configured")
 
         try:
             await self._rate_limiter.acquire()
 
             url_id = self._get_url_id(url)
             endpoint = f"{self.BASE_URL}/urls/{url_id}"
-
-            headers = {
-                "x-apikey": self._api_key,
-                "Accept": "application/json",
-            }
+            headers = {"x-apikey": self._api_key, "Accept": "application/json"}
 
             async with await self._http_client.get(
                 endpoint,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return self._parse_url_response(data)
-                elif response.status == 404:
-                    # URL not found - submit for analysis
-                    return await self._submit_url_for_analysis(url)
-                elif response.status == 429:
-                    return {
-                        "success": False,
-                        "error": "VirusTotal rate limit exceeded",
-                        "score": None,
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"VirusTotal API error: HTTP {response.status}",
-                        "score": None,
-                    }
+                return await self._handle_url_response(response, url)
 
         except asyncio.TimeoutError:
             logger.warning("VirusTotal API timeout for URL: %s", url)
-            return {"success": False, "error": "Request timeout", "score": None}
+            return self._build_error_response("Request timeout")
         except Exception as e:
             logger.error("VirusTotal API error: %s", e)
-            return {"success": False, "error": str(e), "score": None}
+            return self._build_error_response(str(e))
 
     async def _submit_url_for_analysis(self, url: str) -> Dict[str, Any]:
         """Submit URL for analysis if not found in VirusTotal database."""

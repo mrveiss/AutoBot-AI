@@ -169,64 +169,89 @@ class UnifiedMultiModalProcessor:
 
             return self._create_error_result(input_data, processing_time, e)
 
+    def _create_modality_tasks(self, input_data: MultiModalInput) -> List:
+        """
+        Create processing tasks for each modality in combined input.
+
+        Issue #620.
+        """
+        tasks = []
+
+        if "image" in input_data.metadata:
+            image_input = MultiModalInput(
+                input_id=f"{input_data.input_id}_image",
+                modality_type=ModalityType.IMAGE,
+                intent=input_data.intent,
+                data=input_data.metadata["image"],
+            )
+            tasks.append(self.vision_processor.process(image_input))
+
+        if "audio" in input_data.metadata:
+            audio_input = MultiModalInput(
+                input_id=f"{input_data.input_id}_audio",
+                modality_type=ModalityType.AUDIO,
+                intent=input_data.intent,
+                data=input_data.metadata["audio"],
+            )
+            tasks.append(self.voice_processor.process(audio_input))
+
+        return tasks
+
+    def _build_combined_result(
+        self, input_data: MultiModalInput, combined_result: Dict, processing_time: float
+    ) -> ProcessingResult:
+        """
+        Build successful processing result for combined input.
+
+        Issue #620.
+        """
+        return ProcessingResult(
+            result_id=f"combined_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=True,
+            confidence=combined_result.get("confidence", 0.5),
+            result_data=combined_result,
+            processing_time=processing_time,
+        )
+
+    def _build_error_result(
+        self, input_data: MultiModalInput, processing_time: float, error: Exception
+    ) -> ProcessingResult:
+        """
+        Build error processing result for combined input.
+
+        Issue #620.
+        """
+        return ProcessingResult(
+            result_id=f"combined_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=False,
+            confidence=0.0,
+            result_data=None,
+            processing_time=processing_time,
+            error_message=str(error),
+        )
+
     async def _process_combined(self, input_data: MultiModalInput) -> ProcessingResult:
-        """Process combined multi-modal input"""
+        """Process combined multi-modal input."""
         start_time = time.time()
 
         try:
-            # Process different modalities concurrently
-            tasks = []
-
-            # Extract different modalities from combined input
-            if "image" in input_data.metadata:
-                image_input = MultiModalInput(
-                    input_id=f"{input_data.input_id}_image",
-                    modality_type=ModalityType.IMAGE,
-                    intent=input_data.intent,
-                    data=input_data.metadata["image"],
-                )
-                tasks.append(self.vision_processor.process(image_input))
-
-            if "audio" in input_data.metadata:
-                audio_input = MultiModalInput(
-                    input_id=f"{input_data.input_id}_audio",
-                    modality_type=ModalityType.AUDIO,
-                    intent=input_data.intent,
-                    data=input_data.metadata["audio"],
-                )
-                tasks.append(self.voice_processor.process(audio_input))
-
-            # Process all modalities concurrently
+            tasks = self._create_modality_tasks(input_data)
             results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Combine results
             combined_result = self._combine_results(results)
             processing_time = time.time() - start_time
-
-            return ProcessingResult(
-                result_id=f"combined_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=True,
-                confidence=combined_result.get("confidence", 0.5),
-                result_data=combined_result,
-                processing_time=processing_time,
+            return self._build_combined_result(
+                input_data, combined_result, processing_time
             )
 
         except Exception as e:
             processing_time = time.time() - start_time
-            return ProcessingResult(
-                result_id=f"combined_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=False,
-                confidence=0.0,
-                result_data=None,
-                processing_time=processing_time,
-                error_message=str(e),
-            )
+            return self._build_error_result(input_data, processing_time, e)
 
     def _initialize_fusion_components(self):
         """Initialize cross-modal attention fusion components."""
