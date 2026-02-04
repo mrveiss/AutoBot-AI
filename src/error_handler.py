@@ -180,6 +180,24 @@ def _process_retry_exception(
     return (current_delay, current_delay * backoff)
 
 
+def _select_retry_wrapper(
+    func: Callable, sync_wrapper: Callable, async_wrapper: Callable
+) -> Callable:
+    """Select appropriate wrapper based on whether function is async.
+
+    Issue #620.
+
+    Args:
+        func: The function being wrapped
+        sync_wrapper: Wrapper for synchronous functions
+        async_wrapper: Wrapper for asynchronous functions
+
+    Returns:
+        The appropriate wrapper function. Issue #620.
+    """
+    return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
+
 def retry(
     max_attempts: int = 3,
     delay: float = 1.0,
@@ -246,7 +264,7 @@ def retry(
                         await asyncio.sleep(sleep_delay)
             raise last_exception
 
-        return async_wrapper if asyncio.iscoroutinefunction(func) else wrapper
+        return _select_retry_wrapper(func, wrapper, async_wrapper)
 
     return decorator
 

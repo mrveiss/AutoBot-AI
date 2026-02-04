@@ -1012,6 +1012,42 @@ class ChatWorkflowManager(
             current_message_type,
         )
 
+    def _process_stream_result(
+        self,
+        result: tuple,
+        llm_response: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        current_segment: str,
+        current_message_type: str,
+    ) -> tuple:
+        """Process a single stream result and return updated state with yields.
+
+        Issue #620.
+
+        Args:
+            result: Result tuple from _process_stream_chunk_iteration
+            llm_response: Current accumulated LLM response
+            tool_call_completed: Whether tool call has completed
+            streaming_msg: Current streaming message object
+            current_segment: Current response segment
+            current_message_type: Current message type
+
+        Returns:
+            Tuple of (should_return, should_break, yields, llm_response,
+                     tool_call_completed, streaming_msg, current_segment,
+                     current_message_type). Issue #620.
+        """
+        return self._handle_stream_action(
+            result[0],
+            result,
+            llm_response,
+            tool_call_completed,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        )
+
     async def _stream_llm_response(
         self,
         response,
@@ -1060,8 +1096,7 @@ class ChatWorkflowManager(
                     streaming_msg,
                     current_segment,
                     current_message_type,
-                ) = self._handle_stream_action(
-                    result[0],
+                ) = self._process_stream_result(
                     result,
                     llm_response,
                     tool_call_completed,
@@ -1069,13 +1104,10 @@ class ChatWorkflowManager(
                     current_segment,
                     current_message_type,
                 )
-
-                if should_return:
-                    for item in yields:
-                        yield item
-                    return
                 for item in yields:
                     yield item
+                if should_return:
+                    return
                 if should_break:
                     break
 
