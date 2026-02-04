@@ -404,14 +404,54 @@ class GraphRAGService:
 
         return expanded_results
 
+    def _build_content_hash_map(
+        self, results: List[SearchResult]
+    ) -> Dict[int, SearchResult]:
+        """
+        Build hash map of results, keeping highest-scored duplicates.
+
+        Args:
+            results: List of search results to deduplicate
+
+        Returns:
+            Dictionary mapping content hash to best result. Issue #620.
+        """
+        content_hashes: Dict[int, SearchResult] = {}
+        for result in results:
+            content_hash = hash(result.content[:500])
+            if content_hash in content_hashes:
+                if result.hybrid_score > content_hashes[content_hash].hybrid_score:
+                    content_hashes[content_hash] = result
+            else:
+                content_hashes[content_hash] = result
+        return content_hashes
+
+    def _assign_relevance_ranks(
+        self, results: List[SearchResult], max_results: int
+    ) -> List[SearchResult]:
+        """
+        Sort results and assign relevance ranks.
+
+        Args:
+            results: Results to rank
+            max_results: Maximum number to return
+
+        Returns:
+            Ranked and truncated results. Issue #620.
+        """
+        results.sort(key=lambda x: x.hybrid_score, reverse=True)
+        for idx, result in enumerate(results[:max_results]):
+            result.relevance_rank = idx + 1
+        return results[:max_results]
+
     async def _deduplicate_and_rank(
         self, results: List[SearchResult], max_results: int
     ) -> List[SearchResult]:
         """
         Deduplicate results and rank by hybrid score.
 
-        This method removes duplicate content and ranks results by their
-        combined RAG relevance + graph proximity scores.
+        Issue #620: Refactored to use _build_content_hash_map and
+        _assign_relevance_ranks helpers.
 
         Args:
             results: Combined results from RAG + graph expansion
@@ -419,45 +459,19 @@ class GraphRAGService:
 
         Returns:
             Deduplicated and ranked results
-
-        Strategy:
-            1. Hash content for deduplication
-            2. Keep highest-scored version of duplicates
-            3. Sort by hybrid_score descending
-            4. Assign relevance_rank
-            5. Return top N results
         """
-        deduplicated = []
-        content_hashes: Dict[str, SearchResult] = {}
-
-        for result in results:
-            # Create content hash for deduplication
-            content_hash = hash(result.content[:500])  # First 500 chars
-
-            if content_hash in content_hashes:
-                # Keep higher-scored version
-                existing = content_hashes[content_hash]
-                if result.hybrid_score > existing.hybrid_score:
-                    content_hashes[content_hash] = result
-            else:
-                content_hashes[content_hash] = result
-
-        # Convert to list and sort by hybrid score
+        content_hashes = self._build_content_hash_map(results)
         deduplicated = list(content_hashes.values())
-        deduplicated.sort(key=lambda x: x.hybrid_score, reverse=True)
-
-        # Assign relevance ranks
-        for idx, result in enumerate(deduplicated[:max_results]):
-            result.relevance_rank = idx + 1
+        final_results = self._assign_relevance_ranks(deduplicated, max_results)
 
         logger.info(
-            "Deduplication: %s → %s → %s results",
+            "Deduplication: %s -> %s -> %s results",
             len(results),
             len(deduplicated),
-            min(len(deduplicated), max_results),
+            len(final_results),
         )
 
-        return deduplicated[:max_results]
+        return final_results
 
     # === Issue #281: Extracted Helper Methods ===
 

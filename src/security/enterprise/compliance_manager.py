@@ -263,9 +263,69 @@ class ComplianceManager:
                 for event_type in policies:
                     if policies[event_type]["days"] < min_retention:
                         policies[event_type]["days"] = min_retention
-                        logger.info("Updated retention policy for %s to meet %s requirements", event_type, framework)
+                        logger.info(
+                            "Updated retention policy for %s to meet %s requirements",
+                            event_type,
+                            framework,
+                        )
 
         return policies
+
+    def _build_base_audit_event(
+        self,
+        event_type: AuditEventType,
+        user_id: str,
+        action: str,
+        resource: str,
+        outcome: str,
+        details: Optional[Dict],
+        data_classification: DataClassification,
+        compliance_frameworks: Optional[List[ComplianceFramework]],
+    ) -> Dict:
+        """
+        Build base audit event dictionary with core fields.
+
+        Returns:
+            Audit event dictionary with generated event_id. Issue #620.
+        """
+        return {
+            "event_id": str(uuid4()),
+            "timestamp": datetime.utcnow().isoformat(),
+            "event_type": event_type.value,
+            "user_id": user_id,
+            "action": action,
+            "resource": resource,
+            "outcome": outcome,
+            "data_classification": data_classification.value,
+            "details": details or {},
+            "compliance_frameworks": [f.value for f in (compliance_frameworks or [])],
+        }
+
+    async def _process_audit_event(
+        self,
+        audit_event: Dict,
+        data_classification: DataClassification,
+    ) -> None:
+        """
+        Process audit event through enrichment, storage, and validation.
+
+        Issue #620.
+        """
+        await self._enrich_compliance_data(audit_event)
+
+        if data_classification in {
+            DataClassification.PII,
+            DataClassification.SENSITIVE_PII,
+        }:
+            await self._handle_pii_event(audit_event)
+
+        await self._store_audit_event(audit_event)
+        self._update_statistics(audit_event)
+
+        await asyncio.gather(
+            self._check_compliance_violations(audit_event),
+            self._check_real_time_alerts(audit_event),
+        )
 
     async def log_audit_event(
         self,
@@ -279,52 +339,28 @@ class ComplianceManager:
         compliance_frameworks: Optional[List[ComplianceFramework]] = None,
     ) -> str:
         """
-        Log audit event with comprehensive compliance tracking
+        Log audit event with comprehensive compliance tracking.
+
+        Issue #620: Refactored to use _build_base_audit_event and
+        _process_audit_event helpers.
 
         Returns:
             str: Unique audit event ID
         """
-
-        event_id = str(uuid4())
-        timestamp = datetime.utcnow()
-
-        # Build base audit event
-        audit_event = {
-            "event_id": event_id,
-            "timestamp": timestamp.isoformat(),
-            "event_type": event_type.value,
-            "user_id": user_id,
-            "action": action,
-            "resource": resource,
-            "outcome": outcome,
-            "data_classification": data_classification.value,
-            "details": details or {},
-            "compliance_frameworks": [f.value for f in (compliance_frameworks or [])],
-        }
-
-        # Add compliance-specific fields
-        await self._enrich_compliance_data(audit_event)
-
-        # Check for PII and handle accordingly
-        if data_classification in {
-            DataClassification.PII,
-            DataClassification.SENSITIVE_PII,
-        }:
-            await self._handle_pii_event(audit_event)
-
-        # Store audit event
-        await self._store_audit_event(audit_event)
-
-        # Update statistics
-        self._update_statistics(audit_event)
-
-        # Issue #619: Check compliance violations and alerts in parallel
-        await asyncio.gather(
-            self._check_compliance_violations(audit_event),
-            self._check_real_time_alerts(audit_event),
+        audit_event = self._build_base_audit_event(
+            event_type,
+            user_id,
+            action,
+            resource,
+            outcome,
+            details,
+            data_classification,
+            compliance_frameworks,
         )
 
-        return event_id
+        await self._process_audit_event(audit_event, data_classification)
+
+        return audit_event["event_id"]
 
     async def _enrich_compliance_data(self, audit_event: Dict):
         """Enrich audit event with compliance-specific data"""
@@ -568,7 +604,9 @@ class ComplianceManager:
                 await f.write(json.dumps(encrypted_event) + "\n")
 
         except OSError as e:
-            logger.error("Failed to write encrypted audit event to %s: %s", storage_path, e)
+            logger.error(
+                "Failed to write encrypted audit event to %s: %s", storage_path, e
+            )
         except Exception as e:
             logger.error("Failed to store encrypted audit event: %s", e)
 
@@ -635,7 +673,6 @@ class ComplianceManager:
             and audit_event["outcome"] == "success"
             and "unauthorized" in audit_event.get("details", {}).get("flags", [])
         ):
-
             violations.append(
                 {
                     "framework": "SOC2",
@@ -659,7 +696,6 @@ class ComplianceManager:
             "pii",
             "sensitive_pii",
         } and not audit_event.get("pii_handling", {}).get("consent_verified", True):
-
             violations.append(
                 {
                     "framework": "GDPR",
@@ -709,7 +745,9 @@ class ComplianceManager:
             async with aiofiles.open(violations_path, "a", encoding="utf-8") as f:
                 await f.write(json.dumps(violation_event) + "\n")
         except OSError as e:
-            logger.error("Failed to write violation record to %s: %s", violations_path, e)
+            logger.error(
+                "Failed to write violation record to %s: %s", violations_path, e
+            )
         except Exception as e:
             logger.error("Failed to store violation record: %s", e)
 
@@ -731,7 +769,6 @@ class ComplianceManager:
             audit_event["event_type"] == AuditEventType.AUTHENTICATION.value
             and audit_event["outcome"] == "failure"
         ):
-
             recent_failures = await self._count_recent_events(
                 AuditEventType.AUTHENTICATION, outcome="failure", hours=1
             )

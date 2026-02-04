@@ -291,14 +291,18 @@ class TaskExecutionTracker:
             embedding_vector=embedding_vector,
         )
 
-    async def analyze_task_patterns(self, days_back: int = 30) -> Dict[str, Any]:
-        """Analyze task execution patterns and provide insights"""
-        history = self.get_task_history(days_back=days_back, limit=1000)
+    def _aggregate_task_stats(
+        self, history: List[ExecutionRecord]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Aggregate task statistics by agent type in single pass.
 
-        if not history:
-            return {"message": "No task history available for analysis"}
+        Args:
+            history: List of execution records to aggregate
 
-        # Issue #317: Single-pass aggregation using defaultdict (O(2n) → O(n))
+        Returns:
+            Dictionary mapping agent type to aggregated stats. Issue #620.
+        """
         agent_stats = defaultdict(
             lambda: {"total": 0, "successful": 0, "durations": [], "retries": []}
         )
@@ -306,43 +310,67 @@ class TaskExecutionTracker:
         for task in history:
             agent = task.agent_type or "unknown"
             stats = agent_stats[agent]
-
             stats["total"] += 1
             if task.status == TaskStatus.COMPLETED:
                 stats["successful"] += 1
-
             if task.duration_seconds:
                 stats["durations"].append(task.duration_seconds)
-
             if task.retry_count > 0:
                 stats["retries"].append(task.retry_count)
 
-        # Calculate insights directly from aggregated data
-        insights = {
-            "analysis_period_days": days_back,
-            "total_tasks_analyzed": len(history),
-            "agent_performance": {
-                agent: {
-                    "success_rate_percent": round(
-                        (data["successful"] / data["total"]) * 100, 2
-                    ),
-                    "total_tasks": data["total"],
-                    "avg_duration_seconds": (
-                        round(sum(data["durations"]) / len(data["durations"]), 2)
-                        if data["durations"]
-                        else None
-                    ),
-                    "avg_retry_count": (
-                        round(sum(data["retries"]) / len(data["retries"]), 2)
-                        if data["retries"]
-                        else 0
-                    ),
-                }
-                for agent, data in agent_stats.items()
-            },
+        return dict(agent_stats)
+
+    def _compute_agent_performance(
+        self, agent_stats: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Compute performance metrics from aggregated agent statistics.
+
+        Args:
+            agent_stats: Aggregated statistics by agent type
+
+        Returns:
+            Performance metrics per agent. Issue #620.
+        """
+        return {
+            agent: {
+                "success_rate_percent": round(
+                    (data["successful"] / data["total"]) * 100, 2
+                ),
+                "total_tasks": data["total"],
+                "avg_duration_seconds": (
+                    round(sum(data["durations"]) / len(data["durations"]), 2)
+                    if data["durations"]
+                    else None
+                ),
+                "avg_retry_count": (
+                    round(sum(data["retries"]) / len(data["retries"]), 2)
+                    if data["retries"]
+                    else 0
+                ),
+            }
+            for agent, data in agent_stats.items()
         }
 
-        return insights
+    async def analyze_task_patterns(self, days_back: int = 30) -> Dict[str, Any]:
+        """
+        Analyze task execution patterns and provide insights.
+
+        Issue #620: Refactored to use _aggregate_task_stats and
+        _compute_agent_performance helpers.
+        """
+        history = self.get_task_history(days_back=days_back, limit=1000)
+
+        if not history:
+            return {"message": "No task history available for analysis"}
+
+        agent_stats = self._aggregate_task_stats(history)
+
+        return {
+            "analysis_period_days": days_back,
+            "total_tasks_analyzed": len(history),
+            "agent_performance": self._compute_agent_performance(agent_stats),
+        }
 
     # ========================================================================
     # Backward Compatibility Methods for orchestrator.py

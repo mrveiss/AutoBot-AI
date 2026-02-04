@@ -168,6 +168,30 @@ class CaptchaHumanLoop:
             logger.warning("Auto-fill failed, falling back: %s", e)
             return False
 
+    def _build_auto_solve_result(
+        self,
+        captcha_id: str,
+        url: str,
+        start_time: datetime,
+        solution: str,
+        confidence: str,
+    ) -> CaptchaResolutionResult:
+        """
+        Build result for successful auto-solve.
+
+        Issue #620.
+        """
+        duration = (datetime.utcnow() - start_time).total_seconds()
+        return CaptchaResolutionResult(
+            success=True,
+            status=CaptchaResolutionStatus.AUTO_SOLVED,
+            captcha_id=captcha_id,
+            url=url,
+            duration_seconds=duration,
+            auto_solution=solution,
+            auto_confidence=confidence,
+        )
+
     async def _handle_auto_solve(
         self,
         page: Page,
@@ -178,7 +202,10 @@ class CaptchaHumanLoop:
         url: str,
         start_time: datetime,
     ) -> Optional[CaptchaResolutionResult]:
-        """Attempt automatic CAPTCHA solving (Issue #315: extracted).
+        """
+        Attempt automatic CAPTCHA solving.
+
+        Issue #620: Refactored to use _build_auto_solve_result helper.
 
         Returns:
             CaptchaResolutionResult if solved, None to continue to human fallback
@@ -194,31 +221,15 @@ class CaptchaHumanLoop:
         confidence = auto_result.get("confidence", "medium")
         logger.info("CAPTCHA auto-solved with %s confidence: %s", confidence, solution)
 
-        # Try auto-fill if selector provided
         if captcha_input_selector and solution:
             if await self._try_auto_fill(page, captcha_input_selector, solution):
-                duration = (datetime.utcnow() - start_time).total_seconds()
-                return CaptchaResolutionResult(
-                    success=True,
-                    status=CaptchaResolutionStatus.AUTO_SOLVED,
-                    captcha_id=captcha_id,
-                    url=url,
-                    duration_seconds=duration,
-                    auto_solution=solution,
-                    auto_confidence=confidence,
+                return self._build_auto_solve_result(
+                    captcha_id, url, start_time, solution, confidence
                 )
 
-        # Return solution for caller to handle
         if solution:
-            duration = (datetime.utcnow() - start_time).total_seconds()
-            return CaptchaResolutionResult(
-                success=True,
-                status=CaptchaResolutionStatus.AUTO_SOLVED,
-                captcha_id=captcha_id,
-                url=url,
-                duration_seconds=duration,
-                auto_solution=solution,
-                auto_confidence=confidence,
+            return self._build_auto_solve_result(
+                captcha_id, url, start_time, solution, confidence
             )
 
         return None

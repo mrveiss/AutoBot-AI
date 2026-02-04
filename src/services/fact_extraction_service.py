@@ -113,18 +113,49 @@ class FactExtractionService:
             "extraction_metadata": extraction_result.extraction_metadata,
         }
 
+    def _build_no_facts_response(self, processing_time: float) -> Dict[str, Any]:
+        """
+        Build response when no facts were extracted.
+
+        Args:
+            processing_time: Time spent on extraction attempt
+
+        Returns:
+            Success response with zero facts. Issue #620.
+        """
+        return {
+            "status": "success",
+            "facts_extracted": 0,
+            "facts_stored": 0,
+            "processing_time": processing_time,
+            "message": "No facts found in content",
+        }
+
+    def _build_extraction_error_response(self, error_msg: str) -> Dict[str, Any]:
+        """
+        Build error response for extraction failure.
+
+        Args:
+            error_msg: Error message
+
+        Returns:
+            Error response dictionary. Issue #620.
+        """
+        return {
+            "status": "error",
+            "message": error_msg,
+            "facts_extracted": 0,
+            "facts_stored": 0,
+        }
+
     async def extract_and_store_facts(
         self, content: str, source: str, metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Extract facts from content and store them (Issue #398: refactored).
+        """
+        Extract facts from content and store them.
 
-        Args:
-            content: Text content to process
-            source: Source identifier
-            metadata: Additional metadata
-
-        Returns:
-            Dictionary with extraction results and storage information
+        Issue #620: Refactored to use _build_no_facts_response and
+        _build_extraction_error_response helpers.
         """
         try:
             logger.info("Starting fact extraction for source: %s", source)
@@ -137,18 +168,9 @@ class FactExtractionService:
 
             if not extraction_result.facts:
                 logger.warning("No facts extracted from source: %s", source)
-                return {
-                    "status": "success",
-                    "facts_extracted": 0,
-                    "facts_stored": 0,
-                    "processing_time": extraction_result.processing_time,
-                    "message": "No facts found in content",
-                }
+                return self._build_no_facts_response(extraction_result.processing_time)
 
-            # Apply processing steps (Issue #398: uses helper)
             await self._apply_fact_processing(extraction_result)
-
-            # Store facts and handle post-processing
             storage_results = await self._store_facts(extraction_result.facts, metadata)
 
             if self.enable_temporal_invalidation and extraction_result.facts:
@@ -166,12 +188,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error in fact extraction and storage: %s", e)
-            return {
-                "status": "error",
-                "message": str(e),
-                "facts_extracted": 0,
-                "facts_stored": 0,
-            }
+            return self._build_extraction_error_response(str(e))
 
     def _build_extraction_success_response(
         self,

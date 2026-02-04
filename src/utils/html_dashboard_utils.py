@@ -223,14 +223,12 @@ def _get_light_header_styles() -> str:
         .status-critical { color: #e53e3e; }"""
 
 
-def _get_light_component_styles() -> str:
+def _get_light_layout_styles() -> str:
     """
-    Generate component styles for light theme (cards, metrics, charts).
-
-    Issue #665: Extracted from get_light_theme_css
+    Generate layout styles for light theme (container, grid).
 
     Returns:
-        str: CSS for containers, metric cards, and chart containers
+        str: CSS for container and metrics grid layout. Issue #620.
     """
     return """
         .container {
@@ -243,7 +241,17 @@ def _get_light_component_styles() -> str:
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
-        }
+        }"""
+
+
+def _get_light_metric_card_styles() -> str:
+    """
+    Generate metric card styles for light theme.
+
+    Returns:
+        str: CSS for metric cards and their child elements. Issue #620.
+    """
+    return """
         .metric-card {
             background: white;
             border-radius: 10px;
@@ -270,7 +278,17 @@ def _get_light_component_styles() -> str:
         .metric-change {
             font-size: 0.875rem;
             color: #666;
-        }
+        }"""
+
+
+def _get_light_chart_styles() -> str:
+    """
+    Generate chart container styles for light theme.
+
+    Returns:
+        str: CSS for chart containers. Issue #620.
+    """
+    return """
         .chart-container {
             background: white;
             border-radius: 10px;
@@ -278,6 +296,22 @@ def _get_light_component_styles() -> str:
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             margin-bottom: 1.5rem;
         }"""
+
+
+def _get_light_component_styles() -> str:
+    """
+    Generate component styles for light theme (cards, metrics, charts).
+
+    Issue #665: Extracted from get_light_theme_css
+    Issue #620: Refactored into smaller helper functions.
+
+    Returns:
+        str: CSS for containers, metric cards, and chart containers. Issue #620.
+    """
+    layout = _get_light_layout_styles()
+    cards = _get_light_metric_card_styles()
+    charts = _get_light_chart_styles()
+    return f"{layout}{cards}{charts}"
 
 
 def get_light_theme_css() -> str:

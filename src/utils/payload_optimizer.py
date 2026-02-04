@@ -14,7 +14,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Pattern
 
-
 logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for text compression
@@ -37,9 +36,7 @@ def is_empty_value(value: Any) -> bool:
     return value is None or value == "" or value == [] or value == {}
 
 
-def _compress_value_by_type(
-    optimizer: "PayloadOptimizer", value: Any
-) -> Optional[Any]:
+def _compress_value_by_type(optimizer: "PayloadOptimizer", value: Any) -> Optional[Any]:
     """Compress a value based on its type. (Issue #315 - extracted)"""
     if isinstance(value, dict):
         result = optimizer._compress_dict(value)
@@ -101,7 +98,9 @@ class PayloadOptimizer:
         self.compression_count = 0
         self.chunking_count = 0
 
-        logger.info("PayloadOptimizer initialized: max=%s, chunk=%s", max_size, chunk_size)
+        logger.info(
+            "PayloadOptimizer initialized: max=%s, chunk=%s", max_size, chunk_size
+        )
 
     def optimize_payload(self, payload: Any, context: str = "") -> OptimizationResult:
         """
@@ -423,58 +422,72 @@ class PayloadOptimizer:
 
         return optimized
 
-    def _chunk_todos_by_priority(self, todos: List[Dict]) -> List[List[Dict]]:
-        """Chunk todos by priority: in_progress, pending, completed"""
-        chunks = []
+    def _group_todos_by_status(self, todos: List[Dict]) -> Dict[str, List[Dict]]:
+        """
+        Group todos by their status field.
 
-        # Group by status
-        status_groups = {"in_progress": [], "pending": [], "completed": []}
+        Args:
+            todos: List of todo dictionaries
 
+        Returns:
+            Dictionary mapping status to list of todos. Issue #620.
+        """
+        status_groups: Dict[str, List[Dict]] = {
+            "in_progress": [],
+            "pending": [],
+            "completed": [],
+        }
         for todo in todos:
             status = todo.get("status", todo.get("st", "pending"))
             if status in status_groups:
                 status_groups[status].append(todo)
             else:
                 status_groups["pending"].append(todo)
+        return status_groups
 
-        # Create chunks prioritizing active work
-        current_chunk = []
+    def _add_todos_to_chunks(
+        self,
+        todo_list: List[Dict],
+        chunks: List[List[Dict]],
+        current_chunk: List[Dict],
+        current_size: int,
+    ) -> tuple:
+        """
+        Add todos to chunks respecting size limits.
+
+        Args:
+            todo_list: List of todos to add
+            chunks: Accumulated chunks list
+            current_chunk: Current chunk being built
+            current_size: Current chunk size
+
+        Returns:
+            Tuple of (chunks, current_chunk, current_size). Issue #620.
+        """
+        for todo in todo_list:
+            todo_size = self._calculate_size(todo)
+            if current_size + todo_size > self.chunk_size and current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = []
+                current_size = 0
+            current_chunk.append(todo)
+            current_size += todo_size
+        return chunks, current_chunk, current_size
+
+    def _chunk_todos_by_priority(self, todos: List[Dict]) -> List[List[Dict]]:
+        """Chunk todos by priority: in_progress, pending, completed. Issue #620."""
+        chunks: List[List[Dict]] = []
+        current_chunk: List[Dict] = []
         current_size = 0
 
-        # Add in_progress first (highest priority)
-        for todo in status_groups["in_progress"]:
-            todo_size = self._calculate_size(todo)
-            if current_size + todo_size > self.chunk_size and current_chunk:
-                chunks.append(current_chunk)
-                current_chunk = []
-                current_size = 0
+        status_groups = self._group_todos_by_status(todos)
 
-            current_chunk.append(todo)
-            current_size += todo_size
+        # Process in priority order: in_progress, pending, completed
+        for status in ["in_progress", "pending", "completed"]:
+            chunks, current_chunk, current_size = self._add_todos_to_chunks(
+                status_groups[status], chunks, current_chunk, current_size
+            )
 
-        # Add pending
-        for todo in status_groups["pending"]:
-            todo_size = self._calculate_size(todo)
-            if current_size + todo_size > self.chunk_size and current_chunk:
-                chunks.append(current_chunk)
-                current_chunk = []
-                current_size = 0
-
-            current_chunk.append(todo)
-            current_size += todo_size
-
-        # Add completed
-        for todo in status_groups["completed"]:
-            todo_size = self._calculate_size(todo)
-            if current_size + todo_size > self.chunk_size and current_chunk:
-                chunks.append(current_chunk)
-                current_chunk = []
-                current_size = 0
-
-            current_chunk.append(todo)
-            current_size += todo_size
-
-        # Add final chunk
         if current_chunk:
             chunks.append(current_chunk)
 

@@ -491,32 +491,16 @@ EXTENSION_TO_LANGUAGE: Dict[str, str] = {
 # =============================================================================
 
 
-def get_file_category(file_path: Path) -> str:
+def _get_category_by_directory(path_parts: Set[str]) -> str | None:
     """
-    Determine the category of a file based on its path and extension.
-
-    Categories:
-    - code: Programming language source files
-    - config: Configuration files
-    - docs: Documentation files
-    - logs: Log files
-    - backup: Files in backup directories
-    - archive: Files in archive/deprecated directories
-    - test: Test files and directories
-    - data: Data files (CSV, Parquet, etc.)
-    - assets: Images, fonts, media files
+    Determine file category based on directory path.
 
     Args:
-        file_path: Path object for the file
+        path_parts: Set of lowercased directory names in the file path
 
     Returns:
-        Category string for proper tracking and reporting.
+        Category string if matched, None otherwise. Issue #620.
     """
-    path_parts = set(p.lower() for p in file_path.parts)
-    extension = file_path.suffix.lower()
-    filename = file_path.name.lower()
-
-    # Check directory-based categories first (takes precedence)
     if path_parts & BACKUP_DIRS:
         return FILE_CATEGORY_BACKUP
     if path_parts & ARCHIVE_DIRS:
@@ -529,8 +513,20 @@ def get_file_category(file_path: Path) -> str:
         return FILE_CATEGORY_DOCS
     if path_parts & ASSET_DIRS:
         return FILE_CATEGORY_ASSETS
+    return None
 
-    # Check extension-based categories
+
+def _get_category_by_extension(extension: str, filename: str) -> str:
+    """
+    Determine file category based on file extension.
+
+    Args:
+        extension: Lowercased file extension (e.g., ".py")
+        filename: Lowercased filename
+
+    Returns:
+        Category string based on extension. Issue #620.
+    """
     if extension in LOG_EXTENSIONS or filename.endswith(".log"):
         return FILE_CATEGORY_LOGS
     if extension in DOC_EXTENSIONS:
@@ -543,9 +539,32 @@ def get_file_category(file_path: Path) -> str:
         return FILE_CATEGORY_ASSETS
     if extension in ALL_CODE_EXTENSIONS:
         return FILE_CATEGORY_CODE
-
-    # Default to code for unknown extensions in code directories
     return FILE_CATEGORY_CODE
+
+
+def get_file_category(file_path: Path) -> str:
+    """
+    Determine the category of a file based on its path and extension.
+
+    Categories: code, config, docs, logs, backup, archive, test, data, assets.
+
+    Args:
+        file_path: Path object for the file
+
+    Returns:
+        Category string for proper tracking and reporting. Issue #620.
+    """
+    path_parts = set(p.lower() for p in file_path.parts)
+    extension = file_path.suffix.lower()
+    filename = file_path.name.lower()
+
+    # Directory-based categories take precedence
+    dir_category = _get_category_by_directory(path_parts)
+    if dir_category:
+        return dir_category
+
+    # Fall back to extension-based categorization
+    return _get_category_by_extension(extension, filename)
 
 
 def get_language(file_path: Path) -> str:
