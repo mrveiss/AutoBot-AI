@@ -74,7 +74,9 @@ class WorkflowExecutor:
         execution_context["success_rate"] = (
             successful_steps / total_steps if total_steps > 0 else 0
         )
-        execution_context["agents_involved"] = list(execution_context["agents_involved"])
+        execution_context["agents_involved"] = list(
+            execution_context["agents_involved"]
+        )
 
     async def _execute_step_with_agent(
         self,
@@ -90,7 +92,9 @@ class WorkflowExecutor:
             self._reserve_agent(agent_id)
 
         try:
-            step_result = await self._execute_coordinated_step(step, execution_context, context)
+            step_result = await self._execute_coordinated_step(
+                step, execution_context, context
+            )
 
             step["status"] = "completed" if step_result.get("success") else "failed"
             step["execution_time"] = time.time() - step_start_time
@@ -100,7 +104,9 @@ class WorkflowExecutor:
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
                 self._update_performance(
-                    agent_id, step_result.get("success", False), time.time() - step_start_time
+                    agent_id,
+                    step_result.get("success", False),
+                    time.time() - step_start_time,
                 )
         finally:
             if agent_id:
@@ -134,7 +140,9 @@ class WorkflowExecutor:
         try:
             # Execute steps with dependency management (Issue #398: refactored)
             for step in steps:
-                if not await self._check_step_dependencies(step, execution_context["step_results"]):
+                if not await self._check_step_dependencies(
+                    step, execution_context["step_results"]
+                ):
                     logger.warning("Step %s dependencies not met, skipping", step["id"])
                     step["status"] = "skipped"
                     continue
@@ -179,6 +187,39 @@ class WorkflowExecutor:
 
         return True
 
+    def _create_agent_interaction(
+        self,
+        step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+    ) -> AgentInteraction:
+        """
+        Create and record an agent interaction for a workflow step.
+
+        Args:
+            step: The step being executed
+            execution_context: Current execution context
+
+        Returns:
+            The created AgentInteraction object. Issue #620.
+        """
+        agent_id = step.get("assigned_agent")
+        interaction = AgentInteraction(
+            interaction_id=str(uuid.uuid4()),
+            timestamp=datetime.now(),
+            source_agent="orchestrator",
+            target_agent=agent_id,
+            interaction_type="request",
+            message={
+                "step_id": step["id"],
+                "action": step["action"],
+                "inputs": step["inputs"],
+            },
+            context={"workflow_id": execution_context["workflow_id"]},
+        )
+        self.agent_interactions.append(interaction)
+        execution_context["interactions"].append(interaction)
+        return interaction
+
     async def _execute_coordinated_step(
         self,
         step: Dict[str, Any],
@@ -201,30 +242,15 @@ class WorkflowExecutor:
 
         logger.info("Executing step %s with agent %s", step_id, agent_id)
 
-        # Record agent interaction
+        # Record agent interaction (Issue #620: extracted to helper)
         interaction: Optional[AgentInteraction] = None
         if agent_id:
-            interaction = AgentInteraction(
-                interaction_id=str(uuid.uuid4()),
-                timestamp=datetime.now(),
-                source_agent="orchestrator",
-                target_agent=agent_id,
-                interaction_type="request",
-                message={
-                    "step_id": step_id,
-                    "action": step["action"],
-                    "inputs": step["inputs"],
-                },
-                context={"workflow_id": execution_context["workflow_id"]},
-            )
-            self.agent_interactions.append(interaction)
-            execution_context["interactions"].append(interaction)
+            interaction = self._create_agent_interaction(step, execution_context)
 
         # Execute step
         try:
             result = await self._simulate_step_execution(step, context)
 
-            # Record successful interaction
             if interaction:
                 interaction.outcome = "success"
                 interaction.message["result"] = result
@@ -239,7 +265,6 @@ class WorkflowExecutor:
         except Exception as e:
             logger.error("Step %s execution failed: %s", step_id, e)
 
-            # Record failed interaction
             if interaction:
                 interaction.outcome = "failed"
                 interaction.message["error"] = str(e)

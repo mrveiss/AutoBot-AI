@@ -68,9 +68,7 @@ class QueryKnowledgeIntentDetector:
         self._knowledge_re = [
             re.compile(p, re.IGNORECASE) for p in self.KNOWLEDGE_PATTERNS
         ]
-        self._command_re = [
-            re.compile(p, re.IGNORECASE) for p in self.COMMAND_PATTERNS
-        ]
+        self._command_re = [re.compile(p, re.IGNORECASE) for p in self.COMMAND_PATTERNS]
         self._conversational_re = [
             re.compile(p, re.IGNORECASE) for p in self.CONVERSATIONAL_PATTERNS
         ]
@@ -78,62 +76,38 @@ class QueryKnowledgeIntentDetector:
             re.compile(p, re.IGNORECASE) for p in self.CODE_GENERATION_PATTERNS
         ]
 
-    def detect_intent(self, query: str) -> QueryIntentResult:
+    def _check_pattern_match(
+        self, patterns: list, query_lower: str
+    ) -> Optional[QueryIntentResult]:
         """
-        Detect the intent of a query to determine if knowledge retrieval is needed.
+        Check if query matches any pattern in a list and return corresponding result.
 
         Args:
-            query: User's chat message
+            patterns: List of compiled regex patterns to check
+            query_lower: Lowercase query string to match against
 
         Returns:
-            QueryIntentResult with intent type and recommendation
+            QueryIntentResult if match found, None otherwise
+
+        Issue #620.
         """
-        query_lower = query.lower().strip()
-
-        # Check conversational patterns first (highest priority for skipping)
-        for pattern in self._conversational_re:
+        for pattern in patterns:
             if pattern.search(query_lower):
-                return QueryIntentResult(
-                    intent=QueryKnowledgeIntent.CONVERSATIONAL,
-                    should_use_knowledge=False,
-                    confidence=0.9,
-                    reasoning="Conversational message detected - no knowledge needed",
-                )
+                return pattern
+        return None
 
-        # Check command patterns (skip RAG - execute directly)
-        for pattern in self._command_re:
-            if pattern.search(query_lower):
-                return QueryIntentResult(
-                    intent=QueryKnowledgeIntent.COMMAND_REQUEST,
-                    should_use_knowledge=False,
-                    confidence=0.85,
-                    reasoning="Command request detected - execute directly",
-                )
+    def _classify_by_query_length(self, query: str) -> QueryIntentResult:
+        """
+        Classify query based on word count when no patterns matched.
 
-        # Check knowledge patterns (use RAG)
-        knowledge_matches = sum(
-            1 for p in self._knowledge_re if p.search(query_lower)
-        )
-        if knowledge_matches >= 1:
-            confidence = min(0.7 + (knowledge_matches * 0.1), 0.95)
-            return QueryIntentResult(
-                intent=QueryKnowledgeIntent.KNOWLEDGE_QUERY,
-                should_use_knowledge=True,
-                confidence=confidence,
-                reasoning=f"Knowledge query detected ({knowledge_matches} patterns matched)",
-            )
+        Args:
+            query: Original user query
 
-        # Check code generation patterns (might use RAG for context)
-        for pattern in self._code_gen_re:
-            if pattern.search(query_lower):
-                return QueryIntentResult(
-                    intent=QueryKnowledgeIntent.CODE_GENERATION,
-                    should_use_knowledge=True,  # Use RAG for code context
-                    confidence=0.75,
-                    reasoning="Code generation request - RAG may provide useful context",
-                )
+        Returns:
+            QueryIntentResult based on query length heuristics
 
-        # Default: Use knowledge for longer queries, skip for short ones
+        Issue #620.
+        """
         word_count = len(query.split())
         if word_count >= 5:
             return QueryIntentResult(
@@ -149,6 +123,59 @@ class QueryKnowledgeIntentDetector:
                 confidence=0.5,
                 reasoning="Short query - likely a follow-up or clarification",
             )
+
+    def detect_intent(self, query: str) -> QueryIntentResult:
+        """
+        Detect the intent of a query to determine if knowledge retrieval is needed.
+
+        Args:
+            query: User's chat message
+
+        Returns:
+            QueryIntentResult with intent type and recommendation
+        """
+        query_lower = query.lower().strip()
+
+        # Check conversational patterns first (highest priority for skipping)
+        if self._check_pattern_match(self._conversational_re, query_lower):
+            return QueryIntentResult(
+                intent=QueryKnowledgeIntent.CONVERSATIONAL,
+                should_use_knowledge=False,
+                confidence=0.9,
+                reasoning="Conversational message detected - no knowledge needed",
+            )
+
+        # Check command patterns (skip RAG - execute directly)
+        if self._check_pattern_match(self._command_re, query_lower):
+            return QueryIntentResult(
+                intent=QueryKnowledgeIntent.COMMAND_REQUEST,
+                should_use_knowledge=False,
+                confidence=0.85,
+                reasoning="Command request detected - execute directly",
+            )
+
+        # Check knowledge patterns (use RAG)
+        knowledge_matches = sum(1 for p in self._knowledge_re if p.search(query_lower))
+        if knowledge_matches >= 1:
+            confidence = min(0.7 + (knowledge_matches * 0.1), 0.95)
+            return QueryIntentResult(
+                intent=QueryKnowledgeIntent.KNOWLEDGE_QUERY,
+                should_use_knowledge=True,
+                confidence=confidence,
+                reasoning=f"Knowledge query detected ({knowledge_matches} patterns matched)",
+            )
+
+        # Check code generation patterns (might use RAG for context)
+        if self._check_pattern_match(self._code_gen_re, query_lower):
+            return QueryIntentResult(
+                intent=QueryKnowledgeIntent.CODE_GENERATION,
+                should_use_knowledge=True,
+                confidence=0.75,
+                reasoning="Code generation request - RAG may provide useful context",
+            )
+
+        # Default: classify based on query length
+        return self._classify_by_query_length(query)
 
 
 # Global detector instance for reuse (thread-safe)

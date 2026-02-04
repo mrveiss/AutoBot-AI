@@ -50,10 +50,14 @@ class HTTPClientManager:
             self._pool_min = 20  # Minimum pool size
             self._pool_max = 200  # Maximum pool size
             self._current_pool_size = 100  # Start at default
-            self._pool_adjustment_interval = TimingConstants.STANDARD_TIMEOUT  # Adjust every 60s
+            self._pool_adjustment_interval = (
+                TimingConstants.STANDARD_TIMEOUT
+            )  # Adjust every 60s
             self._last_adjustment_time = 0
             self._active_requests = 0  # Track concurrent requests
-            self._pending_pool_recreation = False  # Issue #352: Track deferred recreation
+            self._pending_pool_recreation = (
+                False  # Issue #352: Track deferred recreation
+            )
 
     async def get_session(self) -> ClientSession:
         """
@@ -104,17 +108,67 @@ class HTTPClientManager:
             f"Created new aiohttp ClientSession with pool size: {self._current_pool_size}"
         )
 
+    def _calculate_new_pool_size(
+        self, utilization: float, error_rate: float
+    ) -> tuple[int, bool]:
+        """
+        Calculate new pool size based on utilization and error metrics.
+
+        Args:
+            utilization: Current pool utilization ratio
+            error_rate: Current error rate ratio
+
+        Returns:
+            Tuple of (new_pool_size, was_adjusted). Issue #620.
+        """
+        old_size = self._current_pool_size
+        new_size = old_size
+        adjusted = False
+
+        # Increase pool if under pressure
+        if (utilization > 0.7 or error_rate > 0.05) and old_size < self._pool_max:
+            new_size = min(int(old_size * 1.25), self._pool_max)
+            adjusted = True
+            logger.info(
+                f"Increased connection pool: {old_size} → {new_size} "
+                f"(utilization: {utilization:.1%}, error_rate: {error_rate:.1%})"
+            )
+
+        # Decrease pool if over-provisioned
+        elif utilization < 0.2 and error_rate < 0.01 and old_size > self._pool_min:
+            new_size = max(int(old_size * 0.85), self._pool_min)
+            adjusted = True
+            logger.info(
+                f"Decreased connection pool: {old_size} → {new_size} "
+                f"(utilization: {utilization:.1%})"
+            )
+
+        return new_size, adjusted
+
+    async def _handle_pool_recreation(self) -> None:
+        """
+        Handle session recreation after pool size change.
+
+        Issue #352: Fixed race condition - don't recreate while requests in flight.
+        Issue #620.
+        """
+        if self._active_requests > 0:
+            self._pending_pool_recreation = True
+            logger.info(
+                f"Pool size changed to {self._current_pool_size} but "
+                f"deferring session recreation ({self._active_requests} active requests)"
+            )
+        else:
+            self._pending_pool_recreation = False
+            logger.info("Recreating session with new pool size")
+            await self._create_session()
+
     async def _adjust_pool_size(self):
         """
         Dynamically adjust connection pool size based on usage patterns.
 
-        Increases pool size if:
-        - Utilization > 70% (approaching saturation)
-        - Error rate > 5% (possible connection exhaustion)
-
-        Decreases pool size if:
-        - Utilization < 20% (over-provisioned)
-        - No errors and low usage
+        Increases pool size if utilization > 70% or error rate > 5%.
+        Decreases pool size if utilization < 20% and error rate < 1%.
         """
         current_time = time.time()
 
@@ -123,58 +177,26 @@ class HTTPClientManager:
             return
 
         async with self._counter_lock:
-            # Calculate utilization
+            # Calculate utilization metrics
             utilization = (
                 self._active_requests / self._current_pool_size
                 if self._current_pool_size > 0
                 else 0
             )
             error_rate = (
-                self._error_count / self._request_count if self._request_count > 0 else 0
+                self._error_count / self._request_count
+                if self._request_count > 0
+                else 0
             )
 
-            old_size = self._current_pool_size
-            adjusted = False
-
-            # Increase pool if under pressure
-            if (utilization > 0.7 or error_rate > 0.05) and self._current_pool_size < self._pool_max:
-                # Increase by 25%
-                self._current_pool_size = min(
-                    int(self._current_pool_size * 1.25), self._pool_max
-                )
-                adjusted = True
-                logger.info(
-                    f"Increased connection pool: {old_size} → {self._current_pool_size} "
-                    f"(utilization: {utilization:.1%}, error_rate: {error_rate:.1%})"
-                )
-
-            # Decrease pool if over-provisioned
-            elif utilization < 0.2 and error_rate < 0.01 and self._current_pool_size > self._pool_min:
-                # Decrease by 15%
-                self._current_pool_size = max(
-                    int(self._current_pool_size * 0.85), self._pool_min
-                )
-                adjusted = True
-                logger.info(
-                    f"Decreased connection pool: {old_size} → {self._current_pool_size} "
-                    f"(utilization: {utilization:.1%})"
-                )
-
+            # Issue #620: Use helper for pool size calculation
+            new_size, adjusted = self._calculate_new_pool_size(utilization, error_rate)
+            self._current_pool_size = new_size
             self._last_adjustment_time = current_time
 
-            # Recreate session if pool size changed AND no active requests
-            # Issue #352: Fixed race condition - don't recreate while requests in flight
+            # Issue #620: Use helper for session recreation
             if adjusted and self._session and not self._session.closed:
-                if self._active_requests > 0:
-                    self._pending_pool_recreation = True
-                    logger.info(
-                        f"Pool size changed to {self._current_pool_size} but "
-                        f"deferring session recreation ({self._active_requests} active requests)"
-                    )
-                else:
-                    self._pending_pool_recreation = False
-                    logger.info("Recreating session with new pool size")
-                    await self._create_session()
+                await self._handle_pool_recreation()
 
     async def request(self, method: str, url: str, **kwargs) -> aiohttp.ClientResponse:
         """

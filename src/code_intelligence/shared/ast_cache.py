@@ -240,23 +240,19 @@ class ASTCache:
 
         return content
 
-    def get(self, file_path: Union[str, Path]) -> ast.AST:
+    def _check_cache_hit(self, path_str: str, mtime: float) -> Optional[ast.AST]:
         """
-        Get AST for file, using cache if available.
+        Check for cache hit and return cached AST if valid.
 
         Args:
-            file_path: Path to Python file
+            path_str: String path to the file
+            mtime: Current file modification time
 
         Returns:
-            Parsed AST module
+            Cached AST if hit and valid, None otherwise
 
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            SyntaxError: If file has syntax errors
+        Issue #620.
         """
-        path_str = str(file_path)
-        mtime = self._get_file_mtime(path_str)
-
         with self._cache_lock:
             if path_str in self._ast_cache:
                 entry = self._ast_cache[path_str]
@@ -275,6 +271,66 @@ class ASTCache:
                     logger.debug("ASTCache STALE: %s (mtime changed)", path_str)
 
             self._stats.misses += 1
+        return None
+
+    def _store_parsed_ast(
+        self,
+        path_str: str,
+        tree: ast.AST,
+        mtime: float,
+        content: str,
+        parse_time_ms: float,
+    ) -> None:
+        """
+        Store parsed AST in cache with LRU eviction if needed.
+
+        Args:
+            path_str: String path to the file
+            tree: Parsed AST module
+            mtime: File modification time
+            content: File content (for size calculation)
+            parse_time_ms: Time taken to parse in milliseconds
+
+        Issue #620.
+        """
+        with self._cache_lock:
+            # Evict if needed
+            while len(self._ast_cache) >= self._max_size:
+                self._evict_lru()
+
+            self._ast_cache[path_str] = ASTCacheEntry(
+                tree=tree,
+                mtime=mtime,
+                file_size=len(content),
+                parse_time_ms=parse_time_ms,
+            )
+            self._ast_cache.move_to_end(path_str)
+            self._stats.total_parse_time_ms += parse_time_ms
+            self._stats.current_size = len(self._ast_cache)
+
+        logger.debug("ASTCache: Parsed %s in %.1fms", path_str, parse_time_ms)
+
+    def get(self, file_path: Union[str, Path]) -> ast.AST:
+        """
+        Get AST for file, using cache if available.
+
+        Args:
+            file_path: Path to Python file
+
+        Returns:
+            Parsed AST module
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            SyntaxError: If file has syntax errors
+        """
+        path_str = str(file_path)
+        mtime = self._get_file_mtime(path_str)
+
+        # Check cache first
+        cached_tree = self._check_cache_hit(path_str, mtime)
+        if cached_tree is not None:
+            return cached_tree
 
         # Cache miss - parse file
         logger.debug("ASTCache MISS: %s", path_str)
@@ -285,22 +341,7 @@ class ASTCache:
             tree = ast.parse(content, filename=path_str)
             parse_time_ms = (time.time() - start_time) * 1000
 
-            with self._cache_lock:
-                # Evict if needed
-                while len(self._ast_cache) >= self._max_size:
-                    self._evict_lru()
-
-                self._ast_cache[path_str] = ASTCacheEntry(
-                    tree=tree,
-                    mtime=mtime,
-                    file_size=len(content),
-                    parse_time_ms=parse_time_ms,
-                )
-                self._ast_cache.move_to_end(path_str)
-                self._stats.total_parse_time_ms += parse_time_ms
-                self._stats.current_size = len(self._ast_cache)
-
-            logger.debug("ASTCache: Parsed %s in %.1fms", path_str, parse_time_ms)
+            self._store_parsed_ast(path_str, tree, mtime, content, parse_time_ms)
             return tree
 
         except SyntaxError as e:

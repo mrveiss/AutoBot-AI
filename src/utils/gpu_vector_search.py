@@ -893,6 +893,62 @@ class HybridVectorSearch:
             logger.error("Failed to enrich from ChromaDB: %s", e)
             return results
 
+    def _convert_chromadb_results(
+        self, chromadb_results: Dict[str, Any]
+    ) -> List[SearchResult]:
+        """
+        Convert ChromaDB query results to SearchResult objects.
+
+        Args:
+            chromadb_results: Raw results from ChromaDB query
+
+        Returns:
+            List of SearchResult objects. Issue #620.
+        """
+        results = []
+        if not chromadb_results["ids"] or not chromadb_results["ids"][0]:
+            return results
+
+        for i, doc_id in enumerate(chromadb_results["ids"][0]):
+            distance = chromadb_results["distances"][0][i]
+            score = 1.0 / (1.0 + distance)
+
+            results.append(
+                SearchResult(
+                    doc_id=doc_id,
+                    score=score,
+                    distance=distance,
+                    content=(
+                        chromadb_results["documents"][0][i]
+                        if chromadb_results["documents"]
+                        else None
+                    ),
+                    metadata=(
+                        chromadb_results["metadatas"][0][i]
+                        if chromadb_results["metadatas"]
+                        else {}
+                    ),
+                )
+            )
+
+        return results
+
+    def _create_error_metrics(self) -> SearchMetrics:
+        """
+        Create SearchMetrics for error cases.
+
+        Returns:
+            SearchMetrics with zero values for error state. Issue #620.
+        """
+        return SearchMetrics(
+            query_time_ms=0,
+            total_vectors_searched=0,
+            results_returned=0,
+            backend_used=SearchBackend.CHROMADB,
+            gpu_utilized=False,
+            index_type="error",
+        )
+
     async def _chromadb_search(
         self,
         query_embedding: np.ndarray,
@@ -905,8 +961,6 @@ class HybridVectorSearch:
 
         try:
             collection = self.chromadb.get_collection(collection_name)
-
-            # Build where clause if filter provided
             where = metadata_filter if metadata_filter else None
 
             chromadb_results = collection.query(
@@ -916,31 +970,8 @@ class HybridVectorSearch:
                 include=["documents", "metadatas", "distances"],
             )
 
-            results = []
-            if chromadb_results["ids"] and chromadb_results["ids"][0]:
-                for i, doc_id in enumerate(chromadb_results["ids"][0]):
-                    distance = chromadb_results["distances"][0][i]
-                    # Convert L2 distance to similarity
-                    score = 1.0 / (1.0 + distance)
-
-                    results.append(
-                        SearchResult(
-                            doc_id=doc_id,
-                            score=score,
-                            distance=distance,
-                            content=(
-                                chromadb_results["documents"][0][i]
-                                if chromadb_results["documents"]
-                                else None
-                            ),
-                            metadata=(
-                                chromadb_results["metadatas"][0][i]
-                                if chromadb_results["metadatas"]
-                                else {}
-                            ),
-                        )
-                    )
-
+            # Issue #620: Use helper for result conversion
+            results = self._convert_chromadb_results(chromadb_results)
             query_time = (time.perf_counter() - start_time) * 1000
 
             metrics = SearchMetrics(
@@ -956,14 +987,7 @@ class HybridVectorSearch:
 
         except Exception as e:
             logger.error("ChromaDB search failed: %s", e)
-            return [], SearchMetrics(
-                query_time_ms=0,
-                total_vectors_searched=0,
-                results_returned=0,
-                backend_used=SearchBackend.CHROMADB,
-                gpu_utilized=False,
-                index_type="error",
-            )
+            return [], self._create_error_metrics()
 
     def _matches_filter(
         self, metadata: Dict[str, Any], filter_dict: Dict[str, Any]

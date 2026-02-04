@@ -272,46 +272,83 @@ class KnowledgeSyncService:
                 "timestamp": datetime.now().isoformat(),
             }
 
+    def _calculate_duration_stats(self, durations: list) -> tuple[float, float, float]:
+        """
+        Calculate duration statistics from sync history.
+
+        Args:
+            durations: List of sync durations
+
+        Returns:
+            Tuple of (avg_duration, min_duration, max_duration)
+
+        Issue #620.
+        """
+        avg_duration = sum(durations) / len(durations) if durations else 0
+        min_duration = min(durations) if durations else 0
+        max_duration = max(durations) if durations else 0
+        return avg_duration, min_duration, max_duration
+
+    def _generate_performance_recommendations(
+        self, avg_duration: float, avg_files_per_sync: float, max_duration: float
+    ) -> list[str]:
+        """
+        Generate performance recommendations based on metrics.
+
+        Args:
+            avg_duration: Average sync duration in seconds
+            avg_files_per_sync: Average files processed per sync
+            max_duration: Maximum sync duration in seconds
+
+        Returns:
+            List of recommendation strings
+
+        Issue #620.
+        """
+        recommendations = []
+
+        if avg_duration > 5.0:
+            recommendations.append(
+                "Consider increasing sync interval to reduce overhead"
+            )
+
+        if avg_files_per_sync > 20:
+            recommendations.append(
+                "High file change rate detected - consider batch processing optimization"
+            )
+
+        if max_duration > avg_duration * 3:
+            recommendations.append(
+                "Inconsistent sync times - investigate performance bottlenecks"
+            )
+
+        return recommendations
+
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get detailed performance metrics and recommendations."""
         try:
             if not self.sync_history:
                 return {"message": "No sync history available"}
 
-            # Analyze performance trends
-            durations = [
-                s["duration"] for s in self.sync_history[-20:]
-            ]  # Last 20 syncs
+            # Analyze performance trends from last 20 syncs
+            recent_history = self.sync_history[-20:]
+            durations = [s["duration"] for s in recent_history]
             file_counts = [
                 s["metrics"]["files_changed"] + s["metrics"]["files_added"]
-                for s in self.sync_history[-20:]
+                for s in recent_history
             ]
 
             # Calculate statistics
-            avg_duration = sum(durations) / len(durations) if durations else 0
-            min_duration = min(durations) if durations else 0
-            max_duration = max(durations) if durations else 0
-
+            avg_duration, min_duration, max_duration = self._calculate_duration_stats(
+                durations
+            )
             total_files = sum(file_counts)
             avg_files_per_sync = total_files / len(file_counts) if file_counts else 0
 
-            # Performance recommendations
-            recommendations = []
-
-            if avg_duration > 5.0:
-                recommendations.append(
-                    "Consider increasing sync interval to reduce overhead"
-                )
-
-            if avg_files_per_sync > 20:
-                recommendations.append(
-                    "High file change rate detected - consider batch processing optimization"
-                )
-
-            if max_duration > avg_duration * 3:
-                recommendations.append(
-                    "Inconsistent sync times - investigate performance bottlenecks"
-                )
+            # Generate recommendations
+            recommendations = self._generate_performance_recommendations(
+                avg_duration, avg_files_per_sync, max_duration
+            )
 
             # Estimate performance improvement
             estimated_full_sync_time = total_files * 0.5  # Conservative estimate
