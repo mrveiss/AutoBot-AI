@@ -420,15 +420,25 @@
 
                   <!-- Edit Mode Options -->
                   <div v-if="isEditMode" class="space-y-3">
-                    <!-- Info: credentials optional for basic edits -->
-                    <div v-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <!-- Info: PKI auth - no password ever needed -->
+                    <div v-if="formData.auth_method === 'pki'" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      <p class="text-sm text-blue-700">
+                        Using SSH key authentication. No password required.
+                      </p>
+                    </div>
+                    <!-- Info: Password auth - credentials optional for basic edits -->
+                    <div v-else-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                       <svg class="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p class="text-sm text-green-700">
-                        Credentials not required for basic edits. Enable options below if you need SSH access.
+                        Password not required for basic edits. Enable options below if you need SSH access.
                       </p>
                     </div>
+                    <!-- Info: Password auth with SSH ops - password required -->
                     <div v-else class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                       <svg class="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -803,9 +813,12 @@ const canTest = computed(() => {
   )
 })
 
-// In edit mode, credentials are only needed if SSH operations are requested
+// In edit mode, password only needed if SSH operations requested AND using password auth
+// PKI auth uses SSH key - no password ever needed
 const needsCredentialsForEdit = computed(() => {
-  return formData.value.deploy_pki || formData.value.run_enrollment
+  const sshOpsRequested = formData.value.deploy_pki || formData.value.run_enrollment
+  const usingPasswordAuth = formData.value.auth_method === 'password'
+  return sshOpsRequested && usingPasswordAuth
 })
 
 // Basic field validation without credentials check
