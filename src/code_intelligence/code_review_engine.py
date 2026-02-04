@@ -626,9 +626,56 @@ class CodeReviewEngine(_BaseClass):
                     break
         return filtered
 
+    def _process_diff_file_comments(self, diff_file: DiffFile) -> List[ReviewComment]:
+        """
+        Process a single diff file and return relevant review comments.
+
+        Issue #620.
+        """
+        file_path = self.project_root / diff_file.path
+        if not file_path.exists() or file_path.suffix not in _SUPPORTED_CODE_SUFFIXES:
+            return []
+
+        comments = self.review_file(str(file_path))
+        changed_lines = self._get_changed_lines_from_diff(diff_file)
+        return self._filter_comments_by_changed_lines(comments, changed_lines)
+
+    def _create_review_result(
+        self,
+        diff_files: List[DiffFile],
+        all_comments: List[ReviewComment],
+        total_additions: int,
+        total_deletions: int,
+    ) -> ReviewResult:
+        """
+        Create a ReviewResult from processed diff data.
+
+        Issue #620.
+        """
+        score = self._calculate_score(all_comments)
+        summary = self._generate_summary(all_comments)
+
+        return ReviewResult(
+            id=f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            timestamp=datetime.now(),
+            files_reviewed=len([f for f in diff_files if not f.is_deleted]),
+            total_comments=len(all_comments),
+            score=score,
+            comments=all_comments,
+            summary=summary,
+            diff_stats={
+                "files_changed": len(diff_files),
+                "additions": total_additions,
+                "deletions": total_deletions,
+            },
+        )
+
     def review_diff(self, diff_content: str) -> ReviewResult:
         """
         Review a git diff for issues.
+
+        Issue #620: Refactored to use extracted helpers for file processing
+        and result creation.
 
         Args:
             diff_content: Unified diff content
@@ -646,40 +693,11 @@ class CodeReviewEngine(_BaseClass):
             total_additions += diff_file.additions
             total_deletions += diff_file.deletions
 
-            # Only review modified/new files, not deleted
-            if diff_file.is_deleted:
-                continue
+            if not diff_file.is_deleted:
+                all_comments.extend(self._process_diff_file_comments(diff_file))
 
-            # Get full file content (Issue #380: use module-level constant)
-            file_path = self.project_root / diff_file.path
-            if (
-                not file_path.exists()
-                or file_path.suffix not in _SUPPORTED_CODE_SUFFIXES
-            ):
-                continue
-
-            comments = self.review_file(str(file_path))
-            changed_lines = self._get_changed_lines_from_diff(diff_file)
-            filtered = self._filter_comments_by_changed_lines(comments, changed_lines)
-            all_comments.extend(filtered)
-
-        # Calculate score and summary
-        score = self._calculate_score(all_comments)
-        summary = self._generate_summary(all_comments)
-
-        return ReviewResult(
-            id=f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            timestamp=datetime.now(),
-            files_reviewed=len([f for f in diff_files if not f.is_deleted]),
-            total_comments=len(all_comments),
-            score=score,
-            comments=all_comments,
-            summary=summary,
-            diff_stats={
-                "files_changed": len(diff_files),
-                "additions": total_additions,
-                "deletions": total_deletions,
-            },
+        return self._create_review_result(
+            diff_files, all_comments, total_additions, total_deletions
         )
 
     def review_commit_range(self, commit_range: str = "HEAD~1..HEAD") -> ReviewResult:

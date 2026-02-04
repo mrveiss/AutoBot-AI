@@ -407,6 +407,32 @@ class SLMAgent:
         """
         return self._pending_update
 
+    def _process_code_change(self, commit: str, branch: str, message: str) -> None:
+        """
+        Update version info and buffer the code change event.
+
+        Issue #620.
+        """
+        self.version_manager.save_version(
+            commit=commit,
+            extra_data={
+                "branch": branch,
+                "message": message[:200],
+                "source": "git-hook",
+            },
+        )
+        self.version_manager.clear_cache()
+
+        self.buffer_event(
+            "code_change",
+            {
+                "commit": commit,
+                "branch": branch,
+                "message": message[:200],
+                "node_id": self.node_id,
+            },
+        )
+
     async def handle_code_change(self, request: web.Request) -> web.Response:
         """
         Handle code change notification from git hook (Issue #741).
@@ -424,35 +450,9 @@ class SLMAgent:
             if not commit:
                 return web.json_response({"error": "commit hash required"}, status=400)
 
-            logger.info(
-                "Code change notification: %s on %s",
-                commit[:12],
-                branch,
-            )
+            logger.info("Code change notification: %s on %s", commit[:12], branch)
 
-            # Update local version info
-            self.version_manager.save_version(
-                commit=commit,
-                extra_data={
-                    "branch": branch,
-                    "message": message[:200],
-                    "source": "git-hook",
-                },
-            )
-            self.version_manager.clear_cache()
-
-            # Buffer the code change event
-            self.buffer_event(
-                "code_change",
-                {
-                    "commit": commit,
-                    "branch": branch,
-                    "message": message[:200],
-                    "node_id": self.node_id,
-                },
-            )
-
-            # Trigger immediate heartbeat to notify SLM server
+            self._process_code_change(commit, branch, message)
             asyncio.create_task(self._notify_code_change(commit))
 
             return web.json_response(

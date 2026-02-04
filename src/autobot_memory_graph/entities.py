@@ -94,6 +94,40 @@ class EntityOperationsMixin:
             "metadata": entity_metadata,
         }
 
+    async def _store_entity_in_redis(
+        self: AutoBotMemoryGraphCore,
+        entity_id: str,
+        entity: Dict[str, Any],
+    ) -> None:
+        """
+        Store entity in Redis and generate embedding if knowledge base available.
+
+        Issue #620.
+        """
+        entity_key = f"memory:entity:{entity_id}"
+        await self.redis_client.json().set(entity_key, "$", entity)
+
+        if self.knowledge_base:
+            await self._generate_entity_embedding(entity_id, entity)
+
+    def _validate_entity_inputs(
+        self: AutoBotMemoryGraphCore,
+        entity_type: str,
+        name: str,
+    ) -> None:
+        """
+        Validate entity type and name inputs.
+
+        Issue #620.
+        """
+        if entity_type not in ENTITY_TYPES:
+            raise ValueError(
+                f"Invalid entity_type: {entity_type}. Must be one of {ENTITY_TYPES}"
+            )
+
+        if not name or not name.strip():
+            raise ValueError("Entity name cannot be empty")
+
     async def create_entity(
         self: AutoBotMemoryGraphCore,
         entity_type: str,
@@ -105,7 +139,7 @@ class EntityOperationsMixin:
         """
         Create a new entity in the memory graph.
 
-        (Issue #398: refactored to use extracted helpers)
+        Issue #620: Refactored to use extracted helpers for validation and storage.
 
         Args:
             entity_type: Type of entity (conversation, bug_fix, feature, etc.)
@@ -122,14 +156,7 @@ class EntityOperationsMixin:
             RuntimeError: Memory Graph not initialized
         """
         self.ensure_initialized()
-
-        if entity_type not in ENTITY_TYPES:
-            raise ValueError(
-                f"Invalid entity_type: {entity_type}. Must be one of {ENTITY_TYPES}"
-            )
-
-        if not name or not name.strip():
-            raise ValueError("Entity name cannot be empty")
+        self._validate_entity_inputs(entity_type, name)
 
         try:
             entity_id = str(uuid.uuid4())
@@ -138,18 +165,10 @@ class EntityOperationsMixin:
                 entity_id, entity_type, name, observations, entity_metadata
             )
 
-            # Store in Redis
-            entity_key = f"memory:entity:{entity_id}"
-            await self.redis_client.json().set(entity_key, "$", entity)
-
-            # Generate and cache embedding for semantic search
-            if self.knowledge_base:
-                await self._generate_entity_embedding(entity_id, entity)
-
+            await self._store_entity_in_redis(entity_id, entity)
             logger.info(
                 "Created entity: %s (%s) with ID %s", name, entity_type, entity_id
             )
-
             return entity
 
         except Exception as e:
@@ -357,6 +376,39 @@ class EntityOperationsMixin:
                 "Failed to generate embedding for entity %s: %s", entity_id, e
             )
 
+    def _prepare_conversation_data(
+        self: AutoBotMemoryGraphCore,
+        session_id: str,
+        metadata: Optional[Dict[str, Any]],
+        observations: Optional[List[str]],
+    ) -> tuple[List[str], List[str], Dict[str, Any]]:
+        """
+        Prepare observations, tags, and metadata for conversation entity.
+
+        Issue #620.
+
+        Returns:
+            Tuple of (entity_observations, tags, conv_metadata)
+        """
+        entity_observations = []
+        tags = []
+
+        if observations:
+            entity_observations = observations
+        elif self.chat_history_manager:
+            entity_observations = [f"Conversation session: {session_id}"]
+            tags = ["conversation"]
+
+        conv_metadata = metadata or {}
+        conv_metadata.update(
+            {
+                "session_id": session_id,
+                "priority": "low",
+                "status": "active",
+            }
+        )
+        return entity_observations, tags, conv_metadata
+
     async def create_conversation_entity(
         self: AutoBotMemoryGraphCore,
         session_id: str,
@@ -377,22 +429,8 @@ class EntityOperationsMixin:
         self.ensure_initialized()
 
         try:
-            entity_observations = []
-            tags = []
-
-            if observations:
-                entity_observations = observations
-            elif self.chat_history_manager:
-                entity_observations = [f"Conversation session: {session_id}"]
-                tags = ["conversation"]
-
-            conv_metadata = metadata or {}
-            conv_metadata.update(
-                {
-                    "session_id": session_id,
-                    "priority": "low",
-                    "status": "active",
-                }
+            entity_observations, tags, conv_metadata = self._prepare_conversation_data(
+                session_id, metadata, observations
             )
 
             entity = await self.create_entity(
@@ -404,7 +442,6 @@ class EntityOperationsMixin:
             )
 
             logger.info("Created conversation entity for session %s", session_id)
-
             return entity
 
         except Exception as e:

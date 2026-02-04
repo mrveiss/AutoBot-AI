@@ -729,6 +729,40 @@ class CrossLanguagePatternDetector:
         path = re.sub(r":\w+", "{param}", path)
         return f"/{path}"
 
+    async def _normalize_patterns_batch(self, patterns: List[Dict]) -> List[str]:
+        """
+        Normalize a batch of patterns for embedding generation.
+
+        Issue #620.
+        """
+        normalized_texts = []
+        for p in patterns:
+            normalized = await self._normalize_pattern(p)
+            normalized_texts.append(normalized)
+        return normalized_texts
+
+    def _build_pattern_result_entry(
+        self,
+        pattern: Dict,
+        normalized: str,
+        embedding: List[float],
+        prefix: str,
+        language: str,
+    ) -> Dict:
+        """
+        Build a single pattern result entry with embedding.
+
+        Issue #620.
+        """
+        pattern_id = f"{prefix}{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
+        return {
+            "id": pattern_id,
+            "pattern": pattern,
+            "normalized": normalized,
+            "embedding": embedding,
+            "language": language,
+        }
+
     async def _build_patterns_with_embeddings(
         self,
         patterns: List[Dict],
@@ -737,7 +771,8 @@ class CrossLanguagePatternDetector:
         """
         Build pattern objects with embeddings for a list of patterns.
 
-        Issue #659: Uses batch embedding for 5-10x speedup via parallel requests.
+        Issue #620: Refactored to use extracted helpers for normalization and
+        result building. Uses batch embedding for 5-10x speedup.
 
         Args:
             patterns: Raw patterns to process
@@ -747,10 +782,6 @@ class CrossLanguagePatternDetector:
             List of patterns with embeddings added
         """
         prefix = "py_" if language == "python" else "ts_"
-        result = []
-
-        # Limit patterns to process for performance (individual LLM calls are slow)
-        # Prioritize significant patterns: DTOs, APIs, validators over utility functions
         patterns_to_process = self._prioritize_patterns_for_embedding(patterns)
 
         if len(patterns_to_process) < len(patterns):
@@ -761,31 +792,18 @@ class CrossLanguagePatternDetector:
                 language,
             )
 
-        # Issue #659: Normalize all patterns first, then batch embed
-        normalized_texts = []
-        for p in patterns_to_process:
-            normalized = await self._normalize_pattern(p)
-            normalized_texts.append(normalized)
-
-        # Batch generate embeddings with parallel requests (5-10x faster)
+        normalized_texts = await self._normalize_patterns_batch(patterns_to_process)
         embeddings = await self._get_embeddings_batch(normalized_texts)
 
-        # Build result list with successful embeddings
-        for i, (p, normalized, embedding) in enumerate(
-            zip(patterns_to_process, normalized_texts, embeddings)
+        result = []
+        for p, normalized, embedding in zip(
+            patterns_to_process, normalized_texts, embeddings
         ):
             if embedding:
-                pattern_id = (
-                    f"{prefix}{hashlib.sha256(normalized.encode()).hexdigest()[:12]}"
-                )
                 result.append(
-                    {
-                        "id": pattern_id,
-                        "pattern": p,
-                        "normalized": normalized,
-                        "embedding": embedding,
-                        "language": language,
-                    }
+                    self._build_pattern_result_entry(
+                        p, normalized, embedding, prefix, language
+                    )
                 )
 
         return result
@@ -1065,16 +1083,17 @@ class CrossLanguagePatternDetector:
         except Exception as e:
             logger.warning("Failed to cache results: %s", e)
 
-    async def _run_pattern_detection(
+    async def _collect_and_log_files(
         self, analysis: CrossLanguageAnalysis
-    ) -> tuple[list, list]:
+    ) -> tuple[list, list, list]:
         """
-        Collect files, extract patterns, and find mismatches.
+        Collect files and update analysis counts.
+
+        Issue #620.
 
         Returns:
-            Tuple of (python_patterns, all_ts_patterns)
+            Tuple of (python_files, typescript_files, vue_files)
         """
-        # Collect files
         python_files, typescript_files, vue_files = await self._collect_files()
         analysis.python_files_analyzed = len(python_files)
         analysis.typescript_files_analyzed = len(typescript_files)
@@ -1086,22 +1105,19 @@ class CrossLanguagePatternDetector:
             len(typescript_files),
             len(vue_files),
         )
+        return python_files, typescript_files, vue_files
 
-        # Extract patterns
-        (
-            python_patterns,
-            typescript_patterns,
-            vue_patterns,
-        ) = await self._extract_all_patterns(python_files, typescript_files, vue_files)
-        all_ts_patterns = typescript_patterns + vue_patterns
+    async def _find_all_mismatches(
+        self,
+        analysis: CrossLanguageAnalysis,
+        python_patterns: list,
+        all_ts_patterns: list,
+    ) -> None:
+        """
+        Find all pattern mismatches and populate analysis object.
 
-        logger.info(
-            "Extracted %d Python, %d TypeScript/Vue patterns",
-            len(python_patterns),
-            len(all_ts_patterns),
-        )
-
-        # Find mismatches
+        Issue #620.
+        """
         analysis.dto_mismatches = await self._find_dto_mismatches(
             python_patterns, all_ts_patterns
         )
@@ -1116,6 +1132,34 @@ class CrossLanguagePatternDetector:
             analysis.pattern_matches = await self._find_semantic_matches(
                 python_patterns, all_ts_patterns
             )
+
+    async def _run_pattern_detection(
+        self, analysis: CrossLanguageAnalysis
+    ) -> tuple[list, list]:
+        """
+        Collect files, extract patterns, and find mismatches.
+
+        Returns:
+            Tuple of (python_patterns, all_ts_patterns)
+        """
+        python_files, typescript_files, vue_files = await self._collect_and_log_files(
+            analysis
+        )
+
+        (
+            python_patterns,
+            typescript_patterns,
+            vue_patterns,
+        ) = await self._extract_all_patterns(python_files, typescript_files, vue_files)
+        all_ts_patterns = typescript_patterns + vue_patterns
+
+        logger.info(
+            "Extracted %d Python, %d TypeScript/Vue patterns",
+            len(python_patterns),
+            len(all_ts_patterns),
+        )
+
+        await self._find_all_mismatches(analysis, python_patterns, all_ts_patterns)
 
         return python_patterns, all_ts_patterns
 
