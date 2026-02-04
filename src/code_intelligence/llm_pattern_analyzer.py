@@ -332,17 +332,9 @@ class LLMPatternAnalyzer:
 
         return files
 
-    def get_summary_report(self, result: AnalysisResult) -> str:
-        """
-        Generate a human-readable summary report.
-
-        Args:
-            result: Analysis result to summarize
-
-        Returns:
-            Formatted summary string
-        """
-        lines = [
+    def _build_report_header(self, result: AnalysisResult) -> List[str]:
+        """Build the header section of the summary report. Issue #620."""
+        return [
             "=" * 60,
             "LLM PATTERN ANALYSIS REPORT",
             "=" * 60,
@@ -358,11 +350,14 @@ class LLMPatternAnalyzer:
             f"  Batching Opportunities: {len(result.batching_opportunities)}",
             f"  Retry Patterns: {len(result.retry_patterns)}",
             "",
-            "COST ANALYSIS",
-            "-" * 40,
         ]
 
-        for estimate in result.cost_estimates:
+    def _build_cost_analysis_section(
+        self, cost_estimates: List[CostEstimate]
+    ) -> List[str]:
+        """Build the cost analysis section of the summary report. Issue #620."""
+        lines = ["COST ANALYSIS", "-" * 40]
+        for estimate in cost_estimates:
             lines.append(f"  Model: {estimate.model}")
             lines.append(f"    Daily Calls: {estimate.daily_calls}")
             lines.append(f"    Monthly Cost: ${estimate.monthly_cost_usd:.2f}")
@@ -370,30 +365,36 @@ class LLMPatternAnalyzer:
                 f"    Optimized Cost: ${estimate.optimized_monthly_cost_usd:.2f}"
             )
             lines.append("")
+        return lines
 
-        lines.extend(
-            [
-                "TOP RECOMMENDATIONS",
-                "-" * 40,
-            ]
-        )
-
-        for rec in result.recommendations[:5]:
+    def _build_recommendations_section(
+        self, recommendations: List[OptimizationRecommendation]
+    ) -> List[str]:
+        """Build the top recommendations section of the summary report. Issue #620."""
+        lines = ["TOP RECOMMENDATIONS", "-" * 40]
+        for rec in recommendations[:5]:
             lines.append(f"  [{rec.priority.value.upper()}] {rec.title}")
             lines.append(f"    Impact: {rec.impact}")
             lines.append(f"    Effort: {rec.effort}")
             lines.append("")
+        return lines
 
-        lines.extend(
-            [
-                "ESTIMATED SAVINGS",
-                "-" * 40,
-                f"  Total Savings Potential: {result.total_estimated_savings_percent:.1f}%",
-                "",
-                "=" * 60,
-            ]
-        )
+    def _build_savings_footer(self, savings_percent: float) -> List[str]:
+        """Build the savings footer section of the summary report. Issue #620."""
+        return [
+            "ESTIMATED SAVINGS",
+            "-" * 40,
+            f"  Total Savings Potential: {savings_percent:.1f}%",
+            "",
+            "=" * 60,
+        ]
 
+    def get_summary_report(self, result: AnalysisResult) -> str:
+        """Generate a human-readable summary report. Issue #620."""
+        lines = self._build_report_header(result)
+        lines.extend(self._build_cost_analysis_section(result.cost_estimates))
+        lines.extend(self._build_recommendations_section(result.recommendations))
+        lines.extend(self._build_savings_footer(result.total_estimated_savings_percent))
         return "\n".join(lines)
 
 

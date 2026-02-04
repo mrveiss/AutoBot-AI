@@ -94,32 +94,20 @@ class CodePatternAnalyzer:
         }
     )
 
-    def __init__(
+    def _init_feature_flags(
         self,
-        enable_clone_detection: bool = True,
-        enable_anti_pattern_detection: bool = True,
-        enable_regex_detection: bool = True,
-        enable_complexity_analysis: bool = True,
-        enable_embedding_storage: bool = True,
-        similarity_threshold: float = 0.8,
-        exclude_dirs: Optional[Set[str]] = None,
-        cc_threshold: int = 10,
-        mi_threshold: float = 50,
-    ):
-        """Initialize the code pattern analyzer.
-
-        Args:
-            enable_clone_detection: Enable clone/duplicate detection
-            enable_anti_pattern_detection: Enable anti-pattern detection
-            enable_regex_detection: Enable regex optimization detection
-            enable_complexity_analysis: Enable complexity analysis
-            enable_embedding_storage: Store patterns in ChromaDB
-            similarity_threshold: Threshold for similarity clustering
-            exclude_dirs: Directories to exclude from analysis
-            cc_threshold: Cyclomatic complexity threshold for hotspots
-            mi_threshold: Maintainability index threshold
-        """
-        self.enable_clone_detection = enable_clone_detection and FINGERPRINTING_AVAILABLE
+        enable_clone_detection: bool,
+        enable_anti_pattern_detection: bool,
+        enable_regex_detection: bool,
+        enable_complexity_analysis: bool,
+        enable_embedding_storage: bool,
+        similarity_threshold: float,
+        exclude_dirs: Optional[Set[str]],
+    ) -> None:
+        """Initialize feature flags and configuration settings. Issue #620."""
+        self.enable_clone_detection = (
+            enable_clone_detection and FINGERPRINTING_AVAILABLE
+        )
         self.enable_anti_pattern_detection = (
             enable_anti_pattern_detection and ANTI_PATTERN_AVAILABLE
         )
@@ -129,7 +117,8 @@ class CodePatternAnalyzer:
         self.similarity_threshold = similarity_threshold
         self.exclude_dirs = exclude_dirs or self.DEFAULT_EXCLUDE_DIRS
 
-        # Initialize sub-analyzers
+    def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
+        """Initialize sub-analyzer instances based on feature flags. Issue #620."""
         self._clone_detector = (
             CloneDetector(exclude_dirs=list(self.exclude_dirs))
             if self.enable_clone_detection
@@ -154,9 +143,31 @@ class CodePatternAnalyzer:
             if self.enable_complexity_analysis
             else None
         )
-
-        # Refactoring generator
         self._refactoring_generator = RefactoringSuggestionGenerator()
+
+    def __init__(
+        self,
+        enable_clone_detection: bool = True,
+        enable_anti_pattern_detection: bool = True,
+        enable_regex_detection: bool = True,
+        enable_complexity_analysis: bool = True,
+        enable_embedding_storage: bool = True,
+        similarity_threshold: float = 0.8,
+        exclude_dirs: Optional[Set[str]] = None,
+        cc_threshold: int = 10,
+        mi_threshold: float = 50,
+    ):
+        """Initialize the code pattern analyzer. Issue #620."""
+        self._init_feature_flags(
+            enable_clone_detection,
+            enable_anti_pattern_detection,
+            enable_regex_detection,
+            enable_complexity_analysis,
+            enable_embedding_storage,
+            similarity_threshold,
+            exclude_dirs,
+        )
+        self._init_sub_analyzers(cc_threshold, mi_threshold)
 
     async def analyze_directory(self, directory: str) -> PatternAnalysisReport:
         """Analyze a directory for code patterns.
@@ -243,7 +254,7 @@ class CodePatternAnalyzer:
                     lines = f.readlines()
                     file_count += 1
                     line_count += len(lines)
-            except Exception:
+            except Exception:  # nosec B110 - file read errors ignored
                 pass
 
         return file_count, line_count
@@ -397,7 +408,9 @@ class CodePatternAnalyzer:
                 "error": str(e),
             }
 
-    def _merge_results(self, report: PatternAnalysisReport, result: Dict[str, Any]) -> None:
+    def _merge_results(
+        self, report: PatternAnalysisReport, result: Dict[str, Any]
+    ) -> None:
         """Merge analysis results into report.
 
         Args:
@@ -465,7 +478,9 @@ class CodePatternAnalyzer:
             locations=locations,
             suggestion=group.refactoring_suggestion or "Extract into shared function",
             confidence=min(group.similarity_range) if group.similarity_range else 0.8,
-            similarity_score=min(group.similarity_range) if group.similarity_range else 1.0,
+            similarity_score=min(group.similarity_range)
+            if group.similarity_range
+            else 1.0,
             canonical_code=canonical,
             code_reduction_potential=group.total_duplicated_lines
             - (group.total_duplicated_lines // len(group.instances)),
@@ -488,7 +503,9 @@ class CodePatternAnalyzer:
         }
         return pattern.pattern_type.value.lower() in modularization_types
 
-    def _to_modularization_suggestion(self, pattern) -> Optional[ModularizationSuggestion]:
+    def _to_modularization_suggestion(
+        self, pattern
+    ) -> Optional[ModularizationSuggestion]:
         """Convert anti-pattern to modularization suggestion.
 
         Args:
@@ -514,7 +531,9 @@ class CodePatternAnalyzer:
 
         return ModularizationSuggestion(
             pattern_type=PatternType.MODULARIZATION,
-            severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
+            severity=severity_map.get(
+                pattern.severity.value.lower(), PatternSeverity.MEDIUM
+            ),
             description=pattern.description,
             locations=[location],
             suggestion=pattern.suggestion,
@@ -566,7 +585,9 @@ class CodePatternAnalyzer:
 
         return CodePattern(
             pattern_type=pattern_type,
-            severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
+            severity=severity_map.get(
+                pattern.severity.value.lower(), PatternSeverity.MEDIUM
+            ),
             description=pattern.description,
             locations=[location],
             suggestion=pattern.suggestion,
@@ -592,10 +613,16 @@ class CodePatternAnalyzer:
                         {
                             "pattern_type": "duplicate",
                             "code_content": dup.canonical_code,
-                            "embedding": await self._generate_embedding(dup.canonical_code),
+                            "embedding": await self._generate_embedding(
+                                dup.canonical_code
+                            ),
                             "metadata": {
-                                "file_path": dup.locations[0].file_path if dup.locations else "",
-                                "start_line": dup.locations[0].start_line if dup.locations else 0,
+                                "file_path": dup.locations[0].file_path
+                                if dup.locations
+                                else "",
+                                "start_line": dup.locations[0].start_line
+                                if dup.locations
+                                else 0,
                                 "occurrence_count": dup.occurrence_count,
                                 "severity": dup.severity.value,
                             },
@@ -608,10 +635,16 @@ class CodePatternAnalyzer:
                         {
                             "pattern_type": "regex_opportunity",
                             "code_content": regex_opp.current_code,
-                            "embedding": await self._generate_embedding(regex_opp.current_code),
+                            "embedding": await self._generate_embedding(
+                                regex_opp.current_code
+                            ),
                             "metadata": {
-                                "file_path": regex_opp.locations[0].file_path if regex_opp.locations else "",
-                                "start_line": regex_opp.locations[0].start_line if regex_opp.locations else 0,
+                                "file_path": regex_opp.locations[0].file_path
+                                if regex_opp.locations
+                                else "",
+                                "start_line": regex_opp.locations[0].start_line
+                                if regex_opp.locations
+                                else 0,
                                 "suggested_regex": regex_opp.suggested_regex,
                                 "severity": regex_opp.severity.value,
                             },
@@ -642,7 +675,7 @@ class CodePatternAnalyzer:
                 embedding = await cache.get_embedding(code)
                 if embedding:
                     return embedding
-            except Exception:
+            except Exception:  # nosec B110 - cache miss handled by fallback
                 pass
 
         # Fallback: Simple hash-based pseudo-embedding for testing

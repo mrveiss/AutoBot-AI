@@ -294,59 +294,90 @@ class AdvancedWebResearcher:
         """
         )
 
+    async def _search_all_engines(
+        self, query: str, max_results: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute search across all configured search engines.
+
+        Args:
+            query: Search query string
+            max_results: Maximum results per engine
+
+        Returns:
+            Combined list of results from all engines. Issue #620.
+        """
+        search_engines = [
+            ("duckduckgo", self._search_duckduckgo),
+            ("bing", self._search_bing),
+            ("google", self._search_google),
+        ]
+        all_results = []
+
+        for engine_name, search_func in search_engines:
+            try:
+                logger.info("Searching %s for: %s", engine_name, query)
+                results = await search_func(
+                    query, max_results // len(search_engines) + 1
+                )
+                for result in results:
+                    result["search_engine"] = engine_name
+                    result["timestamp"] = datetime.now().isoformat()
+                all_results.extend(results)
+                await self._random_delay(2, 5)
+            except Exception as e:
+                logger.error("Search engine %s failed: %s", engine_name, str(e))
+                continue
+
+        return all_results
+
+    def _build_search_response(
+        self,
+        query: str,
+        results: List[Dict[str, Any]],
+        total_found: int,
+        unique_count: int,
+        engine_count: int,
+    ) -> Dict[str, Any]:
+        """
+        Build successful search response dictionary.
+
+        Args:
+            query: Original search query
+            results: Enhanced search results
+            total_found: Total results found
+            unique_count: Unique results count
+            engine_count: Number of engines used
+
+        Returns:
+            Search response dictionary. Issue #620.
+        """
+        return {
+            "status": "success",
+            "query": query,
+            "results": results,
+            "total_found": total_found,
+            "unique_results": unique_count,
+            "search_engines_used": engine_count,
+            "timestamp": datetime.now().isoformat(),
+        }
+
     async def search_web(self, query: str, max_results: int = 5) -> Dict[str, Any]:
-        """Perform web search with anti-detection"""
+        """Perform web search with anti-detection. Issue #620."""
         logger.info("Starting advanced web search for: %s", query)
 
         if not self.browser:
             await self.initialize()
 
         try:
-            # Use multiple search engines for better coverage
-            search_engines = [
-                ("duckduckgo", self._search_duckduckgo),
-                ("bing", self._search_bing),
-                ("google", self._search_google),
-            ]
-
-            all_results = []
-
-            for engine_name, search_func in search_engines:
-                try:
-                    logger.info("Searching %s for: %s", engine_name, query)
-                    results = await search_func(
-                        query, max_results // len(search_engines) + 1
-                    )
-
-                    for result in results:
-                        result["search_engine"] = engine_name
-                        result["timestamp"] = datetime.now().isoformat()
-
-                    all_results.extend(results)
-
-                    # Rate limiting between search engines
-                    await self._random_delay(2, 5)
-
-                except Exception as e:
-                    logger.error("Search engine %s failed: %s", engine_name, str(e))
-                    continue
-
-            # Deduplicate and rank results
+            all_results = await self._search_all_engines(query, max_results)
             unique_results = self._deduplicate_results(all_results)
             ranked_results = self._rank_results(unique_results, query)[:max_results]
-
-            # Enhance results with content scraping
             enhanced_results = await self._enhance_results_with_content(ranked_results)
 
-            return {
-                "status": "success",
-                "query": query,
-                "results": enhanced_results,
-                "total_found": len(all_results),
-                "unique_results": len(unique_results),
-                "search_engines_used": len(search_engines),
-                "timestamp": datetime.now().isoformat(),
-            }
+            return self._build_search_response(
+                query, enhanced_results, len(all_results), len(unique_results), 3
+            )
 
         except Exception as e:
             logger.error("Advanced web search failed: %s", str(e))

@@ -102,36 +102,16 @@ class TerminalLogger:
                 )
                 raise
 
-    async def log_command(
+    def _create_log_entry(
         self,
-        session_id: str,
         command: str,
         run_type: str,
-        status: str = "executing",
-        result: Optional[Dict[str, Any]] = None,
-        user_id: Optional[str] = None,
+        status: str,
+        result: Optional[Dict[str, Any]],
+        user_id: Optional[str],
     ) -> Dict[str, Any]:
-        """
-        Log a terminal command execution.
-
-        Args:
-            session_id: Chat session ID
-            command: Command that was executed
-            run_type: "autobot" or "manual"
-            status: Command status (executing, pending_approval, approved, denied, success, error)
-            result: Optional execution result
-            user_id: User who approved/executed command
-
-        Returns:
-            Log entry dictionary
-        """
-        # CRITICAL: Ensure chat.json exists BEFORE creating/appending to terminal.log
-        # This maintains the invariant: terminal.log cannot exist without chat.json
-        await self._ensure_chat_json_exists(session_id)
-
+        """Create a structured log entry dictionary. Issue #620."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-        # Create log entry
         log_entry = {
             "timestamp": timestamp,
             "run_type": run_type.upper(),
@@ -139,14 +119,12 @@ class TerminalLogger:
             "status": status,
             "user_id": user_id,
         }
-
         if result:
             log_entry["result"] = result
+        return log_entry
 
-        # Build log line
-        log_line = self._format_log_line(log_entry)
-
-        # Write to file
+    async def _write_log_to_file(self, session_id: str, log_line: str) -> None:
+        """Write a formatted log line to the session terminal log file. Issue #620."""
         log_file = self.data_dir / f"{session_id}_terminal.log"
         try:
             async with aiofiles.open(log_file, "a", encoding="utf-8") as f:
@@ -156,14 +134,29 @@ class TerminalLogger:
         except Exception as e:
             logger.error("Failed to log command to %s: %s", log_file, e)
 
-        # Update Redis cache if available
+    async def log_command(
+        self,
+        session_id: str,
+        command: str,
+        run_type: str,
+        status: str = "executing",
+        result: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Log a terminal command execution. Issue #620."""
+        # Ensure chat.json exists BEFORE creating/appending to terminal.log
+        await self._ensure_chat_json_exists(session_id)
+
+        log_entry = self._create_log_entry(command, run_type, status, result, user_id)
+        log_line = self._format_log_line(log_entry)
+        await self._write_log_to_file(session_id, log_line)
+
         if self.redis_client:
             await self._cache_command(session_id, log_entry)
 
         logger.debug(
             f"Logged {run_type} command for session {session_id}: {command[:50]}..."
         )
-
         return log_entry
 
     @staticmethod

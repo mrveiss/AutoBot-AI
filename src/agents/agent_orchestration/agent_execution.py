@@ -11,12 +11,13 @@ Contains agent execution logic, result synthesis, and fallback handling.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
-from .types import AgentType, CODE_SEARCH_TERMS, CLASSIFICATION_TERMS
+from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType
 
 if TYPE_CHECKING:
-    from src.agents.base_agent import BaseAgent
+    from src.agents.base_agent import AgentRequest, BaseAgent
+
     from .distributed_management import DistributedAgentManager
     from .routing import AgentRouter
 
@@ -52,6 +53,76 @@ class AgentExecutor:
         self._get_kb_librarian = get_kb_librarian
         self._get_research_agent = get_research_agent
 
+    def _create_agent_request(
+        self,
+        task_id: str,
+        agent_type: str,
+        request: str,
+        context: Optional[Dict[str, Any]],
+        chat_history: Optional[List[Dict[str, Any]]],
+    ) -> "AgentRequest":
+        """
+        Create an AgentRequest object for distributed processing.
+
+        Args:
+            task_id: Unique task identifier
+            agent_type: Type of the agent
+            request: User request string
+            context: Optional context dictionary
+            chat_history: Optional chat history list
+
+        Returns:
+            Configured AgentRequest object. Issue #620.
+        """
+        from src.agents.base_agent import AgentRequest
+
+        return AgentRequest(
+            request_id=task_id,
+            agent_type=agent_type,
+            action="process_user_request",
+            payload={
+                "request": request,
+                "context": context or {},
+                "chat_history": chat_history or [],
+            },
+            priority="normal",
+        )
+
+    def _build_distributed_response(
+        self,
+        response: Any,
+        agent_id: str,
+        agent_type: str,
+        execution_time: float,
+        task_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Build response dictionary from distributed agent execution.
+
+        Args:
+            response: Agent response object
+            agent_id: ID of the agent used
+            agent_type: Type of the agent
+            execution_time: Time taken for execution
+            task_id: Task identifier
+
+        Returns:
+            Formatted response dictionary. Issue #620.
+        """
+        return {
+            "status": response.status,
+            "response": (
+                response.result.get("response", "No response")
+                if response.result
+                else "No result"
+            ),
+            "agent_used": agent_id,
+            "agent_type": agent_type,
+            "execution_time": execution_time,
+            "routing_strategy": "distributed",
+            "task_id": task_id,
+        }
+
     async def process_with_distributed_agents(
         self,
         request: str,
@@ -59,11 +130,7 @@ class AgentExecutor:
         chat_history: Optional[List[Dict[str, Any]]] = None,
         preferred_agents: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Process request using distributed agent system."""
-        # Import here to avoid circular imports
-        from src.agents.base_agent import AgentRequest
-
-        # Select best distributed agent
+        """Process request using distributed agent system. Issue #620."""
         selected_agent = await self._select_distributed_agent(
             request, context, preferred_agents
         )
@@ -71,47 +138,25 @@ class AgentExecutor:
         if not selected_agent:
             raise Exception("No suitable distributed agent found")
 
-        # Execute request with selected agent
         task_id = f"task_{uuid.uuid4().hex[:8]}"
         start_time = datetime.now()
 
         try:
-            # Track active task
             self.distributed_manager.add_active_task(selected_agent.agent_id, task_id)
-
-            # Create agent request
-            agent_request = AgentRequest(
-                request_id=task_id,
-                agent_type=selected_agent.agent_type,
-                action="process_user_request",
-                payload={
-                    "request": request,
-                    "context": context or {},
-                    "chat_history": chat_history or [],
-                },
-                priority="normal",
+            agent_request = self._create_agent_request(
+                task_id, selected_agent.agent_type, request, context, chat_history
             )
-
-            # Execute request
             response = await selected_agent.process_request(agent_request)
             execution_time = (datetime.now() - start_time).total_seconds()
 
-            return {
-                "status": response.status,
-                "response": (
-                    response.result.get("response", "No response")
-                    if response.result
-                    else "No result"
-                ),
-                "agent_used": selected_agent.agent_id,
-                "agent_type": selected_agent.agent_type,
-                "execution_time": execution_time,
-                "routing_strategy": "distributed",
-                "task_id": task_id,
-            }
-
+            return self._build_distributed_response(
+                response,
+                selected_agent.agent_id,
+                selected_agent.agent_type,
+                execution_time,
+                task_id,
+            )
         finally:
-            # Remove from active tasks
             self.distributed_manager.remove_active_task(
                 selected_agent.agent_id, task_id
             )

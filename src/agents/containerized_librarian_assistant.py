@@ -221,29 +221,31 @@ class ContainerizedLibrarianAssistant:
             },
         }
 
-    async def assess_content_quality(
-        self, content_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Assess the quality of extracted content using LLM (Issue #665: uses extracted helper).
+    def _build_assessment_prompt(self, content_data: Dict[str, Any]) -> str:
+        """
+        Build the LLM prompt for content quality assessment.
 
         Args:
             content_data: Content data with text and metadata
 
         Returns:
-            Quality assessment with score and reasoning
+            Formatted prompt string for LLM. Issue #620.
         """
-        try:
-            prompt = """
-Please assess the quality and reliability of this web content for "
-"inclusion in a knowledge base:
+        title = content_data.get("title", "N/A")
+        domain = content_data.get("domain", "N/A")
+        is_trusted = content_data.get("is_trusted", False)
+        content_length = content_data.get("content_length", 0)
+        content_sample = content_data.get("content", "")[:500]
 
-Title: {content_data.get('title', 'N/A')}
-Domain: {content_data.get('domain', 'N/A')}
-Is Trusted Domain: {content_data.get('is_trusted', False)}
-Content Length: {content_data.get('content_length', 0)} characters
+        return f"""Please assess the quality and reliability of this web content for inclusion in a knowledge base:
+
+Title: {title}
+Domain: {domain}
+Is Trusted Domain: {is_trusted}
+Content Length: {content_length} characters
 
 Content Sample (first 500 chars):
-{content_data.get('content', '')[:500]}...
+{content_sample}...
 
 Please evaluate on a scale of 0.0 to 1.0 based on:
 1. Factual accuracy and reliability
@@ -257,30 +259,52 @@ Respond in JSON format:
     "score": 0.0-1.0,
     "reasoning": "Brief explanation of the assessment",
     "recommendation": "store|review|reject",
-    "key_topics": ["list", "o", "main", "topics"],
+    "key_topics": ["list", "of", "main", "topics"],
     "reliability_factors": {{
         "trusted_domain": true/false,
         "content_quality": "high/medium/low",
         "information_density": "high/medium/low"
     }}
-}}
-"""
+}}"""
 
+    def _parse_assessment_response(
+        self, response: str, content_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Parse LLM response into assessment dictionary.
+
+        Args:
+            response: Raw LLM response string
+            content_data: Original content data for fallback
+
+        Returns:
+            Parsed assessment dictionary. Issue #620.
+        """
+        try:
+            assessment = json.loads(response)
+            score = max(0.0, min(1.0, float(assessment.get("score", 0.5))))
+            assessment["score"] = score
+            return assessment
+        except json.JSONDecodeError:
+            logger.warning("Could not parse quality assessment JSON, using fallback")
+            return self._build_fallback_assessment(content_data)
+
+    async def assess_content_quality(
+        self, content_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Assess the quality of extracted content using LLM. Issue #620.
+
+        Args:
+            content_data: Content data with text and metadata
+
+        Returns:
+            Quality assessment with score and reasoning
+        """
+        try:
+            prompt = self._build_assessment_prompt(content_data)
             response = await self.llm.chat([{"role": "user", "content": prompt}])
-
-            # Try to parse JSON response
-            try:
-                assessment = json.loads(response)
-                # Ensure score is within valid range
-                score = max(0.0, min(1.0, float(assessment.get("score", 0.5))))
-                assessment["score"] = score
-                return assessment
-            except json.JSONDecodeError:
-                logger.warning(
-                    "Could not parse quality assessment JSON, using fallback"
-                )
-                return self._build_fallback_assessment(content_data)
-
+            return self._parse_assessment_response(response, content_data)
         except Exception as e:
             logger.error("Error assessing content quality: %s", e)
             return self._build_fallback_assessment(content_data, str(e))
