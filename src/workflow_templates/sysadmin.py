@@ -236,13 +236,12 @@ def create_performance_optimization_template() -> WorkflowTemplate:
     )
 
 
-def _create_backup_and_recovery_steps() -> List[WorkflowStep]:
+def _create_backup_planning_steps() -> List[WorkflowStep]:
     """
-    Create workflow steps for backup and recovery template.
+    Create planning and strategy steps for backup and recovery workflow.
 
-    Returns a list of WorkflowStep objects defining the backup and recovery
-    workflow from data assessment through implementation, testing, and
-    procedure documentation. Issue #620.
+    Returns steps for data assessment, backup research, and strategy design.
+    Issue #620.
     """
     return [
         WorkflowStep(
@@ -269,6 +268,17 @@ def _create_backup_and_recovery_steps() -> List[WorkflowStep]:
             dependencies=["backup_research"],
             expected_duration_ms=15000,
         ),
+    ]
+
+
+def _create_backup_implementation_steps() -> List[WorkflowStep]:
+    """
+    Create implementation and testing steps for backup and recovery workflow.
+
+    Returns steps for backup implementation, recovery testing, and
+    procedure documentation. Issue #620.
+    """
+    return [
         WorkflowStep(
             id="implement_backup",
             agent_type="system_commands",
@@ -295,6 +305,16 @@ def _create_backup_and_recovery_steps() -> List[WorkflowStep]:
             expected_duration_ms=10000,
         ),
     ]
+
+
+def _create_backup_and_recovery_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for backup and recovery template.
+
+    Combines planning and implementation phase steps into complete workflow.
+    Issue #620.
+    """
+    return _create_backup_planning_steps() + _create_backup_implementation_steps()
 
 
 def create_backup_and_recovery_template() -> WorkflowTemplate:

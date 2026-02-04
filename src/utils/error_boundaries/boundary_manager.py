@@ -327,31 +327,71 @@ class ErrorBoundaryManager:
         except Exception as e:
             logger.error("Failed to store error report: %s", e)
 
+    def _fetch_recent_errors_from_redis(self) -> List[Dict[str, Any]]:
+        """
+        Fetch recent errors from Redis using pipeline for batch retrieval.
+
+        Returns:
+            List of error dictionaries from Redis
+
+        Issue #620.
+        """
+        pattern = "autobot:errors:*"
+        error_keys = self.redis_client.keys(pattern)
+
+        recent_errors = []
+        if error_keys:
+            # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
+            pipe = self.redis_client.pipeline()
+            for key in error_keys:
+                pipe.get(key)
+            results = pipe.execute()
+
+            for error_data in results:
+                if error_data:
+                    recent_errors.append(json.loads(error_data))
+
+        return recent_errors
+
+    def _calculate_error_groupings(self, errors: List[Dict[str, Any]]) -> tuple:
+        """
+        Calculate error groupings by category, severity, and component.
+
+        Args:
+            errors: List of error dictionaries
+
+        Returns:
+            Tuple of (categories, severities, components) dictionaries
+
+        Issue #620.
+        """
+        categories = {}
+        severities = {}
+        components = {}
+
+        for error in errors:
+            category = error.get("category", "unknown")
+            severity = error.get("severity", "unknown")
+            component = error.get("component", "unknown")
+
+            categories[category] = categories.get(category, 0) + 1
+            severities[severity] = severities.get(severity, 0) + 1
+            components[component] = components.get(component, 0) + 1
+
+        return categories, severities, components
+
     def get_error_statistics(self) -> Dict[str, Any]:
         """
         Get error statistics for monitoring.
 
         Returns:
             Dictionary with error statistics and recent errors
+
+        (Issue #620: refactored to use extracted helpers)
         """
         try:
-            # Get recent errors from Redis
-            pattern = "autobot:errors:*"
-            error_keys = self.redis_client.keys(pattern)
+            recent_errors = self._fetch_recent_errors_from_redis()
 
-            # Issue #397: Fix N+1 query pattern - use pipeline for batch retrieval
-            recent_errors = []
-            if error_keys:
-                pipe = self.redis_client.pipeline()
-                for key in error_keys:
-                    pipe.get(key)
-                results = pipe.execute()
-
-                for error_data in results:
-                    if error_data:
-                        recent_errors.append(json.loads(error_data))
-
-            # Calculate statistics
             total_errors = len(recent_errors)
             if total_errors == 0:
                 return {
@@ -361,19 +401,9 @@ class ErrorBoundaryManager:
                     "components": {},
                 }
 
-            # Group by category
-            categories = {}
-            severities = {}
-            components = {}
-
-            for error in recent_errors:
-                category = error.get("category", "unknown")
-                severity = error.get("severity", "unknown")
-                component = error.get("component", "unknown")
-
-                categories[category] = categories.get(category, 0) + 1
-                severities[severity] = severities.get(severity, 0) + 1
-                components[component] = components.get(component, 0) + 1
+            categories, severities, components = self._calculate_error_groupings(
+                recent_errors
+            )
 
             return {
                 "total_errors": total_errors,

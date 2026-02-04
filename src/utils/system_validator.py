@@ -1205,48 +1205,46 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
-    async def validate_api_endpoints(self) -> List[ValidationResult]:
-        """Validate all optimization API endpoints"""
-        component = "API Endpoints"
+    def _get_critical_api_endpoints(self) -> List[tuple]:
+        """
+        Get the list of critical API endpoints to validate.
 
-        # Critical API endpoints to test
-        endpoints = [
+        Returns:
+            List of tuples containing (method, url, name) for each endpoint
+
+        Issue #620.
+        """
+        backend_url = self.base_urls["backend"]
+        return [
+            ("GET", f"{backend_url}/api/knowledge_base/cache/stats", "Cache Stats"),
+            ("GET", f"{backend_url}/api/knowledge_base/cache/health", "Cache Health"),
+            ("GET", f"{backend_url}/api/knowledge_base/search/config", "Search Config"),
+            ("GET", f"{backend_url}/api/monitoring/health", "Monitoring Health"),
             (
                 "GET",
-                f"{self.base_urls['backend']}/api/knowledge_base/cache/stats",
-                "Cache Stats",
-            ),
-            (
-                "GET",
-                f"{self.base_urls['backend']}/api/knowledge_base/cache/health",
-                "Cache Health",
-            ),
-            (
-                "GET",
-                f"{self.base_urls['backend']}/api/knowledge_base/search/config",
-                "Search Config",
-            ),
-            (
-                "GET",
-                f"{self.base_urls['backend']}/api/monitoring/health",
-                "Monitoring Health",
-            ),
-            (
-                "GET",
-                f"{self.base_urls['backend']}/api/monitoring/dashboard/overview",
+                f"{backend_url}/api/monitoring/dashboard/overview",
                 "Dashboard Overview",
             ),
             (
                 "GET",
-                f"{self.base_urls['backend']}/api/llm_optimization/health",
+                f"{backend_url}/api/llm_optimization/health",
                 "Optimization Health",
             ),
             (
                 "GET",
-                f"{self.base_urls['backend']}/api/llm_optimization/models/available",
+                f"{backend_url}/api/llm_optimization/models/available",
                 "Available Models",
             ),
         ]
+
+    async def validate_api_endpoints(self) -> List[ValidationResult]:
+        """
+        Validate all optimization API endpoints.
+
+        (Issue #620: refactored to use extracted helper)
+        """
+        component = "API Endpoints"
+        endpoints = self._get_critical_api_endpoints()
 
         try:
             http_client = get_http_client()

@@ -136,6 +136,79 @@ def create_network_security_scan_template() -> WorkflowTemplate:
     )
 
 
+def _create_vuln_scan_steps() -> List[WorkflowStep]:
+    """
+    Create scanning and research steps for vulnerability assessment.
+
+    Returns steps for vulnerability research and comprehensive scanning.
+    Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="research_vulnerabilities",
+            agent_type="research",
+            action="Research current vulnerability databases and threat intelligence",
+            description="Research: CVE and Threat Research",
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="vulnerability_scan",
+            agent_type="security_scanner",
+            action="Execute comprehensive vulnerability scan",
+            description="Security_Scanner: Vulnerability Scan",
+            dependencies=["research_vulnerabilities"],
+            inputs={"scan_type": "vulnerability_scan"},
+            expected_duration_ms=60000,
+        ),
+    ]
+
+
+def _create_vuln_analysis_steps() -> List[WorkflowStep]:
+    """
+    Create analysis and remediation steps for vulnerability assessment.
+
+    Returns steps for results analysis, remediation planning, and storage.
+    Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="analyze_results",
+            agent_type="security_scanner",
+            action="Analyze vulnerability scan results and prioritize findings",
+            description="Security_Scanner: Results Analysis",
+            dependencies=["vulnerability_scan"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="remediation_plan",
+            agent_type="orchestrator",
+            action="Create remediation plan with prioritized recommendations",
+            description="Orchestrator: Create Remediation Plan (requires your approval)",
+            requires_approval=True,
+            dependencies=["analyze_results"],
+            expected_duration_ms=10000,
+        ),
+        WorkflowStep(
+            id="store_assessment",
+            agent_type="knowledge_manager",
+            action="Store vulnerability assessment and remediation plan",
+            description="Knowledge_Manager: Store Assessment",
+            dependencies=["remediation_plan"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
+def _create_vulnerability_assessment_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for vulnerability assessment template.
+
+    Combines scanning and analysis phase steps into complete workflow.
+    Issue #620.
+    """
+    return _create_vuln_scan_steps() + _create_vuln_analysis_steps()
+
+
 def create_vulnerability_assessment_template() -> WorkflowTemplate:
     """Create vulnerability assessment workflow template."""
     return WorkflowTemplate(
@@ -151,49 +224,7 @@ def create_vulnerability_assessment_template() -> WorkflowTemplate:
             "target": "Target system or application",
             "assessment_type": "Type of assessment (web app, network, host)",
         },
-        steps=[
-            WorkflowStep(
-                id="research_vulnerabilities",
-                agent_type="research",
-                action="Research current vulnerability databases and threat intelligence",
-                description="Research: CVE and Threat Research",
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="vulnerability_scan",
-                agent_type="security_scanner",
-                action="Execute comprehensive vulnerability scan",
-                description="Security_Scanner: Vulnerability Scan",
-                dependencies=["research_vulnerabilities"],
-                inputs={"scan_type": "vulnerability_scan"},
-                expected_duration_ms=60000,
-            ),
-            WorkflowStep(
-                id="analyze_results",
-                agent_type="security_scanner",
-                action="Analyze vulnerability scan results and prioritize findings",
-                description="Security_Scanner: Results Analysis",
-                dependencies=["vulnerability_scan"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="remediation_plan",
-                agent_type="orchestrator",
-                action="Create remediation plan with prioritized recommendations",
-                description="Orchestrator: Create Remediation Plan (requires your approval)",
-                requires_approval=True,
-                dependencies=["analyze_results"],
-                expected_duration_ms=10000,
-            ),
-            WorkflowStep(
-                id="store_assessment",
-                agent_type="knowledge_manager",
-                action="Store vulnerability assessment and remediation plan",
-                description="Knowledge_Manager: Store Assessment",
-                dependencies=["remediation_plan"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_vulnerability_assessment_steps(),
     )
 
 

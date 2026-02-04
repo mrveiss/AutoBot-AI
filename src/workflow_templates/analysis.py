@@ -15,8 +15,13 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
-def _build_data_analysis_steps() -> List[WorkflowStep]:
-    """Build workflow steps for data analysis template. Issue #620."""
+def _build_data_preparation_steps() -> List[WorkflowStep]:
+    """
+    Build data preparation steps for data analysis workflow.
+
+    Returns steps for data exploration, research, and cleaning.
+    Issue #620.
+    """
     return [
         WorkflowStep(
             id="data_exploration",
@@ -41,6 +46,17 @@ def _build_data_analysis_steps() -> List[WorkflowStep]:
             dependencies=["analysis_research"],
             expected_duration_ms=30000,
         ),
+    ]
+
+
+def _build_data_processing_steps() -> List[WorkflowStep]:
+    """
+    Build data processing and insights steps for data analysis workflow.
+
+    Returns steps for statistical analysis, insights generation,
+    visualization, and storage. Issue #620.
+    """
+    return [
         WorkflowStep(
             id="statistical_analysis",
             agent_type="system_commands",
@@ -74,6 +90,16 @@ def _build_data_analysis_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _build_data_analysis_steps() -> List[WorkflowStep]:
+    """
+    Build workflow steps for data analysis template.
+
+    Combines preparation and processing phase steps into complete workflow.
+    Issue #620.
+    """
+    return _build_data_preparation_steps() + _build_data_processing_steps()
 
 
 def _get_data_analysis_variables() -> Dict[str, str]:

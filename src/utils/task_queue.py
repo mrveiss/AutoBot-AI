@@ -528,11 +528,55 @@ class TaskQueue:
         result.completed_at = datetime.utcnow()
         result.execution_time = time.time() - start_time
 
+    def _check_task_expired(self, task: Task) -> bool:
+        """
+        Check if a task has expired based on its expiration time.
+
+        Args:
+            task: The task to check
+
+        Returns:
+            True if the task has expired, False otherwise
+
+        Issue #620.
+        """
+        return task.expires_at is not None and datetime.utcnow() > task.expires_at
+
+    async def _execute_task_with_timeout(
+        self, task: Task, result: TaskResult, start_time: float
+    ) -> None:
+        """
+        Execute a task with optional timeout handling.
+
+        Args:
+            task: The task to execute
+            result: The TaskResult object to update
+            start_time: When task processing started
+
+        Issue #620.
+        """
+        if task.function_name not in self.task_registry:
+            raise ValueError(f"Task function '{task.function_name}' not registered")
+
+        func = self.task_registry[task.function_name]
+        kwargs = task.kwargs or {}
+
+        if task.timeout:
+            task_result = await asyncio.wait_for(
+                self._execute_function(func, task.args, kwargs),
+                timeout=task.timeout,
+            )
+        else:
+            task_result = await self._execute_function(func, task.args, kwargs)
+
+        await self._record_task_success(result, task_result, start_time)
+
     async def _process_task(self, task_id: str, worker_name: str) -> None:
         """
         Process a single task.
 
         (Issue #398: refactored to use extracted helpers)
+        (Issue #620: further extraction of helpers)
         """
         start_time = time.time()
         task = await self._get_task(task_id)
@@ -541,7 +585,7 @@ class TaskQueue:
             self.logger.error("Task %s not found", task_id)
             return
 
-        if task.expires_at and datetime.utcnow() > task.expires_at:
+        if self._check_task_expired(task):
             await self._handle_task_completion(
                 task,
                 TaskResult(
@@ -559,21 +603,7 @@ class TaskQueue:
         )
 
         try:
-            if task.function_name not in self.task_registry:
-                raise ValueError(f"Task function '{task.function_name}' not registered")
-
-            func = self.task_registry[task.function_name]
-            kwargs = task.kwargs or {}
-
-            if task.timeout:
-                task_result = await asyncio.wait_for(
-                    self._execute_function(func, task.args, kwargs),
-                    timeout=task.timeout,
-                )
-            else:
-                task_result = await self._execute_function(func, task.args, kwargs)
-
-            await self._record_task_success(result, task_result, start_time)
+            await self._execute_task_with_timeout(task, result, start_time)
 
         except asyncio.TimeoutError:
             self._record_task_failure(
