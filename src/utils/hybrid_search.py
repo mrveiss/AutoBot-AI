@@ -352,6 +352,32 @@ class HybridSearchEngine:
             self.logger.error("Fallback search also failed: %s", fallback_error)
             return []
 
+    def _process_and_finalize_results(
+        self,
+        enhanced_results: List[Dict[str, Any]],
+        top_k: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Sort, deduplicate, and finalize search results.
+
+        Args:
+            enhanced_results: Results with hybrid scores
+            top_k: Maximum results to return
+
+        Returns:
+            Final deduplicated and sorted results. Issue #620.
+        """
+        # Sort by hybrid score (descending)
+        enhanced_results.sort(key=lambda x: x["hybrid_score"], reverse=True)
+
+        # Update the main score field with hybrid score
+        for result in enhanced_results:
+            result["score"] = result["hybrid_score"]
+
+        # Deduplicate and return top results
+        unique_results = self.deduplicate_results(enhanced_results)
+        return unique_results[: min(top_k, self.final_top_k)]
+
     async def search(
         self, query: str, top_k: int = 10, filters: Optional[Dict] = None
     ) -> List[Dict[str, Any]]:
@@ -364,20 +390,16 @@ class HybridSearchEngine:
             filters: Optional filters for the search
 
         Returns:
-            List of search results with hybrid scores
-
-        Issue #620: Refactored to use extracted helper methods.
+            List of search results with hybrid scores. Issue #620.
         """
         if not self.knowledge_base:
             self.logger.error("Knowledge base not available for hybrid search")
             return []
 
         try:
-            # Extract keywords from query
             query_keywords = self.extract_keywords(query)
             self.logger.debug("Extracted keywords from '%s': %s", query, query_keywords)
 
-            # Perform semantic search with higher top_k to get more candidates
             semantic_results = await self.knowledge_base.search(
                 query, top_k=self.semantic_top_k, filters=filters
             )
@@ -386,27 +408,18 @@ class HybridSearchEngine:
                 self.logger.warning("No semantic results found for query: '%s'", query)
                 return []
 
-            # Enhance results with keyword scoring
             enhanced_results = [
                 self._enhance_result_with_scores(result, query_keywords)
                 for result in semantic_results
             ]
 
-            # Sort by hybrid score (descending)
-            enhanced_results.sort(key=lambda x: x["hybrid_score"], reverse=True)
-
-            # Update the main score field with hybrid score
-            for result in enhanced_results:
-                result["score"] = result["hybrid_score"]
-
-            # Deduplicate and return top results
-            unique_results = self.deduplicate_results(enhanced_results)
-            final_results = unique_results[: min(top_k, self.final_top_k)]
+            final_results = self._process_and_finalize_results(enhanced_results, top_k)
 
             self.logger.info(
-                f"Hybrid search for '{query}': "
-                f"{len(semantic_results)} semantic -> {len(unique_results)} unique -> "
-                f"{len(final_results)} final results"
+                "Hybrid search for '%s': %s semantic -> %s final results",
+                query,
+                len(semantic_results),
+                len(final_results),
             )
 
             return final_results

@@ -939,20 +939,19 @@ class ChatWorkflowManager(
             current_message_type,
         )
 
-    async def _process_stream_chunk_iteration(
+    def _extract_chunk_processing_state(
         self,
         chunk_data: Dict[str, Any],
         llm_response: str,
         current_segment: str,
         current_message_type: str,
         tool_call_completed: bool,
-        streaming_msg,
-        selected_model: str,
-        terminal_session_id: str,
-        used_knowledge: bool,
-        rag_citations: List[Dict[str, Any]],
-    ):
-        """Process a single chunk iteration in the stream. Issue #620."""
+    ) -> tuple:
+        """Extract and process chunk state from chunk data.
+
+        Combines chunk text extraction and tool call completion checking.
+        Issue #620.
+        """
         (
             chunk_text,
             llm_response,
@@ -968,6 +967,40 @@ class ChatWorkflowManager(
         ) = self._handle_tool_call_completion_check(
             chunk_data, llm_response, tool_call_completed
         )
+        return (
+            chunk_text,
+            llm_response,
+            current_segment,
+            new_type,
+            done_result,
+            should_break,
+            tool_call_completed,
+        )
+
+    async def _process_stream_chunk_iteration(
+        self,
+        chunk_data: Dict[str, Any],
+        llm_response: str,
+        current_segment: str,
+        current_message_type: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ):
+        """Process a single chunk iteration in the stream. Issue #620."""
+        state = self._extract_chunk_processing_state(
+            chunk_data,
+            llm_response,
+            current_segment,
+            current_message_type,
+            tool_call_completed,
+        )
+        chunk_text, llm_response, current_segment, new_type = state[:4]
+        done_result, should_break, tool_call_completed = state[4:]
+
         early_exit = self._handle_early_exit_conditions(
             should_break,
             tool_call_completed,

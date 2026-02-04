@@ -696,6 +696,71 @@ class VoiceInterface:
                 "message": f"gTTS failed: {str(e)}",
             }
 
+    def _get_stt_backend_priority(self) -> list:
+        """
+        Get ordered list of STT backends based on preference.
+
+        Issue #620.
+
+        Returns:
+            List of (name, method) tuples in priority order
+        """
+        backend_map = {
+            "vosk": (VOSK_AVAILABLE, self._listen_vosk),
+            "google": (SPEECH_RECOGNITION_AVAILABLE, self.listen_and_convert_to_text),
+        }
+        priority_orders = {
+            "vosk": ["vosk", "google"],
+            "google": ["google", "vosk"],
+        }
+        order = priority_orders.get(self.preferred_stt, ["google", "vosk"])
+
+        backends = []
+        for name in order:
+            available, method = backend_map[name]
+            if available:
+                backends.append((name, method))
+        return backends
+
+    async def _try_stt_backends(
+        self,
+        backends: list,
+        timeout: Optional[int],
+        phrase_time_limit: Optional[int],
+    ) -> Dict[str, Any]:
+        """
+        Try STT backends in order until one succeeds.
+
+        Issue #620.
+
+        Args:
+            backends: List of (name, method) tuples to try
+            timeout: Seconds to wait for speech start
+            phrase_time_limit: Seconds to listen for a phrase
+
+        Returns:
+            Dict with status and recognized text or error
+        """
+        errors = []
+        for name, method in backends:
+            logger.debug("Trying STT backend: %s", name)
+            try:
+                result = await method(
+                    timeout=timeout, phrase_time_limit=phrase_time_limit
+                )
+                if result.get("status") in ("success", "timeout", "no_match"):
+                    result["backend"] = name
+                    return result
+                errors.append(f"{name}: {result.get('message', 'Unknown error')}")
+            except Exception as e:
+                errors.append(f"{name}: {str(e)}")
+                logger.warning("STT backend %s failed: %s", name, e)
+
+        return {
+            "status": "error",
+            "message": f"All STT backends failed: {'; '.join(errors)}",
+        }
+
     async def listen_with_fallback(
         self,
         timeout: Optional[int] = 5,
@@ -713,19 +778,7 @@ class VoiceInterface:
         Returns:
             Dict with status and recognized text or error.
         """
-        backends = []
-
-        # Order based on preference
-        if self.preferred_stt == "vosk":
-            if VOSK_AVAILABLE:
-                backends.append(("vosk", self._listen_vosk))
-            if SPEECH_RECOGNITION_AVAILABLE:
-                backends.append(("google", self.listen_and_convert_to_text))
-        else:
-            if SPEECH_RECOGNITION_AVAILABLE:
-                backends.append(("google", self.listen_and_convert_to_text))
-            if VOSK_AVAILABLE:
-                backends.append(("vosk", self._listen_vosk))
+        backends = self._get_stt_backend_priority()
 
         if not backends:
             return {
@@ -733,30 +786,7 @@ class VoiceInterface:
                 "message": "No STT backends available.",
             }
 
-        errors = []
-        for name, method in backends:
-            logger.debug("Trying STT backend: %s", name)
-            try:
-                result = await method(
-                    timeout=timeout, phrase_time_limit=phrase_time_limit
-                )
-                if result.get("status") == "success":
-                    result["backend"] = name
-                    return result
-                elif result.get("status") in ("timeout", "no_match"):
-                    # These are expected conditions, not errors
-                    result["backend"] = name
-                    return result
-                else:
-                    errors.append(f"{name}: {result.get('message', 'Unknown error')}")
-            except Exception as e:
-                errors.append(f"{name}: {str(e)}")
-                logger.warning("STT backend %s failed: %s", name, e)
-
-        return {
-            "status": "error",
-            "message": f"All STT backends failed: {'; '.join(errors)}",
-        }
+        return await self._try_stt_backends(backends, timeout, phrase_time_limit)
 
     def _get_tts_backend_priority(self) -> list:
         """

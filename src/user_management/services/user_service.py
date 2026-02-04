@@ -386,6 +386,21 @@ class UserService(BaseService):
         if preferences is not None:
             user.preferences = preferences
 
+    async def _finalize_user_update(
+        self, user: User, user_id: uuid.UUID, changes: dict
+    ) -> None:
+        """Finalize user update with timestamp and audit logging. Issue #620."""
+        user.updated_at = datetime.now(timezone.utc)
+        await self.session.flush()
+
+        if changes:
+            await self._audit_log(
+                action=AuditAction.USER_UPDATED,
+                resource_type=AuditResourceType.USER,
+                resource_id=user_id,
+                details={"changes": changes},
+            )
+
     async def update_user(
         self,
         user_id: uuid.UUID,
@@ -397,7 +412,7 @@ class UserService(BaseService):
         preferences: Optional[dict] = None,
     ) -> User:
         """
-        Update user profile.
+        Update user profile fields.
 
         Args:
             user_id: User ID to update
@@ -409,11 +424,7 @@ class UserService(BaseService):
             preferences: New preferences dict (optional)
 
         Returns:
-            Updated User instance
-
-        Raises:
-            UserNotFoundError: If user not found
-            DuplicateUserError: If new email/username already taken
+            Updated User instance. Issue #620.
         """
         user = await self.get_user(user_id)
         if not user:
@@ -435,17 +446,7 @@ class UserService(BaseService):
             user, display_name, bio, avatar_url, preferences, changes
         )
 
-        user.updated_at = datetime.now(timezone.utc)
-        await self.session.flush()
-
-        if changes:
-            await self._audit_log(
-                action=AuditAction.USER_UPDATED,
-                resource_type=AuditResourceType.USER,
-                resource_id=user_id,
-                details={"changes": changes},
-            )
-
+        await self._finalize_user_update(user, user_id, changes)
         return user
 
     async def change_password(

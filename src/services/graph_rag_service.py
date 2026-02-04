@@ -193,6 +193,21 @@ class GraphRAGService:
             enable_entity_extraction,
         )
 
+    def _handle_search_error(
+        self,
+        error: Exception,
+        metrics: GraphRAGMetrics,
+        start_time: float,
+        timeout: Optional[float],
+    ) -> Tuple[List[SearchResult], GraphRAGMetrics]:
+        """Handle errors during graph-aware search. Issue #620."""
+        if isinstance(error, asyncio.TimeoutError):
+            logger.warning("Graph-RAG search timed out after %ss", timeout)
+        else:
+            logger.error("Graph-RAG search failed: %s", error, exc_info=True)
+        metrics.total_time = time.perf_counter() - start_time
+        return [], metrics
+
     @error_boundary(
         component="graph_rag_service",
         function="graph_aware_search",
@@ -209,8 +224,6 @@ class GraphRAGService:
         """
         Perform graph-aware RAG search with relationship-based expansion.
 
-        Issue #281: Refactored to use extracted helpers.
-
         Args:
             query: Search query string
             start_entity: Optional starting entity name for graph traversal
@@ -220,7 +233,7 @@ class GraphRAGService:
             timeout: Optional timeout in seconds
 
         Returns:
-            Tuple of (search_results, metrics)
+            Tuple of (search_results, metrics). Issue #620.
         """
         start_time = time.perf_counter()
         metrics = GraphRAGMetrics()
@@ -228,17 +241,14 @@ class GraphRAGService:
         try:
             self._seen_content.clear()
 
-            # Step 1: Initial RAG search
             rag_results = await self._perform_initial_rag_search(
                 query, max_results, enable_reranking, timeout, metrics
             )
 
-            # Step 2-3: Extract entities and expand via graph
             all_results = await self._extract_and_expand_graph(
                 query, rag_results, start_entity, max_depth, max_results, metrics
             )
 
-            # Step 4: Deduplicate and rank
             final_results = await self._deduplicate_and_rank(all_results, max_results)
             metrics.finalize(len(final_results), time.perf_counter() - start_time)
 
@@ -249,15 +259,8 @@ class GraphRAGService:
             )
             return final_results, metrics
 
-        except asyncio.TimeoutError:
-            logger.warning("Graph-RAG search timed out after %ss", timeout)
-            metrics.total_time = time.perf_counter() - start_time
-            return [], metrics
-
-        except Exception as e:
-            logger.error("Graph-RAG search failed: %s", e, exc_info=True)
-            metrics.total_time = time.perf_counter() - start_time
-            return [], metrics
+        except (asyncio.TimeoutError, Exception) as e:
+            return self._handle_search_error(e, metrics, start_time, timeout)
 
     async def _extract_entities_from_results(
         self, results: List[SearchResult]
