@@ -15,6 +15,7 @@ from .config import node_config_router
 from .config import router as config_router
 from .deployments import router as deployments_router
 from .discovery import router as discovery_router
+from .errors import router as errors_router
 from .health import router as health_router
 from .maintenance import router as maintenance_router
 from .monitoring import router as monitoring_router
@@ -37,6 +38,7 @@ __all__ = [
     "nodes_router",
     "deployments_router",
     "settings_router",
+    "errors_router",
     "health_router",
     "stateful_router",
     "updates_router",

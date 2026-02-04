@@ -20,6 +20,7 @@ from api import (
     config_router,
     deployments_router,
     discovery_router,
+    errors_router,
     fleet_services_router,
     health_router,
     maintenance_router,
@@ -58,11 +59,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _run_migrations():
+    """Run pending database migrations on startup."""
+    from migrations.runner import run_migrations_async
+
+    try:
+        results = await run_migrations_async()
+        for name, success, message in results:
+            if success:
+                logger.info("Migration: %s", message)
+            else:
+                logger.error("Migration failed: %s", message)
+                raise RuntimeError(f"Migration failed: {name}")
+        if results:
+            logger.info("Applied %d migration(s)", len(results))
+    except Exception as e:
+        logger.error("Migration error: %s", e)
+        raise
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
+
+    # Run database migrations before initializing SQLAlchemy
+    await _run_migrations()
 
     await db_service.initialize()
     await _ensure_admin_user()
@@ -156,6 +179,7 @@ app.include_router(stateful_router, prefix="/api")
 app.include_router(updates_router, prefix="/api")
 app.include_router(maintenance_router, prefix="/api")
 app.include_router(monitoring_router, prefix="/api")
+app.include_router(errors_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")
 app.include_router(vnc_router, prefix="/api")
