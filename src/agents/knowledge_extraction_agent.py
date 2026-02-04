@@ -505,6 +505,57 @@ Return the results as a JSON array of facts. Example format:
 
         return extracted_facts, validation_errors
 
+    def _build_extraction_success_result(
+        self,
+        extracted_facts: List[AtomicFact],
+        raw_facts_count: int,
+        validation_errors: int,
+        source: str,
+        content_length: int,
+        chunk_id: Optional[str],
+        processing_time: float,
+    ) -> FactExtractionResult:
+        """
+        Build a successful FactExtractionResult with metadata.
+
+        Issue #620.
+        """
+        return FactExtractionResult(
+            facts=extracted_facts,
+            processing_time=processing_time,
+            extraction_metadata={
+                "source": source,
+                "content_length": content_length,
+                "raw_facts_count": raw_facts_count,
+                "validation_errors": validation_errors,
+                "confidence_threshold": self.confidence_threshold,
+                "extraction_method": "llm_guided_extraction",
+                "chunk_id": chunk_id,
+            },
+        )
+
+    def _build_extraction_error_result(
+        self,
+        error: str,
+        source: str,
+        content_length: int,
+        processing_time: float,
+    ) -> FactExtractionResult:
+        """
+        Build an error FactExtractionResult with error details.
+
+        Issue #620.
+        """
+        return FactExtractionResult(
+            facts=[],
+            processing_time=processing_time,
+            extraction_metadata={
+                "error": error,
+                "source": source,
+                "content_length": content_length,
+            },
+        )
+
     async def extract_facts_from_text(
         self,
         content: str,
@@ -538,31 +589,21 @@ Return the results as a JSON array of facts. Example format:
                 f"{processing_time:.2f}s ({validation_errors} validation errors)"
             )
 
-            return FactExtractionResult(
-                facts=extracted_facts,
-                processing_time=processing_time,
-                extraction_metadata={
-                    "source": source,
-                    "content_length": len(content),
-                    "raw_facts_count": len(raw_facts),
-                    "validation_errors": validation_errors,
-                    "confidence_threshold": self.confidence_threshold,
-                    "extraction_method": "llm_guided_extraction",
-                    "chunk_id": chunk_id,
-                },
+            return self._build_extraction_success_result(
+                extracted_facts,
+                len(raw_facts),
+                validation_errors,
+                source,
+                len(content),
+                chunk_id,
+                processing_time,
             )
 
         except Exception as e:
             processing_time = time.time() - start_time
             logger.error("Error in fact extraction: %s", e)
-            return FactExtractionResult(
-                facts=[],
-                processing_time=processing_time,
-                extraction_metadata={
-                    "error": str(e),
-                    "source": source,
-                    "content_length": len(content),
-                },
+            return self._build_extraction_error_result(
+                str(e), source, len(content), processing_time
             )
 
     def _aggregate_chunk_results(self, chunk_results: List[Any]) -> tuple:

@@ -597,6 +597,54 @@ class StepExecutorAgent:
             logger.error("[StepExecutor] Error writing to PTY: %s", e)
             return False
 
+    async def _stream_pty_execution(
+        self, command: str, task_id: str, chat_manager
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """
+        Stream PTY execution output as StreamChunks.
+
+        Polls for output from chat history and yields chunks for the execution
+        status, stdout content, and return code.
+
+        Args:
+            command: The command being executed
+            task_id: Unique identifier for this execution
+            chat_manager: Chat history manager to poll for output
+
+        Yields:
+            StreamChunk objects for execution status, output, and return code.
+            Issue #620.
+        """
+        yield StreamChunk(
+            task_id=task_id,
+            step_number=0,
+            chunk_type="pty_execution",
+            content=f"Executing: {command}",
+            is_final=False,
+        )
+
+        # Poll for output completion
+        output = await self._poll_pty_output(chat_manager, timeout=60.0)
+
+        # Yield final output
+        yield StreamChunk(
+            task_id=task_id,
+            step_number=0,
+            chunk_type="stdout",
+            content=output,
+            is_final=False,
+        )
+
+        # Yield return code (assume 0 for PTY execution)
+        # TODO: Detect actual return code from PTY
+        yield StreamChunk(
+            task_id=task_id,
+            step_number=0,
+            chunk_type="return_code",
+            content="0",
+            is_final=True,
+        )
+
     async def _execute_command_streaming(
         self, command: str
     ) -> AsyncGenerator[StreamChunk, None]:
@@ -617,39 +665,13 @@ class StepExecutorAgent:
                     "[StepExecutor] PTY write failed, falling back to subprocess"
                 )
             else:
-                # Poll for output from chat history
-                # The terminal WebSocket handler saves output to chat
+                # Poll for output from chat history (Issue #620: uses helper)
                 chat_manager = await self._get_chat_history_manager()
                 if chat_manager:
-                    yield StreamChunk(
-                        task_id=task_id,
-                        step_number=0,
-                        chunk_type="pty_execution",
-                        content=f"Executing: {command}",
-                        is_final=False,
-                    )
-
-                    # Poll for output completion
-                    output = await self._poll_pty_output(chat_manager, timeout=60.0)
-
-                    # Yield final output
-                    yield StreamChunk(
-                        task_id=task_id,
-                        step_number=0,
-                        chunk_type="stdout",
-                        content=output,
-                        is_final=False,
-                    )
-
-                    # Yield return code (assume 0 for PTY execution)
-                    # TODO: Detect actual return code from PTY
-                    yield StreamChunk(
-                        task_id=task_id,
-                        step_number=0,
-                        chunk_type="return_code",
-                        content="0",
-                        is_final=True,
-                    )
+                    async for chunk in self._stream_pty_execution(
+                        command, task_id, chat_manager
+                    ):
+                        yield chunk
                     return
 
         # Fallback: Use subprocess (output won't appear in user's terminal)

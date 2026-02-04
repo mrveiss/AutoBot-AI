@@ -475,6 +475,30 @@ Examples:
             logger.error("[OverseerAgent] Step %d failed: %s", task.step_number, e)
             yield ("update", _build_error_update(plan_id, task, str(e)))
 
+    def _build_plan_update(self, plan: TaskPlan) -> OverseerUpdate:
+        """
+        Build an OverseerUpdate for the initial plan announcement.
+
+        Args:
+            plan: The TaskPlan to build the update for
+
+        Returns:
+            OverseerUpdate containing plan analysis and step summaries.
+            Issue #620.
+        """
+        return OverseerUpdate(
+            update_type="plan",
+            plan_id=plan.plan_id,
+            total_steps=len(plan.steps),
+            content={
+                "analysis": plan.analysis,
+                "steps": [
+                    {"step_number": s.step_number, "description": s.description}
+                    for s in plan.steps
+                ],
+            },
+        )
+
     async def orchestrate_execution(
         self, plan: TaskPlan, executor
     ) -> AsyncGenerator[OverseerUpdate, None]:
@@ -492,19 +516,8 @@ Examples:
         """
         logger.info("[OverseerAgent] Starting execution of plan: %s", plan.plan_id)
 
-        # Yield the plan update
-        yield OverseerUpdate(
-            update_type="plan",
-            plan_id=plan.plan_id,
-            total_steps=len(plan.steps),
-            content={
-                "analysis": plan.analysis,
-                "steps": [
-                    {"step_number": s.step_number, "description": s.description}
-                    for s in plan.steps
-                ],
-            },
-        )
+        # Yield the plan update (Issue #620: uses helper)
+        yield self._build_plan_update(plan)
 
         # Track completed step results for dependency resolution
         completed_results: Dict[str, StepResult] = {}

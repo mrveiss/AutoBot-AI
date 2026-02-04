@@ -570,11 +570,16 @@ METADATA:
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored system documentation: %s", doc_title)
 
-    async def store_workflow_knowledge(self, workflow_info: Dict[str, Any]):
-        """Store complete workflow documentation for complex procedures."""
-        workflow_name = workflow_info.get("name", "Unknown Workflow")
+    def _build_workflow_document_content(
+        self, workflow_name: str, workflow_info: Dict[str, Any]
+    ) -> str:
+        """
+        Build the document content string for workflow documentation.
 
-        document_content = f"""
+        Issue #620.
+        """
+        timestamp = datetime.now().isoformat()
+        return f"""
 WORKFLOW DOCUMENTATION: {workflow_name}
 ==================================================
 
@@ -613,19 +618,36 @@ RELATED WORKFLOWS:
 {workflow_info.get('related_workflows', [])}
 
 METADATA:
-- Added: {datetime.now().isoformat()}
-- Last Updated: {datetime.now().isoformat()}
+- Added: {timestamp}
+- Last Updated: {timestamp}
 - Success Rate: {workflow_info.get('success_rate', 'N/A')}
 - Difficulty Level: {workflow_info.get('difficulty', 'medium')}
 """
 
-        metadata = {
+    def _build_workflow_metadata(
+        self, workflow_name: str, workflow_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build metadata dictionary for workflow documentation.
+
+        Issue #620.
+        """
+        return {
             "type": "workflow_documentation",
             "workflow_name": workflow_name,
             "category": workflow_info.get("category", "workflows"),
             "complexity": workflow_info.get("complexity", "medium"),
             "timestamp": datetime.now().isoformat(),
         }
+
+    async def store_workflow_knowledge(self, workflow_info: Dict[str, Any]):
+        """Store complete workflow documentation for complex procedures."""
+        workflow_name = workflow_info.get("name", "Unknown Workflow")
+
+        document_content = self._build_workflow_document_content(
+            workflow_name, workflow_info
+        )
+        metadata = self._build_workflow_metadata(workflow_name, workflow_info)
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored workflow documentation: %s", workflow_name)

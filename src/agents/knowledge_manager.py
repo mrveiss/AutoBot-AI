@@ -918,38 +918,39 @@ class UnifiedKnowledgeManager:
 
         return status
 
+    async def _search_man_pages_if_enabled(
+        self, query: str, results: Dict[str, Any]
+    ) -> None:
+        """
+        Search man pages and update results if machine-aware is enabled.
+
+        Args:
+            query: Search query string
+            results: Results dictionary to update with man page results.
+            Issue #620.
+        """
+        try:
+            man_results = await self.search_man_page_knowledge(query)
+            results["man_page_results"] = man_results
+            results["total_results"] += len(man_results)
+        except Exception as e:
+            logger.warning("Man page search failed: %s", e)
+
     async def search_knowledge(
         self, query: str, include_man_pages: bool = False
     ) -> Dict[str, Any]:
         """
-        Search across all knowledge sources
-
-        Unified search that queries:
-        - System knowledge (tools, workflows, procedures)
-        - Man pages (if machine-aware and requested)
+        Search across all knowledge sources.
 
         Args:
             query: Search query string
             include_man_pages: Include man page search (requires machine-aware)
 
         Returns:
-            Search results dictionary with:
-            - query: Original query
-            - system_results: Results from system knowledge
-            - man_page_results: Results from man pages (if requested)
-            - total_results: Total result count
+            Search results with query, system_results, man_page_results, total_results
 
         Raises:
             ValueError: If query is empty
-
-        Example:
-            >>> results = await manager.search_knowledge(
-            ...     "steganography",
-            ...     include_man_pages=True
-            ... )
-            >>> print(f"Found {results['total_results']} results")
-            >>> for result in results['system_results']:
-            ...     print(f"- {result['name']}: {result['description']}")
         """
         await self._ensure_initialized()
 
@@ -964,17 +965,11 @@ class UnifiedKnowledgeManager:
         }
 
         # Search system knowledge via knowledge base
-        # Note: Actual implementation would query knowledge_base
         logger.info("Searching knowledge for: %s", query)
 
-        # Search man pages if requested and available
+        # Search man pages if requested and available (Issue #620: uses helper)
         if include_man_pages and self.enable_machine_aware:
-            try:
-                man_results = await self.search_man_page_knowledge(query)
-                results["man_page_results"] = man_results
-                results["total_results"] += len(man_results)
-            except Exception as e:
-                logger.warning("Man page search failed: %s", e)
+            await self._search_man_pages_if_enabled(query, results)
 
         return results
 
