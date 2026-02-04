@@ -35,6 +35,45 @@ class RelationOperationsMixin:
     and provides CRUD operations for relations between entities.
     """
 
+    def _build_relation_objects(
+        self: AutoBotMemoryGraphCore,
+        from_id: str,
+        to_id: str,
+        relation_type: str,
+        strength: float,
+        metadata: Optional[Dict[str, Any]],
+    ) -> tuple:
+        """
+        Build outgoing and reverse relation dictionaries.
+
+        Issue #620.
+
+        Args:
+            from_id: Source entity ID
+            to_id: Target entity ID
+            relation_type: Type of relationship
+            strength: Relationship strength
+            metadata: Optional additional metadata
+
+        Returns:
+            Tuple of (outgoing_relation, reverse_relation)
+        """
+        timestamp = int(datetime.now().timestamp() * 1000)
+
+        relation = {
+            "to": to_id,
+            "type": relation_type,
+            "created_at": timestamp,
+            "metadata": {"strength": strength, **(metadata or {})},
+        }
+        reverse_rel = {
+            "from": from_id,
+            "type": relation_type,
+            "created_at": timestamp,
+        }
+
+        return relation, reverse_rel
+
     async def create_relation(
         self: AutoBotMemoryGraphCore,
         from_entity: str,
@@ -67,7 +106,6 @@ class RelationOperationsMixin:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
         try:
-            # Get entity IDs in parallel
             from_entity_data, to_entity_data = await asyncio.gather(
                 self.get_entity(entity_name=from_entity),
                 self.get_entity(entity_name=to_entity),
@@ -78,19 +116,10 @@ class RelationOperationsMixin:
 
             from_id = from_entity_data["id"]
             to_id = to_entity_data["id"]
-            timestamp = int(datetime.now().timestamp() * 1000)
 
-            relation = {
-                "to": to_id,
-                "type": relation_type,
-                "created_at": timestamp,
-                "metadata": {"strength": strength, **(metadata or {})},
-            }
-            reverse_rel = {
-                "from": from_id,
-                "type": relation_type,
-                "created_at": timestamp,
-            }
+            relation, reverse_rel = self._build_relation_objects(
+                from_id, to_id, relation_type, strength, metadata
+            )
 
             await self._store_outgoing_relation(from_id, relation)
             await self._store_incoming_relation(to_id, reverse_rel)

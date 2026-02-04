@@ -24,6 +24,77 @@ class PortInfo:
     pid: Optional[int] = None
 
 
+def _parse_port_from_address(local_addr: str) -> Optional[int]:
+    """
+    Parse port number from local address string.
+
+    Handles formats: *:port, 0.0.0.0:port, :::port. Issue #620.
+
+    Args:
+        local_addr: Local address string from ss output
+
+    Returns:
+        Port number or None if parsing fails
+    """
+    if ":" not in local_addr:
+        return None
+
+    port_str = local_addr.rsplit(":", 1)[-1]
+    try:
+        return int(port_str)
+    except ValueError:
+        return None
+
+
+def _parse_process_info(parts: List[str]) -> tuple:
+    """
+    Parse process name and PID from ss output line parts.
+
+    Extracts from format: users:(("process",pid,fd)). Issue #620.
+
+    Args:
+        parts: Split line parts from ss output
+
+    Returns:
+        Tuple of (process_name, pid) or (None, None)
+    """
+    process = None
+    pid = None
+
+    if len(parts) >= 6:
+        proc_info = parts[5] if "users:" in parts[5] else ""
+        if proc_info and '(("' in proc_info:
+            try:
+                process = proc_info.split('(("')[1].split('"')[0]
+                pid_str = proc_info.split(",")[1]
+                pid = int(pid_str.replace("pid=", ""))
+            except (IndexError, ValueError):
+                pass
+
+    return process, pid
+
+
+def _deduplicate_ports(ports: List[PortInfo]) -> List[PortInfo]:
+    """
+    Remove duplicate ports from list, keeping first occurrence.
+
+    Issue #620.
+
+    Args:
+        ports: List of PortInfo objects
+
+    Returns:
+        Deduplicated list of PortInfo objects
+    """
+    seen = set()
+    unique_ports = []
+    for p in ports:
+        if p.port not in seen:
+            seen.add(p.port)
+            unique_ports.append(p)
+    return unique_ports
+
+
 def get_listening_ports() -> List[PortInfo]:
     """
     Get all listening TCP ports.
@@ -50,32 +121,11 @@ def get_listening_ports() -> List[PortInfo]:
             if len(parts) < 5:
                 continue
 
-            # Parse local address (format: *:port or 0.0.0.0:port or :::port)
-            local_addr = parts[3]
-            if ":" not in local_addr:
+            port = _parse_port_from_address(parts[3])
+            if port is None:
                 continue
 
-            port_str = local_addr.rsplit(":", 1)[-1]
-            try:
-                port = int(port_str)
-            except ValueError:
-                continue
-
-            # Parse process info if available (format: users:(("process",pid,fd)))
-            process = None
-            pid = None
-            if len(parts) >= 6:
-                proc_info = parts[5] if "users:" in parts[5] else ""
-                if proc_info:
-                    # Extract process name
-                    if '(("' in proc_info:
-                        try:
-                            process = proc_info.split('(("')[1].split('"')[0]
-                            pid_str = proc_info.split(",")[1]
-                            pid = int(pid_str.replace("pid=", ""))
-                        except (IndexError, ValueError):
-                            pass
-
+            process, pid = _parse_process_info(parts)
             ports.append(PortInfo(port=port, process=process, pid=pid))
 
     except subprocess.TimeoutExpired:
@@ -86,15 +136,7 @@ def get_listening_ports() -> List[PortInfo]:
     except Exception as e:
         logger.error("Port scan failed: %s", e)
 
-    # Deduplicate by port
-    seen = set()
-    unique_ports = []
-    for p in ports:
-        if p.port not in seen:
-            seen.add(p.port)
-            unique_ports.append(p)
-
-    return unique_ports
+    return _deduplicate_ports(ports)
 
 
 def _get_ports_netstat() -> List[PortInfo]:

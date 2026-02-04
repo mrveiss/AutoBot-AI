@@ -355,13 +355,87 @@ class CertificateGenerator:
         logger.info(f"Certificate generated for {vm_info.name}: {cert_path}")
         return True
 
+    def _parse_certificate_output(
+        self, output: str
+    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Parse OpenSSL x509 output for subject, issuer, and expiry date.
+
+        Issue #620.
+
+        Args:
+            output: Raw output from openssl x509 command
+
+        Returns:
+            Tuple of (subject, issuer, expires_at)
+        """
+        subject = None
+        issuer = None
+        expires_at = None
+
+        for line in output.strip().split("\n"):
+            if line.startswith("subject="):
+                subject = line.replace("subject=", "").strip()
+            elif line.startswith("issuer="):
+                issuer = line.replace("issuer=", "").strip()
+            elif line.startswith("notAfter="):
+                expires_at = line.replace("notAfter=", "").strip()
+
+        return subject, issuer, expires_at
+
+    def _calculate_expiry_info(
+        self, expires_at: Optional[str]
+    ) -> Tuple[Optional[int], bool]:
+        """
+        Calculate days until expiry and renewal status from expiry date string.
+
+        Issue #620.
+
+        Args:
+            expires_at: Expiry date string in OpenSSL format
+
+        Returns:
+            Tuple of (days_until_expiry, needs_renewal)
+        """
+        if not expires_at:
+            return None, False
+
+        try:
+            expiry_date = datetime.strptime(expires_at, "%b %d %H:%M:%S %Y %Z")
+            days_until_expiry = (expiry_date - datetime.now()).days
+            needs_renewal = days_until_expiry <= self.config.renewal_threshold_days
+            return days_until_expiry, needs_renewal
+        except ValueError:
+            return None, False
+
+    def _verify_certificate(self, cert_path: Path) -> bool:
+        """
+        Verify certificate against CA.
+
+        Issue #620.
+
+        Args:
+            cert_path: Path to certificate file
+
+        Returns:
+            True if certificate is valid
+        """
+        verify_cmd = [
+            "openssl",
+            "verify",
+            "-CAfile",
+            str(self.config.ca_cert_path),
+            str(cert_path),
+        ]
+        verify_result = subprocess.run(verify_cmd, capture_output=True)
+        return verify_result.returncode == 0
+
     def get_certificate_status(self, cert_path: Path) -> CertificateStatus:
         """Get status of a certificate."""
         if not cert_path.exists():
             return CertificateStatus(exists=False, valid=False)
 
         try:
-            # Get certificate info
             cmd = [
                 "openssl",
                 "x509",
@@ -375,43 +449,9 @@ class CertificateGenerator:
             result = subprocess.run(cmd, capture_output=True, check=True)
             output = result.stdout.decode()
 
-            # Parse output
-            subject = None
-            issuer = None
-            expires_at = None
-
-            for line in output.strip().split("\n"):
-                if line.startswith("subject="):
-                    subject = line.replace("subject=", "").strip()
-                elif line.startswith("issuer="):
-                    issuer = line.replace("issuer=", "").strip()
-                elif line.startswith("notAfter="):
-                    expires_at = line.replace("notAfter=", "").strip()
-
-            # Calculate days until expiry
-            days_until_expiry = None
-            needs_renewal = False
-            if expires_at:
-                try:
-                    # Parse OpenSSL date format
-                    expiry_date = datetime.strptime(expires_at, "%b %d %H:%M:%S %Y %Z")
-                    days_until_expiry = (expiry_date - datetime.now()).days
-                    needs_renewal = (
-                        days_until_expiry <= self.config.renewal_threshold_days
-                    )
-                except ValueError:
-                    pass
-
-            # Verify certificate
-            verify_cmd = [
-                "openssl",
-                "verify",
-                "-CAfile",
-                str(self.config.ca_cert_path),
-                str(cert_path),
-            ]
-            verify_result = subprocess.run(verify_cmd, capture_output=True)
-            valid = verify_result.returncode == 0
+            subject, issuer, expires_at = self._parse_certificate_output(output)
+            days_until_expiry, needs_renewal = self._calculate_expiry_info(expires_at)
+            valid = self._verify_certificate(cert_path)
 
             return CertificateStatus(
                 exists=True,
