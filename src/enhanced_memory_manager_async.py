@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 import aiosqlite
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -113,8 +112,10 @@ class TaskEntry:
         Returns:
             Generated task ID string.
         """
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        desc_hash = hashlib.md5(self.description.encode(), usedforsecurity=False).hexdigest()[:8]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        desc_hash = hashlib.md5(
+            self.description.encode(), usedforsecurity=False
+        ).hexdigest()[:8]
         return f"task_{timestamp}_{desc_hash}"
 
 
@@ -164,13 +165,12 @@ class AsyncEnhancedMemoryManager:
         await conn.execute("PRAGMA temp_store=MEMORY")
         await conn.execute("PRAGMA foreign_keys=ON")
 
-    async def _create_tables(self, conn) -> None:
+    async def _create_tasks_table(self, conn) -> None:
         """
-        Create database tables for tasks, execution records, and memory entries.
+        Create tasks table with enhanced schema for task tracking.
 
-        Issue #281: Extracted helper for table creation.
+        Issue #620.
         """
-        # Tasks table with enhanced schema
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS tasks (
@@ -195,7 +195,12 @@ class AsyncEnhancedMemoryManager:
             """
         )
 
-        # Execution records table
+    async def _create_execution_records_table(self, conn) -> None:
+        """
+        Create execution_records table for tracking task execution steps.
+
+        Issue #620.
+        """
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS execution_records (
@@ -213,7 +218,12 @@ class AsyncEnhancedMemoryManager:
             """
         )
 
-        # Memory entries table for general storage
+    async def _create_memory_entries_table(self, conn) -> None:
+        """
+        Create memory_entries table for general storage.
+
+        Issue #620.
+        """
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_entries (
@@ -229,6 +239,17 @@ class AsyncEnhancedMemoryManager:
             )
             """
         )
+
+    async def _create_tables(self, conn) -> None:
+        """
+        Create database tables for tasks, execution records, and memory entries.
+
+        Issue #281: Extracted helper for table creation.
+        Issue #620: Further refactored to use individual table creation helpers.
+        """
+        await self._create_tasks_table(conn)
+        await self._create_execution_records_table(conn)
+        await self._create_memory_entries_table(conn)
 
     async def _create_indexes(self, conn) -> None:
         """
@@ -354,7 +375,8 @@ class AsyncEnhancedMemoryManager:
                 values = list(updates.values()) + [task_id]
 
                 cursor = await conn.execute(
-                    f"UPDATE tasks SET {set_clause} WHERE task_id = ?", values
+                    f"UPDATE tasks SET {set_clause} WHERE task_id = ?",  # nosec B608
+                    values,
                 )
 
                 success = cursor.rowcount > 0
@@ -375,8 +397,8 @@ class AsyncEnhancedMemoryManager:
         await self._init_database()
 
         if not record.record_id:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            hash_input = f'{record.task_id}_{record.action}'.encode()
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            hash_input = f"{record.task_id}_{record.action}".encode()
             record_hash = hashlib.md5(hash_input, usedforsecurity=False).hexdigest()[:8]
             record.record_id = f"exec_{timestamp}_{record_hash}"
 
@@ -470,7 +492,9 @@ class AsyncEnhancedMemoryManager:
                             priority=Priority(row[3]),
                             created_at=datetime.fromtimestamp(row[4]),
                             updated_at=datetime.fromtimestamp(row[5]),
-                            completed_at=datetime.fromtimestamp(row[6]) if row[6] else None,
+                            completed_at=datetime.fromtimestamp(row[6])
+                            if row[6]
+                            else None,
                             assigned_agent=row[7],
                             parent_task_id=row[8],
                             tags=json.loads(row[9] or "[]"),
@@ -604,7 +628,8 @@ class AsyncEnhancedMemoryManager:
                 # Recent activity (last 24 hours)
                 recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
                 cursor = await conn.execute(
-                    "SELECT COUNT(*) FROM tasks WHERE created_at > ?", (recent_timestamp,)
+                    "SELECT COUNT(*) FROM tasks WHERE created_at > ?",
+                    (recent_timestamp,),
                 )
                 stats["recent_tasks"] = (await cursor.fetchone())[0]
 
@@ -629,7 +654,8 @@ class AsyncEnhancedMemoryManager:
             async with aiosqlite.connect(self.db_path) as conn:
                 # Clean up old execution records
                 cursor = await conn.execute(
-                    "DELETE FROM execution_records WHERE timestamp < ?", (cutoff_timestamp,)
+                    "DELETE FROM execution_records WHERE timestamp < ?",
+                    (cutoff_timestamp,),
                 )
                 deleted_executions = cursor.rowcount
 
@@ -642,7 +668,8 @@ class AsyncEnhancedMemoryManager:
 
                 # Clean up old memory entries
                 cursor = await conn.execute(
-                    "DELETE FROM memory_entries WHERE timestamp < ?", (cutoff_timestamp,)
+                    "DELETE FROM memory_entries WHERE timestamp < ?",
+                    (cutoff_timestamp,),
                 )
                 deleted_memories = cursor.rowcount
 

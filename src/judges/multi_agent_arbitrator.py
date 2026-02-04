@@ -305,6 +305,48 @@ class MultiAgentArbitrator(BaseLLMJudge):
                 "consensus_confidence": 0.0,
             }
 
+    def _build_response_sections(
+        self,
+        responses: List[Dict[str, Any]],
+        agent_types: List[str],
+    ) -> str:
+        """
+        Build formatted response sections for arbitration prompt.
+
+        Issue #620.
+        """
+        response_sections = [
+            f"RESPONSE {i+1} - {agent_type.upper()} AGENT:\n{json.dumps(response, indent=2)}"
+            for i, (response, agent_type) in enumerate(zip(responses, agent_types), 1)
+        ]
+        return "\n" + "\n\n".join(response_sections) + "\n\n"
+
+    def _build_arbitration_footer(self, context: Dict[str, Any]) -> str:
+        """
+        Build the footer section of the arbitration prompt with weights and instructions.
+
+        Issue #620.
+        """
+        weights = context.get("weights", {})
+        return f"""
+CONFLICT RESOLUTION STRATEGY: {context.get('conflict_resolution_strategy', 'quality_first')}
+
+DECISION WEIGHTS:
+- Quality Weight: {weights.get('quality', 0.4)}
+- Relevance Weight: {weights.get('relevance', 0.3)}
+- Consistency Weight: {weights.get('consistency', 0.3)}
+
+Please provide your arbitration in the required JSON format with:
+- Clear recommendation for which response is best
+- Detailed reasoning comparing all responses
+- Identification of conflicts or agreements between agents
+- Specific evidence supporting your decision
+- Improvement suggestions for multi-agent coordination
+- Analysis of each agent's strengths for this request type
+
+Focus on selecting the response that provides the most value to the user while maintaining accuracy and appropriateness.
+"""
+
     async def _prepare_judgment_prompt(
         self,
         subject: Any,
@@ -313,8 +355,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
         alternatives: Optional[List[Any]] = None,
         **kwargs,
     ) -> str:
-        """Prepare the prompt for multi-agent arbitration"""
-
+        """Prepare the prompt for multi-agent arbitration. Issue #620: Refactored with helpers."""
         combined_data = subject
         responses = combined_data.get("responses", [])
         agent_types = combined_data.get("agent_types", [])
@@ -338,36 +379,12 @@ USER REQUEST:
 
 AGENT RESPONSES TO EVALUATE:
 """
-
-        # Build response sections using list + join (O(n)) instead of += (O(n²))
-        response_sections = [
-            f"RESPONSE {i+1} - {agent_type.upper()} AGENT:\n{json.dumps(response, indent=2)}"
-            for i, (response, agent_type) in enumerate(zip(responses, agent_types), 1)
-        ]
-        prompt += "\n" + "\n\n".join(response_sections) + "\n\n"
-
-        # Issue #398: Use module-level constant for criteria template
+        prompt += self._build_response_sections(responses, agent_types)
         prompt += f"""
 ARBITRATION CONTEXT:
 {arbitration_context_json}
-{_ARBITRATION_CRITERIA_TEMPLATE}
-CONFLICT RESOLUTION STRATEGY: {context.get('conflict_resolution_strategy', 'quality_first')}
-
-DECISION WEIGHTS:
-- Quality Weight: {context.get('weights', {}).get('quality', 0.4)}
-- Relevance Weight: {context.get('weights', {}).get('relevance', 0.3)}
-- Consistency Weight: {context.get('weights', {}).get('consistency', 0.3)}
-
-Please provide your arbitration in the required JSON format with:
-- Clear recommendation for which response is best
-- Detailed reasoning comparing all responses
-- Identification of conflicts or agreements between agents
-- Specific evidence supporting your decision
-- Improvement suggestions for multi-agent coordination
-- Analysis of each agent's strengths for this request type
-
-Focus on selecting the response that provides the most value to the user while maintaining accuracy and appropriateness.
-"""
+{_ARBITRATION_CRITERIA_TEMPLATE}"""
+        prompt += self._build_arbitration_footer(context)
 
         return prompt.strip()
 

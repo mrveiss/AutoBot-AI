@@ -388,14 +388,12 @@ class EnterpriseFeatureManager:
         self.features.update(self._get_config_and_deployment_features())
         logger.info("Initialized %s enterprise features", len(self.features))
 
-    async def enable_feature(self, feature_name: str) -> Dict[str, Any]:
-        """Enable a specific enterprise feature"""
-        if feature_name not in self.features:
-            raise ValueError(f"Unknown feature: {feature_name}")
+    def _check_feature_dependencies(self, feature: EnterpriseFeature) -> List[str]:
+        """
+        Check and return list of missing dependencies for a feature.
 
-        feature = self.features[feature_name]
-
-        # Check dependencies
+        Issue #620.
+        """
         missing_deps = []
         for dep in feature.dependencies:
             if (
@@ -403,56 +401,78 @@ class EnterpriseFeatureManager:
                 or self.features[dep].status != FeatureStatus.ENABLED
             ):
                 missing_deps.append(dep)
+        return missing_deps
+
+    def _build_success_response(
+        self, feature_name: str, feature: EnterpriseFeature, result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build success response dictionary for enabled feature.
+
+        Issue #620.
+        """
+        return {
+            "status": "success",
+            "message": f"Feature {feature_name} enabled successfully",
+            "feature": feature_name,
+            "capabilities_unlocked": result.get("capabilities", []),
+            "configuration": feature.configuration,
+        }
+
+    def _build_error_response(
+        self, feature_name: str, error_message: str
+    ) -> Dict[str, Any]:
+        """
+        Build error response dictionary for feature enablement failure.
+
+        Issue #620.
+        """
+        return {
+            "status": "error",
+            "message": error_message,
+            "feature": feature_name,
+        }
+
+    async def enable_feature(self, feature_name: str) -> Dict[str, Any]:
+        """Enable a specific enterprise feature. Issue #620: Refactored with helpers."""
+        if feature_name not in self.features:
+            raise ValueError(f"Unknown feature: {feature_name}")
+
+        feature = self.features[feature_name]
+        missing_deps = self._check_feature_dependencies(feature)
 
         if missing_deps:
-            return {
-                "status": "error",
-                "message": f"Missing dependencies: {missing_deps}",
-                "feature": feature_name,
-            }
+            return self._build_error_response(
+                feature_name, f"Missing dependencies: {missing_deps}"
+            )
 
         try:
             feature.status = FeatureStatus.ENABLING
             logger.info("Enabling enterprise feature: %s", feature_name)
 
-            # Feature-specific enablement logic
             result = await self._enable_feature_implementation(feature_name, feature)
 
             if result["success"]:
                 feature.status = FeatureStatus.ENABLED
                 feature.enabled_at = datetime.now()
 
-                # Start health monitoring if configured
                 if feature.health_check_endpoint:
                     await self._start_health_monitoring(feature_name, feature)
 
-                logger.info("✅ Enterprise feature enabled: %s", feature_name)
-                return {
-                    "status": "success",
-                    "message": f"Feature {feature_name} enabled successfully",
-                    "feature": feature_name,
-                    "capabilities_unlocked": result.get("capabilities", []),
-                    "configuration": feature.configuration,
-                }
+                logger.info("Enterprise feature enabled: %s", feature_name)
+                return self._build_success_response(feature_name, feature, result)
             else:
                 feature.status = FeatureStatus.ERROR
-                logger.error("❌ Failed to enable feature: %s", feature_name)
-                return {
-                    "status": "error",
-                    "message": (
-                        f"Failed to enable {feature_name}: {result.get('error', 'Unknown error')}"
-                    ),
-                    "feature": feature_name,
-                }
+                logger.error("Failed to enable feature: %s", feature_name)
+                error_msg = f"Failed to enable {feature_name}: {result.get('error', 'Unknown error')}"
+                return self._build_error_response(feature_name, error_msg)
 
         except Exception as e:
             feature.status = FeatureStatus.ERROR
             logger.error("Exception enabling feature %s: %s", feature_name, e)
-            return {
-                "status": "error",
-                "message": f"Exception enabling {feature_name}: {str(e)}",
-                "feature": feature_name,
-            }
+            return self._build_error_response(
+                feature_name, f"Exception enabling {feature_name}: {str(e)}"
+            )
 
     def _get_feature_enablers(self) -> Dict[str, Any]:
         """Get feature name to enabler method mapping (Issue #315 - dispatch table)."""

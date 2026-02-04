@@ -17,11 +17,11 @@ from typing import Any, Dict, Optional
 import aiofiles
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
+from src.config import UnifiedConfigManager
 from src.constants.network_constants import ServiceURLs
 from src.constants.security_constants import SecurityConstants
 from src.constants.threshold_constants import TimingConstants
 from src.source_attribution import SourceType, track_source
-from src.config import UnifiedConfigManager
 from src.utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
@@ -138,7 +138,9 @@ class ResearchBrowserSession:
             return True
 
         except Exception as e:
-            logger.error("Failed to initialize browser session %s: %s", self.session_id, e)
+            logger.error(
+                "Failed to initialize browser session %s: %s", self.session_id, e
+            )
             self.status = "error"
             return False
 
@@ -205,58 +207,67 @@ class ResearchBrowserSession:
         """
         )
 
+    async def _check_interaction_required(self, url: str) -> Optional[Dict[str, Any]]:
+        """
+        Check if user interaction is required after navigation.
+
+        Returns response dict if interaction needed, None otherwise. Issue #620.
+        """
+        interaction_data = await self.page.evaluate(
+            "window.autobot_interaction_required"
+        )
+        if interaction_data:
+            self.interaction_required = True
+            self.interaction_message = interaction_data.get(
+                "message", "User interaction required"
+            )
+            self.status = "waiting_for_user"
+            return {
+                "success": True,
+                "url": url,
+                "title": await self.page.title(),
+                "interaction_required": True,
+                "interaction_message": self.interaction_message,
+                "session_id": self.session_id,
+            }
+        return None
+
+    def _track_navigation_source(self, url: str, title: str) -> None:
+        """
+        Track navigation as a source for attribution. Issue #620.
+        """
+        track_source(
+            SourceType.WEB_SEARCH,
+            f"Navigated to {title}",
+            reliability="medium",
+            metadata={
+                "url": url,
+                "title": title,
+                "session_id": self.session_id,
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
     async def navigate_to(self, url: str, wait_for_load: bool = True) -> Dict[str, Any]:
-        """Navigate to a URL and return page information"""
+        """Navigate to a URL and return page information."""
         if not self.page:
             return {"success": False, "error": "Browser not initialized"}
 
         try:
             self.current_url = url
             self.last_activity = datetime.now()
-
-            # Navigate with timeout
             await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
             if wait_for_load:
-                # Wait a bit for dynamic content
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
-            # Check for interaction requirements
-            interaction_data = await self.page.evaluate(
-                "window.autobot_interaction_required"
-            )
-            if interaction_data:
-                self.interaction_required = True
-                self.interaction_message = interaction_data.get(
-                    "message", "User interaction required"
-                )
-                self.status = "waiting_for_user"
+            interaction_response = await self._check_interaction_required(url)
+            if interaction_response:
+                return interaction_response
 
-                return {
-                    "success": True,
-                    "url": url,
-                    "title": await self.page.title(),
-                    "interaction_required": True,
-                    "interaction_message": self.interaction_message,
-                    "session_id": self.session_id,
-                }
-
-            # Get basic page information
             title = await self.page.title()
             content_length = len(await self.page.content())
-
-            # Track this as a source
-            track_source(
-                SourceType.WEB_SEARCH,
-                f"Navigated to {title}",
-                reliability="medium",
-                metadata={
-                    "url": url,
-                    "title": title,
-                    "session_id": self.session_id,
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
+            self._track_navigation_source(url, title)
 
             return {
                 "success": True,
@@ -353,7 +364,9 @@ class ResearchBrowserSession:
                     self.status = "active"
                     return True
 
-                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every 2 seconds
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_DELAY
+                )  # Check every 2 seconds
 
             except Exception as e:
                 logger.error("Error checking interaction status: %s", e)
@@ -380,7 +393,9 @@ class ResearchBrowserSession:
                     if await asyncio.to_thread(os.path.exists, mhtml_file):
                         await asyncio.to_thread(os.remove, mhtml_file)
                 except Exception as e:
-                    logger.warning("Failed to clean up MHTML file %s: %s", mhtml_file, e)
+                    logger.warning(
+                        "Failed to clean up MHTML file %s: %s", mhtml_file, e
+                    )
 
             if self.mhtml_files:
                 await asyncio.gather(

@@ -304,6 +304,30 @@ class CaptchaSolver:
             logger.debug("OCR attempt failed: %s", e)
             return None, 0.0
 
+    def _get_confidence_level(self, confidence: float) -> SolverConfidence:
+        """
+        Determine confidence level from numeric confidence score. Issue #620.
+        """
+        if confidence >= 0.9:
+            return SolverConfidence.HIGH
+        elif confidence >= 0.7:
+            return SolverConfidence.MEDIUM
+        return SolverConfidence.LOW
+
+    def _build_text_captcha_failure(
+        self, best_result: Optional[str]
+    ) -> CaptchaSolveResult:
+        """
+        Build failure result for text CAPTCHA solving. Issue #620.
+        """
+        return CaptchaSolveResult(
+            success=False,
+            captcha_type=CaptchaType.TEXT,
+            confidence=SolverConfidence.LOW if best_result else SolverConfidence.NONE,
+            error_message="OCR confidence too low",
+            requires_human=True,
+        )
+
     async def _solve_text_captcha(
         self,
         image: Image.Image,
@@ -329,14 +353,10 @@ class CaptchaSolver:
                 requires_human=True,
             )
 
-        # Preprocess image for better OCR
         processed_images = await self._preprocess_for_ocr(image)
         config = self._get_tesseract_config(char_set)
+        best_result, best_confidence = None, 0.0
 
-        best_result = None
-        best_confidence = 0.0
-
-        # Process each image variant (Issue #315: reduced nesting)
         for processed_image in processed_images:
             text, confidence = self._process_ocr_result(
                 processed_image, config, char_set, expected_length
@@ -346,29 +366,15 @@ class CaptchaSolver:
                 best_result = text
 
         if best_result and best_confidence >= self.MIN_CONFIDENCE_THRESHOLD:
-            confidence_level = (
-                SolverConfidence.HIGH
-                if best_confidence >= 0.9
-                else SolverConfidence.MEDIUM
-                if best_confidence >= 0.7
-                else SolverConfidence.LOW
-            )
-
             return CaptchaSolveResult(
                 success=True,
                 captcha_type=CaptchaType.TEXT,
                 solution=best_result,
-                confidence=confidence_level,
+                confidence=self._get_confidence_level(best_confidence),
                 requires_human=False,
             )
 
-        return CaptchaSolveResult(
-            success=False,
-            captcha_type=CaptchaType.TEXT,
-            confidence=SolverConfidence.LOW if best_result else SolverConfidence.NONE,
-            error_message="OCR confidence too low",
-            requires_human=True,
-        )
+        return self._build_text_captcha_failure(best_result)
 
     async def _solve_math_captcha(self, image: Image.Image) -> CaptchaSolveResult:
         """

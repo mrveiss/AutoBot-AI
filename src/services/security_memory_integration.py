@@ -506,81 +506,7 @@ class SecurityMemoryIntegration:
             tags=["security", "vulnerability", severity, cve_id or "no-cve"],
         )
 
-    def _extract_params_from_request(
-        self, request: VulnerabilityRequest
-    ) -> tuple[
-        str,
-        str,
-        Optional[str],
-        str,
-        str,
-        str,
-        Optional[int],
-        Optional[str],
-        Optional[list[str]],
-        Optional[dict[str, Any]],
-    ]:
-        """
-        Extract vulnerability parameters from a VulnerabilityRequest object.
-
-        Issue #620.
-        """
-        return (
-            request.assessment_id,
-            request.host_ip,
-            request.cve_id,
-            request.title,
-            request.severity,
-            request.description,
-            request.affected_port,
-            request.affected_service,
-            request.references,
-            request.metadata,
-        )
-
-    def _extract_params_from_kwargs(
-        self,
-        assessment_id: str,
-        host_ip: str,
-        cve_id: Optional[str],
-        title: str,
-        severity: str,
-        description: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
-        references: Optional[list[str]],
-        metadata: Optional[dict[str, Any]],
-    ) -> tuple[
-        str,
-        str,
-        Optional[str],
-        str,
-        str,
-        str,
-        Optional[int],
-        Optional[str],
-        Optional[list[str]],
-        Optional[dict[str, Any]],
-    ]:
-        """
-        Extract vulnerability parameters from keyword arguments.
-
-        Issue #620.
-        """
-        return (
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
-        )
-
-    def _extract_vulnerability_params(
+    def _normalize_to_request(
         self,
         request: Optional[VulnerabilityRequest],
         assessment_id: Optional[str],
@@ -593,85 +519,60 @@ class SecurityMemoryIntegration:
         affected_service: Optional[str],
         references: Optional[list[str]],
         metadata: Optional[dict[str, Any]],
-    ) -> tuple[
-        str,
-        str,
-        Optional[str],
-        str,
-        str,
-        str,
-        Optional[int],
-        Optional[str],
-        Optional[list[str]],
-        Optional[dict[str, Any]],
-    ]:
+    ) -> VulnerabilityRequest:
         """
-        Extract and validate vulnerability parameters from request or kwargs.
-
-        Issue #620.
+        Normalize parameters into a VulnerabilityRequest object. Issue #620.
         """
         if request is not None:
-            return self._extract_params_from_request(request)
+            return request
         if assessment_id is None or host_ip is None:
             raise ValueError(
                 "Either 'request' object or 'assessment_id' and 'host_ip' required"
             )
-        return self._extract_params_from_kwargs(
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
+        return VulnerabilityRequest(
+            assessment_id=assessment_id,
+            host_ip=host_ip,
+            cve_id=cve_id,
+            title=title,
+            severity=severity,
+            description=description,
+            affected_port=affected_port,
+            affected_service=affected_service,
+            references=references,
+            metadata=metadata,
         )
 
     async def _build_and_store_vulnerability(
-        self,
-        assessment_id: str,
-        host_ip: str,
-        cve_id: Optional[str],
-        title: str,
-        severity: str,
-        description: str,
-        affected_port: Optional[int],
-        affected_service: Optional[str],
-        references: Optional[list[str]],
-        metadata: Optional[dict[str, Any]],
+        self, req: VulnerabilityRequest
     ) -> dict[str, Any]:
         """
-        Build observations, store entity, and create relations for a vulnerability.
-
-        Issue #620.
+        Build observations, store entity, and create relations. Issue #620.
         """
-        vuln_name = cve_id or title or "Unknown Vulnerability"
-        entity_name = f"Vuln: {vuln_name} on {host_ip}"
+        vuln_name = req.cve_id or req.title or "Unknown Vulnerability"
+        entity_name = f"Vuln: {vuln_name} on {req.host_ip}"
         observations = self._build_vuln_observations(
             vuln_name,
-            severity,
-            host_ip,
-            description,
-            affected_port,
-            affected_service,
-            references,
+            req.severity,
+            req.host_ip,
+            req.description,
+            req.affected_port,
+            req.affected_service,
+            req.references,
         )
         entity = await self._store_vulnerability_in_memory(
             entity_name,
             observations,
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            affected_port,
-            affected_service,
-            metadata,
+            req.assessment_id,
+            req.host_ip,
+            req.cve_id,
+            req.title,
+            req.severity,
+            req.affected_port,
+            req.affected_service,
+            req.metadata,
         )
         await self._create_vuln_relations(
-            host_ip, entity_name, affected_port, affected_service
+            req.host_ip, entity_name, req.affected_port, req.affected_service
         )
         logger.info("Created vulnerability entity: %s", entity_name)
         return entity
@@ -704,18 +605,7 @@ class SecurityMemoryIntegration:
         Returns:
             dict[str, Any]: Created entity data.
         """
-        (
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
-        ) = self._extract_vulnerability_params(
+        req = self._normalize_to_request(
             request,
             assessment_id,
             host_ip,
@@ -729,18 +619,7 @@ class SecurityMemoryIntegration:
             metadata,
         )
         await self.ensure_initialized()
-        return await self._build_and_store_vulnerability(
-            assessment_id,
-            host_ip,
-            cve_id,
-            title,
-            severity,
-            description,
-            affected_port,
-            affected_service,
-            references,
-            metadata,
-        )
+        return await self._build_and_store_vulnerability(req)
 
     async def _create_security_relation(
         self,
