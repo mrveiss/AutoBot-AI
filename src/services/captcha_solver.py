@@ -134,6 +134,46 @@ class CaptchaSolver:
             logger.warning("OpenCV not available")
             return False
 
+    async def _route_to_solver(
+        self,
+        image: Image.Image,
+        captcha_type: CaptchaType,
+        expected_length: Optional[int],
+        char_set: Optional[str],
+    ) -> CaptchaSolveResult:
+        """
+        Route CAPTCHA to appropriate solver based on type.
+
+        Args:
+            image: PIL Image of the CAPTCHA
+            captcha_type: Detected or specified CAPTCHA type
+            expected_length: Expected solution length
+            char_set: Expected character set
+
+        Returns:
+            CaptchaSolveResult from the appropriate solver
+
+        Issue #620.
+        """
+        if captcha_type == CaptchaType.TEXT:
+            return await self._solve_text_captcha(image, expected_length, char_set)
+        if captcha_type == CaptchaType.MATH:
+            return await self._solve_math_captcha(image)
+        if captcha_type in (
+            CaptchaType.RECAPTCHA,
+            CaptchaType.HCAPTCHA,
+            CaptchaType.CLOUDFLARE,
+        ):
+            return CaptchaSolveResult(
+                success=False,
+                captcha_type=captcha_type,
+                confidence=SolverConfidence.NONE,
+                error_message=f"{captcha_type.value} requires human intervention",
+                requires_human=True,
+            )
+        # Default: try text solver
+        return await self._solve_text_captcha(image, expected_length, char_set)
+
     async def attempt_solve(
         self,
         image_data: bytes,
@@ -158,39 +198,14 @@ class CaptchaSolver:
         start_time = time.time()
 
         try:
-            # Convert bytes to PIL Image
             image = Image.open(io.BytesIO(image_data))
 
-            # Detect CAPTCHA type if unknown
             if captcha_type == CaptchaType.UNKNOWN:
                 captcha_type = await self._detect_captcha_type(image)
 
-            # Route to appropriate solver
-            if captcha_type == CaptchaType.TEXT:
-                result = await self._solve_text_captcha(
-                    image, expected_length, char_set
-                )
-            elif captcha_type == CaptchaType.MATH:
-                result = await self._solve_math_captcha(image)
-            elif captcha_type in (
-                CaptchaType.RECAPTCHA,
-                CaptchaType.HCAPTCHA,
-                CaptchaType.CLOUDFLARE,
-            ):
-                # These require human intervention
-                result = CaptchaSolveResult(
-                    success=False,
-                    captcha_type=captcha_type,
-                    confidence=SolverConfidence.NONE,
-                    error_message=f"{captcha_type.value} requires human intervention",
-                    requires_human=True,
-                )
-            else:
-                # Try text solver as default
-                result = await self._solve_text_captcha(
-                    image, expected_length, char_set
-                )
-
+            result = await self._route_to_solver(
+                image, captcha_type, expected_length, char_set
+            )
             result.processing_time_ms = (time.time() - start_time) * 1000
             return result
 
@@ -249,7 +264,11 @@ class CaptchaSolver:
         return config
 
     def _process_ocr_result(
-        self, image, config: str, char_set: Optional[str], expected_length: Optional[int]
+        self,
+        image,
+        config: str,
+        char_set: Optional[str],
+        expected_length: Optional[int],
     ) -> tuple:
         """Process single OCR attempt (Issue #315: extracted helper).
 
@@ -330,7 +349,9 @@ class CaptchaSolver:
             confidence_level = (
                 SolverConfidence.HIGH
                 if best_confidence >= 0.9
-                else SolverConfidence.MEDIUM if best_confidence >= 0.7 else SolverConfidence.LOW
+                else SolverConfidence.MEDIUM
+                if best_confidence >= 0.7
+                else SolverConfidence.LOW
             )
 
             return CaptchaSolveResult(
@@ -393,9 +414,7 @@ class CaptchaSolver:
             requires_human=True,
         )
 
-    async def _preprocess_for_ocr(
-        self, image: Image.Image
-    ) -> List[Image.Image]:
+    async def _preprocess_for_ocr(self, image: Image.Image) -> List[Image.Image]:
         """
         Apply various preprocessing techniques to improve OCR accuracy.
 
@@ -429,7 +448,9 @@ class CaptchaSolver:
 
         # 5. Scaled up (2x) for small CAPTCHAs
         if image.width < 200:
-            scaled = gray.resize((gray.width * 2, gray.height * 2), Image.Resampling.LANCZOS)
+            scaled = gray.resize(
+                (gray.width * 2, gray.height * 2), Image.Resampling.LANCZOS
+            )
             results.append(scaled.point(lambda x: 255 if x > 128 else 0))
 
         # 6. Denoised with median filter
@@ -508,8 +529,12 @@ class CaptchaSolver:
         expr = _TRAILING_EQUALS_RE.sub("", expr)
         # Replace text/symbol operators with standard operators
         replacements = [
-            ("×", "*"), ("÷", "/"), ("X", "*"),
-            ("PLUS", "+"), ("MINUS", "-"), ("TIMES", "*"),
+            ("×", "*"),
+            ("÷", "/"),
+            ("X", "*"),
+            ("PLUS", "+"),
+            ("MINUS", "-"),
+            ("TIMES", "*"),
         ]
         for old, new in replacements:
             expr = expr.replace(old, new)

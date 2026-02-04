@@ -21,7 +21,6 @@ from src.code_intelligence.llm_pattern_analysis.data_models import (
 )
 from src.code_intelligence.llm_pattern_analysis.types import UsagePatternType
 
-
 # =============================================================================
 # Token Tracker
 # =============================================================================
@@ -170,6 +169,75 @@ class CostCalculator:
     }
 
     @classmethod
+    def _estimate_avg_tokens(cls, model_pats: List[UsagePattern]) -> tuple:
+        """
+        Estimate average token counts based on pattern types.
+
+        Args:
+            model_pats: List of patterns for a specific model
+
+        Returns:
+            Tuple of (avg_prompt_tokens, avg_completion_tokens)
+
+        Issue #620.
+        """
+        avg_prompt = 500
+        avg_completion = 300
+
+        for pat in model_pats:
+            if pat.pattern_type == UsagePatternType.EMBEDDING:
+                avg_prompt = 200
+                avg_completion = 0
+            elif pat.pattern_type == UsagePatternType.CODE_GENERATION:
+                avg_prompt = 800
+                avg_completion = 600
+
+        return avg_prompt, avg_completion
+
+    @classmethod
+    def _create_cost_estimate(
+        cls,
+        model: str,
+        daily_calls: int,
+        avg_prompt: int,
+        avg_completion: int,
+        pricing: Dict[str, float],
+    ) -> CostEstimate:
+        """
+        Create a CostEstimate for a model.
+
+        Args:
+            model: Model name
+            daily_calls: Estimated daily API calls
+            avg_prompt: Average prompt tokens
+            avg_completion: Average completion tokens
+            pricing: Pricing dict with prompt/completion costs
+
+        Returns:
+            CostEstimate instance
+
+        Issue #620.
+        """
+        daily_prompt_cost = (daily_calls * avg_prompt / 1000) * pricing["prompt"]
+        daily_completion_cost = (daily_calls * avg_completion / 1000) * pricing[
+            "completion"
+        ]
+        daily_cost = daily_prompt_cost + daily_completion_cost
+
+        return CostEstimate(
+            model=model,
+            daily_calls=daily_calls,
+            avg_prompt_tokens=avg_prompt,
+            avg_completion_tokens=avg_completion,
+            cost_per_1k_prompt=pricing["prompt"],
+            cost_per_1k_completion=pricing["completion"],
+            daily_cost_usd=daily_cost,
+            monthly_cost_usd=daily_cost * 30,
+            optimization_potential_percent=25.0,
+            optimized_monthly_cost_usd=daily_cost * 30 * 0.75,
+        )
+
+    @classmethod
     def estimate_costs(
         cls,
         patterns: List[UsagePattern],
@@ -187,7 +255,6 @@ class CostCalculator:
         """
         estimates = []
 
-        # Group by detected model or use default
         model_patterns: Dict[str, List[UsagePattern]] = {}
         for pattern in patterns:
             model = pattern.model_used or "unknown"
@@ -196,45 +263,14 @@ class CostCalculator:
             model_patterns[model].append(pattern)
 
         for model, model_pats in model_patterns.items():
-            # Get pricing
             pricing = cls.MODEL_PRICING.get(
-                model,
-                cls.MODEL_PRICING.get("gpt-3.5-turbo"),  # Default
+                model, cls.MODEL_PRICING.get("gpt-3.5-turbo")
             )
-
-            # Estimate daily calls
             daily_calls = len(model_pats) * daily_call_multiplier
+            avg_prompt, avg_completion = cls._estimate_avg_tokens(model_pats)
 
-            # Estimate average tokens (based on pattern type)
-            avg_prompt = 500
-            avg_completion = 300
-
-            for pat in model_pats:
-                if pat.pattern_type == UsagePatternType.EMBEDDING:
-                    avg_prompt = 200
-                    avg_completion = 0
-                elif pat.pattern_type == UsagePatternType.CODE_GENERATION:
-                    avg_prompt = 800
-                    avg_completion = 600
-
-            # Calculate costs
-            daily_prompt_cost = (daily_calls * avg_prompt / 1000) * pricing["prompt"]
-            daily_completion_cost = (
-                daily_calls * avg_completion / 1000
-            ) * pricing["completion"]
-            daily_cost = daily_prompt_cost + daily_completion_cost
-
-            estimate = CostEstimate(
-                model=model,
-                daily_calls=daily_calls,
-                avg_prompt_tokens=avg_prompt,
-                avg_completion_tokens=avg_completion,
-                cost_per_1k_prompt=pricing["prompt"],
-                cost_per_1k_completion=pricing["completion"],
-                daily_cost_usd=daily_cost,
-                monthly_cost_usd=daily_cost * 30,
-                optimization_potential_percent=25.0,  # Conservative estimate
-                optimized_monthly_cost_usd=daily_cost * 30 * 0.75,
+            estimate = cls._create_cost_estimate(
+                model, daily_calls, avg_prompt, avg_completion, pricing
             )
             estimates.append(estimate)
 

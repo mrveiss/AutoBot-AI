@@ -79,6 +79,44 @@ class ChatAgent(StandardizedAgent):
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
 
+    def _build_success_response(
+        self, response_text: str, response: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build success response dictionary for chat message processing.
+
+        Issue #620.
+        """
+        return {
+            "status": "success",
+            "response_text": response_text,
+            "agent_type": "chat",
+            "model_used": self.model_name,
+            "token_usage": response.get("usage", {}),
+            "metadata": {
+                "agent": "ChatAgent",
+                "processing_time": "fast",
+                "complexity": "low",
+            },
+        }
+
+    def _build_error_response(self, error: Exception) -> Dict[str, Any]:
+        """
+        Build error response dictionary for chat message processing.
+
+        Issue #620.
+        """
+        return {
+            "status": "error",
+            "response_text": (
+                "I'm having trouble processing your message right now. "
+                "Could you try rephrasing it?"
+            ),
+            "error": str(error),
+            "agent_type": "chat",
+            "model_used": self.model_name,
+        }
+
     async def process_chat_message(
         self,
         message: str,
@@ -95,6 +133,8 @@ class ChatAgent(StandardizedAgent):
 
         Returns:
             Dict containing the chat response and metadata
+
+        Issue #620: Refactored to use extracted helper methods.
         """
         try:
             logger.info("Chat Agent processing message: %s...", message[:50])
@@ -121,33 +161,13 @@ class ChatAgent(StandardizedAgent):
                 top_p=LLMDefaults.DEFAULT_TOP_P,
             )
 
-            # Extract response content
+            # Extract response content and build response
             response_text = self._extract_response_content(response)
-
-            return {
-                "status": "success",
-                "response_text": response_text,
-                "agent_type": "chat",
-                "model_used": self.model_name,
-                "token_usage": response.get("usage", {}),
-                "metadata": {
-                    "agent": "ChatAgent",
-                    "processing_time": "fast",
-                    "complexity": "low",
-                },
-            }
+            return self._build_success_response(response_text, response)
 
         except Exception as e:
             logger.error("Chat Agent error processing message: %s", e)
-            return {
-                "status": "error",
-                "response_text": (
-                    "I'm having trouble processing your message right now. Could you try rephrasing it?"
-                ),
-                "error": str(e),
-                "agent_type": "chat",
-                "model_used": self.model_name,
-            }
+            return self._build_error_response(e)
 
     def _get_chat_system_prompt(self) -> str:
         """Get optimized system prompt for chat interactions."""

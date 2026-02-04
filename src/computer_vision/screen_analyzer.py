@@ -20,7 +20,6 @@ import numpy as np
 from PIL import Image
 
 from src.desktop_streaming_manager import desktop_streaming
-from src.task_execution_tracker import task_tracker
 from src.enhanced_memory_manager import TaskPriority
 from src.multimodal_processor import (
     ModalityType,
@@ -28,6 +27,7 @@ from src.multimodal_processor import (
     ProcessingIntent,
     unified_processor,
 )
+from src.task_execution_tracker import task_tracker
 
 from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEngine
 from .collections import ProcessingResultExtractor, UIElementCollection
@@ -55,6 +55,21 @@ class ScreenAnalyzer:
 
         logger.info("Screen Analyzer initialized with multi-modal processing")
 
+    def _build_analysis_outputs(
+        self, ui_elements: List[UIElement], screen_state: ScreenState
+    ) -> Dict[str, Any]:
+        """
+        Build output dictionary for task tracking.
+
+        Issue #620.
+        """
+        return {
+            "elements_detected": len(ui_elements),
+            "text_regions": len(screen_state.text_regions),
+            "automation_opportunities": len(screen_state.automation_opportunities),
+            "confidence_score": screen_state.confidence_score,
+        }
+
     async def analyze_current_screen(
         self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
     ) -> ScreenState:
@@ -62,6 +77,7 @@ class ScreenAnalyzer:
         Analyze the current screen state comprehensively.
 
         Issue #281: Refactored from 141 lines to use extracted helper methods.
+        Issue #620: Further refactored to reduce function length.
         """
         async with task_tracker.track_task(
             "Screen Analysis",
@@ -77,7 +93,10 @@ class ScreenAnalyzer:
                     raise RuntimeError("Failed to capture screenshot")
 
                 # Stage 2: Process multimodal inputs
-                processing_results, primary_result = await self._process_multimodal_inputs(
+                (
+                    processing_results,
+                    primary_result,
+                ) = await self._process_multimodal_inputs(
                     screenshot, session_id, context_audio
                 )
 
@@ -103,14 +122,7 @@ class ScreenAnalyzer:
                 # Update cache and set outputs
                 self._update_screenshot_cache(screenshot)
                 task_context.set_outputs(
-                    {
-                        "elements_detected": len(ui_elements),
-                        "text_regions": len(screen_state.text_regions),
-                        "automation_opportunities": len(
-                            screen_state.automation_opportunities
-                        ),
-                        "confidence_score": screen_state.confidence_score,
-                    }
+                    self._build_analysis_outputs(ui_elements, screen_state)
                 )
 
                 logger.info(
@@ -235,7 +247,9 @@ class ScreenAnalyzer:
             screenshot=screenshot,
             ui_elements=ui_elements,
             text_regions=extractor.extract_text_regions(primary_result.result_data),
-            dominant_colors=extractor.extract_dominant_colors(primary_result.result_data),
+            dominant_colors=extractor.extract_dominant_colors(
+                primary_result.result_data
+            ),
             layout_structure=extractor.extract_layout_structure(
                 primary_result.result_data
             ),
@@ -252,7 +266,9 @@ class ScreenAnalyzer:
         try:
             if session_id:
                 # Use desktop streaming to get screenshot
-                session_info = desktop_streaming.vnc_manager.get_session_info(session_id)
+                session_info = desktop_streaming.vnc_manager.get_session_info(
+                    session_id
+                )
                 if session_info:
                     screenshot_base64 = await desktop_streaming._get_session_screenshot(
                         session_id
@@ -315,9 +331,7 @@ class ScreenAnalyzer:
 
             # Enhance with advanced classification
             for i, element in enumerate(detected_elements):
-                ui_element = await self._classify_single_element(
-                    screenshot, element, i
-                )
+                ui_element = await self._classify_single_element(screenshot, element, i)
                 if ui_element:
                     ui_elements.append(ui_element)
 

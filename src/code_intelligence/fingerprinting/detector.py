@@ -20,23 +20,24 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.code_intelligence.fingerprinting.types import (
-    CloneType,
-    FingerprintType,
-    CloneSeverity,
-    CodeFragment,
-    Fingerprint,
-    CloneInstance,
-    CloneGroup,
-    CloneDetectionReport,
-)
 from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
 from src.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
 from src.code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from src.code_intelligence.fingerprinting.types import (
+    CloneDetectionReport,
+    CloneGroup,
+    CloneInstance,
+    CloneSeverity,
+    CloneType,
+    CodeFragment,
+    Fingerprint,
+    FingerprintType,
+)
 
 # Issue #607: Import shared caches for performance optimization
 try:
     from src.code_intelligence.shared.ast_cache import get_ast_with_content
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -225,7 +226,8 @@ class CloneDetector:
 
         logger.info(
             "Clone detection complete: %d groups, %.1f%% duplication",
-            len(clone_groups), report.duplication_percentage
+            len(clone_groups),
+            report.duplication_percentage,
         )
 
         return report
@@ -475,9 +477,7 @@ class CloneDetector:
             total_duplicated_lines=total_lines,
         )
 
-    def _detect_type2_clones(
-        self, type1_groups: List[CloneGroup]
-    ) -> List[CloneGroup]:
+    def _detect_type2_clones(self, type1_groups: List[CloneGroup]) -> List[CloneGroup]:
         """
         Detect Type 2 (renamed) clones, excluding Type 1 clones.
 
@@ -496,7 +496,8 @@ class CloneDetector:
 
             # Filter out fragments already in Type 1 groups
             valid_fps = [
-                fp for fp in fingerprints
+                fp
+                for fp in fingerprints
                 if (fp.fragment.file_path, fp.fragment.start_line, fp.fragment.end_line)
                 not in type1_fragments
             ]
@@ -513,7 +514,9 @@ class CloneDetector:
 
             # Create group if we have enough valid fingerprints
             if len(valid_fps) >= 2:
-                clone_groups.append(self._create_type2_clone_group(hash_value, valid_fps))
+                clone_groups.append(
+                    self._create_type2_clone_group(hash_value, valid_fps)
+                )
 
         return clone_groups
 
@@ -578,6 +581,38 @@ class CloneDetector:
             total_duplicated_lines=total_lines,
         )
 
+    def _find_similar_fragments(
+        self,
+        frag1: CodeFragment,
+        candidates: List[CodeFragment],
+        start_idx: int,
+        processed: Set[Tuple[str, int, int]],
+    ) -> List[Tuple[CodeFragment, float]]:
+        """
+        Find fragments similar to frag1 from candidates.
+
+        Args:
+            frag1: Fragment to find matches for
+            candidates: List of candidate fragments
+            start_idx: Index to start searching from
+            processed: Set of already processed fragment keys
+
+        Returns:
+            List of (fragment, similarity) tuples meeting threshold
+
+        Issue #620.
+        """
+        similar: List[Tuple[CodeFragment, float]] = []
+        for j, frag2 in enumerate(candidates):
+            if start_idx >= j:
+                continue
+            if (frag2.file_path, frag2.start_line, frag2.end_line) in processed:
+                continue
+            similarity = self.similarity_calc.calculate_similarity(frag1, frag2)
+            if similarity >= self.TYPE_3_SIMILARITY_THRESHOLD:
+                similar.append((frag2, similarity))
+        return similar
+
     def _detect_type3_clones(
         self,
         fragments: List[CodeFragment],
@@ -595,19 +630,10 @@ class CloneDetector:
         Returns:
             List of CloneGroup objects for Type 3 clones
         """
-        # Get fragments already in Type 1 or Type 2 groups
-        existing_fragments: Set[Tuple[str, int, int]] = set()
-        for group in type1_groups + type2_groups:
-            for instance in group.instances:
-                existing_fragments.add(
-                    (
-                        instance.fragment.file_path,
-                        instance.fragment.start_line,
-                        instance.fragment.end_line,
-                    )
-                )
+        existing_fragments = self._collect_existing_fragments(
+            type1_groups + type2_groups
+        )
 
-        # Filter fragments not already classified
         unclassified = [
             f
             for f in fragments
@@ -621,27 +647,14 @@ class CloneDetector:
             if (frag1.file_path, frag1.start_line, frag1.end_line) in processed:
                 continue
 
-            similar_fragments: List[Tuple[CodeFragment, float]] = []
-
-            for j, frag2 in enumerate(unclassified):
-                if i >= j:
-                    continue
-
-                if (frag2.file_path, frag2.start_line, frag2.end_line) in processed:
-                    continue
-
-                # Calculate similarity
-                similarity = self.similarity_calc.calculate_similarity(frag1, frag2)
-
-                if similarity >= self.TYPE_3_SIMILARITY_THRESHOLD:
-                    similar_fragments.append((frag2, similarity))
+            similar_fragments = self._find_similar_fragments(
+                frag1, unclassified, i, processed
+            )
 
             if similar_fragments:
-                # Issue #281: Use extracted helper for clone group creation
                 group = self._create_type3_clone_group(frag1, similar_fragments)
                 clone_groups.append(group)
 
-                # Mark all fragments as processed
                 processed.add((frag1.file_path, frag1.start_line, frag1.end_line))
                 for frag, _ in similar_fragments:
                     processed.add((frag.file_path, frag.start_line, frag.end_line))
@@ -695,11 +708,13 @@ class CloneDetector:
         existing: Set[Tuple[str, int, int]] = set()
         for group in groups:
             for instance in group.instances:
-                existing.add((
-                    instance.fragment.file_path,
-                    instance.fragment.start_line,
-                    instance.fragment.end_line,
-                ))
+                existing.add(
+                    (
+                        instance.fragment.file_path,
+                        instance.fragment.start_line,
+                        instance.fragment.end_line,
+                    )
+                )
         return existing
 
     def _maybe_create_type4_group(
@@ -796,9 +811,7 @@ class CloneDetector:
             return CloneSeverity.LOW
         return CloneSeverity.INFO
 
-    def _calculate_type_distribution(
-        self, groups: List[CloneGroup]
-    ) -> Dict[str, int]:
+    def _calculate_type_distribution(self, groups: List[CloneGroup]) -> Dict[str, int]:
         """
         Calculate distribution of clone types.
 
@@ -853,7 +866,9 @@ class CloneDetector:
             for instance in group.instances:
                 file_path = instance.fragment.file_path
                 file_stats[file_path]["clone_count"] += 1
-                file_stats[file_path]["duplicated_lines"] += instance.fragment.line_count
+                file_stats[file_path][
+                    "duplicated_lines"
+                ] += instance.fragment.line_count
 
         # Sort by clone count
         sorted_files = sorted(

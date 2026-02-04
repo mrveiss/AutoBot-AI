@@ -538,6 +538,90 @@ class SessionMixin:
                 "Failed to update Memory Graph entity (continuing): %s", mg_error
             )
 
+    async def _delete_session_files(
+        self, session_id: str, chats_directory: str
+    ) -> bool:
+        """
+        Delete main session files (new and old format).
+
+        Args:
+            session_id: The session identifier.
+            chats_directory: Path to the chats directory.
+
+        Returns:
+            True if at least one session file was deleted.
+
+        Issue #620.
+        """
+        deleted = False
+
+        # Delete new format file
+        chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+        new_exists = await run_in_chat_io_executor(os.path.exists, chat_file_new)
+        if new_exists:
+            await run_in_chat_io_executor(os.remove, chat_file_new)
+            deleted = True
+
+        # Delete old format file if exists
+        chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+        old_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
+        if old_exists:
+            await run_in_chat_io_executor(os.remove, chat_file_old)
+            deleted = True
+
+        return deleted
+
+    async def _delete_companion_files(
+        self, session_id: str, chats_directory: str
+    ) -> None:
+        """
+        Delete companion files (terminal logs, transcripts, etc.).
+
+        Args:
+            session_id: The session identifier.
+            chats_directory: Path to the chats directory.
+
+        Issue #620.
+        """
+        # Delete terminal log file
+        terminal_log = f"{chats_directory}/{session_id}_terminal.log"
+        log_exists = await run_in_chat_io_executor(os.path.exists, terminal_log)
+        if log_exists:
+            await run_in_chat_io_executor(os.remove, terminal_log)
+            logger.debug("Deleted terminal log for session %s", session_id)
+
+        # Delete terminal transcript file
+        terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
+        transcript_exists = await run_in_chat_io_executor(
+            os.path.exists, terminal_transcript
+        )
+        if transcript_exists:
+            await run_in_chat_io_executor(os.remove, terminal_transcript)
+            logger.debug("Deleted terminal transcript for session %s", session_id)
+
+    async def _clear_session_redis_cache(self, session_id: str) -> None:
+        """
+        Clear Redis cache entries for the session.
+
+        Args:
+            session_id: The session identifier.
+
+        Issue #620.
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            cache_key = f"chat:session:{session_id}"
+            # Issue #361 - avoid blocking
+            await run_in_chat_io_executor(self.redis_client.delete, cache_key)
+            await run_in_chat_io_executor(
+                self.redis_client.zrem, "chat:recent", session_id
+            )
+            logger.debug("Cleared Redis cache for session %s", session_id)
+        except Exception as e:
+            logger.error("Failed to clear Redis cache: %s", e)
+
     async def delete_session(self, session_id: str) -> bool:
         """
         Delete a chat session and its companion files.
@@ -547,55 +631,15 @@ class SessionMixin:
 
         Returns:
             True if deletion was successful, False otherwise
+
+        Issue #620: Refactored to use extracted helper methods.
         """
         try:
             chats_directory = self._get_chats_directory()
-            deleted = False
 
-            # Delete new format file
-            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
-            new_exists = await run_in_chat_io_executor(os.path.exists, chat_file_new)
-            if new_exists:
-                await run_in_chat_io_executor(os.remove, chat_file_new)
-                deleted = True
-
-            # Delete old format file if exists
-            chat_file_old = f"{chats_directory}/chat_{session_id}.json"
-            old_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
-            if old_exists:
-                await run_in_chat_io_executor(os.remove, chat_file_old)
-                deleted = True
-
-            # Delete companion files (terminal logs, transcripts, etc.)
-            terminal_log = f"{chats_directory}/{session_id}_terminal.log"
-            log_exists = await run_in_chat_io_executor(os.path.exists, terminal_log)
-            if log_exists:
-                await run_in_chat_io_executor(os.remove, terminal_log)
-                logger.debug("Deleted terminal log for session %s", session_id)
-
-            # Delete terminal transcript file
-            terminal_transcript = (
-                f"{chats_directory}/{session_id}_terminal_transcript.txt"
-            )
-            transcript_exists = await run_in_chat_io_executor(
-                os.path.exists, terminal_transcript
-            )
-            if transcript_exists:
-                await run_in_chat_io_executor(os.remove, terminal_transcript)
-                logger.debug("Deleted terminal transcript for session %s", session_id)
-
-            # Clear Redis cache
-            if self.redis_client:
-                try:
-                    cache_key = f"chat:session:{session_id}"
-                    # Issue #361 - avoid blocking
-                    await run_in_chat_io_executor(self.redis_client.delete, cache_key)
-                    await run_in_chat_io_executor(
-                        self.redis_client.zrem, "chat:recent", session_id
-                    )
-                    logger.debug("Cleared Redis cache for session %s", session_id)
-                except Exception as e:
-                    logger.error("Failed to clear Redis cache: %s", e)
+            deleted = await self._delete_session_files(session_id, chats_directory)
+            await self._delete_companion_files(session_id, chats_directory)
+            await self._clear_session_redis_cache(session_id)
 
             if not deleted:
                 logger.warning("Chat session %s not found for deletion", session_id)
