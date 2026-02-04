@@ -226,6 +226,31 @@ def success_response(
     )
 
 
+def _build_pagination_metadata(page: int, page_size: int, total: int) -> Dict[str, Any]:
+    """
+    Build pagination metadata dictionary.
+
+    Extracted helper for paginated_response(). Issue #620.
+
+    Args:
+        page: Current page number (1-indexed)
+        page_size: Number of items per page
+        total: Total number of items across all pages
+
+    Returns:
+        Dictionary with pagination metadata
+    """
+    total_pages = (total + page_size - 1) // page_size  # Ceiling division
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total_items": total,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_previous": page > 1,
+    }
+
+
 def paginated_response(
     items: List[Any],
     total: int,
@@ -247,35 +272,17 @@ def paginated_response(
 
     Returns:
         JSONResponse with pagination metadata
-
-    Examples:
-        >>> return paginated_response(
-        ...     items=workflows,
-        ...     total=150,
-        ...     page=2,
-        ...     page_size=20
-        ... )
     """
-    total_pages = (total + page_size - 1) // page_size  # Ceiling division
-
     response_data = {
         "success": True,
         "data": items,
-        "pagination": {
-            "page": page,
-            "page_size": page_size,
-            "total_items": total,
-            "total_pages": total_pages,
-            "has_next": page < total_pages,
-            "has_previous": page > 1,
-        },
+        "pagination": _build_pagination_metadata(page, page_size, total),
         "timestamp": datetime.utcnow().isoformat(),
     }
 
     if message:
         response_data["message"] = message
 
-    # Add any additional fields
     response_data.update(kwargs)
 
     return JSONResponse(

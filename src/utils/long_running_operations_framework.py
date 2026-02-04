@@ -344,27 +344,26 @@ async def _save_indexing_checkpoint_if_needed(
 
 
 # Convenience functions for common operations
-async def execute_codebase_indexing(
+
+
+def _create_indexing_operation(
     codebase_path: str,
-    manager: LongRunningOperationManager,
-    file_patterns: Optional[List[str]] = None,
-) -> str:
-    """Execute codebase indexing operation.
+    file_patterns: Optional[List[str]],
+):
+    """Create the indexing operation function for execute_codebase_indexing.
+
+    Issue #620: Extracted from execute_codebase_indexing to reduce function length. Issue #620.
 
     Args:
         codebase_path: Path to the codebase directory
-        manager: LongRunningOperationManager instance
         file_patterns: List of glob patterns for files to index
 
     Returns:
-        Operation ID for tracking
+        Async function that performs the indexing operation
     """
 
     async def indexing_operation(context: OperationExecutionContext) -> Dict[str, Any]:
-        """Index files in codebase with progress tracking and checkpoints.
-
-        Issue #620.
-        """
+        """Index files in codebase with progress tracking and checkpoints."""
         path = Path(codebase_path)
         patterns = file_patterns or ["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"]
 
@@ -391,6 +390,28 @@ async def execute_codebase_indexing(
             "files": results,
             "completed_at": datetime.now().isoformat(),
         }
+
+    return indexing_operation
+
+
+async def execute_codebase_indexing(
+    codebase_path: str,
+    manager: LongRunningOperationManager,
+    file_patterns: Optional[List[str]] = None,
+) -> str:
+    """Execute codebase indexing operation.
+
+    Issue #620: Refactored using Extract Method pattern. Issue #620.
+
+    Args:
+        codebase_path: Path to the codebase directory
+        manager: LongRunningOperationManager instance
+        file_patterns: List of glob patterns for files to index
+
+    Returns:
+        Operation ID for tracking
+    """
+    indexing_operation = _create_indexing_operation(codebase_path, file_patterns)
 
     return await manager.create_operation(
         OperationType.CODEBASE_INDEXING,

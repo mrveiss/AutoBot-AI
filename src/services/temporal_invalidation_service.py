@@ -329,6 +329,37 @@ class TemporalInvalidationService:
 
         return facts_to_invalidate, invalidation_reasons, rule_statistics
 
+    def _build_sample_facts_list(
+        self,
+        facts_to_invalidate: List[AtomicFact],
+        invalidation_reasons: Dict[str, Dict[str, Any]],
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """
+        Build sample facts list for dry run results.
+
+        Extracted helper for _build_sweep_result(). Issue #620.
+
+        Args:
+            facts_to_invalidate: Facts identified for invalidation
+            invalidation_reasons: Reasons for each fact invalidation
+            limit: Maximum number of sample facts to include
+
+        Returns:
+            List of sample fact dictionaries
+        """
+        return [
+            {
+                "fact_id": fact.fact_id,
+                "statement": f"{fact.subject} {fact.predicate} {fact.object}",
+                "age_days": (datetime.now() - fact.valid_from).days,
+                "confidence": fact.confidence,
+                "source": fact.source,
+                "reason": invalidation_reasons.get(fact.fact_id, {}),
+            }
+            for fact in facts_to_invalidate[:limit]
+        ]
+
     def _build_sweep_result(
         self,
         dry_run: bool,
@@ -342,9 +373,7 @@ class TemporalInvalidationService:
         invalidation_reasons: Dict[str, Dict[str, Any]],
     ) -> Dict[str, Any]:
         """
-        Build the sweep result dictionary.
-
-        Issue #281: Extracted helper for result building.
+        Build the sweep result dictionary. Issue #620.
 
         Args:
             dry_run: Whether this was a dry run
@@ -373,17 +402,9 @@ class TemporalInvalidationService:
         }
 
         if dry_run:
-            result["sample_facts_to_invalidate"] = [
-                {
-                    "fact_id": fact.fact_id,
-                    "statement": f"{fact.subject} {fact.predicate} {fact.object}",
-                    "age_days": (datetime.now() - fact.valid_from).days,
-                    "confidence": fact.confidence,
-                    "source": fact.source,
-                    "reason": invalidation_reasons.get(fact.fact_id, {}),
-                }
-                for fact in facts_to_invalidate[:10]  # Show first 10
-            ]
+            result["sample_facts_to_invalidate"] = self._build_sample_facts_list(
+                facts_to_invalidate, invalidation_reasons
+            )
 
         return result
 
@@ -758,13 +779,39 @@ class TemporalInvalidationService:
             }
         return reasons
 
+    async def _invalidate_high_confidence_contradictions(
+        self, new_fact: AtomicFact, contradictory_facts: List[AtomicFact]
+    ) -> int:
+        """
+        Invalidate contradictory facts where new fact has higher confidence.
+
+        Extracted helper for invalidate_contradictory_facts(). Issue #620.
+
+        Args:
+            new_fact: The new fact with potentially higher confidence
+            contradictory_facts: List of facts contradicting the new fact
+
+        Returns:
+            Number of facts invalidated
+        """
+        if not contradictory_facts:
+            return 0
+
+        high_confidence = [
+            f for f in contradictory_facts if new_fact.confidence > f.confidence
+        ]
+
+        if not high_confidence:
+            return 0
+
+        reasons = self._build_contradiction_reasons(new_fact, high_confidence)
+        return await self._invalidate_facts(high_confidence, reasons)
+
     async def invalidate_contradictory_facts(
         self, new_fact: AtomicFact
     ) -> Dict[str, Any]:
         """
         Invalidate facts that contradict a new fact.
-
-        (Issue #398: refactored to use extracted helpers)
 
         Args:
             new_fact: New fact that may contradict existing facts
@@ -791,19 +838,9 @@ class TemporalInvalidationService:
                 new_fact, similar_facts
             )
 
-            invalidated_count = 0
-            if contradictory_facts:
-                high_confidence = [
-                    f for f in contradictory_facts if new_fact.confidence > f.confidence
-                ]
-
-                if high_confidence:
-                    reasons = self._build_contradiction_reasons(
-                        new_fact, high_confidence
-                    )
-                    invalidated_count = await self._invalidate_facts(
-                        high_confidence, reasons
-                    )
+            invalidated_count = await self._invalidate_high_confidence_contradictions(
+                new_fact, contradictory_facts
+            )
 
             return {
                 "status": "success",

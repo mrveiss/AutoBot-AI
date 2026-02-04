@@ -263,6 +263,47 @@ def _build_security_scan_result(
     }
 
 
+async def _update_security_scan_progress(
+    context: "OperationExecutionContext",
+    file_path: Path,
+    index: int,
+    total_files: int,
+    vulnerability_count: int,
+    scan_types: List[str],
+) -> None:
+    """Update progress for security scan operation.
+
+    Issue #620: Extracted from _process_security_scan_files to reduce function length. Issue #620.
+    """
+    await context.update_progress(
+        f"Scanning {file_path.name}",
+        index + 1,
+        total_files,
+        {
+            "vulnerabilities_found": vulnerability_count,
+            "current_file": str(file_path),
+            "scan_types": scan_types,
+        },
+        f"Scanned {index + 1} of {total_files} files",
+    )
+
+
+async def _save_security_scan_checkpoint(
+    context: "OperationExecutionContext",
+    index: int,
+    scan_results: List[Dict[str, Any]],
+    checkpoint_interval: int = 50,
+) -> None:
+    """Save checkpoint for security scan if at interval.
+
+    Issue #620: Extracted from _process_security_scan_files to reduce function length. Issue #620.
+    """
+    if (index + 1) % checkpoint_interval == 0:
+        await context.save_checkpoint(
+            {"scan_results": scan_results}, f"file_{index + 1}"
+        )
+
+
 async def _process_security_scan_files(
     context: "OperationExecutionContext",
     files_to_scan: List[Path],
@@ -274,7 +315,7 @@ async def _process_security_scan_files(
 ) -> tuple[List[Dict[str, Any]], int]:
     """Process files for security scanning with progress and checkpointing.
 
-    Issue #620: Extracted from migrate_security_scan_operation to reduce function length. Issue #620.
+    Issue #620: Refactored using Extract Method pattern. Issue #620.
 
     Args:
         context: Operation execution context.
@@ -292,30 +333,16 @@ async def _process_security_scan_files(
 
     for i, file_path in enumerate(files_to_scan[start_index:], start_index):
         try:
-            await context.update_progress(
-                f"Scanning {file_path.name}",
-                i + 1,
-                total_files,
-                {
-                    "vulnerabilities_found": vulnerability_count,
-                    "current_file": str(file_path),
-                    "scan_types": scan_types,
-                },
-                f"Scanned {i + 1} of {total_files} files",
+            await _update_security_scan_progress(
+                context, file_path, i, total_files, vulnerability_count, scan_types
             )
-
             file_scan_result = await file_scanner(file_path, scan_types)
             scan_results.append(file_scan_result)
 
             if file_scan_result.get("vulnerabilities"):
                 vulnerability_count += len(file_scan_result["vulnerabilities"])
 
-            # Checkpoint every 50 files
-            if (i + 1) % 50 == 0:
-                await context.save_checkpoint(
-                    {"scan_results": scan_results}, f"file_{i + 1}"
-                )
-
+            await _save_security_scan_checkpoint(context, i, scan_results)
         except Exception as e:
             logger.warning("Failed to scan %s: %s", file_path, e)
 
