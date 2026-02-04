@@ -73,10 +73,10 @@ def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
     ]
 
 
-def _create_code_review_steps() -> List[WorkflowStep]:
-    """Create workflow steps for the code review template.
+def _create_analysis_and_scan_steps() -> List[WorkflowStep]:
+    """
+    Create initial code analysis and security scan steps.
 
-    Returns the analysis, security scan, research, assessment, report, and storage steps.
     Issue #620.
     """
     return [
@@ -104,6 +104,16 @@ def _create_code_review_steps() -> List[WorkflowStep]:
             dependencies=["code_analysis"],
             expected_duration_ms=20000,
         ),
+    ]
+
+
+def _create_assessment_and_report_steps() -> List[WorkflowStep]:
+    """
+    Create quality assessment, report, and storage steps.
+
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="quality_assessment",
             agent_type="orchestrator",
@@ -129,6 +139,15 @@ def _create_code_review_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _create_code_review_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for the code review template.
+
+    Issue #620.
+    """
+    return _create_analysis_and_scan_steps() + _create_assessment_and_report_steps()
 
 
 def create_code_review_template() -> WorkflowTemplate:

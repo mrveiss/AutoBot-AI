@@ -1288,57 +1288,69 @@ class Phase9PerformanceMonitor:
             self.logger.error(f"Error generating performance dashboard: {e}")
             return {"error": str(e), "timestamp": time.time()}
 
+    def _determine_trend_direction(self, values: List[float]) -> str:
+        """Determine trend direction from a list of values.
+
+        Compares first and last values to determine if the trend is
+        increasing, decreasing, or stable. Issue #620.
+        """
+        if values[-1] > values[0]:
+            return "increasing"
+        elif values[-1] < values[0]:
+            return "decreasing"
+        return "stable"
+
+    def _calculate_gpu_utilization_trend(self) -> Optional[Dict[str, Any]]:
+        """Calculate GPU utilization trend from recent metrics.
+
+        Returns trend data if sufficient GPU metrics are available. Issue #620.
+        """
+        if len(self.gpu_metrics_buffer) < 5:
+            return None
+        recent_gpu = list(self.gpu_metrics_buffer)[-5:]
+        utilizations = [g.utilization_percent for g in recent_gpu]
+        return {
+            "average": round(sum(utilizations) / len(utilizations), 1),
+            "trend": self._determine_trend_direction(utilizations),
+        }
+
+    def _calculate_system_trends(self) -> Dict[str, Dict[str, Any]]:
+        """Calculate CPU load and memory usage trends from recent metrics.
+
+        Returns trend data for cpu_load and memory_usage if sufficient
+        system metrics are available. Issue #620.
+        """
+        trends = {}
+        if len(self.system_metrics_buffer) < 5:
+            return trends
+
+        recent_system = list(self.system_metrics_buffer)[-5:]
+        loads = [s.cpu_load_1m for s in recent_system]
+        trends["cpu_load"] = {
+            "average": round(sum(loads) / len(loads), 2),
+            "trend": self._determine_trend_direction(loads),
+        }
+
+        memory_usage = [s.memory_usage_percent for s in recent_system]
+        trends["memory_usage"] = {
+            "average": round(sum(memory_usage) / len(memory_usage), 1),
+            "trend": self._determine_trend_direction(memory_usage),
+        }
+        return trends
+
     def _calculate_performance_trends(self) -> Dict[str, Any]:
-        """Calculate performance trends from recent metrics"""
+        """Calculate performance trends from recent metrics.
+
+        Aggregates GPU utilization and system trends. Issue #620.
+        """
         try:
             trends = {}
 
-            # GPU utilization trend
-            if len(self.gpu_metrics_buffer) >= 5:
-                recent_gpu = list(self.gpu_metrics_buffer)[-5:]
-                utilizations = [g.utilization_percent for g in recent_gpu]
-                trends["gpu_utilization"] = {
-                    "average": round(sum(utilizations) / len(utilizations), 1),
-                    "trend": (
-                        "increasing"
-                        if utilizations[-1] > utilizations[0]
-                        else (
-                            "decreasing"
-                            if utilizations[-1] < utilizations[0]
-                            else "stable"
-                        )
-                    ),
-                }
+            gpu_trend = self._calculate_gpu_utilization_trend()
+            if gpu_trend:
+                trends["gpu_utilization"] = gpu_trend
 
-            # System load trend
-            if len(self.system_metrics_buffer) >= 5:
-                recent_system = list(self.system_metrics_buffer)[-5:]
-                loads = [s.cpu_load_1m for s in recent_system]
-                trends["cpu_load"] = {
-                    "average": round(sum(loads) / len(loads), 2),
-                    "trend": (
-                        "increasing"
-                        if loads[-1] > loads[0]
-                        else "decreasing"
-                        if loads[-1] < loads[0]
-                        else "stable"
-                    ),
-                }
-
-                # Memory usage trend
-                memory_usage = [s.memory_usage_percent for s in recent_system]
-                trends["memory_usage"] = {
-                    "average": round(sum(memory_usage) / len(memory_usage), 1),
-                    "trend": (
-                        "increasing"
-                        if memory_usage[-1] > memory_usage[0]
-                        else (
-                            "decreasing"
-                            if memory_usage[-1] < memory_usage[0]
-                            else "stable"
-                        )
-                    ),
-                }
+            trends.update(self._calculate_system_trends())
 
             return trends
 

@@ -19,34 +19,88 @@ from typing import Dict, FrozenSet, Optional, Set, Tuple
 
 import aiofiles
 
-
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level cached tool category sets to avoid repeated set creation
-_NETWORK_TOOLS: FrozenSet[str] = frozenset({
-    "ping", "curl", "wget", "netstat", "ss", "nmap", "arp",
-    "dig", "nslookup", "traceroute", "ifconfig", "ip",
-})
+_NETWORK_TOOLS: FrozenSet[str] = frozenset(
+    {
+        "ping",
+        "curl",
+        "wget",
+        "netstat",
+        "ss",
+        "nmap",
+        "arp",
+        "dig",
+        "nslookup",
+        "traceroute",
+        "ifconfig",
+        "ip",
+    }
+)
 
-_SYSTEM_TOOLS: FrozenSet[str] = frozenset({
-    "ps", "top", "htop", "d", "du", "free", "uname", "whoami",
-    "id", "groups", "sudo", "su", "crontab", "systemctl", "service",
-})
+_SYSTEM_TOOLS: FrozenSet[str] = frozenset(
+    {
+        "ps",
+        "top",
+        "htop",
+        "d",
+        "du",
+        "free",
+        "uname",
+        "whoami",
+        "id",
+        "groups",
+        "sudo",
+        "su",
+        "crontab",
+        "systemctl",
+        "service",
+    }
+)
 
-_FILE_TOOLS: FrozenSet[str] = frozenset({
-    "ls", "find", "grep", "sed", "awk", "cat", "head", "tail",
-    "less", "more", "wc", "sort", "uniq", "tar", "zip", "unzip",
-})
+_FILE_TOOLS: FrozenSet[str] = frozenset(
+    {
+        "ls",
+        "find",
+        "grep",
+        "sed",
+        "awk",
+        "cat",
+        "head",
+        "tail",
+        "less",
+        "more",
+        "wc",
+        "sort",
+        "uniq",
+        "tar",
+        "zip",
+        "unzip",
+    }
+)
 
-_DEV_TOOLS: FrozenSet[str] = frozenset({
-    "git", "python", "python3", "pip", "pip3", "node", "npm",
-    "docker", "docker-compose", "vim", "nano", "emacs",
-})
+_DEV_TOOLS: FrozenSet[str] = frozenset(
+    {
+        "git",
+        "python",
+        "python3",
+        "pip",
+        "pip3",
+        "node",
+        "npm",
+        "docker",
+        "docker-compose",
+        "vim",
+        "nano",
+        "emacs",
+    }
+)
 
 # Issue #380: Root-required package managers frozenset
-_ROOT_REQUIRED_MANAGERS: FrozenSet[str] = frozenset({
-    "apt", "yum", "dnf", "pacman", "zypper"
-})
+_ROOT_REQUIRED_MANAGERS: FrozenSet[str] = frozenset(
+    {"apt", "yum", "dnf", "pacman", "zypper"}
+)
 
 # Issue #380: Package manager command templates (static parts cached)
 _PM_INSTALL_TEMPLATES: Dict[str, str] = {
@@ -113,40 +167,60 @@ class OSDetector:
         self._os_info: Optional[OSInfo] = None
         self._capabilities_cache: Optional[Dict[str, bool]] = None
 
+    def _get_basic_system_details(self) -> Tuple[str, str, str, bool, str]:
+        """
+        Get basic system details from platform and environment.
+
+        Returns:
+            Tuple of (version, architecture, user, is_root, shell).
+        Issue #620.
+        """
+        version = platform.release()
+        architecture = platform.machine()
+        user = os.getenv("USER", os.getenv("USERNAME", "unknown"))
+        is_root = os.geteuid() == 0 if hasattr(os, "geteuid") else False
+        shell = os.getenv("SHELL", "unknown")
+        return version, architecture, user, is_root, shell
+
+    def _log_detection_results(
+        self,
+        os_type: OSType,
+        distro: Optional[LinuxDistro],
+        user: str,
+        is_root: bool,
+        capabilities: Set[str],
+    ) -> None:
+        """
+        Log system detection results.
+
+        Issue #620.
+        """
+        logger.info(
+            "System detected: %s (%s)",
+            os_type.value,
+            distro.value if distro else "N/A",
+        )
+        logger.info("User: %s (root: %s)", user, is_root)
+        logger.info("Capabilities: %d tools detected", len(capabilities))
+
     async def detect_system(self) -> OSInfo:
         """
         Detect system information and capabilities.
 
         Returns:
             OSInfo: Complete system information
+        Issue #620.
         """
         if self._os_info is not None:
             return self._os_info
 
         logger.info("Detecting system information...")
 
-        # Detect OS type
         os_type = self._detect_os_type()
-
-        # Detect Linux distribution if applicable
-        distro = None
-        if os_type == OSType.LINUX:
-            distro = await self._detect_linux_distro()
-
-        # Get system details
-        version = platform.release()
-        architecture = platform.machine()
-        user = os.getenv("USER", os.getenv("USERNAME", "unknown"))
-        is_root = os.geteuid() == 0 if hasattr(os, "geteuid") else False
+        distro = await self._detect_linux_distro() if os_type == OSType.LINUX else None
+        version, architecture, user, is_root, shell = self._get_basic_system_details()
         is_wsl = await self._detect_wsl()
-
-        # Detect package manager
         package_manager = await self._detect_package_manager(os_type, distro)
-
-        # Detect shell
-        shell = os.getenv("SHELL", "unknown")
-
-        # Detect capabilities
         capabilities = await self._detect_capabilities()
 
         self._os_info = OSInfo(
@@ -158,18 +232,11 @@ class OSDetector:
             is_root=is_root,
             is_wsl=is_wsl,
             package_manager=package_manager,
-            shell=shell,
+            shell=shell,  # nosec B604 - dataclass field assignment
             capabilities=capabilities,
         )
 
-        logger.info(
-            "System detected: %s (%s)",
-            os_type.value,
-            distro.value if distro else "N/A",
-        )
-        logger.info("User: %s (root: %s)", user, is_root)
-        logger.info("Capabilities: %d tools detected", len(capabilities))
-
+        self._log_detection_results(os_type, distro, user, is_root, capabilities)
         return self._os_info
 
     def _detect_os_type(self) -> OSType:
@@ -259,8 +326,8 @@ class OSDetector:
                     return "microsoft" in content or "wsl" in content
         except OSError as e:
             logger.debug("Failed to read /proc/version: %s", e)
-        except Exception:
-            pass  # File read error, assume not WSL
+        except Exception:  # nosec B110 - WSL detection fallback
+            pass
 
         return False
 

@@ -400,62 +400,94 @@ class AuthenticationMiddleware:
             details={"session_id": session_id[:16] + "..."},  # Partial ID for audit
         )
 
+    def _extract_user_from_jwt(self, request: Request) -> Optional[Dict]:
+        """
+        Extract user from JWT token in Authorization header.
+
+        Returns user dict if valid JWT found, None otherwise.
+        Issue #620.
+        """
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ")[1]
+        token_data = self.verify_jwt_token(token)
+        if not token_data:
+            return None
+
+        return {
+            "username": token_data["username"],
+            "role": token_data["role"],
+            "email": token_data.get("email", ""),
+            "auth_method": "jwt",
+        }
+
+    def _extract_user_from_session(self, request: Request) -> Optional[Dict]:
+        """
+        Extract user from session ID in header.
+
+        Returns user dict if valid session found, None otherwise.
+        Issue #620.
+        """
+        session_id = request.headers.get("X-Session-ID")
+        if not session_id:
+            return None
+
+        session = self.get_session(session_id)
+        if not session or not session.get("user_data"):
+            return None
+
+        user_data = session["user_data"].copy()
+        user_data["auth_method"] = "session"
+        return user_data
+
+    def _extract_user_from_dev_header(self, request: Request) -> Optional[Dict]:
+        """
+        Extract user from development mode X-User-Role header.
+
+        Only works when debug mode is enabled.
+        Issue #620.
+        """
+        dev_mode = config.get("development.debug", False)
+        if not dev_mode:
+            return None
+
+        user_role = request.headers.get("X-User-Role")
+        if not user_role:
+            return None
+
+        return {
+            "username": f"dev_{user_role}",
+            "role": user_role,
+            "email": f"dev_{user_role}@autobot.local",
+            "auth_method": "development",
+        }
+
     def get_user_from_request(self, request: Request) -> Optional[Dict]:
         """
-        Extract and validate user from request using multiple authentication methods
+        Extract and validate user from request using multiple authentication methods.
 
-        Priority:
-        1. JWT token in Authorization header
-        2. Session ID in header
-        3. Development mode header (X-User-Role)
-        4. Default guest access
+        Priority: JWT token -> Session ID -> Development mode header.
+        Issue #620.
         """
         if not self.enable_auth:
-            return {
-                "username": "admin",
-                "role": "admin",
-                "email": "admin@autobot.local",
-                "auth_disabled": True,
-            }
+            return self._get_auth_disabled_user()
 
-        # Method 1: JWT Token Authentication
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-            token_data = self.verify_jwt_token(token)
-            if token_data:
-                return {
-                    "username": token_data["username"],
-                    "role": token_data["role"],
-                    "email": token_data.get("email", ""),
-                    "auth_method": "jwt",
-                }
+        # Try authentication methods in priority order
+        user = self._extract_user_from_jwt(request)
+        if user:
+            return user
 
-        # Method 2: Session ID Authentication
-        session_id = request.headers.get("X-Session-ID")
-        if session_id:
-            session = self.get_session(session_id)
-            if session and session.get("user_data"):
-                user_data = session["user_data"].copy()
-                user_data["auth_method"] = "session"
-                return user_data
+        user = self._extract_user_from_session(request)
+        if user:
+            return user
 
-        # Method 3: Development Mode (X-User-Role header)
-        # Only in debug mode AND with explicit X-User-Role header
-        dev_mode = config.get("development.debug", False)
-        if dev_mode:
-            user_role = request.headers.get("X-User-Role")
-            if user_role:  # Only if header is explicitly provided
-                return {
-                    "username": f"dev_{user_role}",
-                    "role": user_role,
-                    "email": f"dev_{user_role}@autobot.local",
-                    "auth_method": "development",
-                }
+        user = self._extract_user_from_dev_header(request)
+        if user:
+            return user
 
-        # Issue #756: Security hardening - no guest fallback for sensitive endpoints
-        # Return None to require explicit authentication
-        # Callers should handle None and return appropriate 401 response
+        # Issue #756: Security hardening - no guest fallback
         logger.debug("No valid authentication found, denying access")
         return None
 
