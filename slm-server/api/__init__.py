@@ -19,6 +19,7 @@ from .health import router as health_router
 from .maintenance import router as maintenance_router
 from .monitoring import router as monitoring_router
 from .nodes import router as nodes_router
+from .npu import router as npu_router
 from .orchestration import router as orchestration_router
 from .security import router as security_router
 from .services import fleet_router as fleet_services_router
@@ -55,4 +56,5 @@ __all__ = [
     "config_router",
     "node_config_router",
     "discovery_router",
+    "npu_router",
 ]

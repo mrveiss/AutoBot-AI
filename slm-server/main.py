@@ -28,6 +28,7 @@ from api import (
     node_tls_router,
     node_vnc_router,
     nodes_router,
+    npu_router,
     orchestration_router,
     security_router,
     services_router,
@@ -142,6 +143,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Debug: Capture all exceptions with full traceback
+import traceback
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(Exception)
+async def debug_exception_handler(request: Request, exc: Exception):
+    """Capture and log all exceptions with full traceback."""
+    tb = traceback.format_exc()
+    logger.error("Unhandled exception on %s: %s\n%s", request.url, exc, tb)
+    return JSONResponse(
+        status_code=500, content={"detail": str(exc), "type": type(exc).__name__}
+    )
+
+
 app.include_router(health_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
@@ -168,6 +187,7 @@ app.include_router(orchestration_router, prefix="/api")
 app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(node_config_router, prefix="/api/nodes")
+app.include_router(npu_router, prefix="/api")
 
 
 @app.get("/")

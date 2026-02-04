@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .database import NodeStatus
 
@@ -147,7 +147,7 @@ class NodeResponse(BaseModel):
     hostname: str
     ip_address: str
     status: str
-    roles: List[str]
+    roles: Optional[List[str]] = []
     ssh_user: Optional[str] = "autobot"
     ssh_port: Optional[int] = 22
     auth_method: Optional[str] = "key"
@@ -161,6 +161,12 @@ class NodeResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def convert_none_roles(cls, v):
+        """Convert None to empty list for roles."""
+        return v if v is not None else []
 
 
 class NodeListResponse(BaseModel):
@@ -1733,3 +1739,103 @@ class AgentLLMConfigWithKey(AgentLLMConfig):
     """LLM config including decrypted API key (for backend only)."""
 
     llm_api_key: Optional[str] = None
+
+
+# =============================================================================
+# NPU Worker Schemas (Issue #255 - NPU Fleet Integration)
+# =============================================================================
+
+
+class NPUDeviceType(str, Enum):
+    """NPU device type enumeration."""
+
+    INTEL_NPU = "intel-npu"
+    NVIDIA_GPU = "nvidia-gpu"
+    AMD_GPU = "amd-gpu"
+    UNKNOWN = "unknown"
+
+
+class NPULoadBalancingStrategy(str, Enum):
+    """NPU load balancing strategy enumeration."""
+
+    ROUND_ROBIN = "round-robin"
+    LEAST_LOADED = "least-loaded"
+    MODEL_AFFINITY = "model-affinity"
+
+
+class NPUCapabilities(BaseModel):
+    """NPU hardware capabilities."""
+
+    models: List[str] = Field(default_factory=list)
+    max_concurrent: int = Field(default=1, alias="maxConcurrent")
+    memory_gb: float = Field(default=0.0, alias="memoryGB")
+    device_type: str = Field(default="unknown", alias="deviceType")
+    utilization: float = Field(default=0.0)
+
+    model_config = {"populate_by_name": True}
+
+
+class NPUNodeStatusResponse(BaseModel):
+    """NPU node status response."""
+
+    node_id: str
+    capabilities: Optional[NPUCapabilities] = None
+    loaded_models: List[str] = Field(default_factory=list, alias="loadedModels")
+    queue_depth: int = Field(default=0, alias="queueDepth")
+    last_health_check: Optional[datetime] = Field(None, alias="lastHealthCheck")
+    detection_status: str = Field(default="pending", alias="detectionStatus")
+    detection_error: Optional[str] = Field(None, alias="detectionError")
+
+    model_config = {"populate_by_name": True}
+
+
+class NPULoadBalancingConfig(BaseModel):
+    """NPU load balancing configuration."""
+
+    strategy: str = "round-robin"
+    model_affinity: Dict[str, List[str]] = Field(
+        default_factory=dict, alias="modelAffinity"
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class NPUModelInfo(BaseModel):
+    """NPU model information."""
+
+    name: str
+    size_mb: float = Field(default=0.0)
+    loaded: bool = False
+    inference_time_ms: Optional[float] = None
+    total_requests: int = 0
+
+
+class NPUNodeListResponse(BaseModel):
+    """List of NPU nodes with their status."""
+
+    nodes: List[NPUNodeStatusResponse]
+    total: int
+
+
+class NPUDetectionRequest(BaseModel):
+    """Request to trigger NPU capability detection."""
+
+    force: bool = Field(default=False, description="Force re-detection")
+
+
+class NPUDetectionResponse(BaseModel):
+    """Response from NPU detection operation."""
+
+    success: bool
+    message: str
+    node_id: str
+    capabilities: Optional[NPUCapabilities] = None
+
+
+class NPURoleAssignResponse(BaseModel):
+    """Response from NPU role assignment."""
+
+    success: bool
+    message: str
+    node_id: str
+    detection_triggered: bool = False
