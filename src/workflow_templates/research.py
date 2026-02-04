@@ -74,6 +74,66 @@ def create_comprehensive_research_template() -> WorkflowTemplate:
     )
 
 
+def _create_competitive_analysis_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for competitive analysis template.
+
+    Returns list of WorkflowStep objects for market research, competitor
+    identification, feature analysis, SWOT analysis, strategic recommendations,
+    and storing results. Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="market_research",
+            agent_type="research",
+            action="Research market landscape and key players",
+            description="Research: Market Analysis",
+            expected_duration_ms=45000,
+        ),
+        WorkflowStep(
+            id="competitor_identification",
+            agent_type="research",
+            action="Identify direct and indirect competitors",
+            description="Research: Competitor Identification",
+            dependencies=["market_research"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="feature_analysis",
+            agent_type="research",
+            action="Analyze competitor features and positioning",
+            description="Research: Feature Comparison",
+            dependencies=["competitor_identification"],
+            expected_duration_ms=40000,
+        ),
+        WorkflowStep(
+            id="swot_analysis",
+            agent_type="orchestrator",
+            action="Perform SWOT analysis of competitive landscape",
+            description="Orchestrator: SWOT Analysis",
+            dependencies=["feature_analysis"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="strategic_recommendations",
+            agent_type="orchestrator",
+            action="Generate strategic recommendations based on analysis",
+            description="Orchestrator: Strategic Recommendations (requires your approval)",
+            requires_approval=True,
+            dependencies=["swot_analysis"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="store_analysis",
+            agent_type="knowledge_manager",
+            action="Store competitive analysis and recommendations",
+            description="Knowledge_Manager: Store Analysis",
+            dependencies=["strategic_recommendations"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
 def create_competitive_analysis_template() -> WorkflowTemplate:
     """Create competitive analysis workflow template."""
     return WorkflowTemplate(
@@ -89,57 +149,68 @@ def create_competitive_analysis_template() -> WorkflowTemplate:
             "company_or_product": "Target company or product for analysis",
             "market_segment": "Market segment or industry focus",
         },
-        steps=[
-            WorkflowStep(
-                id="market_research",
-                agent_type="research",
-                action="Research market landscape and key players",
-                description="Research: Market Analysis",
-                expected_duration_ms=45000,
-            ),
-            WorkflowStep(
-                id="competitor_identification",
-                agent_type="research",
-                action="Identify direct and indirect competitors",
-                description="Research: Competitor Identification",
-                dependencies=["market_research"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="feature_analysis",
-                agent_type="research",
-                action="Analyze competitor features and positioning",
-                description="Research: Feature Comparison",
-                dependencies=["competitor_identification"],
-                expected_duration_ms=40000,
-            ),
-            WorkflowStep(
-                id="swot_analysis",
-                agent_type="orchestrator",
-                action="Perform SWOT analysis of competitive landscape",
-                description="Orchestrator: SWOT Analysis",
-                dependencies=["feature_analysis"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="strategic_recommendations",
-                agent_type="orchestrator",
-                action="Generate strategic recommendations based on analysis",
-                description="Orchestrator: Strategic Recommendations (requires your approval)",
-                requires_approval=True,
-                dependencies=["swot_analysis"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="store_analysis",
-                agent_type="knowledge_manager",
-                action="Store competitive analysis and recommendations",
-                description="Knowledge_Manager: Store Analysis",
-                dependencies=["strategic_recommendations"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_competitive_analysis_steps(),
     )
+
+
+def _create_technology_research_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for technology research template.
+
+    Returns list of WorkflowStep objects for knowledge search, technology overview,
+    alternatives research, pros/cons analysis, recommendation, and storing results.
+    Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="existing_knowledge",
+            agent_type="librarian",
+            action="Search knowledge base for existing technology information",
+            description="Librarian: Technology Knowledge Search",
+            expected_duration_ms=5000,
+        ),
+        WorkflowStep(
+            id="technology_overview",
+            agent_type="research",
+            action="Research technology overview and capabilities",
+            description="Research: Technology Overview",
+            dependencies=["existing_knowledge"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="alternatives_research",
+            agent_type="research",
+            action="Research alternative technologies and solutions",
+            description="Research: Alternative Solutions",
+            dependencies=["technology_overview"],
+            expected_duration_ms=35000,
+        ),
+        WorkflowStep(
+            id="pros_cons_analysis",
+            agent_type="orchestrator",
+            action="Analyze pros, cons, and trade-offs of each option",
+            description="Orchestrator: Pros/Cons Analysis",
+            dependencies=["alternatives_research"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="recommendation",
+            agent_type="orchestrator",
+            action="Provide technology recommendation with rationale",
+            description="Orchestrator: Technology Recommendation (requires your approval)",
+            requires_approval=True,
+            dependencies=["pros_cons_analysis"],
+            expected_duration_ms=10000,
+        ),
+        WorkflowStep(
+            id="store_research",
+            agent_type="knowledge_manager",
+            action="Store technology research and recommendations",
+            description="Knowledge_Manager: Store Technology Research",
+            dependencies=["recommendation"],
+            expected_duration_ms=5000,
+        ),
+    ]
 
 
 def create_technology_research_template() -> WorkflowTemplate:
@@ -157,56 +228,7 @@ def create_technology_research_template() -> WorkflowTemplate:
             "technology": "Technology or tool to research",
             "use_case": "Specific use case or application",
         },
-        steps=[
-            WorkflowStep(
-                id="existing_knowledge",
-                agent_type="librarian",
-                action="Search knowledge base for existing technology information",
-                description="Librarian: Technology Knowledge Search",
-                expected_duration_ms=5000,
-            ),
-            WorkflowStep(
-                id="technology_overview",
-                agent_type="research",
-                action="Research technology overview and capabilities",
-                description="Research: Technology Overview",
-                dependencies=["existing_knowledge"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="alternatives_research",
-                agent_type="research",
-                action="Research alternative technologies and solutions",
-                description="Research: Alternative Solutions",
-                dependencies=["technology_overview"],
-                expected_duration_ms=35000,
-            ),
-            WorkflowStep(
-                id="pros_cons_analysis",
-                agent_type="orchestrator",
-                action="Analyze pros, cons, and trade-offs of each option",
-                description="Orchestrator: Pros/Cons Analysis",
-                dependencies=["alternatives_research"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="recommendation",
-                agent_type="orchestrator",
-                action="Provide technology recommendation with rationale",
-                description="Orchestrator: Technology Recommendation (requires your approval)",
-                requires_approval=True,
-                dependencies=["pros_cons_analysis"],
-                expected_duration_ms=10000,
-            ),
-            WorkflowStep(
-                id="store_research",
-                agent_type="knowledge_manager",
-                action="Store technology research and recommendations",
-                description="Knowledge_Manager: Store Technology Research",
-                dependencies=["recommendation"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_technology_research_steps(),
     )
 
 

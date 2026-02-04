@@ -525,10 +525,76 @@ class IntelligentRequestBatcher:
         else:
             return await self._create_time_window_batch(queue)
 
+    async def _execute_batch_callbacks(
+        self,
+        batch: List[BatchableRequest],
+        individual_responses: Dict[str, str],
+        response: str,
+    ) -> None:
+        """
+        Execute callbacks for all requests in a batch.
+
+        Handles errors for individual callbacks without failing the entire batch.
+        Issue #620.
+        """
+        for request in batch:
+            if request.callback:
+                try:
+                    response_text = individual_responses.get(request.id, response)
+                    await request.callback(response_text)
+                except Exception as e:
+                    logger.error("Error executing callback for %s: %s", request.id, e)
+
+    def _create_success_batch_result(
+        self,
+        batch_id: str,
+        batch: List[BatchableRequest],
+        combined_content: str,
+        response: str,
+        start_time: float,
+        individual_responses: Dict[str, str],
+    ) -> BatchResult:
+        """
+        Create BatchResult for successful batch execution.
+
+        Issue #620.
+        """
+        return BatchResult(
+            batch_id=batch_id,
+            request_ids=[req.id for req in batch],
+            combined_content=combined_content,
+            response=response,
+            processing_time=time.time() - start_time,
+            success=True,
+            individual_responses=individual_responses,
+        )
+
+    def _create_error_batch_result(
+        self,
+        batch_id: str,
+        batch: List[BatchableRequest],
+        start_time: float,
+        error: Exception,
+    ) -> BatchResult:
+        """
+        Create BatchResult for failed batch execution.
+
+        Issue #620.
+        """
+        return BatchResult(
+            batch_id=batch_id,
+            request_ids=[req.id for req in batch],
+            combined_content="",
+            response="",
+            processing_time=time.time() - start_time,
+            success=False,
+            error_message=str(error),
+        )
+
     async def _execute_batch(
         self, batch: List[BatchableRequest], strategy: BatchingStrategy
     ):
-        """Execute a batch of requests"""
+        """Execute a batch of requests."""
         if not batch:
             return
 
@@ -536,59 +602,30 @@ class IntelligentRequestBatcher:
         start_time = time.time()
 
         try:
-            # Combine requests into single prompt
             combined_content = self._combine_requests(batch)
-
-            # Execute combined request (placeholder - implement actual API call)
             response = await self._execute_combined_request(combined_content)
-
-            # Parse response back to individual responses
             individual_responses = self._parse_batch_response(batch, response)
 
-            # Create result
-            result = BatchResult(
-                batch_id=batch_id,
-                request_ids=[req.id for req in batch],
-                combined_content=combined_content,
-                response=response,
-                processing_time=time.time() - start_time,
-                success=True,
-                individual_responses=individual_responses,
+            result = self._create_success_batch_result(
+                batch_id,
+                batch,
+                combined_content,
+                response,
+                start_time,
+                individual_responses,
             )
-
             self.batch_results[batch_id] = result
             await self._update_statistics(batch, result)
             self.adaptive_engine.record_batch_result(strategy, result)
 
-            # Execute callbacks
-            for request in batch:
-                if request.callback:
-                    try:
-                        response_text = individual_responses.get(request.id, response)
-                        await request.callback(response_text)
-                    except Exception as e:
-                        logger.error(
-                            "Error executing callback for %s: %s", request.id, e
-                        )
-
+            await self._execute_batch_callbacks(batch, individual_responses, response)
             logger.info(
                 f"Successfully executed batch {batch_id} with {len(batch)} requests"
             )
 
         except Exception as e:
             logger.error("Error executing batch %s: %s", batch_id, e)
-
-            # Create error result
-            result = BatchResult(
-                batch_id=batch_id,
-                request_ids=[req.id for req in batch],
-                combined_content="",
-                response="",
-                processing_time=time.time() - start_time,
-                success=False,
-                error_message=str(e),
-            )
-
+            result = self._create_error_batch_result(batch_id, batch, start_time, e)
             self.batch_results[batch_id] = result
             self.adaptive_engine.record_batch_result(strategy, result)
 

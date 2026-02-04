@@ -693,71 +693,95 @@ class RedisConnectionManager:
 
         return await self._create_async_pool_with_retry(database_name, config)
 
+    def _check_sync_client_preconditions(self, database_name: str) -> Optional[bool]:
+        """
+        Check preconditions before getting sync client.
+
+        Returns None if preconditions pass, False if client should not be returned.
+        Issue #620.
+        """
+        if not self._config.get("enabled", True):
+            logger.warning("Redis is disabled in configuration")
+            return False
+
+        if self._check_circuit_breaker(database_name):
+            logger.warning(
+                f"Circuit breaker is open for database '{database_name}', rejecting request"
+            )
+            return False
+
+        return None
+
+    def _ensure_sync_pool_exists(self, database_name: str) -> None:
+        """
+        Ensure sync connection pool exists for database, creating if needed.
+
+        Uses double-checked locking pattern for thread safety.
+        Issue #620.
+        """
+        if database_name not in self._sync_pools:
+            with self._init_lock:
+                if database_name not in self._sync_pools:
+                    self._sync_pools[database_name] = self._create_sync_pool(
+                        database_name
+                    )
+
+    def _handle_sync_client_success(
+        self, database_name: str, client: redis.Redis, start_time: float
+    ) -> redis.Redis:
+        """
+        Handle successful sync client creation and connection verification.
+
+        Records metrics and updates connection state.
+        Issue #620.
+        """
+        self._active_sync_connections.add(client)
+        response_time_ms = (time.time() - start_time) * 1000
+        self._record_success(database_name, response_time_ms)
+        self._update_stats(database_name, success=True)
+        self._states[database_name] = ConnectionState.HEALTHY
+        return client
+
+    def _handle_sync_client_failure(self, database_name: str, error: Exception) -> None:
+        """
+        Handle sync client creation failure.
+
+        Records failure metrics and updates connection state.
+        Issue #620.
+        """
+        logger.error(
+            f"Failed to get sync Redis client for database '{database_name}': {error}"
+        )
+        self._record_failure(database_name, error)
+        self._update_stats(database_name, success=False, error=str(error))
+        self._states[database_name] = ConnectionState.FAILED
+
     def get_sync_client(self, database_name: str = "main") -> Optional[redis.Redis]:
         """
         Get synchronous Redis client with circuit breaker.
 
         POOLING BEHAVIOR (Issue #743):
         ===============================
-        This method returns a client backed by a SINGLETON connection pool.
-        The pool is created ONCE on first call and reused for all subsequent calls.
+        Returns a client backed by a SINGLETON connection pool.
+        Pool is created ONCE on first call and reused for subsequent calls.
 
-        Example:
-            # First call creates pool with max 20 connections
-            client1 = manager.get_sync_client("main")  # Pool created
-
-            # Subsequent calls reuse THE SAME pool
-            client2 = manager.get_sync_client("main")  # Pool reused
-            client3 = manager.get_sync_client("main")  # Pool reused
-
-            # All 3 clients share the same pool of max 20 connections
-            # Memory usage: 1 pool, not 3 pools
-
-        Features:
-        - Circuit breaker protection
-        - TCP keepalive tuning
-        - WeakSet connection tracking
-        - Enhanced statistics collection
+        Features: Circuit breaker, TCP keepalive, WeakSet tracking, statistics.
         """
-        if not self._config.get("enabled", True):
-            logger.warning("Redis is disabled in configuration")
-            return None
-
-        if self._check_circuit_breaker(database_name):
-            logger.warning(
-                f"Circuit breaker is open for database '{database_name}', rejecting request"
-            )
+        precondition_result = self._check_sync_client_preconditions(database_name)
+        if precondition_result is False:
             return None
 
         try:
             start_time = time.time()
-
-            if database_name not in self._sync_pools:
-                with self._init_lock:
-                    if database_name not in self._sync_pools:
-                        self._sync_pools[database_name] = self._create_sync_pool(
-                            database_name
-                        )
+            self._ensure_sync_pool_exists(database_name)
 
             client = redis.Redis(connection_pool=self._sync_pools[database_name])
             client.ping()
 
-            self._active_sync_connections.add(client)
-
-            response_time_ms = (time.time() - start_time) * 1000
-            self._record_success(database_name, response_time_ms)
-            self._update_stats(database_name, success=True)
-            self._states[database_name] = ConnectionState.HEALTHY
-
-            return client
+            return self._handle_sync_client_success(database_name, client, start_time)
 
         except Exception as e:
-            logger.error(
-                f"Failed to get sync Redis client for database '{database_name}': {e}"
-            )
-            self._record_failure(database_name, e)
-            self._update_stats(database_name, success=False, error=str(e))
-            self._states[database_name] = ConnectionState.FAILED
+            self._handle_sync_client_failure(database_name, e)
             return None
 
     async def _ensure_async_pool_exists(self, database_name: str) -> None:
