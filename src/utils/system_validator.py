@@ -1057,8 +1057,61 @@ class SystemValidator:
 
         return self._get_component_results(component)
 
+    def _validate_collector_init(
+        self, component: str, collector, init_time: float
+    ) -> None:
+        """
+        Record metrics collector initialization result.
+
+        Args:
+            component: Component name for result logging
+            collector: Metrics collector instance
+            init_time: Initialization time in milliseconds
+
+        Issue #620.
+        """
+        self._add_result(
+            component,
+            "Collector Initialization",
+            ValidationSeverity.SUCCESS,
+            True,
+            "Metrics collector initialized",
+            {"init_time_ms": init_time},
+            init_time,
+        )
+
+    async def _run_monitoring_validation_tests(self, component: str, collector) -> None:
+        """
+        Run all monitoring system validation tests.
+
+        Executes tests for system metrics, service health, storage, and summary. Issue #620.
+        """
+        # Test 2: System metrics collection
+        start_time = time.time()
+        system_metrics = await collector.collect_system_metrics()
+        collection_time = (time.time() - start_time) * 1000
+        self._validate_system_metrics_result(component, system_metrics, collection_time)
+
+        # Test 3: Service health collection
+        start_time = time.time()
+        health_metrics = await collector.collect_service_health()
+        health_time = (time.time() - start_time) * 1000
+        self._validate_service_health_result(component, health_metrics, health_time)
+
+        # Test 4: Metrics storage
+        start_time = time.time()
+        all_metrics = await collector.collect_all_metrics()
+        storage_success = await collector.store_metrics(all_metrics)
+        storage_time = (time.time() - start_time) * 1000
+        self._validate_metrics_storage_result(
+            component, storage_success, all_metrics, storage_time
+        )
+
+        # Test 5: Metrics summary
+        await self._validate_health_summary(component, collector)
+
     async def validate_monitoring_system(self) -> List[ValidationResult]:
-        """Validate monitoring and metrics system"""
+        """Validate monitoring and metrics system."""
         component = "Monitoring System"
 
         try:
@@ -1068,42 +1121,10 @@ class SystemValidator:
             start_time = time.time()
             collector = get_metrics_collector()
             init_time = (time.time() - start_time) * 1000
+            self._validate_collector_init(component, collector, init_time)
 
-            self._add_result(
-                component,
-                "Collector Initialization",
-                ValidationSeverity.SUCCESS,
-                True,
-                "Metrics collector initialized",
-                {"init_time_ms": init_time},
-                init_time,
-            )
-
-            # Test 2: System metrics collection (uses helper)
-            start_time = time.time()
-            system_metrics = await collector.collect_system_metrics()
-            collection_time = (time.time() - start_time) * 1000
-            self._validate_system_metrics_result(
-                component, system_metrics, collection_time
-            )
-
-            # Test 3: Service health collection (uses helper)
-            start_time = time.time()
-            health_metrics = await collector.collect_service_health()
-            health_time = (time.time() - start_time) * 1000
-            self._validate_service_health_result(component, health_metrics, health_time)
-
-            # Test 4: Metrics storage (uses helper)
-            start_time = time.time()
-            all_metrics = await collector.collect_all_metrics()
-            storage_success = await collector.store_metrics(all_metrics)
-            storage_time = (time.time() - start_time) * 1000
-            self._validate_metrics_storage_result(
-                component, storage_success, all_metrics, storage_time
-            )
-
-            # Test 5: Metrics summary (uses helper)
-            await self._validate_health_summary(component, collector)
+            # Run remaining validation tests
+            await self._run_monitoring_validation_tests(component, collector)
 
         except Exception as e:
             self._add_result(
@@ -1414,11 +1435,12 @@ class SystemValidator:
 
         return report
 
-    def _generate_recommendations(self) -> List[str]:
-        """Generate actionable recommendations based on validation results"""
-        recommendations = []
+    def _build_critical_recommendations(self, recommendations: List[str]) -> None:
+        """
+        Add recommendations for critical issues to the list.
 
-        # Critical issues
+        Finds critical validation failures and adds deployment warnings. Issue #620.
+        """
         critical_results = [
             r
             for r in self.results
@@ -1431,7 +1453,12 @@ class SystemValidator:
             for result in critical_results[:3]:  # Show first 3
                 recommendations.append(f"  - {result.component}: {result.message}")
 
-        # Performance issues
+    def _build_performance_recommendations(self, recommendations: List[str]) -> None:
+        """
+        Add recommendations for performance issues to the list.
+
+        Identifies operations exceeding response time threshold. Issue #620.
+        """
         slow_tests = [
             r
             for r in self.results
@@ -1443,8 +1470,13 @@ class SystemValidator:
                 f"PERFORMANCE: {len(slow_tests)} operations are slower than {threshold}ms"
             )
 
-        # Component-specific recommendations
-        failed_by_component = {}
+    def _build_component_recommendations(self, recommendations: List[str]) -> None:
+        """
+        Add recommendations for component-specific failures to the list.
+
+        Identifies component with most failures and suggests prioritization. Issue #620.
+        """
+        failed_by_component: Dict[str, int] = {}
         for result in self.results:
             if not result.status:
                 component = result.component
@@ -1458,14 +1490,28 @@ class SystemValidator:
                 f"FOCUS: '{worst_component[0]}' has {worst_component[1]} failing tests - prioritize fixes here"
             )
 
-        # Success acknowledgments
+    def _build_success_recommendations(self, recommendations: List[str]) -> None:
+        """
+        Add success acknowledgments to the recommendations list.
+
+        Counts passing tests and adds positive feedback. Issue #620.
+        """
         success_count = sum(1 for r in self.results if r.status)
         if success_count > 0:
             recommendations.append(
                 f"POSITIVE: {success_count} tests are passing successfully"
             )
 
-        # Overall system health
+    def _generate_recommendations(self) -> List[str]:
+        """Generate actionable recommendations based on validation results."""
+        recommendations: List[str] = []
+
+        self._build_critical_recommendations(recommendations)
+        self._build_performance_recommendations(recommendations)
+        self._build_component_recommendations(recommendations)
+        self._build_success_recommendations(recommendations)
+
+        # Overall system health - only if no other recommendations
         if not recommendations:
             recommendations.append("EXCELLENT: All systems are operating optimally")
 

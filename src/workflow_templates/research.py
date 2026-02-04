@@ -15,6 +15,56 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
+def _create_comprehensive_research_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for comprehensive research template.
+
+    Returns list of WorkflowStep objects for knowledge base search, web research,
+    source verification, synthesis, and storing results. Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="kb_search",
+            agent_type="librarian",
+            action="Search existing knowledge base for relevant information",
+            description="Librarian: Knowledge Base Search",
+            expected_duration_ms=5000,
+        ),
+        WorkflowStep(
+            id="web_research",
+            agent_type="research",
+            action="Conduct comprehensive web research on the topic",
+            description="Research: Web Research",
+            dependencies=["kb_search"],
+            expected_duration_ms=60000,
+        ),
+        WorkflowStep(
+            id="source_verification",
+            agent_type="research",
+            action="Verify and cross-reference research sources",
+            description="Research: Source Verification",
+            dependencies=["web_research"],
+            expected_duration_ms=20000,
+        ),
+        WorkflowStep(
+            id="synthesis",
+            agent_type="orchestrator",
+            action="Synthesize research findings into comprehensive report",
+            description="Orchestrator: Research Synthesis",
+            dependencies=["source_verification"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="store_research",
+            agent_type="knowledge_manager",
+            action="Store research findings and sources in knowledge base",
+            description="Knowledge_Manager: Store Research",
+            dependencies=["synthesis"],
+            expected_duration_ms=5000,
+        ),
+    ]
+
+
 def create_comprehensive_research_template() -> WorkflowTemplate:
     """Create comprehensive research workflow template."""
     return WorkflowTemplate(
@@ -30,47 +80,7 @@ def create_comprehensive_research_template() -> WorkflowTemplate:
             "research_topic": "Main research topic or question",
             "research_depth": "Depth of research (surface, detailed, comprehensive)",
         },
-        steps=[
-            WorkflowStep(
-                id="kb_search",
-                agent_type="librarian",
-                action="Search existing knowledge base for relevant information",
-                description="Librarian: Knowledge Base Search",
-                expected_duration_ms=5000,
-            ),
-            WorkflowStep(
-                id="web_research",
-                agent_type="research",
-                action="Conduct comprehensive web research on the topic",
-                description="Research: Web Research",
-                dependencies=["kb_search"],
-                expected_duration_ms=60000,
-            ),
-            WorkflowStep(
-                id="source_verification",
-                agent_type="research",
-                action="Verify and cross-reference research sources",
-                description="Research: Source Verification",
-                dependencies=["web_research"],
-                expected_duration_ms=20000,
-            ),
-            WorkflowStep(
-                id="synthesis",
-                agent_type="orchestrator",
-                action="Synthesize research findings into comprehensive report",
-                description="Orchestrator: Research Synthesis",
-                dependencies=["source_verification"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="store_research",
-                agent_type="knowledge_manager",
-                action="Store research findings and sources in knowledge base",
-                description="Knowledge_Manager: Store Research",
-                dependencies=["synthesis"],
-                expected_duration_ms=5000,
-            ),
-        ],
+        steps=_create_comprehensive_research_steps(),
     )
 
 

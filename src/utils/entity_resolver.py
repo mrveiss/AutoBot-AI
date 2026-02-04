@@ -461,6 +461,54 @@ class EntityResolver:
         except Exception as e:
             logger.error("Error recording resolution history: %s", e)
 
+    def _extract_entities_from_facts(self, facts: List[AtomicFact]) -> set:
+        """
+        Extract all unique entities from a list of atomic facts.
+
+        Collects entities from the entities list, subject, and object of each fact.
+
+        Args:
+            facts: List of atomic facts to extract entities from.
+
+        Returns:
+            Set of unique entity strings.
+
+        Issue #620.
+        """
+        all_entities = set()
+        for fact in facts:
+            all_entities.update(fact.entities)
+            all_entities.add(fact.subject)
+            all_entities.add(fact.object)
+        return all_entities
+
+    def _apply_resolution_to_fact(
+        self, fact: AtomicFact, resolution_result: EntityResolutionResult
+    ) -> AtomicFact:
+        """
+        Apply entity resolution to a single atomic fact.
+
+        Args:
+            fact: The atomic fact to update.
+            resolution_result: Resolution result containing canonical mappings.
+
+        Returns:
+            Updated atomic fact with resolved entities.
+
+        Issue #620.
+        """
+        resolved_entities = [
+            resolution_result.get_canonical_name(entity) for entity in fact.entities
+        ]
+        resolved_subject = resolution_result.get_canonical_name(fact.subject)
+        resolved_object = resolution_result.get_canonical_name(fact.object)
+
+        return fact.with_resolved_entities(
+            resolved_subject=resolved_subject,
+            resolved_object=resolved_object,
+            resolved_entities=resolved_entities,
+        )
+
     async def resolve_facts_entities(self, facts: List[AtomicFact]) -> List[AtomicFact]:
         """
         Resolve entities within atomic facts.
@@ -477,39 +525,17 @@ class EntityResolver:
         logger.info("Resolving entities in %s facts", len(facts))
 
         try:
-            # Extract all entities from facts
-            all_entities = set()
-            for fact in facts:
-                all_entities.update(fact.entities)
-                # Also consider subject and object as entities
-                all_entities.add(fact.subject)
-                all_entities.add(fact.object)
+            all_entities = self._extract_entities_from_facts(facts)
 
-            # Resolve entities
             resolution_result = await self.resolve_entities(
                 list(all_entities),
                 context={"source": "atomic_facts", "fact_count": len(facts)},
             )
 
-            # Update facts with resolved entity names (Issue #372 - use model method)
-            updated_facts = []
-            for fact in facts:
-                # Resolve entities for this fact
-                resolved_entities = [
-                    resolution_result.get_canonical_name(entity)
-                    for entity in fact.entities
-                ]
-                resolved_subject = resolution_result.get_canonical_name(fact.subject)
-                resolved_object = resolution_result.get_canonical_name(fact.object)
-
-                # Create updated fact using model method (reduces feature envy)
-                updated_fact = fact.with_resolved_entities(
-                    resolved_subject=resolved_subject,
-                    resolved_object=resolved_object,
-                    resolved_entities=resolved_entities,
-                )
-
-                updated_facts.append(updated_fact)
+            updated_facts = [
+                self._apply_resolution_to_fact(fact, resolution_result)
+                for fact in facts
+            ]
 
             logger.info(
                 f"Entity resolution completed: {resolution_result.resolution_rate:.1f}% reduction"
@@ -518,7 +544,7 @@ class EntityResolver:
 
         except Exception as e:
             logger.error("Error resolving fact entities: %s", e)
-            return facts  # Return original facts if resolution fails
+            return facts
 
     def _parse_resolution_history(self, recent_history: List[str]) -> Dict[str, float]:
         """

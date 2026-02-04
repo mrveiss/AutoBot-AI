@@ -12,7 +12,7 @@ Created: 2025-10-31
 
 import json
 import re
-import subprocess
+import subprocess  # nosec B404 - required for shell detection
 from pathlib import Path
 from typing import Any, List, Union
 
@@ -240,29 +240,29 @@ _PROMPT_PATTERNS = [
 
 
 def _has_box_drawing_chars(text: str) -> bool:
-    """Check if text contains box-drawing characters (Issue #281 - extracted helper)."""
+    """Check if text contains box-drawing characters. Issue #620."""
     return any(char in _BOX_CHARS for char in text)
 
 
 def _ends_with_prompt_symbol(text: str) -> bool:
-    """Check if text ends with a prompt symbol (Issue #281 - extracted helper)."""
+    """Check if text ends with a prompt symbol. Issue #620."""
     return any(text.rstrip().endswith(sym) for sym in _PROMPT_SYMBOLS)
 
 
 def _is_mostly_symbols(text: str) -> bool:
-    """Check if text is mostly symbols (< 40% alphanumeric) (Issue #281 - extracted helper)."""
+    """Check if text is mostly symbols (< 40% alphanumeric). Issue #620."""
     alphanumeric_count = sum(1 for c in text if c.isalnum())
     total_chars = len(text.replace(" ", "").replace("\r", "").replace("\n", ""))
     return total_chars > 0 and (alphanumeric_count / total_chars) < 0.4
 
 
 def _matches_prompt_pattern(text: str) -> bool:
-    """Check if text matches known prompt patterns (Issue #281 - extracted helper)."""
+    """Check if text matches known prompt patterns. Issue #620."""
     return any(re.search(pattern, text, re.MULTILINE) for pattern in _PROMPT_PATTERNS)
 
 
 def _is_prompt_line(line: str) -> bool:
-    """Check if a single line is a prompt line (Issue #281 - extracted helper)."""
+    """Check if a single line is a prompt line. Issue #620."""
     return (
         _has_box_drawing_chars(line)
         or _ends_with_prompt_symbol(line)
@@ -271,7 +271,7 @@ def _is_prompt_line(line: str) -> bool:
 
 
 def _has_command_output(lines: list) -> bool:
-    """Check if lines contain substantial command output (Issue #281 - extracted helper)."""
+    """Check if lines contain substantial command output. Issue #620."""
     non_prompt_lines = []
     for line in lines:
         line_stripped = line.strip()
@@ -296,7 +296,7 @@ def is_terminal_prompt(text: str) -> bool:
     - Typical prompt patterns without actual command output
     - Short length (< 300 chars) with mostly whitespace and symbols
 
-    Issue #281: Refactored from 111 lines to use extracted helper methods.
+    Issue #620: Uses extracted helper methods for maintainability.
 
     Args:
         text: Text to check (should already have ANSI codes stripped)

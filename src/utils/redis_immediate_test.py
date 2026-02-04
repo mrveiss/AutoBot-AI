@@ -44,6 +44,69 @@ class RedisConnectionState:
         self.last_error = error
 
 
+def _create_redis_client_for_test(host: str, port: int, db: int) -> redis.Redis:
+    """
+    Create Redis client configured for immediate connection testing.
+
+    Uses no timeouts for instant success/failure detection.
+
+    Args:
+        host: Redis host address.
+        port: Redis port number.
+        db: Database number.
+
+    Returns:
+        Configured Redis client instance.
+
+    Issue #620.
+    """
+    return redis.Redis(
+        host=host,
+        port=port,
+        db=db,
+        decode_responses=True,
+        socket_keepalive=True,
+        socket_keepalive_options={},
+        retry_on_timeout=False,
+        health_check_interval=0,
+        socket_connect_timeout=None,
+        socket_timeout=None,
+    )
+
+
+async def _test_redis_ping(client: redis.Redis) -> bool:
+    """
+    Execute immediate PING test against Redis client.
+
+    Uses thread pool to prevent blocking the event loop.
+
+    Args:
+        client: Redis client to test.
+
+    Returns:
+        True if PING succeeds, False otherwise.
+
+    Issue #620.
+    """
+    return await asyncio.to_thread(client.ping)
+
+
+async def _cleanup_redis_client(client: Optional[redis.Redis]) -> None:
+    """
+    Cleanup Redis client connection safely.
+
+    Args:
+        client: Redis client to close, or None.
+
+    Issue #620.
+    """
+    if client:
+        try:
+            await asyncio.to_thread(client.close)
+        except Exception:  # nosec B110 - cleanup errors are non-critical
+            pass
+
+
 @asynccontextmanager
 async def immediate_redis_test(host: str, port: int, db: int = 0):
     """
@@ -61,28 +124,11 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
     connection_state = RedisConnectionState()
 
     try:
-        # Create connection with no timeout parameters
-        # If Redis is reachable, connection is immediate
-        # If unreachable, fails immediately
-        client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            decode_responses=True,
-            socket_keepalive=True,
-            socket_keepalive_options={},
-            retry_on_timeout=False,
-            health_check_interval=0,  # No background health checks
-            socket_connect_timeout=None,  # No timeout - immediate fail/success
-            socket_timeout=None,  # No timeout - immediate fail/success
-        )
-
-        # Try immediate PING - either works or doesn't
-        # Use thread pool to prevent blocking event loop
-        ping_result = await asyncio.to_thread(client.ping)
+        client = _create_redis_client_for_test(host, port, db)
+        ping_result = await _test_redis_ping(client)
 
         if ping_result:
-            logger.info("✅ Redis immediate connection SUCCESS: %s:%s", host, port)
+            logger.info("Redis immediate connection SUCCESS: %s:%s", host, port)
             connection_state.mark_connected(
                 client, {"host": host, "port": port, "db": db}
             )
@@ -92,16 +138,11 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
 
     except Exception as e:
         error_msg = f"Redis immediate connection FAILED: {host}:{port} - {str(e)}"
-        logger.warning("⚠️ %s", error_msg)
+        logger.warning("%s", error_msg)
         connection_state.mark_disconnected(error_msg)
         yield connection_state
     finally:
-        # Cleanup connection if it exists
-        if connection_state.client:
-            try:
-                await asyncio.to_thread(connection_state.client.close)
-            except Exception:
-                pass  # Ignore cleanup errors
+        await _cleanup_redis_client(connection_state.client)
 
 
 async def create_redis_with_fallback(
@@ -285,7 +326,5 @@ async def test_redis_connection_immediate(
                 )
                 return None
     except Exception as e:
-        logger.error(
-            f"❌ Redis connection test error for database {database}: {str(e)}"
-        )
+        logger.error(f"❌ Redis connection test error for database {database}: {str(e)}")
         return None
