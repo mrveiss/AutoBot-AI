@@ -1211,6 +1211,231 @@ export function useSlmApi() {
     await client.post('/npu/load-balancing', config)
   }
 
+  // =============================================================================
+  // Error Monitoring API (Issue #563)
+  // =============================================================================
+
+  interface ErrorStatistics {
+    total_errors: number
+    errors_24h: number
+    errors_7d: number
+    errors_30d: number
+    resolved_count: number
+    unresolved_count: number
+    error_rate_per_hour: number
+    trend: 'increasing' | 'decreasing' | 'stable'
+  }
+
+  interface RecentError {
+    event_id: string
+    node_id: string
+    hostname: string
+    event_type: string
+    severity: string
+    message: string
+    timestamp: string
+    resolved: boolean
+    resolved_at: string | null
+    resolved_by: string | null
+  }
+
+  interface RecentErrorsResponse {
+    errors: RecentError[]
+    total: number
+    page: number
+    per_page: number
+  }
+
+  interface CategoryBreakdown {
+    category: string
+    count: number
+    percentage: number
+  }
+
+  interface CategoriesResponse {
+    categories: CategoryBreakdown[]
+    total: number
+  }
+
+  interface ComponentBreakdown {
+    node_id: string
+    hostname: string
+    count: number
+    percentage: number
+  }
+
+  interface ComponentsResponse {
+    components: ComponentBreakdown[]
+    total: number
+  }
+
+  interface ErrorHealthResponse {
+    status: 'healthy' | 'warning' | 'critical'
+    error_rate_current: number
+    error_rate_threshold_warning: number
+    error_rate_threshold_critical: number
+    recent_critical_count: number
+    message: string
+  }
+
+  interface MetricsSummary {
+    total_errors: number
+    unresolved_errors: number
+    critical_errors: number
+    error_rate_per_hour: number
+    mean_time_to_resolve_hours: number | null
+    top_error_type: string | null
+    most_affected_node: string | null
+  }
+
+  interface TimelinePoint {
+    timestamp: string
+    count: number
+    critical: number
+    error: number
+  }
+
+  interface TimelineResponse {
+    timeline: TimelinePoint[]
+    interval: string
+    start: string
+    end: string
+  }
+
+  interface TopError {
+    event_type: string
+    message: string
+    count: number
+    last_occurred: string
+    affected_nodes: string[]
+  }
+
+  interface TopErrorsResponse {
+    errors: TopError[]
+  }
+
+  interface AlertThresholdConfig {
+    warning_threshold: number
+    critical_threshold: number
+    retention_days: number
+  }
+
+  interface AlertThresholdResponse extends AlertThresholdConfig {
+    updated: boolean
+  }
+
+  interface CleanupResponse {
+    deleted_count: number
+    retention_days: number
+    message: string
+  }
+
+  interface ClearResponse {
+    deleted_count: number
+    message: string
+  }
+
+  interface ResolveResponse {
+    event_id: string
+    resolved: boolean
+    resolved_at: string
+    resolved_by: string
+  }
+
+  async function getErrorStatistics(): Promise<ErrorStatistics> {
+    const response = await client.get<ErrorStatistics>('/errors/statistics')
+    return response.data
+  }
+
+  async function getRecentErrors(options?: {
+    page?: number
+    per_page?: number
+    severity?: string
+    resolved?: boolean
+  }): Promise<RecentErrorsResponse> {
+    const params = new URLSearchParams()
+    if (options?.page) params.append('page', options.page.toString())
+    if (options?.per_page) params.append('per_page', options.per_page.toString())
+    if (options?.severity) params.append('severity', options.severity)
+    if (options?.resolved !== undefined) params.append('resolved', options.resolved.toString())
+    const response = await client.get<RecentErrorsResponse>(`/errors/recent?${params}`)
+    return response.data
+  }
+
+  async function getErrorCategories(hours: number = 24): Promise<CategoriesResponse> {
+    const response = await client.get<CategoriesResponse>(`/errors/categories?hours=${hours}`)
+    return response.data
+  }
+
+  async function getErrorComponents(hours: number = 24): Promise<ComponentsResponse> {
+    const response = await client.get<ComponentsResponse>(`/errors/components?hours=${hours}`)
+    return response.data
+  }
+
+  async function getErrorHealth(): Promise<ErrorHealthResponse> {
+    const response = await client.get<ErrorHealthResponse>('/errors/health')
+    return response.data
+  }
+
+  async function clearErrors(options?: {
+    severity?: string
+    older_than_hours?: number
+  }): Promise<ClearResponse> {
+    const params = new URLSearchParams()
+    if (options?.severity) params.append('severity', options.severity)
+    if (options?.older_than_hours) params.append('older_than_hours', options.older_than_hours.toString())
+    const response = await client.post<ClearResponse>(`/errors/clear?${params}`)
+    return response.data
+  }
+
+  async function createTestError(severity: 'error' | 'critical' = 'error'): Promise<{ event_id: string; message: string }> {
+    const response = await client.post<{ event_id: string; message: string }>(`/errors/test-error?severity=${severity}`)
+    return response.data
+  }
+
+  async function getErrorMetricsSummary(): Promise<MetricsSummary> {
+    const response = await client.get<MetricsSummary>('/errors/metrics/summary')
+    return response.data
+  }
+
+  async function getErrorTimeline(options?: {
+    hours?: number
+    interval?: 'hour' | 'day'
+  }): Promise<TimelineResponse> {
+    const params = new URLSearchParams()
+    if (options?.hours) params.append('hours', options.hours.toString())
+    if (options?.interval) params.append('interval', options.interval)
+    const response = await client.get<TimelineResponse>(`/errors/metrics/timeline?${params}`)
+    return response.data
+  }
+
+  async function getTopErrors(options?: {
+    hours?: number
+    limit?: number
+  }): Promise<TopErrorsResponse> {
+    const params = new URLSearchParams()
+    if (options?.hours) params.append('hours', options.hours.toString())
+    if (options?.limit) params.append('limit', options.limit.toString())
+    const response = await client.get<TopErrorsResponse>(`/errors/metrics/top-errors?${params}`)
+    return response.data
+  }
+
+  async function resolveError(eventId: string): Promise<ResolveResponse> {
+    const response = await client.post<ResolveResponse>(`/errors/metrics/resolve/${eventId}`)
+    return response.data
+  }
+
+  async function configureAlertThreshold(config: AlertThresholdConfig): Promise<AlertThresholdResponse> {
+    const response = await client.post<AlertThresholdResponse>('/errors/metrics/alert-threshold', config)
+    return response.data
+  }
+
+  async function cleanupOldErrors(days?: number): Promise<CleanupResponse> {
+    const params = days ? `?days=${days}` : ''
+    const response = await client.post<CleanupResponse>(`/errors/metrics/cleanup${params}`)
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -1325,5 +1550,19 @@ export function useSlmApi() {
     removeNpuRole,
     getNpuLoadBalancing,
     updateNpuLoadBalancing,
+    // Error Monitoring (Issue #563)
+    getErrorStatistics,
+    getRecentErrors,
+    getErrorCategories,
+    getErrorComponents,
+    getErrorHealth,
+    clearErrors,
+    createTestError,
+    getErrorMetricsSummary,
+    getErrorTimeline,
+    getTopErrors,
+    resolveError,
+    configureAlertThreshold,
+    cleanupOldErrors,
   }
 }
