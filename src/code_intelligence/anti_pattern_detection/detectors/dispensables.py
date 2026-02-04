@@ -20,7 +20,6 @@ from ..models import AntiPatternResult
 from ..severity_utils import get_lazy_class_severity
 from ..types import AntiPatternSeverity, AntiPatternType, Thresholds
 
-
 # AST node types for function definitions
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 
@@ -175,9 +174,7 @@ class DispensableDetector:
 
         # Count attributes
         attributes = [
-            n
-            for n in node.body
-            if isinstance(n, (ast.Assign, ast.AnnAssign))
+            n for n in node.body if isinstance(n, (ast.Assign, ast.AnnAssign))
         ]
 
         total_members = len(methods) + len(attributes)
@@ -334,6 +331,7 @@ class DispensableDetector:
         Detect classes with very similar structure (potential duplicates).
 
         This is a simple heuristic based on method names.
+        Issue #620: Refactored to extract helper methods.
 
         Args:
             tree: AST tree to analyze
@@ -347,43 +345,87 @@ class DispensableDetector:
 
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
-                # Create signature from method names
-                methods = frozenset(
-                    n.name
-                    for n in node.body
-                    if isinstance(n, _FUNCTION_DEF_TYPES)
-                    and not (n.name.startswith("__") and n.name.endswith("__"))
-                )
+                methods = self._extract_class_method_signature(node)
 
                 if len(methods) >= 3:  # Only consider classes with 3+ methods
-                    for existing_name, (existing_methods, existing_line) in class_signatures.items():
-                        # Check for high overlap (>80%)
-                        overlap = methods & existing_methods
-                        union = methods | existing_methods
-                        if union and len(overlap) / len(union) > 0.8:
-                            patterns.append(
-                                AntiPatternResult(
-                                    pattern_type=AntiPatternType.DUPLICATE_ABSTRACTION,
-                                    severity=AntiPatternSeverity.MEDIUM,
-                                    file_path=file_path,
-                                    line_number=node.lineno,
-                                    entity_name=f"{node.name}, {existing_name}",
-                                    description=(
-                                        f"Classes '{node.name}' and '{existing_name}' "
-                                        f"have {len(overlap)}/{len(union)} overlapping methods"
-                                    ),
-                                    suggestion=(
-                                        "Consider extracting common functionality "
-                                        "into a base class or shared module"
-                                    ),
-                                    metrics={
-                                        "overlap_count": len(overlap),
-                                        "overlap_methods": list(overlap)[:5],
-                                        "similarity": round(len(overlap) / len(union), 2),
-                                    },
-                                )
-                            )
+                    for existing_name, (
+                        existing_methods,
+                        _,
+                    ) in class_signatures.items():
+                        result = self._check_class_overlap(
+                            node, methods, existing_name, existing_methods, file_path
+                        )
+                        if result:
+                            patterns.append(result)
 
                     class_signatures[node.name] = (methods, node.lineno)
 
         return patterns
+
+    def _extract_class_method_signature(self, node: ast.ClassDef) -> frozenset:
+        """
+        Extract method names signature from a class definition.
+
+        Issue #620: Extracted from detect_duplicate_classes. Issue #620.
+
+        Args:
+            node: AST ClassDef node to extract methods from
+
+        Returns:
+            Frozenset of non-dunder method names
+        """
+        return frozenset(
+            n.name
+            for n in node.body
+            if isinstance(n, _FUNCTION_DEF_TYPES)
+            and not (n.name.startswith("__") and n.name.endswith("__"))
+        )
+
+    def _check_class_overlap(
+        self,
+        node: ast.ClassDef,
+        methods: frozenset,
+        existing_name: str,
+        existing_methods: frozenset,
+        file_path: str,
+    ) -> Optional[AntiPatternResult]:
+        """
+        Check if two classes have significant method overlap indicating duplication.
+
+        Issue #620: Extracted from detect_duplicate_classes. Issue #620.
+
+        Args:
+            node: Current class AST node
+            methods: Method names of current class
+            existing_name: Name of class to compare against
+            existing_methods: Method names of existing class
+            file_path: Path to source file
+
+        Returns:
+            AntiPatternResult if overlap exceeds 80%, None otherwise
+        """
+        overlap = methods & existing_methods
+        union = methods | existing_methods
+        if not union or len(overlap) / len(union) <= 0.8:
+            return None
+
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.DUPLICATE_ABSTRACTION,
+            severity=AntiPatternSeverity.MEDIUM,
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=f"{node.name}, {existing_name}",
+            description=(
+                f"Classes '{node.name}' and '{existing_name}' "
+                f"have {len(overlap)}/{len(union)} overlapping methods"
+            ),
+            suggestion=(
+                "Consider extracting common functionality "
+                "into a base class or shared module"
+            ),
+            metrics={
+                "overlap_count": len(overlap),
+                "overlap_methods": list(overlap)[:5],
+                "similarity": round(len(overlap) / len(union), 2),
+            },
+        )

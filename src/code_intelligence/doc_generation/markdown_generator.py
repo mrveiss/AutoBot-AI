@@ -164,6 +164,7 @@ class MarkdownGenerator:
         """Generate Markdown API documentation.
 
         Issue #665: Refactored to use extracted helper functions.
+        Issue #620: Further refactored to extract module processing.
         """
         lines = [f"# {title}", ""]
 
@@ -173,36 +174,13 @@ class MarkdownGenerator:
 
         diagrams = []
 
-        # Process each module using helpers (Issue #665)
+        # Process each module using helpers (Issue #665, #620)
         for module in modules:
-            lines.extend(_generate_module_header_lines(module))
-            lines.extend(_generate_constants_section(module.constants))
-
-            # Generate class diagram
-            if include_diagrams and module.classes:
-                diagram = self._generate_class_diagram(module)
-                diagrams.append(diagram)
-                lines.extend(
-                    [
-                        "### Class Diagram",
-                        "",
-                        "```mermaid",
-                        diagram.to_mermaid(),
-                        "```",
-                        "",
-                    ]
-                )
-
-            # Classes and functions
-            for class_doc in module.classes:
-                lines.extend(self._generate_class_markdown(class_doc))
-
-            if module.functions:
-                lines.extend(["### Functions", ""])
-                for func_doc in module.functions:
-                    lines.extend(self._generate_function_markdown(func_doc))
-
-            lines.extend(["---", ""])
+            module_lines, module_diagrams = self._process_module_content(
+                module, include_diagrams
+            )
+            lines.extend(module_lines)
+            diagrams.extend(module_diagrams)
 
         content = "\n".join(lines)
 
@@ -216,6 +194,66 @@ class MarkdownGenerator:
             word_count=len(content.split()),
             completeness_score=_calculate_avg_completeness(modules),
         )
+
+    def _process_module_content(
+        self, module: ModuleDoc, include_diagrams: bool
+    ) -> tuple:
+        """
+        Process a single module and generate its markdown content.
+
+        Issue #620: Extracted from _generate_markdown_api. Issue #620.
+
+        Args:
+            module: Module documentation to process
+            include_diagrams: Whether to include class diagrams
+
+        Returns:
+            Tuple of (lines list, diagrams list)
+        """
+        lines = []
+        diagrams = []
+
+        lines.extend(_generate_module_header_lines(module))
+        lines.extend(_generate_constants_section(module.constants))
+
+        # Generate class diagram if requested
+        if include_diagrams and module.classes:
+            diagram = self._generate_class_diagram(module)
+            diagrams.append(diagram)
+            lines.extend(self._format_diagram_section(diagram))
+
+        # Classes and functions
+        for class_doc in module.classes:
+            lines.extend(self._generate_class_markdown(class_doc))
+
+        if module.functions:
+            lines.extend(["### Functions", ""])
+            for func_doc in module.functions:
+                lines.extend(self._generate_function_markdown(func_doc))
+
+        lines.extend(["---", ""])
+        return lines, diagrams
+
+    def _format_diagram_section(self, diagram: DiagramSpec) -> List[str]:
+        """
+        Format a class diagram as a mermaid code block.
+
+        Issue #620: Extracted from _generate_markdown_api. Issue #620.
+
+        Args:
+            diagram: DiagramSpec containing the class diagram
+
+        Returns:
+            List of markdown lines for the diagram section
+        """
+        return [
+            "### Class Diagram",
+            "",
+            "```mermaid",
+            diagram.to_mermaid(),
+            "```",
+            "",
+        ]
 
     def _generate_toc(self, modules: List[ModuleDoc]) -> List[str]:
         """Generate table of contents."""

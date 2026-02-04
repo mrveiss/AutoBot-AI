@@ -679,7 +679,8 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
         Compute pairwise cosine similarities for embeddings batch.
 
         Issue #554: Performance - Uses numpy for O(n) vectorized computation when available,
-        falls back to pure Python O(n²) otherwise. Provides 10-50x speedup for large batches.
+        falls back to pure Python O(n^2) otherwise. Provides 10-50x speedup for large batches.
+        Issue #620: Refactored to extract helper methods.
 
         Args:
             embeddings: List of embedding vectors (None entries are skipped)
@@ -696,42 +697,80 @@ class SemanticAnalysisMixin(AnalyticsInfrastructureMixin):
         try:
             import numpy as np
 
-            # Issue #554: Performance - Vectorized numpy computation
-            indices = [v[0] for v in valid]
-            matrix = np.array([v[1] for v in valid], dtype=np.float32)
-
-            # Normalize rows for cosine similarity
-            norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-            norms = np.where(norms == 0, 1, norms)  # Avoid division by zero
-            normalized = matrix / norms
-
-            # Compute full similarity matrix (upper triangle only needed)
-            sim_matrix = np.dot(normalized, normalized.T)
-
-            # Extract pairs above threshold
-            results = []
-            n = len(indices)
-            for i in range(n):
-                for j in range(i + 1, n):
-                    sim = float(sim_matrix[i, j])
-                    if sim >= min_similarity:
-                        results.append((indices[i], indices[j], sim))
-            return results
-
+            return self._compute_similarities_numpy(valid, min_similarity, np)
         except ImportError:
-            # Fallback to pure Python
-            results = []
-            for idx1, (i, emb1) in enumerate(valid):
-                for idx2 in range(idx1 + 1, len(valid)):
-                    j, emb2 = valid[idx2]
-                    dot_product = sum(a * b for a, b in zip(emb1, emb2))
-                    norm1 = sum(a * a for a in emb1) ** 0.5
-                    norm2 = sum(b * b for b in emb2) ** 0.5
-                    if norm1 > 0 and norm2 > 0:
-                        sim = dot_product / (norm1 * norm2)
-                        if sim >= min_similarity:
-                            results.append((i, j, sim))
-            return results
+            return self._compute_similarities_python(valid, min_similarity)
+
+    def _compute_similarities_numpy(
+        self,
+        valid: List[tuple],
+        min_similarity: float,
+        np,
+    ) -> List[tuple]:
+        """
+        Compute cosine similarities using numpy vectorized operations.
+
+        Issue #554: Performance - Vectorized numpy computation.
+        Issue #620: Extracted from _compute_batch_similarities. Issue #620.
+
+        Args:
+            valid: List of (index, embedding) tuples for valid embeddings
+            min_similarity: Minimum similarity threshold
+            np: numpy module reference
+
+        Returns:
+            List of (i, j, similarity) tuples for pairs above threshold
+        """
+        indices = [v[0] for v in valid]
+        matrix = np.array([v[1] for v in valid], dtype=np.float32)
+
+        # Normalize rows for cosine similarity
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1, norms)  # Avoid division by zero
+        normalized = matrix / norms
+
+        # Compute full similarity matrix (upper triangle only needed)
+        sim_matrix = np.dot(normalized, normalized.T)
+
+        # Extract pairs above threshold
+        results = []
+        n = len(indices)
+        for i in range(n):
+            for j in range(i + 1, n):
+                sim = float(sim_matrix[i, j])
+                if sim >= min_similarity:
+                    results.append((indices[i], indices[j], sim))
+        return results
+
+    def _compute_similarities_python(
+        self,
+        valid: List[tuple],
+        min_similarity: float,
+    ) -> List[tuple]:
+        """
+        Compute cosine similarities using pure Python (fallback when numpy unavailable).
+
+        Issue #620: Extracted from _compute_batch_similarities. Issue #620.
+
+        Args:
+            valid: List of (index, embedding) tuples for valid embeddings
+            min_similarity: Minimum similarity threshold
+
+        Returns:
+            List of (i, j, similarity) tuples for pairs above threshold
+        """
+        results = []
+        for idx1, (i, emb1) in enumerate(valid):
+            for idx2 in range(idx1 + 1, len(valid)):
+                j, emb2 = valid[idx2]
+                dot_product = sum(a * b for a, b in zip(emb1, emb2))
+                norm1 = sum(a * a for a in emb1) ** 0.5
+                norm2 = sum(b * b for b in emb2) ** 0.5
+                if norm1 > 0 and norm2 > 0:
+                    sim = dot_product / (norm1 * norm2)
+                    if sim >= min_similarity:
+                        results.append((i, j, sim))
+        return results
 
     async def _normalize_code_for_embedding(
         self, code: str, language: str = "python"

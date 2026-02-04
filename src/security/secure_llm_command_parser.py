@@ -86,54 +86,50 @@ class SecureLLMCommandParser:
             self._security_layer = EnhancedSecurityLayer()
         return self._security_layer
 
-    def parse_commands(
-        self, llm_response: str, user_goal: str = ""
-    ) -> List[ValidatedCommand]:
-        """
-        Securely parse and validate commands from LLM response
+    def _check_response_injection(
+        self, llm_response: str, user_goal: str
+    ) -> Optional[List[ValidatedCommand]]:
+        """Check for injection attempts in LLM response and block if detected. Issue #620.
 
         Args:
-            llm_response: Raw response text from LLM
-            user_goal: Original user goal for context
+            llm_response: Raw LLM response to check
+            user_goal: Original user goal for logging
 
         Returns:
-            List of validated commands that passed all security checks
+            Empty list if blocked, None if safe to continue
         """
-        self.stats["total_parses"] += 1
-
-        logger.debug("Parsing LLM response (length: %s)", len(llm_response))
-
-        # Step 1: Detect injection attempts in entire response
         response_validation = self.injection_detector.detect_injection(
             llm_response, context="llm_response"
         )
 
         if response_validation.blocked:
-            logger.error("🚨 BLOCKED: LLM response contains injection patterns")
+            logger.error("BLOCKED: LLM response contains injection patterns")
             logger.error("User goal: %s", user_goal)
             logger.error("Detected patterns: %s", response_validation.detected_patterns)
             self.stats["blocked_responses"] += 1
 
-            # Log security event
             self._log_security_event(
                 event_type="llm_response_blocked",
                 user_goal=user_goal,
                 risk_level=response_validation.risk_level.value,
                 patterns=response_validation.detected_patterns,
             )
-
-            return []  # Block entire response if injection detected
-
-        # Step 2: Parse commands from response
-        raw_commands = self._parse_command_structure(llm_response)
-
-        if not raw_commands:
-            logger.debug("No commands found in LLM response")
             return []
 
-        logger.debug("Found %s commands in response", len(raw_commands))
+        return None
 
-        # Step 3: Validate each command individually
+    def _validate_and_collect_commands(
+        self, raw_commands: List[Dict[str, str]], user_goal: str
+    ) -> List[ValidatedCommand]:
+        """Validate each command and collect results. Issue #620.
+
+        Args:
+            raw_commands: List of raw command dictionaries
+            user_goal: Original user goal for context
+
+        Returns:
+            List of validated commands that passed security checks
+        """
         validated_commands = []
 
         for cmd_dict in raw_commands:
@@ -145,8 +141,39 @@ class SecureLLMCommandParser:
             else:
                 self.stats["blocked_commands"] += 1
 
+        return validated_commands
+
+    def parse_commands(
+        self, llm_response: str, user_goal: str = ""
+    ) -> List[ValidatedCommand]:
+        """Securely parse and validate commands from LLM response.
+
+        Args:
+            llm_response: Raw response text from LLM
+            user_goal: Original user goal for context
+
+        Returns:
+            List of validated commands that passed all security checks
+        """
+        self.stats["total_parses"] += 1
+        logger.debug("Parsing LLM response (length: %s)", len(llm_response))
+
+        blocked_result = self._check_response_injection(llm_response, user_goal)
+        if blocked_result is not None:
+            return blocked_result
+
+        raw_commands = self._parse_command_structure(llm_response)
+        if not raw_commands:
+            logger.debug("No commands found in LLM response")
+            return []
+
+        logger.debug("Found %s commands in response", len(raw_commands))
+
+        validated_commands = self._validate_and_collect_commands(
+            raw_commands, user_goal
+        )
         logger.info(
-            "✅ Validated %s/%s commands", len(validated_commands), len(raw_commands)
+            "Validated %s/%s commands", len(validated_commands), len(raw_commands)
         )
 
         return validated_commands

@@ -47,9 +47,7 @@ class SecretManagementMixin:
                 f"Must be one of {valid_secret_types}"
             )
         if scope not in valid_scopes:
-            raise ValueError(
-                f"Invalid scope: {scope}. Must be one of {valid_scopes}"
-            )
+            raise ValueError(f"Invalid scope: {scope}. Must be one of {valid_scopes}")
         if scope == "session" and not session_id:
             raise ValueError("session_id is required for session-scoped secrets")
 
@@ -93,6 +91,42 @@ class SecretManagementMixin:
                     relation_type="shared_with",
                 )
 
+    def _build_secret_metadata(
+        self: AutoBotMemoryGraphCore,
+        owner_id: str,
+        secret_type: str,
+        scope: str,
+        session_id: Optional[str],
+        shared_with: Optional[List[str]],
+        base_metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build metadata dictionary for a secret entity. Issue #620.
+
+        Args:
+            owner_id: User ID of secret owner
+            secret_type: Type of secret
+            scope: Scope level
+            session_id: Session ID for session-scoped secrets
+            shared_with: List of user IDs for shared secrets
+            base_metadata: Optional base metadata to extend
+
+        Returns:
+            Complete metadata dictionary for the secret
+        """
+        secret_metadata = base_metadata or {}
+        secret_metadata.update(
+            {
+                "owner_id": owner_id,
+                "secret_type": secret_type,
+                "scope": scope,
+                "session_id": session_id,
+                "shared_with": shared_with or [],
+                "usage_count": 0,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        )
+        return secret_metadata
+
     async def create_secret_entity(
         self: AutoBotMemoryGraphCore,
         name: str,
@@ -103,10 +137,8 @@ class SecretManagementMixin:
         shared_with: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Create a secret entity with ownership and scoping.
+        """Create a secret entity with ownership and scoping. Issue #608.
 
-        Issue #608: Secrets can be user-scoped, session-scoped, or shared.
         Note: This does NOT store the actual secret value.
 
         Args:
@@ -125,16 +157,9 @@ class SecretManagementMixin:
         self._validate_secret_params(secret_type, scope, session_id)
 
         try:
-            secret_metadata = metadata or {}
-            secret_metadata.update({
-                "owner_id": owner_id,
-                "secret_type": secret_type,
-                "scope": scope,
-                "session_id": session_id,
-                "shared_with": shared_with or [],
-                "usage_count": 0,
-                "created_at": datetime.utcnow().isoformat(),
-            })
+            secret_metadata = self._build_secret_metadata(
+                owner_id, secret_type, scope, session_id, shared_with, metadata
+            )
 
             entity = await self.create_entity(
                 entity_type="secret",
@@ -212,7 +237,7 @@ class SecretManagementMixin:
         if scope and secret_scope != scope:
             return False
 
-        if secret_scope == "session" and session_id:
+        if secret_scope == "session" and session_id:  # nosec B105 - scope enum value
             if secret.get("metadata", {}).get("session_id") != session_id:
                 return False
 

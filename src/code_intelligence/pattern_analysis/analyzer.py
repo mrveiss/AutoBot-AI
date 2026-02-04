@@ -594,6 +594,62 @@ class CodePatternAnalyzer:
             confidence=0.7,
         )
 
+    async def _prepare_duplicate_pattern_for_storage(
+        self, dup: DuplicatePattern
+    ) -> Optional[Dict[str, Any]]:
+        """Prepare a duplicate pattern for ChromaDB storage. Issue #620.
+
+        Args:
+            dup: Duplicate pattern to prepare
+
+        Returns:
+            Pattern dict ready for storage, or None if no canonical code
+        """
+        if not dup.canonical_code:
+            return None
+
+        return {
+            "pattern_type": "duplicate",
+            "code_content": dup.canonical_code,
+            "embedding": await self._generate_embedding(dup.canonical_code),
+            "metadata": {
+                "file_path": dup.locations[0].file_path if dup.locations else "",
+                "start_line": dup.locations[0].start_line if dup.locations else 0,
+                "occurrence_count": dup.occurrence_count,
+                "severity": dup.severity.value,
+            },
+        }
+
+    async def _prepare_regex_pattern_for_storage(
+        self, regex_opp: Any
+    ) -> Optional[Dict[str, Any]]:
+        """Prepare a regex opportunity pattern for ChromaDB storage. Issue #620.
+
+        Args:
+            regex_opp: Regex opportunity pattern to prepare
+
+        Returns:
+            Pattern dict ready for storage, or None if no current code
+        """
+        if not regex_opp.current_code:
+            return None
+
+        return {
+            "pattern_type": "regex_opportunity",
+            "code_content": regex_opp.current_code,
+            "embedding": await self._generate_embedding(regex_opp.current_code),
+            "metadata": {
+                "file_path": regex_opp.locations[0].file_path
+                if regex_opp.locations
+                else "",
+                "start_line": regex_opp.locations[0].start_line
+                if regex_opp.locations
+                else 0,
+                "suggested_regex": regex_opp.suggested_regex,
+                "severity": regex_opp.severity.value,
+            },
+        }
+
     async def _store_patterns(self, report: PatternAnalysisReport) -> None:
         """Store patterns in ChromaDB for similarity search.
 
@@ -604,54 +660,18 @@ class CodePatternAnalyzer:
             return
 
         try:
-            # Prepare patterns for storage
             patterns_to_store = []
 
             for dup in report.duplicate_patterns:
-                if dup.canonical_code:
-                    patterns_to_store.append(
-                        {
-                            "pattern_type": "duplicate",
-                            "code_content": dup.canonical_code,
-                            "embedding": await self._generate_embedding(
-                                dup.canonical_code
-                            ),
-                            "metadata": {
-                                "file_path": dup.locations[0].file_path
-                                if dup.locations
-                                else "",
-                                "start_line": dup.locations[0].start_line
-                                if dup.locations
-                                else 0,
-                                "occurrence_count": dup.occurrence_count,
-                                "severity": dup.severity.value,
-                            },
-                        }
-                    )
+                pattern = await self._prepare_duplicate_pattern_for_storage(dup)
+                if pattern:
+                    patterns_to_store.append(pattern)
 
             for regex_opp in report.regex_opportunities:
-                if regex_opp.current_code:
-                    patterns_to_store.append(
-                        {
-                            "pattern_type": "regex_opportunity",
-                            "code_content": regex_opp.current_code,
-                            "embedding": await self._generate_embedding(
-                                regex_opp.current_code
-                            ),
-                            "metadata": {
-                                "file_path": regex_opp.locations[0].file_path
-                                if regex_opp.locations
-                                else "",
-                                "start_line": regex_opp.locations[0].start_line
-                                if regex_opp.locations
-                                else 0,
-                                "suggested_regex": regex_opp.suggested_regex,
-                                "severity": regex_opp.severity.value,
-                            },
-                        }
-                    )
+                pattern = await self._prepare_regex_pattern_for_storage(regex_opp)
+                if pattern:
+                    patterns_to_store.append(pattern)
 
-            # Store in batch
             if patterns_to_store:
                 stored_count = await store_patterns_batch(patterns_to_store)
                 logger.info("Stored %d patterns in ChromaDB", stored_count)

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import sqlite3
 import sys
 from datetime import datetime
@@ -24,6 +25,40 @@ from typing import Optional
 
 import aiohttp
 from aiohttp import web
+
+
+def sd_notify(state: str) -> bool:
+    """
+    Send notification to systemd.
+
+    This is a lightweight implementation that doesn't require the sdnotify package.
+    Used for watchdog support (Issue #xxx - slm-agent watchdog timeout fix).
+
+    Args:
+        state: Notification state string (e.g., "READY=1", "WATCHDOG=1")
+
+    Returns:
+        True if notification was sent successfully, False otherwise.
+    """
+    notify_socket = os.environ.get("NOTIFY_SOCKET")
+    if not notify_socket:
+        return False
+
+    try:
+        # Handle abstract socket (starts with @)
+        if notify_socket.startswith("@"):
+            notify_socket = "\0" + notify_socket[1:]
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        try:
+            sock.connect(notify_socket)
+            sock.sendall(state.encode("utf-8"))
+            return True
+        finally:
+            sock.close()
+    except Exception:
+        return False
+
 
 from .health_collector import HealthCollector
 from .port_scanner import get_listening_ports
@@ -334,11 +369,17 @@ class SLMAgent:
             "SLM Agent started (node_id=%s, admin=%s)", self.node_id, self.admin_url
         )
 
+        # Notify systemd that we're ready
+        sd_notify("READY=1")
+
         # Issue #741: Start notification server if enabled (code-source nodes)
         if enable_notify_server:
             await self.start_notify_server(notify_port)
 
         while self.running:
+            # Send systemd watchdog notification (prevents timeout restart)
+            sd_notify("WATCHDOG=1")
+
             # Send heartbeat
             success = await self.send_heartbeat()
 
@@ -349,6 +390,8 @@ class SLMAgent:
             # Wait for next heartbeat
             await asyncio.sleep(self.heartbeat_interval)
 
+        # Notify systemd we're stopping
+        sd_notify("STOPPING=1")
         logger.info("SLM Agent stopped")
 
     def stop(self):
