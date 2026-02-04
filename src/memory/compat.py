@@ -310,7 +310,7 @@ class LongTermMemoryManager:
             retention_days=90,
         )
         logger.info(
-            f"LongTermMemoryManager compatibility wrapper initialized at {db_path}"
+            "LongTermMemoryManager compatibility wrapper initialized at %s", db_path
         )
 
     async def store_memory(
@@ -351,8 +351,21 @@ class LongTermMemoryManager:
         )
 
     async def search_by_metadata(self, metadata_query: Dict) -> List[MemoryEntry]:
-        """Search by metadata (limited implementation)"""
-        # Convert to content search
+        """
+        Search by metadata (limited implementation).
+
+        WARNING: This is a limited implementation that converts metadata values
+        to a text search query. It does NOT perform true metadata key/value matching.
+        Results may include false positives if content happens to contain the
+        metadata values as text.
+
+        Args:
+            metadata_query: Dictionary of metadata key/value pairs to search for
+
+        Returns:
+            List of MemoryEntry where content matches the search query
+        """
+        # Convert to content search (limited - does not do true metadata matching)
         query = " ".join(str(v) for v in metadata_query.values())
         return await self._unified.search_memories(query)
 
