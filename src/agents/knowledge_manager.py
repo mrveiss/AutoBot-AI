@@ -32,13 +32,7 @@ import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Protocol,
-)
+from typing import Any, Dict, List, Optional, Protocol
 
 from src.agents.machine_aware_system_knowledge_manager import (
     MachineAwareSystemKnowledgeManager,
@@ -431,9 +425,9 @@ class UnifiedKnowledgeManager:
 
         # Access machine profile from MachineAwareSystemKnowledgeManager
         if hasattr(self._system_manager, "current_machine_profile"):
-            profile: Optional[MachineProfile] = (
-                self._system_manager.current_machine_profile
-            )
+            profile: Optional[
+                MachineProfile
+            ] = self._system_manager.current_machine_profile
             if profile:
                 return profile.to_dict()
 
@@ -988,6 +982,61 @@ class UnifiedKnowledgeManager:
     # BACKUP & MAINTENANCE API
     # ========================================================================
 
+    async def _backup_system_knowledge(self, backup_info: Dict[str, Any]) -> None:
+        """
+        Backup system knowledge using the system manager.
+
+        Issue #620.
+        """
+        if hasattr(self._system_manager, "_backup_current_knowledge"):
+            await self._system_manager._backup_current_knowledge()
+            backup_info["components"]["system_knowledge"] = "backed up"
+
+    def _build_temporal_data(self) -> Dict[str, Any]:
+        """
+        Build temporal metadata dictionary for backup.
+
+        Issue #620.
+        """
+        return {
+            content_id: {
+                "content_id": meta.content_id,
+                "created_time": meta.created_time,
+                "last_modified": meta.last_modified,
+                "last_accessed": meta.last_accessed,
+                "access_count": meta.access_count,
+                "priority": meta.priority.value,
+                "ttl_hours": meta.ttl_hours,
+                "freshness_score": meta.freshness_score,
+            }
+            for content_id, meta in self._temporal_manager.temporal_metadata.items()
+        }
+
+    async def _backup_temporal_metadata(self, backup_info: Dict[str, Any]) -> None:
+        """
+        Backup temporal metadata to JSON file.
+
+        Issue #620.
+        """
+        if not self._temporal_manager:
+            return
+
+        if not hasattr(self._system_manager, "runtime_knowledge_dir"):
+            return
+
+        temporal_backup_path = (
+            self._system_manager.runtime_knowledge_dir / "temporal_metadata_backup.json"
+        )
+        temporal_data = self._build_temporal_data()
+
+        # Issue #358 - avoid blocking
+        await asyncio.to_thread(
+            temporal_backup_path.write_text,
+            json.dumps(temporal_data, indent=2),
+            encoding="utf-8",
+        )
+        backup_info["components"]["temporal_metadata"] = str(temporal_backup_path)
+
     async def backup_knowledge(self) -> Dict[str, Any]:
         """
         Backup current knowledge state
@@ -1008,44 +1057,10 @@ class UnifiedKnowledgeManager:
 
         backup_info = {"timestamp": datetime.now().isoformat(), "components": {}}
 
-        # Backup system knowledge (handled by system manager)
-        if hasattr(self._system_manager, "_backup_current_knowledge"):
-            await self._system_manager._backup_current_knowledge()
-            backup_info["components"]["system_knowledge"] = "backed up"
+        await self._backup_system_knowledge(backup_info)
+        await self._backup_temporal_metadata(backup_info)
 
-        # Save temporal metadata if enabled
-        if self._temporal_manager:
-            # Save temporal metadata to JSON
-            if hasattr(self._system_manager, "runtime_knowledge_dir"):
-                temporal_backup_path = (
-                    self._system_manager.runtime_knowledge_dir
-                    / "temporal_metadata_backup.json"
-                )
-                temporal_data = {
-                    content_id: {
-                        "content_id": meta.content_id,
-                        "created_time": meta.created_time,
-                        "last_modified": meta.last_modified,
-                        "last_accessed": meta.last_accessed,
-                        "access_count": meta.access_count,
-                        "priority": meta.priority.value,
-                        "ttl_hours": meta.ttl_hours,
-                        "freshness_score": meta.freshness_score,
-                    }
-                    for content_id, meta in self._temporal_manager.temporal_metadata.items()
-                }
-
-                # Issue #358 - avoid blocking
-                await asyncio.to_thread(
-                    temporal_backup_path.write_text,
-                    json.dumps(temporal_data, indent=2),
-                    encoding="utf-8",
-                )
-                backup_info["components"]["temporal_metadata"] = str(
-                    temporal_backup_path
-                )
-
-        logger.info("Knowledge backup completed: %s", backup_info['components'])
+        logger.info("Knowledge backup completed: %s", backup_info["components"])
         return backup_info
 
     async def cleanup_expired_content(self) -> Dict[str, int]:

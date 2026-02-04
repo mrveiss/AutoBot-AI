@@ -529,8 +529,46 @@ class GoogleGeminiProvider(BaseAIProvider):
             logger.error("Google Gemini text generation failed: %s", e)
             return self._create_error_response(request, str(e))
 
+    def _prepare_image_content(self, request: AIRequest) -> List[Any]:
+        """
+        Prepare image content list for Gemini Vision analysis.
+
+        Decodes base64 images and prepares them for the model. Issue #620.
+        """
+        import io
+
+        from PIL import Image
+
+        content = [request.prompt]
+        for image_b64 in request.images:
+            image_bytes = base64.b64decode(image_b64)
+            image = Image.open(io.BytesIO(image_bytes))
+            content.append(image)
+        return content
+
+    def _build_image_analysis_response(
+        self, request: AIRequest, response: Any, processing_time: float
+    ) -> AIResponse:
+        """
+        Build AIResponse from Gemini Vision analysis result.
+
+        Constructs standardized response with usage metrics. Issue #620.
+        """
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name="gemini-pro-vision",
+            content=response.text,
+            usage={"prompt_tokens": 0, "completion_tokens": 0},
+            finish_reason="stop",
+            tool_calls=None,
+            confidence=0.85,
+            processing_time=processing_time,
+            metadata={"images_analyzed": len(request.images)},
+        )
+
     async def analyze_image(self, request: AIRequest) -> AIResponse:
-        """Analyze image using Gemini Vision"""
+        """Analyze image using Gemini Vision."""
         await self._check_rate_limit()
 
         if not self.client:
@@ -545,23 +583,9 @@ class GoogleGeminiProvider(BaseAIProvider):
 
         try:
             start_time = time.time()
-
-            # Create vision model
             model = self.client.GenerativeModel("gemini-pro-vision")
+            content = self._prepare_image_content(request)
 
-            # Prepare content with images
-            import io
-
-            from PIL import Image
-
-            content = [request.prompt]
-
-            for image_b64 in request.images:
-                image_bytes = base64.b64decode(image_b64)
-                image = Image.open(io.BytesIO(image_bytes))
-                content.append(image)
-
-            # Generate content
             response = model.generate_content(
                 content,
                 generation_config=self.client.types.GenerationConfig(
@@ -571,18 +595,8 @@ class GoogleGeminiProvider(BaseAIProvider):
             )
 
             processing_time = time.time() - start_time
-
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name="gemini-pro-vision",
-                content=response.text,
-                usage={"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="stop",
-                tool_calls=None,
-                confidence=0.85,
-                processing_time=processing_time,
-                metadata={"images_analyzed": len(request.images)},
+            return self._build_image_analysis_response(
+                request, response, processing_time
             )
 
         except Exception as e:

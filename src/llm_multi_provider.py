@@ -300,6 +300,51 @@ class OpenAIProvider(LLMProvider):
         else:
             raise ImportError("OpenAI package not available")
 
+    def _build_openai_params(self, request: LLMRequest, model: str) -> Dict[str, Any]:
+        """
+        Build OpenAI API request parameters from LLMRequest.
+
+        Constructs the parameter dict for chat completions API. Issue #620.
+        """
+        params = {
+            "model": model,
+            "messages": request.messages,
+            "temperature": request.temperature,
+            "top_p": request.top_p,
+            "frequency_penalty": request.frequency_penalty,
+            "presence_penalty": request.presence_penalty,
+        }
+        if request.max_tokens:
+            params["max_tokens"] = request.max_tokens
+        if request.stop:
+            params["stop"] = request.stop
+        return params
+
+    def _build_openai_success_response(
+        self, response: Any, model: str, start_time: float, request_id: str
+    ) -> LLMResponse:
+        """
+        Build LLMResponse from successful OpenAI API response.
+
+        Extracts content, usage, and metadata from API response. Issue #620.
+        """
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        usage = {
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+        }
+        return LLMResponse(
+            content=content,
+            provider=ProviderType.OPENAI,
+            model=model,
+            usage=usage,
+            finish_reason=choice.finish_reason,
+            response_time=time.time() - start_time,
+            request_id=request_id,
+        )
+
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Execute chat completion with OpenAI."""
         start_time = time.time()
@@ -308,47 +353,15 @@ class OpenAIProvider(LLMProvider):
 
         try:
             model = request.model_name or self.config.default_model or "gpt-3.5-turbo"
-
-            # Build request parameters
-            params = {
-                "model": model,
-                "messages": request.messages,
-                "temperature": request.temperature,
-                "top_p": request.top_p,
-                "frequency_penalty": request.frequency_penalty,
-                "presence_penalty": request.presence_penalty,
-            }
-
-            if request.max_tokens:
-                params["max_tokens"] = request.max_tokens
-            if request.stop:
-                params["stop"] = request.stop
-
-            # Make request to OpenAI
+            params = self._build_openai_params(request, model)
             response = await self.client.chat.completions.create(**params)
-
-            choice = response.choices[0]
-            content = choice.message.content or ""
-
-            usage = {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
-            }
-
-            return LLMResponse(
-                content=content,
-                provider=ProviderType.OPENAI,
-                model=model,
-                usage=usage,
-                finish_reason=choice.finish_reason,
-                response_time=time.time() - start_time,
-                request_id=request.request_id,
+            return self._build_openai_success_response(
+                response, model, start_time, request.request_id
             )
 
         except Exception as e:
             self._total_errors += 1
-            logger.error(f"OpenAI provider error: {e}")
+            logger.error("OpenAI provider error: %s", e)
             return LLMResponse(
                 content="",
                 provider=ProviderType.OPENAI,

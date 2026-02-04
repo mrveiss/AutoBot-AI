@@ -272,64 +272,95 @@ class MarkdownGenerator:
 
         return lines
 
-    def _generate_class_markdown(self, class_doc: ClassDoc) -> List[str]:
-        """Generate Markdown documentation for a class."""
+    def _generate_class_header(self, class_doc: ClassDoc) -> List[str]:
+        """
+        Generate class header with inheritance and decorators.
+
+        Issue #620.
+        """
         lines = [f"### Class: `{class_doc.name}`", ""]
 
-        # Inheritance
         if class_doc.base_classes:
             bases = ", ".join(f"`{b}`" for b in class_doc.base_classes)
             lines.append(f"**Inherits from:** {bases}")
             lines.append("")
 
-        # Decorators
         if class_doc.decorators:
             decorators = ", ".join(f"`@{d}`" for d in class_doc.decorators)
             lines.append(f"**Decorators:** {decorators}")
             lines.append("")
 
-        # Description
         if class_doc.description:
             lines.append(class_doc.description)
             lines.append("")
 
-        # Class variables
-        if class_doc.class_variables:
-            lines.append("#### Class Variables")
-            lines.append("")
-            lines.append("| Name | Type |")
-            lines.append("|------|------|")
-            for name, type_hint in class_doc.class_variables.items():
-                lines.append(f"| `{name}` | `{type_hint}` |")
-            lines.append("")
+        return lines
 
-        # Properties
+    def _generate_class_variables_table(self, class_doc: ClassDoc) -> List[str]:
+        """
+        Generate markdown table for class variables.
+
+        Issue #620.
+        """
+        if not class_doc.class_variables:
+            return []
+
+        lines = ["#### Class Variables", ""]
+        lines.append("| Name | Type |")
+        lines.append("|------|------|")
+        for name, type_hint in class_doc.class_variables.items():
+            lines.append(f"| `{name}` | `{type_hint}` |")
+        lines.append("")
+        return lines
+
+    def _generate_class_members(self, class_doc: ClassDoc) -> List[str]:
+        """
+        Generate documentation for class properties and methods.
+
+        Issue #620.
+        """
+        lines = []
+
         if class_doc.properties:
             lines.append("#### Properties")
             lines.append("")
             for prop in class_doc.properties:
                 lines.extend(self._generate_function_markdown(prop, is_property=True))
 
-        # Methods
         if class_doc.methods:
             lines.append("#### Methods")
             lines.append("")
             for method in class_doc.methods:
                 lines.extend(self._generate_function_markdown(method))
 
-        # Examples
-        if class_doc.examples:
-            lines.append("#### Examples")
-            lines.append("")
-            for example in class_doc.examples:
-                if example.description:
-                    lines.append(example.description)
-                    lines.append("")
-                lines.append(f"```{example.language}")
-                lines.append(example.code)
-                lines.append("```")
-                lines.append("")
+        return lines
 
+    def _generate_class_examples(self, class_doc: ClassDoc) -> List[str]:
+        """
+        Generate examples section for class documentation.
+
+        Issue #620.
+        """
+        if not class_doc.examples:
+            return []
+
+        lines = ["#### Examples", ""]
+        for example in class_doc.examples:
+            if example.description:
+                lines.append(example.description)
+                lines.append("")
+            lines.append(f"```{example.language}")
+            lines.append(example.code)
+            lines.append("```")
+            lines.append("")
+        return lines
+
+    def _generate_class_markdown(self, class_doc: ClassDoc) -> List[str]:
+        """Generate Markdown documentation for a class."""
+        lines = self._generate_class_header(class_doc)
+        lines.extend(self._generate_class_variables_table(class_doc))
+        lines.extend(self._generate_class_members(class_doc))
+        lines.extend(self._generate_class_examples(class_doc))
         return lines
 
     def _generate_function_header(

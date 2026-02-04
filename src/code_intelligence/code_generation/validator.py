@@ -49,6 +49,52 @@ class CodeValidator:
     }
 
     @classmethod
+    def _validate_input(
+        cls, code: str, language: str
+    ) -> Tuple[bool, ValidationResult | None]:
+        """
+        Check input validity before parsing.
+
+        Returns (is_valid, error_result) where error_result is None if valid.
+        Issue #620.
+        """
+        if language != "python":
+            return False, ValidationResult(
+                status=ValidationStatus.UNKNOWN,
+                is_valid=False,
+                errors=[f"Language '{language}' validation not supported"],
+            )
+
+        if not code or not code.strip():
+            return False, ValidationResult(
+                status=ValidationStatus.INCOMPLETE,
+                is_valid=False,
+                errors=["Empty code provided"],
+            )
+
+        return True, None
+
+    @classmethod
+    def _parse_code_ast(
+        cls, code: str
+    ) -> Tuple[ast.AST | None, ValidationResult | None]:
+        """
+        Parse code into AST, returning error result on syntax error.
+
+        Returns (ast_node, error_result) where error_result is None on success.
+        Issue #620.
+        """
+        try:
+            return ast.parse(code), None
+        except SyntaxError as e:
+            return None, ValidationResult(
+                status=ValidationStatus.SYNTAX_ERROR,
+                is_valid=False,
+                errors=[f"Syntax error at line {e.lineno}: {e.msg}"],
+                line_count=len(code.splitlines()),
+            )
+
+    @classmethod
     def validate(cls, code: str, language: str = "python") -> ValidationResult:
         """
         Validate code for syntax and basic semantic correctness.
@@ -60,46 +106,26 @@ class CodeValidator:
         Returns:
             ValidationResult with validation details
         """
-        if language != "python":
-            return ValidationResult(
-                status=ValidationStatus.UNKNOWN,
-                is_valid=False,
-                errors=[f"Language '{language}' validation not supported"],
-            )
+        is_valid, error_result = cls._validate_input(code, language)
+        if not is_valid:
+            return error_result
 
-        if not code or not code.strip():
-            return ValidationResult(
-                status=ValidationStatus.INCOMPLETE,
-                is_valid=False,
-                errors=["Empty code provided"],
-            )
+        ast_node, parse_error = cls._parse_code_ast(code)
+        if parse_error:
+            return parse_error
 
         errors: List[str] = []
         warnings: List[str] = []
-        ast_node = None
-
-        # Try to parse the AST
-        try:
-            ast_node = ast.parse(code)
-        except SyntaxError as e:
-            return ValidationResult(
-                status=ValidationStatus.SYNTAX_ERROR,
-                is_valid=False,
-                errors=[f"Syntax error at line {e.lineno}: {e.msg}"],
-                line_count=len(code.splitlines()),
-            )
-
-        # Check for common issues
         warnings.extend(cls._check_style_issues(code))
         warnings.extend(cls._check_semantic_issues(ast_node))
 
-        # Calculate complexity
         complexity = cls._calculate_complexity(ast_node)
-
         line_count = len(code.splitlines())
 
         return ValidationResult(
-            status=ValidationStatus.VALID if not errors else ValidationStatus.STYLE_ERROR,
+            status=ValidationStatus.VALID
+            if not errors
+            else ValidationStatus.STYLE_ERROR,
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,
@@ -148,9 +174,7 @@ class CodeValidator:
             return
         for default in child.args.defaults:
             if isinstance(default, MUTABLE_DEFAULT_TYPES):  # Issue #380
-                warnings.append(
-                    f"Function '{child.name}' has mutable default argument"
-                )
+                warnings.append(f"Function '{child.name}' has mutable default argument")
 
     @classmethod
     def _check_semantic_issues(cls, node: ast.AST) -> List[str]:

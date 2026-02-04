@@ -682,6 +682,49 @@ class IncrementalKnowledgeSync:
         # Step 5: Invalidate expired knowledge
         await self._invalidate_expired_knowledge()
 
+    async def _scan_and_analyze_changes(
+        self, metrics: SyncMetrics
+    ) -> tuple[list, list]:
+        """
+        Scan files and analyze changes with content hashing.
+
+        Returns changed_files and removed_files lists. Issue #620.
+        """
+        logger.info("Scanning files for changes...")
+        all_files = await self._scan_files()
+
+        logger.info("Analyzing file changes with content hashing...")
+        changed_files, removed_files, new_files = await self._analyze_file_changes(
+            all_files
+        )
+
+        metrics.record_file_analysis(
+            total_scanned=len(all_files),
+            changed_count=len(changed_files),
+            new_count=len(new_files),
+            removed_count=len(removed_files),
+        )
+        logger.info(metrics.get_change_analysis_log())
+        return changed_files, removed_files
+
+    async def _finalize_sync_metrics(
+        self, metrics: SyncMetrics, start_time: float
+    ) -> None:
+        """
+        Calculate final metrics and log sync completion.
+
+        Saves summary and logs performance statistics. Issue #620.
+        """
+        total_time = time.time() - start_time
+        metrics.total_processing_time = total_time
+        metrics.calculate_performance()
+        await self._save_sync_summary(metrics)
+
+        logger.info("=== Incremental Sync Completed ===")
+        logger.info("Total time: %.3fs", total_time)
+        logger.info("Chunks processed: %d", metrics.total_chunks_processed)
+        logger.info("Performance: %.1f chunks/sec", metrics.avg_chunks_per_second)
+
     async def perform_incremental_sync(self) -> SyncMetrics:
         """
         Perform intelligent incremental sync with GPU acceleration.
@@ -690,51 +733,16 @@ class IncrementalKnowledgeSync:
         """
         logger.info("=== Starting Incremental Knowledge Sync ===")
         start_time = time.time()
-
         metrics = SyncMetrics()
 
         try:
-            # Initialize if needed
             if not self.kb:
                 await self.initialize()
 
-            # Step 1: Scan files
-            logger.info("Scanning files for changes...")
-            all_files = await self._scan_files()
-
-            # Step 2: Analyze changes with content hashing
-            logger.info("Analyzing file changes with content hashing...")
-            changed_files, removed_files, new_files = await self._analyze_file_changes(
-                all_files
-            )
-
-            # Issue #372: Use model method to record file analysis
-            metrics.record_file_analysis(
-                total_scanned=len(all_files),
-                changed_count=len(changed_files),
-                new_count=len(new_files),
-                removed_count=len(removed_files),
-            )
-            logger.info(metrics.get_change_analysis_log())
-
-            # Steps 3-5: Process file changes (Issue #665: extracted helper)
+            changed_files, removed_files = await self._scan_and_analyze_changes(metrics)
             await self._process_sync_changes(changed_files, removed_files, metrics)
-
-            # Step 6: Save sync state
             await self._save_sync_state()
-
-            # Calculate final metrics
-            total_time = time.time() - start_time
-            metrics.total_processing_time = total_time
-            metrics.calculate_performance()
-
-            # Save sync summary
-            await self._save_sync_summary(metrics)
-
-            logger.info("=== Incremental Sync Completed ===")
-            logger.info("Total time: %.3fs", total_time)
-            logger.info("Chunks processed: %d", metrics.total_chunks_processed)
-            logger.info("Performance: %.1f chunks/sec", metrics.avg_chunks_per_second)
+            await self._finalize_sync_metrics(metrics, start_time)
 
             return metrics
 
