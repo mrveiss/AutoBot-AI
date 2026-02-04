@@ -173,9 +173,7 @@ class MarkdownReferenceSystem:
             "directory": str(directory),
         }
 
-    def _get_file_metadata(
-        self, file_path: Path, content: str
-    ) -> Dict[str, Any]:
+    def _get_file_metadata(self, file_path: Path, content: str) -> Dict[str, Any]:
         """Issue #665: Extracted from _process_markdown_file to reduce function length.
 
         Calculate hash, stats, word count and tags for a markdown file.
@@ -382,7 +380,9 @@ class MarkdownReferenceSystem:
                     self._extract_references(conn, file_path, content, files)
 
                 except Exception as e:
-                    logger.warning("Error processing references in %s: %s", file_path, e)
+                    logger.warning(
+                        "Error processing references in %s: %s", file_path, e
+                    )
 
             conn.commit()
 
@@ -619,61 +619,85 @@ class MarkdownReferenceSystem:
 
         return doc_results + section_results
 
+    def _get_document_stats_by_type(
+        self, conn: sqlite3.Connection
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Query document statistics grouped by document type.
+
+        Issue #620.
+        """
+        cursor = conn.execute(
+            """
+            SELECT document_type, COUNT(*), SUM(word_count), AVG(word_count)
+            FROM markdown_documents
+            GROUP BY document_type
+        """
+        )
+        doc_stats = {}
+        for row in cursor.fetchall():
+            doc_stats[row[0]] = {
+                "count": row[1],
+                "total_words": row[2],
+                "avg_words": round(row[3], 2) if row[3] else 0,
+            }
+        return doc_stats
+
+    def _get_reference_stats(self, conn: sqlite3.Connection) -> Dict[str, int]:
+        """
+        Query cross-reference statistics grouped by reference type.
+
+        Issue #620.
+        """
+        cursor = conn.execute(
+            """
+            SELECT reference_type, COUNT(*)
+            FROM markdown_cross_references
+            GROUP BY reference_type
+        """
+        )
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+    def _get_section_stats(self, conn: sqlite3.Connection) -> Dict[str, int]:
+        """
+        Query section statistics grouped by section level.
+
+        Issue #620.
+        """
+        cursor = conn.execute(
+            """
+            SELECT section_level, COUNT(*)
+            FROM markdown_sections
+            GROUP BY section_level
+            ORDER BY section_level
+        """
+        )
+        return {f"level_{row[0]}": row[1] for row in cursor.fetchall()}
+
+    def _get_document_totals(self, conn: sqlite3.Connection) -> tuple:
+        """
+        Query overall document totals.
+
+        Issue #620.
+        """
+        cursor = conn.execute(
+            """
+            SELECT
+                COUNT(*) as total_documents,
+                SUM(word_count) as total_words,
+                COUNT(DISTINCT directory) as total_directories
+            FROM markdown_documents
+        """
+        )
+        return cursor.fetchone()
+
     def get_markdown_statistics(self) -> Dict[str, Any]:
         """Get comprehensive markdown statistics"""
         with sqlite3.connect(self.memory_manager.db_path) as conn:
-            # Document counts by type
-            cursor = conn.execute(
-                """
-                SELECT document_type, COUNT(*), SUM(word_count), AVG(word_count)
-                FROM markdown_documents
-                GROUP BY document_type
-            """
-            )
-
-            doc_stats = {}
-            for row in cursor.fetchall():
-                doc_stats[row[0]] = {
-                    "count": row[1],
-                    "total_words": row[2],
-                    "avg_words": round(row[3], 2) if row[3] else 0,
-                }
-
-            # Cross-reference statistics
-            cursor = conn.execute(
-                """
-                SELECT reference_type, COUNT(*)
-                FROM markdown_cross_references
-                GROUP BY reference_type
-            """
-            )
-
-            ref_stats = {row[0]: row[1] for row in cursor.fetchall()}
-
-            # Section statistics
-            cursor = conn.execute(
-                """
-                SELECT section_level, COUNT(*)
-                FROM markdown_sections
-                GROUP BY section_level
-                ORDER BY section_level
-            """
-            )
-
-            section_stats = {f"level_{row[0]}": row[1] for row in cursor.fetchall()}
-
-            # Overall totals
-            cursor = conn.execute(
-                """
-                SELECT
-                    COUNT(*) as total_documents,
-                    SUM(word_count) as total_words,
-                    COUNT(DISTINCT directory) as total_directories
-                FROM markdown_documents
-            """
-            )
-
-            totals = cursor.fetchone()
+            doc_stats = self._get_document_stats_by_type(conn)
+            ref_stats = self._get_reference_stats(conn)
+            section_stats = self._get_section_stats(conn)
+            totals = self._get_document_totals(conn)
 
         return {
             "total_documents": totals[0],

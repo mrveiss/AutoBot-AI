@@ -14,15 +14,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .types import (
-    CodeLocation,
-    ComplexityHotspot,
-    PatternSeverity,
-)
+from .types import CodeLocation, ComplexityHotspot, PatternSeverity
 
 # Issue #607: Import shared caches for performance optimization
 try:
     from src.code_intelligence.shared.ast_cache import get_ast_with_content
+
     HAS_SHARED_CACHE = True
 except ImportError:
     HAS_SHARED_CACHE = False
@@ -507,9 +504,7 @@ class ComplexityAnalyzer:
                     return visitor.max_depth
         return 0
 
-    def _calculate_cognitive_complexity(
-        self, tree: ast.AST, function_name: str
-    ) -> int:
+    def _calculate_cognitive_complexity(self, tree: ast.AST, function_name: str) -> int:
         """Calculate cognitive complexity for a function.
 
         Args:
@@ -548,9 +543,7 @@ class ComplexityAnalyzer:
 
         return results
 
-    def find_hotspots(
-        self, modules: List[ModuleComplexity]
-    ) -> List[ComplexityHotspot]:
+    def find_hotspots(self, modules: List[ModuleComplexity]) -> List[ComplexityHotspot]:
         """Find complexity hotspots across modules.
 
         Args:
@@ -568,9 +561,7 @@ class ComplexityAnalyzer:
                     hotspots.append(hotspot)
 
         # Sort by severity (cyclomatic complexity)
-        return sorted(
-            hotspots, key=lambda x: x.cyclomatic_complexity, reverse=True
-        )
+        return sorted(hotspots, key=lambda x: x.cyclomatic_complexity, reverse=True)
 
     def _create_hotspot(
         self, func: FunctionComplexity, module: ModuleComplexity
@@ -632,10 +623,10 @@ class ComplexityAnalyzer:
 
         # High cyclomatic complexity
         if func.cyclomatic_complexity > 15:
+            suggestions.append("Extract conditional branches into separate methods")
             suggestions.append(
-                "Extract conditional branches into separate methods"
+                "Consider using strategy pattern for multiple conditions"
             )
-            suggestions.append("Consider using strategy pattern for multiple conditions")
 
         if func.cyclomatic_complexity > 10:
             suggestions.append("Break down into smaller, focused functions")
@@ -665,9 +656,75 @@ class ComplexityAnalyzer:
 
         return suggestions
 
-    def generate_report(
-        self, modules: List[ModuleComplexity]
-    ) -> Dict[str, Any]:
+    def _calculate_report_averages(
+        self,
+        all_functions: List[FunctionComplexity],
+        modules: List[ModuleComplexity],
+    ) -> tuple:
+        """Calculate average complexity and maintainability metrics. Issue #620.
+
+        Args:
+            all_functions: List of all functions across modules
+            modules: List of analyzed modules
+
+        Returns:
+            Tuple of (average_cc, average_mi)
+        """
+        avg_cc = (
+            sum(f.cyclomatic_complexity for f in all_functions) / len(all_functions)
+            if all_functions
+            else 0
+        )
+        avg_mi = (
+            sum(m.maintainability_index for m in modules) / len(modules)
+            if modules
+            else 100
+        )
+        return avg_cc, avg_mi
+
+    def _build_complexity_distribution(
+        self, all_functions: List[FunctionComplexity]
+    ) -> Dict[str, int]:
+        """Build complexity rank distribution from functions. Issue #620.
+
+        Args:
+            all_functions: List of all functions across modules
+
+        Returns:
+            Dictionary mapping complexity rank (A-F) to count
+        """
+        cc_dist = {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0, "F": 0}
+        for func in all_functions:
+            cc_dist[func.complexity_rank] += 1
+        return cc_dist
+
+    def _format_worst_functions(
+        self, all_functions: List[FunctionComplexity], limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Format worst complexity offenders for report. Issue #620.
+
+        Args:
+            all_functions: List of all functions across modules
+            limit: Maximum number of functions to include
+
+        Returns:
+            List of formatted function dictionaries
+        """
+        worst_functions = sorted(
+            all_functions, key=lambda x: x.cyclomatic_complexity, reverse=True
+        )[:limit]
+        return [
+            {
+                "name": f.name,
+                "file": f.file_path,
+                "line": f.start_line,
+                "cc": f.cyclomatic_complexity,
+                "rank": f.complexity_rank,
+            }
+            for f in worst_functions
+        ]
+
+    def generate_report(self, modules: List[ModuleComplexity]) -> Dict[str, Any]:
         """Generate a summary report of complexity analysis.
 
         Args:
@@ -687,28 +744,7 @@ class ComplexityAnalyzer:
 
         all_functions = [f for m in modules for f in m.functions]
         hotspots = self.find_hotspots(modules)
-
-        # Calculate averages
-        avg_cc = (
-            sum(f.cyclomatic_complexity for f in all_functions) / len(all_functions)
-            if all_functions
-            else 0
-        )
-        avg_mi = (
-            sum(m.maintainability_index for m in modules) / len(modules)
-            if modules
-            else 100
-        )
-
-        # Complexity distribution
-        cc_dist = {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0, "F": 0}
-        for func in all_functions:
-            cc_dist[func.complexity_rank] += 1
-
-        # Find worst offenders
-        worst_functions = sorted(
-            all_functions, key=lambda x: x.cyclomatic_complexity, reverse=True
-        )[:10]
+        avg_cc, avg_mi = self._calculate_report_averages(all_functions, modules)
 
         return {
             "total_modules": len(modules),
@@ -718,16 +754,9 @@ class ComplexityAnalyzer:
             "hotspots_count": len(hotspots),
             "average_complexity": round(avg_cc, 2),
             "average_maintainability": round(avg_mi, 2),
-            "complexity_distribution": cc_dist,
-            "worst_functions": [
-                {
-                    "name": f.name,
-                    "file": f.file_path,
-                    "line": f.start_line,
-                    "cc": f.cyclomatic_complexity,
-                    "rank": f.complexity_rank,
-                }
-                for f in worst_functions
-            ],
+            "complexity_distribution": self._build_complexity_distribution(
+                all_functions
+            ),
+            "worst_functions": self._format_worst_functions(all_functions),
             "hotspots": [h.to_dict() for h in hotspots[:10]],
         }

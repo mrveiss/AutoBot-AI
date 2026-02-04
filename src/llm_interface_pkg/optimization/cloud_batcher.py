@@ -144,6 +144,52 @@ class CloudRequestBatcher:
         await asyncio.sleep(self.batch_window_ms / 1000.0)
         await self._execute_batch()
 
+    def _resolve_batch_results(
+        self,
+        requests: List[BatchedRequest],
+        responses: List[Any],
+        batch_id: str,
+        batch_size: int,
+    ) -> None:
+        """
+        Match executor responses to requests and resolve futures.
+
+        Issue #620.
+        """
+        for i, request in enumerate(requests):
+            wait_time = (time.time() - request.created_at) * 1000
+            result = BatchResult(
+                request_id=request.request_id,
+                response=responses[i] if i < len(responses) else None,
+                batch_id=batch_id,
+                batch_size=batch_size,
+                wait_time_ms=wait_time,
+            )
+            if not request.future.done():
+                request.future.set_result(result)
+
+    def _fail_batch_requests(
+        self,
+        requests: List[BatchedRequest],
+        error: Exception,
+        batch_id: str,
+        batch_size: int,
+    ) -> None:
+        """
+        Fail all requests in a batch with the given error.
+
+        Issue #620.
+        """
+        for request in requests:
+            result = BatchResult(
+                request_id=request.request_id,
+                error=error,
+                batch_id=batch_id,
+                batch_size=batch_size,
+            )
+            if not request.future.done():
+                request.future.set_result(result)
+
     async def _execute_batch(self) -> None:
         """Execute pending batch of requests."""
         async with self._lock:
@@ -165,47 +211,16 @@ class CloudRequestBatcher:
 
         try:
             if self._executor:
-                # Execute batch using provided executor
                 payloads = [r.payload for r in requests]
                 responses = await self._executor(payloads)
-
-                # Match responses to requests
-                for i, request in enumerate(requests):
-                    wait_time = (time.time() - request.created_at) * 1000
-                    result = BatchResult(
-                        request_id=request.request_id,
-                        response=responses[i] if i < len(responses) else None,
-                        batch_id=batch_id,
-                        batch_size=batch_size,
-                        wait_time_ms=wait_time,
-                    )
-                    if not request.future.done():
-                        request.future.set_result(result)
+                self._resolve_batch_results(requests, responses, batch_id, batch_size)
             else:
-                # No executor - fail all requests
                 error = RuntimeError("No batch executor configured")
-                for request in requests:
-                    result = BatchResult(
-                        request_id=request.request_id,
-                        error=error,
-                        batch_id=batch_id,
-                        batch_size=batch_size,
-                    )
-                    if not request.future.done():
-                        request.future.set_result(result)
+                self._fail_batch_requests(requests, error, batch_id, batch_size)
 
         except Exception as e:
             logger.error("Batch %s execution failed: %s", batch_id, e)
-            # Fail all requests in batch
-            for request in requests:
-                result = BatchResult(
-                    request_id=request.request_id,
-                    error=e,
-                    batch_id=batch_id,
-                    batch_size=batch_size,
-                )
-                if not request.future.done():
-                    request.future.set_result(result)
+            self._fail_batch_requests(requests, e, batch_id, batch_size)
 
         # Update metrics
         execution_time = (time.time() - start_time) * 1000

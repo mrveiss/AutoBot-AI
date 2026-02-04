@@ -290,6 +290,43 @@ async def store_patterns_batch(
         return 0
 
 
+def _process_search_results(
+    results: Dict[str, Any], min_similarity: float
+) -> List[Dict[str, Any]]:
+    """Process ChromaDB query results into pattern list. Issue #620.
+
+    Args:
+        results: Raw ChromaDB query results
+        min_similarity: Minimum similarity threshold (0.0 to 1.0)
+
+    Returns:
+        List of similar patterns with similarity scores
+    """
+    similar_patterns = []
+    if not results or not results.get("ids") or not results["ids"][0]:
+        return similar_patterns
+
+    for i, pattern_id in enumerate(results["ids"][0]):
+        distance = results["distances"][0][i] if results.get("distances") else 0
+        similarity = 1.0 - distance  # Cosine distance to similarity
+
+        if similarity >= min_similarity:
+            similar_patterns.append(
+                {
+                    "id": pattern_id,
+                    "similarity": similarity,
+                    "document": results["documents"][0][i]
+                    if results.get("documents")
+                    else "",
+                    "metadata": results["metadatas"][0][i]
+                    if results.get("metadatas")
+                    else {},
+                }
+            )
+
+    return similar_patterns
+
+
 async def search_similar_patterns(
     query_embedding: List[float],
     pattern_type: Optional[str] = None,
@@ -316,12 +353,8 @@ async def search_similar_patterns(
                 logger.error("Could not get pattern collection")
                 return []
 
-        # Build where filter
-        where_filter = None
-        if pattern_type:
-            where_filter = {"pattern_type": pattern_type}
+        where_filter = {"pattern_type": pattern_type} if pattern_type else None
 
-        # Query ChromaDB
         results = await collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results,
@@ -329,29 +362,7 @@ async def search_similar_patterns(
             include=["documents", "metadatas", "distances"],
         )
 
-        # Process results
-        similar_patterns = []
-        if results and results.get("ids") and results["ids"][0]:
-            for i, pattern_id in enumerate(results["ids"][0]):
-                # Convert distance to similarity (cosine distance)
-                distance = results["distances"][0][i] if results.get("distances") else 0
-                similarity = 1.0 - distance  # Cosine distance to similarity
-
-                if similarity >= min_similarity:
-                    similar_patterns.append(
-                        {
-                            "id": pattern_id,
-                            "similarity": similarity,
-                            "document": results["documents"][0][i]
-                            if results.get("documents")
-                            else "",
-                            "metadata": results["metadatas"][0][i]
-                            if results.get("metadatas")
-                            else {},
-                        }
-                    )
-
-        return similar_patterns
+        return _process_search_results(results, min_similarity)
 
     except Exception as e:
         logger.error("Failed to search similar patterns: %s", e)

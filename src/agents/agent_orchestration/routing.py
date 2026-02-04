@@ -93,36 +93,54 @@ class AgentRouter:
             # Fallback to simple routing
             return self.quick_route_analysis(request)
 
-    def quick_route_analysis(self, request: str) -> Dict[str, Any]:
-        """Quick pattern-based routing analysis."""
-        request_lower = request.lower()
+    def _check_chat_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+        """Check for greeting/chat patterns in request. Issue #620.
 
-        # Chat patterns
-        if any(
-            pattern in request_lower for pattern in GREETING_PATTERNS
-        ):  # O(1) lookup (Issue #326)
+        Args:
+            request_lower: Lowercase request string
+
+        Returns:
+            Routing dict if pattern matched, None otherwise
+        """
+        if any(pattern in request_lower for pattern in GREETING_PATTERNS):
             return {
                 "strategy": "single_agent",
                 "primary_agent": AgentType.CHAT,
                 "confidence": 0.9,
                 "reasoning": "Simple greeting/conversational pattern",
             }
+        return None
 
-        # System command patterns
-        if any(
-            pattern in request_lower for pattern in SYSTEM_COMMAND_PATTERNS
-        ):  # O(1) lookup (Issue #326)
+    def _check_system_command_patterns(
+        self, request_lower: str
+    ) -> Optional[Dict[str, Any]]:
+        """Check for system command patterns in request. Issue #620.
+
+        Args:
+            request_lower: Lowercase request string
+
+        Returns:
+            Routing dict if pattern matched, None otherwise
+        """
+        if any(pattern in request_lower for pattern in SYSTEM_COMMAND_PATTERNS):
             return {
                 "strategy": "single_agent",
                 "primary_agent": AgentType.SYSTEM_COMMANDS,
                 "confidence": 0.9,
                 "reasoning": "System command pattern detected",
             }
+        return None
 
-        # Research patterns
-        if any(
-            pattern in request_lower for pattern in RESEARCH_PATTERNS
-        ):  # O(1) lookup (Issue #326)
+    def _check_research_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+        """Check for research patterns in request. Issue #620.
+
+        Args:
+            request_lower: Lowercase request string
+
+        Returns:
+            Routing dict if pattern matched, None otherwise
+        """
+        if any(pattern in request_lower for pattern in RESEARCH_PATTERNS):
             return {
                 "strategy": "multi_agent",
                 "primary_agent": AgentType.RESEARCH,
@@ -130,11 +148,18 @@ class AgentRouter:
                 "confidence": 0.8,
                 "reasoning": "Web research pattern with synthesis needed",
             }
+        return None
 
-        # Knowledge/RAG patterns
-        if any(
-            pattern in request_lower for pattern in KNOWLEDGE_PATTERNS
-        ):  # O(1) lookup (Issue #326)
+    def _check_knowledge_patterns(self, request_lower: str) -> Optional[Dict[str, Any]]:
+        """Check for knowledge/RAG patterns in request. Issue #620.
+
+        Args:
+            request_lower: Lowercase request string
+
+        Returns:
+            Routing dict if pattern matched, None otherwise
+        """
+        if any(pattern in request_lower for pattern in KNOWLEDGE_PATTERNS):
             return {
                 "strategy": "multi_agent",
                 "primary_agent": AgentType.KNOWLEDGE_RETRIEVAL,
@@ -142,8 +167,17 @@ class AgentRouter:
                 "confidence": 0.8,
                 "reasoning": "Knowledge retrieval with synthesis needed",
             }
+        return None
 
-        # Default to chat for simple requests
+    def _get_default_routing(self, request: str) -> Dict[str, Any]:
+        """Get default routing for unmatched requests. Issue #620.
+
+        Args:
+            request: Original request string
+
+        Returns:
+            Routing dict for short or complex requests
+        """
         if len(request.split()) <= 10:
             return {
                 "strategy": "single_agent",
@@ -151,8 +185,6 @@ class AgentRouter:
                 "confidence": 0.6,
                 "reasoning": "Short request, likely conversational",
             }
-
-        # Complex requests need orchestrator analysis
         return {
             "strategy": "orchestrator_analysis",
             "primary_agent": AgentType.ORCHESTRATOR,
@@ -160,22 +192,39 @@ class AgentRouter:
             "reasoning": "Complex request requiring orchestrator analysis",
         }
 
+    def quick_route_analysis(self, request: str) -> Dict[str, Any]:
+        """Quick pattern-based routing analysis."""
+        request_lower = request.lower()
+
+        # Check patterns in priority order (O(1) lookups - Issue #326)
+        for checker in [
+            self._check_chat_patterns,
+            self._check_system_command_patterns,
+            self._check_research_patterns,
+            self._check_knowledge_patterns,
+        ]:
+            result = checker(request_lower)
+            if result:
+                return result
+
+        return self._get_default_routing(request)
+
     def _get_routing_system_prompt(self) -> str:
         """Get system prompt for routing decisions."""
         return (
             "You are an intelligent agent router. Your task is to analyze user "
             "requests and determine the optimal agent routing strategy.\n\n"
             "Available routing strategies:\n"
-            "1. \"single_agent\" - Route to one specialized agent\n"
-            "2. \"multi_agent\" - Coordinate multiple agents\n"
-            "3. \"orchestrator_analysis\" - Complex analysis needed\n\n"
+            '1. "single_agent" - Route to one specialized agent\n'
+            '2. "multi_agent" - Coordinate multiple agents\n'
+            '3. "orchestrator_analysis" - Complex analysis needed\n\n'
             "Respond in JSON format:\n"
             "{\n"
-            "    \"strategy\": \"single_agent|multi_agent|orchestrator_analysis\",\n"
-            "    \"primary_agent\": \"chat|system_commands|rag|knowledge_retrieval|research\",\n"
-            "    \"secondary_agents\": [\"agent1\", \"agent2\"],\n"
-            "    \"confidence\": 0.8,\n"
-            "    \"reasoning\": \"explanation of routing decision\"\n"
+            '    "strategy": "single_agent|multi_agent|orchestrator_analysis",\n'
+            '    "primary_agent": "chat|system_commands|rag|knowledge_retrieval|research",\n'
+            '    "secondary_agents": ["agent1", "agent2"],\n'
+            '    "confidence": 0.8,\n'
+            '    "reasoning": "explanation of routing decision"\n'
             "}\n\n"
             "Consider:\n"
             "- Task complexity\n"

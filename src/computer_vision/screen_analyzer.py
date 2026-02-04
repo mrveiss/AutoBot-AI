@@ -70,6 +70,48 @@ class ScreenAnalyzer:
             "confidence_score": screen_state.confidence_score,
         }
 
+    async def _perform_screen_analysis(
+        self, session_id: Optional[str], context_audio: Optional[bytes]
+    ) -> Tuple[ScreenState, List[UIElement]]:
+        """
+        Execute the core screen analysis pipeline stages.
+
+        Issue #620.
+        """
+        # Stage 1: Capture screenshot
+        screenshot = await self._capture_screenshot(session_id)
+        if screenshot is None:
+            raise RuntimeError("Failed to capture screenshot")
+
+        # Stage 2: Process multimodal inputs
+        processing_results, primary_result = await self._process_multimodal_inputs(
+            screenshot, session_id, context_audio
+        )
+
+        # Stage 3: Detect and analyze UI elements
+        ui_elements = await self._detect_and_classify_elements(
+            screenshot, primary_result.result_data or {}
+        )
+
+        # Stage 4: Context analysis
+        context_analysis = await self._build_context_analysis(
+            screenshot, ui_elements, processing_results, primary_result
+        )
+
+        # Stage 5: Build screen state
+        screen_state = self._build_screen_state(
+            screenshot,
+            ui_elements,
+            context_analysis,
+            processing_results,
+            primary_result,
+        )
+
+        # Update cache
+        self._update_screenshot_cache(screenshot)
+
+        return screen_state, ui_elements
+
     async def analyze_current_screen(
         self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
     ) -> ScreenState:
@@ -87,44 +129,13 @@ class ScreenAnalyzer:
             inputs={"session_id": session_id},
         ) as task_context:
             try:
-                # Stage 1: Capture screenshot
-                screenshot = await self._capture_screenshot(session_id)
-                if screenshot is None:
-                    raise RuntimeError("Failed to capture screenshot")
-
-                # Stage 2: Process multimodal inputs
-                (
-                    processing_results,
-                    primary_result,
-                ) = await self._process_multimodal_inputs(
-                    screenshot, session_id, context_audio
+                screen_state, ui_elements = await self._perform_screen_analysis(
+                    session_id, context_audio
                 )
 
-                # Stage 3: Detect and analyze UI elements
-                ui_elements = await self._detect_and_classify_elements(
-                    screenshot, primary_result.result_data or {}
-                )
-
-                # Stage 4: Context analysis
-                context_analysis = await self._build_context_analysis(
-                    screenshot, ui_elements, processing_results, primary_result
-                )
-
-                # Stage 5: Build screen state
-                screen_state = self._build_screen_state(
-                    screenshot,
-                    ui_elements,
-                    context_analysis,
-                    processing_results,
-                    primary_result,
-                )
-
-                # Update cache and set outputs
-                self._update_screenshot_cache(screenshot)
                 task_context.set_outputs(
                     self._build_analysis_outputs(ui_elements, screen_state)
                 )
-
                 logger.info(
                     "Screen analysis completed: %d elements, confidence %.2f",
                     len(ui_elements),
