@@ -12,14 +12,14 @@ Part of Issue #381 - God Class Refactoring
 
 import asyncio
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.enhanced_memory_manager_async import TaskPriority
 from src.task_execution_tracker import task_tracker
 
 from ..models import ContextElement, DecisionContext
 from ..time_provider import TimeProvider
-from ..types import ContextType, DecisionType, DEFAULT_USER_PREFERENCES
+from ..types import DEFAULT_USER_PREFERENCES, ContextType, DecisionType
 from .audio import AudioContextCollector
 from .system import SystemContextCollector
 from .visual import VisualContextCollector
@@ -112,9 +112,15 @@ class ContextCollector:
             inputs={"decision_type": decision_type.value, "goal": primary_goal},
         ) as task_context:
             try:
-                decision_id = f"decision_{self.time_provider.current_timestamp_millis()}"
-                context_elements = await self._gather_all_context_elements(decision_type)
-                analysis = await self._analyze_context_elements(decision_type, context_elements)
+                decision_id = (
+                    f"decision_{self.time_provider.current_timestamp_millis()}"
+                )
+                context_elements = await self._gather_all_context_elements(
+                    decision_type
+                )
+                analysis = await self._analyze_context_elements(
+                    decision_type, context_elements
+                )
 
                 decision_context = DecisionContext(
                     decision_id=decision_id,
@@ -126,12 +132,14 @@ class ContextCollector:
                 )
 
                 self._update_context_cache(context_elements)
-                task_context.set_outputs({
-                    "context_elements": len(context_elements),
-                    "available_actions": len(analysis["available_actions"]),
-                    "constraints": len(analysis["constraints"]),
-                    "risk_factors": len(analysis["risk_factors"]),
-                })
+                task_context.set_outputs(
+                    {
+                        "context_elements": len(context_elements),
+                        "available_actions": len(analysis["available_actions"]),
+                        "constraints": len(analysis["constraints"]),
+                        "risk_factors": len(analysis["risk_factors"]),
+                    }
+                )
                 logger.info(
                     f"Context collected: {len(context_elements)} elements for decision {decision_id}"
                 )
@@ -202,21 +210,25 @@ class ContextCollector:
 
         cpu_percent = resource_info.get("cpu_percent", 0)
         if cpu_percent > 80:
-            constraints.append({
-                "type": "high_cpu_usage",
-                "description": f"CPU usage at {cpu_percent}%",
-                "severity": "medium",
-                "affects": ["resource_intensive_tasks"],
-            })
+            constraints.append(
+                {
+                    "type": "high_cpu_usage",
+                    "description": f"CPU usage at {cpu_percent}%",
+                    "severity": "medium",
+                    "affects": ["resource_intensive_tasks"],
+                }
+            )
 
         memory_percent = resource_info.get("memory_percent", 0)
         if memory_percent > 85:
-            constraints.append({
-                "type": "high_memory_usage",
-                "description": f"Memory usage at {memory_percent}%",
-                "severity": "high",
-                "affects": ["memory_intensive_operations"],
-            })
+            constraints.append(
+                {
+                    "type": "high_memory_usage",
+                    "description": f"Memory usage at {memory_percent}%",
+                    "severity": "high",
+                    "affects": ["memory_intensive_operations"],
+                }
+            )
 
         return constraints
 
@@ -237,27 +249,33 @@ class ContextCollector:
 
         # Check for active takeovers (constraint on autonomous actions)
         if context_by_type.get("active_takeovers"):
-            constraints.append({
-                "type": "human_takeover_active",
-                "description": "Human operator has taken control",
-                "severity": "high",
-                "affects": ["automation_action", "navigation_choice"],
-            })
+            constraints.append(
+                {
+                    "type": "human_takeover_active",
+                    "description": "Human operator has taken control",
+                    "severity": "high",
+                    "affects": ["automation_action", "navigation_choice"],
+                }
+            )
 
         # Check system resources (Issue #298 - uses extracted helper)
         for resource_context in context_by_type.get("resource_usage", []):
-            constraints.extend(self._check_resource_constraints(resource_context.content))
+            constraints.extend(
+                self._check_resource_constraints(resource_context.content)
+            )
 
         # Time-based constraints
         for temporal_context in context_by_type.get("temporal_context", []):
             temporal_info = temporal_context.content
             if not temporal_info.get("is_business_hours", True):
-                constraints.append({
-                    "type": "outside_business_hours",
-                    "description": "Current time is outside business hours",
-                    "severity": "low",
-                    "affects": ["external_communications", "user_interactions"],
-                })
+                constraints.append(
+                    {
+                        "type": "outside_business_hours",
+                        "description": "Current time is outside business hours",
+                        "severity": "low",
+                        "affects": ["external_communications", "user_interactions"],
+                    }
+                )
 
         return constraints
 
@@ -312,73 +330,75 @@ class ContextCollector:
             available_actions.extend(self._get_navigation_actions(context_elements))
 
         elif decision_type == DecisionType.HUMAN_ESCALATION:
-            available_actions.extend([
-                {
-                    "action_type": "escalation",
-                    "action": "request_takeover",
-                    "trigger": "manual_request",
-                    "confidence": 1.0,
-                    "description": "Request human takeover",
-                },
-                {
-                    "action_type": "escalation",
-                    "action": "pause_operations",
-                    "confidence": 1.0,
-                    "description": "Pause autonomous operations",
-                },
-            ])
+            available_actions.extend(
+                [
+                    {
+                        "action_type": "escalation",
+                        "action": "request_takeover",
+                        "trigger": "manual_request",
+                        "confidence": 1.0,
+                        "description": "Request human takeover",
+                    },
+                    {
+                        "action_type": "escalation",
+                        "action": "pause_operations",
+                        "confidence": 1.0,
+                        "description": "Pause autonomous operations",
+                    },
+                ]
+            )
 
         # Always available: monitoring and logging actions
-        available_actions.extend([
-            {
-                "action_type": "monitoring",
-                "action": "continue_monitoring",
-                "confidence": 1.0,
-                "description": "Continue monitoring current state",
-            },
-            {
-                "action_type": "logging",
-                "action": "log_decision",
-                "confidence": 1.0,
-                "description": "Log decision and context",
-            },
-        ])
+        available_actions.extend(
+            [
+                {
+                    "action_type": "monitoring",
+                    "action": "continue_monitoring",
+                    "confidence": 1.0,
+                    "description": "Continue monitoring current state",
+                },
+                {
+                    "action_type": "logging",
+                    "action": "log_decision",
+                    "confidence": 1.0,
+                    "description": "Log decision and context",
+                },
+            ]
+        )
 
         return available_actions
 
-    async def _assess_risk_factors(
+    def _assess_low_confidence_risk(
+        self, context_elements: List[ContextElement]
+    ) -> Optional[Dict[str, Any]]:
+        """Assess risk from low confidence context elements. Issue #620."""
+        low_confidence_elements = [ce for ce in context_elements if ce.confidence < 0.6]
+        if len(low_confidence_elements) > len(context_elements) * 0.3:
+            return {
+                "risk_type": "low_context_confidence",
+                "severity": "medium",
+                "probability": 0.7,
+                "description": (
+                    f"{len(low_confidence_elements)} context elements have low confidence"
+                ),
+                "mitigation": (
+                    "Gather additional context or request human verification"
+                ),
+            }
+        return None
+
+    def _assess_resource_constraint_risks(
         self, context_elements: List[ContextElement]
     ) -> List[Dict[str, Any]]:
-        """Assess risk factors based on context."""
-        risk_factors = []
-
-        # Check for low confidence elements
-        low_confidence_elements = [ce for ce in context_elements if ce.confidence < 0.6]
-        if (
-            len(low_confidence_elements) > len(context_elements) * 0.3
-        ):  # More than 30% low confidence
-            risk_factors.append(
-                {
-                    "risk_type": "low_context_confidence",
-                    "severity": "medium",
-                    "probability": 0.7,
-                    "description": (
-                        f"{len(low_confidence_elements)} context elements have low confidence"
-                    ),
-                    "mitigation": (
-                        "Gather additional context or request human verification"
-                    ),
-                }
-            )
-
-        # Check for system resource constraints
+        """Assess risks from system resource constraints. Issue #620."""
+        risks = []
         resource_contexts = [
             ce for ce in context_elements if ce.metadata.get("type") == "resource_usage"
         ]
         for resource_context in resource_contexts:
             resource_info = resource_context.content
             if resource_info.get("cpu_percent", 0) > 90:
-                risk_factors.append(
+                risks.append(
                     {
                         "risk_type": "system_overload",
                         "severity": "high",
@@ -387,19 +407,40 @@ class ContextCollector:
                         "mitigation": "Defer non-critical operations",
                     }
                 )
+        return risks
+
+    def _assess_information_overload_risk(
+        self, context_elements: List[ContextElement]
+    ) -> Optional[Dict[str, Any]]:
+        """Assess risk from too much conflicting context. Issue #620."""
+        if len(context_elements) > 50:
+            return {
+                "risk_type": "information_overload",
+                "severity": "low",
+                "probability": 0.4,
+                "description": "Large amount of context data may contain conflicts",
+                "mitigation": "Prioritize most relevant context elements",
+            }
+        return None
+
+    async def _assess_risk_factors(
+        self, context_elements: List[ContextElement]
+    ) -> List[Dict[str, Any]]:
+        """Assess risk factors based on context."""
+        risk_factors = []
+
+        # Check for low confidence elements
+        low_confidence_risk = self._assess_low_confidence_risk(context_elements)
+        if low_confidence_risk:
+            risk_factors.append(low_confidence_risk)
+
+        # Check for system resource constraints
+        risk_factors.extend(self._assess_resource_constraint_risks(context_elements))
 
         # Check for conflicting context
-        # (This would be more sophisticated in a real implementation)
-        if len(context_elements) > 50:  # Too much context might be conflicting
-            risk_factors.append(
-                {
-                    "risk_type": "information_overload",
-                    "severity": "low",
-                    "probability": 0.4,
-                    "description": "Large amount of context data may contain conflicts",
-                    "mitigation": "Prioritize most relevant context elements",
-                }
-            )
+        overload_risk = self._assess_information_overload_risk(context_elements)
+        if overload_risk:
+            risk_factors.append(overload_risk)
 
         return risk_factors
 
@@ -441,7 +482,8 @@ class ContextCollector:
             "active_sessions": 0,
             "pending_tasks": 0,
             "system_health": "healthy",
-            "last_user_interaction": self.time_provider.current_timestamp() - 3600,  # 1 hour ago
+            "last_user_interaction": self.time_provider.current_timestamp()
+            - 3600,  # 1 hour ago
             "current_focus": "monitoring",
         }
 
@@ -451,7 +493,7 @@ class ContextCollector:
 
         # Remove oldest elements if cache is too large
         if len(self.context_cache) > self.max_cache_size:
-            self.context_cache = self.context_cache[-self.max_cache_size:]
+            self.context_cache = self.context_cache[-self.max_cache_size :]
 
         # Decay relevance scores based on age using ContextElement method
         for element in self.context_cache:

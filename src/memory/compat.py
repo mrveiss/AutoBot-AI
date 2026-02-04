@@ -267,14 +267,19 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
             days_to_keep: Retention period in days
 
         Returns:
-            Dictionary with cleanup statistics:
-            - memories_deleted: Number of old memories deleted
+            Dictionary with cleanup statistics (matches original API):
+            - tasks_deleted: Number of old tasks/memories deleted
+            - embeddings_deleted: Number of old embeddings deleted (0 in unified manager)
 
         ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
         """
         memories_deleted = self._run_sync(self.cleanup_old_memories(days_to_keep))
 
-        result = {"memories_deleted": memories_deleted}
+        # Match original enhanced_memory_manager.py return structure
+        result = {
+            "tasks_deleted": memories_deleted,
+            "embeddings_deleted": 0,  # Unified manager doesn't track embeddings separately
+        }
         logger.info("Cleanup completed: %s", result)
         return result
 

@@ -147,13 +147,34 @@ class DispensableDetector:
     # Lazy Class Detection
     # =========================================================================
 
+    def _count_class_members(
+        self, node: ast.ClassDef
+    ) -> tuple[list[ast.AST], list[ast.AST]]:
+        """Count methods and attributes in a class definition. Issue #620.
+
+        Args:
+            node: AST ClassDef node to analyze
+
+        Returns:
+            Tuple of (methods, attributes) lists
+        """
+        methods = [
+            n
+            for n in node.body
+            if isinstance(n, _FUNCTION_DEF_TYPES)
+            and not (n.name.startswith("__") and n.name.endswith("__"))
+        ]
+        attributes = [
+            n for n in node.body if isinstance(n, (ast.Assign, ast.AnnAssign))
+        ]
+        return methods, attributes
+
     def detect_lazy_class(
         self,
         node: ast.ClassDef,
         file_path: str,
     ) -> List[AntiPatternResult]:
-        """
-        Detect classes that do too little (lazy classes).
+        """Detect classes that do too little (lazy classes).
 
         Args:
             node: AST ClassDef node to analyze
@@ -163,20 +184,7 @@ class DispensableDetector:
             List of AntiPatternResult for detected lazy classes
         """
         patterns: List[AntiPatternResult] = []
-
-        # Count methods (excluding __init__ and dunder methods)
-        methods = [
-            n
-            for n in node.body
-            if isinstance(n, _FUNCTION_DEF_TYPES)
-            and not (n.name.startswith("__") and n.name.endswith("__"))
-        ]
-
-        # Count attributes
-        attributes = [
-            n for n in node.body if isinstance(n, (ast.Assign, ast.AnnAssign))
-        ]
-
+        methods, attributes = self._count_class_members(node)
         total_members = len(methods) + len(attributes)
 
         if total_members <= self.lazy_class_method_threshold and len(methods) <= 1:

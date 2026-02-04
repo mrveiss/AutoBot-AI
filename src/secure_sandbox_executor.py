@@ -458,17 +458,65 @@ class SecureSandboxExecutor:
             return False
         return True
 
+    def _apply_security_level_config(
+        self, container_config: Dict[str, Any], config: SandboxConfig
+    ) -> None:
+        """
+        Apply security level specific settings to container configuration.
+
+        Extracted from _prepare_container_config() to reduce function length. Issue #620.
+
+        Args:
+            container_config: Container configuration dictionary to modify
+            config: Sandbox configuration with security level
+        """
+        if config.security_level == SandboxSecurityLevel.HIGH:
+            container_config["environment"]["SECURITY_LEVEL"] = "high"
+            container_config["environment"]["MONITOR_ENABLED"] = "true"
+        elif config.security_level == SandboxSecurityLevel.MEDIUM:
+            container_config["environment"]["SECURITY_LEVEL"] = "medium"
+            container_config["cap_add"] = ["DAC_OVERRIDE", "CHOWN"]
+        else:  # LOW
+            container_config["environment"]["SECURITY_LEVEL"] = "low"
+            container_config["cap_add"] = [
+                "DAC_OVERRIDE",
+                "CHOWN",
+                "FOWNER",
+                "SETUID",
+                "SETGID",
+            ]
+
+    def _apply_volume_config(
+        self, container_config: Dict[str, Any], config: SandboxConfig
+    ) -> None:
+        """
+        Apply volume configuration to container.
+
+        Extracted from _prepare_container_config() to reduce function length. Issue #620.
+
+        Args:
+            container_config: Container configuration dictionary to modify
+            config: Sandbox configuration with volumes
+        """
+        if config.volumes:
+            container_config["volumes"] = config.volumes
+        else:
+            # Default volumes
+            container_config["tmpfs"] = {  # nosec B108 - container tmpfs mounts
+                "/tmp": "size=50M,mode=1777",
+                "/sandbox/tmp": "size=50M,mode=1777",
+            }
+
     def _prepare_container_config(
         self, command: Union[str, List[str]], config: SandboxConfig
     ) -> Dict[str, Any]:
         """Prepare Docker container configuration"""
-        # Base configuration
         container_config = {
             "image": "autobot/secure-sandbox:latest",
             "command": command if isinstance(command, list) else command.split(),
             "name": f"{self.container_prefix}{uuid.uuid4().hex[:8]}",
             "detach": True,
-            "remove": False,  # We'll remove manually after collecting data
+            "remove": False,
             "network_mode": "none" if not config.enable_network else "bridge",
             "read_only": True,
             "security_opt": ["no-new-privileges"],
@@ -486,32 +534,8 @@ class SecureSandboxExecutor:
             },
         }
 
-        # Security level specific configuration
-        if config.security_level == SandboxSecurityLevel.HIGH:
-            container_config["environment"]["SECURITY_LEVEL"] = "high"
-            container_config["environment"]["MONITOR_ENABLED"] = "true"
-        elif config.security_level == SandboxSecurityLevel.MEDIUM:
-            container_config["environment"]["SECURITY_LEVEL"] = "medium"
-            container_config["cap_add"] = ["DAC_OVERRIDE", "CHOWN"]
-        else:  # LOW
-            container_config["environment"]["SECURITY_LEVEL"] = "low"
-            container_config["cap_add"] = [
-                "DAC_OVERRIDE",
-                "CHOWN",
-                "FOWNER",
-                "SETUID",
-                "SETGID",
-            ]
-
-        # Add volumes if specified
-        if config.volumes:
-            container_config["volumes"] = config.volumes
-        else:
-            # Default volumes
-            container_config["tmpfs"] = {  # nosec B108 - container tmpfs mounts
-                "/tmp": "size=50M,mode=1777",
-                "/sandbox/tmp": "size=50M,mode=1777",
-            }
+        self._apply_security_level_config(container_config, config)
+        self._apply_volume_config(container_config, config)
 
         return container_config
 

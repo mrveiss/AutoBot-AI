@@ -290,6 +290,37 @@ def optimized_transform(text: str) -> str:
             requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
+    def _determine_complexity_refactoring_approach(
+        self, pattern: ComplexityHotspot, func_name: str
+    ) -> tuple[str, str, str]:
+        """Determine the best refactoring approach for a complexity hotspot. Issue #620.
+
+        Args:
+            pattern: Complexity hotspot to analyze
+            func_name: Name of the function being refactored
+
+        Returns:
+            Tuple of (refactoring_type, title, code_template)
+        """
+        if pattern.nesting_depth > 4:
+            return (
+                "flatten_nesting",
+                f"Flatten deeply nested code in {func_name}",
+                self._generate_flattening_template(pattern),
+            )
+        elif pattern.cyclomatic_complexity > 20:
+            return (
+                "extract_strategy",
+                f"Apply strategy pattern to {func_name}",
+                self._generate_strategy_template(pattern),
+            )
+        else:
+            return (
+                "extract_methods",
+                f"Extract methods from {func_name}",
+                self._generate_extraction_template_for_complexity(pattern),
+            )
+
     def _handle_complexity(
         self, pattern: ComplexityHotspot
     ) -> Optional[RefactoringSuggestion]:
@@ -307,19 +338,11 @@ def optimized_transform(text: str) -> str:
         location = pattern.locations[0]
         func_name = location.function_name or "complex_function"
 
-        # Determine best refactoring approach
-        if pattern.nesting_depth > 4:
-            refactoring_type = "flatten_nesting"
-            title = f"Flatten deeply nested code in {func_name}"
-            code_template = self._generate_flattening_template(pattern)
-        elif pattern.cyclomatic_complexity > 20:
-            refactoring_type = "extract_strategy"
-            title = f"Apply strategy pattern to {func_name}"
-            code_template = self._generate_strategy_template(pattern)
-        else:
-            refactoring_type = "extract_methods"
-            title = f"Extract methods from {func_name}"
-            code_template = self._generate_extraction_template_for_complexity(pattern)
+        (
+            refactoring_type,
+            title,
+            code_template,
+        ) = self._determine_complexity_refactoring_approach(pattern, func_name)
 
         benefits = [
             f"Reduce cyclomatic complexity from {pattern.cyclomatic_complexity}",
@@ -327,8 +350,6 @@ def optimized_transform(text: str) -> str:
             "Easier unit testing of extracted functions",
             "Better separation of concerns",
         ]
-
-        # Add specific suggestions
         benefits.extend(pattern.simplification_suggestions[:2])
 
         return RefactoringSuggestion(

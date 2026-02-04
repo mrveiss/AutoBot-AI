@@ -24,9 +24,61 @@ from .types import TrackingMetric
 logger = logging.getLogger(__name__)
 
 
-def build_tracking_metrics_section(
-    tracking_metrics: Dict[str, Any]
-) -> List[str]:
+def _build_error_tracking_lines(error_data: Dict[str, Any]) -> List[str]:
+    """
+    Build report lines for error tracking metrics.
+
+    Extracted from build_tracking_metrics_section() to reduce function length. Issue #620.
+
+    Args:
+        error_data: Error tracking data dictionary
+
+    Returns:
+        List of formatted report lines
+    """
+    return [
+        f"- **Error Rate**: {error_data.get('current_error_rate', 0)}%",
+        f"- **Total Errors**: {error_data.get('total_errors_tracked', 0)}",
+    ]
+
+
+def _build_api_tracking_lines(api_data: Dict[str, Any]) -> List[str]:
+    """
+    Build report lines for API tracking metrics.
+
+    Extracted from build_tracking_metrics_section() to reduce function length. Issue #620.
+
+    Args:
+        api_data: API tracking data dictionary
+
+    Returns:
+        List of formatted report lines
+    """
+    return [
+        f"- **API Calls (24h)**: {api_data.get('total_api_calls_24h', 0)}",
+        f"- **Session API Calls**: {api_data.get('current_session_calls', 0)}",
+    ]
+
+
+def _build_interaction_tracking_lines(interaction_data: Dict[str, Any]) -> List[str]:
+    """
+    Build report lines for user interaction metrics.
+
+    Extracted from build_tracking_metrics_section() to reduce function length. Issue #620.
+
+    Args:
+        interaction_data: User interaction data dictionary
+
+    Returns:
+        List of formatted report lines
+    """
+    return [
+        f"- **User Interactions (24h)**: {interaction_data.get('total_interactions_24h', 0)}",
+        f"- **Session Interactions**: {interaction_data.get('current_session_interactions', 0)}",
+    ]
+
+
+def build_tracking_metrics_section(tracking_metrics: Dict[str, Any]) -> List[str]:
     """
     Build the tracking metrics section of the state report.
 
@@ -39,42 +91,23 @@ def build_tracking_metrics_section(
     Returns:
         List of formatted report lines for tracking metrics
     """
-    lines = []
-    lines.append("## System Tracking Metrics")
+    lines = ["## System Tracking Metrics"]
 
     if "error_tracking" in tracking_metrics:
-        error_data = tracking_metrics["error_tracking"]
-        lines.append(
-            f"- **Error Rate**: {error_data.get('current_error_rate', 0)}%"
-        )
-        lines.append(
-            f"- **Total Errors**: {error_data.get('total_errors_tracked', 0)}"
-        )
+        lines.extend(_build_error_tracking_lines(tracking_metrics["error_tracking"]))
 
     if "api_tracking" in tracking_metrics:
-        api_data = tracking_metrics["api_tracking"]
-        lines.append(
-            f"- **API Calls (24h)**: {api_data.get('total_api_calls_24h', 0)}"
-        )
-        lines.append(
-            f"- **Session API Calls**: {api_data.get('current_session_calls', 0)}"
-        )
+        lines.extend(_build_api_tracking_lines(tracking_metrics["api_tracking"]))
 
     if "user_interactions" in tracking_metrics:
-        interaction_data = tracking_metrics["user_interactions"]
-        lines.append(
-            f"- **User Interactions (24h)**: {interaction_data.get('total_interactions_24h', 0)}"
-        )
-        lines.append(
-            f"- **Session Interactions**: {interaction_data.get('current_session_interactions', 0)}"
+        lines.extend(
+            _build_interaction_tracking_lines(tracking_metrics["user_interactions"])
         )
 
     if "system_health" in tracking_metrics:
         health_data = tracking_metrics["system_health"]
         redis_status = (
-            "✅ Connected"
-            if health_data.get("redis_connected")
-            else "❌ Disconnected"
+            "✅ Connected" if health_data.get("redis_connected") else "❌ Disconnected"
         )
         lines.append(f"- **Redis Status**: {redis_status}")
 
@@ -89,18 +122,10 @@ def build_current_state_section(summary: Dict[str, Any]) -> List[str]:
     current = summary["current_state"]
     metrics = current["system_metrics"]
 
-    lines.append(
-        f"- **System Maturity**: {metrics.get('system_maturity', 0):.1f}%"
-    )
-    lines.append(
-        f"- **Phases Completed**: {metrics.get('phase_completion', 0)}/10"
-    )
-    lines.append(
-        f"- **Active Capabilities**: {metrics.get('capability_count', 0)}"
-    )
-    lines.append(
-        f"- **Validation Score**: {metrics.get('validation_score', 0):.1f}%"
-    )
+    lines.append(f"- **System Maturity**: {metrics.get('system_maturity', 0):.1f}%")
+    lines.append(f"- **Phases Completed**: {metrics.get('phase_completion', 0)}/10")
+    lines.append(f"- **Active Capabilities**: {metrics.get('capability_count', 0)}")
+    lines.append(f"- **Validation Score**: {metrics.get('validation_score', 0):.1f}%")
     lines.append("")
     return lines
 
@@ -152,7 +177,9 @@ def build_phase_status_section(summary: Dict[str, Any]) -> List[str]:
         status_icon = (
             "✅"
             if phase_data["completion_percentage"] >= 95
-            else "🔄" if phase_data["completion_percentage"] >= 50 else "⏳"
+            else "🔄"
+            if phase_data["completion_percentage"] >= 50
+            else "⏳"
         )
         lines.append(
             f"- {status_icon} **{phase_name}**: "
@@ -217,7 +244,9 @@ def calculate_trends(
             trend = (
                 "increasing"
                 if last_value > first_value
-                else "decreasing" if last_value < first_value else "stable"
+                else "decreasing"
+                if last_value < first_value
+                else "stable"
             )
             trends[metric.value] = {
                 "current": last_value,
@@ -252,18 +281,14 @@ async def export_state_data_to_file(
 
     try:
         if format == "json":
-            async with aiofiles.open(
-                output_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(output_file, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(summary, indent=2, default=str))
         elif format == "markdown":
             if report_generator:
                 report = await report_generator()
             else:
                 report = generate_state_report_from_summary(summary)
-            async with aiofiles.open(
-                output_file, "w", encoding="utf-8"
-            ) as f:
+            async with aiofiles.open(output_file, "w", encoding="utf-8") as f:
                 await f.write(report)
         else:
             raise ValueError(f"Unsupported format: {format}")
