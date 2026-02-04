@@ -149,6 +149,37 @@ def _should_retry_on_exception(attempt: int, max_attempts: int, func_name: str) 
     return True
 
 
+def _process_retry_exception(
+    exception: Exception,
+    attempt: int,
+    max_attempts: int,
+    func_name: str,
+    on_retry: Optional[Callable[[Exception, int], None]],
+    current_delay: float,
+    backoff: float,
+) -> tuple:
+    """Process exception during retry and calculate next delay.
+
+    Issue #620.
+
+    Args:
+        exception: The caught exception
+        attempt: Current attempt number (0-indexed)
+        max_attempts: Maximum number of attempts allowed
+        func_name: Name of the function being retried
+        on_retry: Optional callback called on each retry
+        current_delay: Current delay between retries
+        backoff: Multiplier for delay after each retry
+
+    Returns:
+        Tuple of (sleep_delay, next_delay) where sleep_delay is 0 if should not retry. Issue #620.
+    """
+    if not _should_retry_on_exception(attempt, max_attempts, func_name):
+        return (0, current_delay)
+    _handle_retry_attempt(exception, attempt, max_attempts, func_name, on_retry)
+    return (current_delay, current_delay * backoff)
+
+
 def retry(
     max_attempts: int = 3,
     delay: float = 1.0,
@@ -156,8 +187,9 @@ def retry(
     exceptions: tuple = (Exception,),
     on_retry: Optional[Callable[[Exception, int], None]] = None,
 ):
-    """
-    Decorator for retrying functions with exponential backoff.
+    """Decorator for retrying functions with exponential backoff.
+
+    Issue #620: Refactored using Extract Method to reduce function length.
 
     Args:
         max_attempts: Maximum number of retry attempts
@@ -173,52 +205,48 @@ def retry(
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
             """Sync wrapper that retries function on specified exceptions."""
-            last_exception = None
-            current_delay = delay
-
+            last_exception, current_delay = None, delay
             for attempt in range(max_attempts):
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    if not _should_retry_on_exception(
-                        attempt, max_attempts, func.__name__
-                    ):
-                        continue
-                    _handle_retry_attempt(
-                        e, attempt, max_attempts, func.__name__, on_retry
+                    sleep_delay, current_delay = _process_retry_exception(
+                        e,
+                        attempt,
+                        max_attempts,
+                        func.__name__,
+                        on_retry,
+                        current_delay,
+                        backoff,
                     )
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-
+                    if sleep_delay > 0:
+                        time.sleep(sleep_delay)
             raise last_exception
 
         @functools.wraps(func)
         async def async_wrapper(*args, **kwargs) -> T:
             """Async wrapper that retries function on specified exceptions."""
-            last_exception = None
-            current_delay = delay
-
+            last_exception, current_delay = None, delay
             for attempt in range(max_attempts):
                 try:
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    if not _should_retry_on_exception(
-                        attempt, max_attempts, func.__name__
-                    ):
-                        continue
-                    _handle_retry_attempt(
-                        e, attempt, max_attempts, func.__name__, on_retry
+                    sleep_delay, current_delay = _process_retry_exception(
+                        e,
+                        attempt,
+                        max_attempts,
+                        func.__name__,
+                        on_retry,
+                        current_delay,
+                        backoff,
                     )
-                    await asyncio.sleep(current_delay)
-                    current_delay *= backoff
-
+                    if sleep_delay > 0:
+                        await asyncio.sleep(sleep_delay)
             raise last_exception
 
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else wrapper
 
     return decorator
 

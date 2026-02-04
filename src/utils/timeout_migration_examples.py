@@ -35,9 +35,7 @@ from .long_running_operations_framework import (
     OperationPriority,
     OperationType,
 )
-from .operation_timeout_integration import (
-    operation_integration_manager,
-)
+from .operation_timeout_integration import operation_integration_manager
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +193,14 @@ def _collect_security_scan_files(scan_paths: List[Path]) -> List[Path]:
     """
     files_to_scan = []
     patterns = [
-        "*.py", "*.js", "*.json", "*.yaml", "*.yml",
-        "*.env", "*.con", "*.config",
+        "*.py",
+        "*.js",
+        "*.json",
+        "*.yaml",
+        "*.yml",
+        "*.env",
+        "*.con",
+        "*.config",
     ]
     for scan_path in scan_paths:
         if scan_path.exists():
@@ -259,46 +263,83 @@ def _build_security_scan_result(
     }
 
 
+async def _process_security_scan_files(
+    context: "OperationExecutionContext",
+    files_to_scan: List[Path],
+    total_files: int,
+    scan_types: List[str],
+    scan_results: List[Dict[str, Any]],
+    start_index: int,
+    file_scanner,
+) -> tuple[List[Dict[str, Any]], int]:
+    """Process files for security scanning with progress and checkpointing.
+
+    Issue #620: Extracted from migrate_security_scan_operation to reduce function length. Issue #620.
+
+    Args:
+        context: Operation execution context.
+        files_to_scan: List of files to scan.
+        total_files: Total number of files.
+        scan_types: Types of scans to perform.
+        scan_results: Accumulated scan results.
+        start_index: Index to start scanning from.
+        file_scanner: Callable to scan individual files.
+
+    Returns:
+        Tuple of (scan_results, vulnerability_count).
+    """
+    vulnerability_count = 0
+
+    for i, file_path in enumerate(files_to_scan[start_index:], start_index):
+        try:
+            await context.update_progress(
+                f"Scanning {file_path.name}",
+                i + 1,
+                total_files,
+                {
+                    "vulnerabilities_found": vulnerability_count,
+                    "current_file": str(file_path),
+                    "scan_types": scan_types,
+                },
+                f"Scanned {i + 1} of {total_files} files",
+            )
+
+            file_scan_result = await file_scanner(file_path, scan_types)
+            scan_results.append(file_scan_result)
+
+            if file_scan_result.get("vulnerabilities"):
+                vulnerability_count += len(file_scan_result["vulnerabilities"])
+
+            # Checkpoint every 50 files
+            if (i + 1) % 50 == 0:
+                await context.save_checkpoint(
+                    {"scan_results": scan_results}, f"file_{i + 1}"
+                )
+
+        except Exception as e:
+            logger.warning("Failed to scan %s: %s", file_path, e)
+
+    return scan_results, vulnerability_count
+
+
 class ExistingOperationMigrator:
-    """
-    Utility class to help migrate existing operations to the long-running framework
-    """
+    """Utility class to help migrate existing operations to the long-running framework."""
 
     def __init__(self, manager: LongRunningOperationManager):
         """Initialize migrator with operation manager instance."""
         self.manager = manager
 
-    async def migrate_knowledge_base_indexing(self):
+    async def _create_indexing_operation_function(self):
+        """Create the enhanced indexing operation function.
+
+        Issue #620: Extracted from migrate_knowledge_base_indexing to reduce function length. Issue #620.
+
+        Returns:
+            Async function for enhanced indexing operation.
         """
-        Migrate existing knowledge base indexing operation
-
-        BEFORE (problematic):
-        - Simple 30-second timeout
-        - No progress tracking
-        - No checkpoint/resume
-        - Lost work on timeout
-
-        AFTER (robust):
-        - Dynamic timeout based on codebase size
-        - Real-time progress tracking
-        - Checkpoint every 100 files
-        - Resume capability
-        """
-
-        # Example of existing problematic code:
-        # try:
-        #     result = await asyncio.wait_for(
-        #         index_all_files(),
-        #         timeout=30.0  # Too short for large codebases!
-        #     )
-        # except asyncio.TimeoutError:
-        #     return {"error": "Indexing timed out"}  # Work lost!
 
         async def enhanced_indexing_operation(context: OperationExecutionContext):
-            """Enhanced indexing with proper progress tracking and checkpoints.
-
-            Issue #665: Refactored to use extracted helper functions.
-            """
+            """Enhanced indexing with proper progress tracking and checkpoints."""
             codebase_path = Path(PATH.PROJECT_ROOT)
 
             # Collect files using helper (Issue #665)
@@ -320,18 +361,30 @@ class ExistingOperationMigrator:
                     processed_files,
                     self._process_file_for_indexing,
                 )
-
                 # Build result using helper (Issue #665)
                 return _build_indexing_result(indexed_files, context.should_resume())
-
             except Exception as e:
                 await context.save_checkpoint(
-                    {"processed_files": processed_files + indexed_files, "error": str(e)},
+                    {
+                        "processed_files": processed_files + indexed_files,
+                        "error": str(e),
+                    },
                     "error_recovery",
                 )
                 raise
 
-        # Create and execute the enhanced operation
+        return enhanced_indexing_operation
+
+    async def migrate_knowledge_base_indexing(self):
+        """Migrate existing knowledge base indexing operation.
+
+        Issue #620: Refactored using Extract Method pattern.
+
+        BEFORE: Simple 30-second timeout, no progress/checkpoint, lost work on timeout.
+        AFTER: Dynamic timeout, real-time progress, checkpoint every 100 files, resume capability.
+        """
+        enhanced_indexing_operation = await self._create_indexing_operation_function()
+
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.CODEBASE_INDEXING,
             name="Enhanced Knowledge Base Indexing",
@@ -377,7 +430,12 @@ class ExistingOperationMigrator:
 
             # Execution phase: run tests with resource management
             completed_tests, failed_tests = await self._execute_tests(
-                context, test_files, total_tests, completed_tests, failed_tests, start_index
+                context,
+                test_files,
+                total_tests,
+                completed_tests,
+                failed_tests,
+                start_index,
             )
 
             # Validation phase: calculate and return results
@@ -434,9 +492,7 @@ class ExistingOperationMigrator:
             completed_tests = checkpoint_data.intermediate_results.get(
                 "completed_tests", []
             )
-            failed_tests = checkpoint_data.intermediate_results.get(
-                "failed_tests", []
-            )
+            failed_tests = checkpoint_data.intermediate_results.get("failed_tests", [])
             start_index = len(completed_tests) + len(failed_tests)
             logger.info("Resuming test suite from test %s", start_index)
         else:
@@ -456,18 +512,8 @@ class ExistingOperationMigrator:
     ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """Execute tests with resource management and checkpointing.
 
-        Issue #665: Extracted from migrate_comprehensive_test_suite to reduce function length.
-
-        Args:
-            context: The operation execution context.
-            test_files: List of test file paths.
-            total_tests: Total number of tests.
-            completed_tests: List of completed test results.
-            failed_tests: List of failed test results.
-            start_index: Index to start execution from.
-
-        Returns:
-            Tuple of (completed_tests, failed_tests) after execution.
+        Issue #665: Extracted from migrate_comprehensive_test_suite.
+        Issue #620: Refactored using Extract Method pattern. Issue #620.
         """
         import concurrent.futures
 
@@ -478,21 +524,16 @@ class ExistingOperationMigrator:
         ) as executor:
             for i, test_file in enumerate(test_files[start_index:], start_index):
                 try:
-                    await context.update_progress(
-                        f"Running {test_file.name}",
+                    await self._update_test_progress(
+                        context,
+                        test_file,
                         i,
                         total_tests,
-                        {
-                            "passed": len(completed_tests),
-                            "failed": len(failed_tests),
-                            "current_test": str(test_file),
-                        },
-                        f"Test {i + 1} of {total_tests}: {test_file.name}",
+                        completed_tests,
+                        failed_tests,
                     )
-
-                    future = executor.submit(self._run_single_test, test_file)
-                    test_result = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: future.result(timeout=300)
+                    test_result = await self._run_test_with_executor(
+                        executor, test_file
                     )
 
                     if test_result["status"] == "PASS":
@@ -508,17 +549,8 @@ class ExistingOperationMigrator:
                             },
                             f"test_{i + 1}",
                         )
-
                 except Exception as e:
-                    logger.warning("Test %s failed with error: %s", test_file, e)
-                    failed_tests.append(
-                        {
-                            "file": str(test_file),
-                            "status": "ERROR",
-                            "error": str(e),
-                            "duration": 0,
-                        }
-                    )
+                    failed_tests.append(self._record_test_error(test_file, e))
 
         return completed_tests, failed_tests
 
@@ -556,69 +588,119 @@ class ExistingOperationMigrator:
             "resumed_from_checkpoint": resumed_from_checkpoint,
         }
 
-    async def migrate_security_scan_operation(self):
+    async def _update_test_progress(
+        self,
+        context: OperationExecutionContext,
+        test_file: Path,
+        index: int,
+        total_tests: int,
+        completed_tests: List[Dict[str, Any]],
+        failed_tests: List[Dict[str, Any]],
+    ) -> None:
+        """Update progress for current test execution.
+
+        Issue #620: Extracted from _execute_tests to reduce function length. Issue #620.
+
+        Args:
+            context: The operation execution context.
+            test_file: Current test file being executed.
+            index: Current test index.
+            total_tests: Total number of tests.
+            completed_tests: List of completed test results.
+            failed_tests: List of failed test results.
         """
-        Migrate security scanning operation
+        await context.update_progress(
+            f"Running {test_file.name}",
+            index,
+            total_tests,
+            {
+                "passed": len(completed_tests),
+                "failed": len(failed_tests),
+                "current_test": str(test_file),
+            },
+            f"Test {index + 1} of {total_tests}: {test_file.name}",
+        )
 
-        BEFORE:
-        - 5-minute timeout regardless of codebase size
-        - No progress visibility
-        - Complete re-scan on timeout
-        - No incremental scanning
+    async def _run_test_with_executor(
+        self,
+        executor,
+        test_file: Path,
+    ) -> Dict[str, Any]:
+        """Run a single test using the thread pool executor.
 
-        AFTER:
-        - Dynamic timeout based on files to scan
-        - Real-time scan progress with file details
-        - Resume from last scanned file
-        - Incremental scanning with vulnerability tracking
+        Issue #620: Extracted from _execute_tests to reduce function length. Issue #620.
+
+        Args:
+            executor: ThreadPoolExecutor instance.
+            test_file: Test file to execute.
+
+        Returns:
+            Test result dictionary.
+        """
+        future = executor.submit(self._run_single_test, test_file)
+        test_result = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: future.result(timeout=300)
+        )
+        return test_result
+
+    def _record_test_error(
+        self,
+        test_file: Path,
+        error: Exception,
+    ) -> Dict[str, Any]:
+        """Record a test execution error.
+
+        Issue #620: Extracted from _execute_tests to reduce function length. Issue #620.
+
+        Args:
+            test_file: Test file that failed.
+            error: Exception that occurred.
+
+        Returns:
+            Error result dictionary.
+        """
+        logger.warning("Test %s failed with error: %s", test_file, error)
+        return {
+            "file": str(test_file),
+            "status": "ERROR",
+            "error": str(error),
+            "duration": 0,
+        }
+
+    async def migrate_security_scan_operation(self):
+        """Migrate security scanning operation.
+
+        Issue #620: Refactored using Extract Method pattern. Issue #620.
+
+        BEFORE: 5-minute timeout, no progress visibility, complete re-scan on timeout.
+        AFTER: Dynamic timeout, real-time progress, resume capability, incremental scanning.
         """
 
         async def enhanced_security_scan_operation(context: OperationExecutionContext):
-            """Enhanced security scan with checkpointing and progress tracking.
-
-            Issue #665: Refactored to use extracted helper functions.
-            """
+            """Enhanced security scan with checkpointing and progress tracking."""
             scan_paths = [Path(PATH.PROJECT_ROOT)]
             scan_types = ["vulnerability", "dependency", "secrets"]
 
-            # Collect files using helper (Issue #665)
             files_to_scan = _collect_security_scan_files(scan_paths)
             total_files = len(files_to_scan)
-            await context.update_progress("File discovery for security scan", 0, total_files)
+            await context.update_progress(
+                "File discovery for security scan", 0, total_files
+            )
 
-            # Get resume state using helper (Issue #665)
             scan_results, start_index = await _get_security_scan_resume_state(context)
-            vulnerability_count = 0
+            scan_results, _ = await _process_security_scan_files(
+                context,
+                files_to_scan,
+                total_files,
+                scan_types,
+                scan_results,
+                start_index,
+                self._scan_file_for_security,
+            )
 
-            for i, file_path in enumerate(files_to_scan[start_index:], start_index):
-                try:
-                    await context.update_progress(
-                        f"Scanning {file_path.name}",
-                        i + 1,
-                        total_files,
-                        {
-                            "vulnerabilities_found": vulnerability_count,
-                            "current_file": str(file_path),
-                            "scan_types": scan_types,
-                        },
-                        f"Scanned {i + 1} of {total_files} files",
-                    )
-
-                    file_scan_result = await self._scan_file_for_security(file_path, scan_types)
-                    scan_results.append(file_scan_result)
-
-                    if file_scan_result.get("vulnerabilities"):
-                        vulnerability_count += len(file_scan_result["vulnerabilities"])
-
-                    # Checkpoint every 50 files
-                    if (i + 1) % 50 == 0:
-                        await context.save_checkpoint({"scan_results": scan_results}, f"file_{i + 1}")
-
-                except Exception as e:
-                    logger.warning("Failed to scan %s: %s", file_path, e)
-
-            # Build result using helper (Issue #665)
-            return _build_security_scan_result(scan_results, scan_types, context.should_resume())
+            return _build_security_scan_result(
+                scan_results, scan_types, context.should_resume()
+            )
 
         operation_id = await self.manager.create_operation(
             operation_type=OperationType.SECURITY_SCAN,
@@ -626,7 +708,7 @@ class ExistingOperationMigrator:
             description="Migrate from fixed timeout to dynamic checkpoint-based security scanning",
             operation_function=enhanced_security_scan_operation,
             priority=OperationPriority.HIGH,
-            estimated_items=1000,  # Estimate based on typical codebase
+            estimated_items=1000,
             execute_immediately=False,
         )
 
@@ -656,14 +738,14 @@ class ExistingOperationMigrator:
 
     def _run_single_test(self, test_file: Path) -> Dict[str, Any]:
         """Run a single test file (placeholder implementation)"""
-        import subprocess
+        import subprocess  # nosec B404 - controlled pytest execution
         import time
 
         start_time = time.time()
 
         try:
             # Run pytest on single file
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B607 - pytest runner
                 ["python", "-m", "pytest", str(test_file), "-v"],
                 capture_output=True,
                 text=True,
@@ -836,7 +918,10 @@ def migrate_timeout_operation(
             async def enhanced_operation(context: OperationExecutionContext):
                 """Enhanced operation with progress tracking."""
                 # Inject progress callback if function expects it
-                if progress_callback or "progress_callback" in func.__code__.co_varnames:
+                if (
+                    progress_callback
+                    or "progress_callback" in func.__code__.co_varnames
+                ):
                     kwargs["progress_callback"] = _create_progress_wrapper(context)
 
                 # Execute original function
@@ -847,7 +932,10 @@ def migrate_timeout_operation(
             items = _get_estimated_items(estimated_items, args)
 
             # Execute with operation manager if available
-            if operation_integration_manager and operation_integration_manager.operation_manager:
+            if (
+                operation_integration_manager
+                and operation_integration_manager.operation_manager
+            ):
                 operation_id = await operation_integration_manager.operation_manager.create_operation(
                     operation_type=operation_type,
                     name=f"Migrated: {func.__name__}",
