@@ -224,6 +224,56 @@ class ResearchAgent:
             # Fallback to general research
             return await self.perform_research(request)
 
+    async def _fetch_web_resources(self, tool_name: str, max_results: int = 3) -> list:
+        """
+        Fetch web resources for tool installation guide.
+
+        Args:
+            tool_name: Name of the tool to search for
+            max_results: Maximum number of search results to return
+
+        Returns:
+            List of web search results, empty list on failure.
+            Issue #620.
+        """
+        try:
+            researcher = await self._get_web_researcher()
+            search_results = await researcher.search_web(
+                f"{tool_name} installation guide", max_results=max_results
+            )
+            if search_results.get("status") == "success":
+                return search_results.get("results", [])
+        except Exception as e:
+            logger.warning("Web search for %s failed: %s", tool_name, str(e))
+        return []
+
+    def _build_guide_from_reference(
+        self, tool_name: str, tool_info: Dict[str, Any], web_results: list
+    ) -> Dict[str, Any]:
+        """
+        Build installation guide from reference data.
+
+        Args:
+            tool_name: Name of the tool
+            tool_info: Tool information from reference database
+            web_results: Additional web search results
+
+        Returns:
+            Complete installation guide dictionary.
+            Issue #620.
+        """
+        return {
+            "success": True,
+            "tool_name": tool_name,
+            "installation_command": tool_info.get("installation", "Not available"),
+            "usage_example": tool_info.get("usage", "Not available"),
+            "prerequisites": tool_info.get("prerequisites", ["sudo privileges"]),
+            "verification_command": tool_info.get(
+                "verification", f"{tool_name} --version"
+            ),
+            "web_resources": web_results,
+        }
+
     async def get_tool_installation_guide(self, tool_name: str) -> Dict[str, Any]:
         """Get detailed installation guide for a specific tool."""
         tool_lower = tool_name.lower()
@@ -231,55 +281,22 @@ class ResearchAgent:
         # Check tool reference data
         if tool_lower in self._tool_reference_data:
             tool_info = self._tool_reference_data[tool_lower]
+            web_results = await self._fetch_web_resources(tool_name, max_results=3)
+            return self._build_guide_from_reference(tool_name, tool_info, web_results)
 
-            # Also perform web research for additional context
-            try:
-                researcher = await self._get_web_researcher()
-                search_results = await researcher.search_web(
-                    f"{tool_name} installation guide", max_results=3
-                )
-                web_results = (
-                    search_results.get("results", [])
-                    if search_results.get("status") == "success"
-                    else []
-                )
-            except Exception:
-                web_results = []
-
+        # Tool not in reference data - search web for installation info
+        web_results = await self._fetch_web_resources(tool_name, max_results=5)
+        if web_results:
             return {
                 "success": True,
                 "tool_name": tool_name,
-                "installation_command": tool_info.get("installation", "Not available"),
-                "usage_example": tool_info.get("usage", "Not available"),
-                "prerequisites": tool_info.get("prerequisites", ["sudo privileges"]),
-                "verification_command": tool_info.get(
-                    "verification", f"{tool_name} --version"
-                ),
+                "installation_command": "See web resources below",
+                "usage_example": "See web resources below",
+                "prerequisites": ["sudo privileges"],
+                "verification_command": f"{tool_name} --version",
                 "web_resources": web_results,
+                "note": "Tool not in reference database, showing web search results",
             }
-
-        # Tool not in reference data - search web for installation info
-        try:
-            researcher = await self._get_web_researcher()
-            search_results = await researcher.search_web(
-                f"{tool_name} installation guide", max_results=5
-            )
-
-            if search_results.get("status") == "success" and search_results.get(
-                "results"
-            ):
-                return {
-                    "success": True,
-                    "tool_name": tool_name,
-                    "installation_command": "See web resources below",
-                    "usage_example": "See web resources below",
-                    "prerequisites": ["sudo privileges"],
-                    "verification_command": f"{tool_name} --version",
-                    "web_resources": search_results.get("results", []),
-                    "note": "Tool not in reference database, showing web search results",
-                }
-        except Exception as e:
-            logger.error("Failed to search for tool installation: %s", str(e))
 
         return {
             "success": False,

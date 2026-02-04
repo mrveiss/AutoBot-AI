@@ -657,6 +657,29 @@ class StepExecutorAgent:
         async for chunk in self._execute_subprocess_streaming(command, task_id):
             yield chunk
 
+    def _extract_terminal_output(self, messages: list) -> str:
+        """
+        Extract terminal output from chat messages.
+
+        Searches through messages in reverse order to find the most recent
+        terminal output that is not a command prompt.
+
+        Args:
+            messages: List of chat messages to search through
+
+        Returns:
+            Extracted terminal output text, or empty string if none found.
+            Issue #620.
+        """
+        from src.utils.encoding_utils import strip_ansi_codes
+
+        for msg in reversed(messages):
+            if msg.get("sender") == "terminal" and msg.get("text"):
+                text = strip_ansi_codes(msg["text"])
+                if text and not text.startswith("$"):
+                    return text
+        return ""
+
     async def _poll_pty_output(
         self,
         chat_manager,
@@ -674,8 +697,6 @@ class StepExecutorAgent:
         Returns:
             Collected output from chat history
         """
-        from src.utils.encoding_utils import strip_ansi_codes
-
         start_time = time.time()
         last_output = ""
         last_change_time = start_time
@@ -688,20 +709,11 @@ class StepExecutorAgent:
                 messages = await chat_manager.get_session_messages(
                     session_id=self.session_id, limit=10
                 )
+                current_output = self._extract_terminal_output(messages)
 
-                # Extract terminal output from recent messages
-                current_output = ""
-                for msg in reversed(messages):
-                    if msg.get("sender") == "terminal" and msg.get("text"):
-                        text = strip_ansi_codes(msg["text"])
-                        if text and not text.startswith("$"):
-                            current_output = text
-                            break
-
-                # Check stability
+                # Check stability - output unchanged for threshold duration
                 if current_output and current_output == last_output:
-                    stable_duration = time.time() - last_change_time
-                    if stable_duration >= stability_threshold:
+                    if (time.time() - last_change_time) >= stability_threshold:
                         logger.info(
                             "[StepExecutor] Output stabilized after %.2fs",
                             time.time() - start_time,

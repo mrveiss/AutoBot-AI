@@ -179,11 +179,52 @@ class KnowledgeExtractionAgent:
             "past_indicators": self._get_past_indicators(),
         }
 
+    def _get_fact_json_example(self) -> str:
+        """Get JSON example for fact extraction prompt.
+
+        Returns:
+            Formatted JSON example string.
+
+        Issue #620.
+        """
+        return """{
+  "facts": [
+    {
+      "subject": "AutoBot",
+      "predicate": "is",
+      "object": "an AI automation platform",
+      "fact_type": "FACT",
+      "temporal_type": "STATIC",
+      "confidence": 0.9,
+      "entities": ["AutoBot", "AI automation platform"],
+      "context": "Definition of AutoBot system",
+      "reasoning": "Clear definitional statement"
+    }
+  ]
+}"""
+
+    def _get_extraction_guidelines(self) -> str:
+        """Get guidelines for fact extraction prompt.
+
+        Returns:
+            Formatted guidelines string.
+
+        Issue #620.
+        """
+        return f"""Guidelines:
+- Extract only clear, discrete facts
+- Avoid vague or ambiguous statements
+- Include temporal indicators in your analysis
+- Consider the factual vs. opinion nature of statements
+- Aim for {self.max_facts_per_chunk} most important facts maximum
+- Ensure confidence reflects certainty level
+
+Respond only with valid JSON."""
+
     def _build_extraction_prompt(
         self, content: str, context: Optional[str] = None
     ) -> str:
-        """
-        Build the LLM prompt for fact extraction.
+        """Build the LLM prompt for fact extraction.
 
         Args:
             content: Text content to analyze
@@ -194,10 +235,8 @@ class KnowledgeExtractionAgent:
         """
         context_info = f"\n\nContext: {context}" if context else ""
 
-        return f"""
-Analyze the following text and extract atomic facts. Each fact should be a
-single, verifiable statement that can be independently confirmed or
-contradicted.
+        return f"""Analyze the following text and extract atomic facts. Each fact should be a
+single, verifiable statement that can be independently confirmed or contradicted.
 
 Text to analyze:
 {content}{context_info}
@@ -215,32 +254,9 @@ For each fact, provide:
 8. Context: Brief surrounding context for the fact
 
 Return the results as a JSON array of facts. Example format:
-{{
-  "facts": [
-    {{
-      "subject": "AutoBot",
-      "predicate": "is",
-      "object": "an AI automation platform",
-      "fact_type": "FACT",
-      "temporal_type": "STATIC",
-      "confidence": 0.9,
-      "entities": ["AutoBot", "AI automation platform"],
-      "context": "Definition of AutoBot system",
-      "reasoning": "Clear definitional statement"
-    }}
-  ]
-}}
+{self._get_fact_json_example()}
 
-Guidelines:
-- Extract only clear, discrete facts
-- Avoid vague or ambiguous statements
-- Include temporal indicators in your analysis
-- Consider the factual vs. opinion nature of statements
-- Aim for {self.max_facts_per_chunk} most important facts maximum
-- Ensure confidence reflects certainty level
-
-Respond only with valid JSON.
-"""
+{self._get_extraction_guidelines()}"""
 
     def _count_keyword_matches(self, text_lower: str, keyword_type: str) -> int:
         """Count how many keywords of a given type appear in text."""

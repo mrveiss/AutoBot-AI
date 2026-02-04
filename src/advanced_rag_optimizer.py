@@ -610,68 +610,94 @@ class AdvancedRAGOptimizer:
         logger.info("  - Final results: %s", metrics.final_results_count)
         logger.info("  - Query type: %s", context.query_type)
 
+    def _build_context_parts(
+        self,
+        results: List[SearchResult],
+        max_context_length: int,
+        query_context: QueryContext,
+    ) -> List[str]:
+        """Build context parts from search results with length optimization.
+
+        Args:
+            results: Search results to build context from.
+            max_context_length: Maximum total context length.
+            query_context: Query context for complexity-based decisions.
+
+        Returns:
+            List of formatted context entries.
+
+        Issue #620.
+        """
+        context_parts = []
+        current_length = 0
+
+        for i, result in enumerate(results):
+            source_info = f"Source: {result.source_path}"
+            if result.chunk_index > 0:
+                source_info += f" (section {result.chunk_index + 1})"
+
+            context_entry = f"{source_info}\nContent: {result.content}\n"
+            entry_length = len(context_entry)
+
+            if current_length + entry_length > max_context_length and context_parts:
+                break
+
+            context_parts.append(context_entry)
+            current_length += entry_length
+
+            if i >= 2 and query_context.complexity_score < 0.6:
+                break
+
+        return context_parts
+
+    def _build_context_header(
+        self, query: str, context_parts: List[str], query_context: QueryContext
+    ) -> str:
+        """Build the header for optimized context output.
+
+        Args:
+            query: Original query string.
+            context_parts: List of context entries.
+            query_context: Query context with type information.
+
+        Returns:
+            Formatted header string.
+
+        Issue #620.
+        """
+        header = f"Relevant Information for: {query}\n"
+        header += f"Sources: {len(context_parts)} documents\n"
+        header += f"Query type: {query_context.query_type}\n\n"
+        return header
+
     async def get_optimized_context(
         self, query: str, max_context_length: int = 2000
     ) -> Tuple[str, RAGMetrics]:
-        """
-        Get optimized context for RAG-based response generation.
-
-        Dynamically selects and combines the most relevant information.
-        """
+        """Get optimized context for RAG-based response generation."""
         try:
-            # Perform advanced search
             results, metrics = await self.advanced_search(query, max_results=8)
 
             if not results:
                 return "No relevant information found.", metrics
 
-            # Analyze query to determine optimal context strategy
-            context = self._analyze_query_context(query)
-
-            # Build context with dynamic length optimization
-            context_parts = []
-            current_length = 0
-
-            for i, result in enumerate(results):
-                # Create context entry
-                source_info = f"Source: {result.source_path}"
-                if result.chunk_index > 0:
-                    source_info += f" (section {result.chunk_index + 1})"
-
-                context_entry = f"{source_info}\nContent: {result.content}\n"
-
-                # Check if adding this entry would exceed limits
-                entry_length = len(context_entry)
-                if current_length + entry_length > max_context_length and context_parts:
-                    break
-
-                context_parts.append(context_entry)
-                current_length += entry_length
-
-                # Ensure we have enough context for complex queries
-                if i >= 2 and context.complexity_score < 0.6:
-                    break
-
-            # Combine context
-            optimized_context = "\n---\n".join(context_parts)
-
-            # Add summary header
-            header = f"Relevant Information for: {query}\n"
-            header += f"Sources: {len(context_parts)} documents\n"
-            header += f"Query type: {context.query_type}\n\n"
-
-            final_context = header + optimized_context
+            query_context = self._analyze_query_context(query)
+            context_parts = self._build_context_parts(
+                results, max_context_length, query_context
+            )
+            header = self._build_context_header(query, context_parts, query_context)
+            final_context = header + "\n---\n".join(context_parts)
 
             logger.info(
-                f"Optimized context generated: {len(final_context)} characters from {len(context_parts)} sources"
+                "Optimized context generated: %s characters from %s sources",
+                len(final_context),
+                len(context_parts),
             )
 
             return final_context, metrics
 
         except Exception as e:
             logger.error("Context optimization failed: %s", e)
-            metrics = RAGMetrics()
-            return f"Error retrieving context: {str(e)}", metrics
+            return f"Error retrieving context: {str(e)}", RAGMetrics()
 
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for the RAG optimizer."""

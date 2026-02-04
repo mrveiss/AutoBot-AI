@@ -171,54 +171,92 @@ async def cmd_test_service(args):
         return 1
 
 
+async def _test_services(registry, services: list) -> dict:
+    """Test each service and collect results.
+
+    Args:
+        registry: Service registry instance.
+        services: List of service names to test.
+
+    Returns:
+        Dictionary mapping service names to test results.
+
+    Issue #620.
+    """
+    results = {}
+    for service in services:
+        print(f"🔄 Testing {service}...")
+        try:
+            health = await registry.check_service_health(service)
+            results[service] = {
+                "status": health.status.value,
+                "response_time": getattr(health, "response_time", 0),
+                "url": get_service_url(service),
+            }
+        except Exception as e:
+            results[service] = {"status": "error", "error": str(e), "url": "unknown"}
+    return results
+
+
+def _display_test_results(results: dict) -> tuple:
+    """Display test results and categorize services.
+
+    Args:
+        results: Dictionary of test results by service.
+
+    Returns:
+        Tuple of (healthy_services, unhealthy_services) lists.
+
+    Issue #620.
+    """
+    print_header("Test Results")
+    healthy_services = []
+    unhealthy_services = []
+
+    for service, result in results.items():
+        if result["status"] == "healthy":
+            print_status("success", f"{service:15} → {result['url']}")
+            if result.get("response_time", 0) > 0:
+                print(f"{'':18}Response: {result['response_time']:.3f}s")
+            healthy_services.append(service)
+        else:
+            print_status("error", f"{service:15} → {result['status']}")
+            if "error" in result:
+                print(f"{'':18}Error: {result['error']}")
+            unhealthy_services.append(service)
+
+    return healthy_services, unhealthy_services
+
+
+def _print_test_summary(services: list, healthy: list, unhealthy: list) -> None:
+    """Print test summary statistics.
+
+    Args:
+        services: All services tested.
+        healthy: List of healthy service names.
+        unhealthy: List of unhealthy service names.
+
+    Issue #620.
+    """
+    print_header("Summary")
+    print_status("info", f"Total services: {len(services)}")
+    print_status("success", f"Healthy: {len(healthy)}")
+    if unhealthy:
+        print_status("error", f"Unhealthy: {len(unhealthy)}")
+        print(f"   Issues: {', '.join(unhealthy)}")
+
+
 async def cmd_test_all(args):
-    """Test all services and generate report"""
+    """Test all services and generate report."""
     print_header("Testing All Services")
 
     try:
         registry = get_service_registry(args.config)
         services = registry.list_services()
 
-        results = {}
-        for service in services:
-            print(f"🔄 Testing {service}...")
-            try:
-                health = await registry.check_service_health(service)
-                results[service] = {
-                    "status": health.status.value,
-                    "response_time": getattr(health, "response_time", 0),
-                    "url": get_service_url(service),
-                }
-            except Exception as e:
-                results[service] = {
-                    "status": "error",
-                    "error": str(e),
-                    "url": "unknown",
-                }
-
-        print_header("Test Results")
-
-        healthy_services = []
-        unhealthy_services = []
-
-        for service, result in results.items():
-            if result["status"] == "healthy":
-                print_status("success", f"{service:15} → {result['url']}")
-                if result.get("response_time", 0) > 0:
-                    print(f"{'':18}Response: {result['response_time']:.3f}s")
-                healthy_services.append(service)
-            else:
-                print_status("error", f"{service:15} → {result['status']}")
-                if "error" in result:
-                    print(f"{'':18}Error: {result['error']}")
-                unhealthy_services.append(service)
-
-        print_header("Summary")
-        print_status("info", f"Total services: {len(services)}")
-        print_status("success", f"Healthy: {len(healthy_services)}")
-        if unhealthy_services:
-            print_status("error", f"Unhealthy: {len(unhealthy_services)}")
-            print(f"   Issues: {', '.join(unhealthy_services)}")
+        results = await _test_services(registry, services)
+        healthy, unhealthy = _display_test_results(results)
+        _print_test_summary(services, healthy, unhealthy)
 
         if args.json:
             json_output = {
@@ -229,7 +267,7 @@ async def cmd_test_all(args):
             print_header("JSON Output")
             print(json.dumps(json_output, indent=2))
 
-        return 0 if len(unhealthy_services) == 0 else 1
+        return 0 if len(unhealthy) == 0 else 1
 
     except Exception as e:
         print_status("error", f"Test failed: {e}")
