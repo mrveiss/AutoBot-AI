@@ -600,13 +600,59 @@ class MarkdownGenerator:
         html = self._apply_markdown_substitutions(markdown)
         return self._wrap_list_items(html)
 
+    def _build_overview_stats_section(self, module: ModuleDoc) -> List[str]:
+        """Build the overview statistics section for a module.
+
+        Issue #620.
+
+        Args:
+            module: Module documentation object
+
+        Returns:
+            List of markdown lines for the stats section
+        """
+        return [
+            "## Overview",
+            "",
+            f"- **Classes:** {len(module.classes)}",
+            f"- **Functions:** {len(module.functions)}",
+            f"- **Constants:** {len(module.constants)}",
+            f"- **Lines of code:** {module.line_count}",
+            f"- **Documentation completeness:** {module.completeness.value}",
+            "",
+        ]
+
+    def _build_list_section(
+        self, title: str, items: List[str], code_format: bool = True
+    ) -> List[str]:
+        """Build a markdown list section with optional code formatting.
+
+        Issue #620.
+
+        Args:
+            title: Section heading
+            items: List of items to include
+            code_format: Whether to wrap items in backticks
+
+        Returns:
+            List of markdown lines, empty if no items
+        """
+        if not items:
+            return []
+        lines = [f"## {title}", ""]
+        for item in items:
+            lines.append(f"- `{item}`" if code_format else f"- {item}")
+        lines.append("")
+        return lines
+
     def generate_module_overview(
         self,
         module: ModuleDoc,
         format: DocFormat = DocFormat.MARKDOWN,
     ) -> GeneratedDoc:
-        """
-        Generate an overview document for a single module.
+        """Generate an overview document for a single module.
+
+        Issue #620: Refactored to use extracted helpers.
 
         Args:
             module: Analyzed module documentation
@@ -616,38 +662,17 @@ class MarkdownGenerator:
             GeneratedDoc with the overview
         """
         lines = [f"# {module.name}", ""]
-
         if module.description:
-            lines.append(module.description)
-            lines.append("")
+            lines.extend([module.description, ""])
 
-        # Quick stats
-        lines.append("## Overview")
-        lines.append("")
-        lines.append(f"- **Classes:** {len(module.classes)}")
-        lines.append(f"- **Functions:** {len(module.functions)}")
-        lines.append(f"- **Constants:** {len(module.constants)}")
-        lines.append(f"- **Lines of code:** {module.line_count}")
-        lines.append(f"- **Documentation completeness:** {module.completeness.value}")
-        lines.append("")
-
-        # Dependencies
-        if module.dependencies:
-            lines.append("## Dependencies")
-            lines.append("")
-            for dep in module.dependencies:
-                lines.append(f"- `{dep}`")
-            lines.append("")
-
-        # Exports
-        if module.exports:
-            lines.append("## Public API (exports)")
-            lines.append("")
-            for export in module.exports:
-                lines.append(f"- `{export}`")
-            lines.append("")
+        lines.extend(self._build_overview_stats_section(module))
+        lines.extend(self._build_list_section("Dependencies", module.dependencies))
+        lines.extend(self._build_list_section("Public API (exports)", module.exports))
 
         content = "\n".join(lines)
+        completeness_score = (
+            100 if module.completeness == DocCompleteness.COMPREHENSIVE else 50
+        )
 
         return GeneratedDoc(
             title=f"{module.name} Overview",
@@ -656,9 +681,7 @@ class MarkdownGenerator:
             sections=[DocSection.OVERVIEW],
             source_files=[module.file_path],
             word_count=len(content.split()),
-            completeness_score=(
-                100 if module.completeness == DocCompleteness.COMPREHENSIVE else 50
-            ),
+            completeness_score=completeness_score,
         )
 
 

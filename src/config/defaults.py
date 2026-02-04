@@ -270,23 +270,87 @@ def _get_simple_configs() -> Dict[str, Any]:
     }
 
 
+def _get_deployment_config(redis_host: str, backend_port: int) -> Dict[str, Any]:
+    """Get deployment configuration section.
+
+    Issue #620.
+
+    Args:
+        redis_host: Redis server host
+        backend_port: Backend API port
+    """
+    return {
+        "mode": "local",
+        "host": redis_host,
+        "port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(backend_port))),
+    }
+
+
+def _get_redis_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
+    """Get Redis connection configuration section.
+
+    Issue #620.
+
+    Args:
+        redis_host: Redis server host
+        redis_port: Redis server port
+    """
+    return {
+        "host": redis_host,
+        "port": redis_port,
+        "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
+        "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+    }
+
+
+def _get_celery_config() -> Dict[str, Any]:
+    """Get Celery task queue configuration section.
+
+    Issue #620.
+    """
+    return {
+        "visibility_timeout": int(
+            os.getenv("AUTOBOT_CELERY_VISIBILITY_TIMEOUT", "43200")
+        ),
+        "result_expires": int(os.getenv("AUTOBOT_CELERY_RESULT_EXPIRES", "86400")),
+        "worker_prefetch_multiplier": 1,
+        "worker_max_tasks_per_child": 100,
+    }
+
+
+def _get_task_transport_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
+    """Get task transport configuration section.
+
+    Issue #620.
+
+    Args:
+        redis_host: Redis server host
+        redis_port: Redis server port
+    """
+    return {
+        "type": "redis",
+        "redis": {
+            "host": redis_host,
+            "port": redis_port,
+            "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
+            "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
+        },
+    }
+
+
 def get_default_config() -> Dict[str, Any]:
     """Get default configuration values.
 
     Issue #763: Now uses ConfigRegistry with fallback to NetworkConstants.
+    Issue #620: Refactored to use extracted helpers.
 
     Note: LLM host/port are provider-agnostic. The default provider is Ollama,
     but agents can override via their individual configurations.
     """
-    # Lazy import to avoid circular dependency
     from src.constants.network_constants import NetworkConstants
 
-    # LLM service configuration (provider-agnostic)
-    # Default uses Ollama endpoint, but agents can use different providers
     llm_host = ConfigRegistry.get("vm.llm", NetworkConstants.AI_STACK_HOST)
     llm_port = int(ConfigRegistry.get("port.llm", str(NetworkConstants.OLLAMA_PORT)))
-
-    # Infrastructure configuration
     redis_host = ConfigRegistry.get("vm.redis", NetworkConstants.REDIS_VM_IP)
     redis_port = int(ConfigRegistry.get("port.redis", str(NetworkConstants.REDIS_PORT)))
     bind_host = NetworkConstants.BIND_ALL_INTERFACES
@@ -294,38 +358,14 @@ def get_default_config() -> Dict[str, Any]:
 
     config = {
         "backend": _get_backend_config(llm_host, llm_port, bind_host, backend_port),
-        "deployment": {
-            "mode": "local",
-            "host": redis_host,
-            "port": int(os.getenv("AUTOBOT_BACKEND_PORT", str(backend_port))),
-        },
-        "redis": {
-            "host": redis_host,
-            "port": redis_port,
-            "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
-            "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
-        },
-        "celery": {
-            "visibility_timeout": int(
-                os.getenv("AUTOBOT_CELERY_VISIBILITY_TIMEOUT", "43200")
-            ),
-            "result_expires": int(os.getenv("AUTOBOT_CELERY_RESULT_EXPIRES", "86400")),
-            "worker_prefetch_multiplier": 1,
-            "worker_max_tasks_per_child": 100,
-        },
+        "deployment": _get_deployment_config(redis_host, backend_port),
+        "redis": _get_redis_config(redis_host, redis_port),
+        "celery": _get_celery_config(),
         "memory": _get_memory_config(redis_host, redis_port),
         "multimodal": _get_multimodal_config(),
         "hardware": _get_hardware_config(),
         "system": _get_system_config(),
-        "task_transport": {
-            "type": "redis",
-            "redis": {
-                "host": redis_host,
-                "port": redis_port,
-                "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
-                "db": int(os.getenv("AUTOBOT_REDIS_TASK_DB", "0")),
-            },
-        },
+        "task_transport": _get_task_transport_config(redis_host, redis_port),
     }
     config.update(_get_simple_configs())
     config.update(_get_llm_optimization_config())  # Issue #717

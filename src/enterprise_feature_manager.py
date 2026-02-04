@@ -107,10 +107,14 @@ class EnterpriseFeatureManager:
                 "AUTOBOT_*_PORT environment variables must be set"
             )
 
-    def _build_vm_topology(
+    def _get_core_vm_configs(
         self, cfg: Dict[str, Optional[str]]
     ) -> Dict[str, Dict[str, Any]]:
-        """Build VM topology dictionary from environment configuration."""
+        """
+        Get main machine and frontend VM configurations.
+
+        Issue #620.
+        """
         return {
             "main_machine": {
                 "ip": cfg["backend_host"],
@@ -126,6 +130,17 @@ class EnterpriseFeatureManager:
                 "capabilities": ["web_ui", "user_interaction"],
                 "resources": {"cpu_cores": 4, "memory_gb": 8},
             },
+        }
+
+    def _get_processing_vm_configs(
+        self, cfg: Dict[str, Optional[str]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Get NPU worker and AI stack VM configurations.
+
+        Issue #620.
+        """
+        return {
             "npu_worker_vm": {
                 "ip": cfg["npu_worker_host"],
                 "services": ["ai_acceleration", "npu_worker"],
@@ -136,13 +151,6 @@ class EnterpriseFeatureManager:
                     "hardware_optimization",
                 ],
                 "resources": {"cpu_cores": 4, "memory_gb": 8, "npu": "Intel_NPU"},
-            },
-            "redis_vm": {
-                "ip": cfg["redis_host"],
-                "services": ["redis_server", "data_storage"],
-                "ports": [int(cfg["redis_port"])],
-                "capabilities": ["data_persistence", "caching", "session_storage"],
-                "resources": {"cpu_cores": 2, "memory_gb": 16, "storage_gb": 100},
             },
             "ai_stack_vm": {
                 "ip": cfg["ai_stack_host"],
@@ -159,6 +167,24 @@ class EnterpriseFeatureManager:
                     "gpu_acceleration": True,
                 },
             },
+        }
+
+    def _get_service_vm_configs(
+        self, cfg: Dict[str, Optional[str]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Get Redis and browser VM configurations.
+
+        Issue #620.
+        """
+        return {
+            "redis_vm": {
+                "ip": cfg["redis_host"],
+                "services": ["redis_server", "data_storage"],
+                "ports": [int(cfg["redis_port"])],
+                "capabilities": ["data_persistence", "caching", "session_storage"],
+                "resources": {"cpu_cores": 2, "memory_gb": 16, "storage_gb": 100},
+            },
             "browser_vm": {
                 "ip": cfg["browser_host"],
                 "services": ["web_automation", "playwright_server"],
@@ -167,6 +193,20 @@ class EnterpriseFeatureManager:
                 "resources": {"cpu_cores": 4, "memory_gb": 8, "display": True},
             },
         }
+
+    def _build_vm_topology(
+        self, cfg: Dict[str, Optional[str]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Build VM topology dictionary from environment configuration.
+
+        Issue #620: Refactored with helper methods for each VM group.
+        """
+        topology = {}
+        topology.update(self._get_core_vm_configs(cfg))
+        topology.update(self._get_processing_vm_configs(cfg))
+        topology.update(self._get_service_vm_configs(cfg))
+        return topology
 
     def _initialize_vm_topology(self) -> Dict[str, Dict[str, Any]]:
         """Initialize 6-VM distributed topology."""

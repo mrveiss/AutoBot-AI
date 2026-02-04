@@ -520,15 +520,64 @@ class CloneDetector:
 
         return clone_groups
 
+    def _create_clone_instance(
+        self, fragment: CodeFragment, similarity_score: float
+    ) -> CloneInstance:
+        """Create a CloneInstance for a code fragment.
+
+        Issue #620.
+
+        Args:
+            fragment: Code fragment for the instance
+            similarity_score: Similarity score (1.0 for primary)
+
+        Returns:
+            CloneInstance with AST structural fingerprint
+        """
+        return CloneInstance(
+            fragment=fragment,
+            fingerprint=Fingerprint(
+                hash_value="",
+                fingerprint_type=FingerprintType.AST_STRUCTURAL,
+                fragment=fragment,
+            ),
+            similarity_score=similarity_score,
+        )
+
+    def _build_clone_instances(
+        self,
+        primary_fragment: CodeFragment,
+        similar_fragments: List[Tuple[CodeFragment, float]],
+    ) -> Tuple[List[CloneInstance], List[float]]:
+        """Build clone instances from primary and similar fragments.
+
+        Issue #620.
+
+        Args:
+            primary_fragment: The primary fragment (similarity 1.0)
+            similar_fragments: List of (fragment, similarity) tuples
+
+        Returns:
+            Tuple of (instances list, similarities list)
+        """
+        instances = [self._create_clone_instance(primary_fragment, 1.0)]
+        similarities = [1.0]
+
+        for frag, sim in similar_fragments:
+            instances.append(self._create_clone_instance(frag, sim))
+            similarities.append(sim)
+
+        return instances, similarities
+
     def _create_type3_clone_group(
         self,
         frag1: CodeFragment,
         similar_fragments: List[Tuple[CodeFragment, float]],
     ) -> CloneGroup:
-        """
-        Create a Type 3 clone group from a fragment and its similar matches.
+        """Create a Type 3 clone group from a fragment and its similar matches.
 
         Issue #281: Extracted from _detect_type3_clones to reduce nesting.
+        Issue #620: Further refactored with extracted helpers.
 
         Args:
             frag1: Primary fragment
@@ -537,37 +586,10 @@ class CloneDetector:
         Returns:
             CloneGroup for the similar fragments
         """
-        instances = [
-            CloneInstance(
-                fragment=frag1,
-                fingerprint=Fingerprint(
-                    hash_value="",
-                    fingerprint_type=FingerprintType.AST_STRUCTURAL,
-                    fragment=frag1,
-                ),
-                similarity_score=1.0,
-            )
-        ]
-
-        similarities = [1.0]
-        for frag, sim in similar_fragments:
-            instances.append(
-                CloneInstance(
-                    fragment=frag,
-                    fingerprint=Fingerprint(
-                        hash_value="",
-                        fingerprint_type=FingerprintType.AST_STRUCTURAL,
-                        fragment=frag,
-                    ),
-                    similarity_score=sim,
-                )
-            )
-            similarities.append(sim)
+        instances, similarities = self._build_clone_instances(frag1, similar_fragments)
 
         total_lines = sum(i.fragment.line_count for i in instances)
         severity = self._calculate_severity(len(instances), total_lines)
-
-        # Generate a hash for this group
         group_hash = hashlib.sha256(
             f"{frag1.file_path}:{frag1.start_line}".encode()
         ).hexdigest()[:16]

@@ -345,25 +345,57 @@ class EnhancedMultiAgentOrchestrator:
         except Exception as e:
             return await self._handle_workflow_failure(plan, e, results)
 
+    async def _handle_task_timeout(
+        self, task: AgentTask, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Handle task timeout with retry logic.
+
+        Issue #620.
+        """
+        task.fail_execution("Timeout")
+
+        if task.can_retry():
+            task.increment_retry()
+            self.logger.warning(
+                "Task %s timed out, retrying (%d/%d)",
+                task.task_id,
+                task.retry_count,
+                task.max_retries,
+            )
+            return await self._execute_single_task(task, context)
+
+        self._update_agent_performance(task.agent_type, False, task.timeout)
+        return task.to_failed_result("Task execution timed out")
+
+    def _handle_task_exception(
+        self, task: AgentTask, error: Exception
+    ) -> Dict[str, Any]:
+        """
+        Handle task execution exception.
+
+        Issue #620.
+        """
+        task.fail_execution(str(error))
+        execution_time = time.time() - (task.start_time or time.time())
+        self._update_agent_performance(task.agent_type, False, execution_time)
+        return task.to_failed_result(str(error))
+
     async def _execute_single_task(
         self, task: AgentTask, context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Execute a single agent task"""
+        """Execute a single agent task. Issue #620: Refactored with helpers."""
         task.start_execution()
 
         try:
-            # Acquire resource semaphore
             async with self.resource_semaphore:
-                # Get agent implementation
                 agent = await self._get_agent_instance(task.agent_type)
 
                 if not agent:
                     raise Exception(f"Agent {task.agent_type} not available")
 
-                # Prepare inputs with context using model method
                 enhanced_inputs = task.get_enhanced_inputs(context)
 
-                # Execute with timeout
                 result = await asyncio.wait_for(
                     agent.process_request(
                         {"action": task.action, "payload": enhanced_inputs}
@@ -372,39 +404,16 @@ class EnhancedMultiAgentOrchestrator:
                 )
 
                 task.complete_execution(result)
-
-                # Update performance metrics
                 self._update_agent_performance(
                     task.agent_type, True, task.get_execution_time()
                 )
-
                 return task.to_completed_result(result)
 
         except asyncio.TimeoutError:
-            task.fail_execution("Timeout")
-
-            # Retry logic using model methods
-            if task.can_retry():
-                task.increment_retry()
-                self.logger.warning(
-                    "Task %s timed out, retrying (%d/%d)",
-                    task.task_id,
-                    task.retry_count,
-                    task.max_retries,
-                )
-                return await self._execute_single_task(task, context)
-
-            self._update_agent_performance(task.agent_type, False, task.timeout)
-            return task.to_failed_result("Task execution timed out")
+            return await self._handle_task_timeout(task, context)
 
         except Exception as e:
-            task.fail_execution(str(e))
-
-            self._update_agent_performance(
-                task.agent_type, False, time.time() - (task.start_time or time.time())
-            )
-
-            return task.to_failed_result(str(e))
+            return self._handle_task_exception(task, e)
 
     async def get_agent_recommendations(
         self, task_type: str, capabilities_needed: Set[AgentCapability]

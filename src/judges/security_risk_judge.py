@@ -208,17 +208,7 @@ class SecurityRiskJudge(BaseLLMJudge):
         """
         Build the file access risk assessment result.
 
-        (Issue #398: extracted helper)
-
-        Args:
-            judgment: The judgment result
-            safety_score: Extracted safety score
-            security_score: Extracted security score
-            path_risks: List of path-related risks
-            operation_risk: Operation risk level
-
-        Returns:
-            Dict with complete risk assessment
+        Issue #398: extracted helper. Issue #620.
         """
         return {
             "risk_level": self._calculate_risk_level(safety_score, security_score),
@@ -231,6 +221,42 @@ class SecurityRiskJudge(BaseLLMJudge):
             "mitigation_suggestions": judgment.improvement_suggestions,
         }
 
+    def _build_access_context(
+        self,
+        file_path: str,
+        operation: str,
+        path_risks: List[str],
+        operation_risk: str,
+        context: Dict[str, Any],
+        user_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build the access context dictionary for file access judgment.
+
+        Issue #620.
+        """
+        return {
+            "file_path": file_path,
+            "operation": operation,
+            "path_risks": path_risks,
+            "operation_risk": operation_risk,
+            "context": context,
+            "user_context": user_context,
+        }
+
+    def _build_file_access_error_response(self, error: Exception) -> Dict[str, Any]:
+        """
+        Build error response for file access risk assessment failure.
+
+        Issue #620.
+        """
+        return {
+            "risk_level": "unknown",
+            "should_allow": False,
+            "error": str(error),
+            "requires_confirmation": True,
+        }
+
     async def assess_file_access_risk(
         self,
         file_path: str,
@@ -241,29 +267,20 @@ class SecurityRiskJudge(BaseLLMJudge):
         """
         Assess security risk of file access operations.
 
-        (Issue #398: refactored to use extracted helpers)
-
-        Returns:
-            Dict with risk assessment and recommendations
+        Issue #398, #620: Refactored with extracted helpers.
         """
         try:
             path_risks = self._analyze_file_path_risks(file_path)
             operation_risk = self._evaluate_operation_risk(operation, file_path)
-
             criteria = [
                 JudgmentDimension.SAFETY,
                 JudgmentDimension.SECURITY,
                 JudgmentDimension.COMPLIANCE,
             ]
 
-            access_context = {
-                "file_path": file_path,
-                "operation": operation,
-                "path_risks": path_risks,
-                "operation_risk": operation_risk,
-                "context": context,
-                "user_context": user_context,
-            }
+            access_context = self._build_access_context(
+                file_path, operation, path_risks, operation_risk, context, user_context
+            )
 
             judgment = await self.make_judgment(
                 subject={"file_path": file_path, "operation": operation},
@@ -271,7 +288,6 @@ class SecurityRiskJudge(BaseLLMJudge):
                 context=access_context,
             )
 
-            # Extract security-specific metrics (Issue #398: uses helper)
             safety_score = self._extract_dimension_score(
                 judgment, JudgmentDimension.SAFETY
             )
@@ -285,12 +301,7 @@ class SecurityRiskJudge(BaseLLMJudge):
 
         except Exception as e:
             logger.error("Error assessing file access risk: %s", e)
-            return {
-                "risk_level": "unknown",
-                "should_allow": False,
-                "error": str(e),
-                "requires_confirmation": True,
-            }
+            return self._build_file_access_error_response(e)
 
     async def evaluate_network_operation_security(
         self, operation_data: Dict[str, Any], context: Dict[str, Any]
