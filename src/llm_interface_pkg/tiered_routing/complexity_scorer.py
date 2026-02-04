@@ -245,43 +245,9 @@ class TaskComplexityScorer:
             "question": self._score_question(user_content),
         }
 
-        # Calculate weighted score
-        weighted_score = (
-            factors["length"] * self.WEIGHT_LENGTH
-            + factors["code"] * self.WEIGHT_CODE
-            + factors["technical"] * self.WEIGHT_TECHNICAL
-            + factors["multistep"] * self.WEIGHT_MULTISTEP
-            + factors["question"] * self.WEIGHT_QUESTION
-        )
-
-        # Normalize to 0-10 scale (factors are 0-3, max weighted is 3)
-        normalized_score = (weighted_score / 3.0) * 10.0
-        normalized_score = min(10.0, max(0.0, normalized_score))
-
-        # Determine tier
-        tier = (
-            "simple"
-            if normalized_score < self.config.complexity_threshold
-            else "complex"
-        )
-
-        # Generate reasoning
-        reasoning = self._generate_reasoning(factors, normalized_score, tier)
-
-        if self.config.logging.log_scores:
-            logger.debug(
-                "Complexity score: %.1f (%s) - factors: %s",
-                normalized_score,
-                tier,
-                factors,
-            )
-
-        return ComplexityResult(
-            score=round(normalized_score, 2),
-            factors={k: round(v, 2) for k, v in factors.items()},
-            tier=tier,
-            reasoning=reasoning,
-        )
+        # Calculate weighted score and build result
+        normalized_score = self._calculate_weighted_score(factors)
+        return self._build_complexity_result(normalized_score, factors)
 
     def _extract_user_content(self, messages: List[Dict]) -> str:
         """Extract and combine user message content."""
@@ -367,6 +333,68 @@ class TaskComplexityScorer:
 
         # Clamp to 0-3
         return max(0.0, min(3.0, net_score))
+
+    def _calculate_weighted_score(self, factors: Dict[str, float]) -> float:
+        """
+        Calculate and normalize the weighted complexity score.
+
+        Issue #620.
+
+        Args:
+            factors: Dictionary of factor scores (0-3 scale each)
+
+        Returns:
+            Normalized score on 0-10 scale
+        """
+        weighted_score = (
+            factors["length"] * self.WEIGHT_LENGTH
+            + factors["code"] * self.WEIGHT_CODE
+            + factors["technical"] * self.WEIGHT_TECHNICAL
+            + factors["multistep"] * self.WEIGHT_MULTISTEP
+            + factors["question"] * self.WEIGHT_QUESTION
+        )
+        # Normalize to 0-10 scale (factors are 0-3, max weighted is 3)
+        normalized_score = (weighted_score / 3.0) * 10.0
+        return min(10.0, max(0.0, normalized_score))
+
+    def _build_complexity_result(
+        self,
+        normalized_score: float,
+        factors: Dict[str, float],
+    ) -> ComplexityResult:
+        """
+        Build the final ComplexityResult with tier and reasoning.
+
+        Issue #620.
+
+        Args:
+            normalized_score: The normalized 0-10 complexity score
+            factors: Dictionary of factor scores
+
+        Returns:
+            ComplexityResult with all fields populated
+        """
+        tier = (
+            "simple"
+            if normalized_score < self.config.complexity_threshold
+            else "complex"
+        )
+        reasoning = self._generate_reasoning(factors, normalized_score, tier)
+
+        if self.config.logging.log_scores:
+            logger.debug(
+                "Complexity score: %.1f (%s) - factors: %s",
+                normalized_score,
+                tier,
+                factors,
+            )
+
+        return ComplexityResult(
+            score=round(normalized_score, 2),
+            factors={k: round(v, 2) for k, v in factors.items()},
+            tier=tier,
+            reasoning=reasoning,
+        )
 
     def _generate_reasoning(
         self, factors: Dict[str, float], score: float, tier: str

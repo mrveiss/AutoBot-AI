@@ -101,13 +101,12 @@ def create_system_health_check_template() -> WorkflowTemplate:
     )
 
 
-def _create_performance_optimization_steps() -> List[WorkflowStep]:
+def _create_perf_analysis_steps() -> List[WorkflowStep]:
     """
-    Create workflow steps for performance optimization template.
+    Create analysis phase steps for performance optimization.
 
-    Returns a list of WorkflowStep objects defining the performance optimization
-    workflow sequence from baseline metrics collection through optimization
-    implementation and verification. Issue #620.
+    Returns baseline metrics collection, bottleneck analysis,
+    and optimization research steps. Issue #620.
     """
     return [
         WorkflowStep(
@@ -133,6 +132,17 @@ def _create_performance_optimization_steps() -> List[WorkflowStep]:
             dependencies=["bottleneck_analysis"],
             expected_duration_ms=35000,
         ),
+    ]
+
+
+def _create_perf_implementation_steps() -> List[WorkflowStep]:
+    """
+    Create implementation phase steps for performance optimization.
+
+    Returns optimization planning, implementation, verification,
+    and result storage steps. Issue #620.
+    """
+    return [
         WorkflowStep(
             id="optimization_plan",
             agent_type="orchestrator",
@@ -168,6 +178,16 @@ def _create_performance_optimization_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _create_performance_optimization_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for performance optimization template.
+
+    Combines analysis and implementation phase steps into a complete
+    performance optimization workflow sequence. Issue #620.
+    """
+    return _create_perf_analysis_steps() + _create_perf_implementation_steps()
 
 
 def create_performance_optimization_template() -> WorkflowTemplate:

@@ -33,6 +33,82 @@ class OperationCheckpointManager:
         self.checkpoint_dir = PATH.PROJECT_ROOT / "data" / "operation_checkpoints"
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+    def _create_checkpoint_data(
+        self, checkpoint: OperationCheckpoint
+    ) -> Dict[str, Any]:
+        """
+        Create serializable checkpoint data dictionary.
+
+        Issue #620.
+
+        Args:
+            checkpoint: The checkpoint object to serialize
+
+        Returns:
+            Dictionary representation of the checkpoint
+        """
+        return {
+            "checkpoint_id": checkpoint.checkpoint_id,
+            "operation_id": checkpoint.operation_id,
+            "checkpoint_time": checkpoint.checkpoint_time.isoformat(),
+            "progress_percent": checkpoint.progress_percent,
+            "state_data": checkpoint.state_data,
+            "metadata": checkpoint.metadata,
+        }
+
+    async def _save_checkpoint_to_file(
+        self, checkpoint_id: str, checkpoint_data: Dict[str, Any]
+    ) -> None:
+        """
+        Save checkpoint data to file storage.
+
+        Issue #620.
+
+        Args:
+            checkpoint_id: The checkpoint ID for filename
+            checkpoint_data: The data to save
+        """
+        checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.json"
+        async with aiofiles.open(checkpoint_file, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(checkpoint_data, indent=2))
+
+    async def _save_checkpoint_to_redis(
+        self,
+        operation_id: str,
+        checkpoint_id: str,
+        checkpoint_data: Dict[str, Any],
+        checkpoint_time: datetime,
+        progress_percent: float,
+    ) -> None:
+        """
+        Save checkpoint data to Redis for fast lookup.
+
+        Issue #620.
+
+        Args:
+            operation_id: The operation ID
+            checkpoint_id: The checkpoint ID
+            checkpoint_data: The data to save
+            checkpoint_time: The checkpoint timestamp
+            progress_percent: The progress percentage
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            redis_key = f"checkpoint:{operation_id}:{checkpoint_id}"
+            await self.redis_client.hset(
+                redis_key,
+                mapping={
+                    "data": pickle.dumps(checkpoint_data),
+                    "progress": str(progress_percent),
+                    "timestamp": checkpoint_time.isoformat(),
+                },
+            )
+            await self.redis_client.expire(redis_key, 86400 * 7)  # 7 days TTL
+        except Exception as e:
+            logger.warning("Failed to save checkpoint to Redis: %s", e)
+
     async def save_checkpoint(
         self,
         operation_id: str,
@@ -63,35 +139,20 @@ class OperationCheckpointManager:
             metadata=metadata or {},
         )
 
-        # Save to file (primary storage)
-        checkpoint_file = self.checkpoint_dir / f"{checkpoint_id}.json"
-        checkpoint_data = {
-            "checkpoint_id": checkpoint.checkpoint_id,
-            "operation_id": checkpoint.operation_id,
-            "checkpoint_time": checkpoint.checkpoint_time.isoformat(),
-            "progress_percent": checkpoint.progress_percent,
-            "state_data": checkpoint.state_data,
-            "metadata": checkpoint.metadata,
-        }
+        # Create serializable checkpoint data
+        checkpoint_data = self._create_checkpoint_data(checkpoint)
 
-        async with aiofiles.open(checkpoint_file, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(checkpoint_data, indent=2))
+        # Save to file (primary storage)
+        await self._save_checkpoint_to_file(checkpoint_id, checkpoint_data)
 
         # Also save to Redis for fast lookup if available
-        if self.redis_client:
-            try:
-                redis_key = f"checkpoint:{operation_id}:{checkpoint_id}"
-                await self.redis_client.hset(
-                    redis_key,
-                    mapping={
-                        "data": pickle.dumps(checkpoint_data),
-                        "progress": str(progress_percent),
-                        "timestamp": checkpoint.checkpoint_time.isoformat(),
-                    },
-                )
-                await self.redis_client.expire(redis_key, 86400 * 7)  # 7 days TTL
-            except Exception as e:
-                logger.warning("Failed to save checkpoint to Redis: %s", e)
+        await self._save_checkpoint_to_redis(
+            operation_id,
+            checkpoint_id,
+            checkpoint_data,
+            checkpoint.checkpoint_time,
+            progress_percent,
+        )
 
         logger.info(
             "Checkpoint saved: %s at %.1f%%",

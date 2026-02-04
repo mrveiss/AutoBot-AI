@@ -84,8 +84,15 @@ async def run_verify() -> None:
     logger.info("")
 
 
-def main():
-    """Main CLI entry point."""
+def _create_argument_parser() -> argparse.ArgumentParser:
+    """
+    Create and configure the CLI argument parser.
+
+    Issue #620.
+
+    Returns:
+        Configured ArgumentParser instance
+    """
     parser = argparse.ArgumentParser(
         description="AutoBot PKI Management (oVirt-style)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -126,8 +133,19 @@ Examples:
     # Verify command
     subparsers.add_parser("verify", help="Verify certificate distribution")
 
-    args = parser.parse_args()
+    return parser
 
+
+def _execute_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """
+    Execute the CLI command based on parsed arguments.
+
+    Issue #620.
+
+    Args:
+        args: Parsed command line arguments
+        parser: The argument parser (for help display)
+    """
     if args.command == "setup":
         success = asyncio.run(
             run_pki_setup(
@@ -151,6 +169,13 @@ Examples:
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def main():
+    """Main CLI entry point."""
+    parser = _create_argument_parser()
+    args = parser.parse_args()
+    _execute_command(args, parser)
 
 
 if __name__ == "__main__":

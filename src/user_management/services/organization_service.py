@@ -85,26 +85,9 @@ class OrganizationService(BaseService):
         """
         self._require_platform_admin()
 
-        # Generate slug if not provided
-        if not slug:
-            slug = self._generate_slug(name)
-
-        # Check for duplicate slug
-        existing = await self.get_organization_by_slug(slug)
-        if existing:
-            raise DuplicateOrganizationError(
-                f"Organization with slug '{slug}' already exists"
-            )
-
-        org = Organization(
-            id=uuid.uuid4(),
-            name=name,
-            slug=slug,
-            description=description,
-            settings=settings or {},
-            subscription_tier=subscription_tier,
-            max_users=max_users,
-            is_active=True,
+        slug = await self._validate_and_prepare_slug(name, slug)
+        org = self._build_organization_entity(
+            name, slug, description, settings, subscription_tier, max_users
         )
 
         self.session.add(org)
@@ -237,31 +220,9 @@ class OrganizationService(BaseService):
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
-        changes = {}
-
-        if name and name != org.name:
-            changes["name"] = {"old": org.name, "new": name}
-            org.name = name
-
-        if description is not None:
-            changes["description"] = {"old": org.description, "new": description}
-            org.description = description
-
-        if settings is not None:
-            org.settings = settings
-
-        if subscription_tier is not None:
-            changes["subscription_tier"] = {
-                "old": org.subscription_tier,
-                "new": subscription_tier,
-            }
-            org.subscription_tier = subscription_tier
-
-        if max_users is not None:
-            changes["max_users"] = {"old": org.max_users, "new": max_users}
-            org.max_users = max_users
-
-        org.updated_at = datetime.now(timezone.utc)
+        changes = self._apply_organization_updates(
+            org, name, description, settings, subscription_tier, max_users
+        )
         await self.session.flush()
 
         if changes:
@@ -447,6 +408,120 @@ class OrganizationService(BaseService):
     # -------------------------------------------------------------------------
     # Private Helpers
     # -------------------------------------------------------------------------
+
+    async def _validate_and_prepare_slug(self, name: str, slug: Optional[str]) -> str:
+        """
+        Validate slug uniqueness and generate if not provided.
+
+        Args:
+            name: Organization name for slug generation
+            slug: Optional provided slug
+
+        Returns:
+            Validated unique slug
+
+        Raises:
+            DuplicateOrganizationError: If slug already exists
+
+        Issue #620.
+        """
+        if not slug:
+            slug = self._generate_slug(name)
+
+        existing = await self.get_organization_by_slug(slug)
+        if existing:
+            raise DuplicateOrganizationError(
+                f"Organization with slug '{slug}' already exists"
+            )
+        return slug
+
+    def _build_organization_entity(
+        self,
+        name: str,
+        slug: str,
+        description: Optional[str],
+        settings: Optional[dict],
+        subscription_tier: str,
+        max_users: int,
+    ) -> Organization:
+        """
+        Build Organization entity with provided parameters.
+
+        Args:
+            name: Organization name
+            slug: URL-safe slug
+            description: Organization description
+            settings: Organization settings JSON
+            subscription_tier: Subscription tier
+            max_users: Maximum users allowed
+
+        Returns:
+            Organization instance ready for persistence
+
+        Issue #620.
+        """
+        return Organization(
+            id=uuid.uuid4(),
+            name=name,
+            slug=slug,
+            description=description,
+            settings=settings or {},
+            subscription_tier=subscription_tier,
+            max_users=max_users,
+            is_active=True,
+        )
+
+    def _apply_organization_updates(
+        self,
+        org: Organization,
+        name: Optional[str],
+        description: Optional[str],
+        settings: Optional[dict],
+        subscription_tier: Optional[str],
+        max_users: Optional[int],
+    ) -> dict:
+        """
+        Apply field updates to organization and track changes.
+
+        Args:
+            org: Organization instance to update
+            name: New name (optional)
+            description: New description (optional)
+            settings: New settings (optional)
+            subscription_tier: New subscription tier (optional)
+            max_users: New max users (optional)
+
+        Returns:
+            Dictionary of tracked changes for audit logging
+
+        Issue #620.
+        """
+        changes = {}
+
+        if name and name != org.name:
+            changes["name"] = {"old": org.name, "new": name}
+            org.name = name
+
+        if description is not None:
+            changes["description"] = {"old": org.description, "new": description}
+            org.description = description
+
+        if settings is not None:
+            org.settings = settings
+
+        if subscription_tier is not None:
+            changes["subscription_tier"] = {
+                "old": org.subscription_tier,
+                "new": subscription_tier,
+            }
+            org.subscription_tier = subscription_tier
+
+        if max_users is not None:
+            changes["max_users"] = {"old": org.max_users, "new": max_users}
+            org.max_users = max_users
+
+        org.updated_at = datetime.now(timezone.utc)
+        return changes
 
     def _generate_slug(self, name: str) -> str:
         """Generate URL-safe slug from name."""
