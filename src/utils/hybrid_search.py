@@ -414,11 +414,75 @@ class HybridSearchEngine:
         except Exception as e:
             return await self._fallback_semantic_search(query, top_k, filters, e)
 
+    def _build_explanation_base(
+        self,
+        query: str,
+        query_keywords: List[str],
+        semantic_results_count: int,
+    ) -> Dict[str, Any]:
+        """Build the base explanation dictionary. Issue #620.
+
+        Args:
+            query: Original search query
+            query_keywords: Keywords extracted from query
+            semantic_results_count: Number of semantic search results
+
+        Returns:
+            Base explanation dictionary with metadata
+        """
+        return {
+            "query": query,
+            "extracted_keywords": query_keywords,
+            "semantic_weight": self.semantic_weight,
+            "keyword_weight": self.keyword_weight,
+            "semantic_results_count": semantic_results_count,
+            "scoring_details": [],
+        }
+
+    def _build_score_detail(
+        self,
+        rank: int,
+        result: Dict[str, Any],
+        query_keywords: List[str],
+    ) -> Dict[str, Any]:
+        """Build scoring detail for a single result. Issue #620.
+
+        Args:
+            rank: Result rank (1-indexed)
+            result: Search result dictionary
+            query_keywords: Keywords extracted from query
+
+        Returns:
+            Scoring detail dictionary for this result
+        """
+        content = result.get("content", "")
+        content_preview = content[:200] + "..." if len(content) > 200 else content
+        semantic_score = result.get("score", 0.0)
+
+        keyword_score = self.calculate_keyword_score(
+            query_keywords,
+            content,
+            result.get("metadata", {}),
+        )
+
+        hybrid_score = self.combine_scores(semantic_score, keyword_score)
+
+        matched_keywords = [
+            kw for kw in query_keywords if kw.lower() in content.lower()
+        ]
+
+        return {
+            "rank": rank,
+            "content_preview": content_preview,
+            "semantic_score": round(semantic_score, 4),
+            "keyword_score": round(keyword_score, 4),
+            "hybrid_score": round(hybrid_score, 4),
+            "matched_keywords": matched_keywords,
+            "source": result.get("metadata", {}).get("source", "unknown"),
+        }
+
     async def explain_search(self, query: str, top_k: int = 5) -> Dict[str, Any]:
-        """
-        Perform a search and return detailed explanation of the scoring process.
-        Useful for debugging and understanding search behavior.
-        """
+        """Perform a search and return detailed scoring explanation. Issue #620."""
         try:
             query_keywords = self.extract_keywords(query)
 
@@ -427,45 +491,14 @@ class HybridSearchEngine:
                 query, top_k=min(top_k * 2, 20)
             )
 
-            explanation = {
-                "query": query,
-                "extracted_keywords": query_keywords,
-                "semantic_weight": self.semantic_weight,
-                "keyword_weight": self.keyword_weight,
-                "semantic_results_count": len(semantic_results),
-                "scoring_details": [],
-            }
+            # Build base explanation
+            explanation = self._build_explanation_base(
+                query, query_keywords, len(semantic_results)
+            )
 
+            # Build scoring details for each result
             for i, result in enumerate(semantic_results[:top_k]):
-                content = (
-                    result.get("content", "")[:200] + "..."
-                )  # Truncate for readability
-                semantic_score = result.get("score", 0.0)
-
-                keyword_score = self.calculate_keyword_score(
-                    query_keywords,
-                    result.get("content", ""),
-                    result.get("metadata", {}),
-                )
-
-                hybrid_score = self.combine_scores(semantic_score, keyword_score)
-
-                matched_keywords = [
-                    kw
-                    for kw in query_keywords
-                    if kw.lower() in result.get("content", "").lower()
-                ]
-
-                score_detail = {
-                    "rank": i + 1,
-                    "content_preview": content,
-                    "semantic_score": round(semantic_score, 4),
-                    "keyword_score": round(keyword_score, 4),
-                    "hybrid_score": round(hybrid_score, 4),
-                    "matched_keywords": matched_keywords,
-                    "source": result.get("metadata", {}).get("source", "unknown"),
-                }
-
+                score_detail = self._build_score_detail(i + 1, result, query_keywords)
                 explanation["scoring_details"].append(score_detail)
 
             return explanation

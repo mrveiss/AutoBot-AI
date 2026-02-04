@@ -424,6 +424,73 @@ def validate_against_ssot(
     return results
 
 
+def _group_violations_by_category(violations: List[Dict]) -> Dict[str, List]:
+    """
+    Group violations by their SSOT category.
+
+    Args:
+        violations: List of validated values with SSOT equivalents.
+
+    Returns:
+        Dictionary mapping category names to lists of violations.
+
+    Issue #620.
+    """
+    by_category: Dict[str, List] = {}
+    for v in violations:
+        cat = v["ssot_mapping"]["category"]
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append(v)
+    return by_category
+
+
+def _count_violations_by_severity(violations: List[Dict]) -> Dict[str, int]:
+    """
+    Count violations by severity level.
+
+    Args:
+        violations: List of validated values with SSOT equivalents.
+
+    Returns:
+        Dictionary with counts for high, medium, and low severity.
+
+    Issue #620.
+    """
+    by_severity = {"high": 0, "medium": 0, "low": 0}
+    for v in violations:
+        sev = v["ssot_mapping"]["severity"]
+        by_severity[sev] += 1
+    return by_severity
+
+
+def _get_high_priority_violations(
+    violations: List[Dict], limit: int = 20
+) -> List[Dict]:
+    """
+    Extract top high-priority violations with fix suggestions.
+
+    Args:
+        violations: List of validated values with SSOT equivalents.
+        limit: Maximum number of violations to return.
+
+    Returns:
+        List of high-priority violation details.
+
+    Issue #620.
+    """
+    return [
+        {
+            "file": v.get("file"),
+            "line": v.get("line"),
+            "value": v.get("value"),
+            "suggestion": v["ssot_mapping"]["python_config"],
+        }
+        for v in violations
+        if v["ssot_mapping"]["severity"] == "high"
+    ][:limit]
+
+
 def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
     """
     Generate a coverage report showing SSOT usage vs hardcoded values.
@@ -441,19 +508,8 @@ def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
         v for v in validated if not v["ssot_mapping"]["has_ssot_equivalent"]
     ]
 
-    # Group by category
-    by_category: Dict[str, List] = {}
-    for v in with_ssot:
-        cat = v["ssot_mapping"]["category"]
-        if cat not in by_category:
-            by_category[cat] = []
-        by_category[cat].append(v)
-
-    # Count by severity
-    by_severity = {"high": 0, "medium": 0, "low": 0}
-    for v in with_ssot:
-        sev = v["ssot_mapping"]["severity"]
-        by_severity[sev] += 1
+    by_category = _group_violations_by_category(with_ssot)
+    by_severity = _count_violations_by_severity(with_ssot)
 
     return {
         "total_hardcoded": len(hardcoded_values),
@@ -466,18 +522,7 @@ def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
         ),
         "violations_by_category": {k: len(v) for k, v in by_category.items()},
         "violations_by_severity": by_severity,
-        "high_priority_violations": [
-            {
-                "file": v.get("file"),
-                "line": v.get("line"),
-                "value": v.get("value"),
-                "suggestion": v["ssot_mapping"]["python_config"],
-            }
-            for v in with_ssot
-            if v["ssot_mapping"]["severity"] == "high"
-        ][
-            :20
-        ],  # Top 20
+        "high_priority_violations": _get_high_priority_violations(with_ssot),
     }
 
 

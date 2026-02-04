@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
+from src.config import config_manager
 from src.models.atomic_fact import AtomicFact
 from src.models.entity_mapping import (
     EntityMapping,
@@ -24,7 +25,6 @@ from src.models.entity_mapping import (
     EntityType,
     SimilarityMethod,
 )
-from src.config import config_manager
 from src.utils.logging_manager import get_llm_logger
 from src.utils.redis_client import get_redis_client
 
@@ -33,13 +33,39 @@ logger = get_llm_logger("entity_resolver")
 # Entity classification patterns (Issue #315 - module-level constant)
 _ENTITY_PATTERNS = {
     EntityType.TECHNOLOGY: [
-        "api", "sdk", "framework", "library", "database", "server", "client",
-        "python", "javascript", "java", "redis", "chromadb", "openai", "model",
-        "algorithm", "neural", "transformer", "gpt", "llm",
+        "api",
+        "sdk",
+        "framework",
+        "library",
+        "database",
+        "server",
+        "client",
+        "python",
+        "javascript",
+        "java",
+        "redis",
+        "chromadb",
+        "openai",
+        "model",
+        "algorithm",
+        "neural",
+        "transformer",
+        "gpt",
+        "llm",
     ],
     EntityType.PRODUCT: [
-        "autobot", "system", "platform", "application", "service", "tool",
-        "bot", "agent", "interface", "dashboard", "ui", "gui",
+        "autobot",
+        "system",
+        "platform",
+        "application",
+        "service",
+        "tool",
+        "bot",
+        "agent",
+        "interface",
+        "dashboard",
+        "ui",
+        "gui",
     ],
     EntityType.VERSION: ["v", "version", ".", "beta", "alpha", "rc"],
     EntityType.CONFIGURATION: ["config", "setting", "parameter", "option", "flag"],
@@ -48,9 +74,8 @@ _ENTITY_PATTERNS = {
 
 def _check_version_pattern(name_lower: str, entity_name: str) -> bool:
     """Check if entity name matches version pattern. (Issue #315 - extracted)"""
-    return (
-        any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.VERSION])
-        and any(c.isdigit() for c in entity_name)
+    return any(p in name_lower for p in _ENTITY_PATTERNS[EntityType.VERSION]) and any(
+        c.isdigit() for c in entity_name
     )
 
 
@@ -120,16 +145,13 @@ class EntityResolver:
 
         for i in range(0, len(unique_entities), batch_size):
             batch = unique_entities[i : i + batch_size]
-            batch_results = await self._resolve_entity_batch(
-                batch, existing_mappings
-            )
+            batch_results = await self._resolve_entity_batch(batch, existing_mappings)
 
             for original, mapping in batch_results.items():
                 resolved_mappings[original] = mapping.canonical_id
 
                 if not any(
-                    c.canonical_id == mapping.canonical_id
-                    for c in canonical_entities
+                    c.canonical_id == mapping.canonical_id for c in canonical_entities
                 ):
                     canonical_entities.append(mapping)
 
@@ -498,61 +520,93 @@ class EntityResolver:
             logger.error("Error resolving fact entities: %s", e)
             return facts  # Return original facts if resolution fails
 
+    def _parse_resolution_history(self, recent_history: List[str]) -> Dict[str, float]:
+        """
+        Parse resolution history entries and calculate totals.
+
+        Args:
+            recent_history: List of JSON-encoded history entries.
+
+        Returns:
+            Dict with total_processing_time, total_entities_processed,
+            and total_entities_resolved.
+
+        Issue #620.
+        """
+        totals = {
+            "processing_time": 0.0,
+            "entities_processed": 0,
+            "entities_resolved": 0,
+        }
+        for history_str in recent_history:
+            try:
+                history = json.loads(history_str)
+                totals["processing_time"] += history.get("processing_time", 0)
+                totals["entities_processed"] += history.get("total_original", 0)
+                totals["entities_resolved"] += history.get("total_canonical", 0)
+            except Exception:  # nosec B112 - skip malformed JSON entries
+                continue
+        return totals
+
+    def _build_statistics_response(
+        self,
+        total_mappings: int,
+        total_resolutions: int,
+        totals: Dict[str, float],
+    ) -> Dict[str, Any]:
+        """
+        Build statistics response dictionary.
+
+        Args:
+            total_mappings: Number of entity mappings in Redis.
+            total_resolutions: Number of recent resolution operations.
+            totals: Parsed totals from resolution history.
+
+        Returns:
+            Dictionary containing all resolution statistics.
+
+        Issue #620.
+        """
+        avg_processing_time = (
+            totals["processing_time"] / total_resolutions
+            if total_resolutions > 0
+            else 0
+        )
+        avg_resolution_rate = (
+            (totals["entities_processed"] - totals["entities_resolved"])
+            / totals["entities_processed"]
+            * 100
+            if totals["entities_processed"] > 0
+            else 0
+        )
+        return {
+            "total_entity_mappings": total_mappings,
+            "recent_resolutions": total_resolutions,
+            "total_entities_processed": totals["entities_processed"],
+            "total_entities_resolved": totals["entities_resolved"],
+            "average_processing_time": round(avg_processing_time, 3),
+            "average_resolution_rate": round(avg_resolution_rate, 1),
+            "similarity_threshold": self.similarity_threshold,
+            "fuzzy_threshold": self.fuzzy_threshold,
+            "semantic_similarity_enabled": self.enable_semantic_similarity,
+            "fuzzy_matching_enabled": self.enable_fuzzy_matching,
+        }
+
     async def get_resolution_statistics(self) -> Dict[str, Any]:
         """Get entity resolution statistics."""
         try:
             if not self.redis_client:
                 return {"error": "Redis client not available"}
 
-            # Get total entity mappings
             total_mappings = await self.redis_client.hlen(self.entity_mappings_key)
-
-            # Get recent resolution history
             recent_history = await self.redis_client.lrange(
                 self.resolution_history_key, 0, 99
             )
 
-            # Calculate statistics
-            total_resolutions = len(recent_history)
-            total_processing_time = 0
-            total_entities_processed = 0
-            total_entities_resolved = 0
-
-            for history_str in recent_history:
-                try:
-                    # Use json.loads instead of eval for security
-                    history = json.loads(history_str)
-                    total_processing_time += history.get("processing_time", 0)
-                    total_entities_processed += history.get("total_original", 0)
-                    total_entities_resolved += history.get("total_canonical", 0)
-                except Exception:
-                    continue
-
-            avg_processing_time = (
-                total_processing_time / total_resolutions
-                if total_resolutions > 0
-                else 0
+            totals = self._parse_resolution_history(recent_history)
+            return self._build_statistics_response(
+                total_mappings, len(recent_history), totals
             )
-            avg_resolution_rate = (
-                (total_entities_processed - total_entities_resolved)
-                / total_entities_processed
-                * 100
-                if total_entities_processed > 0
-                else 0
-            )
-
-            return {
-                "total_entity_mappings": total_mappings,
-                "recent_resolutions": total_resolutions,
-                "total_entities_processed": total_entities_processed,
-                "total_entities_resolved": total_entities_resolved,
-                "average_processing_time": round(avg_processing_time, 3),
-                "average_resolution_rate": round(avg_resolution_rate, 1),
-                "similarity_threshold": self.similarity_threshold,
-                "fuzzy_threshold": self.fuzzy_threshold,
-                "semantic_similarity_enabled": self.enable_semantic_similarity,
-                "fuzzy_matching_enabled": self.enable_fuzzy_matching,
-            }
 
         except Exception as e:
             logger.error("Error getting resolution statistics: %s", e)
