@@ -14,12 +14,7 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-)
+from typing import Any, Dict, List, Optional
 
 from src.constants.threshold_constants import StringParsingConstants
 
@@ -61,6 +56,52 @@ class JSONFormatterAgent:
             (r':\s*""\s*}', ':""}'),  # Trailing empty value
         ]
 
+    def _create_empty_input_result(self, response: str) -> JSONParseResult:
+        """
+        Create a failure result for empty or whitespace-only input.
+
+        Args:
+            response: The original empty/whitespace response
+
+        Returns:
+            JSONParseResult indicating empty input failure. Issue #620.
+        """
+        return JSONParseResult(
+            success=False,
+            data={},
+            original_text=response,
+            method_used="empty_input",
+            confidence=0.0,
+            warnings=["Empty or whitespace-only input"],
+        )
+
+    def _try_direct_json_parse(self, response: str) -> Optional[JSONParseResult]:
+        """
+        Attempt direct JSON parsing of the response.
+
+        Args:
+            response: Raw LLM response text
+
+        Returns:
+            JSONParseResult if successful, None otherwise. Issue #620.
+        """
+        try:
+            parsed = json.loads(response.strip())
+            if isinstance(parsed, dict):
+                with self._stats_lock:
+                    self.successful_parses += 1
+                return JSONParseResult(
+                    success=True,
+                    data=parsed,
+                    original_text=response,
+                    method_used="direct_parse",
+                    confidence=1.0,
+                    warnings=[],
+                )
+        except json.JSONDecodeError as e:
+            logger.debug("Direct JSON parse failed, trying extraction: %s", e)
+        return None
+
     def parse_llm_response(
         self, response: str, expected_schema: Optional[Dict[str, Any]] = None
     ) -> JSONParseResult:
@@ -78,31 +119,12 @@ class JSONFormatterAgent:
             self.parse_attempts += 1
 
         if not response or not response.strip():
-            return JSONParseResult(
-                success=False,
-                data={},
-                original_text=response,
-                method_used="empty_input",
-                confidence=0.0,
-                warnings=["Empty or whitespace-only input"],
-            )
+            return self._create_empty_input_result(response)
 
         # Strategy 1: Direct JSON parsing
-        try:
-            parsed = json.loads(response.strip())
-            if isinstance(parsed, dict):
-                with self._stats_lock:
-                    self.successful_parses += 1
-                return JSONParseResult(
-                    success=True,
-                    data=parsed,
-                    original_text=response,
-                    method_used="direct_parse",
-                    confidence=1.0,
-                    warnings=[],
-                )
-        except json.JSONDecodeError as e:
-            logger.debug("Direct JSON parse failed, trying extraction: %s", e)
+        direct_result = self._try_direct_json_parse(response)
+        if direct_result:
+            return direct_result
 
         # Strategy 2: Extract JSON from mixed content
         json_result = self._extract_json_from_text(response)
@@ -122,9 +144,7 @@ class JSONFormatterAgent:
             return reconstructed_result
 
         # Strategy 5: Last resort - create minimal valid JSON
-        fallback_result = self._create_fallback_json(response, expected_schema)
-
-        return fallback_result
+        return self._create_fallback_json(response, expected_schema)
 
     def _try_parse_json_match(self, match: str) -> Optional[Dict[str, Any]]:
         """Try to parse a potential JSON match (Issue #334 - extracted helper)."""
@@ -181,9 +201,7 @@ class JSONFormatterAgent:
             warnings=["No valid JSON found in text"],
         )
 
-    def _apply_json_fixes(
-        self, json_content: str, warnings: List[str]
-    ) -> tuple:
+    def _apply_json_fixes(self, json_content: str, warnings: List[str]) -> tuple:
         """Apply common JSON syntax fixes and return fixed content with fixes list (Issue #665: extracted helper)."""
         fixes_applied = []
 
@@ -205,7 +223,11 @@ class JSONFormatterAgent:
         return json_content, fixes_applied
 
     def _try_parse_fixed_json(
-        self, json_content: str, text: str, fixes_applied: List[str], warnings: List[str]
+        self,
+        json_content: str,
+        text: str,
+        fixes_applied: List[str],
+        warnings: List[str],
     ) -> Optional[JSONParseResult]:
         """Attempt to parse fixed JSON and return result if successful (Issue #665: extracted helper)."""
         try:
@@ -424,7 +446,9 @@ class JSONFormatterAgent:
 
     def _convert_float(self, value: str) -> float:
         """Convert string to float (Issue #334 - extracted helper)."""
-        return float(value) if value.replace(".", "").replace("-", "").isdigit() else 0.0
+        return (
+            float(value) if value.replace(".", "").replace("-", "").isdigit() else 0.0
+        )
 
     def _convert_list(self, value: str) -> list:
         """Convert string to list (Issue #334 - extracted helper)."""

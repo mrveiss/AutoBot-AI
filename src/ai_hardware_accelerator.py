@@ -371,6 +371,73 @@ class AIHardwareAccelerator:
 
         return TaskComplexity.MODERATE  # Conservative default
 
+    def _is_device_under_threshold(
+        self, device: HardwareDevice, threshold: float
+    ) -> bool:
+        """
+        Check if a device's utilization is under the specified threshold.
+
+        Args:
+            device: Hardware device to check
+            threshold: Utilization threshold percentage
+
+        Returns:
+            True if device is available and under threshold. Issue #620.
+        """
+        if not self.device_status[device]["available"]:
+            return False
+        metrics = self.device_metrics.get(device)
+        return not metrics or metrics.utilization_percent < threshold
+
+    def _route_lightweight_task(self) -> HardwareDevice:
+        """
+        Select optimal device for lightweight tasks (NPU preferred for power efficiency).
+
+        Returns:
+            Selected hardware device for lightweight task. Issue #620.
+        """
+        if self._is_device_under_threshold(
+            HardwareDevice.NPU, ResourceThresholds.NPU_BUSY_THRESHOLD
+        ):
+            return HardwareDevice.NPU
+
+        if self._is_device_under_threshold(
+            HardwareDevice.GPU, ResourceThresholds.GPU_MODERATE_THRESHOLD
+        ):
+            return HardwareDevice.GPU
+
+        return HardwareDevice.CPU
+
+    def _route_moderate_task(self) -> HardwareDevice:
+        """
+        Select optimal device for moderate tasks (GPU preferred for performance).
+
+        Returns:
+            Selected hardware device for moderate task. Issue #620.
+        """
+        if self._is_device_under_threshold(
+            HardwareDevice.GPU, ResourceThresholds.GPU_BUSY_THRESHOLD
+        ):
+            return HardwareDevice.GPU
+
+        if self._is_device_under_threshold(
+            HardwareDevice.NPU, ResourceThresholds.NPU_AVAILABLE_THRESHOLD
+        ):
+            return HardwareDevice.NPU
+
+        return HardwareDevice.CPU
+
+    def _route_heavy_task(self) -> HardwareDevice:
+        """
+        Select optimal device for heavy tasks (GPU only, CPU fallback).
+
+        Returns:
+            Selected hardware device for heavy task. Issue #620.
+        """
+        if self.device_status[HardwareDevice.GPU]["available"]:
+            return HardwareDevice.GPU
+        return HardwareDevice.CPU
+
     def _select_optimal_device(self, task: ProcessingTask) -> HardwareDevice:
         """Select optimal device for task processing."""
         complexity = self._classify_task_complexity(task)
@@ -384,57 +451,11 @@ class AIHardwareAccelerator:
 
         # Intelligent routing based on complexity and availability
         if complexity == TaskComplexity.LIGHTWEIGHT:
-            # Lightweight tasks: NPU preferred for power efficiency (Issue #376)
-            if self.device_status[HardwareDevice.NPU]["available"]:
-                npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
-                if (
-                    not npu_metrics
-                    or npu_metrics.utilization_percent
-                    < ResourceThresholds.NPU_BUSY_THRESHOLD
-                ):
-                    return HardwareDevice.NPU
-
-            # Fallback to GPU if available
-            if self.device_status[HardwareDevice.GPU]["available"]:
-                gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
-                if (
-                    not gpu_metrics
-                    or gpu_metrics.utilization_percent
-                    < ResourceThresholds.GPU_MODERATE_THRESHOLD
-                ):
-                    return HardwareDevice.GPU
-
-            return HardwareDevice.CPU
-
+            return self._route_lightweight_task()
         elif complexity == TaskComplexity.MODERATE:
-            # Moderate tasks: GPU preferred for performance (Issue #376)
-            if self.device_status[HardwareDevice.GPU]["available"]:
-                gpu_metrics = self.device_metrics.get(HardwareDevice.GPU)
-                if (
-                    not gpu_metrics
-                    or gpu_metrics.utilization_percent
-                    < ResourceThresholds.GPU_BUSY_THRESHOLD
-                ):
-                    return HardwareDevice.GPU
-
-            # NPU can handle some moderate tasks
-            if self.device_status[HardwareDevice.NPU]["available"]:
-                npu_metrics = self.device_metrics.get(HardwareDevice.NPU)
-                if (
-                    not npu_metrics
-                    or npu_metrics.utilization_percent
-                    < ResourceThresholds.NPU_AVAILABLE_THRESHOLD
-                ):
-                    return HardwareDevice.NPU
-
-            return HardwareDevice.CPU
-
+            return self._route_moderate_task()
         else:  # HEAVY tasks
-            # Heavy tasks: GPU only, CPU fallback
-            if self.device_status[HardwareDevice.GPU]["available"]:
-                return HardwareDevice.GPU
-
-            return HardwareDevice.CPU
+            return self._route_heavy_task()
 
     async def process_task(self, task: ProcessingTask) -> ProcessingResult:
         """Process an AI task using optimal hardware (Issue #315 - refactored)."""

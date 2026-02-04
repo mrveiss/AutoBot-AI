@@ -634,7 +634,7 @@ class SecurityWorkflowManager:
         metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[SecurityAssessment]:
         """
-        Add a discovered host to the assessment.
+        Add a discovered host to the assessment. Issue #620: Refactored.
 
         Args:
             assessment_id: Assessment UUID
@@ -650,46 +650,88 @@ class SecurityWorkflowManager:
         if not assessment:
             return None
 
-        is_new_host = False
-
-        # Check if host already exists
-        existing = next((h for h in assessment.hosts if h.ip == ip), None)
-        if existing:
-            # Update existing host
-            existing.hostname = hostname or existing.hostname
-            existing.status = status
-            existing.metadata.update(metadata or {})
-        else:
-            # Add new host
-            host = TargetHost(
-                ip=ip,
-                hostname=hostname,
-                status=status,
-                metadata=metadata or {},
-            )
-            assessment.hosts.append(host)
-            is_new_host = True
+        is_new_host = self._update_or_create_host(
+            assessment, ip, hostname, status, metadata
+        )
 
         await self._save_assessment(assessment)
         logger.info("Added/updated host %s in assessment %s", ip, assessment_id)
 
-        # Create Memory MCP entity for new hosts
         if is_new_host:
-            try:
-                memory = await _get_memory_integration()
-                if memory:
-                    await memory.create_host_entity(
-                        assessment_id=assessment_id,
-                        ip=ip,
-                        hostname=hostname,
-                        status=status,
-                        os_guess=metadata.get("os_guess") if metadata else None,
-                        metadata=metadata,
-                    )
-            except Exception as e:
-                logger.warning("Failed to create host entity in Memory MCP: %s", e)
+            await self._create_host_memory_entity(
+                assessment_id, ip, hostname, status, metadata
+            )
 
         return assessment
+
+    def _update_or_create_host(
+        self,
+        assessment: SecurityAssessment,
+        ip: str,
+        hostname: Optional[str],
+        status: str,
+        metadata: Optional[dict[str, Any]],
+    ) -> bool:
+        """
+        Update existing host or create new one in assessment. Issue #620.
+
+        Args:
+            assessment: Security assessment to modify
+            ip: Host IP address
+            hostname: Optional hostname
+            status: Host status
+            metadata: Additional metadata
+
+        Returns:
+            True if new host was created, False if existing was updated
+        """
+        existing = next((h for h in assessment.hosts if h.ip == ip), None)
+        if existing:
+            existing.hostname = hostname or existing.hostname
+            existing.status = status
+            existing.metadata.update(metadata or {})
+            return False
+
+        host = TargetHost(
+            ip=ip,
+            hostname=hostname,
+            status=status,
+            metadata=metadata or {},
+        )
+        assessment.hosts.append(host)
+        return True
+
+    async def _create_host_memory_entity(
+        self,
+        assessment_id: str,
+        ip: str,
+        hostname: Optional[str],
+        status: str,
+        metadata: Optional[dict[str, Any]],
+    ) -> None:
+        """
+        Create Memory MCP entity for a newly discovered host. Issue #620.
+
+        Args:
+            assessment_id: Assessment UUID
+            ip: Host IP address
+            hostname: Optional hostname
+            status: Host status
+            metadata: Additional metadata
+        """
+        try:
+            memory = await _get_memory_integration()
+            if memory:
+                await memory.create_host_entity(
+                    assessment_id=assessment_id,
+                    ip=ip,
+                    hostname=hostname,
+                    status=status,
+                    os_guess=metadata.get("os_guess") if metadata else None,
+                    metadata=metadata,
+                )
+        except Exception as e:
+            logger.warning("Failed to create host entity in Memory MCP: %s", e)
 
     def _build_port_info(
         self,

@@ -564,46 +564,67 @@ class AdvancedWebResearcher:
 
         return False
 
-    async def _handle_captcha(self, page: Page) -> bool:
-        """Handle CAPTCHA challenge with human-in-the-loop fallback"""
-        logger.info("Attempting to handle CAPTCHA challenge")
+    async def _detect_captcha_type(self, page: Page) -> str:
+        """
+        Detect the type of CAPTCHA present on the page.
 
-        # Detect CAPTCHA type for better user messaging
-        captcha_type = "unknown"
+        Args:
+            page: Playwright page instance
+
+        Returns:
+            String identifier for the CAPTCHA type. Issue #620.
+        """
         if await page.query_selector(".g-recaptcha, [data-sitekey]"):
-            captcha_type = "recaptcha"
+            return "recaptcha"
         elif await page.query_selector(".h-captcha"):
-            captcha_type = "hcaptcha"
+            return "hcaptcha"
         elif await page.query_selector(".cf-challenge-running"):
-            captcha_type = "cloudflare"
+            return "cloudflare"
+        return "unknown"
 
-        # Try to find reCAPTCHA for automated solving
+    async def _try_automated_recaptcha_solving(self, page: Page) -> bool:
+        """
+        Attempt automated reCAPTCHA solving using the captcha solver service.
+
+        Args:
+            page: Playwright page instance
+
+        Returns:
+            True if CAPTCHA was solved automatically, False otherwise. Issue #620.
+        """
         recaptcha_element = await page.query_selector(".g-recaptcha, [data-sitekey]")
-        if recaptcha_element:
-            site_key = await recaptcha_element.get_attribute("data-sitekey")
-            if site_key:
-                page_url = page.url
+        if not recaptcha_element:
+            return False
 
-                # Solve using CAPTCHA service
-                solution = await self.captcha_solver.solve_recaptcha(site_key, page_url)
-                if solution:
-                    # Inject solution
-                    await page.evaluate(
-                        "document.getElementById('g-recaptcha-response')"
-                        f'.innerHTML="{solution}";'
-                    )
-                    await page.evaluate(
-                        "if(window.captchaCallback) window.captchaCallback();"
-                    )
+        site_key = await recaptcha_element.get_attribute("data-sitekey")
+        if not site_key:
+            return False
 
-                    # Wait for navigation or form submission
-                    await page.wait_for_timeout(2000)
-                    return True
+        solution = await self.captcha_solver.solve_recaptcha(site_key, page.url)
+        if not solution:
+            return False
 
-        # Automated solving failed - request human intervention
-        logger.warning("Automated CAPTCHA solving failed, requesting human intervention")
+        await page.evaluate(
+            "document.getElementById('g-recaptcha-response')"
+            f'.innerHTML="{solution}";'
+        )
+        await page.evaluate("if(window.captchaCallback) window.captchaCallback();")
+        await page.wait_for_timeout(2000)
+        return True
 
-        # Use human-in-the-loop service
+    async def _request_human_captcha_intervention(
+        self, page: Page, captcha_type: str
+    ) -> bool:
+        """
+        Request human intervention to solve CAPTCHA via human-in-the-loop service.
+
+        Args:
+            page: Playwright page instance
+            captcha_type: Type of CAPTCHA detected
+
+        Returns:
+            True if human solved the CAPTCHA, False otherwise. Issue #620.
+        """
         captcha_service = get_captcha_human_loop(
             timeout_seconds=120.0,
             auto_skip_on_timeout=True,
@@ -616,18 +637,30 @@ class AdvancedWebResearcher:
         )
 
         if result.success:
-            logger.info(
-                f"CAPTCHA solved by user in {result.duration_seconds:.1f}s"
-            )
-            # Wait a moment for page to update after CAPTCHA solved
+            logger.info("CAPTCHA solved by user in %.1fs", result.duration_seconds)
             await page.wait_for_timeout(2000)
             return True
-        else:
-            logger.warning(
-                f"CAPTCHA not solved: {result.status.value} "
-                f"(waited {result.duration_seconds:.1f}s)"
-            )
-            return False
+
+        logger.warning(
+            "CAPTCHA not solved: %s (waited %.1fs)",
+            result.status.value,
+            result.duration_seconds,
+        )
+        return False
+
+    async def _handle_captcha(self, page: Page) -> bool:
+        """Handle CAPTCHA challenge with human-in-the-loop fallback"""
+        logger.info("Attempting to handle CAPTCHA challenge")
+
+        captcha_type = await self._detect_captcha_type(page)
+
+        if await self._try_automated_recaptcha_solving(page):
+            return True
+
+        logger.warning(
+            "Automated CAPTCHA solving failed, requesting human intervention"
+        )
+        return await self._request_human_captcha_intervention(page, captcha_type)
 
     async def _enhance_results_with_content(
         self, results: List[Dict[str, Any]]
@@ -653,7 +686,7 @@ class AdvancedWebResearcher:
                 await self._random_delay(1, 3)
 
             except Exception as e:
-                logger.error("Failed to enhance result %s: %s", result['url'], str(e))
+                logger.error("Failed to enhance result %s: %s", result["url"], str(e))
                 result["content"] = result.get("snippet", "")
                 result["content_length"] = len(result["content"])
                 result["quality_score"] = 0.5

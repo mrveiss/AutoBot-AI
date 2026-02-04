@@ -454,68 +454,26 @@ class WorkflowScheduler:
             request.user_id,
         )
 
-    def _create_scheduled_workflow(
+    def _resolve_workflow_params(
         self,
-        workflow_id: str,
-        user_message: str,
-        scheduled_time: datetime,
-        priority: WorkflowPriority,
-        complexity: TaskComplexity,
+        request: Optional["WorkflowScheduleRequest"],
+        user_message: Optional[str],
+        scheduled_time: Optional[Union[datetime, str]],
+        priority: Union[WorkflowPriority, str],
+        complexity: Union[TaskComplexity, str],
         template_id: Optional[str],
         variables: Optional[Dict[str, Any]],
         auto_approve: bool,
         tags: Optional[List[str]],
         dependencies: Optional[List[str]],
         user_id: Optional[str],
-        **kwargs,
-    ) -> ScheduledWorkflow:
+        kwargs: Dict[str, Any],
+    ) -> Dict[str, Any]:
         """
-        Create a ScheduledWorkflow instance with provided parameters. Issue #620.
+        Resolve and validate workflow parameters from request or kwargs. Issue #620.
 
         Returns:
-            ScheduledWorkflow instance
-        """
-        return ScheduledWorkflow(
-            id=workflow_id,
-            name=f"Workflow {workflow_id[:8]}",
-            template_id=template_id,
-            user_message=user_message,
-            scheduled_time=scheduled_time,
-            priority=priority,
-            status=WorkflowStatus.SCHEDULED,
-            created_at=datetime.now(),
-            complexity=complexity,
-            user_id=user_id,
-            variables=variables or {},
-            auto_approve=auto_approve,
-            tags=tags or [],
-            dependencies=dependencies or [],
-            **kwargs,
-        )
-
-    def schedule_workflow(
-        self,
-        request: Optional[WorkflowScheduleRequest] = None,
-        *,  # Force keyword-only args for backwards compatibility
-        user_message: Optional[str] = None,
-        scheduled_time: Optional[Union[datetime, str]] = None,
-        priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL,
-        complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE,
-        template_id: Optional[str] = None,
-        variables: Optional[Dict[str, Any]] = None,
-        auto_approve: bool = False,
-        tags: Optional[List[str]] = None,
-        dependencies: Optional[List[str]] = None,
-        user_id: Optional[str] = None,
-        **kwargs,
-    ) -> str:
-        """Schedule a workflow for future execution (Issue #398: refactored).
-
-        Issue #319: Supports both request object and individual parameters.
-        Issue #620: Refactored to use helper methods.
-
-        Returns:
-            Workflow ID string
+            Dict with all resolved workflow parameters
         """
         if request is not None:
             (
@@ -539,9 +497,78 @@ class WorkflowScheduler:
             scheduled_time, priority, complexity
         )
 
-        workflow_id = str(uuid4())
-        workflow = self._create_scheduled_workflow(
-            workflow_id,
+        return {
+            "user_message": user_message,
+            "scheduled_time": scheduled_time,
+            "priority": priority,
+            "complexity": complexity,
+            "template_id": template_id,
+            "variables": variables,
+            "auto_approve": auto_approve,
+            "tags": tags,
+            "dependencies": dependencies,
+            "user_id": user_id,
+        }
+
+    def _create_scheduled_workflow(
+        self,
+        workflow_id: str,
+        params: Dict[str, Any],
+        **kwargs,
+    ) -> ScheduledWorkflow:
+        """
+        Create a ScheduledWorkflow instance from params dict. Issue #620.
+
+        Args:
+            workflow_id: Unique workflow identifier
+            params: Dict with workflow parameters from _resolve_workflow_params
+
+        Returns:
+            ScheduledWorkflow instance
+        """
+        return ScheduledWorkflow(
+            id=workflow_id,
+            name=f"Workflow {workflow_id[:8]}",
+            template_id=params["template_id"],
+            user_message=params["user_message"],
+            scheduled_time=params["scheduled_time"],
+            priority=params["priority"],
+            status=WorkflowStatus.SCHEDULED,
+            created_at=datetime.now(),
+            complexity=params["complexity"],
+            user_id=params["user_id"],
+            variables=params["variables"] or {},
+            auto_approve=params["auto_approve"],
+            tags=params["tags"] or [],
+            dependencies=params["dependencies"] or [],
+            **kwargs,
+        )
+
+    def schedule_workflow(
+        self,
+        request: Optional[WorkflowScheduleRequest] = None,
+        *,  # Force keyword-only args for backwards compatibility
+        user_message: Optional[str] = None,
+        scheduled_time: Optional[Union[datetime, str]] = None,
+        priority: Union[WorkflowPriority, str] = WorkflowPriority.NORMAL,
+        complexity: Union[TaskComplexity, str] = TaskComplexity.SIMPLE,
+        template_id: Optional[str] = None,
+        variables: Optional[Dict[str, Any]] = None,
+        auto_approve: bool = False,
+        tags: Optional[List[str]] = None,
+        dependencies: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
+        **kwargs,
+    ) -> str:
+        """Schedule a workflow for future execution. Issue #620: Refactored.
+
+        Issue #319: Supports both request object and individual parameters.
+
+        Returns:
+            Workflow ID string
+        """
+        params = self._resolve_workflow_params(
+            request,
             user_message,
             scheduled_time,
             priority,
@@ -552,8 +579,11 @@ class WorkflowScheduler:
             tags,
             dependencies,
             user_id,
-            **kwargs,
+            kwargs,
         )
+
+        workflow_id = str(uuid4())
+        workflow = self._create_scheduled_workflow(workflow_id, params, **kwargs)
 
         self.scheduled_workflows[workflow_id] = workflow
         self._save_workflows()

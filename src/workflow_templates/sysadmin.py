@@ -15,12 +15,12 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
-def _create_system_health_check_steps() -> List[WorkflowStep]:
+def _create_health_check_collection_steps() -> List[WorkflowStep]:
     """
-    Create workflow steps for system health check template.
+    Create data collection steps for system health check. Issue #620.
 
-    Returns a list of WorkflowStep objects defining the health check workflow
-    from system overview through recommendations and result storage. Issue #620.
+    Returns steps for system overview, resource check, service status,
+    and security status collection.
     """
     return [
         WorkflowStep(
@@ -54,6 +54,17 @@ def _create_system_health_check_steps() -> List[WorkflowStep]:
             dependencies=["service_status"],
             expected_duration_ms=25000,
         ),
+    ]
+
+
+def _create_health_check_reporting_steps() -> List[WorkflowStep]:
+    """
+    Create reporting steps for system health check. Issue #620.
+
+    Returns steps for health report generation, recommendations,
+    and result storage.
+    """
+    return [
         WorkflowStep(
             id="health_report",
             agent_type="orchestrator",
@@ -80,6 +91,17 @@ def _create_system_health_check_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _create_system_health_check_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for system health check template. Issue #620.
+
+    Combines collection and reporting phase steps into complete workflow.
+    """
+    return (
+        _create_health_check_collection_steps() + _create_health_check_reporting_steps()
+    )
 
 
 def create_system_health_check_template() -> WorkflowTemplate:
