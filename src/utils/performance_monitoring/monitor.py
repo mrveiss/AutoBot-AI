@@ -18,12 +18,12 @@ import time
 from dataclasses import asdict
 from typing import Any, Callable, Dict, List
 
-from src.utils.performance_monitoring.types import (
-    DEFAULT_COLLECTION_INTERVAL,
-    DEFAULT_RETENTION_HOURS,
-    DEFAULT_PERFORMANCE_BASELINES,
+# Issue #469: Import Prometheus metrics manager
+from src.monitoring.prometheus_metrics import get_metrics_manager
+from src.utils.performance_monitoring.analyzers import (
+    AlertAnalyzer,
+    RecommendationGenerator,
 )
-from src.utils.performance_monitoring.hardware import HardwareDetector
 from src.utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
@@ -31,14 +31,13 @@ from src.utils.performance_monitoring.collectors import (
     ServiceCollector,
     SystemCollector,
 )
-from src.utils.performance_monitoring.analyzers import (
-    AlertAnalyzer,
-    RecommendationGenerator,
-)
 from src.utils.performance_monitoring.decorator import set_redis_client
-
-# Issue #469: Import Prometheus metrics manager
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from src.utils.performance_monitoring.hardware import HardwareDetector
+from src.utils.performance_monitoring.types import (
+    DEFAULT_COLLECTION_INTERVAL,
+    DEFAULT_PERFORMANCE_BASELINES,
+    DEFAULT_RETENTION_HOURS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -200,12 +199,102 @@ class PerformanceMonitor:
                 self.service_metrics_buffer[service_name] = []
             self.service_metrics_buffer[service_name].append(service_metric)
             if len(self.service_metrics_buffer[service_name]) > max_size:
-                self.service_metrics_buffer[service_name] = (
-                    self.service_metrics_buffer[service_name][-max_size:]
-                )
+                self.service_metrics_buffer[service_name] = self.service_metrics_buffer[
+                    service_name
+                ][-max_size:]
+
+    def _process_collection_results(
+        self, results: List[Any]
+    ) -> tuple[Any, Any, Any, Any, List[Any]]:
+        """
+        Process asyncio.gather results and handle exceptions. Issue #620.
+
+        Args:
+            results: Results from asyncio.gather with return_exceptions=True
+
+        Returns:
+            Tuple of (gpu_metrics, npu_metrics, multimodal_metrics, system_metrics, service_metrics)
+        """
+        gpu_metrics = self._handle_metric_exception("GPU", results[0])
+        npu_metrics = self._handle_metric_exception("NPU", results[1])
+        multimodal_metrics = self._handle_metric_exception("Multimodal", results[2])
+        system_metrics = self._handle_metric_exception("System", results[3])
+        service_metrics = results[4] if not isinstance(results[4], Exception) else []
+        if isinstance(results[4], Exception):
+            self.logger.error("Service metrics collection failed: %s", results[4])
+        return (
+            gpu_metrics,
+            npu_metrics,
+            multimodal_metrics,
+            system_metrics,
+            service_metrics,
+        )
+
+    def _update_all_metric_buffers(
+        self,
+        gpu_metrics,
+        npu_metrics,
+        multimodal_metrics,
+        system_metrics,
+        service_metrics,
+    ) -> None:
+        """
+        Update all metric buffers with collected data. Issue #620.
+
+        Args:
+            gpu_metrics: GPU metrics data
+            npu_metrics: NPU metrics data
+            multimodal_metrics: Multimodal metrics data
+            system_metrics: System metrics data
+            service_metrics: Service metrics list
+        """
+        self.gpu_metrics_buffer = self._update_metric_buffer(
+            self.gpu_metrics_buffer, gpu_metrics
+        )
+        self.npu_metrics_buffer = self._update_metric_buffer(
+            self.npu_metrics_buffer, npu_metrics
+        )
+        self.multimodal_metrics_buffer = self._update_metric_buffer(
+            self.multimodal_metrics_buffer, multimodal_metrics
+        )
+        self.system_metrics_buffer = self._update_metric_buffer(
+            self.system_metrics_buffer, system_metrics
+        )
+        self._update_service_buffer(service_metrics)
+
+    def _build_metrics_response(
+        self,
+        gpu_metrics,
+        npu_metrics,
+        multimodal_metrics,
+        system_metrics,
+        service_metrics,
+    ) -> Dict[str, Any]:
+        """
+        Build the metrics response dictionary. Issue #620.
+
+        Args:
+            gpu_metrics: GPU metrics data
+            npu_metrics: NPU metrics data
+            multimodal_metrics: Multimodal metrics data
+            system_metrics: System metrics data
+            service_metrics: Service metrics list
+
+        Returns:
+            Formatted metrics dictionary
+        """
+        return {
+            "timestamp": time.time(),
+            "gpu": asdict(gpu_metrics) if gpu_metrics else None,
+            "npu": asdict(npu_metrics) if npu_metrics else None,
+            "multimodal": asdict(multimodal_metrics) if multimodal_metrics else None,
+            "system": asdict(system_metrics) if system_metrics else None,
+            "services": [asdict(s) for s in (service_metrics or [])],
+            "collection_successful": True,
+        }
 
     async def collect_all_metrics(self) -> Dict[str, Any]:
-        """Collect all performance metrics in parallel (Issue #398: refactored to use helpers)."""
+        """Collect all performance metrics in parallel. Issue #620: Refactored with helpers."""
         try:
             tasks = [
                 self.collect_gpu_metrics(),
@@ -216,59 +305,26 @@ class PerformanceMonitor:
             ]
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            gpu, npu, multimodal, system, services = self._process_collection_results(
+                results
+            )
 
-            # Issue #398: Use extracted helper for exception handling
-            gpu_metrics = self._handle_metric_exception("GPU", results[0])
-            npu_metrics = self._handle_metric_exception("NPU", results[1])
-            multimodal_metrics = self._handle_metric_exception("Multimodal", results[2])
-            system_metrics = self._handle_metric_exception("System", results[3])
-            service_metrics = results[4] if not isinstance(results[4], Exception) else []
-            if isinstance(results[4], Exception):
-                self.logger.error("Service metrics collection failed: %s", results[4])
+            self._update_all_metric_buffers(gpu, npu, multimodal, system, services)
 
-            # Issue #398: Use extracted helpers for buffer updates
-            self.gpu_metrics_buffer = self._update_metric_buffer(
-                self.gpu_metrics_buffer, gpu_metrics
-            )
-            self.npu_metrics_buffer = self._update_metric_buffer(
-                self.npu_metrics_buffer, npu_metrics
-            )
-            self.multimodal_metrics_buffer = self._update_metric_buffer(
-                self.multimodal_metrics_buffer, multimodal_metrics
-            )
-            self.system_metrics_buffer = self._update_metric_buffer(
-                self.system_metrics_buffer, system_metrics
-            )
-            self._update_service_buffer(service_metrics)
-
-            # Persist to Redis if available
             if self.redis_client:
                 await self._persist_metrics_to_redis(
                     {
-                        "gpu": gpu_metrics,
-                        "npu": npu_metrics,
-                        "multimodal": multimodal_metrics,
-                        "system": system_metrics,
-                        "services": service_metrics,
+                        "gpu": gpu,
+                        "npu": npu,
+                        "multimodal": multimodal,
+                        "system": system,
+                        "services": services,
                     }
                 )
 
-            # Issue #469: Push metrics to Prometheus for unified monitoring
-            self._push_to_prometheus(
-                gpu_metrics, npu_metrics, multimodal_metrics, system_metrics
-            )
+            self._push_to_prometheus(gpu, npu, multimodal, system)
 
-            return {
-                "timestamp": time.time(),
-                "gpu": asdict(gpu_metrics) if gpu_metrics else None,
-                "npu": asdict(npu_metrics) if npu_metrics else None,
-                "multimodal": (
-                    asdict(multimodal_metrics) if multimodal_metrics else None
-                ),
-                "system": asdict(system_metrics) if system_metrics else None,
-                "services": [asdict(s) for s in (service_metrics or [])],
-                "collection_successful": True,
-            }
+            return self._build_metrics_response(gpu, npu, multimodal, system, services)
 
         except Exception as e:
             self.logger.error("Error collecting all metrics: %s", e)
@@ -309,6 +365,63 @@ class PerformanceMonitor:
         except Exception as e:
             self.logger.error("Error persisting metrics to Redis: %s", e)
 
+    def _push_gpu_metrics_to_prometheus(self, gpu_metrics) -> None:
+        """Push GPU metrics to Prometheus. Issue #620."""
+        if gpu_metrics:
+            self._prometheus.set_gpu_available(True)
+            self._prometheus.update_gpu_metrics(
+                gpu_id="0",
+                gpu_name=getattr(gpu_metrics, "name", "NVIDIA GPU"),
+                utilization=getattr(gpu_metrics, "utilization_percent", 0),
+                memory_utilization=getattr(
+                    gpu_metrics, "memory_utilization_percent", 0
+                ),
+                temperature=getattr(gpu_metrics, "temperature_celsius", 0),
+                power_watts=getattr(gpu_metrics, "power_draw_watts", 0),
+            )
+            if getattr(gpu_metrics, "thermal_throttling", False):
+                self._prometheus.record_gpu_throttling("0", "thermal")
+            if getattr(gpu_metrics, "power_throttling", False):
+                self._prometheus.record_gpu_throttling("0", "power")
+        else:
+            self._prometheus.set_gpu_available(False)
+
+    def _push_npu_metrics_to_prometheus(self, npu_metrics) -> None:
+        """Push NPU metrics to Prometheus. Issue #620."""
+        if npu_metrics:
+            self._prometheus.set_npu_available(
+                getattr(npu_metrics, "hardware_detected", False)
+            )
+            self._prometheus.set_npu_wsl_limitation(
+                getattr(npu_metrics, "wsl_limitation", False)
+            )
+            self._prometheus.update_npu_metrics(
+                utilization=getattr(npu_metrics, "utilization_percent", 0),
+                acceleration_ratio=getattr(npu_metrics, "acceleration_ratio", 0),
+            )
+        else:
+            self._prometheus.set_npu_available(False)
+
+    def _push_multimodal_metrics_to_prometheus(self, multimodal_metrics) -> None:
+        """Push multimodal processing metrics to Prometheus. Issue #620."""
+        if not multimodal_metrics:
+            return
+        text_time = getattr(multimodal_metrics, "text_processing_time_ms", 0)
+        if text_time > 0:
+            self._prometheus.record_multimodal_processing(
+                "text", text_time / 1000, True
+            )
+        image_time = getattr(multimodal_metrics, "image_processing_time_ms", 0)
+        if image_time > 0:
+            self._prometheus.record_multimodal_processing(
+                "vision", image_time / 1000, True
+            )
+        audio_time = getattr(multimodal_metrics, "audio_processing_time_ms", 0)
+        if audio_time > 0:
+            self._prometheus.record_multimodal_processing(
+                "audio", audio_time / 1000, True
+            )
+
     def _push_to_prometheus(
         self, gpu_metrics, npu_metrics, multimodal_metrics, system_metrics
     ):
@@ -316,70 +429,12 @@ class PerformanceMonitor:
         Push collected metrics to Prometheus for unified monitoring.
 
         Issue #469: Consolidates all monitoring to Prometheus/Grafana stack.
-        This ensures GPU/NPU/Performance metrics are available via the
-        standard Prometheus endpoint at /api/monitoring/metrics.
+        Issue #620: Refactored with helper methods.
         """
         try:
-            # GPU Metrics
-            if gpu_metrics:
-                self._prometheus.set_gpu_available(True)
-                self._prometheus.update_gpu_metrics(
-                    gpu_id="0",
-                    gpu_name=getattr(gpu_metrics, "name", "NVIDIA GPU"),
-                    utilization=getattr(gpu_metrics, "utilization_percent", 0),
-                    memory_utilization=getattr(
-                        gpu_metrics, "memory_utilization_percent", 0
-                    ),
-                    temperature=getattr(gpu_metrics, "temperature_celsius", 0),
-                    power_watts=getattr(gpu_metrics, "power_draw_watts", 0),
-                )
-
-                # Record throttling events if detected
-                if getattr(gpu_metrics, "thermal_throttling", False):
-                    self._prometheus.record_gpu_throttling("0", "thermal")
-                if getattr(gpu_metrics, "power_throttling", False):
-                    self._prometheus.record_gpu_throttling("0", "power")
-            else:
-                self._prometheus.set_gpu_available(False)
-
-            # NPU Metrics
-            if npu_metrics:
-                self._prometheus.set_npu_available(
-                    getattr(npu_metrics, "hardware_detected", False)
-                )
-                self._prometheus.set_npu_wsl_limitation(
-                    getattr(npu_metrics, "wsl_limitation", False)
-                )
-                self._prometheus.update_npu_metrics(
-                    utilization=getattr(npu_metrics, "utilization_percent", 0),
-                    acceleration_ratio=getattr(npu_metrics, "acceleration_ratio", 0),
-                )
-            else:
-                self._prometheus.set_npu_available(False)
-
-            # System metrics are already pushed via SystemMetricsRecorder
-            # No need to duplicate here
-
-            # Multimodal metrics - record processing times
-            if multimodal_metrics:
-                text_time = getattr(multimodal_metrics, "text_processing_time_ms", 0)
-                if text_time > 0:
-                    self._prometheus.record_multimodal_processing(
-                        "text", text_time / 1000, True
-                    )
-
-                image_time = getattr(multimodal_metrics, "image_processing_time_ms", 0)
-                if image_time > 0:
-                    self._prometheus.record_multimodal_processing(
-                        "vision", image_time / 1000, True
-                    )
-
-                audio_time = getattr(multimodal_metrics, "audio_processing_time_ms", 0)
-                if audio_time > 0:
-                    self._prometheus.record_multimodal_processing(
-                        "audio", audio_time / 1000, True
-                    )
-
+            self._push_gpu_metrics_to_prometheus(gpu_metrics)
+            self._push_npu_metrics_to_prometheus(npu_metrics)
+            self._push_multimodal_metrics_to_prometheus(multimodal_metrics)
         except Exception as e:
             self.logger.debug("Error pushing metrics to Prometheus: %s", e)
 
@@ -428,7 +483,9 @@ class PerformanceMonitor:
                     def _store_alerts():
                         key = "performance_alerts"
                         for alert in alerts:
-                            self.redis_client.zadd(key, {json.dumps(alert): time.time()})
+                            self.redis_client.zadd(
+                                key, {json.dumps(alert): time.time()}
+                            )
                         self.redis_client.expire(key, 3600)
 
                     await asyncio.to_thread(_store_alerts)
@@ -443,9 +500,15 @@ class PerformanceMonitor:
                     self._prometheus.record_performance_alert(category, severity)
 
             # Update active alert counts in Prometheus
-            critical_count = sum(1 for a in self.performance_alerts if a.get("severity") == "critical")
-            warning_count = sum(1 for a in self.performance_alerts if a.get("severity") == "warning")
-            info_count = sum(1 for a in self.performance_alerts if a.get("severity") == "info")
+            critical_count = sum(
+                1 for a in self.performance_alerts if a.get("severity") == "critical"
+            )
+            warning_count = sum(
+                1 for a in self.performance_alerts if a.get("severity") == "warning"
+            )
+            info_count = sum(
+                1 for a in self.performance_alerts if a.get("severity") == "info"
+            )
             self._prometheus.update_active_alerts("critical", critical_count)
             self._prometheus.update_active_alerts("warning", warning_count)
             self._prometheus.update_active_alerts("info", info_count)
@@ -495,7 +558,7 @@ class PerformanceMonitor:
                     f"Services: {healthy_services}/{total_services} healthy"
                 )
 
-            self.logger.info("PERFORMANCE: %s", ' | '.join(summary_parts))
+            self.logger.info("PERFORMANCE: %s", " | ".join(summary_parts))
 
         except Exception as e:
             self.logger.error("Error logging performance summary: %s", e)
@@ -549,9 +612,12 @@ class PerformanceMonitor:
                         )
                         return gpu_data, npu_data, system_data, alerts_data
 
-                    gpu_data, npu_data, system_data, alerts_data = (
-                        await asyncio.to_thread(_fetch_dashboard_data)
-                    )
+                    (
+                        gpu_data,
+                        npu_data,
+                        system_data,
+                        alerts_data,
+                    ) = await asyncio.to_thread(_fetch_dashboard_data)
 
                     if gpu_data:
                         dashboard["gpu"] = json.loads(gpu_data[0])
@@ -562,9 +628,7 @@ class PerformanceMonitor:
                     dashboard["recent_alerts"] = [json.loads(a) for a in alerts_data]
 
                 except Exception as e:
-                    self.logger.debug(
-                        f"Could not fetch dashboard data from Redis: {e}"
-                    )
+                    self.logger.debug(f"Could not fetch dashboard data from Redis: {e}")
 
             dashboard["trends"] = await self._calculate_performance_trends()
 
@@ -616,6 +680,7 @@ class PerformanceMonitor:
                 }
 
             try:
+
                 def _fetch_trend_data():
                     gpu_data = self.redis_client.zrange(
                         "performance_metrics:gpu", -5, -1
@@ -629,17 +694,27 @@ class PerformanceMonitor:
 
                 if gpu_data and len(gpu_data) >= 2:
                     gpu_metrics = [json.loads(d) for d in gpu_data]
-                    utilizations = [g.get("utilization_percent", 0) for g in gpu_metrics]
-                    trends["gpu_utilization"] = self._compute_metric_trend(utilizations, "gpu")
+                    utilizations = [
+                        g.get("utilization_percent", 0) for g in gpu_metrics
+                    ]
+                    trends["gpu_utilization"] = self._compute_metric_trend(
+                        utilizations, "gpu"
+                    )
 
                 if system_data and len(system_data) >= 2:
                     system_metrics = [json.loads(d) for d in system_data]
 
                     loads = [s.get("cpu_load_1m", 0) for s in system_metrics]
-                    trends["cpu_load"] = self._compute_metric_trend(loads, "cpu", decimals=2)
+                    trends["cpu_load"] = self._compute_metric_trend(
+                        loads, "cpu", decimals=2
+                    )
 
-                    memory_usage = [s.get("memory_usage_percent", 0) for s in system_metrics]
-                    trends["memory_usage"] = self._compute_metric_trend(memory_usage, "memory")
+                    memory_usage = [
+                        s.get("memory_usage_percent", 0) for s in system_metrics
+                    ]
+                    trends["memory_usage"] = self._compute_metric_trend(
+                        memory_usage, "memory"
+                    )
 
             except Exception as e:
                 self.logger.debug("Could not calculate trends from Redis: %s", e)
@@ -666,7 +741,9 @@ class PerformanceMonitor:
         system_data = self.redis_client.zrange("performance_metrics:system", -1, -1)
         return gpu_data, npu_data, system_data
 
-    async def get_performance_optimization_recommendations(self) -> List[Dict[str, Any]]:
+    async def get_performance_optimization_recommendations(
+        self,
+    ) -> List[Dict[str, Any]]:
         """Generate performance optimization recommendations."""
         try:
             latest_gpu, latest_npu, latest_system = None, None, None

@@ -1207,6 +1207,63 @@ class BugPredictor(_BaseClass):
 
         return assessment
 
+    async def _check_cached_prediction(
+        self, cache_key: str
+    ) -> Optional[PredictionResult]:
+        """
+        Check for cached prediction result if semantic analysis is enabled.
+
+        Args:
+            cache_key: Redis cache key for this prediction
+
+        Returns:
+            Cached PredictionResult if found, None otherwise. Issue #620.
+        """
+        if not self.use_semantic_analysis:
+            return None
+        cached = await self._get_cached_result(cache_key, prefix="bug_predictor")
+        if cached:
+            logger.info("Returning cached bug prediction")
+            return PredictionResult(**cached)
+        return None
+
+    async def _analyze_files_async(self, files: List[Path]) -> List[FileRiskAssessment]:
+        """
+        Analyze a list of files asynchronously with semantic analysis.
+
+        Args:
+            files: List of file paths to analyze
+
+        Returns:
+            List of FileRiskAssessment objects. Issue #620.
+        """
+        assessments = []
+        for file_path in files:
+            try:
+                assessment = await self.analyze_file_async(str(file_path))
+                assessments.append(assessment)
+            except Exception as e:
+                logger.warning("Failed to analyze %s: %s", file_path, e)
+        return assessments
+
+    async def _cache_prediction_result(
+        self, cache_key: str, result: PredictionResult
+    ) -> None:
+        """
+        Cache prediction result in Redis if semantic analysis is enabled.
+
+        Args:
+            cache_key: Redis cache key
+            result: PredictionResult to cache. Issue #620.
+        """
+        if self.use_semantic_analysis:
+            await self._cache_result(
+                cache_key,
+                result.to_dict(),
+                prefix="bug_predictor",
+                ttl=1800,  # 30 minute cache
+            )
+
     async def analyze_directory_async(
         self,
         directory: Optional[str] = None,
@@ -1228,33 +1285,19 @@ class BugPredictor(_BaseClass):
             PredictionResult with complete codebase analysis
         """
         root = Path(directory) if directory else self.project_root
-
-        # Check for cached results
         cache_key = f"bug_pred:{root}:{pattern}:{limit}"
-        if self.use_semantic_analysis:
-            cached = await self._get_cached_result(cache_key, prefix="bug_predictor")
-            if cached:
-                logger.info("Returning cached bug prediction")
-                return PredictionResult(**cached)
 
-        # Learn from historical bug patterns
+        cached_result = await self._check_cached_prediction(cache_key)
+        if cached_result:
+            return cached_result
+
         await self._learn_bug_patterns_async()
 
-        # Find files to analyze (limit=0 means no limit)
         all_files = list(root.rglob(pattern))
         total_files = len(all_files)
         files = all_files[:limit] if limit > 0 else all_files
 
-        # Analyze each file with semantic analysis
-        assessments = []
-        for file_path in files:
-            try:
-                assessment = await self.analyze_file_async(str(file_path))
-                assessments.append(assessment)
-            except Exception as e:
-                logger.warning("Failed to analyze %s: %s", file_path, e)
-
-        # Sort and compute statistics (Issue #665: uses shared helper)
+        assessments = await self._analyze_files_async(files)
         assessments.sort(key=lambda x: x.risk_score, reverse=True)
         stats = self._compute_prediction_stats(assessments)
 
@@ -1270,15 +1313,7 @@ class BugPredictor(_BaseClass):
             top_risk_factors=stats["top_factors"],
         )
 
-        # Cache results
-        if self.use_semantic_analysis:
-            await self._cache_result(
-                cache_key,
-                result.to_dict(),
-                prefix="bug_predictor",
-                ttl=1800,  # 30 minute cache
-            )
-
+        await self._cache_prediction_result(cache_key, result)
         return result
 
     def get_infrastructure_metrics(self) -> Dict[str, Any]:

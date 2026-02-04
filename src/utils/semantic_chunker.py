@@ -624,65 +624,64 @@ class AutoBotSemanticChunker:
 
         return boundaries
 
+    def _merge_with_previous_chunk(
+        self, chunks: List[SemanticChunk], chunk_sentences: List[str], boundary: int
+    ) -> None:
+        """Merge small chunk with previous chunk. Issue #620."""
+        prev_chunk = chunks[-1]
+        merged_sentences = prev_chunk.sentences + chunk_sentences
+        merged_content = " ".join(merged_sentences)
+        chunks[-1] = SemanticChunk(
+            content=merged_content,
+            start_index=prev_chunk.start_index,
+            end_index=boundary,
+            sentences=merged_sentences,
+            semantic_score=0.8,
+            metadata={"merged": True, "original_boundary": boundary},
+        )
+
+    def _create_regular_chunk(
+        self,
+        chunk_content: str,
+        chunk_sentences: List[str],
+        start_idx: int,
+        boundary: int,
+    ) -> SemanticChunk:
+        """Create a regular semantic chunk. Issue #620."""
+        return SemanticChunk(
+            content=chunk_content,
+            start_index=start_idx,
+            end_index=boundary,
+            sentences=chunk_sentences,
+            semantic_score=0.8,
+            metadata={"boundary_type": "semantic"},
+        )
+
     def _create_chunks_with_boundaries(
         self, sentences: List[str], boundaries: List[int], distances: List[float]
     ) -> List[SemanticChunk]:
-        """
-        Create semantic chunks based on identified boundaries.
-
-        Args:
-            sentences: List of sentences
-            boundaries: List of boundary indices
-            distances: Semantic distances for scoring
-
-        Returns:
-            List of SemanticChunk objects
-        """
+        """Create semantic chunks based on identified boundaries. Issue #620: Refactored."""
         chunks = []
         start_idx = 0
-
-        # Add final boundary to ensure we capture the last chunk
         final_boundaries = boundaries + [len(sentences)]
 
         for boundary in final_boundaries:
             if boundary <= start_idx:
                 continue
 
-            # Extract sentences for this chunk
             chunk_sentences = sentences[start_idx:boundary]
             chunk_content = " ".join(chunk_sentences)
 
-            # Check size constraints
             if len(chunk_content) < self.min_chunk_size and chunks:
-                # Merge with previous chunk if too small
-                prev_chunk = chunks[-1]
-                merged_sentences = prev_chunk.sentences + chunk_sentences
-                merged_content = " ".join(merged_sentences)
-
-                # Update previous chunk
-                chunks[-1] = SemanticChunk(
-                    content=merged_content,
-                    start_index=prev_chunk.start_index,
-                    end_index=boundary,
-                    sentences=merged_sentences,
-                    semantic_score=0.8,  # Default high coherence for merged chunks
-                    metadata={"merged": True, "original_boundary": boundary},
-                )
+                self._merge_with_previous_chunk(chunks, chunk_sentences, boundary)
             elif len(chunk_content) > self.max_chunk_size:
-                # Split large chunks further
-                sub_chunks = self._split_large_chunk(chunk_sentences, start_idx)
-                chunks.extend(sub_chunks)
+                chunks.extend(self._split_large_chunk(chunk_sentences, start_idx))
             else:
-                # Create regular chunk
-                chunk = SemanticChunk(
-                    content=chunk_content,
-                    start_index=start_idx,
-                    end_index=boundary,
-                    sentences=chunk_sentences,
-                    semantic_score=0.8,  # Default high coherence - async calculation expensive
-                    metadata={"boundary_type": "semantic"},
+                chunks.append(
+                    self._create_regular_chunk(
+                        chunk_content, chunk_sentences, start_idx, boundary
+                    )
                 )
-                chunks.append(chunk)
 
             start_idx = (
                 boundary - self.overlap_sentences
@@ -791,11 +790,56 @@ class AutoBotSemanticChunker:
             logger.error("Error calculating chunk coherence: %s", e)
             return 0.5  # Default neutral score
 
+    def _create_single_sentence_chunk(
+        self, text: str, sentences: List[str], metadata: Optional[Dict[str, Any]]
+    ) -> SemanticChunk:
+        """
+        Create a chunk for single-sentence or empty text. Issue #620.
+
+        Args:
+            text: Original input text
+            sentences: List of sentences (0 or 1 item)
+            metadata: Optional metadata to attach
+
+        Returns:
+            SemanticChunk for the single sentence
+        """
+        return SemanticChunk(
+            content=text,
+            start_index=0,
+            end_index=1,
+            sentences=sentences,
+            semantic_score=1.0,
+            metadata=metadata or {"single_sentence": True},
+        )
+
+    def _enrich_chunks_with_metadata(
+        self, chunks: List[SemanticChunk], metadata: Optional[Dict[str, Any]]
+    ) -> None:
+        """
+        Add metadata to all chunks including index and model info. Issue #620.
+
+        Args:
+            chunks: List of chunks to enrich
+            metadata: Source metadata to include
+        """
+        for i, chunk in enumerate(chunks):
+            chunk.metadata.update(
+                {
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                    "source_metadata": metadata or {},
+                    "chunking_method": "semantic_percentile",
+                    "embedding_model": self.embedding_model_name,
+                    "percentile_threshold": self.percentile_threshold,
+                }
+            )
+
     async def chunk_text(
         self, text: str, metadata: Optional[Dict[str, Any]] = None
     ) -> List[SemanticChunk]:
         """
-        Chunk text using semantic analysis.
+        Chunk text using semantic analysis. Issue #620: Refactored with helpers.
 
         Args:
             text: Input text to chunk
@@ -807,62 +851,34 @@ class AutoBotSemanticChunker:
         try:
             logger.info("Starting semantic chunking of text (%d characters)", len(text))
 
-            # Step 1: Split into sentences
             sentences = self._split_into_sentences(text)
             if len(sentences) <= 1:
-                # Single sentence or empty text
-                chunk = SemanticChunk(
-                    content=text,
-                    start_index=0,
-                    end_index=1,
-                    sentences=sentences,
-                    semantic_score=1.0,
-                    metadata=metadata or {"single_sentence": True},
-                )
-                return [chunk]
+                return [self._create_single_sentence_chunk(text, sentences, metadata)]
 
             logger.debug("Split text into %d sentences", len(sentences))
 
-            # Step 2: Compute sentence embeddings asynchronously
             embeddings = await self._compute_sentence_embeddings_async(sentences)
-
-            # Step 3: Calculate semantic distances
             distances = self._compute_semantic_distances(embeddings)
-
-            # Step 4: Find chunk boundaries
             boundaries = self._find_chunk_boundaries(distances)
 
             logger.debug("Found %d semantic boundaries", len(boundaries))
 
-            # Step 5: Create chunks
             chunks = self._create_chunks_with_boundaries(
                 sentences, boundaries, distances
             )
-
-            # Add metadata to chunks
-            for i, chunk in enumerate(chunks):
-                chunk.metadata.update(
-                    {
-                        "chunk_index": i,
-                        "total_chunks": len(chunks),
-                        "source_metadata": metadata or {},
-                        "chunking_method": "semantic_percentile",
-                        "embedding_model": self.embedding_model_name,
-                        "percentile_threshold": self.percentile_threshold,
-                    }
-                )
+            self._enrich_chunks_with_metadata(chunks, metadata)
 
             avg_coherence = np.mean([c.semantic_score for c in chunks])
             logger.info(
-                f"Created {len(chunks)} semantic chunks with average "
-                f"coherence: {avg_coherence:.3f}"
+                "Created %d semantic chunks with average coherence: %.3f",
+                len(chunks),
+                avg_coherence,
             )
 
             return chunks
 
         except Exception as e:
             logger.error("Error in semantic chunking: %s", e)
-            # Fallback to simple sentence-based chunking
             return await self._fallback_chunking(text, metadata)
 
     async def _fallback_chunking(
