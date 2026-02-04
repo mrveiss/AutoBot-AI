@@ -198,7 +198,9 @@
                       <!-- Password -->
                       <div>
                         <label for="ssh_password" class="block text-sm font-medium text-gray-700 mb-1">
-                          Password <span class="text-danger-500">*</span>
+                          Password
+                          <span v-if="!isEditMode || needsCredentialsForEdit" class="text-danger-500">*</span>
+                          <span v-else class="text-gray-400 text-xs ml-1">(optional)</span>
                         </label>
                         <div class="relative">
                           <input
@@ -206,7 +208,7 @@
                             :type="showPassword ? 'text' : 'password'"
                             id="ssh_password"
                             :class="['input pr-10', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ssh_password }]"
-                            placeholder="Enter password"
+                            :placeholder="isEditMode && !needsCredentialsForEdit ? 'Leave empty for basic edit' : 'Enter password'"
                             @blur="validateField('ssh_password')"
                           />
                           <button
@@ -418,6 +420,24 @@
 
                   <!-- Edit Mode Options -->
                   <div v-if="isEditMode" class="space-y-3">
+                    <!-- Info: credentials optional for basic edits -->
+                    <div v-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <svg class="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p class="text-sm text-green-700">
+                        Credentials not required for basic edits. Enable options below if you need SSH access.
+                      </p>
+                    </div>
+                    <div v-else class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <svg class="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <p class="text-sm text-amber-700">
+                        Password required for selected SSH operations.
+                      </p>
+                    </div>
+
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
                         type="checkbox"
@@ -783,14 +803,40 @@ const canTest = computed(() => {
   )
 })
 
-const canSubmit = computed(() => {
-  const baseValid = canTest.value && formData.value.roles.length > 0 && Object.keys(errors.value).length === 0
+// In edit mode, credentials are only needed if SSH operations are requested
+const needsCredentialsForEdit = computed(() => {
+  return formData.value.deploy_pki || formData.value.run_enrollment
+})
 
+// Basic field validation without credentials check
+const hasBasicFields = computed(() => {
+  return (
+    formData.value.hostname.trim() !== '' &&
+    formData.value.ip_address.trim() !== '' &&
+    formData.value.ssh_user.trim() !== '' &&
+    formData.value.roles.length > 0 &&
+    Object.keys(errors.value).length === 0
+  )
+})
+
+const canSubmit = computed(() => {
+  // Replace mode always needs full credentials
   if (isReplaceMode.value) {
-    return baseValid && replaceConfirmed.value
+    return canTest.value && hasBasicFields.value && replaceConfirmed.value
   }
 
-  return baseValid
+  // Edit mode: credentials only required if SSH operations are requested
+  if (isEditMode.value) {
+    if (needsCredentialsForEdit.value) {
+      // Need credentials for PKI deployment or re-enrollment
+      return canTest.value && hasBasicFields.value
+    }
+    // Simple edit without SSH operations - no credentials needed
+    return hasBasicFields.value
+  }
+
+  // Add mode always needs full credentials
+  return canTest.value && hasBasicFields.value
 })
 
 // Watchers
@@ -833,7 +879,7 @@ function populateEditData() {
     roles: [...props.existingNode.roles],
     import_existing: false,
     auto_enroll: false,
-    deploy_pki: props.existingNode.auth_method === 'password',
+    deploy_pki: false,  // User must opt-in to SSH operations when editing
     run_enrollment: false,
   }
 
@@ -917,8 +963,13 @@ function validateField(field: string) {
       break
 
     case 'ssh_password':
-      if (formData.value.auth_method === 'password' && (!value || (typeof value === 'string' && value.trim() === ''))) {
-        errors.value.ssh_password = 'Password is required'
+      // In edit mode, password only required if SSH operations are requested
+      const passwordRequired = isEditMode.value
+        ? formData.value.auth_method === 'password' && needsCredentialsForEdit.value
+        : formData.value.auth_method === 'password'
+
+      if (passwordRequired && (!value || (typeof value === 'string' && value.trim() === ''))) {
+        errors.value.ssh_password = 'Password is required for SSH operations'
       } else {
         delete errors.value.ssh_password
       }
@@ -1064,4 +1115,3 @@ function handleClose() {
   emit('close')
 }
 </script>
-
