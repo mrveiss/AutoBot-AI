@@ -238,6 +238,34 @@ class RateLimitHandler:
             if attempt > 0:
                 metrics.retried_requests += 1
 
+    async def _record_rate_limit_hit(self, metrics: "RetryMetrics") -> None:
+        """Record a rate limit hit in metrics. Issue #620."""
+        async with self._lock:
+            metrics.rate_limits_hit += 1
+            metrics.last_rate_limit_at = time.time()
+
+    async def _wait_and_retry(
+        self,
+        metrics: "RetryMetrics",
+        provider: str,
+        attempt: int,
+        max_attempts: int,
+        retry_after: Optional[float],
+    ) -> None:
+        """Wait with backoff before retry. Issue #620."""
+        delay = self._calculate_delay(attempt, retry_after)
+        async with self._lock:
+            metrics.total_retry_attempts += 1
+            metrics.total_wait_time_seconds += delay
+        logger.warning(
+            "Rate limit for %s, retry %d/%d in %.2fs",
+            provider,
+            attempt + 1,
+            max_attempts - 1,
+            delay,
+        )
+        await asyncio.sleep(delay)
+
     async def _handle_attempt_error(
         self,
         error: Exception,
@@ -246,49 +274,29 @@ class RateLimitHandler:
         attempt: int,
         max_attempts: int,
     ) -> Optional[Exception]:
-        """
-        Handle error during attempt, return error if should continue retry.
-
-        Issue #620: Extracted from execute_with_retry.
-
-        Returns:
-            Exception if should continue retrying, None if should raise immediately.
-        """
+        """Handle error during attempt. Issue #620."""
         is_rate_limit, retry_after = self._is_rate_limit_error(error)
 
-        if is_rate_limit:
-            async with self._lock:
-                metrics.rate_limits_hit += 1
-                metrics.last_rate_limit_at = time.time()
-
-            if attempt < max_attempts - 1:
-                delay = self._calculate_delay(attempt, retry_after)
-                async with self._lock:
-                    metrics.total_retry_attempts += 1
-                    metrics.total_wait_time_seconds += delay
-                logger.warning(
-                    "Rate limit hit for %s, retry %d/%d in %.2fs",
-                    provider,
-                    attempt + 1,
-                    max_attempts - 1,
-                    delay,
-                )
-                await asyncio.sleep(delay)
-                return error  # Continue retrying
-
-            # Out of retries - raise rate limit error
+        if not is_rate_limit:
             async with self._lock:
                 metrics.failed_requests += 1
-            raise RateLimitError(
-                f"Rate limit exceeded for {provider} after {max_attempts} attempts",
-                retry_after=retry_after,
-                provider=provider,
-            ) from error
+            return None
 
-        # Not a rate limit error
+        await self._record_rate_limit_hit(metrics)
+
+        if attempt < max_attempts - 1:
+            await self._wait_and_retry(
+                metrics, provider, attempt, max_attempts, retry_after
+            )
+            return error
+
         async with self._lock:
             metrics.failed_requests += 1
-        return None  # Signal to raise original error
+        raise RateLimitError(
+            f"Rate limit exceeded for {provider} after {max_attempts} attempts",
+            retry_after=retry_after,
+            provider=provider,
+        ) from error
 
     def get_metrics(self, provider: str = None) -> Dict[str, Any]:
         """

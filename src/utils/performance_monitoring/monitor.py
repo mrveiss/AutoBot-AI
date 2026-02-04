@@ -51,56 +51,49 @@ class PerformanceMonitor:
     Note: Renamed from Phase9PerformanceMonitor - "Phase9" naming is deprecated.
     """
 
-    def __init__(self):
-        """Initialize performance monitor with hardware detection and thresholds."""
-        self.logger = logging.getLogger(__name__)
-        self.monitoring_active = False
-        self.collection_interval = DEFAULT_COLLECTION_INTERVAL
-        self.retention_hours = DEFAULT_RETENTION_HOURS
-
-        # Lock for thread-safe access to shared mutable state
-        self._lock = asyncio.Lock()
-
-        # Performance baselines and thresholds
-        self.performance_baselines = dict(DEFAULT_PERFORMANCE_BASELINES)
-
-        # Real-time alerting
-        self.alert_callbacks: List[Callable] = []
-
-        # Hardware acceleration tracking
-        self.gpu_available = HardwareDetector.check_gpu_availability()
-        self.npu_available = HardwareDetector.check_npu_availability()
-
-        # Redis client for persistent storage
-        self.redis_client = None
-        self._initialize_redis()
-
-        # Initialize collectors
+    def _initialize_collectors(self) -> None:
+        """Initialize metric collectors for GPU, NPU, system, and services. Issue #620."""
         self._gpu_collector = GPUCollector(self.gpu_available)
         self._npu_collector = NPUCollector(self.npu_available)
         self._system_collector = SystemCollector()
         self._service_collector = ServiceCollector(self.redis_client)
         self._multimodal_collector = MultiModalCollector(self.redis_client)
 
-        # Initialize analyzers
+    def _initialize_analyzers(self) -> None:
+        """Initialize alert analyzer and recommendation generator. Issue #620."""
         self._alert_analyzer = AlertAnalyzer(self.performance_baselines)
         self._recommendation_generator = RecommendationGenerator()
 
-        # Background monitoring task
-        self.monitoring_task = None
-
-        # Metrics buffers for backward compatibility with monitoring API (Issue #427)
-        # These store recent metrics for status endpoint access
+    def _initialize_metric_buffers(self) -> None:
+        """Initialize metric buffers for backward compatibility. Issue #620."""
         self.gpu_metrics_buffer: List[Any] = []
         self.npu_metrics_buffer: List[Any] = []
         self.multimodal_metrics_buffer: List[Any] = []
         self.system_metrics_buffer: List[Any] = []
         self.service_metrics_buffer: Dict[str, List[Any]] = {}
-
-        # Performance alerts buffer (Issue #427)
         self.performance_alerts: List[Dict[str, Any]] = []
 
-        # Issue #469: Prometheus metrics manager for unified monitoring
+    def __init__(self):
+        """Initialize performance monitor with hardware detection and thresholds."""
+        self.logger = logging.getLogger(__name__)
+        self.monitoring_active = False
+        self.collection_interval = DEFAULT_COLLECTION_INTERVAL
+        self.retention_hours = DEFAULT_RETENTION_HOURS
+        self._lock = asyncio.Lock()
+        self.performance_baselines = dict(DEFAULT_PERFORMANCE_BASELINES)
+        self.alert_callbacks: List[Callable] = []
+
+        self.gpu_available = HardwareDetector.check_gpu_availability()
+        self.npu_available = HardwareDetector.check_npu_availability()
+
+        self.redis_client = None
+        self._initialize_redis()
+        self._initialize_collectors()
+        self._initialize_analyzers()
+
+        self.monitoring_task = None
+        self._initialize_metric_buffers()
+
         self._prometheus = get_metrics_manager()
 
         self.logger.info("Performance Monitor initialized")

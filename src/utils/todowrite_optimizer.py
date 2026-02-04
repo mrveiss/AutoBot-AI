@@ -603,18 +603,15 @@ class TodoWriteOptimizer:
         else:
             pattern.api_cost_score = 5  # Default
 
-    def get_optimization_recommendations(self) -> Dict[str, Any]:
-        """Get optimization recommendations based on usage patterns"""
-        recommendations = {
-            "todowrite_optimizations": [],
-            "tool_usage_optimizations": [],
-            "general_recommendations": [],
-            "statistics": self.optimization_stats.copy(),
-        }
+    def _build_todowrite_recommendations(self) -> List[Dict[str, Any]]:
+        """Build TodoWrite-specific optimization recommendations. Issue #620.
 
-        # TodoWrite specific recommendations
+        Returns:
+            List of TodoWrite optimization recommendation dictionaries
+        """
+        recommendations = []
         if len(self.pending_todos) > 0:
-            recommendations["todowrite_optimizations"].append(
+            recommendations.append(
                 {
                     "type": "pending_optimization",
                     "message": (
@@ -624,18 +621,24 @@ class TodoWriteOptimizer:
                     "action": "call process_optimization_batch()",
                 }
             )
+        return recommendations
 
-        # Tool usage recommendations
+    def _build_tool_usage_recommendations(self) -> List[Dict[str, Any]]:
+        """Build tool usage optimization recommendations. Issue #620.
+
+        Returns:
+            List of tool usage optimization recommendation dictionaries
+        """
         high_potential_tools = [
             pattern
             for pattern in self.tool_usage_stats.values()
             if pattern.optimization_potential > 0.6
         ]
-
+        recommendations = []
         for pattern in sorted(
             high_potential_tools, key=lambda p: p.optimization_potential, reverse=True
         ):
-            recommendations["tool_usage_optimizations"].append(
+            recommendations.append(
                 {
                     "tool_name": pattern.tool_name,
                     "optimization_potential": pattern.optimization_potential,
@@ -645,19 +648,33 @@ class TodoWriteOptimizer:
                     "recommendations": self._get_tool_specific_recommendations(pattern),
                 }
             )
+        return recommendations
 
-        # General recommendations
+    def _build_general_recommendations(self) -> List[str]:
+        """Build general optimization recommendations. Issue #620.
+
+        Returns:
+            List of general recommendation strings
+        """
+        recommendations = []
         if self.optimization_stats["total_optimizations"] == 0:
-            recommendations["general_recommendations"].append(
+            recommendations.append(
                 "Start using TodoWrite optimization to reduce API calls and prevent rate limiting"
             )
-
         if self.optimization_stats["api_calls_saved"] > 10:
-            recommendations["general_recommendations"].append(
+            recommendations.append(
                 f"Great job! You've saved {self.optimization_stats['api_calls_saved']} API calls through optimization"
             )
-
         return recommendations
+
+    def get_optimization_recommendations(self) -> Dict[str, Any]:
+        """Get optimization recommendations based on usage patterns. Issue #620."""
+        return {
+            "todowrite_optimizations": self._build_todowrite_recommendations(),
+            "tool_usage_optimizations": self._build_tool_usage_recommendations(),
+            "general_recommendations": self._build_general_recommendations(),
+            "statistics": self.optimization_stats.copy(),
+        }
 
     def _get_tool_specific_recommendations(
         self, pattern: ToolUsagePattern

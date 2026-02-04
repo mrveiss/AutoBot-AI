@@ -789,6 +789,25 @@ class LLMInterface:
 
         return response
 
+    def _build_llm_request(
+        self,
+        messages: list,
+        llm_type: str,
+        provider: str,
+        model_name: str,
+        request_id: str,
+        **kwargs,
+    ) -> LLMRequest:
+        """Build LLMRequest from parameters. Issue #620."""
+        return LLMRequest(
+            messages=messages,
+            llm_type=llm_type,
+            provider=provider,
+            model_name=model_name,
+            request_id=request_id,
+            **kwargs,
+        )
+
     async def _execute_chat_request(
         self,
         messages: list,
@@ -799,11 +818,7 @@ class LLMInterface:
         **kwargs,
     ) -> LLMResponse:
         """
-        Issue #665: Extracted from chat_completion to reduce function length.
-        Issue #717: Added optimization layer for prompt compression and rate limiting.
-        Issue #620: Refactored to use helper methods for reduced complexity.
-
-        Execute the chat request with caching, fallback, and metrics.
+        Execute chat request with caching and fallback. Issue #620.
 
         Args:
             messages: List of message dicts
@@ -828,13 +843,8 @@ class LLMInterface:
             if cached_response:
                 return cached_response
 
-        request = LLMRequest(
-            messages=messages,
-            llm_type=llm_type,
-            provider=provider,
-            model_name=model_name,
-            request_id=request_id,
-            **kwargs,
+        request = self._build_llm_request(
+            messages, llm_type, provider, model_name, request_id, **kwargs
         )
         response = await self._execute_with_fallback(request, provider)
 
@@ -890,16 +900,36 @@ class LLMInterface:
                 error=str(e),
             )
 
+    def _mark_fallback_response(
+        self, response: LLMResponse, provider_name: str, primary_provider: str
+    ) -> None:
+        """Mark response as using fallback provider. Issue #620."""
+        if provider_name != primary_provider:
+            response.fallback_used = True
+            self._metrics["fallback_count"] += 1
+            logger.info(
+                f"Fallback to {provider_name} succeeded (primary: {primary_provider})"
+            )
+
+    def _build_all_providers_failed_response(
+        self, request_id: str, last_error: Optional[str]
+    ) -> LLMResponse:
+        """Build error response when all providers fail. Issue #620."""
+        logger.error(f"All providers failed. Last error: {last_error}")
+        return LLMResponse(
+            content="",
+            model="failed",
+            provider="none",
+            processing_time=0.0,
+            request_id=request_id,
+            error=f"All providers failed. Last error: {last_error}",
+        )
+
     async def _execute_with_fallback(
         self, request: LLMRequest, primary_provider: str
     ) -> LLMResponse:
         """
-        Execute request with provider fallback chain.
-
-        Issue #551: Restored from archived llm_interface_unified.py
-        Issue #717: Added rate limit handling for cloud providers.
-        Issue #620: Refactored to use helper functions.
-        Automatically fails over to backup providers on error.
+        Execute request with provider fallback chain. Issue #620.
 
         Args:
             request: LLM request object
@@ -920,31 +950,16 @@ class LLMInterface:
                 response = await self._execute_provider_request(request, provider_name)
                 if response.error:
                     last_error = response.error
-                    logger.warning(
-                        f"Provider {provider_name} returned error: {response.error}"
-                    )
+                    logger.warning(f"Provider {provider_name} error: {response.error}")
                     continue
-                if provider_name != primary_provider:
-                    response.fallback_used = True
-                    self._metrics["fallback_count"] += 1
-                    logger.info(
-                        f"Fallback to {provider_name} succeeded (primary: {primary_provider})"
-                    )
+                self._mark_fallback_response(response, provider_name, primary_provider)
                 return response
             except Exception as e:
                 last_error = str(e)
                 logger.warning(f"Provider {provider_name} failed: {e}")
                 continue
 
-        logger.error(f"All providers failed. Last error: {last_error}")
-        return LLMResponse(
-            content="",
-            model="failed",
-            provider="none",
-            processing_time=0.0,
-            request_id=request.request_id,
-            error=f"All providers failed. Last error: {last_error}",
-        )
+        return self._build_all_providers_failed_response(request.request_id, last_error)
 
     def _build_fallback_provider_order(self, primary_provider: str) -> list[str]:
         """Build ordered list of providers to try. Issue #620."""
@@ -1223,6 +1238,15 @@ class LLMInterface:
             result["l2_cleared"] = await self._response_cache.clear_l2()
         return result
 
+    def _calculate_cache_hit_rate(self, response: LLMResponse) -> None:
+        """Calculate and add cache hit rate to response metadata. Issue #620."""
+        if "cached_tokens" not in response.usage:
+            return
+        cached_tokens = response.usage.get("cached_tokens", 0)
+        total_tokens = response.usage.get("prompt_tokens", 0)
+        cache_hit_rate = (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
+        response.metadata["cache_hit_rate"] = cache_hit_rate
+
     async def chat_completion_optimized(
         self,
         agent_type: str,
@@ -1235,14 +1259,7 @@ class LLMInterface:
         additional_params: Optional[dict] = None,
         **llm_params,
     ) -> LLMResponse:
-        """
-        Convenience method for chat completion with vLLM-optimized prompts.
-
-        This method automatically:
-        1. Gets the optimal base prompt for the agent tier
-        2. Constructs a cache-optimized prompt (98.7% cache hit rate)
-        3. Routes to vLLM provider for 3-4x performance improvement
-        """
+        """Chat completion with vLLM-optimized prompts. Issue #620."""
         from src.agent_tier_classifier import get_base_prompt_for_agent
         from src.prompt_manager import get_optimized_prompt
 
@@ -1266,15 +1283,7 @@ class LLMInterface:
         )
 
         response = await self.chat_completion(request)
-
-        if "cached_tokens" in response.usage:
-            cached_tokens = response.usage.get("cached_tokens", 0)
-            total_tokens = response.usage.get("prompt_tokens", 0)
-            cache_hit_rate = (
-                (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
-            )
-            response.metadata["cache_hit_rate"] = cache_hit_rate
-
+        self._calculate_cache_hit_rate(response)
         return response
 
     # Backward compatibility helper methods

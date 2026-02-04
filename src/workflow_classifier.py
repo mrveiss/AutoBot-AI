@@ -25,24 +25,48 @@ INSTALLATION_KEYWORDS = {"install", "setup", "configure"}
 # Issue #380: Module-level frozensets to avoid repeated list creation in classify_complexity
 _SECURITY_NETWORK_KEYWORDS = frozenset({"scan", "security", "vulnerabilities"})
 _NETWORK_KEYWORDS = frozenset({"network", "port", "firewall"})
-_COMPLEX_KEYWORDS = frozenset({
-    "install", "setup", "configure", "guide", "tutorial", "how to"
-})
-_RESEARCH_KEYWORDS = frozenset({
-    "find", "search", "tools", "best", "recommend", "compare"
-})
+_COMPLEX_KEYWORDS = frozenset(
+    {"install", "setup", "configure", "guide", "tutorial", "how to"}
+)
+_RESEARCH_KEYWORDS = frozenset(
+    {"find", "search", "tools", "best", "recommend", "compare"}
+)
 
 # Issue #281: Default classification keywords extracted from _initialize_default_rules
 DEFAULT_CLASSIFICATION_KEYWORDS = {
     "research": [
-        "find", "search", "tools", "best", "recommend", "compare", "need",
-        "what", "which", "whats new", "what's new", "latest", "current",
-        "news", "updates", ".com", ".lv", ".net", ".org", "website", "site",
+        "find",
+        "search",
+        "tools",
+        "best",
+        "recommend",
+        "compare",
+        "need",
+        "what",
+        "which",
+        "whats new",
+        "what's new",
+        "latest",
+        "current",
+        "news",
+        "updates",
+        ".com",
+        ".lv",
+        ".net",
+        ".org",
+        "website",
+        "site",
     ],
     "install": ["install", "setup", "configure", "deploy", "run", "execute", "start"],
     "complex": ["how to", "guide", "tutorial", "step by step", "plan", "strategy"],
     "security": [
-        "scan", "security", "vulnerabilities", "penetration", "exploit", "audit", "assess",
+        "scan",
+        "security",
+        "vulnerabilities",
+        "penetration",
+        "exploit",
+        "audit",
+        "assess",
     ],
     "network": ["network", "port", "firewall", "tcp", "udp", "lan", "wan", "router"],
     "system": ["system", "server", "machine", "host", "computer", "device"],
@@ -146,69 +170,82 @@ class WorkflowClassifier:
         except Exception as e:
             logger.error("Error adding keywords: %s", e)
 
+    def _count_keyword_matches(
+        self, keywords: Dict[str, List[str]], message_lower: str
+    ) -> Dict[str, Any]:
+        """Count keyword matches for classification. Issue #620.
+
+        Args:
+            keywords: Dictionary of category to keyword list mappings
+            message_lower: Lowercased message to search
+
+        Returns:
+            Dictionary of keyword counts and match flags
+        """
+        keyword_counts = {}
+        for category, keyword_list in keywords.items():
+            if category in CRITICAL_CATEGORIES:
+                keyword_counts[f"any_{category}"] = any(
+                    kw in message_lower for kw in keyword_list
+                )
+            else:
+                keyword_counts[category] = sum(
+                    1 for kw in keyword_list if kw in message_lower
+                )
+        keyword_counts["has_tools"] = "tools" in message_lower
+        return keyword_counts
+
+    def _evaluate_rules_for_complexity(
+        self, rules: Dict[str, Any], keyword_counts: Dict[str, Any]
+    ) -> Optional[TaskComplexity]:
+        """Evaluate classification rules to determine complexity. Issue #620.
+
+        Args:
+            rules: Dictionary of rule configurations
+            keyword_counts: Dictionary of keyword match counts
+
+        Returns:
+            TaskComplexity if a rule matches, None otherwise
+        """
+        sorted_rules = sorted(
+            rules.items(), key=lambda x: x[1].get("priority", 0), reverse=True
+        )
+        for rule_name, rule_config in sorted_rules:
+            condition = rule_config.get("condition", "")
+            complexity = rule_config.get("complexity", "simple")
+            if self._evaluate_condition(condition, keyword_counts):
+                return TaskComplexity(complexity)
+        return None
+
     def classify_request(self, user_message: str) -> TaskComplexity:
         """Classify user request using Redis-stored rules and keywords."""
         message_lower = user_message.lower()
 
-        # Fall back to simple classification if Redis not available
         if not self.redis_client:
             logger.warning("Redis not available, using fallback classification")
             return self._fallback_classification(message_lower)
 
         try:
-            # Get keywords from Redis
             keywords_data = self.redis_client.get(self.keywords_key)
             keywords = json.loads(keywords_data) if keywords_data else {}
 
-            # Count keyword matches (O(1) category lookup - Issue #326)
-            keyword_counts = {}
-            for category, keyword_list in keywords.items():
-                if category in CRITICAL_CATEGORIES:
-                    # For these categories, check if ANY keyword matches
-                    keyword_counts[f"any_{category}"] = any(
-                        kw in message_lower for kw in keyword_list
-                    )
-                else:
-                    # For others, count occurrences
-                    keyword_counts[category] = sum(
-                        1 for kw in keyword_list if kw in message_lower
-                    )
+            keyword_counts = self._count_keyword_matches(keywords, message_lower)
 
-            # Special checks
-            keyword_counts["has_tools"] = "tools" in message_lower
-
-            # Get rules from Redis
             rules_data = self.redis_client.get(self.rules_key)
             rules = json.loads(rules_data) if rules_data else {}
 
-            # Sort rules by priority
-            sorted_rules = sorted(
-                rules.items(), key=lambda x: x[1].get("priority", 0), reverse=True
-            )
-
-            # Evaluate rules
-            for rule_name, rule_config in sorted_rules:
-                condition = rule_config.get("condition", "")
-                complexity = rule_config.get("complexity", "simple")
-
-                # Simple condition evaluation (can be made more sophisticated)
-                if self._evaluate_condition(condition, keyword_counts):
-                    return TaskComplexity(complexity)
-
-            return TaskComplexity.SIMPLE
+            result = self._evaluate_rules_for_complexity(rules, keyword_counts)
+            return result if result else TaskComplexity.SIMPLE
 
         except Exception as e:
             logger.error("Error in classification: %s", e)
-            # Fallback to simple classification
             return self._fallback_classification(message_lower)
 
     def _fallback_classification(self, message_lower: str) -> TaskComplexity:
         """Simple fallback classification without Redis."""
         # Issue #380: Use module-level frozensets instead of recreating lists
         # Check for security/network combined
-        has_security = any(
-            kw in message_lower for kw in _SECURITY_NETWORK_KEYWORDS
-        )
+        has_security = any(kw in message_lower for kw in _SECURITY_NETWORK_KEYWORDS)
         has_network = any(kw in message_lower for kw in _NETWORK_KEYWORDS)
         if has_security and has_network:
             return TaskComplexity.COMPLEX
@@ -250,7 +287,10 @@ class WorkflowClassifier:
                 # Convert to appropriate type for evaluation
                 if isinstance(value, str) and value.isdigit():
                     eval_context[var_name] = int(value)
-                elif isinstance(value, str) and value.lower() in StringParsingConstants.BOOL_STRING_VALUES:
+                elif (
+                    isinstance(value, str)
+                    and value.lower() in StringParsingConstants.BOOL_STRING_VALUES
+                ):
                     eval_context[var_name] = value.lower() == "true"
                 else:
                     eval_context[var_name] = value

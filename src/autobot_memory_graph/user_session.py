@@ -36,48 +36,42 @@ class UserSessionMixin:
     Note: Secret management is in SecretManagementMixin (secrets.py).
     """
 
+    def _build_user_metadata(
+        self: AutoBotMemoryGraphCore,
+        user_id: str,
+        username: str,
+        metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build metadata dictionary for a user entity. Issue #620."""
+        user_metadata = metadata or {}
+        user_metadata.update(
+            {
+                "user_id": user_id,
+                "username": username,
+                "status": "active",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        )
+        return user_metadata
+
     async def create_user_entity(
         self: AutoBotMemoryGraphCore,
         user_id: str,
         username: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """
-        Create or get a user entity in the knowledge graph.
-
-        Issue #608: User entities are the foundation for user-centric session tracking.
-
-        Args:
-            user_id: Unique user identifier
-            username: Human-readable username
-            metadata: Optional additional metadata (email, display_name, etc.)
-
-        Returns:
-            Created or existing user entity
-        """
+        """Create or get a user entity. Issue #620."""
         self.ensure_initialized()
 
         try:
             existing = await self.search_entities(
-                query=user_id,
-                entity_type="user",
-                limit=1,
+                query=user_id, entity_type="user", limit=1
             )
-
             if existing:
                 logger.debug("User entity already exists for %s", username)
                 return existing[0]
 
-            user_metadata = metadata or {}
-            user_metadata.update(
-                {
-                    "user_id": user_id,
-                    "username": username,
-                    "status": "active",
-                    "created_at": datetime.utcnow().isoformat(),
-                }
-            )
-
+            user_metadata = self._build_user_metadata(user_id, username, metadata)
             entity = await self.create_entity(
                 entity_type="user",
                 name=f"User: {username}",
@@ -85,10 +79,8 @@ class UserSessionMixin:
                 metadata=user_metadata,
                 tags=["user", "account"],
             )
-
             logger.info("Created user entity for %s (id: %s)", username, user_id)
             return entity
-
         except Exception as e:
             logger.error("Failed to create user entity: %s", e)
             raise

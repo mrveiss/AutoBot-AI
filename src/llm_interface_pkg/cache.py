@@ -160,12 +160,54 @@ class LLMResponseCache:
         content_hash = xxhash.xxh64(str(key_data)).hexdigest()
         return f"llm_cache:{content_hash}"
 
+    def _parse_cached_data(self, cached_data: bytes) -> CachedResponse:
+        """
+        Parse cached data bytes into CachedResponse. Issue #620.
+
+        Args:
+            cached_data: Raw bytes from Redis cache
+
+        Returns:
+            CachedResponse object
+        """
+        data = json.loads(cached_data.decode("utf-8"))
+        return CachedResponse(
+            content=data.get("content", ""),
+            model=data.get("model", ""),
+            tokens_used=data.get("tokens_used"),
+            processing_time=data.get("processing_time", 0.0),
+            metadata=data.get("metadata", {}),
+        )
+
+    async def _check_l2_cache(self, cache_key: str) -> Optional[CachedResponse]:
+        """
+        Check L2 Redis cache and promote to L1 on hit. Issue #620.
+
+        Args:
+            cache_key: Cache key to lookup
+
+        Returns:
+            CachedResponse if found, None otherwise
+        """
+        redis_client = await get_redis_client(
+            async_client=True, database=self._redis_database
+        )
+        if not redis_client:
+            return None
+
+        cached_data = await redis_client.get(cache_key)
+        if not cached_data:
+            return None
+
+        response = self._parse_cached_data(cached_data)
+        await self._store_memory_cache(cache_key, response)
+        self._metrics["l2_hits"] += 1
+        logger.debug(f"L2 Redis cache hit: {cache_key[:24]}...")
+        return response
+
     async def get(self, cache_key: str) -> Optional[CachedResponse]:
         """
-        Get cached response with L1/L2 lookup.
-
-        First checks L1 memory cache (fastest), then falls back to L2 Redis.
-        Automatically promotes L2 hits to L1 for future fast access.
+        Get cached response with L1/L2 lookup. Issue #620.
 
         Args:
             cache_key: Cache key from generate_cache_key()
@@ -175,39 +217,17 @@ class LLMResponseCache:
         """
         async with self._lock:
             self._metrics["total_requests"] += 1
-
-            # L1 Memory Cache Check (fastest)
             if cache_key in self._memory_cache:
-                # Update LRU access order
                 self._memory_cache_access.remove(cache_key)
                 self._memory_cache_access.append(cache_key)
                 self._metrics["l1_hits"] += 1
                 logger.debug(f"L1 memory cache hit: {cache_key[:24]}...")
                 return self._memory_cache[cache_key]
 
-        # L2 Redis Cache Check (outside lock for non-blocking)
         try:
-            redis_client = await get_redis_client(
-                async_client=True, database=self._redis_database
-            )
-            if redis_client:
-                cached_data = await redis_client.get(cache_key)
-                if cached_data:
-                    data = json.loads(cached_data.decode("utf-8"))
-                    response = CachedResponse(
-                        content=data.get("content", ""),
-                        model=data.get("model", ""),
-                        tokens_used=data.get("tokens_used"),
-                        processing_time=data.get("processing_time", 0.0),
-                        metadata=data.get("metadata", {}),
-                    )
-
-                    # Promote to L1 cache for future fast access
-                    await self._store_memory_cache(cache_key, response)
-
-                    self._metrics["l2_hits"] += 1
-                    logger.debug(f"L2 Redis cache hit: {cache_key[:24]}...")
-                    return response
+            result = await self._check_l2_cache(cache_key)
+            if result:
+                return result
         except Exception as e:
             logger.debug(f"L2 cache retrieval failed (non-critical): {e}")
 

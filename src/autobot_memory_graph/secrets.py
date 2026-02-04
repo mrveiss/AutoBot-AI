@@ -127,6 +127,33 @@ class SecretManagementMixin:
         )
         return secret_metadata
 
+    async def _create_and_link_secret_entity(
+        self: AutoBotMemoryGraphCore,
+        name: str,
+        secret_type: str,
+        owner_id: str,
+        scope: str,
+        session_id: Optional[str],
+        shared_with: Optional[List[str]],
+        metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Create secret entity and its relations. Issue #620."""
+        secret_metadata = self._build_secret_metadata(
+            owner_id, secret_type, scope, session_id, shared_with, metadata
+        )
+        entity = await self.create_entity(
+            entity_type="secret",
+            name=name,
+            observations=[f"Secret created: {secret_type} ({scope} scope)"],
+            metadata=secret_metadata,
+            tags=["secret", secret_type, scope],
+        )
+        await self._create_secret_owner_relations(owner_id, entity["id"])
+        await self._create_secret_scope_relations(
+            entity["id"], scope, session_id, shared_with
+        )
+        return entity
+
     async def create_secret_entity(
         self: AutoBotMemoryGraphCore,
         name: str,
@@ -137,46 +164,16 @@ class SecretManagementMixin:
         shared_with: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Create a secret entity with ownership and scoping. Issue #608.
-
-        Note: This does NOT store the actual secret value.
-
-        Args:
-            name: Human-readable secret name
-            secret_type: Type of secret (api_key, token, password, ssh_key, certificate)
-            owner_id: User ID of secret owner
-            scope: Scope level (user, session, shared)
-            session_id: Session ID for session-scoped secrets
-            shared_with: List of user IDs for shared secrets
-            metadata: Optional additional metadata
-
-        Returns:
-            Created secret entity (without the actual secret value)
-        """
+        """Create a secret entity with ownership and scoping. Issue #620."""
         self.ensure_initialized()
         self._validate_secret_params(secret_type, scope, session_id)
 
         try:
-            secret_metadata = self._build_secret_metadata(
-                owner_id, secret_type, scope, session_id, shared_with, metadata
+            entity = await self._create_and_link_secret_entity(
+                name, secret_type, owner_id, scope, session_id, shared_with, metadata
             )
-
-            entity = await self.create_entity(
-                entity_type="secret",
-                name=name,
-                observations=[f"Secret created: {secret_type} ({scope} scope)"],
-                metadata=secret_metadata,
-                tags=["secret", secret_type, scope],
-            )
-
-            await self._create_secret_owner_relations(owner_id, entity["id"])
-            await self._create_secret_scope_relations(
-                entity["id"], scope, session_id, shared_with
-            )
-
             logger.info("Created secret entity: %s (scope: %s)", name, scope)
             return entity
-
         except Exception as e:
             logger.error("Failed to create secret entity: %s", e)
             raise

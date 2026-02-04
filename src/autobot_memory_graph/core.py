@@ -215,12 +215,8 @@ class AutoBotMemoryGraphCore:
             logger.error("Failed to initialize Redis connection: %s", e)
             raise
 
-    def _get_entity_index_schema(self) -> list:
-        """Issue #665: Extracted helper for RediSearch schema definition.
-
-        Returns:
-            List of schema arguments for FT.CREATE command
-        """
+    def _get_core_schema_fields(self) -> list:
+        """Get core entity schema fields. Issue #620."""
         return [
             "$.type",
             "AS",
@@ -238,6 +234,11 @@ class AutoBotMemoryGraphCore:
             "AS",
             "observations",
             "TEXT",
+        ]
+
+    def _get_timestamp_schema_fields(self) -> list:
+        """Get timestamp schema fields. Issue #620."""
+        return [
             "$.created_at",
             "AS",
             "created_at",
@@ -248,6 +249,11 @@ class AutoBotMemoryGraphCore:
             "updated_at",
             "NUMERIC",
             "SORTABLE",
+        ]
+
+    def _get_metadata_schema_fields(self) -> list:
+        """Get metadata schema fields. Issue #620."""
+        return [
             "$.metadata.priority",
             "AS",
             "priority",
@@ -268,6 +274,14 @@ class AutoBotMemoryGraphCore:
             "session_id",
             "TAG",
         ]
+
+    def _get_entity_index_schema(self) -> list:
+        """Get RediSearch schema for entity index. Issue #620."""
+        schema = []
+        schema.extend(self._get_core_schema_fields())
+        schema.extend(self._get_timestamp_schema_fields())
+        schema.extend(self._get_metadata_schema_fields())
+        return schema
 
     async def _check_index_exists(self, index_name: str) -> bool:
         """Issue #665: Check if a RediSearch index already exists.

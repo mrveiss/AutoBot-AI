@@ -134,6 +134,28 @@ class RelationOperationsMixin:
             logger.error("Failed to create relation: %s", e)
             raise RuntimeError(f"Relation creation failed: {str(e)}")
 
+    def _build_relation_by_id_objects(
+        self: AutoBotMemoryGraphCore,
+        from_entity_id: str,
+        to_entity_id: str,
+        relation_type: str,
+        metadata: Optional[Dict[str, Any]],
+    ) -> tuple:
+        """Build relation objects for create_relation_by_id. Issue #620."""
+        timestamp = int(datetime.now().timestamp() * 1000)
+        relation = {
+            "to": to_entity_id,
+            "type": relation_type,
+            "created_at": timestamp,
+            "metadata": metadata or {},
+        }
+        reverse_rel = {
+            "from": from_entity_id,
+            "type": relation_type,
+            "created_at": timestamp,
+        }
+        return relation, reverse_rel
+
     async def create_relation_by_id(
         self: AutoBotMemoryGraphCore,
         from_entity_id: str,
@@ -141,44 +163,18 @@ class RelationOperationsMixin:
         relation_type: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """
-        Create relationship between two entities using their IDs directly.
-
-        Issue #608: Helper for user-centric session tracking where we have
-        entity IDs rather than names.
-
-        Args:
-            from_entity_id: Source entity ID (UUID)
-            to_entity_id: Target entity ID (UUID)
-            relation_type: Type of relationship
-            metadata: Optional additional metadata
-
-        Returns:
-            True if relation created successfully
-        """
+        """Create relationship between entities using IDs. Issue #620."""
         self.ensure_initialized()
 
         if relation_type not in RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
         try:
-            timestamp = int(datetime.now().timestamp() * 1000)
-
-            relation = {
-                "to": to_entity_id,
-                "type": relation_type,
-                "created_at": timestamp,
-                "metadata": metadata or {},
-            }
-            reverse_rel = {
-                "from": from_entity_id,
-                "type": relation_type,
-                "created_at": timestamp,
-            }
-
+            relation, reverse_rel = self._build_relation_by_id_objects(
+                from_entity_id, to_entity_id, relation_type, metadata
+            )
             await self._store_outgoing_relation(from_entity_id, relation)
             await self._store_incoming_relation(to_entity_id, reverse_rel)
-
             logger.debug(
                 "Created relation by ID: %s --[%s]--> %s",
                 from_entity_id[:8],
@@ -186,7 +182,6 @@ class RelationOperationsMixin:
                 to_entity_id[:8],
             )
             return True
-
         except Exception as e:
             logger.error("Failed to create relation by ID: %s", e)
             return False
@@ -253,63 +248,85 @@ class RelationOperationsMixin:
             logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
 
+    def _format_outgoing_relation(
+        self: AutoBotMemoryGraphCore, entity_id: str, rel: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Format an outgoing relation for response. Issue #620."""
+        return {
+            "from": entity_id,
+            "to": rel.get("to"),
+            "type": rel.get("type"),
+            "direction": "outgoing",
+            "metadata": rel.get("metadata", {}),
+        }
+
+    def _format_incoming_relation(
+        self: AutoBotMemoryGraphCore, entity_id: str, rel: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Format an incoming relation for response. Issue #620."""
+        return {
+            "from": rel.get("from"),
+            "to": entity_id,
+            "type": rel.get("type"),
+            "direction": "incoming",
+            "metadata": rel.get("metadata", {}),
+        }
+
     async def get_relations(
         self: AutoBotMemoryGraphCore,
         entity_id: str,
         relation_types: Optional[List[str]] = None,
         direction: str = "both",
     ) -> Dict[str, Any]:
-        """
-        Get relations for an entity.
-
-        Issue #608: Public method for retrieving entity relationships.
-
-        Args:
-            entity_id: Entity ID to get relations for
-            relation_types: Optional filter by relation types
-            direction: "outgoing", "incoming", or "both"
-
-        Returns:
-            Dict with "relations" key containing list of relations
-        """
+        """Get relations for an entity. Issue #620."""
         self.ensure_initialized()
 
         try:
             relations = []
-
             if direction in OUTGOING_DIRECTIONS:
                 outgoing = await self._get_outgoing_relations(entity_id)
                 for rel in outgoing:
                     if relation_types is None or rel.get("type") in relation_types:
-                        relations.append(
-                            {
-                                "from": entity_id,
-                                "to": rel.get("to"),
-                                "type": rel.get("type"),
-                                "direction": "outgoing",
-                                "metadata": rel.get("metadata", {}),
-                            }
-                        )
+                        relations.append(self._format_outgoing_relation(entity_id, rel))
 
             if direction in INCOMING_DIRECTIONS:
                 incoming = await self._get_incoming_relations(entity_id)
                 for rel in incoming:
                     if relation_types is None or rel.get("type") in relation_types:
-                        relations.append(
-                            {
-                                "from": rel.get("from"),
-                                "to": entity_id,
-                                "type": rel.get("type"),
-                                "direction": "incoming",
-                                "metadata": rel.get("metadata", {}),
-                            }
-                        )
+                        relations.append(self._format_incoming_relation(entity_id, rel))
 
             return {"relations": relations}
-
         except Exception as e:
             logger.error("Failed to get relations for %s: %s", entity_id, e)
             return {"relations": []}
+
+    async def _process_outgoing(
+        self: AutoBotMemoryGraphCore,
+        current_id: str,
+        relation_type: Optional[str],
+        depth: int,
+        max_depth: int,
+        queue: List,
+    ) -> List[Dict[str, Any]]:
+        """Process outgoing relations for BFS traversal. Issue #620."""
+        outgoing = await self._get_outgoing_relations(current_id)
+        return await self._process_direction_relations(
+            outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+        )
+
+    async def _process_incoming(
+        self: AutoBotMemoryGraphCore,
+        current_id: str,
+        relation_type: Optional[str],
+        depth: int,
+        max_depth: int,
+        queue: List,
+    ) -> List[Dict[str, Any]]:
+        """Process incoming relations for BFS traversal. Issue #620."""
+        incoming = await self._get_incoming_relations(current_id)
+        return await self._process_direction_relations(
+            incoming, relation_type, "incoming", "from", depth, max_depth, queue
+        )
 
     async def _fetch_and_process_relations(
         self: AutoBotMemoryGraphCore,
@@ -320,21 +337,7 @@ class RelationOperationsMixin:
         max_depth: int,
         queue: List,
     ) -> List[Dict[str, Any]]:
-        """Issue #665: Extracted from get_related_entities to reduce function length.
-
-        Fetch relations for a direction and process them.
-
-        Args:
-            current_id: Current entity ID in BFS traversal
-            direction: "outgoing", "incoming", or "both"
-            relation_type: Filter by relation type
-            depth: Current traversal depth
-            max_depth: Maximum traversal depth
-            queue: BFS queue to append to
-
-        Returns:
-            List of related entity dicts with relation metadata
-        """
+        """Fetch and process relations for BFS traversal. Issue #620."""
         need_outgoing = direction in OUTGOING_DIRECTIONS
         need_incoming = direction in INCOMING_DIRECTIONS
         related = []
@@ -355,21 +358,28 @@ class RelationOperationsMixin:
                 )
             )
         elif need_outgoing:
-            outgoing = await self._get_outgoing_relations(current_id)
             related.extend(
-                await self._process_direction_relations(
-                    outgoing, relation_type, "outgoing", "to", depth, max_depth, queue
+                await self._process_outgoing(
+                    current_id, relation_type, depth, max_depth, queue
                 )
             )
         elif need_incoming:
-            incoming = await self._get_incoming_relations(current_id)
             related.extend(
-                await self._process_direction_relations(
-                    incoming, relation_type, "incoming", "from", depth, max_depth, queue
+                await self._process_incoming(
+                    current_id, relation_type, depth, max_depth, queue
                 )
             )
 
         return related
+
+    def _build_related_entry(
+        self: AutoBotMemoryGraphCore,
+        rel: Dict[str, Any],
+        entity: Dict[str, Any],
+        direction: str,
+    ) -> Dict[str, Any]:
+        """Build a related entity entry for BFS results. Issue #620."""
+        return {"entity": entity, "relation": rel, "direction": direction}
 
     async def _process_direction_relations(
         self: AutoBotMemoryGraphCore,
@@ -381,20 +391,7 @@ class RelationOperationsMixin:
         max_depth: int,
         queue: List,
     ) -> List[Dict[str, Any]]:
-        """Process relations in a single direction (Issue #298 - extracted helper).
-
-        Args:
-            relations: Raw relations from Redis
-            relation_type: Optional filter for relation type
-            direction: "outgoing" or "incoming"
-            id_field: Field name for entity ID ("to" or "from")
-            depth: Current traversal depth
-            max_depth: Maximum traversal depth
-            queue: BFS queue to append to
-
-        Returns:
-            List of related entity dicts with relation metadata
-        """
+        """Process relations in a single direction. Issue #620."""
         filtered = [
             rel
             for rel in relations
@@ -413,11 +410,7 @@ class RelationOperationsMixin:
         for rel, related_entity in zip(filtered, entities):
             if related_entity and not isinstance(related_entity, Exception):
                 related.append(
-                    {
-                        "entity": related_entity,
-                        "relation": rel,
-                        "direction": direction,
-                    }
+                    self._build_related_entry(rel, related_entity, direction)
                 )
                 if depth + 1 <= max_depth:
                     queue.append((rel[id_field], depth + 1))

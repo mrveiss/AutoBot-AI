@@ -124,22 +124,18 @@ class OpenAIProvider:
             span.record_exception(error)
             span.set_attribute("llm.error", True)
 
+    async def _execute_openai_request(self, client, model: str, request: LLMRequest):
+        """Execute the OpenAI API request. Issue #620."""
+        return await client.chat.completions.create(
+            model=model,
+            messages=request.messages,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+        )
+
     @circuit_breaker_async("openai_service")
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """
-        Enhanced OpenAI chat completion.
-
-        Issue #697: Added OpenTelemetry tracing for LLM inference monitoring.
-
-        Args:
-            request: LLM request object
-
-        Returns:
-            LLMResponse object
-
-        Raises:
-            ValueError: If API key is not configured
-        """
+        """Enhanced OpenAI chat completion. Issue #620."""
         if not self.api_key:
             raise ValueError("OpenAI API key not configured")
 
@@ -147,33 +143,21 @@ class OpenAIProvider:
 
         client = openai.AsyncOpenAI(api_key=self.api_key)
         model = request.model_name or "gpt-3.5-turbo"
-
-        # Issue #697: Create span for LLM inference with model attributes
-        # Issue #620: Extracted span attributes to helper method
         span_attrs = self._build_span_attributes(model, request)
+
         with _tracer.start_as_current_span(
             "llm.inference", kind=SpanKind.CLIENT, attributes=span_attrs
         ) as span:
             start_time = time.time()
-
             try:
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=request.messages,
-                    temperature=request.temperature,
-                    max_tokens=request.max_tokens,
-                )
+                response = await self._execute_openai_request(client, model, request)
                 processing_time = time.time() - start_time
-
-                # Issue #697/#620: Extracted to helper methods
                 self._record_success_span_attributes(span, response, processing_time)
                 return self._build_response(
                     response, processing_time, request.request_id
                 )
-
             except Exception as e:
                 logger.error("OpenAI completion error: %s", e)
-                # Issue #620: Extracted error span recording
                 self._record_error_span_attributes(span, e)
                 raise
 

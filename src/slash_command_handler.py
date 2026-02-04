@@ -303,9 +303,7 @@ class DocsCommand(Command):
 class HelpCommand(Command):
     """Help information command."""
 
-    async def execute(self) -> SlashCommandResult:
-        """Execute /help command."""
-        content = """## 💡 AutoBot Chat Commands
+    HELP_CONTENT = """## 💡 AutoBot Chat Commands
 
 **Available Commands:**
 
@@ -351,10 +349,10 @@ class HelpCommand(Command):
 
 💬 For general questions, just type normally without a slash command."""
 
+    async def execute(self) -> SlashCommandResult:
+        """Execute /help command. Issue #620."""
         return SlashCommandResult(
-            success=True,
-            command_type=CommandType.HELP,
-            content=content,
+            success=True, command_type=CommandType.HELP, content=self.HELP_CONTENT
         )
 
 
@@ -928,52 +926,52 @@ class SecretsCommand(Command):
         self.args = args
         self.chat_id = chat_id
 
+    def _get_subcommand_handlers(self, sub_args: Optional[str]) -> dict:
+        """Get subcommand handler mapping. Issue #620."""
+        from backend.api.secrets import secrets_manager
+
+        return {
+            "list": lambda: SecretsListSubcommand(
+                secrets_manager, self.chat_id
+            ).execute(),
+            "add": lambda: SecretsAddSubcommand(
+                secrets_manager, sub_args, self.chat_id
+            ).execute(),
+            "show": lambda: SecretsShowSubcommand(
+                secrets_manager, sub_args, self.chat_id
+            ).execute(),
+            "delete": lambda: SecretsDeleteSubcommand(
+                secrets_manager, sub_args, self.chat_id
+            ).execute(),
+            "transfer": lambda: SecretsTransferSubcommand(
+                secrets_manager, sub_args, self.chat_id
+            ).execute(),
+            "types": lambda: SecretsTypesSubcommand().execute(),
+        }
+
+    def _unknown_subcommand_result(self, subcommand: str) -> SlashCommandResult:
+        """Build result for unknown subcommand. Issue #620."""
+        return SlashCommandResult(
+            success=False,
+            command_type=CommandType.SECRETS,
+            content=f"❓ Unknown subcommand: `{subcommand}`\n\nUse `/secrets` for available commands.",
+        )
+
     async def execute(self) -> SlashCommandResult:
-        """Execute /secrets command - Manage secrets via chat."""
+        """Execute /secrets command. Issue #620."""
         if not self.args:
             return self._show_usage()
 
-        # Parse subcommand
         parts = self.args.strip().split(maxsplit=1)
         subcommand = parts[0].lower()
         sub_args = parts[1] if len(parts) > 1 else None
 
         try:
-            from backend.api.secrets import secrets_manager
-
-            # Dispatch to appropriate subcommand
-            subcommand_handlers = {
-                "list": lambda: SecretsListSubcommand(
-                    secrets_manager, self.chat_id
-                ).execute(),
-                "add": lambda: SecretsAddSubcommand(
-                    secrets_manager, sub_args, self.chat_id
-                ).execute(),
-                "show": lambda: SecretsShowSubcommand(
-                    secrets_manager, sub_args, self.chat_id
-                ).execute(),
-                "delete": lambda: SecretsDeleteSubcommand(
-                    secrets_manager, sub_args, self.chat_id
-                ).execute(),
-                "transfer": lambda: SecretsTransferSubcommand(
-                    secrets_manager, sub_args, self.chat_id
-                ).execute(),
-                "types": lambda: SecretsTypesSubcommand().execute(),
-            }
-
-            handler = subcommand_handlers.get(subcommand)
+            handlers = self._get_subcommand_handlers(sub_args)
+            handler = handlers.get(subcommand)
             if handler:
                 return await handler()
-            else:
-                return SlashCommandResult(
-                    success=False,
-                    command_type=CommandType.SECRETS,
-                    content=(
-                        f"❓ Unknown subcommand: `{subcommand}`\n\n"
-                        "Use `/secrets` for available commands."
-                    ),
-                )
-
+            return self._unknown_subcommand_result(subcommand)
         except Exception as e:
             logger.error("Secrets command failed: %s", e)
             return SlashCommandResult(
@@ -1333,8 +1331,41 @@ class SecretsDeleteSubcommand(Command):
         self.secret_name = secret_name
         self.chat_id = chat_id
 
+    def _find_secret_by_name(self) -> Optional[dict]:
+        """
+        Find a secret by name from accessible secrets.
+
+        Issue #620.
+        """
+        secrets = self.manager.list_secrets(chat_id=self.chat_id)
+        for s in secrets:
+            if s.get("name") == self.secret_name:
+                return s
+        return None
+
+    def _build_delete_result(self, success: bool) -> SlashCommandResult:
+        """
+        Build result for delete operation based on success status.
+
+        Issue #620.
+        """
+        if success:
+            return SlashCommandResult(
+                success=True,
+                command_type=CommandType.SECRETS,
+                content=(
+                    f"## ✅ Secret Deleted\n\n"
+                    f"`{self.secret_name}` has been permanently removed."
+                ),
+            )
+        return SlashCommandResult(
+            success=False,
+            command_type=CommandType.SECRETS,
+            content=f"❌ Failed to delete secret: `{self.secret_name}`",
+        )
+
     async def execute(self) -> SlashCommandResult:
-        """Delete a secret."""
+        """Delete a secret. Issue #620."""
         if not self.secret_name:
             return SlashCommandResult(
                 success=False,
@@ -1342,15 +1373,7 @@ class SecretsDeleteSubcommand(Command):
                 content="❌ Please provide a secret name: `/secrets delete <name>`",
             )
 
-        # Find the secret by name
-        secrets = self.manager.list_secrets(chat_id=self.chat_id)
-        target_secret = None
-
-        for s in secrets:
-            if s.get("name") == self.secret_name:
-                target_secret = s
-                break
-
+        target_secret = self._find_secret_by_name()
         if not target_secret:
             return SlashCommandResult(
                 success=False,
@@ -1360,26 +1383,9 @@ class SecretsDeleteSubcommand(Command):
 
         try:
             success = self.manager.delete_secret(
-                target_secret["id"],
-                chat_id=self.chat_id,
+                target_secret["id"], chat_id=self.chat_id
             )
-
-            if success:
-                return SlashCommandResult(
-                    success=True,
-                    command_type=CommandType.SECRETS,
-                    content=(
-                        f"## ✅ Secret Deleted\n\n"
-                        f"`{self.secret_name}` has been permanently removed."
-                    ),
-                )
-            else:
-                return SlashCommandResult(
-                    success=False,
-                    command_type=CommandType.SECRETS,
-                    content=f"❌ Failed to delete secret: `{self.secret_name}`",
-                )
-
+            return self._build_delete_result(success)
         except PermissionError:
             return SlashCommandResult(
                 success=False,
