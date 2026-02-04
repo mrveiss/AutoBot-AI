@@ -513,12 +513,23 @@ Found {len(tools)} tools for {tool_type}:
 
         return None
 
-    async def store_system_documentation(self, doc_info: Dict[str, Any]):
-        """Store general system documentation and procedures."""
-        doc_type = doc_info.get("type", "general")
-        doc_title = doc_info.get("title", "System Documentation")
+    def _build_system_doc_header(
+        self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]
+    ) -> str:
+        """
+        Build the header section of system documentation content.
 
-        document_content = f"""
+        Args:
+            doc_title: Title of the documentation.
+            doc_type: Type of documentation.
+            doc_info: Full documentation info dictionary.
+
+        Returns:
+            Formatted header section string.
+
+        Issue #620.
+        """
+        return f"""
 SYSTEM DOCUMENTATION: {doc_title}
 ==================================================
 
@@ -536,7 +547,22 @@ PREREQUISITES:
 
 STEP-BY-STEP GUIDE:
 {ToolInfoFormatter.format_steps(doc_info.get('steps', []))}
+"""
 
+    def _build_system_doc_footer(self, doc_info: Dict[str, Any]) -> str:
+        """
+        Build the footer section of system documentation content.
+
+        Args:
+            doc_info: Full documentation info dictionary.
+
+        Returns:
+            Formatted footer section string.
+
+        Issue #620.
+        """
+        timestamp = datetime.now().isoformat()
+        return f"""
 COMMON ISSUES & SOLUTIONS:
 {ToolInfoFormatter.format_troubleshooting(doc_info.get('common_issues', []))}
 
@@ -553,19 +579,70 @@ VERIFICATION STEPS:
 {ToolInfoFormatter.format_verification_steps(doc_info.get('verification', []))}
 
 METADATA:
-- Added: {datetime.now().isoformat()}
-- Last Updated: {datetime.now().isoformat()}
+- Added: {timestamp}
+- Last Updated: {timestamp}
 - Verification Status: {doc_info.get('verified', 'unverified')}
 - Complexity Level: {doc_info.get('complexity', 'medium')}
 """
 
-        metadata = {
+    def _build_system_doc_content(
+        self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]
+    ) -> str:
+        """
+        Build the full document content string for system documentation.
+
+        Args:
+            doc_title: Title of the documentation.
+            doc_type: Type of documentation.
+            doc_info: Full documentation info dictionary.
+
+        Returns:
+            Formatted document content string.
+
+        Issue #620.
+        """
+        header = self._build_system_doc_header(doc_title, doc_type, doc_info)
+        footer = self._build_system_doc_footer(doc_info)
+        return header + footer
+
+    def _build_system_doc_metadata(
+        self, doc_title: str, doc_type: str, doc_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build metadata dictionary for system documentation storage.
+
+        Args:
+            doc_title: Title of the documentation.
+            doc_type: Type of documentation.
+            doc_info: Full documentation info dictionary.
+
+        Returns:
+            Metadata dictionary for storage.
+
+        Issue #620.
+        """
+        return {
             "type": "system_documentation",
             "doc_type": doc_type,
             "category": doc_info.get("category", "system"),
             "title": doc_title,
             "timestamp": datetime.now().isoformat(),
         }
+
+    async def store_system_documentation(self, doc_info: Dict[str, Any]):
+        """
+        Store general system documentation and procedures.
+
+        Args:
+            doc_info: Documentation information dictionary.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        doc_type = doc_info.get("type", "general")
+        doc_title = doc_info.get("title", "System Documentation")
+
+        document_content = self._build_system_doc_content(doc_title, doc_type, doc_info)
+        metadata = self._build_system_doc_metadata(doc_title, doc_type, doc_info)
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
         logger.info("Stored system documentation: %s", doc_title)

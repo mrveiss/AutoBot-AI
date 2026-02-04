@@ -471,9 +471,6 @@ class WorkflowScheduler:
     ) -> Dict[str, Any]:
         """
         Resolve and validate workflow parameters from request or kwargs. Issue #620.
-
-        Returns:
-            Dict with all resolved workflow parameters
         """
         if request is not None:
             (
@@ -497,6 +494,35 @@ class WorkflowScheduler:
             scheduled_time, priority, complexity
         )
 
+        return self._build_workflow_params_dict(
+            user_message,
+            scheduled_time,
+            priority,
+            complexity,
+            template_id,
+            variables,
+            auto_approve,
+            tags,
+            dependencies,
+            user_id,
+        )
+
+    def _build_workflow_params_dict(
+        self,
+        user_message: str,
+        scheduled_time: datetime,
+        priority: WorkflowPriority,
+        complexity: TaskComplexity,
+        template_id: Optional[str],
+        variables: Optional[Dict[str, Any]],
+        auto_approve: bool,
+        tags: Optional[List[str]],
+        dependencies: Optional[List[str]],
+        user_id: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Build workflow parameters dictionary from resolved values. Issue #620.
+        """
         return {
             "user_message": user_message,
             "scheduled_time": scheduled_time,

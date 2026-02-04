@@ -35,6 +35,65 @@ class MessagesMixin:
     - self._periodic_memory_check(): method
     """
 
+    def _build_message_dict(
+        self,
+        sender: str,
+        text: str,
+        message_type: str,
+        raw_data: Any,
+        tool_markers: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, Any]:
+        """
+        Build a message dictionary with standard fields.
+
+        Args:
+            sender: The sender of the message.
+            text: The content of the message.
+            message_type: The type of message.
+            raw_data: Additional raw data (metadata).
+            tool_markers: Optional list of tool usage markers.
+
+        Returns:
+            Constructed message dictionary.
+
+        Issue #620.
+        """
+        message = {
+            "sender": sender,
+            "text": text,
+            "messageType": message_type,
+            "metadata": raw_data,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        if tool_markers:
+            message["toolMarkers"] = tool_markers
+        return message
+
+    async def _add_message_to_session(
+        self, session_id: str, message: Dict[str, Any]
+    ) -> bool:
+        """
+        Add a message to a specific session.
+
+        Args:
+            session_id: The session identifier.
+            message: The message dictionary to add.
+
+        Returns:
+            True if successful, False otherwise.
+
+        Issue #620.
+        """
+        try:
+            messages = await self.load_session(session_id)
+            messages.append(message)
+            await self.save_session(session_id, messages=messages)
+            logger.debug("Added message to session %s", session_id)
+            return True
+        except Exception as e:
+            logger.error("Error adding message to session %s: %s", session_id, e)
+            return False
+
     async def add_message(
         self,
         sender: str,
@@ -56,39 +115,22 @@ class MessagesMixin:
             raw_data (Any): Additional raw data associated with the message.
             session_id (str): Optional session ID to add message to specific session.
             tool_markers (List[Dict[str, Any]]): Optional list of tool usage markers.
-        """
-        message = {
-            "sender": sender,
-            "text": text,
-            "messageType": message_type,
-            "metadata": (
-                raw_data
-            ),  # CRITICAL FIX: Use 'metadata' to match frontend expectations
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
 
-        # Add tool markers if provided
-        if tool_markers:
-            message["toolMarkers"] = tool_markers
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        message = self._build_message_dict(
+            sender, text, message_type, raw_data, tool_markers
+        )
 
         # If session_id provided, add to that session
         if session_id:
-            try:
-                messages = await self.load_session(session_id)
-                messages.append(message)
-                await self.save_session(session_id, messages=messages)
-                logger.debug("Added message to session %s", session_id)
+            if await self._add_message_to_session(session_id, message):
                 return
-            except Exception as e:
-                logger.error("Error adding message to session %s: %s", session_id, e)
-                # Fall through to add to default history
+            # Fall through to add to default history on failure
 
         # Otherwise add to default history
         self.history.append(message)
-
-        # PERFORMANCE: Periodic memory checks
         self._periodic_memory_check()
-
         await self._save_history()
         logger.debug("Added message from %s with type %s", sender, message_type)
 

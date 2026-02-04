@@ -149,50 +149,60 @@ class TodoWriteOptimizer:
         """
         Add a todo item for optimization instead of immediate writing.
 
-        Args:
-            content: Todo content
-            status: Todo status (pending, in_progress, completed)
-            active_form: Active form description
-            priority: Priority level (1-10)
-            tags: Optional tags for categorization
-
         Returns:
             bool: True if added for optimization, False if duplicate/similar exists
         """
         try:
-            # Convert status string to enum
-            todo_status = TodoStatus(status.lower())
-
-            # Create optimized todo item
-            todo_item = OptimizedTodoItem(
-                content=content,
-                status=todo_status,
-                active_form=active_form
-                or f"{content.split()[0].title()}ing {' '.join(content.split()[1:]).lower()}",
-                priority=priority,
-                tags=set(tags or []),
+            todo_item = self._create_optimized_todo_item(
+                content, status, active_form, priority, tags
             )
 
-            # Check for duplicates and similar items
             if self._is_duplicate_or_similar(todo_item):
                 logger.info("Skipping duplicate/similar todo: %s...", content[:50])
                 return False
 
-            # Add to pending optimization queue
-            self.pending_todos.append(todo_item)
-            self.content_cache[todo_item.similarity_hash] = todo_item
-
-            logger.debug("Added todo for optimization: %s...", content[:50])
-
-            # Check if we should trigger optimization
-            if self._should_trigger_optimization():
-                asyncio.create_task(self._process_optimization_batch())
-
+            self._queue_todo_for_optimization(todo_item, content)
             return True
 
         except Exception as e:
             logger.error("Error adding todo for optimization: %s", e)
             return False
+
+    def _create_optimized_todo_item(
+        self,
+        content: str,
+        status: str,
+        active_form: str,
+        priority: int,
+        tags: Optional[List[str]],
+    ) -> "OptimizedTodoItem":
+        """
+        Create an OptimizedTodoItem from input parameters. Issue #620.
+        """
+        todo_status = TodoStatus(status.lower())
+        computed_active_form = active_form or (
+            f"{content.split()[0].title()}ing {' '.join(content.split()[1:]).lower()}"
+        )
+        return OptimizedTodoItem(
+            content=content,
+            status=todo_status,
+            active_form=computed_active_form,
+            priority=priority,
+            tags=set(tags or []),
+        )
+
+    def _queue_todo_for_optimization(
+        self, todo_item: "OptimizedTodoItem", content: str
+    ) -> None:
+        """
+        Add todo item to pending queue and trigger optimization if needed. Issue #620.
+        """
+        self.pending_todos.append(todo_item)
+        self.content_cache[todo_item.similarity_hash] = todo_item
+        logger.debug("Added todo for optimization: %s...", content[:50])
+
+        if self._should_trigger_optimization():
+            asyncio.create_task(self._process_optimization_batch())
 
     def _is_duplicate_or_similar(self, todo_item: OptimizedTodoItem) -> bool:
         """Check if todo item is duplicate or too similar to existing items"""

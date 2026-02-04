@@ -396,6 +396,53 @@ class SessionMixin:
         if should_cleanup:
             await self._cleanup_old_session_files()
 
+    async def _ensure_chats_directory_exists(self, chats_directory: str) -> None:
+        """
+        Ensure the chats directory exists, creating it if necessary.
+
+        Args:
+            chats_directory: Path to the chats directory.
+
+        Issue #620.
+        """
+        dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
+        if not dir_exists:
+            await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+
+    def _build_session_chat_data(
+        self,
+        chat_data: Dict[str, Any],
+        session_id: str,
+        name: str,
+        session_messages: List[Dict[str, Any]],
+        current_time: str,
+    ) -> Dict[str, Any]:
+        """
+        Build updated chat data dictionary for session save.
+
+        Args:
+            chat_data: Existing chat data to update.
+            session_id: The session identifier.
+            name: Optional session name.
+            session_messages: Messages to include.
+            current_time: Current timestamp string.
+
+        Returns:
+            Updated chat data dictionary.
+
+        Issue #620.
+        """
+        chat_data.update(
+            {
+                "chatId": session_id,
+                "name": name or chat_data.get("name", ""),
+                "messages": session_messages,
+                "last_modified": current_time,
+                "created_time": chat_data.get("created_time", current_time),
+            }
+        )
+        return chat_data
+
     async def save_session(
         self,
         session_id: str,
@@ -410,37 +457,25 @@ class SessionMixin:
             messages: The messages to save (defaults to empty list).
             name: Optional name for the chat session.
 
-        Issue #665: Refactored to use extracted helper methods.
+        Issue #665, #620: Refactored to use extracted helper methods.
         """
         try:
             chats_directory = self._get_chats_directory()
-            dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
-            if not dir_exists:
-                await run_in_chat_io_executor(
-                    os.makedirs, chats_directory, exist_ok=True
-                )
+            await self._ensure_chats_directory_exists(chats_directory)
 
             chat_file = f"{chats_directory}/{session_id}_chat.json"
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-
             session_messages = self._prepare_session_messages(session_id, messages)
 
             chat_data = await self._load_existing_chat_data(
                 session_id, chat_file, chats_directory
             )
-            chat_data.update(
-                {
-                    "chatId": session_id,
-                    "name": name or chat_data.get("name", ""),
-                    "messages": session_messages,
-                    "last_modified": current_time,
-                    "created_time": chat_data.get("created_time", current_time),
-                }
+            chat_data = self._build_session_chat_data(
+                chat_data, session_id, name, session_messages, current_time
             )
 
             await self._write_session_to_storage(chat_file, chat_data)
             await self._update_redis_cache_on_save(session_id, chat_data)
-
             logger.info("Chat session '%s' saved successfully", session_id)
 
             if self.memory_graph_enabled and self.memory_graph:

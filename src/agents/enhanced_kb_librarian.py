@@ -1021,11 +1021,33 @@ Found {len(tools)} tools for {tool_type}:
         return "\n".join(formatted)
 
     async def store_system_documentation(self, doc_info: Dict[str, Any]):
-        """Store general system documentation and procedures"""
+        """Store general system documentation and procedures."""
         doc_type = doc_info.get("type", "general")
         doc_title = doc_info.get("title", "System Documentation")
 
-        document_content = """
+        document_content = self._build_documentation_content(
+            doc_info, doc_type, doc_title
+        )
+        metadata = self._build_documentation_metadata(doc_info, doc_type, doc_title)
+
+        await self.knowledge_base.store_fact(document_content, metadata=metadata)
+        logger.info(f"Stored system documentation: {doc_title}")
+
+    def _build_documentation_content(
+        self, doc_info: Dict[str, Any], doc_type: str, doc_title: str
+    ) -> str:
+        """
+        Build formatted documentation content from doc_info. Issue #620.
+
+        Args:
+            doc_info: Documentation information dictionary
+            doc_type: Type of documentation
+            doc_title: Title of the documentation
+
+        Returns:
+            Formatted documentation content string
+        """
+        return f"""
 SYSTEM DOCUMENTATION: {doc_title}
 ==================================================
 
@@ -1066,16 +1088,27 @@ METADATA:
 - Complexity Level: {doc_info.get('complexity', 'medium')}
 """
 
-        metadata = {
+    def _build_documentation_metadata(
+        self, doc_info: Dict[str, Any], doc_type: str, doc_title: str
+    ) -> Dict[str, str]:
+        """
+        Build metadata dictionary for documentation storage. Issue #620.
+
+        Args:
+            doc_info: Documentation information dictionary
+            doc_type: Type of documentation
+            doc_title: Title of the documentation
+
+        Returns:
+            Metadata dictionary for storage
+        """
+        return {
             "type": "system_documentation",
             "doc_type": doc_type,
             "category": doc_info.get("category", "system"),
             "title": doc_title,
             "timestamp": datetime.now().isoformat(),
         }
-
-        await self.knowledge_base.store_fact(document_content, metadata=metadata)
-        logger.info(f"Stored system documentation: {doc_title}")
 
     def _format_procedures(self, procedures: List[Dict[str, str]]) -> str:
         """Format procedure documentation"""
