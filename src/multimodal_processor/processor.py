@@ -354,13 +354,81 @@ class UnifiedMultiModalProcessor:
 
         return fused_embedding
 
+    def _extract_modality_contributions(
+        self, attention_weights: Optional[Any], modalities: List[str]
+    ) -> Dict[str, float]:
+        """Extract modality contributions from attention weights. Issue #620."""
+        if attention_weights is not None:
+            attn_scores = attention_weights.mean(dim=1).squeeze().cpu().numpy()
+            return dict(zip(modalities, attn_scores[: len(modalities)]))
+        return {m: 1.0 / len(modalities) for m in modalities}
+
+    def _build_fusion_result(
+        self,
+        fused_embedding: torch.Tensor,
+        fusion_confidence: float,
+        modality_contributions: Dict[str, float],
+        modalities: List[str],
+        embeddings: List[torch.Tensor],
+        results: List[ProcessingResult],
+        result_data: List[Any],
+    ) -> Dict[str, Any]:
+        """Build the final fusion result dictionary. Issue #620."""
+        return {
+            "fusion_type": "attention_based",
+            "fused_embedding": fused_embedding.cpu().numpy().tolist(),
+            "fusion_confidence": fusion_confidence,
+            "modality_contributions": modality_contributions,
+            "modalities_fused": modalities,
+            "success_count": len(embeddings),
+            "total_count": len(results),
+            "individual_results": result_data,
+        }
+
+    def _perform_attention_fusion(
+        self,
+        embeddings: List[torch.Tensor],
+        modalities: List[str],
+        confidences: List[float],
+        result_data: List[Any],
+        results: List[ProcessingResult],
+    ) -> Dict[str, Any]:
+        """Perform attention-based fusion on embeddings. Issue #620."""
+        with torch.no_grad():
+            normalized_embeddings = self._normalize_embeddings(embeddings)
+            stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(0)
+            attended_output, attention_weights = self._apply_attention_fusion(
+                stacked_embeddings
+            )
+
+            confidence_weights = torch.tensor(
+                confidences, device=self.device
+            ).unsqueeze(-1)
+            weighted_embeddings = attended_output.squeeze(0) * confidence_weights
+            fused_embedding = self._compute_fused_embedding(weighted_embeddings)
+            fusion_confidence = torch.mean(confidence_weights).item()
+            modality_contributions = self._extract_modality_contributions(
+                attention_weights, modalities
+            )
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        return self._build_fusion_result(
+            fused_embedding,
+            fusion_confidence,
+            modality_contributions,
+            modalities,
+            embeddings,
+            results,
+            result_data,
+        )
+
     def _combine_results(self, results: List[ProcessingResult]) -> Dict[str, Any]:
         """Combine results from multiple processors with attention-based fusion."""
-        # Guard clause: Check if we have fusion components (Issue #315 - early return)
         if self.fusion_network is None or self.attention_layer is None:
             return self._simple_combination(results)
 
-        # Extract embeddings and metadata (Issue #315 - extracted method)
         (
             embeddings,
             modalities,
@@ -368,61 +436,13 @@ class UnifiedMultiModalProcessor:
             result_data,
         ) = self._collect_embeddings_from_results(results)
 
-        # Guard clause: Not enough embeddings for fusion (Issue #315 - early return)
         if len(embeddings) < 2:
             return self._simple_combination(results)
 
         try:
-            with torch.no_grad():
-                # Normalize embeddings to target dimension (Issue #315 - extracted method)
-                normalized_embeddings = self._normalize_embeddings(embeddings)
-
-                # Stack embeddings for attention [num_modalities, 512]
-                stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(0)
-
-                # Apply multi-head attention (Issue #315 - extracted method)
-                attended_output, attention_weights = self._apply_attention_fusion(
-                    stacked_embeddings
-                )
-
-                # Confidence-weighted fusion
-                confidence_weights = torch.tensor(
-                    confidences, device=self.device
-                ).unsqueeze(-1)
-                weighted_embeddings = attended_output.squeeze(0) * confidence_weights
-
-                # Compute final fused embedding (Issue #315 - extracted method)
-                fused_embedding = self._compute_fused_embedding(weighted_embeddings)
-
-                # Calculate fusion confidence
-                fusion_confidence = torch.mean(confidence_weights).item()
-
-                # Extract attention weights for each modality
-                if attention_weights is not None:
-                    attn_scores = attention_weights.mean(dim=1).squeeze().cpu().numpy()
-                    modality_contributions = dict(
-                        zip(modalities, attn_scores[: len(modalities)])
-                    )
-                else:
-                    modality_contributions = {
-                        m: 1.0 / len(modalities) for m in modalities
-                    }
-
-            # Clear GPU cache
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            return {
-                "fusion_type": "attention_based",
-                "fused_embedding": fused_embedding.cpu().numpy().tolist(),
-                "fusion_confidence": fusion_confidence,
-                "modality_contributions": modality_contributions,
-                "modalities_fused": modalities,
-                "success_count": len(embeddings),
-                "total_count": len(results),
-                "individual_results": result_data,
-            }
-
+            return self._perform_attention_fusion(
+                embeddings, modalities, confidences, result_data, results
+            )
         except Exception as e:
             self.logger.error("Attention fusion failed: %s", e)
             return self._simple_combination(results)

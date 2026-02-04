@@ -323,6 +323,40 @@ class SecurityWorkflowManager:
         """Generate Redis key for an assessment."""
         return f"{self.REDIS_KEY_PREFIX}:{assessment_id}"
 
+    async def _create_assessment_memory_entity(
+        self,
+        assessment_id: str,
+        name: str,
+        target: str,
+        scope: list[str],
+        training_mode: bool,
+        metadata: Optional[dict[str, Any]],
+    ) -> None:
+        """
+        Create Memory MCP entity for assessment. Issue #620.
+
+        Args:
+            assessment_id: Assessment UUID
+            name: Assessment name
+            target: Primary target
+            scope: List of in-scope targets
+            training_mode: Whether training mode is enabled
+            metadata: Additional metadata
+        """
+        try:
+            memory = await _get_memory_integration()
+            if memory:
+                await memory.create_assessment_entity(
+                    assessment_id=assessment_id,
+                    name=name,
+                    target=target,
+                    scope=scope,
+                    training_mode=training_mode,
+                    metadata=metadata,
+                )
+        except Exception as e:
+            logger.warning("Failed to create assessment entity in Memory MCP: %s", e)
+
     async def create_assessment(
         self,
         name: str,
@@ -332,7 +366,7 @@ class SecurityWorkflowManager:
         metadata: Optional[dict[str, Any]] = None,
     ) -> SecurityAssessment:
         """
-        Create a new security assessment.
+        Create a new security assessment. Issue #620.
 
         Args:
             name: Human-readable assessment name
@@ -346,29 +380,23 @@ class SecurityWorkflowManager:
         """
         assessment_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        effective_scope = scope or [target]
 
         assessment = SecurityAssessment(
             id=assessment_id,
             name=name,
             target=target,
-            scope=scope or [target],
+            scope=effective_scope,
             phase=AssessmentPhase.INIT,
             training_mode=training_mode,
             created_at=now,
             updated_at=now,
             phase_history=[
-                {
-                    "phase": "INIT",
-                    "timestamp": now,
-                    "action": "Assessment created",
-                }
+                {"phase": "INIT", "timestamp": now, "action": "Assessment created"}
             ],
             metadata=metadata or {},
         )
-
-        # Persist to Redis
         await self._save_assessment(assessment)
-
         logger.info(
             "Created security assessment: id=%s, name=%s, target=%s, training_mode=%s",
             assessment_id,
@@ -376,22 +404,9 @@ class SecurityWorkflowManager:
             target,
             training_mode,
         )
-
-        # Create Memory MCP entity for the assessment
-        try:
-            memory = await _get_memory_integration()
-            if memory:
-                await memory.create_assessment_entity(
-                    assessment_id=assessment_id,
-                    name=name,
-                    target=target,
-                    scope=scope or [target],
-                    training_mode=training_mode,
-                    metadata=metadata,
-                )
-        except Exception as e:
-            logger.warning("Failed to create assessment entity in Memory MCP: %s", e)
-
+        await self._create_assessment_memory_entity(
+            assessment_id, name, target, effective_scope, training_mode, metadata
+        )
         return assessment
 
     async def _save_assessment(self, assessment: SecurityAssessment) -> None:
@@ -891,6 +906,27 @@ class SecurityWorkflowManager:
             "metadata": metadata or {},
         }
 
+    def _add_vulnerability_to_host(
+        self,
+        assessment: SecurityAssessment,
+        host: TargetHost,
+        host_ip: str,
+        vuln: dict[str, Any],
+    ) -> None:
+        """
+        Add vulnerability to host and update assessment findings. Issue #620.
+
+        Args:
+            assessment: The security assessment
+            host: Target host to add vulnerability to
+            host_ip: Host IP address
+            vuln: Vulnerability record dictionary
+        """
+        host.vulnerabilities.append(vuln)
+        assessment.findings.append(
+            {"type": "vulnerability", "host": host_ip, "data": vuln}
+        )
+
     async def add_vulnerability(
         self,
         assessment_id: str,
@@ -905,7 +941,7 @@ class SecurityWorkflowManager:
         metadata: Optional[dict[str, Any]] = None,
     ) -> Optional[SecurityAssessment]:
         """
-        Add a discovered vulnerability. Issue #620: Refactored with extracted helpers.
+        Add a discovered vulnerability. Issue #620.
 
         Args:
             assessment_id: Assessment UUID
@@ -937,11 +973,7 @@ class SecurityWorkflowManager:
             references,
             metadata,
         )
-        host.vulnerabilities.append(vuln)
-        assessment.findings.append(
-            {"type": "vulnerability", "host": host_ip, "data": vuln}
-        )
-
+        self._add_vulnerability_to_host(assessment, host, host_ip, vuln)
         await self._save_assessment(assessment)
         logger.info(
             "Added vulnerability %s to %s in assessment %s",
@@ -949,7 +981,6 @@ class SecurityWorkflowManager:
             host_ip,
             assessment_id,
         )
-
         await self._create_vulnerability_memory_entity(
             assessment_id,
             host_ip,

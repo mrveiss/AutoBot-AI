@@ -133,20 +133,21 @@ class ConversationFlowAnalyzer:
 
         return parsed_msg, intent, error_inc, clarification_inc, satisfaction_signal
 
-    def parse_conversation(
+    def _aggregate_message_metrics(
         self,
         messages: List[Dict[str, Any]],
-        session_id: str = "unknown",
-    ) -> ConversationFlow:
+    ) -> Tuple[
+        List[ConversationMessage], List[IntentCategory], float, int, int, List[str]
+    ]:
         """
-        Parse a raw conversation into a ConversationFlow.
+        Parse messages and aggregate metrics. Issue #620.
 
         Args:
-            messages: List of message dicts with 'role' and 'content'
-            session_id: Session identifier
+            messages: List of raw message dicts
 
         Returns:
-            Parsed ConversationFlow
+            Tuple of (parsed_messages, intent_sequence, total_latency,
+                     error_count, clarification_count, satisfaction_signals)
         """
         parsed_messages: List[ConversationMessage] = []
         intent_sequence: List[IntentCategory] = []
@@ -155,7 +156,6 @@ class ConversationFlowAnalyzer:
         clarification_count = 0
         user_satisfaction_signals: List[str] = []
 
-        # Issue #281: Use extracted helper for message parsing
         for msg in messages:
             (
                 parsed_msg,
@@ -166,7 +166,6 @@ class ConversationFlowAnalyzer:
             ) = self._parse_single_message(msg)
             parsed_messages.append(parsed_msg)
             total_latency += parsed_msg.latency_ms or 0.0
-
             if intent:
                 intent_sequence.append(intent)
             error_count += err_inc
@@ -174,20 +173,66 @@ class ConversationFlowAnalyzer:
             if sat_signal:
                 user_satisfaction_signals.append(sat_signal)
 
-        # Determine final state
+        return (
+            parsed_messages,
+            intent_sequence,
+            total_latency,
+            error_count,
+            clarification_count,
+            user_satisfaction_signals,
+        )
+
+    def _calculate_success(
+        self, final_state: FlowState, error_count: int, clarification_count: int
+    ) -> bool:
+        """
+        Calculate if conversation was successful. Issue #620.
+
+        Args:
+            final_state: Final flow state
+            error_count: Number of errors
+            clarification_count: Number of clarifications
+
+        Returns:
+            True if conversation was successful
+        """
+        if final_state not in (FlowState.COMPLETED, FlowState.INITIATED):
+            return False
+        if error_count > 2 or clarification_count > self.clarification_threshold:
+            return False
+        return True
+
+    def parse_conversation(
+        self,
+        messages: List[Dict[str, Any]],
+        session_id: str = "unknown",
+    ) -> ConversationFlow:
+        """
+        Parse a raw conversation into a ConversationFlow. Issue #620.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            session_id: Session identifier
+
+        Returns:
+            Parsed ConversationFlow
+        """
+        (
+            parsed_messages,
+            intent_sequence,
+            total_latency,
+            error_count,
+            clarification_count,
+            user_satisfaction_signals,
+        ) = self._aggregate_message_metrics(messages)
+
         final_state = self._determine_final_state(
             parsed_messages, error_count, clarification_count
         )
-
-        # Determine primary intent
         primary_intent = self._determine_primary_intent(intent_sequence)
-
-        # Calculate success
-        successful = final_state in (FlowState.COMPLETED, FlowState.INITIATED)
-        if error_count > 2 or clarification_count > self.clarification_threshold:
-            successful = False
-
-        # Get timestamps
+        successful = self._calculate_success(
+            final_state, error_count, clarification_count
+        )
         start_time = parsed_messages[0].timestamp if parsed_messages else None
         end_time = parsed_messages[-1].timestamp if parsed_messages else None
 
@@ -579,48 +624,71 @@ class ConversationFlowAnalyzer:
 
         return bottlenecks
 
-    def _generate_optimizations(
-        self, patterns: List[FlowPattern], bottlenecks: List[Bottleneck]
+    def _create_caching_optimization(
+        self, patterns: List[FlowPattern]
+    ) -> Optional[Optimization]:
+        """
+        Create caching optimization from frequent patterns. Issue #620.
+
+        Args:
+            patterns: List of flow patterns to analyze
+
+        Returns:
+            Optimization if frequent patterns exist, None otherwise
+        """
+        frequent = [p for p in patterns if p.occurrence_count >= 5]
+        if not frequent:
+            return None
+        return Optimization(
+            optimization_type=OptimizationType.CACHING,
+            description="Cache responses for frequently occurring conversation patterns",
+            impact="high",
+            effort="medium",
+            affected_patterns=[p.pattern_id for p in frequent],
+            implementation_notes="Implement response caching for common intents",
+            estimated_improvement="20-30% latency reduction",
+        )
+
+    def _create_prompt_optimization(
+        self, patterns: List[FlowPattern]
+    ) -> Optional[Optimization]:
+        """
+        Create prompt improvement optimization from low success patterns. Issue #620.
+
+        Args:
+            patterns: List of flow patterns to analyze
+
+        Returns:
+            Optimization if low success patterns exist, None otherwise
+        """
+        low_success = [p for p in patterns if p.success_rate < 0.5]
+        if not low_success:
+            return None
+        return Optimization(
+            optimization_type=OptimizationType.PROMPT_IMPROVEMENT,
+            description="Improve prompts for low-success conversation patterns",
+            impact="high",
+            effort="medium",
+            affected_patterns=[p.pattern_id for p in low_success],
+            implementation_notes="Review and enhance system prompts",
+            estimated_improvement="30-50% success rate increase",
+        )
+
+    def _create_bottleneck_optimizations(
+        self, bottlenecks: List[Bottleneck]
     ) -> List[Optimization]:
-        """Generate optimization suggestions."""
-        optimizations: List[Optimization] = []
+        """
+        Create optimizations from detected bottlenecks. Issue #620.
 
-        # Caching opportunity from frequent patterns
-        frequent_patterns = [p for p in patterns if p.occurrence_count >= 5]
-        if frequent_patterns:
-            optimizations.append(
-                Optimization(
-                    optimization_type=OptimizationType.CACHING,
-                    description="Cache responses for frequently occurring conversation patterns",
-                    impact="high",
-                    effort="medium",
-                    affected_patterns=[p.pattern_id for p in frequent_patterns],
-                    implementation_notes="Implement response caching for common intents",
-                    estimated_improvement="20-30% latency reduction",
-                )
-            )
+        Args:
+            bottlenecks: List of detected bottlenecks
 
-        # Prompt improvement from low success patterns
-        low_success_patterns = [p for p in patterns if p.success_rate < 0.5]
-        if low_success_patterns:
-            optimizations.append(
-                Optimization(
-                    optimization_type=OptimizationType.PROMPT_IMPROVEMENT,
-                    description="Improve prompts for low-success conversation patterns",
-                    impact="high",
-                    effort="medium",
-                    affected_patterns=[p.pattern_id for p in low_success_patterns],
-                    implementation_notes="Review and enhance system prompts",
-                    estimated_improvement="30-50% success rate increase",
-                )
-            )
-
-        # Error handling from bottlenecks
-        error_bottlenecks = [
-            b for b in bottlenecks if b.bottleneck_type == BottleneckType.ERROR_LOOP
-        ]
-        if error_bottlenecks:
-            optimizations.append(
+        Returns:
+            List of optimizations addressing bottlenecks
+        """
+        result: List[Optimization] = []
+        if any(b.bottleneck_type == BottleneckType.ERROR_LOOP for b in bottlenecks):
+            result.append(
                 Optimization(
                     optimization_type=OptimizationType.ERROR_HANDLING,
                     description="Implement robust error recovery mechanisms",
@@ -631,15 +699,11 @@ class ConversationFlowAnalyzer:
                     estimated_improvement="50% reduction in error loops",
                 )
             )
-
-        # Intent classification improvement
-        clarification_bottlenecks = [
-            b
+        if any(
+            b.bottleneck_type == BottleneckType.REPEATED_CLARIFICATION
             for b in bottlenecks
-            if b.bottleneck_type == BottleneckType.REPEATED_CLARIFICATION
-        ]
-        if clarification_bottlenecks:
-            optimizations.append(
+        ):
+            result.append(
                 Optimization(
                     optimization_type=OptimizationType.INTENT_CLASSIFICATION,
                     description="Enhance intent classification accuracy",
@@ -650,7 +714,29 @@ class ConversationFlowAnalyzer:
                     estimated_improvement="40% reduction in clarifications",
                 )
             )
+        return result
 
+    def _generate_optimizations(
+        self, patterns: List[FlowPattern], bottlenecks: List[Bottleneck]
+    ) -> List[Optimization]:
+        """
+        Generate optimization suggestions. Issue #620.
+
+        Args:
+            patterns: Detected flow patterns
+            bottlenecks: Detected bottlenecks
+
+        Returns:
+            List of optimization suggestions
+        """
+        optimizations: List[Optimization] = []
+        caching_opt = self._create_caching_optimization(patterns)
+        if caching_opt:
+            optimizations.append(caching_opt)
+        prompt_opt = self._create_prompt_optimization(patterns)
+        if prompt_opt:
+            optimizations.append(prompt_opt)
+        optimizations.extend(self._create_bottleneck_optimizations(bottlenecks))
         return optimizations
 
     def _find_common_paths(self) -> List[List[IntentCategory]]:

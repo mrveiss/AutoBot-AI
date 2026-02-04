@@ -194,6 +194,67 @@ def create_performance_optimization_template() -> WorkflowTemplate:
     )
 
 
+def _create_backup_and_recovery_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for backup and recovery template.
+
+    Returns a list of WorkflowStep objects defining the backup and recovery
+    workflow from data assessment through implementation, testing, and
+    procedure documentation. Issue #620.
+    """
+    return [
+        WorkflowStep(
+            id="assess_data",
+            agent_type="system_commands",
+            action="Assess critical data and system components",
+            description="System_Commands: Data Assessment",
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="backup_research",
+            agent_type="research",
+            action="Research backup solutions and best practices",
+            description="Research: Backup Solutions",
+            dependencies=["assess_data"],
+            expected_duration_ms=25000,
+        ),
+        WorkflowStep(
+            id="backup_strategy",
+            agent_type="orchestrator",
+            action="Design comprehensive backup strategy",
+            description="Orchestrator: Backup Strategy (requires your approval)",
+            requires_approval=True,
+            dependencies=["backup_research"],
+            expected_duration_ms=15000,
+        ),
+        WorkflowStep(
+            id="implement_backup",
+            agent_type="system_commands",
+            action="Implement backup solution and schedule",
+            description="System_Commands: Backup Implementation (requires your approval)",
+            requires_approval=True,
+            dependencies=["backup_strategy"],
+            expected_duration_ms=40000,
+        ),
+        WorkflowStep(
+            id="test_recovery",
+            agent_type="system_commands",
+            action="Test backup and recovery procedures",
+            description="System_Commands: Recovery Testing",
+            dependencies=["implement_backup"],
+            expected_duration_ms=30000,
+        ),
+        WorkflowStep(
+            id="document_procedures",
+            agent_type="knowledge_manager",
+            action="Document backup and recovery procedures",
+            description="Knowledge_Manager: Document Procedures",
+            dependencies=["test_recovery"],
+            expected_duration_ms=10000,
+        ),
+    ]
+
+
 def create_backup_and_recovery_template() -> WorkflowTemplate:
     """Create backup and recovery workflow template."""
     return WorkflowTemplate(
@@ -214,57 +275,7 @@ def create_backup_and_recovery_template() -> WorkflowTemplate:
             "backup_scope": "Scope of backup (files, databases, full system)",
             "recovery_requirements": "Recovery time and point objectives",
         },
-        steps=[
-            WorkflowStep(
-                id="assess_data",
-                agent_type="system_commands",
-                action="Assess critical data and system components",
-                description="System_Commands: Data Assessment",
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="backup_research",
-                agent_type="research",
-                action="Research backup solutions and best practices",
-                description="Research: Backup Solutions",
-                dependencies=["assess_data"],
-                expected_duration_ms=25000,
-            ),
-            WorkflowStep(
-                id="backup_strategy",
-                agent_type="orchestrator",
-                action="Design comprehensive backup strategy",
-                description="Orchestrator: Backup Strategy (requires your approval)",
-                requires_approval=True,
-                dependencies=["backup_research"],
-                expected_duration_ms=15000,
-            ),
-            WorkflowStep(
-                id="implement_backup",
-                agent_type="system_commands",
-                action="Implement backup solution and schedule",
-                description="System_Commands: Backup Implementation (requires your approval)",
-                requires_approval=True,
-                dependencies=["backup_strategy"],
-                expected_duration_ms=40000,
-            ),
-            WorkflowStep(
-                id="test_recovery",
-                agent_type="system_commands",
-                action="Test backup and recovery procedures",
-                description="System_Commands: Recovery Testing",
-                dependencies=["implement_backup"],
-                expected_duration_ms=30000,
-            ),
-            WorkflowStep(
-                id="document_procedures",
-                agent_type="knowledge_manager",
-                action="Document backup and recovery procedures",
-                description="Knowledge_Manager: Document Procedures",
-                dependencies=["test_recovery"],
-                expected_duration_ms=10000,
-            ),
-        ],
+        steps=_create_backup_and_recovery_steps(),
     )
 
 

@@ -13,9 +13,9 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.config import config
 from src.knowledge_base import KnowledgeBase
 from src.llm_interface import LLMInterface
-from src.config import config
 from src.utils.http_client import get_http_client
 
 from ..utils.service_registry import get_service_url
@@ -73,7 +73,9 @@ class ContainerizedLibrarianAssistant:
     async def _check_playwright_service(self) -> bool:
         """Check if Playwright service is available."""
         try:
-            async with await self.http_client.get(f"{self.playwright_service_url}/health") as response:
+            async with await self.http_client.get(
+                f"{self.playwright_service_url}/health"
+            ) as response:
                 if response.status == 200:
                     logger.info("Playwright service is healthy")
                     return True
@@ -156,7 +158,9 @@ class ContainerizedLibrarianAssistant:
                 f"{self.playwright_service_url}/extract", json=payload
             ) as response:
                 if response.status != 200:
-                    logger.error("Content extraction failed: status %s", response.status)
+                    logger.error(
+                        "Content extraction failed: status %s", response.status
+                    )
                     return None
 
                 result = await response.json()
@@ -326,7 +330,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 )
                 return True
             else:
-                logger.error("Failed to store content from %s", content_data.get('url'))
+                logger.error("Failed to store content from %s", content_data.get("url"))
                 return False
 
         except Exception as e:
@@ -359,11 +363,13 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         if self._should_store_content(assessment, store_quality_content):
             stored = await self.store_in_knowledge_base(content, assessment)
             if stored:
-                stored_list.append({
-                    "url": content["url"],
-                    "title": content["title"],
-                    "quality_score": assessment.get("score", 0),
-                })
+                stored_list.append(
+                    {
+                        "url": content["url"],
+                        "title": content["title"],
+                        "quality_score": assessment.get("score", 0),
+                    }
+                )
         return content
 
     def _build_source_entry(self, content: Dict[str, Any]) -> Dict[str, Any]:
@@ -376,10 +382,57 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
             "quality_score": content.get("quality_assessment", {}).get("score", 0),
         }
 
+    def _create_empty_research_results(self, query: str) -> Dict[str, Any]:
+        """
+        Create empty research results structure. Issue #620.
+
+        Args:
+            query: The research query
+
+        Returns:
+            Empty research results dictionary
+        """
+        return {
+            "query": query,
+            "timestamp": datetime.now().isoformat(),
+            "search_results": [],
+            "content_extracted": [],
+            "stored_in_kb": [],
+            "summary": "",
+            "sources": [],
+        }
+
+    async def _extract_and_process_results(
+        self,
+        search_results: List[Dict[str, Any]],
+        store_quality_content: bool,
+        stored_list: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract and process top search results. Issue #620.
+
+        Args:
+            search_results: List of search results
+            store_quality_content: Whether to store quality content
+            stored_list: List to append stored items to
+
+        Returns:
+            List of extracted content
+        """
+        extracted = []
+        for result in search_results[:3]:
+            content = await self._process_single_search_result(
+                result, store_quality_content, stored_list
+            )
+            if content:
+                extracted.append(content)
+        return extracted
+
     async def research_query(
         self, query: str, store_quality_content: bool = None
     ) -> Dict[str, Any]:
-        """Research a query by searching the web and extracting content.
+        """
+        Research a query by searching the web and extracting content. Issue #620.
 
         Args:
             query: Research query
@@ -397,15 +450,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         if store_quality_content is None:
             store_quality_content = self.auto_store_quality
 
-        research_results = {
-            "query": query,
-            "timestamp": datetime.now().isoformat(),
-            "search_results": [],
-            "content_extracted": [],
-            "stored_in_kb": [],
-            "summary": "",
-            "sources": [],
-        }
+        research_results = self._create_empty_research_results(query)
 
         try:
             if not await self._check_playwright_service():
@@ -420,15 +465,9 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 research_results["summary"] = "No search results found for the query."
                 return research_results
 
-            # Extract content from top 3 results
-            extracted_content = []
-            for result in search_results[:3]:
-                content = await self._process_single_search_result(
-                    result, store_quality_content, research_results["stored_in_kb"]
-                )
-                if content:
-                    extracted_content.append(content)
-
+            extracted_content = await self._extract_and_process_results(
+                search_results, store_quality_content, research_results["stored_in_kb"]
+            )
             research_results["content_extracted"] = extracted_content
 
             if extracted_content:
@@ -440,10 +479,10 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 ]
 
             logger.info(
-                f"Research completed: {len(extracted_content)} sources analyzed, "
-                f"{len(research_results['stored_in_kb'])} stored in KB"
+                "Research completed: %d sources analyzed, %d stored in KB",
+                len(extracted_content),
+                len(research_results["stored_in_kb"]),
             )
-
         except Exception as e:
             logger.error("Error during research: %s", e)
             research_results["error"] = str(e)

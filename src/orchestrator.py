@@ -463,6 +463,30 @@ class ConsolidatedOrchestrator:
         logger.info("  Tasks failed: %s", self.metrics["tasks_failed"])
         logger.info("✅ Orchestrator shutdown complete")
 
+    def _start_request_tracking(
+        self,
+        task_id: str,
+        user_message: str,
+        priority: TaskPriority,
+        context: Optional[Dict[str, Any]],
+    ) -> None:
+        """Start task tracking for user request. Issue #620."""
+        task_tracker.start_task(
+            task_id=task_id,
+            task_type=TaskType.USER_REQUEST,
+            description=user_message[:200],
+            priority=Priority(priority.value),
+            context=context or {},
+        )
+
+    def _update_success_metrics(self, processing_time: float) -> None:
+        """Update metrics after successful request processing. Issue #620."""
+        self.metrics["tasks_completed"] += 1
+        self.metrics["total_processing_time"] += processing_time
+        self.metrics["average_response_time"] = (
+            self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
+        )
+
     async def process_user_request(
         self,
         user_message: str,
@@ -471,30 +495,16 @@ class ConsolidatedOrchestrator:
         priority: TaskPriority = TaskPriority.NORMAL,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Process user request with enhanced orchestration.
-
-        Issue #281: Refactored to use extracted helpers.
-        """
+        """Process user request with enhanced orchestration. Issue #281, #620."""
         start_time = time.time()
         task_id = str(uuid.uuid4())
-
         logger.info("Processing user request %s: %s...", task_id, user_message[:100])
 
         try:
-            # Track task
-            task_tracker.start_task(
-                task_id=task_id,
-                task_type=TaskType.USER_REQUEST,
-                description=user_message[:200],
-                priority=Priority(priority.value),
-                context=context or {},
-            )
-
-            # Classify and select model (Issue #281 - uses helpers)
+            self._start_request_tracking(task_id, user_message, priority, context)
             classification_result = await self._classify_task(user_message)
             target_llm_model = self._select_model_for_task(classification_result)
 
-            # Execute based on mode (Issue #281 - uses helper)
             result = await self._execute_mode_request(
                 mode,
                 user_message,
@@ -504,15 +514,8 @@ class ConsolidatedOrchestrator:
                 context,
             )
 
-            # Update metrics
             processing_time = time.time() - start_time
-            self.metrics["tasks_completed"] += 1
-            self.metrics["total_processing_time"] += processing_time
-            self.metrics["average_response_time"] = (
-                self.metrics["total_processing_time"] / self.metrics["tasks_completed"]
-            )
-
-            # Complete task tracking
+            self._update_success_metrics(processing_time)
             task_tracker.complete_task(task_id, result)
             logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
 
@@ -526,14 +529,12 @@ class ConsolidatedOrchestrator:
             )
 
         except Exception as e:
-            # Update failure metrics
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
             task_tracker.fail_task(task_id, str(e))
             logger.error(
                 "❌ Request %s failed after %.2fs: %s", task_id, processing_time, e
             )
-
             return self._build_failure_response(task_id, e, processing_time, mode)
 
     async def _classify_task(self, user_message: str) -> Optional[Any]:
