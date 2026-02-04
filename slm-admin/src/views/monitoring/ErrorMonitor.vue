@@ -6,102 +6,130 @@
 /**
  * ErrorMonitor - Error tracking and analysis dashboard
  *
- * Displays error rates, error details, and trends across all services.
+ * Issue #563: Displays error rates, error details, and trends across all services.
+ * Integrates with /api/errors/* endpoints for comprehensive error monitoring.
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
+import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ErrorMonitor')
+const api = useSlmApi()
 
 interface ErrorEntry {
-  id: string
-  timestamp: string
-  service: string
-  type: string
+  event_id: string
+  node_id: string
+  hostname: string
+  event_type: string
+  severity: string
   message: string
-  stack?: string
-  count: number
-  lastOccurred: string
-  status: 'active' | 'resolved' | 'ignored'
+  timestamp: string
+  resolved: boolean
+  resolved_at: string | null
+  resolved_by: string | null
 }
 
 interface ErrorStats {
-  total: number
-  last24h: number
-  lastHour: number
-  byService: Record<string, number>
-  byType: Record<string, number>
+  total_errors: number
+  errors_24h: number
+  errors_7d: number
+  resolved_count: number
+  unresolved_count: number
+  error_rate_per_hour: number
+  trend: string
 }
 
-const backendUrl = getBackendUrl()
+interface CategoryBreakdown {
+  category: string
+  count: number
+  percentage: number
+}
+
+interface ComponentBreakdown {
+  node_id: string
+  hostname: string
+  count: number
+  percentage: number
+}
 
 // State
 const errors = ref<ErrorEntry[]>([])
 const stats = ref<ErrorStats>({
-  total: 0,
-  last24h: 0,
-  lastHour: 0,
-  byService: {},
-  byType: {},
+  total_errors: 0,
+  errors_24h: 0,
+  errors_7d: 0,
+  resolved_count: 0,
+  unresolved_count: 0,
+  error_rate_per_hour: 0,
+  trend: 'stable',
 })
+const categories = ref<CategoryBreakdown[]>([])
+const components = ref<ComponentBreakdown[]>([])
 const isLoading = ref(false)
 const selectedError = ref<ErrorEntry | null>(null)
-const filterService = ref<string>('all')
-const filterStatus = ref<string>('all')
+const filterSeverity = ref<string>('all')
+const filterResolved = ref<string>('all')
 const searchQuery = ref('')
+const currentPage = ref(1)
+const totalErrors = ref(0)
+const perPage = 20
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
 
-// Services from errors
-const services = computed(() => {
-  const svcSet = new Set(errors.value.map(e => e.service))
-  return ['all', ...Array.from(svcSet).sort()]
-})
-
-// Filtered errors
+// Filtered errors (client-side search only, API handles severity/resolved)
 const filteredErrors = computed(() => {
-  return errors.value.filter(error => {
-    if (filterService.value !== 'all' && error.service !== filterService.value) return false
-    if (filterStatus.value !== 'all' && error.status !== filterStatus.value) return false
-    if (searchQuery.value) {
-      const query = searchQuery.value.toLowerCase()
-      return (
-        error.message.toLowerCase().includes(query) ||
-        error.type.toLowerCase().includes(query) ||
-        error.service.toLowerCase().includes(query)
-      )
-    }
-    return true
-  })
+  if (!searchQuery.value) return errors.value
+  const query = searchQuery.value.toLowerCase()
+  return errors.value.filter(
+    (error) =>
+      error.message.toLowerCase().includes(query) ||
+      error.event_type.toLowerCase().includes(query) ||
+      error.hostname.toLowerCase().includes(query)
+  )
 })
 
-// Top errors by count
+// Top errors by unresolved status
 const topErrors = computed(() => {
-  return [...errors.value]
-    .filter(e => e.status === 'active')
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5)
+  return [...errors.value].filter((e) => !e.resolved).slice(0, 5)
 })
 
-function getStatusClass(status: string): string {
-  switch (status) {
-    case 'active': return 'bg-red-100 text-red-700'
-    case 'resolved': return 'bg-green-100 text-green-700'
-    case 'ignored': return 'bg-gray-100 text-gray-600'
-    default: return 'bg-gray-100 text-gray-600'
+function getStatusClass(resolved: boolean): string {
+  return resolved ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+}
+
+function getSeverityColor(severity: string): string {
+  switch (severity.toLowerCase()) {
+    case 'critical':
+      return 'text-red-600'
+    case 'error':
+      return 'text-orange-600'
+    case 'warning':
+      return 'text-yellow-600'
+    default:
+      return 'text-gray-600'
   }
 }
 
-function getTypeColor(type: string): string {
-  switch (type.toLowerCase()) {
-    case 'exception':
-    case 'error': return 'text-red-600'
-    case 'timeout': return 'text-orange-600'
-    case 'validation': return 'text-yellow-600'
-    case 'network': return 'text-blue-600'
-    default: return 'text-gray-600'
+function getTrendIcon(trend: string): string {
+  switch (trend) {
+    case 'increasing':
+      return '↑'
+    case 'decreasing':
+      return '↓'
+    default:
+      return '→'
+  }
+}
+
+function getTrendColor(trend: string): string {
+  switch (trend) {
+    case 'increasing':
+      return 'text-red-600'
+    case 'decreasing':
+      return 'text-green-600'
+    default:
+      return 'text-gray-600'
   }
 }
 
@@ -129,74 +157,40 @@ function formatRelativeTime(ts: string): string {
   return `${diffDays}d ago`
 }
 
-async function fetchErrors() {
+async function fetchData() {
   isLoading.value = true
   try {
-    const response = await fetch(`${backendUrl}/monitoring/errors`)
-    if (response.ok) {
-      const data = await response.json()
-      errors.value = data.errors ?? []
-      stats.value = data.stats ?? stats.value
-    } else {
-      // Generate mock data
-      generateMockData()
-    }
+    // Build filter options
+    const resolvedFilter =
+      filterResolved.value === 'all'
+        ? undefined
+        : filterResolved.value === 'resolved'
+    const severityFilter =
+      filterSeverity.value === 'all' ? undefined : filterSeverity.value
+
+    // Fetch all data in parallel
+    const [statsData, errorsData, categoriesData, componentsData] =
+      await Promise.all([
+        api.getErrorStatistics(),
+        api.getRecentErrors({
+          page: currentPage.value,
+          per_page: perPage,
+          severity: severityFilter,
+          resolved: resolvedFilter,
+        }),
+        api.getErrorCategories(24),
+        api.getErrorComponents(24),
+      ])
+
+    stats.value = statsData
+    errors.value = errorsData.errors
+    totalErrors.value = errorsData.total
+    categories.value = categoriesData.categories
+    components.value = componentsData.components
   } catch (err) {
-    logger.error('Failed to fetch errors:', err)
-    generateMockData()
+    logger.error('Failed to fetch error data:', err)
   } finally {
     isLoading.value = false
-  }
-}
-
-function generateMockData() {
-  const errorTypes = ['Exception', 'Timeout', 'Validation', 'Network', 'Database']
-  const serviceList = ['slm-backend', 'fleet-manager', 'agent-worker', 'api-gateway', 'redis-cache']
-  const messages = [
-    'Connection refused to database',
-    'Request timeout after 30s',
-    'Invalid input validation failed',
-    'Memory allocation failed',
-    'Authentication token expired',
-    'Rate limit exceeded',
-    'File not found',
-    'Permission denied',
-  ]
-
-  const mockErrors: ErrorEntry[] = []
-  const now = Date.now()
-
-  for (let i = 0; i < 20; i++) {
-    const timestamp = new Date(now - Math.random() * 86400000 * 7).toISOString()
-    mockErrors.push({
-      id: `err-${i}`,
-      timestamp,
-      service: serviceList[Math.floor(Math.random() * serviceList.length)],
-      type: errorTypes[Math.floor(Math.random() * errorTypes.length)],
-      message: messages[Math.floor(Math.random() * messages.length)],
-      count: Math.floor(Math.random() * 100) + 1,
-      lastOccurred: new Date(now - Math.random() * 3600000).toISOString(),
-      status: Math.random() > 0.7 ? 'resolved' : Math.random() > 0.9 ? 'ignored' : 'active',
-    })
-  }
-
-  errors.value = mockErrors
-
-  // Calculate stats
-  const now24h = now - 86400000
-  const nowHour = now - 3600000
-  stats.value = {
-    total: mockErrors.length,
-    last24h: mockErrors.filter(e => new Date(e.timestamp).getTime() > now24h).length,
-    lastHour: mockErrors.filter(e => new Date(e.timestamp).getTime() > nowHour).length,
-    byService: mockErrors.reduce((acc, e) => {
-      acc[e.service] = (acc[e.service] || 0) + 1
-      return acc
-    }, {} as Record<string, number>),
-    byType: mockErrors.reduce((acc, e) => {
-      acc[e.type] = (acc[e.type] || 0) + 1
-      return acc
-    }, {} as Record<string, number>),
   }
 }
 
@@ -208,16 +202,59 @@ function closeDetail() {
   selectedError.value = null
 }
 
-function updateStatus(id: string, status: 'resolved' | 'ignored') {
-  const error = errors.value.find(e => e.id === id)
-  if (error) {
-    error.status = status
+async function resolveError(eventId: string) {
+  try {
+    await api.resolveError(eventId)
+    // Refresh data after resolving
+    await fetchData()
+    closeDetail()
+  } catch (err) {
+    logger.error('Failed to resolve error:', err)
+  }
+}
+
+async function createTestError() {
+  try {
+    await api.createTestError('error')
+    await fetchData()
+  } catch (err) {
+    logger.error('Failed to create test error:', err)
+  }
+}
+
+async function clearOldErrors() {
+  if (!confirm('Clear errors older than 7 days?')) return
+  try {
+    const result = await api.clearErrors({ older_than_hours: 168 })
+    logger.info('Cleared errors:', result.message)
+    await fetchData()
+  } catch (err) {
+    logger.error('Failed to clear errors:', err)
+  }
+}
+
+function onFilterChange() {
+  currentPage.value = 1
+  fetchData()
+}
+
+function nextPage() {
+  if (currentPage.value * perPage < totalErrors.value) {
+    currentPage.value++
+    fetchData()
+  }
+}
+
+function prevPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--
+    fetchData()
   }
 }
 
 onMounted(() => {
-  fetchErrors()
-  refreshInterval = setInterval(fetchErrors, 60000)
+  fetchData()
+  refreshInterval = setInterval(fetchData, 60000)
 })
 
 onUnmounted(() => {
@@ -232,42 +269,70 @@ onUnmounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">Error Monitoring</h2>
-      <button
-        @click="fetchErrors"
-        :disabled="isLoading"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
-      >
-        <svg
-          class="w-4 h-4"
-          :class="{ 'animate-spin': isLoading }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      <div class="flex items-center gap-2">
+        <button
+          @click="clearOldErrors"
+          class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        Refresh
-      </button>
+          Clear Old
+        </button>
+        <button
+          @click="createTestError"
+          class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Test Error
+        </button>
+        <button
+          @click="fetchData"
+          :disabled="isLoading"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg
+            class="w-4 h-4"
+            :class="{ 'animate-spin': isLoading }"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Refresh
+        </button>
+      </div>
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
       <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <p class="text-sm text-gray-500">Total Errors</p>
-        <p class="text-2xl font-bold text-gray-900">{{ stats.total }}</p>
+        <p class="text-2xl font-bold text-gray-900">{{ stats.total_errors }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-sm border border-red-200 p-4">
         <p class="text-sm text-red-600">Last 24 Hours</p>
-        <p class="text-2xl font-bold text-red-700">{{ stats.last24h }}</p>
+        <p class="text-2xl font-bold text-red-700">{{ stats.errors_24h }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-sm border border-orange-200 p-4">
-        <p class="text-sm text-orange-600">Last Hour</p>
-        <p class="text-2xl font-bold text-orange-700">{{ stats.lastHour }}</p>
+        <p class="text-sm text-orange-600">Unresolved</p>
+        <p class="text-2xl font-bold text-orange-700">
+          {{ stats.unresolved_count }}
+        </p>
       </div>
       <div class="bg-white rounded-lg shadow-sm border border-green-200 p-4">
         <p class="text-sm text-green-600">Resolved</p>
         <p class="text-2xl font-bold text-green-700">
-          {{ errors.filter(e => e.status === 'resolved').length }}
+          {{ stats.resolved_count }}
+        </p>
+      </div>
+      <div class="bg-white rounded-lg shadow-sm border border-blue-200 p-4">
+        <p class="text-sm text-blue-600">Trend</p>
+        <p class="text-2xl font-bold" :class="getTrendColor(stats.trend)">
+          {{ getTrendIcon(stats.trend) }}
+          {{ stats.error_rate_per_hour.toFixed(1) }}/hr
         </p>
       </div>
     </div>
@@ -287,62 +352,115 @@ onUnmounted(() => {
               />
             </div>
             <select
-              v-model="filterService"
+              v-model="filterSeverity"
+              @change="onFilterChange"
               class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
-              <option v-for="svc in services" :key="svc" :value="svc">
-                {{ svc === 'all' ? 'All Services' : svc }}
-              </option>
+              <option value="all">All Severities</option>
+              <option value="critical">Critical</option>
+              <option value="error">Error</option>
             </select>
             <select
-              v-model="filterStatus"
+              v-model="filterResolved"
+              @change="onFilterChange"
               class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">All Status</option>
-              <option value="active">Active</option>
+              <option value="unresolved">Unresolved</option>
               <option value="resolved">Resolved</option>
-              <option value="ignored">Ignored</option>
             </select>
           </div>
         </div>
 
         <!-- Error List -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div
+          class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+        >
           <div class="max-h-[500px] overflow-y-auto divide-y divide-gray-200">
             <div
               v-for="error in filteredErrors"
-              :key="error.id"
+              :key="error.event_id"
               @click="selectError(error)"
               class="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
             >
               <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 mb-1">
-                    <span :class="['px-2 py-0.5 text-xs font-medium rounded', getStatusClass(error.status)]">
-                      {{ error.status }}
+                    <span
+                      :class="[
+                        'px-2 py-0.5 text-xs font-medium rounded',
+                        getStatusClass(error.resolved),
+                      ]"
+                    >
+                      {{ error.resolved ? 'resolved' : 'active' }}
                     </span>
-                    <span :class="['text-xs font-medium', getTypeColor(error.type)]">
-                      {{ error.type }}
+                    <span
+                      :class="[
+                        'text-xs font-medium',
+                        getSeverityColor(error.severity),
+                      ]"
+                    >
+                      {{ error.severity }}
                     </span>
-                    <span class="text-xs text-gray-400">{{ error.service }}</span>
+                    <span class="text-xs text-gray-400">{{
+                      error.hostname
+                    }}</span>
                   </div>
-                  <p class="text-sm font-medium text-gray-900 truncate">{{ error.message }}</p>
-                  <p class="text-xs text-gray-500 mt-1">
-                    First: {{ formatTimestamp(error.timestamp) }} · Last: {{ formatRelativeTime(error.lastOccurred) }}
+                  <p class="text-sm font-medium text-gray-900 truncate">
+                    {{ error.message }}
                   </p>
-                </div>
-                <div class="ml-4 text-right">
-                  <p class="text-lg font-bold text-gray-900">{{ error.count }}</p>
-                  <p class="text-xs text-gray-500">occurrences</p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {{ error.event_type }} ·
+                    {{ formatRelativeTime(error.timestamp) }}
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div v-if="filteredErrors.length === 0" class="p-8 text-center text-gray-500">
-              <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div
+              v-if="filteredErrors.length === 0"
+              class="p-8 text-center text-gray-500"
+            >
+              <svg
+                class="w-12 h-12 mx-auto mb-3 text-gray-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               <p>No errors found</p>
+            </div>
+          </div>
+
+          <!-- Pagination -->
+          <div
+            v-if="totalErrors > perPage"
+            class="px-4 py-3 border-t border-gray-200 flex items-center justify-between"
+          >
+            <span class="text-sm text-gray-500">
+              Page {{ currentPage }} of {{ Math.ceil(totalErrors / perPage) }}
+            </span>
+            <div class="flex gap-2">
+              <button
+                @click="prevPage"
+                :disabled="currentPage === 1"
+                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                @click="nextPage"
+                :disabled="currentPage * perPage >= totalErrors"
+                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
           </div>
         </div>
@@ -352,51 +470,81 @@ onUnmounted(() => {
       <div class="space-y-4">
         <!-- Top Errors -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">Top Active Errors</h3>
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">
+            Recent Unresolved
+          </h3>
           <div class="space-y-3">
             <div
               v-for="error in topErrors"
-              :key="error.id"
+              :key="error.event_id"
               class="flex items-center justify-between"
             >
               <div class="flex-1 min-w-0">
-                <p class="text-sm text-gray-900 truncate">{{ error.message }}</p>
-                <p class="text-xs text-gray-500">{{ error.service }}</p>
+                <p class="text-sm text-gray-900 truncate">
+                  {{ error.message }}
+                </p>
+                <p class="text-xs text-gray-500">{{ error.hostname }}</p>
               </div>
-              <span class="ml-2 text-sm font-bold text-red-600">{{ error.count }}</span>
+              <span
+                :class="[
+                  'ml-2 text-xs font-medium',
+                  getSeverityColor(error.severity),
+                ]"
+              >
+                {{ error.severity }}
+              </span>
             </div>
-            <div v-if="topErrors.length === 0" class="text-sm text-gray-500 text-center py-2">
-              No active errors
+            <div
+              v-if="topErrors.length === 0"
+              class="text-sm text-gray-500 text-center py-2"
+            >
+              No unresolved errors
             </div>
           </div>
         </div>
 
-        <!-- Errors by Type -->
+        <!-- Errors by Category -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">By Error Type</h3>
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">By Category</h3>
           <div class="space-y-2">
             <div
-              v-for="(count, type) in stats.byType"
-              :key="type"
+              v-for="cat in categories"
+              :key="cat.category"
               class="flex items-center justify-between"
             >
-              <span :class="['text-sm', getTypeColor(String(type))]">{{ type }}</span>
-              <span class="text-sm font-medium text-gray-900">{{ count }}</span>
+              <span class="text-sm text-gray-600">{{ cat.category }}</span>
+              <span class="text-sm font-medium text-gray-900"
+                >{{ cat.count }} ({{ cat.percentage }}%)</span
+              >
+            </div>
+            <div
+              v-if="categories.length === 0"
+              class="text-sm text-gray-500 text-center py-2"
+            >
+              No categories
             </div>
           </div>
         </div>
 
-        <!-- Errors by Service -->
+        <!-- Errors by Component -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-3">By Service</h3>
+          <h3 class="text-sm font-semibold text-gray-900 mb-3">By Node</h3>
           <div class="space-y-2">
             <div
-              v-for="(count, service) in stats.byService"
-              :key="service"
+              v-for="comp in components"
+              :key="comp.node_id"
               class="flex items-center justify-between"
             >
-              <span class="text-sm text-gray-600">{{ service }}</span>
-              <span class="text-sm font-medium text-gray-900">{{ count }}</span>
+              <span class="text-sm text-gray-600">{{ comp.hostname }}</span>
+              <span class="text-sm font-medium text-gray-900"
+                >{{ comp.count }} ({{ comp.percentage }}%)</span
+              >
+            </div>
+            <div
+              v-if="components.length === 0"
+              class="text-sm text-gray-500 text-center py-2"
+            >
+              No components
             </div>
           </div>
         </div>
@@ -409,69 +557,106 @@ onUnmounted(() => {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
       @click.self="closeDetail"
     >
-      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
-        <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+      <div
+        class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
+      >
+        <div
+          class="p-4 border-b border-gray-200 flex items-center justify-between"
+        >
           <h3 class="text-lg font-semibold text-gray-900">Error Details</h3>
           <button @click="closeDetail" class="text-gray-400 hover:text-gray-600">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
         <div class="p-4 overflow-y-auto max-h-[60vh]">
           <div class="space-y-4">
             <div class="flex items-center gap-2">
-              <span :class="['px-2 py-1 text-xs font-medium rounded', getStatusClass(selectedError.status)]">
-                {{ selectedError.status }}
+              <span
+                :class="[
+                  'px-2 py-1 text-xs font-medium rounded',
+                  getStatusClass(selectedError.resolved),
+                ]"
+              >
+                {{ selectedError.resolved ? 'resolved' : 'active' }}
               </span>
-              <span :class="['text-sm font-medium', getTypeColor(selectedError.type)]">
-                {{ selectedError.type }}
+              <span
+                :class="[
+                  'text-sm font-medium',
+                  getSeverityColor(selectedError.severity),
+                ]"
+              >
+                {{ selectedError.severity }}
               </span>
             </div>
 
             <div>
-              <label class="text-xs font-medium text-gray-500 uppercase">Service</label>
-              <p class="text-sm text-gray-900">{{ selectedError.service }}</p>
+              <label class="text-xs font-medium text-gray-500 uppercase"
+                >Event ID</label
+              >
+              <p class="text-sm text-gray-900 font-mono">
+                {{ selectedError.event_id }}
+              </p>
             </div>
 
             <div>
-              <label class="text-xs font-medium text-gray-500 uppercase">Message</label>
+              <label class="text-xs font-medium text-gray-500 uppercase"
+                >Node</label
+              >
+              <p class="text-sm text-gray-900">
+                {{ selectedError.hostname }} ({{ selectedError.node_id }})
+              </p>
+            </div>
+
+            <div>
+              <label class="text-xs font-medium text-gray-500 uppercase"
+                >Type</label
+              >
+              <p class="text-sm text-gray-900">{{ selectedError.event_type }}</p>
+            </div>
+
+            <div>
+              <label class="text-xs font-medium text-gray-500 uppercase"
+                >Message</label
+              >
               <p class="text-sm text-gray-900">{{ selectedError.message }}</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="text-xs font-medium text-gray-500 uppercase">First Occurred</label>
-                <p class="text-sm text-gray-900">{{ formatTimestamp(selectedError.timestamp) }}</p>
-              </div>
-              <div>
-                <label class="text-xs font-medium text-gray-500 uppercase">Last Occurred</label>
-                <p class="text-sm text-gray-900">{{ formatTimestamp(selectedError.lastOccurred) }}</p>
-              </div>
-            </div>
-
             <div>
-              <label class="text-xs font-medium text-gray-500 uppercase">Occurrence Count</label>
-              <p class="text-2xl font-bold text-gray-900">{{ selectedError.count }}</p>
+              <label class="text-xs font-medium text-gray-500 uppercase"
+                >Timestamp</label
+              >
+              <p class="text-sm text-gray-900">
+                {{ formatTimestamp(selectedError.timestamp) }}
+              </p>
             </div>
 
-            <div v-if="selectedError.stack">
-              <label class="text-xs font-medium text-gray-500 uppercase">Stack Trace</label>
-              <pre class="mt-1 p-3 bg-gray-900 text-gray-100 text-xs rounded-lg overflow-x-auto">{{ selectedError.stack }}</pre>
+            <div v-if="selectedError.resolved">
+              <label class="text-xs font-medium text-gray-500 uppercase"
+                >Resolved</label
+              >
+              <p class="text-sm text-gray-900">
+                By {{ selectedError.resolved_by }} at
+                {{ formatTimestamp(selectedError.resolved_at || '') }}
+              </p>
             </div>
           </div>
         </div>
         <div class="p-4 border-t border-gray-200 flex justify-end gap-2">
           <button
-            v-if="selectedError.status === 'active'"
-            @click="updateStatus(selectedError.id, 'ignored')"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-          >
-            Ignore
-          </button>
-          <button
-            v-if="selectedError.status === 'active'"
-            @click="updateStatus(selectedError.id, 'resolved')"
+            v-if="!selectedError.resolved"
+            @click="resolveError(selectedError.event_id)"
             class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
           >
             Mark Resolved
