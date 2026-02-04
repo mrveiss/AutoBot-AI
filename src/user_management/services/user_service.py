@@ -329,7 +329,7 @@ class UserService(BaseService):
         lookup_func,
         changes: dict,
     ) -> None:
-        """Update a unique field with duplicate check (Issue #665: extracted helper)."""
+        """Update a unique field with duplicate check. Issue #620."""
         new_value_lower = new_value.lower()
         current_value = getattr(user, field_name)
 
@@ -341,6 +341,38 @@ class UserService(BaseService):
                 )
             changes[field_name] = {"old": current_value, "new": new_value_lower}
             setattr(user, field_name, new_value_lower)
+
+    def _update_optional_profile_fields(
+        self,
+        user: User,
+        display_name: Optional[str],
+        bio: Optional[str],
+        avatar_url: Optional[str],
+        preferences: Optional[dict],
+        changes: dict,
+    ) -> None:
+        """Update optional profile fields on user object. Issue #620.
+
+        Args:
+            user: User object to update
+            display_name: New display name if provided
+            bio: New bio if provided
+            avatar_url: New avatar URL if provided
+            preferences: New preferences dict if provided
+            changes: Dictionary to track changes for audit
+        """
+        if display_name is not None:
+            changes["display_name"] = {"old": user.display_name, "new": display_name}
+            user.display_name = display_name
+
+        if bio is not None:
+            user.bio = bio
+
+        if avatar_url is not None:
+            user.avatar_url = avatar_url
+
+        if preferences is not None:
+            user.preferences = preferences
 
     async def update_user(
         self,
@@ -387,18 +419,9 @@ class UserService(BaseService):
                 user, user_id, "username", username, self.get_user_by_username, changes
             )
 
-        if display_name is not None:
-            changes["display_name"] = {"old": user.display_name, "new": display_name}
-            user.display_name = display_name
-
-        if bio is not None:
-            user.bio = bio
-
-        if avatar_url is not None:
-            user.avatar_url = avatar_url
-
-        if preferences is not None:
-            user.preferences = preferences
+        self._update_optional_profile_fields(
+            user, display_name, bio, avatar_url, preferences, changes
+        )
 
         user.updated_at = datetime.now(timezone.utc)
         await self.session.flush()

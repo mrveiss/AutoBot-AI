@@ -131,14 +131,10 @@ class EnhancedSecurityLayer:
 
         return policy
 
-    async def _command_approval_callback(self, approval_data: Dict[str, Any]) -> bool:
-        """
-        Callback for command approval requests
-        This can be extended to integrate with UI or notification systems
-        """
-        command_id = f"cmd_{int(approval_data['timestamp'])}"
-
-        # Log the approval request
+    def _log_approval_request(
+        self, command_id: str, approval_data: Dict[str, Any]
+    ) -> None:
+        """Log command approval request to audit log. Issue #620."""
         self.audit_log(
             action="command_approval_request",
             user="system",
@@ -151,43 +147,45 @@ class EnhancedSecurityLayer:
             },
         )
 
-        # In a real implementation, this would:
-        # 1. Send notification to UI/admin
-        # 2. Wait for user response
-        # 3. Return approval decision
+    def _check_auto_approve_moderate(
+        self, command_id: str, approval_data: Dict[str, Any]
+    ) -> Optional[bool]:
+        """Check if moderate risk command should be auto-approved. Issue #620.
 
-        # For now, implement automatic approval based on risk level
-        if approval_data["risk"] == CommandRisk.MODERATE.value:
-            # Auto-approve moderate risk commands if configured
-            if self.security_config.get("auto_approve_moderate", False):
-                self.audit_log(
-                    action="command_auto_approved",
-                    user="system",
-                    outcome="approved",
-                    details={"command_id": command_id, "risk": "moderate"},
-                )
-                return True
+        Returns:
+            True if auto-approved, None if approval still required.
+        """
+        if approval_data["risk"] != CommandRisk.MODERATE.value:
+            return None
+        if not self.security_config.get("auto_approve_moderate", False):
+            return None
+        self.audit_log(
+            action="command_auto_approved",
+            user="system",
+            outcome="approved",
+            details={"command_id": command_id, "risk": "moderate"},
+        )
+        return True
 
-        # Create approval event
+    async def _wait_for_approval_response(self, command_id: str) -> bool:
+        """Wait for approval response with timeout and log result. Issue #620.
+
+        Returns:
+            True if approved, False if denied or timeout.
+        """
         approval_event = asyncio.Event()
         self.pending_approvals[command_id] = approval_event
 
-        # Wait for approval (with timeout)
         try:
-            await asyncio.wait_for(
-                approval_event.wait(), timeout=300
-            )  # 5 minute timeout
+            await asyncio.wait_for(approval_event.wait(), timeout=300)
             approved = self.approval_results.get(command_id, False)
-
             self.audit_log(
                 action="command_approval_response",
                 user="system",
                 outcome="approved" if approved else "denied",
                 details={"command_id": command_id},
             )
-
             return approved
-
         except asyncio.TimeoutError:
             self.audit_log(
                 action="command_approval_timeout",
@@ -196,11 +194,25 @@ class EnhancedSecurityLayer:
                 details={"command_id": command_id},
             )
             return False
-
         finally:
-            # Cleanup
             self.pending_approvals.pop(command_id, None)
             self.approval_results.pop(command_id, None)
+
+    async def _command_approval_callback(self, approval_data: Dict[str, Any]) -> bool:
+        """
+        Callback for command approval requests.
+        This can be extended to integrate with UI or notification systems.
+        """
+        command_id = f"cmd_{int(approval_data['timestamp'])}"
+        self._log_approval_request(command_id, approval_data)
+
+        # Check for auto-approval of moderate risk commands
+        auto_result = self._check_auto_approve_moderate(command_id, approval_data)
+        if auto_result is not None:
+            return auto_result
+
+        # Wait for manual approval
+        return await self._wait_for_approval_response(command_id)
 
     def approve_command(self, command_id: str, approved: bool = True):
         """

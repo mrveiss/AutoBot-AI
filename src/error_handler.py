@@ -15,13 +15,7 @@ import threading
 import time
 import traceback
 from contextlib import contextmanager
-from typing import (
-    Any,
-    Callable,
-    Optional,
-    Type,
-    TypeVar,
-)
+from typing import Any, Callable, Optional, Type, TypeVar
 
 from src.constants.threshold_constants import TimingConstants
 from src.exceptions import AutoBotError, InternalError
@@ -123,7 +117,7 @@ def _handle_retry_attempt(
     func_name: str,
     on_retry: Optional[Callable[[Exception, int], None]],
 ) -> None:
-    """Handle logging and callback for retry attempt"""
+    """Handle logging and callback for retry attempt. Issue #620."""
     if on_retry:
         on_retry(exception, attempt + 1)
     logger.warning(
@@ -134,8 +128,25 @@ def _handle_retry_attempt(
 
 # (Issue #315 - extracted) Helper function for max retry logging
 def _log_max_retries_exceeded(max_attempts: int, func_name: str) -> None:
-    """Log when max retries are exceeded"""
+    """Log when max retries are exceeded. Issue #620."""
     logger.error("Max retries (%s) exceeded for %s", max_attempts, func_name)
+
+
+def _should_retry_on_exception(attempt: int, max_attempts: int, func_name: str) -> bool:
+    """Check if retry should continue or log final failure. Issue #620.
+
+    Args:
+        attempt: Current attempt number (0-indexed)
+        max_attempts: Maximum number of attempts allowed
+        func_name: Name of the function being retried
+
+    Returns:
+        True if should retry, False if max attempts reached.
+    """
+    if attempt >= max_attempts - 1:
+        _log_max_retries_exceeded(max_attempts, func_name)
+        return False
+    return True
 
 
 def retry(
@@ -157,7 +168,7 @@ def retry(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        """Inner decorator that wraps function with retry logic."""
+        """Inner decorator that wraps function with retry logic. Issue #620."""
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -170,12 +181,13 @@ def retry(
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    # (Issue #315 - refactored) Use guard clause to reduce nesting
-                    if attempt >= max_attempts - 1:
-                        _log_max_retries_exceeded(max_attempts, func.__name__)
+                    if not _should_retry_on_exception(
+                        attempt, max_attempts, func.__name__
+                    ):
                         continue
-
-                    _handle_retry_attempt(e, attempt, max_attempts, func.__name__, on_retry)
+                    _handle_retry_attempt(
+                        e, attempt, max_attempts, func.__name__, on_retry
+                    )
                     time.sleep(current_delay)
                     current_delay *= backoff
 
@@ -192,12 +204,13 @@ def retry(
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
-                    # (Issue #315 - refactored) Use guard clause to reduce nesting
-                    if attempt >= max_attempts - 1:
-                        _log_max_retries_exceeded(max_attempts, func.__name__)
+                    if not _should_retry_on_exception(
+                        attempt, max_attempts, func.__name__
+                    ):
                         continue
-
-                    _handle_retry_attempt(e, attempt, max_attempts, func.__name__, on_retry)
+                    _handle_retry_attempt(
+                        e, attempt, max_attempts, func.__name__, on_retry
+                    )
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff
 

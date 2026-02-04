@@ -760,6 +760,33 @@ class RedisConnectionManager:
             self._states[database_name] = ConnectionState.FAILED
             return None
 
+    async def _ensure_async_pool_exists(self, database_name: str) -> None:
+        """
+        Ensure async connection pool exists for database, creating if needed.
+
+        Uses double-checked locking pattern for thread safety.
+        Issue #620.
+        """
+        if database_name not in self._async_pools:
+            async with self._async_lock:
+                if database_name not in self._async_pools:
+                    self._async_pools[database_name] = await self._create_async_pool(
+                        database_name
+                    )
+
+    async def _create_and_verify_async_client(
+        self, database_name: str
+    ) -> async_redis.Redis:
+        """
+        Create async Redis client from pool and verify connection.
+
+        Issue #620.
+        """
+        client = async_redis.Redis(connection_pool=self._async_pools[database_name])
+        await client.ping()
+        self._active_async_connections.add(client)
+        return client
+
     async def get_async_client(
         self, database_name: str = "main"
     ) -> Optional[async_redis.Redis]:
@@ -768,27 +795,11 @@ class RedisConnectionManager:
 
         POOLING BEHAVIOR (Issue #743):
         ===============================
-        This method returns a client backed by a SINGLETON async connection pool.
-        The pool is created ONCE on first call and reused for all subsequent calls.
+        Returns a client backed by a SINGLETON async connection pool.
+        The pool is created ONCE on first call and reused for subsequent calls.
 
-        Example:
-            # First call creates async pool with max 20 connections
-            client1 = await manager.get_async_client("main")  # Pool created
-
-            # Subsequent calls reuse THE SAME pool
-            client2 = await manager.get_async_client("main")  # Pool reused
-            client3 = await manager.get_async_client("main")  # Pool reused
-
-            # All 3 clients share the same pool of max 20 connections
-            # Memory usage: 1 pool, not 3 pools
-
-        Features:
-        - Circuit breaker protection
-        - Loading dataset handling
-        - Tenacity retry logic
-        - TCP keepalive tuning
-        - WeakSet connection tracking
-        - Enhanced statistics collection
+        Features: Circuit breaker, loading dataset handling, TCP keepalive,
+        WeakSet tracking, enhanced statistics.
         """
         if not self._config.get("enabled", True):
             logger.warning("Redis is disabled in configuration")
@@ -802,18 +813,8 @@ class RedisConnectionManager:
 
         try:
             start_time = time.time()
-
-            if database_name not in self._async_pools:
-                async with self._async_lock:
-                    if database_name not in self._async_pools:
-                        self._async_pools[
-                            database_name
-                        ] = await self._create_async_pool(database_name)
-
-            client = async_redis.Redis(connection_pool=self._async_pools[database_name])
-            await client.ping()
-
-            self._active_async_connections.add(client)
+            await self._ensure_async_pool_exists(database_name)
+            client = await self._create_and_verify_async_client(database_name)
 
             response_time_ms = (time.time() - start_time) * 1000
             self._record_success(database_name, response_time_ms)
