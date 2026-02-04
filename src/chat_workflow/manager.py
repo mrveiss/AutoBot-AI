@@ -922,6 +922,96 @@ class ChatWorkflowManager(
             result[7],
         )
 
+    def _handle_stream_action(
+        self,
+        action: str,
+        result: tuple,
+        llm_response: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        current_segment: str,
+        current_message_type: str,
+    ) -> tuple:
+        """Handle stream action and return updated state with yields.
+
+        Processes break, continue, no_chunk, and chunk actions from stream
+        chunk iteration. Returns updated state and any messages to yield.
+
+        Issue #620.
+
+        Args:
+            action: Action type from result tuple
+            result: Full result tuple from _process_stream_chunk_iteration
+            llm_response: Current accumulated LLM response
+            tool_call_completed: Whether tool call has completed
+            streaming_msg: Current streaming message object
+            current_segment: Current response segment
+            current_message_type: Current message type
+
+        Returns:
+            Tuple of (should_return, should_break, yields, llm_response,
+                     tool_call_completed, streaming_msg, current_segment,
+                     current_message_type). Issue #620.
+        """
+        yields = []
+
+        if action == "break":
+            return (
+                True,
+                False,
+                [result[1]],
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            )
+
+        if action in ("continue", "no_chunk"):
+            (
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            ) = self._unpack_stream_action_state(result)
+            should_break = action == "continue"
+            return (
+                False,
+                should_break,
+                [],
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            )
+
+        if action == "chunk":
+            (
+                complete_msg,
+                workflow_msg,
+                llm_response,
+                tool_call_completed,
+                streaming_msg,
+                current_segment,
+                current_message_type,
+            ) = self._unpack_chunk_action_state(result)
+            if complete_msg:
+                yields.append((complete_msg, llm_response, False, True))
+            yields.append((workflow_msg, llm_response, False, False))
+
+        return (
+            False,
+            False,
+            yields,
+            llm_response,
+            tool_call_completed,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        )
+
     async def _stream_llm_response(
         self,
         response,
@@ -961,33 +1051,33 @@ class ChatWorkflowManager(
                 used_knowledge,
                 rag_citations,
             ):
-                action = result[0]
-                if action == "break":
-                    yield result[1]
+                (
+                    should_return,
+                    should_break,
+                    yields,
+                    llm_response,
+                    tool_call_completed,
+                    streaming_msg,
+                    current_segment,
+                    current_message_type,
+                ) = self._handle_stream_action(
+                    result[0],
+                    result,
+                    llm_response,
+                    tool_call_completed,
+                    streaming_msg,
+                    current_segment,
+                    current_message_type,
+                )
+
+                if should_return:
+                    for item in yields:
+                        yield item
                     return
-                elif action in ("continue", "no_chunk"):
-                    (
-                        llm_response,
-                        tool_call_completed,
-                        streaming_msg,
-                        current_segment,
-                        current_message_type,
-                    ) = self._unpack_stream_action_state(result)
-                    if action == "continue":
-                        break
-                elif action == "chunk":
-                    (
-                        complete_msg,
-                        workflow_msg,
-                        llm_response,
-                        tool_call_completed,
-                        streaming_msg,
-                        current_segment,
-                        current_message_type,
-                    ) = self._unpack_chunk_action_state(result)
-                    if complete_msg:
-                        yield (complete_msg, llm_response, False, True)
-                    yield (workflow_msg, llm_response, False, False)
+                for item in yields:
+                    yield item
+                if should_break:
+                    break
 
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)

@@ -97,9 +97,44 @@ class TaskExecutor:
             "ask_user_command_approval": AskUserCommandApprovalHandler(),
         }
 
-        logger.info(
-            f"TaskExecutor initialized with {len(self.handlers)} task handlers"
+        logger.info(f"TaskExecutor initialized with {len(self.handlers)} task handlers")
+
+    def _handle_execution_error(
+        self,
+        error: Exception,
+        ctx: TaskExecutionContext,
+        task_type: str,
+    ) -> Dict[str, Any]:
+        """Handle unexpected errors during task handler execution.
+
+        Logs the error, records audit trail, and returns error response.
+
+        Issue #620.
+
+        Args:
+            error: The exception that occurred
+            ctx: Task execution context for audit logging
+            task_type: Type of task that failed
+
+        Returns:
+            Dict with error status and message. Issue #620.
+        """
+        error_msg = f"Handler execution error: {str(error)}"
+        logger.error("Task %s failed: %s", ctx.task_id, error_msg, exc_info=True)
+
+        ctx.audit_log(
+            f"execute_task_{task_type}",
+            "failure",
+            {
+                "payload": ctx.task_payload,
+                "error": str(error),
+            },
         )
+
+        return {
+            "status": "error",
+            "message": error_msg,
+        }
 
     async def execute(
         self,
@@ -148,29 +183,9 @@ class TaskExecutor:
             # Missing required parameter
             error_msg = f"Missing required parameter: {str(e)}"
             logger.error("Task %s failed: %s", task_id, error_msg)
-            return {
-                "status": "error",
-                "message": error_msg,
-            }
+            return {"status": "error", "message": error_msg}
         except Exception as e:
-            # Unexpected error during handler execution
-            error_msg = f"Handler execution error: {str(e)}"
-            logger.error("Task %s failed: %s", task_id, error_msg, exc_info=True)
-
-            # Audit log the failure using context
-            ctx.audit_log(
-                f"execute_task_{task_type}",
-                "failure",
-                {
-                    "payload": task_payload,
-                    "error": str(e),
-                },
-            )
-
-            return {
-                "status": "error",
-                "message": error_msg,
-            }
+            return self._handle_execution_error(e, ctx, task_type)
 
     def register_handler(self, task_type: str, handler):
         """

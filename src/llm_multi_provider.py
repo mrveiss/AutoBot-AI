@@ -176,8 +176,50 @@ class OllamaProvider(LLMProvider):
         super().__init__(config)
         self.base_url = config.base_url or _OLLAMA_DEFAULT_URL
 
+    def _build_ollama_payload(self, model: str, request: LLMRequest) -> Dict[str, Any]:
+        """Build request payload for Ollama API. Issue #620."""
+        formatted_messages = [
+            {"role": msg["role"], "content": msg["content"]} for msg in request.messages
+        ]
+        payload = {
+            "model": model,
+            "messages": formatted_messages,
+            "stream": False,
+            "options": {
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+            },
+        }
+        if request.max_tokens:
+            payload["options"]["num_predict"] = request.max_tokens
+        return payload
+
+    async def _execute_ollama_request(
+        self, payload: Dict[str, Any], timeout_seconds: int
+    ) -> Dict[str, Any]:
+        """Execute async HTTP request to Ollama API. Issue #620."""
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                f"{self.base_url}/api/chat", json=payload
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+
+    def _extract_ollama_usage(self, result: Dict[str, Any]) -> Dict[str, int]:
+        """Extract token usage info from Ollama response. Issue #620."""
+        usage = {}
+        if "eval_count" in result:
+            usage["completion_tokens"] = result["eval_count"]
+        if "prompt_eval_count" in result:
+            usage["prompt_tokens"] = result["prompt_eval_count"]
+            usage["total_tokens"] = (
+                usage.get("completion_tokens", 0) + result["prompt_eval_count"]
+            )
+        return usage
+
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """Execute chat completion with Ollama."""
+        """Execute chat completion with Ollama. Issue #620: Refactored."""
         start_time = time.time()
         self._active_requests += 1
         self._total_requests += 1
@@ -187,46 +229,10 @@ class OllamaProvider(LLMProvider):
             if not model:
                 raise ValueError("No model specified for Ollama")
 
-            # Format messages for Ollama
-            formatted_messages = []
-            for msg in request.messages:
-                formatted_messages.append(
-                    {"role": msg["role"], "content": msg["content"]}
-                )
-
-            # Build request payload
-            payload = {
-                "model": model,
-                "messages": formatted_messages,
-                "stream": False,
-                "options": {
-                    "temperature": request.temperature,
-                    "top_p": request.top_p,
-                },
-            }
-
-            if request.max_tokens:
-                payload["options"]["num_predict"] = request.max_tokens
-
-            # Make async request to Ollama - PERFORMANCE FIX: Convert blocking HTTP to async
-            timeout = aiohttp.ClientTimeout(total=request.timeout)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    f"{self.base_url}/api/chat", json=payload
-                ) as response:
-                    response.raise_for_status()
-                    result = await response.json()
+            payload = self._build_ollama_payload(model, request)
+            result = await self._execute_ollama_request(payload, request.timeout)
             content = result.get("message", {}).get("content", "")
-
-            # Extract usage info if available
-            usage = {}
-            if "eval_count" in result:
-                usage["completion_tokens"] = result["eval_count"]
-            if "prompt_eval_count" in result:
-                usage["prompt_tokens"] = result["prompt_eval_count"]
-                usage["total_tokens"] = (
-                    usage.get("completion_tokens", 0) + result["prompt_eval_count"]
-                )
+            usage = self._extract_ollama_usage(result)
 
             return LLMResponse(
                 content=content,
