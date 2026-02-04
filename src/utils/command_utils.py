@@ -337,6 +337,31 @@ def _create_stream_reader(
     return read_stream
 
 
+async def _yield_chunks_from_queue(
+    output_queue: AsyncQueue,
+    done_event: asyncio.Event,
+) -> AsyncGenerator[StreamChunk, None]:
+    """
+    Yield chunks from the output queue until processing is complete.
+
+    Polls the queue with a timeout to allow checking if stream processing
+    is complete. Issue #620.
+
+    Args:
+        output_queue: Queue containing StreamChunk objects
+        done_event: Event signaling when stream processing is complete
+
+    Yields:
+        StreamChunk objects as they arrive in the queue
+    """
+    while not done_event.is_set() or not output_queue.empty():
+        try:
+            chunk = await asyncio.wait_for(output_queue.get(), timeout=0.1)
+            yield chunk
+        except asyncio.TimeoutError:
+            continue
+
+
 def _create_final_chunk(
     return_code: int,
     on_output: Optional[Callable[[StreamChunk], None]],
@@ -433,12 +458,8 @@ async def execute_shell_command_streaming(
         completion_task = asyncio.create_task(wait_for_completion())
 
         # Yield chunks as they arrive
-        while not done_event.is_set() or not output_queue.empty():
-            try:
-                chunk = await asyncio.wait_for(output_queue.get(), timeout=0.1)
-                yield chunk
-            except asyncio.TimeoutError:
-                continue
+        async for chunk in _yield_chunks_from_queue(output_queue, done_event):
+            yield chunk
 
         await process.wait()
         await completion_task

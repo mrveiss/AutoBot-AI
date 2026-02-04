@@ -117,6 +117,74 @@ class WorkflowDocumenter:
                 doc_type="agent_profile",
             )
 
+    def _update_workflow_doc_content(
+        self,
+        workflow_doc: WorkflowDocumentation,
+        execution_result: Dict[str, Any],
+    ) -> None:
+        """
+        Update workflow documentation with execution results.
+
+        Issue #620.
+
+        Args:
+            workflow_doc: The workflow documentation to update
+            execution_result: Results from workflow execution
+        """
+        workflow_doc.updated_at = datetime.now()
+        workflow_doc.content.update(
+            {
+                "execution_result": execution_result,
+                "agents_involved": execution_result.get("agents_involved", []),
+                "success_rate": execution_result.get("success_rate", 0),
+                "status": execution_result.get("status", "unknown"),
+                "interactions": len(execution_result.get("interactions", [])),
+                "end_time": datetime.now().isoformat(),
+            }
+        )
+
+    async def _generate_llm_summary(
+        self,
+        workflow_doc: WorkflowDocumentation,
+        execution_result: Dict[str, Any],
+    ) -> None:
+        """
+        Generate and attach LLM summary to workflow documentation.
+
+        Issue #620.
+
+        Args:
+            workflow_doc: The workflow documentation to update
+            execution_result: Results from workflow execution
+        """
+        if not self.llm_interface:
+            return
+
+        try:
+            summary_prompt = f"""
+            Generate a concise summary of this workflow execution:
+
+            Request: {workflow_doc.description}
+            Status: {execution_result.get('status', 'unknown')}
+            Agents Involved: {', '.join(execution_result.get('agents_involved', []))}
+            Success Rate: {execution_result.get('success_rate', 0):.1%}
+
+            Provide a brief summary of what was accomplished and any key insights.
+            """
+
+            summary_result = await self.llm_interface.chat_completion(
+                model="default",
+                messages=[{"role": "user", "content": summary_prompt}],
+            )
+
+            if summary_result:
+                workflow_doc.content["generated_summary"] = summary_result.get(
+                    "content", ""
+                )
+
+        except Exception as e:
+            logger.warning("Failed to generate workflow summary: %s", e)
+
     async def generate_workflow_documentation(
         self,
         workflow_id: str,
@@ -134,45 +202,8 @@ class WorkflowDocumenter:
 
         workflow_doc = self._documentation[workflow_id]
 
-        # Update documentation with execution results
-        workflow_doc.updated_at = datetime.now()
-        workflow_doc.content.update(
-            {
-                "execution_result": execution_result,
-                "agents_involved": execution_result.get("agents_involved", []),
-                "success_rate": execution_result.get("success_rate", 0),
-                "status": execution_result.get("status", "unknown"),
-                "interactions": len(execution_result.get("interactions", [])),
-                "end_time": datetime.now().isoformat(),
-            }
-        )
-
-        # Generate summary using LLM
-        if self.llm_interface:
-            try:
-                summary_prompt = f"""
-                Generate a concise summary of this workflow execution:
-
-                Request: {workflow_doc.description}
-                Status: {execution_result.get('status', 'unknown')}
-                Agents Involved: {', '.join(execution_result.get('agents_involved', []))}
-                Success Rate: {execution_result.get('success_rate', 0):.1%}
-
-                Provide a brief summary of what was accomplished and any key insights.
-                """
-
-                summary_result = await self.llm_interface.chat_completion(
-                    model="default",
-                    messages=[{"role": "user", "content": summary_prompt}],
-                )
-
-                if summary_result:
-                    workflow_doc.content["generated_summary"] = summary_result.get(
-                        "content", ""
-                    )
-
-            except Exception as e:
-                logger.warning("Failed to generate workflow summary: %s", e)
+        self._update_workflow_doc_content(workflow_doc, execution_result)
+        await self._generate_llm_summary(workflow_doc, execution_result)
 
         self._metrics["documentation_generated"] += 1
 

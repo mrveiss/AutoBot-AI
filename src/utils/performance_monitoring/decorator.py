@@ -28,7 +28,11 @@ def set_redis_client(client):
 
 
 def _store_performance_in_redis(
-    category: str, func_name: str, execution_time: float, args_count: int, kwargs_count: int
+    category: str,
+    func_name: str,
+    execution_time: float,
+    args_count: int,
+    kwargs_count: int,
 ) -> None:
     """Store performance metrics in Redis."""
     if not _redis_client:
@@ -50,64 +54,78 @@ def _store_performance_in_redis(
         )
         _redis_client.expire(key, 3600)  # 1 hour retention
     except Exception:
-        pass  # Non-critical: Redis metrics storage failure
+        pass  # nosec B110 - Non-critical: Redis metrics storage failure
+
+
+def _create_async_wrapper(func, category: str):
+    """
+    Create async wrapper for performance monitoring.
+
+    Issue #620.
+    """
+
+    @wraps(func)
+    async def async_wrapper(*args, **kwargs):
+        """Execute async function with timing and logging."""
+        start_time = time.time()
+        try:
+            result = await func(*args, **kwargs)
+            execution_time = time.time() - start_time
+            logger.info(
+                f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
+            )
+            _store_performance_in_redis(
+                category, func.__name__, execution_time, len(args), len(kwargs)
+            )
+            return result
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(
+                f"PERFORMANCE [{category}]: {func.__name__} failed "
+                f"after {execution_time:.3f}s: {e}"
+            )
+            raise
+
+    return async_wrapper
+
+
+def _create_sync_wrapper(func, category: str):
+    """
+    Create sync wrapper for performance monitoring.
+
+    Issue #620.
+    """
+
+    @wraps(func)
+    def sync_wrapper(*args, **kwargs):
+        """Execute sync function with timing and logging."""
+        start_time = time.time()
+        try:
+            result = func(*args, **kwargs)
+            execution_time = time.time() - start_time
+            logger.info(
+                f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
+            )
+            return result
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(
+                f"PERFORMANCE [{category}]: {func.__name__} failed "
+                f"after {execution_time:.3f}s: {e}"
+            )
+            raise
+
+    return sync_wrapper
 
 
 def monitor_performance(category: str = "general"):
     """Decorator to monitor function performance."""
 
     def decorator(func):
-        """Wrap function with performance monitoring and Redis metric storage."""
-
-        @wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            """Execute async function with timing and logging."""
-            start_time = time.time()
-            try:
-                result = await func(*args, **kwargs)
-                execution_time = time.time() - start_time
-
-                logger.info(
-                    f"PERFORMANCE [{category}]: {func.__name__} executed in {execution_time:.3f}s"
-                )
-                _store_performance_in_redis(
-                    category, func.__name__, execution_time, len(args), len(kwargs)
-                )
-
-                return result
-            except Exception as e:
-                execution_time = time.time() - start_time
-                logger.error(
-                    f"PERFORMANCE [{category}]: {func.__name__} failed "
-                    f"after {execution_time:.3f}s: {e}"
-                )
-                raise
-
-        @wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            """Execute sync function with timing and logging."""
-            start_time = time.time()
-            try:
-                result = func(*args, **kwargs)
-                execution_time = time.time() - start_time
-
-                logger.info(
-                    f"PERFORMANCE [{category}]: {func.__name__} "
-                    f"executed in {execution_time:.3f}s"
-                )
-
-                return result
-            except Exception as e:
-                execution_time = time.time() - start_time
-                logger.error(
-                    f"PERFORMANCE [{category}]: {func.__name__} failed "
-                    f"after {execution_time:.3f}s: {e}"
-                )
-                raise
-
+        """Wrap function with performance monitoring and Redis metric storage. Issue #620."""
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return _create_async_wrapper(func, category)
         else:
-            return sync_wrapper
+            return _create_sync_wrapper(func, category)
 
     return decorator

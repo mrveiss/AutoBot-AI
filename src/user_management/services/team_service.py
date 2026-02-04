@@ -318,6 +318,73 @@ class TeamService(BaseService):
     # Membership Management
     # -------------------------------------------------------------------------
 
+    async def _validate_membership_request(
+        self,
+        team_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> Team:
+        """
+        Validate a membership request before adding a member.
+
+        Checks role validity, team existence, and existing membership. Issue #620.
+
+        Args:
+            team_id: Team ID
+            user_id: User ID to add
+            role: Requested role
+
+        Returns:
+            Team instance if validation passes
+
+        Raises:
+            MembershipError: If role invalid or user already a member
+            TeamNotFoundError: If team not found
+        """
+        if role not in self.VALID_ROLES:
+            raise MembershipError(
+                f"Invalid role '{role}'. Must be one of: {self.VALID_ROLES}"
+            )
+
+        team = await self.get_team(team_id)
+        if not team:
+            raise TeamNotFoundError(f"Team {team_id} not found")
+
+        existing = await self._get_membership(team_id, user_id)
+        if existing:
+            raise MembershipError(
+                f"User {user_id} is already a member of team {team_id}"
+            )
+
+        return team
+
+    def _create_membership_instance(
+        self,
+        team_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: str,
+    ) -> TeamMembership:
+        """
+        Create a new TeamMembership instance.
+
+        Issue #620.
+
+        Args:
+            team_id: Team ID
+            user_id: User ID
+            role: Membership role
+
+        Returns:
+            New TeamMembership instance
+        """
+        return TeamMembership(
+            id=uuid.uuid4(),
+            team_id=team_id,
+            user_id=user_id,
+            role=role,
+            joined_at=datetime.now(timezone.utc),
+        )
+
     async def add_member(
         self,
         team_id: uuid.UUID,
@@ -339,31 +406,9 @@ class TeamService(BaseService):
             TeamNotFoundError: If team not found
             MembershipError: If user already a member or invalid role
         """
-        if role not in self.VALID_ROLES:
-            raise MembershipError(
-                f"Invalid role '{role}'. Must be one of: {self.VALID_ROLES}"
-            )
+        await self._validate_membership_request(team_id, user_id, role)
 
-        # Verify team exists
-        team = await self.get_team(team_id)
-        if not team:
-            raise TeamNotFoundError(f"Team {team_id} not found")
-
-        # Check if already a member
-        existing = await self._get_membership(team_id, user_id)
-        if existing:
-            raise MembershipError(
-                f"User {user_id} is already a member of team {team_id}"
-            )
-
-        membership = TeamMembership(
-            id=uuid.uuid4(),
-            team_id=team_id,
-            user_id=user_id,
-            role=role,
-            joined_at=datetime.now(timezone.utc),
-        )
-
+        membership = self._create_membership_instance(team_id, user_id, role)
         self.session.add(membership)
         await self.session.flush()
 

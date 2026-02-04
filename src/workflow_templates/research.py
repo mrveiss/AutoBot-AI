@@ -84,13 +84,11 @@ def create_comprehensive_research_template() -> WorkflowTemplate:
     )
 
 
-def _create_competitive_analysis_steps() -> List[WorkflowStep]:
+def _create_competitive_research_steps() -> List[WorkflowStep]:
     """
-    Create workflow steps for competitive analysis template.
+    Create research steps for competitive analysis: market and competitor research.
 
-    Returns list of WorkflowStep objects for market research, competitor
-    identification, feature analysis, SWOT analysis, strategic recommendations,
-    and storing results. Issue #620.
+    Issue #620.
     """
     return [
         WorkflowStep(
@@ -116,6 +114,16 @@ def _create_competitive_analysis_steps() -> List[WorkflowStep]:
             dependencies=["competitor_identification"],
             expected_duration_ms=40000,
         ),
+    ]
+
+
+def _create_competitive_analysis_final_steps() -> List[WorkflowStep]:
+    """
+    Create final steps for competitive analysis: SWOT, recommendations, storage.
+
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="swot_analysis",
             agent_type="orchestrator",
@@ -142,6 +150,20 @@ def _create_competitive_analysis_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _create_competitive_analysis_steps() -> List[WorkflowStep]:
+    """
+    Create workflow steps for competitive analysis template.
+
+    Returns list of WorkflowStep objects for market research, competitor
+    identification, feature analysis, SWOT analysis, strategic recommendations,
+    and storing results. Issue #620.
+    """
+    steps = []
+    steps.extend(_create_competitive_research_steps())
+    steps.extend(_create_competitive_analysis_final_steps())
+    return steps
 
 
 def create_competitive_analysis_template() -> WorkflowTemplate:

@@ -25,6 +25,52 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _prepare_logger(name: str, level: int) -> logging.Logger:
+    """
+    Create and prepare a logger by removing existing handlers.
+
+    Issue #620.
+    """
+    log = logging.getLogger(name)
+    log.setLevel(level)
+    for handler in log.handlers[:]:
+        log.removeHandler(handler)
+    return log
+
+
+def _get_log_formatter() -> logging.Formatter:
+    """
+    Create standard log formatter for AutoBot logging.
+
+    Issue #620.
+    """
+    return logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+
+def _ensure_log_directory(log_file: Union[str, Path]) -> None:
+    """
+    Ensure the log file directory exists.
+
+    Issue #620.
+    """
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _add_console_handler(
+    log: logging.Logger, level: int, formatter: logging.Formatter
+) -> None:
+    """
+    Add console handler to logger if requested.
+
+    Issue #620.
+    """
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(level)
+    console_handler.setFormatter(formatter)
+    log.addHandler(console_handler)
+
+
 class MemoryOptimizedLogging:
     """Memory-efficient logging configuration with rotation"""
 
@@ -40,34 +86,14 @@ class MemoryOptimizedLogging:
         console_output: bool = True,
     ) -> logging.Logger:
         """
-        Set up a logger with rotating file handler to prevent large log files
+        Set up a logger with rotating file handler to prevent large log files.
 
-        Args:
-            name: Logger name
-            log_file: Path to log file
-            level: Logging level
-            max_bytes: Maximum size per log file
-            backup_count: Number of backup files to keep
-            console_output: Whether to also log to console
+        Issue #620.
         """
-        # Create logger
-        log = logging.getLogger(name)
-        log.setLevel(level)
+        log = _prepare_logger(name, level)
+        formatter = _get_log_formatter()
+        _ensure_log_directory(log_file)
 
-        # Remove existing handlers to avoid duplicates
-        for handler in log.handlers[:]:
-            log.removeHandler(handler)
-
-        # Create formatter
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-
-        # Ensure log directory exists
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Set up rotating file handler
         file_handler = RotatingFileHandler(
             log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
         )
@@ -75,12 +101,8 @@ class MemoryOptimizedLogging:
         file_handler.setFormatter(formatter)
         log.addHandler(file_handler)
 
-        # Add console handler if requested
         if console_output:
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(level)
-            console_handler.setFormatter(formatter)
-            log.addHandler(console_handler)
+            _add_console_handler(log, level, formatter)
 
         return log
 
@@ -95,35 +117,14 @@ class MemoryOptimizedLogging:
         console_output: bool = True,
     ) -> logging.Logger:
         """
-        Set up a logger with time-based rotation (daily, hourly, etc.)
+        Set up a logger with time-based rotation (daily, hourly, etc.).
 
-        Args:
-            name: Logger name
-            log_file: Path to log file
-            level: Logging level
-            when: When to rotate ('midnight', 'H', 'D', etc.)
-            interval: Rotation interval
-            backup_count: Number of backup files to keep
-            console_output: Whether to also log to console
+        Issue #620.
         """
-        # Create logger
-        log = logging.getLogger(name)
-        log.setLevel(level)
+        log = _prepare_logger(name, level)
+        formatter = _get_log_formatter()
+        _ensure_log_directory(log_file)
 
-        # Remove existing handlers to avoid duplicates
-        for handler in log.handlers[:]:
-            log.removeHandler(handler)
-
-        # Create formatter
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-
-        # Ensure log directory exists
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Set up timed rotating file handler
         file_handler = TimedRotatingFileHandler(
             log_file,
             when=when,
@@ -135,12 +136,8 @@ class MemoryOptimizedLogging:
         file_handler.setFormatter(formatter)
         log.addHandler(file_handler)
 
-        # Add console handler if requested
         if console_output:
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(level)
-            console_handler.setFormatter(formatter)
-            log.addHandler(console_handler)
+            _add_console_handler(log, level, formatter)
 
         return log
 
