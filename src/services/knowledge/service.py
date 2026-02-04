@@ -397,6 +397,26 @@ class ChatKnowledgeService:
 
         return False
 
+    def _log_retrieval_start(
+        self,
+        intent_result: QueryIntentResult,
+        effective_categories: Optional[List[str]],
+    ) -> None:
+        """Log the start of smart retrieval operation.
+
+        Args:
+            intent_result: Detected query intent.
+            effective_categories: Categories to search.
+
+        Issue #620.
+        """
+        logger.info(
+            "[Smart RAG] Retrieving - intent=%s, confidence=%.2f, categories=%s",
+            intent_result.intent.value,
+            intent_result.confidence,
+            effective_categories or "all",
+        )
+
     async def smart_retrieve_knowledge(
         self,
         query: str,
@@ -406,10 +426,9 @@ class ChatKnowledgeService:
         categories: Optional[List[str]] = None,
         enable_smart_categories: bool = True,
     ) -> Tuple[str, List[Dict], QueryIntentResult]:
-        """
-        Smart knowledge retrieval with intent detection.
+        """Smart knowledge retrieval with intent detection.
 
-        Issue #665: Refactored to use extracted helper methods.
+        Issue #665, #620: Refactored to use extracted helper methods.
 
         Args:
             query: User's chat message/query
@@ -425,23 +444,14 @@ class ChatKnowledgeService:
         start_time = time.time()
         intent_result = self.intent_detector.detect_intent(query)
 
-        # Issue #665: Use helper for skip decision
         if self._should_skip_retrieval(intent_result, force_retrieval):
             return "", [], intent_result
 
-        # Issue #556: Smart category selection if not explicitly provided
-        effective_categories = categories
-        if effective_categories is None and enable_smart_categories:
-            effective_categories = self._select_categories_for_intent(
-                intent_result, query
-            )
-
-        logger.info(
-            "[Smart RAG] Retrieving - intent=%s, confidence=%.2f, categories=%s",
-            intent_result.intent.value,
-            intent_result.confidence,
-            effective_categories or "all",
+        effective_categories = self._get_effective_categories(
+            intent_result, query, categories, enable_smart_categories
         )
+
+        self._log_retrieval_start(intent_result, effective_categories)
 
         context_string, citations = await self.retrieve_relevant_knowledge(
             query=query,

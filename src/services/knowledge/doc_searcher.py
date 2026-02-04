@@ -89,13 +89,13 @@ class DocumentationSearcher:
                 doc_count = self._collection.count()
                 logger.info(
                     "DocumentationSearcher initialized: %d documents available",
-                    doc_count
+                    doc_count,
                 )
             except Exception:
                 logger.warning(
                     "Documentation collection '%s' not found. "
                     "Run 'python tools/index_documentation.py --tier 1' to index docs.",
-                    self.collection_name
+                    self.collection_name,
                 )
                 return False
 
@@ -130,11 +130,55 @@ class DocumentationSearcher:
 
         return False
 
+    def _query_chromadb(
+        self, embedding: List[float], n_results: int
+    ) -> Optional[Dict[str, Any]]:
+        """Query ChromaDB collection with embedding.
+
+        Args:
+            embedding: Query embedding vector.
+            n_results: Maximum number of results.
+
+        Returns:
+            ChromaDB query results or None if empty. Issue #620.
+        """
+        results = self._collection.query(
+            query_embeddings=[embedding],
+            n_results=n_results,
+            include=["documents", "metadatas", "distances"],
+        )
+        if not results or not results.get("documents"):
+            return None
+        return results
+
+    def _format_result_item(
+        self, doc: str, meta: Dict[str, Any], distance: float
+    ) -> Dict[str, Any]:
+        """Format a single search result item.
+
+        Args:
+            doc: Document content.
+            meta: Document metadata.
+            distance: Distance score from embedding search.
+
+        Returns:
+            Formatted result dictionary. Issue #620.
+        """
+        score = 1 - distance  # Convert distance to similarity
+        return {
+            "content": doc,
+            "score": round(score, 3),
+            "file_path": meta.get("file_path", "unknown"),
+            "section": meta.get("section", ""),
+            "subsection": meta.get("subsection", ""),
+            "doc_type": meta.get("doc_type", "documentation"),
+            "priority": meta.get("priority", "medium"),
+        }
+
     def search(
         self, query: str, n_results: int = 3, score_threshold: float = 0.6
     ) -> List[Dict[str, Any]]:
-        """
-        Search documentation for relevant content.
+        """Search documentation for relevant content.
 
         Args:
             query: Search query
@@ -144,46 +188,25 @@ class DocumentationSearcher:
         Returns:
             List of search result dictionaries with content and metadata
         """
-        if not self._initialized:
-            if not self.initialize():
-                return []
+        if not self._initialized and not self.initialize():
+            return []
 
         try:
-            # Generate query embedding
             embedding = self._embed_model.get_text_embedding(query)
+            results = self._query_chromadb(embedding, n_results)
 
-            # Search collection
-            results = self._collection.query(
-                query_embeddings=[embedding],
-                n_results=n_results,
-                include=["documents", "metadatas", "distances"],
-            )
-
-            if not results or not results.get("documents"):
+            if not results:
                 return []
 
-            # Format results
             formatted = []
-            for i, (doc, meta, dist) in enumerate(
-                zip(
-                    results["documents"][0],
-                    results["metadatas"][0],
-                    results["distances"][0],
-                )
+            for doc, meta, dist in zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0],
             ):
-                score = 1 - dist  # Convert distance to similarity
-                if score >= score_threshold:
-                    formatted.append(
-                        {
-                            "content": doc,
-                            "score": round(score, 3),
-                            "file_path": meta.get("file_path", "unknown"),
-                            "section": meta.get("section", ""),
-                            "subsection": meta.get("subsection", ""),
-                            "doc_type": meta.get("doc_type", "documentation"),
-                            "priority": meta.get("priority", "medium"),
-                        }
-                    )
+                item = self._format_result_item(doc, meta, dist)
+                if item["score"] >= score_threshold:
+                    formatted.append(item)
 
             return formatted
 

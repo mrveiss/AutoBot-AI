@@ -22,7 +22,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import aiohttp
@@ -400,6 +400,79 @@ class URLVoidClient:
             logger.error("URLVoid API error: %s", e)
             return {"success": False, "error": str(e), "score": None}
 
+    def _check_xml_error(self, root: Any) -> Optional[Dict[str, Any]]:
+        """Check for error response in URLVoid XML.
+
+        Args:
+            root: Parsed XML root element.
+
+        Returns:
+            Error dict if error found, None otherwise. Issue #620.
+        """
+        error = root.find(".//error")
+        if error is not None:
+            return {
+                "success": False,
+                "error": error.text or "Unknown URLVoid error",
+                "score": None,
+            }
+        return None
+
+    def _extract_detection_counts(self, root: Any) -> Tuple[int, int]:
+        """Extract detection and engine counts from URLVoid XML.
+
+        Args:
+            root: Parsed XML root element.
+
+        Returns:
+            Tuple of (detection_count, total_engines). Issue #620.
+        """
+        detections = root.find(".//detections")
+        engines_count = root.find(".//engines_count")
+
+        detection_count = (
+            int(detections.text) if detections is not None and detections.text else 0
+        )
+        total_engines = (
+            int(engines_count.text)
+            if engines_count is not None and engines_count.text
+            else 0
+        )
+        return detection_count, total_engines
+
+    def _calculate_reputation_score(
+        self, detection_count: int, total_engines: int
+    ) -> float:
+        """Calculate reputation score from detection counts.
+
+        Args:
+            detection_count: Number of engines detecting threats.
+            total_engines: Total number of engines checked.
+
+        Returns:
+            Score from 0.0 (malicious) to 1.0 (safe). Issue #620.
+        """
+        if total_engines == 0:
+            return 0.5  # Neutral if no engines checked
+        score = 1.0 - (detection_count / total_engines)
+        return max(0.0, min(1.0, score))
+
+    def _extract_blacklists(self, root: Any) -> List[str]:
+        """Extract blacklist names from URLVoid XML.
+
+        Args:
+            root: Parsed XML root element.
+
+        Returns:
+            List of blacklist names. Issue #620.
+        """
+        blacklists = []
+        for blacklist in root.findall(".//blacklist"):
+            name = blacklist.find("name")
+            if name is not None and name.text:
+                blacklists.append(name.text)
+        return blacklists
+
     def _parse_response(self, content: str, domain: str) -> Dict[str, Any]:
         """Parse URLVoid API response (XML format).
 
@@ -411,42 +484,14 @@ class URLVoidClient:
             root = ET.fromstring(content)
 
             # Check for error response
-            error = root.find(".//error")
-            if error is not None:
-                return {
-                    "success": False,
-                    "error": error.text or "Unknown URLVoid error",
-                    "score": None,
-                }
+            error_result = self._check_xml_error(root)
+            if error_result:
+                return error_result
 
-            # Extract detection information
-            detections = root.find(".//detections")
-            engines_count = root.find(".//engines_count")
-
-            detection_count = (
-                int(detections.text)
-                if detections is not None and detections.text
-                else 0
-            )
-            total_engines = (
-                int(engines_count.text)
-                if engines_count is not None and engines_count.text
-                else 0
-            )
-
-            if total_engines == 0:
-                score = 0.5  # Neutral if no engines checked
-            else:
-                # Calculate score: 1.0 = safe, 0.0 = all detections
-                score = 1.0 - (detection_count / total_engines)
-                score = max(0.0, min(1.0, score))
-
-            # Extract additional information
-            blacklists = []
-            for blacklist in root.findall(".//blacklist"):
-                name = blacklist.find("name")
-                if name is not None and name.text:
-                    blacklists.append(name.text)
+            # Extract detection information and calculate score
+            detection_count, total_engines = self._extract_detection_counts(root)
+            score = self._calculate_reputation_score(detection_count, total_engines)
+            blacklists = self._extract_blacklists(root)
 
             return {
                 "success": True,
