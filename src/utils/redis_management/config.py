@@ -77,11 +77,16 @@ class RedisConfig:
             # Fallback to legacy cert_dir pattern for backwards compatibility
             if not self.ssl_ca_certs or not self.ssl_certfile or not self.ssl_keyfile:
                 from pathlib import Path
+
                 cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
                 project_root = Path(__file__).parent.parent.parent.parent
                 self.ssl_ca_certs = str(project_root / cert_dir / "ca" / "ca-cert.pem")
-                self.ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
-                self.ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
+                self.ssl_certfile = str(
+                    project_root / cert_dir / "main-host" / "server-cert.pem"
+                )
+                self.ssl_keyfile = str(
+                    project_root / cert_dir / "main-host" / "server-key.pem"
+                )
 
 
 class RedisConfigLoader:
@@ -93,6 +98,53 @@ class RedisConfigLoader:
     - Service registry
     - Centralized timeout configuration
     """
+
+    @staticmethod
+    def _resolve_yaml_path(yaml_path: Optional[str]) -> Optional[str]:
+        """
+        Resolve the YAML configuration file path.
+
+        Checks container and host paths if no explicit path provided.
+        Issue #620.
+        """
+        if yaml_path is not None:
+            return yaml_path if os.path.exists(yaml_path) else None
+
+        possible_paths = [
+            "/app/config/redis-databases.yaml",  # Container
+            "./config/redis-databases.yaml",  # Host relative
+            "/home/kali/Desktop/AutoBot/config/redis-databases.yaml",  # Host absolute
+        ]
+
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+
+        return None
+
+    @staticmethod
+    def _parse_database_config(db_name: str, db_config: Dict[str, Any]) -> RedisConfig:
+        """
+        Parse a single database configuration from YAML data.
+
+        Issue #620.
+        """
+        return RedisConfig(
+            name=db_name,
+            db=db_config.get("db", 0),
+            host=db_config.get("host", NetworkConstants.REDIS_VM_IP),
+            port=db_config.get("port", NetworkConstants.REDIS_PORT),
+            password=db_config.get("password"),
+            decode_responses=db_config.get("decode_responses", True),
+            max_connections=db_config.get("max_connections", 100),
+            socket_timeout=db_config.get("socket_timeout", 5.0),
+            socket_connect_timeout=db_config.get("socket_connect_timeout", 5.0),
+            socket_keepalive=db_config.get("socket_keepalive", True),
+            health_check_interval=db_config.get("health_check_interval", 30),
+            retry_on_timeout=db_config.get("retry_on_timeout", True),
+            max_retries=db_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
+            description=db_config.get("description", ""),
+        )
 
     @staticmethod
     def load_from_yaml(yaml_path: str = None) -> Dict[str, RedisConfig]:
@@ -111,57 +163,32 @@ class RedisConfigLoader:
         Returns:
             Dict mapping database names to RedisConfig objects
         """
-        if yaml_path is None:
-            # Auto-detect container vs host environment
-            possible_paths = [
-                "/app/config/redis-databases.yaml",  # Container
-                "./config/redis-databases.yaml",  # Host relative
-                "/home/kali/Desktop/AutoBot/config/redis-databases.yaml",  # Host absolute
-            ]
+        resolved_path = RedisConfigLoader._resolve_yaml_path(yaml_path)
 
-            for path in possible_paths:
-                if os.path.exists(path):
-                    yaml_path = path
-                    break
-
-        if not yaml_path or not os.path.exists(yaml_path):
+        if not resolved_path:
             logger.debug("No YAML configuration file found, using defaults")
             return {}
 
         try:
-            with open(yaml_path, "r", encoding="utf-8") as f:
+            with open(resolved_path, "r", encoding="utf-8") as f:
                 config_data = yaml.safe_load(f)
 
-            configs = {}
             databases = config_data.get(
                 "redis_databases", config_data.get("databases", {})
             )
 
-            for db_name, db_config in databases.items():
-                configs[db_name] = RedisConfig(
-                    name=db_name,
-                    db=db_config.get("db", 0),
-                    host=db_config.get("host", NetworkConstants.REDIS_VM_IP),
-                    port=db_config.get("port", NetworkConstants.REDIS_PORT),
-                    password=db_config.get("password"),
-                    decode_responses=db_config.get("decode_responses", True),
-                    max_connections=db_config.get("max_connections", 100),
-                    socket_timeout=db_config.get("socket_timeout", 5.0),
-                    socket_connect_timeout=db_config.get("socket_connect_timeout", 5.0),
-                    socket_keepalive=db_config.get("socket_keepalive", True),
-                    health_check_interval=db_config.get("health_check_interval", 30),
-                    retry_on_timeout=db_config.get("retry_on_timeout", True),
-                    max_retries=db_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
-                    description=db_config.get("description", ""),
-                )
+            configs = {
+                db_name: RedisConfigLoader._parse_database_config(db_name, db_config)
+                for db_name, db_config in databases.items()
+            }
 
             logger.info(
-                f"Loaded {len(configs)} database configurations from {yaml_path}"
+                f"Loaded {len(configs)} database configurations from {resolved_path}"
             )
             return configs
 
         except Exception as e:
-            logger.error("Error loading YAML config from %s: %s", yaml_path, e)
+            logger.error("Error loading YAML config from %s: %s", resolved_path, e)
             return {}
 
     @staticmethod

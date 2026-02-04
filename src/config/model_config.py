@@ -61,47 +61,48 @@ class ModelConfigMixin:
 
         logger.info("Model updated to '%s' in unified configuration", model_name)
 
-    def get_llm_config(self) -> Dict[str, Any]:
-        """Get LLM configuration with correct model reading"""
-        # Get the full backend.llm configuration
-        backend_llm = self.get_nested("backend.llm", {})
+    def _create_default_llm_structure(self) -> Dict[str, Any]:
+        """
+        Create default LLM configuration structure.
 
-        # Ensure we have proper structure
-        if not backend_llm:
-            # Lazy import to avoid circular dependency
-            from src.constants.network_constants import NetworkConstants
+        Returns default backend.llm configuration with Ollama provider settings.
+        Issue #620.
+        """
+        # Lazy import to avoid circular dependency
+        from src.constants.network_constants import NetworkConstants
 
-            # Create default structure
-            backend_llm = {
-                "provider_type": "local",
-                "local": {
-                    "provider": "ollama",
-                    "providers": {
-                        "ollama": {
-                            "selected_model": self.get_selected_model(),
-                            "models": [],
-                            "endpoint": (
-                                f"http://{NetworkConstants.LOCALHOST_NAME}"
-                                f":{NetworkConstants.OLLAMA_PORT}/api/generate"
-                            ),
-                            "host": (
-                                f"http://{NetworkConstants.LOCALHOST_NAME}"
-                                f":{NetworkConstants.OLLAMA_PORT}"
-                            ),
-                        }
-                    },
+        return {
+            "provider_type": "local",
+            "local": {
+                "provider": "ollama",
+                "providers": {
+                    "ollama": {
+                        "selected_model": self.get_selected_model(),
+                        "models": [],
+                        "endpoint": (
+                            f"http://{NetworkConstants.LOCALHOST_NAME}"
+                            f":{NetworkConstants.OLLAMA_PORT}/api/generate"
+                        ),
+                        "host": (
+                            f"http://{NetworkConstants.LOCALHOST_NAME}"
+                            f":{NetworkConstants.OLLAMA_PORT}"
+                        ),
+                    }
                 },
-            }
-            self.set_nested("backend.llm", backend_llm)
+            },
+        }
 
-        # CRITICAL: Always use the selected model from config, not hardcoded values
-        selected_model = self.get_selected_model()
-        if backend_llm.get("local", {}).get("providers", {}).get("ollama"):
-            backend_llm["local"]["providers"]["ollama"][
-                "selected_model"
-            ] = selected_model
+    def _resolve_ollama_endpoint(self, backend_llm: Dict[str, Any]) -> str:
+        """
+        Resolve Ollama endpoint from config or infrastructure settings.
 
-        # Build Ollama endpoint from config instead of hardcoded IP
+        Args:
+            backend_llm: Backend LLM configuration dictionary.
+
+        Returns:
+            Ollama endpoint URL string.
+        Issue #620.
+        """
         ollama_endpoint = (
             backend_llm.get("local", {})
             .get("providers", {})
@@ -114,6 +115,28 @@ class ModelConfigMixin:
             ollama_host = self.get_host("ollama")
             ollama_port = self.get_port("ollama")
             ollama_endpoint = f"http://{ollama_host}:{ollama_port}"
+
+        return ollama_endpoint
+
+    def get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration with correct model reading"""
+        # Get the full backend.llm configuration
+        backend_llm = self.get_nested("backend.llm", {})
+
+        # Ensure we have proper structure
+        if not backend_llm:
+            backend_llm = self._create_default_llm_structure()
+            self.set_nested("backend.llm", backend_llm)
+
+        # CRITICAL: Always use the selected model from config, not hardcoded values
+        selected_model = self.get_selected_model()
+        if backend_llm.get("local", {}).get("providers", {}).get("ollama"):
+            backend_llm["local"]["providers"]["ollama"][
+                "selected_model"
+            ] = selected_model
+
+        # Build Ollama endpoint from config instead of hardcoded IP
+        ollama_endpoint = self._resolve_ollama_endpoint(backend_llm)
 
         # Return legacy-compatible format for existing code
         return {

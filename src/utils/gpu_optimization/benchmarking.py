@@ -110,15 +110,14 @@ async def benchmark_tensor_cores() -> Dict[str, Any]:
         return {"error": str(e), "score": 0}
 
 
-def generate_benchmark_recommendations(
-    results: Dict[str, Any],
-    capabilities: GPUCapabilities,
-) -> List[str]:
-    """Generate recommendations based on benchmark results."""
-    recommendations = []
-    tests = results.get("benchmark_tests", {})
+def _add_memory_bandwidth_recommendations(
+    recommendations: List[str], tests: Dict[str, Any]
+) -> None:
+    """
+    Add memory bandwidth recommendations based on test results.
 
-    # Memory bandwidth recommendations
+    Issue #620.
+    """
     memory_test = tests.get("memory_bandwidth", {})
     if memory_test.get("score", 0) < 80:
         recommendations.append(
@@ -126,7 +125,15 @@ def generate_benchmark_recommendations(
             "operations or upgrading GPU memory."
         )
 
-    # Compute performance recommendations
+
+def _add_compute_recommendations(
+    recommendations: List[str], tests: Dict[str, Any]
+) -> None:
+    """
+    Add compute performance recommendations based on test results.
+
+    Issue #620.
+    """
     compute_test = tests.get("compute_performance", {})
     if compute_test.get("score", 0) < 80:
         recommendations.append(
@@ -134,7 +141,15 @@ def generate_benchmark_recommendations(
             "or power limit issues."
         )
 
-    # Mixed precision recommendations
+
+def _add_precision_and_tensor_recommendations(
+    recommendations: List[str], tests: Dict[str, Any]
+) -> None:
+    """
+    Add mixed precision and Tensor Core recommendations based on test results.
+
+    Issue #620.
+    """
     mixed_test = tests.get("mixed_precision", {})
     if mixed_test.get("score", 0) < 70:
         recommendations.append(
@@ -147,7 +162,6 @@ def generate_benchmark_recommendations(
             "all supported operations."
         )
 
-    # Tensor Core recommendations
     tensor_test = tests.get("tensor_core", {})
     if tensor_test.get("score", 0) < 70:
         recommendations.append(
@@ -160,8 +174,15 @@ def generate_benchmark_recommendations(
             "optimized for Tensor Core acceleration."
         )
 
-    # Overall score recommendations
-    overall_score = results.get("overall_score", 0)
+
+def _add_overall_score_recommendations(
+    recommendations: List[str], overall_score: float
+) -> None:
+    """
+    Add overall score recommendations based on benchmark results.
+
+    Issue #620.
+    """
     if overall_score >= 90:
         recommendations.append(
             "GPU is performing excellently! No major optimizations needed."
@@ -176,6 +197,20 @@ def generate_benchmark_recommendations(
             "GPU performance is significantly below potential. Consider "
             "reviewing driver versions, power settings, and thermal management."
         )
+
+
+def generate_benchmark_recommendations(
+    results: Dict[str, Any],
+    capabilities: GPUCapabilities,
+) -> List[str]:
+    """Generate recommendations based on benchmark results."""
+    recommendations = []
+    tests = results.get("benchmark_tests", {})
+
+    _add_memory_bandwidth_recommendations(recommendations, tests)
+    _add_compute_recommendations(recommendations, tests)
+    _add_precision_and_tensor_recommendations(recommendations, tests)
+    _add_overall_score_recommendations(recommendations, results.get("overall_score", 0))
 
     return recommendations
 
@@ -201,12 +236,16 @@ async def run_comprehensive_benchmark(
 
         # Compute performance test
         compute_performance = await benchmark_compute_performance()
-        benchmark_results["benchmark_tests"]["compute_performance"] = compute_performance
+        benchmark_results["benchmark_tests"][
+            "compute_performance"
+        ] = compute_performance
 
         # Mixed precision performance test
         if capabilities.mixed_precision:
             mixed_precision_perf = await benchmark_mixed_precision()
-            benchmark_results["benchmark_tests"]["mixed_precision"] = mixed_precision_perf
+            benchmark_results["benchmark_tests"][
+                "mixed_precision"
+            ] = mixed_precision_perf
 
         # Tensor Core performance test
         if capabilities.tensor_cores:

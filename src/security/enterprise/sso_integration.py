@@ -147,6 +147,54 @@ class SSOIntegrationFramework:
             logger.error("Failed to load SSO config: %s", e)
             return self._get_default_config()
 
+    def _get_default_saml_config(self) -> Dict:
+        """
+        Return default SAML configuration settings.
+
+        Issue #620.
+        """
+        return {
+            "entity_id": "autobot-enterprise",
+            "service_url": "https://autobot.company.com",
+            "acs_url": "/api/auth/saml/acs",
+            "sls_url": "/api/auth/saml/sls",
+            "name_id_format": ("urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"),
+            "attribute_mapping": {
+                "email": (
+                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+                ),
+                "first_name": (
+                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+                ),
+                "last_name": (
+                    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+                ),
+                "groups": (
+                    "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
+                ),
+            },
+        }
+
+    def _get_default_ldap_config(self) -> Dict:
+        """
+        Return default LDAP configuration settings.
+
+        Issue #620.
+        """
+        return {
+            "user_search_base": "ou=users,dc=company,dc=com",
+            "group_search_base": "ou=groups,dc=company,dc=com",
+            "user_filter": "(objectClass=person)",
+            "group_filter": "(objectClass=group)",
+            "attribute_mapping": {
+                "username": "sAMAccountName",
+                "email": "mail",
+                "first_name": "givenName",
+                "last_name": "sn",
+                "groups": "memberOf",
+            },
+        }
+
     def _get_default_config(self) -> Dict:
         """Return default SSO configuration"""
         return {
@@ -156,29 +204,7 @@ class SSOIntegrationFramework:
             "auto_provision_users": True,
             "require_group_membership": False,
             # SAML configuration
-            "saml": {
-                "entity_id": "autobot-enterprise",
-                "service_url": "https://autobot.company.com",
-                "acs_url": "/api/auth/saml/acs",
-                "sls_url": "/api/auth/saml/sls",
-                "name_id_format": (
-                    "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"
-                ),
-                "attribute_mapping": {
-                    "email": (
-                        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-                    ),
-                    "first_name": (
-                        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
-                    ),
-                    "last_name": (
-                        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
-                    ),
-                    "groups": (
-                        "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
-                    ),
-                },
-            },
+            "saml": self._get_default_saml_config(),
             # OAuth2/OpenID Connect configuration
             "oauth2": {
                 "default_scope": ["openid", "profile", "email"],
@@ -187,19 +213,7 @@ class SSOIntegrationFramework:
                 "grant_type": "authorization_code",
             },
             # LDAP configuration
-            "ldap": {
-                "user_search_base": "ou=users,dc=company,dc=com",
-                "group_search_base": "ou=groups,dc=company,dc=com",
-                "user_filter": "(objectClass=person)",
-                "group_filter": "(objectClass=group)",
-                "attribute_mapping": {
-                    "username": "sAMAccountName",
-                    "email": "mail",
-                    "first_name": "givenName",
-                    "last_name": "sn",
-                    "groups": "memberOf",
-                },
-            },
+            "ldap": self._get_default_ldap_config(),
             # Role mapping
             "role_mapping": {
                 "admin_groups": ["AutoBot-Admins", "IT-Security"],
