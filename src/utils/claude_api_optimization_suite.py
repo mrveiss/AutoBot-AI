@@ -294,7 +294,9 @@ class ClaudeAPIOptimizationSuite:
         if not self.payload_optimizer:
             return request_data
 
-        optimization_result = await self.payload_optimizer.optimize_payload(request_data)
+        optimization_result = await self.payload_optimizer.optimize_payload(
+            request_data
+        )
         if optimization_result.optimized:
             optimization_applied.append("payload_optimization")
             async with self._lock:
@@ -305,7 +307,10 @@ class ClaudeAPIOptimizationSuite:
         return request_data
 
     async def _try_request_batching(
-        self, request_data: Dict[str, Any], request_type: str, optimization_applied: List[str]
+        self,
+        request_data: Dict[str, Any],
+        request_type: str,
+        optimization_applied: List[str],
     ) -> Optional[Dict[str, Any]]:
         """Try to batch the request if appropriate."""
         if not self.request_batcher or not self._should_batch_request(request_type):
@@ -321,8 +326,12 @@ class ClaudeAPIOptimizationSuite:
         return None
 
     async def _record_success_and_cache(
-        self, request_data: Dict[str, Any], request_type: str,
-        response: Dict[str, Any], start_time: float, optimization_applied: List[str]
+        self,
+        request_data: Dict[str, Any],
+        request_type: str,
+        response: Dict[str, Any],
+        start_time: float,
+        optimization_applied: List[str],
     ) -> Dict[str, Any]:
         """Record success metrics and cache response."""
         # Record pattern analysis
@@ -336,7 +345,9 @@ class ClaudeAPIOptimizationSuite:
 
         # Cache successful response for degradation
         if self.degradation_manager and response.get("status") == "success":
-            await self.degradation_manager._cache_response(str(request_data), response["data"])
+            await self.degradation_manager._cache_response(
+                str(request_data), response["data"]
+            )
 
         # Update metrics
         if optimization_applied:
@@ -345,13 +356,15 @@ class ClaudeAPIOptimizationSuite:
 
         # Record optimization history
         async with self._lock:
-            self.optimization_history.append({
-                "timestamp": datetime.now().isoformat(),
-                "request_type": request_type,
-                "optimizations_applied": optimization_applied,
-                "response_time": time.time() - start_time,
-                "success": True,
-            })
+            self.optimization_history.append(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "request_type": request_type,
+                    "optimizations_applied": optimization_applied,
+                    "response_time": time.time() - start_time,
+                    "success": True,
+                }
+            )
 
         return {
             "status": "success",
@@ -361,8 +374,11 @@ class ClaudeAPIOptimizationSuite:
         }
 
     async def _handle_optimization_error(
-        self, error: Exception, request_data: Dict[str, Any],
-        request_type: str, start_time: float
+        self,
+        error: Exception,
+        request_data: Dict[str, Any],
+        request_type: str,
+        start_time: float,
     ) -> Dict[str, Any]:
         """Handle optimization errors with pattern analysis and degradation."""
         logger.error("Error optimizing request: %s", error)
@@ -381,7 +397,11 @@ class ClaudeAPIOptimizationSuite:
                 str(request_data), {"type": request_type, "error": str(error)}
             )
             if fallback.success:
-                return {"status": "fallback", "data": fallback.response, "source": fallback.source}
+                return {
+                    "status": "fallback",
+                    "data": fallback.response,
+                    "source": fallback.source,
+                }
 
         return {"status": "error", "error": str(error)}
 
@@ -410,7 +430,9 @@ class ClaudeAPIOptimizationSuite:
 
             # Step 1: Rate limiting check
             if self.rate_limiter and not await self._check_rate_limits(request_data):
-                return await self._handle_rate_limited_request(request_data, request_type)
+                return await self._handle_rate_limited_request(
+                    request_data, request_type
+                )
 
             # Step 2: TodoWrite optimization (special handling)
             if request_type == "todowrite" and self.todowrite_optimizer:
@@ -422,10 +444,14 @@ class ClaudeAPIOptimizationSuite:
                     return optimized
 
             # Step 3: Payload optimization
-            request_data = await self._apply_payload_optimization(request_data, optimization_applied)
+            request_data = await self._apply_payload_optimization(
+                request_data, optimization_applied
+            )
 
             # Step 4: Request batching
-            batched = await self._try_request_batching(request_data, request_type, optimization_applied)
+            batched = await self._try_request_batching(
+                request_data, request_type, optimization_applied
+            )
             if batched:
                 return batched
 
@@ -436,7 +462,9 @@ class ClaudeAPIOptimizationSuite:
             )
 
         except Exception as e:
-            return await self._handle_optimization_error(e, request_data, request_type, start_time)
+            return await self._handle_optimization_error(
+                e, request_data, request_type, start_time
+            )
 
     async def _check_rate_limits(self, request_data: Dict[str, Any]) -> bool:
         """Check if request can proceed based on rate limits"""
@@ -488,7 +516,9 @@ class ClaudeAPIOptimizationSuite:
 
     def _should_batch_request(self, request_type: str) -> bool:
         """Determine if request type should be considered for batching"""
-        return any(btype in request_type.lower() for btype in _BATCHABLE_TYPES)  # Issue #380
+        return any(
+            btype in request_type.lower() for btype in _BATCHABLE_TYPES
+        )  # Issue #380
 
     async def _attempt_request_batching(
         self, request_data: Dict[str, Any], request_type: str
@@ -565,13 +595,17 @@ class ClaudeAPIOptimizationSuite:
                 await self._process_pattern_analysis()
             except Exception as e:
                 logger.error("Error in background pattern analysis: %s", e)
-                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Wait before retrying
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_TIMEOUT
+                )  # Wait before retrying
 
     async def _background_api_monitoring(self):
         """Background task for API monitoring"""
         while self.is_active:
             try:
-                await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)  # Check every minute
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_TIMEOUT
+                )  # Check every minute
 
                 # Check for approaching rate limits
                 rate_limit_risk = self.api_monitor.predict_rate_limit_risk()
@@ -606,13 +640,17 @@ class ClaudeAPIOptimizationSuite:
 
         # Use dispatch table for mode adjustment
         if degradation_level in self._DEGRADATION_MODE_MAP:
-            await self._adjust_optimization_mode(self._DEGRADATION_MODE_MAP[degradation_level])
+            await self._adjust_optimization_mode(
+                self._DEGRADATION_MODE_MAP[degradation_level]
+            )
 
     async def _background_degradation_monitoring(self):
         """Background task for degradation monitoring (Issue #315 - refactored depth 5 to 3)."""
         while self.is_active:
             try:
-                await asyncio.sleep(TimingConstants.SHORT_TIMEOUT)  # Check every 30 seconds
+                await asyncio.sleep(
+                    TimingConstants.SHORT_TIMEOUT
+                )  # Check every 30 seconds
                 await self._check_degradation_status()
             except Exception as e:
                 logger.error("Error in degradation monitoring: %s", e)
@@ -918,11 +956,57 @@ async def get_optimization_insights() -> Dict[str, Any]:
     return await suite.get_optimization_status()
 
 
+def _get_example_todos() -> List[Dict[str, Any]]:
+    """Return sample todo items for example usage demonstration. Issue #620."""
+    return [
+        {
+            "content": "Implement authentication system",
+            "status": "pending",
+            "activeForm": "Implementing authentication system",
+        },
+        {
+            "content": "Create login endpoint",
+            "status": "pending",
+            "activeForm": "Creating login endpoint",
+        },
+        {
+            "content": "Add auth middleware",
+            "status": "pending",
+            "activeForm": "Adding auth middleware",
+        },
+    ]
+
+
+async def _run_example_optimizations(suite: ClaudeAPIOptimizationSuite) -> None:
+    """Execute example optimization operations and log results. Issue #620."""
+    todowrite_result = await optimize_todowrite(_get_example_todos())
+    logger.info(
+        "TodoWrite optimization result: %s", json.dumps(todowrite_result, indent=2)
+    )
+
+    general_result = await optimize_claude_request(
+        {"action": "read_file", "path": "/test/file.py"}, "read_operation"
+    )
+    logger.info(
+        "General request optimization result: %s", json.dumps(general_result, indent=2)
+    )
+
+    status = suite.get_optimization_status()
+    logger.info("Optimization status: %s", json.dumps(status, indent=2, default=str))
+
+    analysis = await suite.force_optimization_analysis()
+    logger.info(
+        "Forced analysis result: %s", json.dumps(analysis, indent=2, default=str)
+    )
+
+    report_path = "/tmp/claude_optimization_report.json"  # nosec B108 - example code
+    exported = await suite.export_optimization_report(report_path)
+    logger.info("Report exported: %s -> %s", exported, report_path)
+
+
 # Example usage and testing
 async def example_usage():
     """Example of how to use the Claude API optimization suite"""
-
-    # Initialize with custom configuration
     config = OptimizationConfig(
         mode=OptimizationMode.BALANCED,
         enable_todowrite_optimization=True,
@@ -930,57 +1014,14 @@ async def example_usage():
         todowrite_consolidation_window=45,
     )
 
-    # Start optimization
     success = await initialize_claude_api_optimization(config)
     if not success:
         logger.error("Failed to initialize optimization suite")
         return
 
-    # Get optimization suite
     suite = get_optimization_suite()
+    await _run_example_optimizations(suite)
 
-    # Example: Optimize TodoWrite operation
-    todowrite_result = await optimize_todowrite(
-        [
-            {
-                "content": "Implement authentication system",
-                "status": "pending",
-                "activeForm": "Implementing authentication system",
-            },
-            {
-                "content": "Create login endpoint",
-                "status": "pending",
-                "activeForm": "Creating login endpoint",
-            },
-            {
-                "content": "Add auth middleware",
-                "status": "pending",
-                "activeForm": "Adding auth middleware",
-            },
-        ]
-    )
-    logger.info("TodoWrite optimization result: %s", json.dumps(todowrite_result, indent=2))
-
-    # Example: Optimize general request
-    general_result = await optimize_claude_request(
-        {"action": "read_file", "path": "/test/file.py"}, "read_operation"
-    )
-    logger.info("General request optimization result: %s", json.dumps(general_result, indent=2))
-
-    # Get optimization status
-    status = suite.get_optimization_status()
-    logger.info("Optimization status: %s", json.dumps(status, indent=2, default=str))
-
-    # Force optimization analysis
-    analysis = await suite.force_optimization_analysis()
-    logger.info("Forced analysis result: %s", json.dumps(analysis, indent=2, default=str))
-
-    # Export comprehensive report
-    report_path = "/tmp/claude_optimization_report.json"
-    exported = await suite.export_optimization_report(report_path)
-    logger.info("Report exported: %s -> %s", exported, report_path)
-
-    # Shutdown
     await shutdown_claude_api_optimization()
     logger.info("Optimization suite shutdown complete")
 

@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 from langchain.agents import Tool, initialize_agent
 from langchain.agents.agent_types import AgentType
 
-
 try:
     from langchain_community.llms import Ollama  # type: ignore
 except ImportError:
@@ -60,7 +59,9 @@ class LangChainAgentOrchestrator:
     def _validate_prerequisites(self) -> bool:
         """Validate prerequisites for orchestrator initialization."""
         if not self.available:
-            logging.warning("LangChain Agent Orchestrator disabled due to missing worker node")
+            logging.warning(
+                "LangChain Agent Orchestrator disabled due to missing worker node"
+            )
             return False
 
         if Ollama is None:
@@ -78,18 +79,26 @@ class LangChainAgentOrchestrator:
 
         llm_config = global_config.get_llm_config()
         llm_model = ModelConstants.DEFAULT_OLLAMA_MODEL
-        llm_base_url = llm_config.get("ollama", {}).get("base_url", get_service_url("ollama"))
+        llm_base_url = llm_config.get("ollama", {}).get(
+            "base_url", get_service_url("ollama")
+        )
         return llm_model, llm_base_url
 
     def _initialize_llm(self) -> bool:
         """Initialize the LLM for LangChain."""
         llm_model, llm_base_url = self._get_llm_config()
-        logging.info(f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}")
+        logging.info(
+            f"LangChain Agent initializing with model: {llm_model}, base_url: {llm_base_url}"
+        )
 
         try:
-            logging.debug(f"Passing model='{llm_model}' and base_url='{llm_base_url}' to Ollama constructor.")
+            logging.debug(
+                f"Passing model='{llm_model}' and base_url='{llm_base_url}' to Ollama constructor."
+            )
             self.llm = Ollama(model=llm_model, base_url=llm_base_url, temperature=0.7)
-            logging.info(f"LangChain Agent LLM initialized successfully with model: {llm_model}")
+            logging.info(
+                f"LangChain Agent LLM initialized successfully with model: {llm_model}"
+            )
             return True
         except Exception as e:
             logging.error(f"Failed to initialize LangChain Agent: {e}", exc_info=True)
@@ -98,7 +107,9 @@ class LangChainAgentOrchestrator:
 
     def _initialize_components(self) -> None:
         """Initialize tool registry, tools, and agent."""
-        self.tool_registry = ToolRegistry(worker_node=self.worker_node, knowledge_base=self.knowledge_base)
+        self.tool_registry = ToolRegistry(
+            worker_node=self.worker_node, knowledge_base=self.knowledge_base
+        )
         self.tools = self._create_tools()
         self.agent = initialize_agent(
             tools=self.tools,
@@ -478,6 +489,32 @@ class LangChainAgentOrchestrator:
         except Exception as e:
             return f"Error: {e}"
 
+    def _build_conversation_context(
+        self, conversation_history: Optional[List[Dict[str, str]]]
+    ) -> str:
+        """Build context string from conversation history. Issue #620."""
+        if not conversation_history:
+            return ""
+        context = "\n".join(
+            [f"{msg['role']}: {msg['content']}" for msg in conversation_history[-5:]]
+        )
+        return f"Recent conversation:\n{context}\n\n"
+
+    async def _build_knowledge_base_context(self, goal: str) -> str:
+        """Fetch and format knowledge base context for a goal. Issue #620."""
+        if not self.knowledge_base:
+            return ""
+        try:
+            kb_results = await self.knowledge_base.search(goal, n_results=3)
+            if kb_results:
+                kb_context = "\n".join(
+                    [f"KB: {result['content'][:200]}..." for result in kb_results]
+                )
+                return f"Relevant knowledge:\n{kb_context}\n\n"
+        except Exception as e:
+            logging.warning(f"Failed to search knowledge base: {e}")
+        return ""
+
     async def execute_goal(
         self, goal: str, conversation_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
@@ -488,36 +525,12 @@ class LangChainAgentOrchestrator:
                 {"level": "INFO", "message": f"LangChain Agent executing goal: {goal}"},
             )
 
-            # Build context from conversation history
-            context = ""
-            if conversation_history:
-                context = "\n".join(
-                    [
-                        f"{msg['role']}: {msg['content']}"
-                        for msg in conversation_history[-5:]
-                    ]
-                )
-                context = f"Recent conversation:\n{context}\n\n"
-
-            # Add knowledge base context
-            if self.knowledge_base:  # Guard against None
-                try:
-                    kb_results = await self.knowledge_base.search(goal, n_results=3)
-                    if kb_results:
-                        kb_context = "\n".join(
-                            [
-                                f"KB: {result['content'][:200]}..."
-                                for result in kb_results
-                            ]
-                        )
-                        context += f"Relevant knowledge:\n{kb_context}\n\n"
-                except Exception as e:
-                    logging.warning(f"Failed to search knowledge base: {e}")
+            # Build context from conversation history and knowledge base
+            context = self._build_conversation_context(conversation_history)
+            context += await self._build_knowledge_base_context(goal)
 
             # Execute the goal using LangChain agent
             full_goal = f"{context}Current goal: {goal}"
-
-            # Run the agent in a thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, self.agent.run, full_goal)
 

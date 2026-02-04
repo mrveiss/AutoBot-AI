@@ -222,8 +222,15 @@ class TakeoverManager:
 
         # Issue #665: Use helper to create request
         request = self._create_takeover_request(
-            request_id, trigger, reason, requesting_agent, affected_tasks,
-            priority, context_data, timeout_minutes, auto_approve
+            request_id,
+            trigger,
+            reason,
+            requesting_agent,
+            affected_tasks,
+            priority,
+            context_data,
+            timeout_minutes,
+            auto_approve,
         )
 
         # Issue #665: Use helper to record in memory
@@ -236,44 +243,44 @@ class TakeoverManager:
         await self._execute_trigger_handlers(request)
 
         # Auto-pause affected tasks if critical
-        if trigger in {TakeoverTrigger.CRITICAL_ERROR, TakeoverTrigger.SECURITY_CONCERN}:
+        if trigger in {
+            TakeoverTrigger.CRITICAL_ERROR,
+            TakeoverTrigger.SECURITY_CONCERN,
+        }:
             await self._pause_affected_tasks(request.affected_tasks)
 
         # Auto-approve if configured
         if request.auto_approve:
             await self._auto_approve_request(request_id)
 
-        logger.info("Takeover requested: %s - %s - %s", request_id, trigger.value, reason)
+        logger.info(
+            "Takeover requested: %s - %s - %s", request_id, trigger.value, reason
+        )
         await self._notify_state_change("request_created", request_id)
 
         return request_id
 
-    async def approve_takeover(
-        self,
-        request_id: str,
-        human_operator: str,
-        takeover_scope: Optional[Dict[str, Any]] = None,
-    ) -> str:
-        """Approve a takeover request and start session"""
-
+    async def _validate_takeover_request(self, request_id: str) -> TakeoverRequest:
+        """Validate takeover request exists, not expired, and capacity available. Issue #620."""
         if request_id not in self.pending_requests:
             raise ValueError(f"Takeover request not found: {request_id}")
 
         request = self.pending_requests[request_id]
 
-        # Check if request has expired
         if request.expires_at and datetime.now() > request.expires_at:
             await self._expire_request(request_id)
             raise ValueError(f"Takeover request has expired: {request_id}")
 
-        # Check concurrent session limit
         if len(self.active_sessions) >= self.max_concurrent_sessions:
             raise RuntimeError("Maximum concurrent takeover sessions reached")
 
-        # Create takeover session
-        session_id = f"session_{request_id}_{int(time.time())}"
+        return request
 
-        # Capture system snapshot
+    async def _create_takeover_session(
+        self, request_id: str, request: TakeoverRequest, human_operator: str
+    ) -> TakeoverSession:
+        """Create and register a new takeover session. Issue #620."""
+        session_id = f"session_{request_id}_{int(time.time())}"
         system_snapshot = await self._capture_system_snapshot()
 
         session = TakeoverSession(
@@ -287,31 +294,39 @@ class TakeoverManager:
             system_snapshot=system_snapshot,
         )
 
-        # Move from pending to active
         del self.pending_requests[request_id]
         self.active_sessions[session_id] = session
+        return session
 
-        # Pause affected autonomous operations
+    async def approve_takeover(
+        self,
+        request_id: str,
+        human_operator: str,
+        takeover_scope: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Approve a takeover request and start session"""
+        request = await self._validate_takeover_request(request_id)
+        session = await self._create_takeover_session(
+            request_id, request, human_operator
+        )
+
         await self._pause_affected_tasks(request.affected_tasks)
 
-        # Complete the takeover request task
         self.memory_manager.complete_task(
             self._get_task_id_for_request(request_id),
             outputs={
-                "session_id": session_id,
+                "session_id": session.session_id,
                 "human_operator": human_operator,
                 "status": "approved_and_active",
             },
         )
 
         logger.info(
-            f"Takeover approved and session started: {session_id} by {human_operator}"
+            f"Takeover approved and session started: {session.session_id} by {human_operator}"
         )
+        await self._notify_state_change("session_started", session.session_id)
 
-        # Notify state change
-        await self._notify_state_change("session_started", session_id)
-
-        return session_id
+        return session.session_id
 
     async def execute_takeover_action(
         self, session_id: str, action_type: str, action_data: Dict[str, Any]
@@ -340,7 +355,9 @@ class TakeoverManager:
         action_record["result"] = result
         session.actions_taken.append(action_record)
 
-        logger.info("Takeover action executed: %s in session %s", action_type, session_id)
+        logger.info(
+            "Takeover action executed: %s in session %s", action_type, session_id
+        )
 
         return result
 
@@ -374,7 +391,11 @@ class TakeoverManager:
         """Handle reject_operation action (Issue #315)."""
         operation_id = action_data.get("operation_id")
         reason = action_data.get("reason", "Rejected by human operator")
-        return {"status": "operation_rejected", "operation_id": operation_id, "reason": reason}
+        return {
+            "status": "operation_rejected",
+            "operation_id": operation_id,
+            "reason": reason,
+        }
 
     def _action_system_command(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle system_command action (Issue #315)."""
@@ -387,7 +408,11 @@ class TakeoverManager:
         """Handle custom_script action (Issue #315)."""
         script_name = action_data.get("script_name")
         script_params = action_data.get("parameters", {})
-        return {"status": "script_executed", "script": script_name, "parameters": script_params}
+        return {
+            "status": "script_executed",
+            "script": script_name,
+            "parameters": script_params,
+        }
 
     async def _execute_action(
         self, action_type: str, action_data: Dict[str, Any], session: TakeoverSession
@@ -582,7 +607,9 @@ class TakeoverManager:
             session_id = await self.approve_takeover(
                 request_id, human_operator="system_auto_approval"
             )
-            logger.info("Auto-approved takeover request: %s -> %s", request_id, session_id)
+            logger.info(
+                "Auto-approved takeover request: %s -> %s", request_id, session_id
+            )
         except Exception as e:
             logger.error("Auto-approval failed for %s: %s", request_id, e)
 
