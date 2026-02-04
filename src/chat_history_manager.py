@@ -16,6 +16,61 @@ from src.utils.redis_client import get_redis_client
 
 
 class ChatHistoryManager:
+    def _load_configuration(
+        self,
+        history_file: Optional[str],
+        use_redis: Optional[bool],
+        redis_host: Optional[str],
+        redis_port: Optional[int],
+    ) -> None:
+        """Load configuration from centralized config manager. Issue #620."""
+        data_config = global_config_manager.get("data", {})
+        redis_config = global_config_manager.get_redis_config()
+
+        self.history_file = history_file or data_config.get(
+            "chat_history_file",
+            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
+        )
+        self.use_redis = (
+            use_redis if use_redis is not None else redis_config.get("enabled", False)
+        )
+        self.redis_host = redis_host or redis_config.get(
+            "host", os.getenv("REDIS_HOST", "localhost")
+        )
+        self.redis_port = redis_port or redis_config.get("port", 6379)
+
+    def _initialize_encryption(self) -> None:
+        """Initialize and verify encryption service. Issue #620."""
+        self.encryption_enabled = is_encryption_enabled()
+
+        if self.encryption_enabled:
+            logging.info("Chat history encryption is ENABLED")
+            try:
+                encryption_service = get_encryption_service()
+                key_info = encryption_service.get_key_info()
+                logging.info(f"Encryption service initialized: {key_info['algorithm']}")
+            except Exception as e:
+                logging.error(f"Failed to initialize encryption service: {e}")
+                self.encryption_enabled = False
+        else:
+            logging.info("Chat history encryption is DISABLED")
+
+    def _initialize_redis_client(self) -> None:
+        """Initialize Redis client if enabled. Issue #620."""
+        if self.use_redis:
+            self.redis_client = get_redis_client(async_client=False)
+            if self.redis_client:
+                logging.info(
+                    "Redis connection established via centralized utility "
+                    "for active memory storage."
+                )
+            else:
+                logging.error(
+                    "Failed to get Redis client from centralized utility. "
+                    "Falling back to file storage."
+                )
+                self.use_redis = False
+
     def __init__(
         self,
         history_file: Optional[str] = None,
@@ -33,55 +88,13 @@ class ChatHistoryManager:
             redis_host (str): Hostname for Redis server.
             redis_port (int): Port for Redis server.
         """
-        # Load configuration from centralized config manager
-        data_config = global_config_manager.get("data", {})
-        redis_config = global_config_manager.get_redis_config()
-
-        # Set values using configuration with environment variable overrides
-        self.history_file = history_file or data_config.get(
-            "chat_history_file",
-            os.getenv("AUTOBOT_CHAT_HISTORY_FILE", "data/chat_history.json"),
-        )
-        self.use_redis = (
-            use_redis if use_redis is not None else redis_config.get("enabled", False)
-        )
-        self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("REDIS_HOST", "localhost")
-        )
-        self.redis_port = redis_port or redis_config.get("port", 6379)
+        self._load_configuration(history_file, use_redis, redis_host, redis_port)
 
         self.history: List[Dict[str, Any]] = []
         self.redis_client = None
-        self.encryption_enabled = is_encryption_enabled()
 
-        # Log encryption status
-        if self.encryption_enabled:
-            logging.info("Chat history encryption is ENABLED")
-            try:
-                # Verify encryption service is available
-                encryption_service = get_encryption_service()
-                key_info = encryption_service.get_key_info()
-                logging.info(f"Encryption service initialized: {key_info['algorithm']}")
-            except Exception as e:
-                logging.error(f"Failed to initialize encryption service: {e}")
-                self.encryption_enabled = False
-        else:
-            logging.info("Chat history encryption is DISABLED")
-
-        if self.use_redis:
-            # Use centralized Redis client utility
-            self.redis_client = get_redis_client(async_client=False)
-            if self.redis_client:
-                logging.info(
-                    "Redis connection established via centralized utility "
-                    "for active memory storage."
-                )
-            else:
-                logging.error(
-                    "Failed to get Redis client from centralized utility. "
-                    "Falling back to file storage."
-                )
-                self.use_redis = False
+        self._initialize_encryption()
+        self._initialize_redis_client()
 
         self._ensure_data_directory_exists()
         self._load_history()

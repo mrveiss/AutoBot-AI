@@ -265,6 +265,37 @@ async def _save_test_checkpoint_if_needed(
         )
 
 
+async def _run_test_suite_loop(
+    test_files: List[Path],
+    context: "OperationExecutionContext",
+) -> Dict[str, Any]:
+    """Execute the test suite loop and return summary results.
+
+    Iterates through test files, executes each test, tracks pass/fail counts,
+    and saves checkpoints periodically. Issue #620.
+    """
+    total_tests = len(test_files)
+    results: List[Dict[str, Any]] = []
+    passed = 0
+    failed = 0
+
+    for i, test_file in enumerate(test_files):
+        try:
+            test_result, test_passed = await _execute_single_test(
+                test_file, i, total_tests, passed, failed, context
+            )
+            results.append(test_result)
+            passed, failed = (
+                (passed + 1, failed) if test_passed else (passed, failed + 1)
+            )
+            await _save_test_checkpoint_if_needed(i, results, passed, failed, context)
+        except Exception as e:
+            context.logger.error("Failed to run test %s: %s", test_file, e)
+            failed += 1
+
+    return _calculate_test_summary(total_tests, passed, failed, results)
+
+
 # =============================================================================
 # Convenience Functions for Common Operations
 # =============================================================================
@@ -393,44 +424,14 @@ async def execute_comprehensive_test_suite(
     async def test_suite_operation(
         context: OperationExecutionContext,
     ) -> Dict[str, Any]:
-        """Run test suite with progress tracking and checkpoint support.
-
-        Issue #620: Refactored to use extracted helper functions for reduced complexity.
-        """
+        """Run test suite with progress tracking and checkpoint support. Issue #620."""
         path = Path(test_suite_path)
         patterns = test_patterns or ["test_*.py", "*_test.py"]
 
-        # Discover test files using helper (Issue #665)
         test_files = await _discover_test_files(path, patterns)
-        total_tests = len(test_files)
-        await context.update_progress("Initializing test suite", 0, total_tests)
+        await context.update_progress("Initializing test suite", 0, len(test_files))
 
-        results: List[Dict[str, Any]] = []
-        passed = 0
-        failed = 0
-
-        for i, test_file in enumerate(test_files):
-            try:
-                # Execute test using helper (Issue #620)
-                test_result, test_passed = await _execute_single_test(
-                    test_file, i, total_tests, passed, failed, context
-                )
-                results.append(test_result)
-                passed, failed = (
-                    (passed + 1, failed) if test_passed else (passed, failed + 1)
-                )
-
-                # Save checkpoint using helper (Issue #620)
-                await _save_test_checkpoint_if_needed(
-                    i, results, passed, failed, context
-                )
-
-            except Exception as e:
-                context.logger.error("Failed to run test %s: %s", test_file, e)
-                failed += 1
-
-        # Return summary using helper (Issue #665)
-        return _calculate_test_summary(total_tests, passed, failed, results)
+        return await _run_test_suite_loop(test_files, context)
 
     return await manager.create_operation(
         OperationType.COMPREHENSIVE_TEST_SUITE,

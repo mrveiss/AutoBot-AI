@@ -197,13 +197,11 @@ def create_vulnerability_assessment_template() -> WorkflowTemplate:
     )
 
 
-def _create_audit_steps() -> List[WorkflowStep]:
-    """Create workflow steps for security audit template.
+def _create_audit_planning_steps() -> List[WorkflowStep]:
+    """Create planning and discovery steps for security audit.
 
-    Issue #665: Extracted from create_security_audit_template to reduce function length.
-
-    Returns:
-        List of WorkflowStep objects defining the security audit workflow.
+    Returns planning, research, and asset discovery workflow steps.
+    Issue #620.
     """
     return [
         WorkflowStep(
@@ -231,6 +229,16 @@ def _create_audit_steps() -> List[WorkflowStep]:
             inputs={"task_type": "asset_inventory"},
             expected_duration_ms=25000,
         ),
+    ]
+
+
+def _create_audit_execution_steps() -> List[WorkflowStep]:
+    """Create execution and reporting steps for security audit.
+
+    Returns scanning, compliance check, reporting, and storage steps.
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="security_scanning",
             agent_type="security_scanner",
@@ -266,6 +274,17 @@ def _create_audit_steps() -> List[WorkflowStep]:
             expected_duration_ms=5000,
         ),
     ]
+
+
+def _create_audit_steps() -> List[WorkflowStep]:
+    """Create workflow steps for security audit template.
+
+    Issue #620: Refactored using Extract Method pattern for reduced function length.
+
+    Returns:
+        List of WorkflowStep objects defining the security audit workflow.
+    """
+    return _create_audit_planning_steps() + _create_audit_execution_steps()
 
 
 def _create_audit_metadata() -> dict:

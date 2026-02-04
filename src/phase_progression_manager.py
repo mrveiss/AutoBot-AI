@@ -78,8 +78,8 @@ class PhaseProgressionManager:
         self.progression_history = []
         self.current_capabilities = set()
 
-    def _get_core_phase_rules(self) -> Dict[str, Dict[str, Any]]:
-        """Get rules for core infrastructure phases (1-4)."""
+    def _get_phase1_core_infrastructure_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 1: Core Infrastructure. Issue #620."""
         return {
             "Phase 1: Core Infrastructure": {
                 "prerequisites": [],
@@ -95,6 +95,11 @@ class PhaseProgressionManager:
                     "logging",
                 ],
             },
+        }
+
+    def _get_phase2_knowledge_base_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 2: Knowledge Base and Memory. Issue #620."""
+        return {
             "Phase 2: Knowledge Base and Memory": {
                 "prerequisites": ["Phase 1: Core Infrastructure"],
                 "auto_progression": True,
@@ -112,6 +117,11 @@ class PhaseProgressionManager:
                     "data_persistence",
                 ],
             },
+        }
+
+    def _get_phase3_llm_integration_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 3: LLM Integration. Issue #620."""
+        return {
             "Phase 3: LLM Integration": {
                 "prerequisites": ["Phase 1: Core Infrastructure"],
                 "auto_progression": True,
@@ -129,6 +139,11 @@ class PhaseProgressionManager:
                     "natural_language_processing",
                 ],
             },
+        }
+
+    def _get_phase4_security_rule(self) -> Dict[str, Dict[str, Any]]:
+        """Get rule for Phase 4: Security and Authentication. Issue #620."""
+        return {
             "Phase 4: Security and Authentication": {
                 "prerequisites": ["Phase 2: Knowledge Base and Memory"],
                 "auto_progression": True,
@@ -147,6 +162,15 @@ class PhaseProgressionManager:
                 ],
             },
         }
+
+    def _get_core_phase_rules(self) -> Dict[str, Dict[str, Any]]:
+        """Get rules for core infrastructure phases (1-4). Issue #620."""
+        rules: Dict[str, Dict[str, Any]] = {}
+        rules.update(self._get_phase1_core_infrastructure_rule())
+        rules.update(self._get_phase2_knowledge_base_rule())
+        rules.update(self._get_phase3_llm_integration_rule())
+        rules.update(self._get_phase4_security_rule())
+        return rules
 
     def _get_performance_optimization_rule(self) -> Dict[str, Dict[str, Any]]:
         """Get rule for Phase 5: Performance Optimization. Issue #620."""

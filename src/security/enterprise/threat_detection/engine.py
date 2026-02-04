@@ -12,7 +12,7 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 
 import asyncio
 import logging
-import pickle
+import pickle  # nosec B403 - internal profile storage only
 import threading
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
@@ -287,7 +287,7 @@ class ThreatDetectionEngine:
         try:
             if self.profile_storage_path.exists():
                 with open(self.profile_storage_path, "rb") as f:
-                    self.user_profiles = pickle.load(f)
+                    self.user_profiles = pickle.load(f)  # nosec B301
                 self.stats["users_monitored"] = len(self.user_profiles)
                 logger.info("Loaded %s user profiles", len(self.user_profiles))
         except Exception as e:
@@ -353,9 +353,56 @@ class ThreatDetectionEngine:
             except Exception as e:
                 logger.error("Error in periodic cleanup: %s", e)
 
+    def _get_analyzer_mode_map(self) -> Dict:
+        """Get mapping of analyzer types to their config mode keys. Issue #620."""
+        return {
+            CommandInjectionAnalyzer: "command_injection_detection",
+            BehavioralAnomalyAnalyzer: "behavioral_analysis",
+            BruteForceAnalyzer: "brute_force_detection",
+            MaliciousFileAnalyzer: "file_upload_scanning",
+            APIAbuseAnalyzer: "api_abuse_detection",
+            InsiderThreatAnalyzer: "insider_threat_detection",
+        }
+
+    async def _run_analyzers(
+        self, security_event: SecurityEvent, context: AnalysisContext
+    ) -> List[ThreatEvent]:
+        """Run all enabled analyzers on the security event. Issue #620."""
+        detected_threats = []
+        detection_modes = self.config.get("detection_modes", {})
+        analyzer_mode_map = self._get_analyzer_mode_map()
+
+        for analyzer in self.analyzers:
+            mode_key = analyzer_mode_map.get(type(analyzer))
+            if mode_key and not detection_modes.get(mode_key, True):
+                continue
+
+            threat = await analyzer.analyze(security_event, context)
+            if threat:
+                detected_threats.append(threat)
+
+        return detected_threats
+
+    async def _process_detected_threat(
+        self, detected_threats: List[ThreatEvent]
+    ) -> ThreatEvent:
+        """Process detected threats and update statistics. Issue #620."""
+        primary_threat = max(
+            detected_threats,
+            key=lambda t: (t.threat_level.value, t.confidence_score),
+        )
+
+        self.stats["threats_detected"] += 1
+        self.stats["threats_by_category"][primary_threat.threat_category.value] += 1
+        self.stats["threats_by_level"][primary_threat.threat_level.value] += 1
+
+        await self._execute_response_actions(primary_threat)
+
+        return primary_threat
+
     async def analyze_event(self, event: Dict) -> Optional[ThreatEvent]:
         """
-        Analyze a security event for potential threats
+        Analyze a security event for potential threats.
 
         Args:
             event: Security event to analyze
@@ -366,10 +413,8 @@ class ThreatDetectionEngine:
         self.stats["total_events_processed"] += 1
         self.recent_events.append(event)
 
-        # Wrap event in SecurityEvent for typed access
         security_event = SecurityEvent(raw_event=event)
 
-        # Create analysis context
         context = AnalysisContext(
             config=self.config,
             user_profiles=self.user_profiles,
@@ -379,46 +424,11 @@ class ThreatDetectionEngine:
             api_patterns=self.suspicious_api_patterns,
         )
 
-        # Run all analyzers
-        detected_threats = []
+        detected_threats = await self._run_analyzers(security_event, context)
 
-        detection_modes = self.config.get("detection_modes", {})
-        analyzer_mode_map = {
-            CommandInjectionAnalyzer: "command_injection_detection",
-            BehavioralAnomalyAnalyzer: "behavioral_analysis",
-            BruteForceAnalyzer: "brute_force_detection",
-            MaliciousFileAnalyzer: "file_upload_scanning",
-            APIAbuseAnalyzer: "api_abuse_detection",
-            InsiderThreatAnalyzer: "insider_threat_detection",
-        }
-
-        for analyzer in self.analyzers:
-            # Check if this analyzer type is enabled
-            mode_key = analyzer_mode_map.get(type(analyzer))
-            if mode_key and not detection_modes.get(mode_key, True):
-                continue
-
-            threat = await analyzer.analyze(security_event, context)
-            if threat:
-                detected_threats.append(threat)
-
-        # Select highest priority threat
         if detected_threats:
-            primary_threat = max(
-                detected_threats,
-                key=lambda t: (t.threat_level.value, t.confidence_score),
-            )
+            return await self._process_detected_threat(detected_threats)
 
-            self.stats["threats_detected"] += 1
-            self.stats["threats_by_category"][primary_threat.threat_category.value] += 1
-            self.stats["threats_by_level"][primary_threat.threat_level.value] += 1
-
-            # Execute response actions
-            await self._execute_response_actions(primary_threat)
-
-            return primary_threat
-
-        # Update user profile with benign behavior
         await self._update_user_behavior(security_event.user_id, security_event)
 
         return None
