@@ -363,6 +363,66 @@ class CaptchaHumanLoop:
             duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
         )
 
+    async def _try_auto_solve_flow(
+        self,
+        page: Page,
+        captcha_type: str,
+        captcha_input_selector: Optional[str],
+        captcha_id: str,
+        url: str,
+        start_time: datetime,
+    ) -> tuple[Optional[CaptchaResolutionResult], str]:
+        """Attempt auto-solve and return result with screenshot base64.
+
+        Args:
+            page: Playwright page with CAPTCHA
+            captcha_type: Type of CAPTCHA detected
+            captcha_input_selector: CSS selector for input field
+            captcha_id: Unique CAPTCHA identifier
+            url: URL where CAPTCHA was encountered
+            start_time: When intervention started
+
+        Returns:
+            Tuple of (auto_result or None, screenshot_b64). Issue #620.
+        """
+        screenshot_b64 = await self._capture_screenshot_b64(page)
+        screenshot = base64.b64decode(screenshot_b64)
+
+        auto_result = await self._handle_auto_solve(
+            page,
+            screenshot,
+            captcha_type,
+            captcha_input_selector,
+            captcha_id,
+            url,
+            start_time,
+        )
+        return auto_result, screenshot_b64
+
+    async def _human_intervention_flow(
+        self,
+        captcha_id: str,
+        url: str,
+        captcha_type: str,
+        screenshot_b64: str,
+    ) -> tuple[CaptchaResolutionStatus, bool]:
+        """Execute human intervention flow and return status.
+
+        Args:
+            captcha_id: Unique CAPTCHA identifier
+            url: URL where CAPTCHA was encountered
+            captcha_type: Type of CAPTCHA detected
+            screenshot_b64: Base64-encoded screenshot
+
+        Returns:
+            Tuple of (status, success). Issue #620.
+        """
+        logger.info("Requesting human intervention for CAPTCHA at %s", url)
+        resolution_event = await self._setup_human_intervention(
+            captcha_id, url, captcha_type, screenshot_b64
+        )
+        return await self._wait_for_human_resolution(captcha_id, url, resolution_event)
+
     async def request_human_intervention(
         self,
         page: Page,
@@ -379,20 +439,15 @@ class CaptchaHumanLoop:
             captcha_input_selector: CSS selector for CAPTCHA input field (if known)
 
         Returns:
-            CaptchaResolutionResult with success status and details. Issue #620.
+            CaptchaResolutionResult with success status and details.
         """
         captcha_id = str(uuid.uuid4())
         start_time = datetime.utcnow()
         logger.info("Handling CAPTCHA at %s (type: %s)", url, captcha_type)
 
         try:
-            screenshot_b64 = await self._capture_screenshot_b64(page)
-            screenshot = base64.b64decode(screenshot_b64)
-
-            # Attempt automatic solving (Issue #620: uses helper)
-            auto_result = await self._handle_auto_solve(
+            auto_result, screenshot_b64 = await self._try_auto_solve_flow(
                 page,
-                screenshot,
                 captcha_type,
                 captcha_input_selector,
                 captcha_id,
@@ -402,13 +457,8 @@ class CaptchaHumanLoop:
             if auto_result:
                 return auto_result
 
-            # Fall back to human intervention (Issue #620: uses helpers)
-            logger.info("Requesting human intervention for CAPTCHA at %s", url)
-            resolution_event = await self._setup_human_intervention(
+            status, success = await self._human_intervention_flow(
                 captcha_id, url, captcha_type, screenshot_b64
-            )
-            status, success = await self._wait_for_human_resolution(
-                captcha_id, url, resolution_event
             )
 
         except Exception as e:

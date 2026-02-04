@@ -15,9 +15,10 @@ from src.autobot_types import TaskComplexity
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 
 
-def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
-    """Create workflow steps for the deployment pipeline template.
+def _create_deployment_setup_steps() -> List[WorkflowStep]:
+    """Create research and environment setup steps for deployment pipeline.
 
+    Returns WorkflowStep objects for pipeline_research, environment_setup, and pipeline_config.
     Issue #620.
     """
     return [
@@ -45,6 +46,16 @@ def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
             dependencies=["environment_setup"],
             expected_duration_ms=20000,
         ),
+    ]
+
+
+def _create_deployment_execution_steps() -> List[WorkflowStep]:
+    """Create deployment execution and verification steps for deployment pipeline.
+
+    Returns WorkflowStep objects for deploy_application, verify_deployment, and document_pipeline.
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="deploy_application",
             agent_type="system_commands",
@@ -71,6 +82,15 @@ def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
             expected_duration_ms=8000,
         ),
     ]
+
+
+def _create_deployment_pipeline_steps() -> List[WorkflowStep]:
+    """Create workflow steps for the deployment pipeline template.
+
+    Combines setup and execution steps using helper methods.
+    Issue #620.
+    """
+    return _create_deployment_setup_steps() + _create_deployment_execution_steps()
 
 
 def _create_analysis_and_scan_steps() -> List[WorkflowStep]:
@@ -203,10 +223,10 @@ def create_deployment_pipeline_template() -> WorkflowTemplate:
     )
 
 
-def _create_testing_strategy_steps() -> List[WorkflowStep]:
-    """Create workflow steps for the testing strategy template.
+def _create_testing_research_and_setup_steps() -> List[WorkflowStep]:
+    """Create research, strategy, and framework setup steps for testing workflow.
 
-    Returns the research, strategy, setup, test creation, execution, and documentation steps.
+    Returns WorkflowStep objects for testing_research, test_strategy, and setup_frameworks.
     Issue #620.
     """
     return [
@@ -234,6 +254,16 @@ def _create_testing_strategy_steps() -> List[WorkflowStep]:
             dependencies=["test_strategy"],
             expected_duration_ms=30000,
         ),
+    ]
+
+
+def _create_testing_execution_steps() -> List[WorkflowStep]:
+    """Create test execution and documentation steps for testing workflow.
+
+    Returns WorkflowStep objects for create_tests, run_tests, and document_testing.
+    Issue #620.
+    """
+    return [
         WorkflowStep(
             id="create_tests",
             agent_type="system_commands",
@@ -259,6 +289,17 @@ def _create_testing_strategy_steps() -> List[WorkflowStep]:
             expected_duration_ms=8000,
         ),
     ]
+
+
+def _create_testing_strategy_steps() -> List[WorkflowStep]:
+    """Create workflow steps for the testing strategy template.
+
+    Combines research/setup and execution steps using helper methods.
+    Issue #620.
+    """
+    return (
+        _create_testing_research_and_setup_steps() + _create_testing_execution_steps()
+    )
 
 
 def create_testing_strategy_template() -> WorkflowTemplate:

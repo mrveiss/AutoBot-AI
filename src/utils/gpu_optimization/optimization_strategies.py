@@ -9,7 +9,7 @@ Contains individual optimization strategy implementations.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from src.utils.performance_monitor import performance_monitor
 
@@ -74,48 +74,68 @@ async def optimize_memory_allocation(
         }
 
 
+def _apply_batch_size_optimizations(
+    config: GPUOptimizationConfig,
+) -> List[str]:
+    """Apply modal-specific batch size optimizations.
+
+    Args:
+        config: GPU optimization configuration
+
+    Returns:
+        List of optimization messages. Issue #620.
+    """
+    optimizations = []
+
+    if config.auto_batch_sizing:
+        optimizations.append("Adaptive batch sizing enabled")
+
+    optimizations.append(f"Text batch size optimized: {config.text_batch_size}")
+    optimizations.append(f"Image batch size optimized: {config.image_batch_size}")
+    optimizations.append(f"Audio batch size optimized: {config.audio_batch_size}")
+
+    if config.batch_timeout_ms > 0:
+        optimizations.append(f"Batch timeout set to {config.batch_timeout_ms}ms")
+
+    return optimizations
+
+
+def _get_memory_based_recommendations(
+    capabilities: GPUCapabilities,
+) -> List[str]:
+    """Generate recommendations based on GPU memory capacity.
+
+    Args:
+        capabilities: GPU hardware capabilities
+
+    Returns:
+        List of recommendation messages. Issue #620.
+    """
+    recommendations = []
+    memory_gb = capabilities.memory_gb
+
+    if memory_gb >= 12:
+        recommendations.append(
+            "High memory GPU detected. "
+            "Consider increasing batch sizes for better throughput."
+        )
+    elif memory_gb <= 8:
+        recommendations.append(
+            "Limited memory GPU detected. "
+            "Consider smaller batch sizes to prevent OOM."
+        )
+
+    return recommendations
+
+
 async def optimize_batch_processing(
     config: GPUOptimizationConfig,
     capabilities: GPUCapabilities,
 ) -> Dict[str, Any]:
     """Optimize batch processing for multi-modal workloads."""
     try:
-        optimizations = []
-        recommendations = []
-
-        # Enable adaptive batching
-        if config.auto_batch_sizing:
-            optimizations.append("Adaptive batch sizing enabled")
-
-        # Set modal-specific batch sizes
-        optimizations.append(
-            f"Text batch size optimized: {config.text_batch_size}"
-        )
-        optimizations.append(
-            f"Image batch size optimized: {config.image_batch_size}"
-        )
-        optimizations.append(
-            f"Audio batch size optimized: {config.audio_batch_size}"
-        )
-
-        # Enable batch timeout for better responsiveness
-        if config.batch_timeout_ms > 0:
-            optimizations.append(
-                f"Batch timeout set to {config.batch_timeout_ms}ms"
-            )
-
-        # Recommendations based on GPU capabilities
-        memory_gb = capabilities.memory_gb
-        if memory_gb >= 12:
-            recommendations.append(
-                "High memory GPU detected. "
-                "Consider increasing batch sizes for better throughput."
-            )
-        elif memory_gb <= 8:
-            recommendations.append(
-                "Limited memory GPU detected. "
-                "Consider smaller batch sizes to prevent OOM."
-            )
+        optimizations = _apply_batch_size_optimizations(config)
+        recommendations = _get_memory_based_recommendations(capabilities)
 
         return {
             "success": len(optimizations) > 0,
@@ -199,9 +219,7 @@ async def optimize_tensor_cores(
         # Enable Tensor Core optimization
         if config.tensor_core_optimization:
             optimizations.append("Tensor Core optimization enabled")
-            optimizations.append(
-                "Matrix dimensions aligned for Tensor Core efficiency"
-            )
+            optimizations.append("Matrix dimensions aligned for Tensor Core efficiency")
 
         # Recommendations for Tensor Core efficiency
         recommendations.append(
@@ -214,9 +232,7 @@ async def optimize_tensor_cores(
         # Check compute capability for optimal Tensor Core features
         compute_cap = capabilities.compute_capability
         if compute_cap and float(compute_cap) >= 7.5:
-            optimizations.append(
-                "Advanced Tensor Core features enabled (Compute 7.5+)"
-            )
+            optimizations.append("Advanced Tensor Core features enabled (Compute 7.5+)")
             recommendations.append("GPU supports latest Tensor Core optimizations")
 
         return {

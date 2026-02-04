@@ -162,6 +162,46 @@ class ToolPatternAnalyzer:
 
         logger.info("Tool pattern analyzer initialized")
 
+    def _create_tool_call_record(
+        self,
+        tool_name: str,
+        parameters: Dict[str, Any],
+        response_time: float,
+        success: bool,
+        error_message: Optional[str],
+        session_id: str,
+    ) -> ToolCall:
+        """Create a ToolCall record with classification and cost estimation.
+
+        Creates the record, classifies the call type, and estimates API cost.
+        Issue #620.
+        """
+        tool_call = ToolCall(
+            tool_name=tool_name,
+            call_time=datetime.now(),
+            parameters=parameters.copy(),
+            response_time=response_time,
+            success=success,
+            error_message=error_message,
+            session_id=session_id or "default",
+            sequence_position=len(self.tool_calls),
+        )
+        tool_call.call_type = self._classify_tool_call(tool_name, parameters)
+        tool_call.api_cost = self._estimate_api_cost(tool_name, parameters)
+        return tool_call
+
+    def _process_tool_call(self, tool_call: ToolCall) -> None:
+        """Process a tool call by updating statistics and triggering analysis.
+
+        Updates call history, statistics, pattern tracking, and triggers analysis.
+        Issue #620.
+        """
+        self.tool_calls.append(tool_call)
+        self._update_tool_statistics(tool_call)
+        self._update_pattern_tracking(tool_call)
+        if len(self.tool_calls) % 10 == 0:
+            asyncio.create_task(self._analyze_patterns())
+
     def record_tool_call(
         self,
         tool_name: str,
@@ -171,8 +211,7 @@ class ToolPatternAnalyzer:
         error_message: Optional[str] = None,
         session_id: str = "",
     ) -> None:
-        """
-        Record a tool call for pattern analysis.
+        """Record a tool call for pattern analysis.
 
         Args:
             tool_name: Name of the tool that was called
@@ -183,39 +222,11 @@ class ToolPatternAnalyzer:
             session_id: Session identifier for grouping related calls
         """
         try:
-            # Create tool call record
-            tool_call = ToolCall(
-                tool_name=tool_name,
-                call_time=datetime.now(),
-                parameters=parameters.copy(),
-                response_time=response_time,
-                success=success,
-                error_message=error_message,
-                session_id=session_id or "default",
-                sequence_position=len(self.tool_calls),
+            tool_call = self._create_tool_call_record(
+                tool_name, parameters, response_time, success, error_message, session_id
             )
-
-            # Classify tool call type
-            tool_call.call_type = self._classify_tool_call(tool_name, parameters)
-
-            # Estimate API cost
-            tool_call.api_cost = self._estimate_api_cost(tool_name, parameters)
-
-            # Add to call history
-            self.tool_calls.append(tool_call)
-
-            # Update tool statistics
-            self._update_tool_statistics(tool_call)
-
-            # Update pattern tracking
-            self._update_pattern_tracking(tool_call)
-
-            # Trigger pattern analysis if needed
-            if len(self.tool_calls) % 10 == 0:  # Analyze every 10 calls
-                asyncio.create_task(self._analyze_patterns())
-
+            self._process_tool_call(tool_call)
             logger.debug("Recorded tool call: %s (%.2fs)", tool_name, response_time)
-
         except Exception as e:
             logger.error("Error recording tool call: %s", e)
 
