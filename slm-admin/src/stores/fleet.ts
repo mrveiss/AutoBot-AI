@@ -26,6 +26,8 @@ import type {
   UpdateInfo,
   ConnectionTestResult,
   RoleInfo,
+  NPUNodeStatus,
+  NPULoadBalancingConfig,
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
 
@@ -55,6 +57,12 @@ export const useFleetStore = defineStore('fleet', () => {
 
   /** Available roles from the backend */
   const availableRoles = ref<RoleInfo[]>([])
+
+  /** NPU capabilities cache by node ID (Issue #255 - NPU Fleet Integration) */
+  const npuCapabilities = ref<Map<string, NPUNodeStatus>>(new Map())
+
+  /** NPU load balancing configuration */
+  const npuLoadBalancingConfig = ref<NPULoadBalancingConfig | null>(null)
 
   // ============================================================
   // Getters
@@ -118,6 +126,20 @@ export const useFleetStore = defineStore('fleet', () => {
   const selectedNodeCertificate = computed<CertificateInfo | null>(() => {
     if (!selectedNode.value) return null
     return certificateStatus.value.get(selectedNode.value.node_id) || null
+  })
+
+  /** Get all nodes with npu-worker role (Issue #255 - NPU Fleet Integration) */
+  const npuNodes = computed<SLMNode[]>(() => {
+    return Array.from(nodes.value.values()).filter(
+      node => node.roles.includes('npu-worker')
+    )
+  })
+
+  /** Get nodes without npu-worker role (for role assignment) */
+  const nonNpuNodes = computed<SLMNode[]>(() => {
+    return Array.from(nodes.value.values()).filter(
+      node => !node.roles.includes('npu-worker')
+    )
   })
 
   // ============================================================
@@ -512,6 +534,114 @@ export const useFleetStore = defineStore('fleet', () => {
   }
 
   // ============================================================
+  // Actions - NPU Management (Issue #255 - NPU Fleet Integration)
+  // ============================================================
+
+  /**
+   * Fetch NPU status for a specific node
+   */
+  async function fetchNpuStatus(nodeId: string): Promise<NPUNodeStatus | null> {
+    try {
+      const status = await api.getNpuStatus(nodeId)
+      npuCapabilities.value.set(nodeId, status)
+      return status
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to fetch NPU status for node ${nodeId}`
+      return null
+    }
+  }
+
+  /**
+   * Fetch NPU status for all NPU nodes
+   */
+  async function fetchAllNpuStatus(): Promise<void> {
+    const npuNodeList = npuNodes.value
+    await Promise.all(
+      npuNodeList.map(node => fetchNpuStatus(node.node_id))
+    )
+  }
+
+  /**
+   * Get cached NPU status for a node
+   */
+  function getNpuStatus(nodeId: string): NPUNodeStatus | undefined {
+    return npuCapabilities.value.get(nodeId)
+  }
+
+  /**
+   * Assign npu-worker role to a node and trigger capability detection
+   */
+  async function assignNpuRole(nodeId: string): Promise<SLMNode> {
+    const node = nodes.value.get(nodeId)
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`)
+    }
+
+    // Add npu-worker role
+    const newRoles: NodeRole[] = [...node.roles, 'npu-worker']
+    const updatedNode = await updateNodeRoles(nodeId, newRoles)
+
+    // Trigger capability detection
+    await fetchNpuStatus(nodeId)
+
+    return updatedNode
+  }
+
+  /**
+   * Remove npu-worker role from a node
+   */
+  async function removeNpuRole(nodeId: string): Promise<SLMNode> {
+    const node = nodes.value.get(nodeId)
+    if (!node) {
+      throw new Error(`Node ${nodeId} not found`)
+    }
+
+    // Remove npu-worker role
+    const newRoles = node.roles.filter(r => r !== 'npu-worker')
+    const updatedNode = await updateNodeRoles(nodeId, newRoles)
+
+    // Clear cached NPU data
+    npuCapabilities.value.delete(nodeId)
+
+    return updatedNode
+  }
+
+  /**
+   * Update NPU load balancing configuration
+   */
+  async function updateNpuLoadBalancing(
+    config: NPULoadBalancingConfig
+  ): Promise<void> {
+    try {
+      await api.updateNpuLoadBalancing(config)
+      npuLoadBalancingConfig.value = config
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : 'Failed to update NPU load balancing configuration'
+      throw err
+    }
+  }
+
+  /**
+   * Fetch current NPU load balancing configuration
+   */
+  async function fetchNpuLoadBalancing(): Promise<NPULoadBalancingConfig | null> {
+    try {
+      const config = await api.getNpuLoadBalancing()
+      npuLoadBalancingConfig.value = config
+      return config
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : 'Failed to fetch NPU load balancing configuration'
+      return null
+    }
+  }
+
+  // ============================================================
   // Actions - Cache Management
   // ============================================================
 
@@ -522,6 +652,7 @@ export const useFleetStore = defineStore('fleet', () => {
     nodeEvents.value.delete(nodeId)
     certificateStatus.value.delete(nodeId)
     nodeUpdates.value.delete(nodeId)
+    npuCapabilities.value.delete(nodeId)
   }
 
   /**
@@ -556,6 +687,8 @@ export const useFleetStore = defineStore('fleet', () => {
     certificateStatus,
     nodeUpdates,
     availableRoles,
+    npuCapabilities,
+    npuLoadBalancingConfig,
 
     // Getters
     nodeList,
@@ -563,6 +696,8 @@ export const useFleetStore = defineStore('fleet', () => {
     overallHealth,
     selectedNodeEvents,
     selectedNodeCertificate,
+    npuNodes,
+    nonNpuNodes,
 
     // Actions - Roles
     fetchRoles,
@@ -602,6 +737,15 @@ export const useFleetStore = defineStore('fleet', () => {
     // Actions - Updates
     checkNodeUpdates,
     applyNodeUpdates,
+
+    // Actions - NPU Management
+    fetchNpuStatus,
+    fetchAllNpuStatus,
+    getNpuStatus,
+    assignNpuRole,
+    removeNpuRole,
+    updateNpuLoadBalancing,
+    fetchNpuLoadBalancing,
 
     // Actions - Cache Management
     clearNodeCache,

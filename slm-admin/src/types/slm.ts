@@ -466,3 +466,42 @@ export interface RolePurgeRequest {
   roles: string[]
   force?: boolean
 }
+
+// =============================================================================
+// NPU Worker Types (Issue #255 - NPU Fleet Integration)
+// =============================================================================
+
+export type NPUDeviceType = 'intel-npu' | 'nvidia-gpu' | 'amd-gpu' | 'unknown'
+
+export type NPULoadBalancingStrategy = 'round-robin' | 'least-loaded' | 'model-affinity'
+
+export interface NPUCapabilities {
+  models: string[]
+  maxConcurrent: number
+  memoryGB: number
+  deviceType: NPUDeviceType
+  utilization: number
+}
+
+export interface NPUNodeStatus {
+  node_id: string
+  capabilities: NPUCapabilities | null
+  loadedModels: string[]
+  queueDepth: number
+  lastHealthCheck: string | null
+  detectionStatus: 'pending' | 'detected' | 'failed' | 'unavailable'
+  detectionError?: string
+}
+
+export interface NPULoadBalancingConfig {
+  strategy: NPULoadBalancingStrategy
+  modelAffinity: Record<string, string[]>
+}
+
+export interface NPUModelInfo {
+  name: string
+  size_mb: number
+  loaded: boolean
+  inference_time_ms: number | null
+  total_requests: number
+}

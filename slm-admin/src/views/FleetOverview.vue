@@ -21,6 +21,7 @@ import AddNodeModal from '@/components/AddNodeModal.vue'
 import NodeLifecyclePanel from '@/components/fleet/NodeLifecyclePanel.vue'
 import NodeServicesPanel from '@/components/fleet/NodeServicesPanel.vue'
 import FleetToolsTab from '@/components/fleet/FleetToolsTab.vue'
+import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
@@ -32,7 +33,7 @@ const connectionTest = useNodeConnectionTest()
 const ws = useSlmWebSocket()
 
 // Tab management
-const activeTab = ref<'overview' | 'tools'>('overview')
+const activeTab = ref<'overview' | 'tools' | 'npu'>('overview')
 
 // Computed
 const nodes = computed(() => fleetStore.nodeList)
@@ -441,6 +442,22 @@ function handleRestart(nodeId: string): void {
             Fleet Tools
           </div>
         </button>
+        <button
+          @click="activeTab = 'npu'"
+          :class="[
+            'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
+            activeTab === 'npu'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          ]"
+        >
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+            NPU Workers
+          </div>
+        </button>
       </nav>
     </div>
 
@@ -485,6 +502,11 @@ function handleRestart(nodeId: string): void {
     <!-- Tools Tab Content -->
     <div v-show="activeTab === 'tools'">
       <FleetToolsTab />
+    </div>
+
+    <!-- NPU Workers Tab Content -->
+    <div v-show="activeTab === 'npu'">
+      <NPUWorkersTab />
     </div>
 
     <!-- Add/Edit Node Modal -->

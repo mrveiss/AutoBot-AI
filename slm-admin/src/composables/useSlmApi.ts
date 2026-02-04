@@ -36,6 +36,8 @@ import type {
   MaintenanceWindow,
   MaintenanceWindowCreate,
   MaintenanceWindowListResponse,
+  NPUNodeStatus,
+  NPULoadBalancingConfig,
 } from '@/types/slm'
 
 // SLM Admin uses the local SLM backend API
@@ -1152,6 +1154,24 @@ export function useSlmApi() {
     return response.data
   }
 
+  // =============================================================================
+  // NPU Management API (Issue #255 - NPU Fleet Integration)
+  // =============================================================================
+
+  async function getNpuStatus(nodeId: string): Promise<NPUNodeStatus> {
+    const response = await client.get<NPUNodeStatus>(`/nodes/${nodeId}/npu/status`)
+    return response.data
+  }
+
+  async function getNpuLoadBalancing(): Promise<NPULoadBalancingConfig> {
+    const response = await client.get<NPULoadBalancingConfig>('/npu/load-balancing')
+    return response.data
+  }
+
+  async function updateNpuLoadBalancing(config: NPULoadBalancingConfig): Promise<void> {
+    await client.post('/npu/load-balancing', config)
+  }
+
   return {
     // Nodes
     getNodes,
@@ -1258,5 +1278,9 @@ export function useSlmApi() {
     retryBlueGreen,
     getEligibleNodes,
     purgeRoles,
+    // NPU Management (Issue #255)
+    getNpuStatus,
+    getNpuLoadBalancing,
+    updateNpuLoadBalancing,
   }
 }
