@@ -183,19 +183,76 @@ def _process_retry_exception(
 def _select_retry_wrapper(
     func: Callable, sync_wrapper: Callable, async_wrapper: Callable
 ) -> Callable:
-    """Select appropriate wrapper based on whether function is async.
-
-    Issue #620.
-
-    Args:
-        func: The function being wrapped
-        sync_wrapper: Wrapper for synchronous functions
-        async_wrapper: Wrapper for asynchronous functions
-
-    Returns:
-        The appropriate wrapper function. Issue #620.
-    """
+    """Select appropriate wrapper based on whether function is async. Issue #620."""
     return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
+
+def _create_sync_retry_wrapper(
+    func: Callable[..., T],
+    max_attempts: int,
+    delay: float,
+    backoff: float,
+    exceptions: tuple,
+    on_retry: Optional[Callable[[Exception, int], None]],
+) -> Callable[..., T]:
+    """Create synchronous retry wrapper for a function. Issue #620."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> T:
+        last_exception, current_delay = None, delay
+        for attempt in range(max_attempts):
+            try:
+                return func(*args, **kwargs)
+            except exceptions as e:
+                last_exception = e
+                sleep_delay, current_delay = _process_retry_exception(
+                    e,
+                    attempt,
+                    max_attempts,
+                    func.__name__,
+                    on_retry,
+                    current_delay,
+                    backoff,
+                )
+                if sleep_delay > 0:
+                    time.sleep(sleep_delay)
+        raise last_exception
+
+    return wrapper
+
+
+def _create_async_retry_wrapper(
+    func: Callable[..., T],
+    max_attempts: int,
+    delay: float,
+    backoff: float,
+    exceptions: tuple,
+    on_retry: Optional[Callable[[Exception, int], None]],
+) -> Callable[..., T]:
+    """Create asynchronous retry wrapper for a function. Issue #620."""
+
+    @functools.wraps(func)
+    async def async_wrapper(*args, **kwargs) -> T:
+        last_exception, current_delay = None, delay
+        for attempt in range(max_attempts):
+            try:
+                return await func(*args, **kwargs)
+            except exceptions as e:
+                last_exception = e
+                sleep_delay, current_delay = _process_retry_exception(
+                    e,
+                    attempt,
+                    max_attempts,
+                    func.__name__,
+                    on_retry,
+                    current_delay,
+                    backoff,
+                )
+                if sleep_delay > 0:
+                    await asyncio.sleep(sleep_delay)
+        raise last_exception
+
+    return async_wrapper
 
 
 def retry(
@@ -205,9 +262,7 @@ def retry(
     exceptions: tuple = (Exception,),
     on_retry: Optional[Callable[[Exception, int], None]] = None,
 ):
-    """Decorator for retrying functions with exponential backoff.
-
-    Issue #620: Refactored using Extract Method to reduce function length.
+    """Decorator for retrying functions with exponential backoff. Issue #620.
 
     Args:
         max_attempts: Maximum number of retry attempts
@@ -219,52 +274,13 @@ def retry(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         """Inner decorator that wraps function with retry logic. Issue #620."""
-
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> T:
-            """Sync wrapper that retries function on specified exceptions."""
-            last_exception, current_delay = None, delay
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    last_exception = e
-                    sleep_delay, current_delay = _process_retry_exception(
-                        e,
-                        attempt,
-                        max_attempts,
-                        func.__name__,
-                        on_retry,
-                        current_delay,
-                        backoff,
-                    )
-                    if sleep_delay > 0:
-                        time.sleep(sleep_delay)
-            raise last_exception
-
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs) -> T:
-            """Async wrapper that retries function on specified exceptions."""
-            last_exception, current_delay = None, delay
-            for attempt in range(max_attempts):
-                try:
-                    return await func(*args, **kwargs)
-                except exceptions as e:
-                    last_exception = e
-                    sleep_delay, current_delay = _process_retry_exception(
-                        e,
-                        attempt,
-                        max_attempts,
-                        func.__name__,
-                        on_retry,
-                        current_delay,
-                        backoff,
-                    )
-                    if sleep_delay > 0:
-                        await asyncio.sleep(sleep_delay)
-            raise last_exception
-
-        return _select_retry_wrapper(func, wrapper, async_wrapper)
+        sync_wrapper = _create_sync_retry_wrapper(
+            func, max_attempts, delay, backoff, exceptions, on_retry
+        )
+        async_wrapper = _create_async_retry_wrapper(
+            func, max_attempts, delay, backoff, exceptions, on_retry
+        )
+        return _select_retry_wrapper(func, sync_wrapper, async_wrapper)
 
     return decorator
 

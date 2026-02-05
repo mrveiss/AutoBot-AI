@@ -101,8 +101,21 @@ class ModelOptimizer:
         self._classifier = ModelClassifier()
         self.model_classifications = self._classifier.load_model_classifications()
 
-        # Task complexity mapping
-        self.complexity_keywords = {
+        # Task complexity mapping - Issue #620: Extracted to helper method
+        self.complexity_keywords = self._build_default_complexity_keywords()
+
+        # Initialize new components (Tell Don't Ask pattern)
+        self._resource_analyzer = SystemResourceAnalyzer(self.logger)
+        self._model_selector = ModelSelector(self._min_samples)
+        self._performance_tracker: Optional[ModelPerformanceTracker] = None
+
+    def _build_default_complexity_keywords(self) -> Dict[TaskComplexity, List[str]]:
+        """Build default task complexity keyword mappings. Issue #620.
+
+        Returns:
+            Dictionary mapping TaskComplexity levels to keyword lists
+        """
+        return {
             TaskComplexity.SIMPLE: [
                 "what",
                 "when",
@@ -145,11 +158,6 @@ class ModelOptimizer:
                 "advanced algorithms",
             ],
         }
-
-        # Initialize new components (Tell Don't Ask pattern)
-        self._resource_analyzer = SystemResourceAnalyzer(self.logger)
-        self._model_selector = ModelSelector(self._min_samples)
-        self._performance_tracker: Optional[ModelPerformanceTracker] = None
 
     async def _get_redis_client(self):
         """Get Redis client for caching performance data.

@@ -912,6 +912,79 @@
         />
       </div>
 
+      <!-- Issue #566: Code Intelligence Analysis (Security, Performance, Redis) -->
+      <div class="code-intelligence-section analytics-section">
+        <h3>
+          <i class="fas fa-brain"></i> Code Intelligence Analysis
+          <span v-if="codeIntelTotalFindings > 0" class="total-count">
+            ({{ codeIntelTotalFindings.toLocaleString() }} findings)
+          </span>
+          <div class="section-actions">
+            <button @click="showFileScanModal = true" class="action-btn" title="Scan single file">
+              <i class="fas fa-file-code"></i> Scan File
+            </button>
+            <button @click="runCodeIntelligenceAnalysis" :disabled="codeIntelLoading" class="action-btn primary" title="Run full analysis">
+              <i :class="codeIntelLoading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+              {{ codeIntelLoading ? 'Analyzing...' : 'Analyze' }}
+            </button>
+          </div>
+        </h3>
+
+        <!-- Code Intelligence Tabs -->
+        <div v-if="hasCodeIntelFindings" class="code-intel-tabs">
+          <div class="tabs-header">
+            <button
+              v-for="tab in codeIntelTabs"
+              :key="tab.id"
+              @click="activeCodeIntelTab = tab.id"
+              :class="['tab-btn', { active: activeCodeIntelTab === tab.id }]"
+            >
+              <i :class="tab.icon"></i>
+              {{ tab.label }}
+              <span v-if="getCodeIntelTabCount(tab.id) > 0" class="tab-count">
+                {{ getCodeIntelTabCount(tab.id) }}
+              </span>
+            </button>
+          </div>
+
+          <div class="tabs-content">
+            <SecurityFindingsPanel
+              v-if="activeCodeIntelTab === 'security'"
+              :findings="codeIntelSecurityFindings"
+              :loading="codeIntelFindingsLoading"
+            />
+            <PerformanceFindingsPanel
+              v-if="activeCodeIntelTab === 'performance'"
+              :findings="codeIntelPerformanceFindings"
+              :loading="codeIntelFindingsLoading"
+            />
+            <RedisFindingsPanel
+              v-if="activeCodeIntelTab === 'redis'"
+              :findings="codeIntelRedisFindings"
+              :loading="codeIntelFindingsLoading"
+            />
+          </div>
+        </div>
+
+        <EmptyState
+          v-else-if="!codeIntelLoading"
+          icon="fas fa-brain"
+          message="Run Code Intelligence analysis to detect security vulnerabilities, performance issues, and Redis optimizations."
+          variant="info"
+        >
+          <template #actions>
+            <button @click="runCodeIntelligenceAnalysis" class="btn-link">Run Analysis</button>
+          </template>
+        </EmptyState>
+
+        <!-- File Scan Modal -->
+        <FileScanModal
+          :show="showFileScanModal"
+          @close="showFileScanModal = false"
+          @scan="handleFileScan"
+        />
+      </div>
+
       <!-- Duplicate Code Analysis - Grouped by Similarity -->
       <div class="duplicates-section analytics-section">
         <h3>
@@ -2592,7 +2665,13 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import BasePanel from '@/components/base/BasePanel.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
+import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import { createLogger } from '@/utils/debugUtils'
+// Issue #566: Code Intelligence Dashboard Components
+import SecurityFindingsPanel from '@/components/analytics/code-intelligence/SecurityFindingsPanel.vue'
+import PerformanceFindingsPanel from '@/components/analytics/code-intelligence/PerformanceFindingsPanel.vue'
+import RedisFindingsPanel from '@/components/analytics/code-intelligence/RedisFindingsPanel.vue'
+import FileScanModal from '@/components/analytics/code-intelligence/FileScanModal.vue'
 
 const logger = createLogger('CodebaseAnalytics')
 
@@ -2610,6 +2689,130 @@ import {
 
 // Toast notifications
 const { showToast } = useToast()
+
+// Issue #566: Code Intelligence composable (renamed to avoid conflicts with existing refs)
+const {
+  loading: codeIntelLoading,
+  securityFindings: codeIntelSecurityFindings,
+  performanceFindings: codeIntelPerformanceFindings,
+  redisFindings: codeIntelRedisFindings,
+  fetchSecurityFindings,
+  fetchPerformanceFindings,
+  fetchRedisFindings,
+  scanFileSecurity,
+  scanFilePerformance,
+  scanFileRedis
+} = useCodeIntelligence()
+
+// Issue #566: Code Intelligence UI state
+const showFileScanModal = ref(false)
+const activeCodeIntelTab = ref<'security' | 'performance' | 'redis'>('security')
+const codeIntelFindingsLoading = ref(false)
+const codeIntelFindingsFetched = ref({ security: false, performance: false, redis: false })
+
+// Issue #566: Code Intelligence tabs definition
+const codeIntelTabs = [
+  { id: 'security' as const, label: 'Security', icon: 'fas fa-shield-alt' },
+  { id: 'performance' as const, label: 'Performance', icon: 'fas fa-tachometer-alt' },
+  { id: 'redis' as const, label: 'Redis', icon: 'fas fa-database' }
+]
+
+// Issue #566: Code Intelligence computed properties
+const codeIntelTotalFindings = computed(() =>
+  codeIntelSecurityFindings.value.length + codeIntelPerformanceFindings.value.length + codeIntelRedisFindings.value.length
+)
+
+const hasCodeIntelFindings = computed(() => codeIntelTotalFindings.value > 0)
+
+// Issue #566: Code Intelligence methods
+function getCodeIntelTabCount(tabId: string): number {
+  switch (tabId) {
+    case 'security': return codeIntelSecurityFindings.value.length
+    case 'performance': return codeIntelPerformanceFindings.value.length
+    case 'redis': return codeIntelRedisFindings.value.length
+    default: return 0
+  }
+}
+
+async function runCodeIntelligenceAnalysis() {
+  if (!rootPath.value) return
+  logger.info('Running Code Intelligence analysis on:', rootPath.value)
+
+  // Reset findings cache
+  codeIntelFindingsFetched.value = { security: false, performance: false, redis: false }
+
+  // Fetch findings for all types
+  codeIntelFindingsLoading.value = true
+  try {
+    await Promise.all([
+      fetchSecurityFindings(rootPath.value),
+      fetchPerformanceFindings(rootPath.value),
+      fetchRedisFindings(rootPath.value)
+    ])
+    codeIntelFindingsFetched.value = { security: true, performance: true, redis: true }
+    notify(`Code Intelligence analysis complete: ${codeIntelTotalFindings.value} findings`, 'success')
+  } catch (e) {
+    logger.error('Code Intelligence analysis failed:', e)
+    notify('Code Intelligence analysis failed', 'error')
+  } finally {
+    codeIntelFindingsLoading.value = false
+  }
+}
+
+async function handleFileScan(
+  filePath: string,
+  types: { security: boolean; performance: boolean; redis: boolean }
+) {
+  showFileScanModal.value = false
+  codeIntelFindingsLoading.value = true
+
+  try {
+    const results: string[] = []
+
+    if (types.security) {
+      const findings = await scanFileSecurity(filePath)
+      if (findings.length > 0) {
+        codeIntelFindingsFetched.value.security = true
+        results.push(`${findings.length} security`)
+      }
+    }
+
+    if (types.performance) {
+      const findings = await scanFilePerformance(filePath)
+      if (findings.length > 0) {
+        codeIntelFindingsFetched.value.performance = true
+        results.push(`${findings.length} performance`)
+      }
+    }
+
+    if (types.redis) {
+      const findings = await scanFileRedis(filePath)
+      if (findings.length > 0) {
+        codeIntelFindingsFetched.value.redis = true
+        results.push(`${findings.length} Redis`)
+      }
+    }
+
+    if (results.length > 0) {
+      notify(`File scan found: ${results.join(', ')} issues`, 'info')
+      // Switch to first tab with results
+      if (types.security && codeIntelSecurityFindings.value.length > 0) {
+        activeCodeIntelTab.value = 'security'
+      } else if (types.performance && codeIntelPerformanceFindings.value.length > 0) {
+        activeCodeIntelTab.value = 'performance'
+      } else if (types.redis && codeIntelRedisFindings.value.length > 0) {
+        activeCodeIntelTab.value = 'redis'
+      }
+    } else {
+      notify('No issues found in file scan', 'success')
+    }
+  } catch (e) {
+    logger.error('File scan failed:', e)
+    notify('File scan failed', 'error')
+  } finally {
+    codeIntelFindingsLoading.value = false
+  }
+}
 
 // Notification helper for error handling
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -10945,5 +11148,104 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .gap-recommendation i {
   color: var(--color-warning-light);
   margin-top: 2px;
+}
+
+/* Issue #566: Code Intelligence Section Styles */
+.code-intelligence-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.code-intelligence-section .section-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.code-intelligence-section .action-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.85em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.code-intelligence-section .action-btn:hover:not(:disabled) {
+  background: var(--bg-card);
+  border-color: var(--color-info-dark);
+}
+
+.code-intelligence-section .action-btn.primary {
+  background: var(--color-info-dark);
+  border-color: var(--color-info-dark);
+  color: white;
+}
+
+.code-intelligence-section .action-btn.primary:hover:not(:disabled) {
+  background: var(--color-info-hover);
+}
+
+.code-intelligence-section .action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Code Intelligence Tabs */
+.code-intel-tabs {
+  margin-top: 16px;
+}
+
+.code-intel-tabs .tabs-header {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-primary);
+  margin-bottom: 16px;
+}
+
+.code-intel-tabs .tab-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+  transition: all 0.15s ease;
+}
+
+.code-intel-tabs .tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.code-intel-tabs .tab-btn.active {
+  color: var(--color-info-dark);
+  border-bottom-color: var(--color-info-dark);
+}
+
+.code-intel-tabs .tab-count {
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.8em;
+}
+
+.code-intel-tabs .tab-btn.active .tab-count {
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--color-info-dark);
+}
+
+.code-intel-tabs .tabs-content {
+  min-height: 200px;
 }
 </style>
