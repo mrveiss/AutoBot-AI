@@ -740,6 +740,68 @@ class NPUCodeSearchAgent(StandardizedAgent):
             for r in results
         ]
 
+    def _merge_semantic_result(
+        self,
+        result: CodeSearchResult,
+        merged: Dict[tuple, CodeSearchResult],
+        semantic_weight: float,
+    ) -> None:
+        """Merge a semantic result into the combined results dict. Issue #620.
+
+        Args:
+            result: Semantic search result to merge
+            merged: Dictionary of merged results keyed by (file_path, line_number)
+            semantic_weight: Weight multiplier for semantic scores
+        """
+        key = (result.file_path, result.line_number)
+        weighted_score = result.confidence * semantic_weight
+        merged[key] = CodeSearchResult(
+            file_path=result.file_path,
+            content=result.content,
+            line_number=result.line_number,
+            confidence=weighted_score,
+            context_lines=result.context_lines,
+            metadata={
+                **result.metadata,
+                "search_type": "hybrid",
+                "semantic_score": result.confidence,
+            },
+        )
+
+    def _merge_keyword_result(
+        self,
+        result: CodeSearchResult,
+        merged: Dict[tuple, CodeSearchResult],
+        keyword_weight: float,
+    ) -> None:
+        """Merge a keyword result into the combined results dict. Issue #620.
+
+        Args:
+            result: Keyword search result to merge
+            merged: Dictionary of merged results keyed by (file_path, line_number)
+            keyword_weight: Weight multiplier for keyword scores
+        """
+        key = (result.file_path, result.line_number)
+        keyword_score = result.confidence * keyword_weight
+
+        if key in merged:
+            merged[key].confidence += keyword_score
+            merged[key].metadata["keyword_score"] = result.confidence
+            merged[key].metadata["combined"] = True
+        else:
+            merged[key] = CodeSearchResult(
+                file_path=result.file_path,
+                content=result.content,
+                line_number=result.line_number,
+                confidence=keyword_score,
+                context_lines=result.context_lines,
+                metadata={
+                    **result.metadata,
+                    "search_type": "hybrid",
+                    "keyword_score": result.confidence,
+                },
+            )
+
     async def _search_hybrid(
         self,
         query: str,
@@ -747,10 +809,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         max_results: int,
         semantic_weight: float = 0.7,
     ) -> List[CodeSearchResult]:
-        """
-        Perform hybrid search combining semantic and keyword matching.
-
-        Issue #207: Hybrid search for best results.
+        """Perform hybrid search combining semantic and keyword matching. Issue #207, #620.
 
         Args:
             query: Search query
@@ -762,7 +821,6 @@ class NPUCodeSearchAgent(StandardizedAgent):
             Combined and ranked results
         """
         keyword_weight = 1.0 - semantic_weight
-
         semantic_results = []
         keyword_results = []
 
@@ -778,45 +836,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
         except Exception as e:
             self.logger.warning("Hybrid: keyword search failed: %s", e)
 
-        merged = {}
-
+        merged: Dict[tuple, CodeSearchResult] = {}
         for result in semantic_results:
-            key = (result.file_path, result.line_number)
-            weighted_score = result.confidence * semantic_weight
-            merged[key] = CodeSearchResult(
-                file_path=result.file_path,
-                content=result.content,
-                line_number=result.line_number,
-                confidence=weighted_score,
-                context_lines=result.context_lines,
-                metadata={
-                    **result.metadata,
-                    "search_type": "hybrid",
-                    "semantic_score": result.confidence,
-                },
-            )
-
+            self._merge_semantic_result(result, merged, semantic_weight)
         for result in keyword_results:
-            key = (result.file_path, result.line_number)
-            keyword_score = result.confidence * keyword_weight
-
-            if key in merged:
-                merged[key].confidence += keyword_score
-                merged[key].metadata["keyword_score"] = result.confidence
-                merged[key].metadata["combined"] = True
-            else:
-                merged[key] = CodeSearchResult(
-                    file_path=result.file_path,
-                    content=result.content,
-                    line_number=result.line_number,
-                    confidence=keyword_score,
-                    context_lines=result.context_lines,
-                    metadata={
-                        **result.metadata,
-                        "search_type": "hybrid",
-                        "keyword_score": result.confidence,
-                    },
-                )
+            self._merge_keyword_result(result, merged, keyword_weight)
 
         results = sorted(merged.values(), key=lambda x: x.confidence, reverse=True)
         self.logger.info(
@@ -1208,13 +1232,62 @@ class NPUCodeSearchAgent(StandardizedAgent):
         )
         return code_results
 
+    async def _convert_embedding_search_result(
+        self, sr: Dict[str, Any], query: str, device_used: str
+    ) -> CodeSearchResult:
+        """Convert a single embedding search result to CodeSearchResult. Issue #620.
+
+        Args:
+            sr: Raw search result dict with content, metadata, score
+            query: Original search query for metadata
+            device_used: Device identifier for metadata
+
+        Returns:
+            Converted CodeSearchResult object. Issue #620.
+        """
+        metadata = sr["metadata"]
+        file_path = metadata.get("file_path", "unknown")
+        line_number = metadata.get("line_number", 0)
+        context_lines = await self._get_file_context(file_path, line_number)
+
+        return CodeSearchResult(
+            file_path=file_path,
+            content=sr["content"][:500],
+            line_number=line_number,
+            confidence=sr["score"],
+            context_lines=context_lines,
+            metadata={
+                "element_type": metadata.get("element_type"),
+                "element_name": metadata.get("element_name"),
+                "language": metadata.get("language"),
+                "search_type": "semantic_embedding",
+                "device_used": device_used,
+                "query": query,
+            },
+        )
+
+    def _update_embedding_search_stats(
+        self, results: List[CodeSearchResult], search_time: float, query_result: Any
+    ) -> None:
+        """Update search statistics after embedding search. Issue #620.
+
+        Args:
+            results: List of search results
+            search_time: Search duration in milliseconds
+            query_result: Query result object with device_used and cache_hit
+        """
+        self.stats = SearchStats(
+            total_files_indexed=len(results),
+            search_time_ms=search_time,
+            npu_acceleration_used=(query_result.device_used in ["npu", "gpu"]),
+            redis_cache_hit=query_result.cache_hit,
+            results_count=len(results),
+        )
+
     async def _search_code_embeddings(
         self, query: str, language: Optional[str], max_results: int
     ) -> List[CodeSearchResult]:
-        """
-        Search code embeddings using CodeBERT.
-
-        Issue #207: NPU-accelerated semantic code search.
+        """Search code embeddings using CodeBERT. Issue #207, #620.
 
         Args:
             query: Search query (natural language or code)
@@ -1241,40 +1314,15 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 similarity_threshold=0.4,
             )
 
-            results = []
-            for sr in search_results:
-                metadata = sr["metadata"]
-                file_path = metadata.get("file_path", "unknown")
-                line_number = metadata.get("line_number", 0)
-
-                context_lines = await self._get_file_context(file_path, line_number)
-
-                result = CodeSearchResult(
-                    file_path=file_path,
-                    content=sr["content"][:500],
-                    line_number=line_number,
-                    confidence=sr["score"],
-                    context_lines=context_lines,
-                    metadata={
-                        "element_type": metadata.get("element_type"),
-                        "element_name": metadata.get("element_name"),
-                        "language": metadata.get("language"),
-                        "search_type": "semantic_embedding",
-                        "device_used": query_result.device_used,
-                        "query": query,
-                    },
+            results = [
+                await self._convert_embedding_search_result(
+                    sr, query, query_result.device_used
                 )
-                results.append(result)
+                for sr in search_results
+            ]
 
             search_time = (time.time() - start_time) * 1000
-            self.stats = SearchStats(
-                total_files_indexed=len(results),
-                search_time_ms=search_time,
-                npu_acceleration_used=(query_result.device_used in ["npu", "gpu"]),
-                redis_cache_hit=query_result.cache_hit,
-                results_count=len(results),
-            )
-
+            self._update_embedding_search_stats(results, search_time, query_result)
             self.logger.info(
                 "Code embedding search: %d results in %.2fms using %s",
                 len(results),

@@ -1217,6 +1217,67 @@ class NPUSemanticSearch:
             logger.error("Failed to store code embedding: %s", e)
             return None
 
+    def _build_code_search_filter(
+        self, language: Optional[str], element_type: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Build ChromaDB where filter for code search. Issue #620.
+
+        Args:
+            language: Filter by programming language
+            element_type: Filter by element type (function, class, etc.)
+
+        Returns:
+            ChromaDB where filter dict or None if no filters. Issue #620.
+        """
+        if not language and not element_type:
+            return None
+
+        conditions = []
+        if language:
+            conditions.append({"language": language})
+        if element_type:
+            conditions.append({"element_type": element_type})
+
+        if len(conditions) == 1:
+            return conditions[0]
+        return {"$and": conditions}
+
+    def _convert_code_search_results(
+        self,
+        search_results: Dict[str, Any],
+        similarity_threshold: float,
+    ) -> List[Dict[str, Any]]:
+        """Convert ChromaDB results to code search result format. Issue #620.
+
+        Args:
+            search_results: Raw ChromaDB query results
+            similarity_threshold: Minimum similarity score to include
+
+        Returns:
+            List of result dicts with doc_id, content, metadata, score. Issue #620.
+        """
+        results = []
+        if not search_results["ids"] or len(search_results["ids"][0]) == 0:
+            return results
+
+        for i, doc_id in enumerate(search_results["ids"][0]):
+            distance = search_results["distances"][0][i]
+            similarity = 1.0 / (1.0 + distance)
+
+            if similarity < similarity_threshold:
+                continue
+
+            result = {
+                "doc_id": doc_id,
+                "content": search_results["documents"][0][i],
+                "metadata": search_results["metadatas"][0][i],
+                "score": similarity,
+                "distance": distance,
+            }
+            results.append(result)
+
+        return results
+
     async def search_code_embeddings(
         self,
         query_embedding: np.ndarray,
@@ -1225,10 +1286,7 @@ class NPUSemanticSearch:
         max_results: int = 20,
         similarity_threshold: float = 0.5,
     ) -> List[Dict[str, Any]]:
-        """
-        Search code embeddings collection.
-
-        Issue #207: NPU-accelerated semantic code search.
+        """Search code embeddings collection. Issue #207, #620.
 
         Args:
             query_embedding: Query embedding vector
@@ -1246,22 +1304,8 @@ class NPUSemanticSearch:
 
         try:
             collection = self.collections["code"]
+            where_filter = self._build_code_search_filter(language, element_type)
 
-            # Build where filter
-            where_filter = None
-            if language or element_type:
-                conditions = []
-                if language:
-                    conditions.append({"language": language})
-                if element_type:
-                    conditions.append({"element_type": element_type})
-
-                if len(conditions) == 1:
-                    where_filter = conditions[0]
-                else:
-                    where_filter = {"$and": conditions}
-
-            # Query ChromaDB
             search_results = collection.query(
                 query_embeddings=[query_embedding.tolist()],
                 n_results=max_results,
@@ -1269,26 +1313,9 @@ class NPUSemanticSearch:
                 include=["metadatas", "documents", "distances"],
             )
 
-            # Convert to result format
-            results = []
-            if search_results["ids"] and len(search_results["ids"][0]) > 0:
-                for i, doc_id in enumerate(search_results["ids"][0]):
-                    distance = search_results["distances"][0][i]
-                    # Convert L2 distance to similarity score
-                    similarity = 1.0 / (1.0 + distance)
-
-                    if similarity < similarity_threshold:
-                        continue
-
-                    result = {
-                        "doc_id": doc_id,
-                        "content": search_results["documents"][0][i],
-                        "metadata": search_results["metadatas"][0][i],
-                        "score": similarity,
-                        "distance": distance,
-                    }
-                    results.append(result)
-
+            results = self._convert_code_search_results(
+                search_results, similarity_threshold
+            )
             logger.info(
                 "Code search found %d results (threshold=%.2f)",
                 len(results),
