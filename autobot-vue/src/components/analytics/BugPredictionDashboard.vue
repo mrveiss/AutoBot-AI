@@ -376,6 +376,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue';
 import { createLogger } from '@/utils/debugUtils';
+import { formatTimeAgo } from '@/utils/formatHelpers';
 
 // Create scoped logger for BugPredictionDashboard
 const logger = createLogger('BugPredictionDashboard');
@@ -665,18 +666,6 @@ function getFactorClass(value: number): string {
   if (value >= 50) return 'high';
   if (value >= 30) return 'medium';
   return 'low';
-}
-
-function timeAgo(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-
-  if (seconds < 60) return `${seconds}s ago`
-
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-
-  const hours = Math.floor(minutes / 60)
-  return `${hours}h ago`
 }
 
 // Lifecycle
