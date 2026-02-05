@@ -181,93 +181,14 @@ class ReplicationService:
             result["comparison"]["key_difference"] = key_diff
             result["comparison"]["keys_match"] = key_diff == 0
 
-            # Check key difference
-            if key_diff == 0:
-                result["checks"].append(
-                    {
-                        "name": "key_count",
-                        "status": "passed",
-                        "message": f"Key counts match: {source_keys}",
-                    }
-                )
-            elif key_diff <= 10:
-                result["checks"].append(
-                    {
-                        "name": "key_count",
-                        "status": "warning",
-                        "message": f"Minor key difference: {key_diff} keys",
-                    }
-                )
-            else:
-                result["checks"].append(
-                    {
-                        "name": "key_count",
-                        "status": "failed",
-                        "message": f"Significant key difference: {key_diff} keys",
-                    }
-                )
+            # Add key count check using helper
+            self._add_key_count_check(result["checks"], source_keys, target_keys)
 
-            # Get replication lag info
+            # Get replication lag info and add replication checks
             repl_info = await self._get_replication_info(
                 target_ip, ssh_user, ssh_port, redis_password
             )
-
-            if repl_info.get("role") == "slave":
-                lag_bytes = repl_info.get("lag_bytes", 0)
-                link_status = repl_info.get("master_link_status", "unknown")
-
-                result["lag"]["bytes"] = lag_bytes
-                result["lag"]["link_status"] = link_status
-
-                if link_status == "up":
-                    result["checks"].append(
-                        {
-                            "name": "replication_link",
-                            "status": "passed",
-                            "message": "Replication link is up",
-                        }
-                    )
-                else:
-                    result["checks"].append(
-                        {
-                            "name": "replication_link",
-                            "status": "failed",
-                            "message": f"Replication link status: {link_status}",
-                        }
-                    )
-
-                if lag_bytes == 0:
-                    result["checks"].append(
-                        {
-                            "name": "replication_lag",
-                            "status": "passed",
-                            "message": "No replication lag",
-                        }
-                    )
-                elif lag_bytes < 1024:
-                    result["checks"].append(
-                        {
-                            "name": "replication_lag",
-                            "status": "warning",
-                            "message": f"Minor lag: {lag_bytes} bytes",
-                        }
-                    )
-                else:
-                    result["checks"].append(
-                        {
-                            "name": "replication_lag",
-                            "status": "failed",
-                            "message": f"Significant lag: {lag_bytes} bytes",
-                        }
-                    )
-            else:
-                result["checks"].append(
-                    {
-                        "name": "role_check",
-                        "status": "warning",
-                        "message": f"Target role is '{repl_info.get('role', 'unknown')}', not 'slave'",
-                    }
-                )
+            self._add_replication_checks(result["checks"], result["lag"], repl_info)
 
             # Determine overall sync status
             failed_checks = [c for c in result["checks"] if c["status"] == "failed"]
@@ -276,11 +197,7 @@ class ReplicationService:
         except Exception as e:
             logger.error("Sync verification failed: %s", e)
             result["checks"].append(
-                {
-                    "name": "verification",
-                    "status": "failed",
-                    "message": str(e)[:200],
-                }
+                self._build_check("verification", "failed", str(e)[:200])
             )
 
         return result
@@ -418,6 +335,121 @@ class ReplicationService:
         except Exception as e:
             logger.error("Failed to update lag info: %s", e)
             return None
+
+    # =========================================================================
+    # Helper Methods for verify_sync
+    # =========================================================================
+
+    def _build_check(self, name: str, status: str, message: str) -> Dict:
+        """Build a standardized check result dict.
+
+        Helper for verify_sync (Issue #665).
+
+        Args:
+            name: Check name identifier
+            status: Check status ('passed', 'warning', 'failed')
+            message: Human-readable message
+
+        Returns:
+            Dict with name, status, and message keys
+        """
+        return {"name": name, "status": status, "message": message}
+
+    def _add_key_count_check(
+        self, checks: list, source_keys: int, target_keys: int
+    ) -> None:
+        """Add key count comparison check to checks list.
+
+        Helper for verify_sync (Issue #665).
+
+        Args:
+            checks: List to append check result to
+            source_keys: Number of keys on source
+            target_keys: Number of keys on target
+        """
+        key_diff = abs(source_keys - target_keys)
+
+        if key_diff == 0:
+            checks.append(
+                self._build_check(
+                    "key_count", "passed", f"Key counts match: {source_keys}"
+                )
+            )
+        elif key_diff <= 10:
+            checks.append(
+                self._build_check(
+                    "key_count", "warning", f"Minor key difference: {key_diff} keys"
+                )
+            )
+        else:
+            checks.append(
+                self._build_check(
+                    "key_count",
+                    "failed",
+                    f"Significant key difference: {key_diff} keys",
+                )
+            )
+
+    def _add_replication_checks(
+        self, checks: list, result_lag: Dict, repl_info: Dict
+    ) -> None:
+        """Add replication link and lag checks to checks list.
+
+        Helper for verify_sync (Issue #665).
+
+        Args:
+            checks: List to append check results to
+            result_lag: Dict to populate with lag info
+            repl_info: Replication info from Redis
+        """
+        if repl_info.get("role") != "slave":
+            role = repl_info.get("role", "unknown")
+            checks.append(
+                self._build_check(
+                    "role_check", "warning", f"Target role is '{role}', not 'slave'"
+                )
+            )
+            return
+
+        lag_bytes = repl_info.get("lag_bytes", 0)
+        link_status = repl_info.get("master_link_status", "unknown")
+
+        result_lag["bytes"] = lag_bytes
+        result_lag["link_status"] = link_status
+
+        # Check replication link status
+        if link_status == "up":
+            checks.append(
+                self._build_check(
+                    "replication_link", "passed", "Replication link is up"
+                )
+            )
+        else:
+            checks.append(
+                self._build_check(
+                    "replication_link",
+                    "failed",
+                    f"Replication link status: {link_status}",
+                )
+            )
+
+        # Check replication lag
+        if lag_bytes == 0:
+            checks.append(
+                self._build_check("replication_lag", "passed", "No replication lag")
+            )
+        elif lag_bytes < 1024:
+            checks.append(
+                self._build_check(
+                    "replication_lag", "warning", f"Minor lag: {lag_bytes} bytes"
+                )
+            )
+        else:
+            checks.append(
+                self._build_check(
+                    "replication_lag", "failed", f"Significant lag: {lag_bytes} bytes"
+                )
+            )
 
     # =========================================================================
     # Private Methods
