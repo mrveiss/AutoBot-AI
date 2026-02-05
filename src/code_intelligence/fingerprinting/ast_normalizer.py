@@ -16,6 +16,56 @@ from typing import Dict
 # Module-level constant for numeric type checking
 _NUMERIC_TYPES = (int, float)
 
+# Module-level constant for names that should not be normalized. Issue #620.
+_PRESERVED_NAMES = frozenset(
+    {
+        "self",
+        "cls",
+        "True",
+        "False",
+        "None",
+        "__init__",
+        "__str__",
+        "__repr__",
+        "__eq__",
+        "__hash__",
+        "__len__",
+        "__iter__",
+        "__next__",
+        "__enter__",
+        "__exit__",
+        "__call__",
+        "print",
+        "len",
+        "str",
+        "int",
+        "float",
+        "list",
+        "dict",
+        "set",
+        "tuple",
+        "range",
+        "enumerate",
+        "zip",
+        "map",
+        "filter",
+        "open",
+        "isinstance",
+        "issubclass",
+        "hasattr",
+        "getattr",
+        "setattr",
+        "super",
+        "type",
+        "Exception",
+        "ValueError",
+        "TypeError",
+        "KeyError",
+        "IndexError",
+        "AttributeError",
+    }
+)
+
 
 class ASTNormalizer(ast.NodeTransformer):
     """
@@ -26,57 +76,12 @@ class ASTNormalizer(ast.NodeTransformer):
     """
 
     def __init__(self):
-        """Initialize normalizer with counters and preserved names list."""
+        """Initialize normalizer with counters and preserved names reference. Issue #620."""
         self.var_counter = 0
         self.func_counter = 0
         self.name_mapping: Dict[str, str] = {}
-        # Common names that shouldn't be normalized
-        self.preserved_names = {
-            "self",
-            "cls",
-            "True",
-            "False",
-            "None",
-            "__init__",
-            "__str__",
-            "__repr__",
-            "__eq__",
-            "__hash__",
-            "__len__",
-            "__iter__",
-            "__next__",
-            "__enter__",
-            "__exit__",
-            "__call__",
-            "print",
-            "len",
-            "str",
-            "int",
-            "float",
-            "list",
-            "dict",
-            "set",
-            "tuple",
-            "range",
-            "enumerate",
-            "zip",
-            "map",
-            "filter",
-            "open",
-            "isinstance",
-            "issubclass",
-            "hasattr",
-            "getattr",
-            "setattr",
-            "super",
-            "type",
-            "Exception",
-            "ValueError",
-            "TypeError",
-            "KeyError",
-            "IndexError",
-            "AttributeError",
-        }
+        # Reference module-level constant for names that shouldn't be normalized
+        self.preserved_names = _PRESERVED_NAMES
 
     def _get_placeholder(self, name: str, prefix: str) -> str:
         """
@@ -202,9 +207,7 @@ class ASTNormalizer(ast.NodeTransformer):
                 else None
             ),
             kwonlyargs=new_kwonlyargs,
-            kw_defaults=[
-                self.visit(d) if d else None for d in args.kw_defaults
-            ],
+            kw_defaults=[self.visit(d) if d else None for d in args.kw_defaults],
             kwarg=(
                 ast.arg(arg=self._get_placeholder(args.kwarg.arg, "VAR"))
                 if args.kwarg

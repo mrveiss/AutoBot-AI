@@ -265,23 +265,19 @@ class WorkflowMetricsCollector:
         except Exception as e:
             logger.error("Failed to record resource usage: %s", e)
 
-    def _build_workflow_stats(
-        self,
-        workflow_id: str,
-        workflow: Dict[str, Any],
-        end_time: datetime,
-        final_status: str,
-    ) -> WorkflowExecutionStats:
-        """Build workflow execution stats (Issue #665: extracted helper).
+    def _calculate_workflow_metrics(
+        self, workflow: Dict[str, Any], end_time: datetime
+    ) -> tuple:
+        """
+        Calculate duration, average step time, approval wait, and success rate.
 
         Args:
-            workflow_id: Workflow identifier
             workflow: Workflow data dict
             end_time: Workflow end timestamp
-            final_status: Final status string
 
         Returns:
-            WorkflowExecutionStats instance
+            Tuple of (total_duration_ms, avg_step_duration, total_approval_wait, success_rate).
+            Issue #620.
         """
         total_duration_ms = (end_time - workflow["start_time"]).total_seconds() * 1000
         step_durations = list(workflow["step_timings"].values())
@@ -297,6 +293,27 @@ class WorkflowMetricsCollector:
             workflow["completed_steps"]
             / max(workflow["completed_steps"] + workflow["failed_steps"], 1)
         ) * 100
+        return total_duration_ms, avg_step_duration, total_approval_wait, success_rate
+
+    def _build_workflow_stats(
+        self,
+        workflow_id: str,
+        workflow: Dict[str, Any],
+        end_time: datetime,
+        final_status: str,
+    ) -> WorkflowExecutionStats:
+        """
+        Build workflow execution stats.
+
+        Issue #665: Extracted helper.
+        Issue #620: Further refactored to use _calculate_workflow_metrics helper.
+        """
+        (
+            total_duration_ms,
+            avg_step_duration,
+            total_approval_wait,
+            success_rate,
+        ) = self._calculate_workflow_metrics(workflow, end_time)
 
         return WorkflowExecutionStats(
             workflow_id=workflow_id,

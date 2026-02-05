@@ -360,6 +360,31 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 )
             )
 
+    def _build_blocking_issue_messages(
+        self, is_potential: bool, severity: PerformanceSeverity
+    ) -> tuple:
+        """
+        Build description and impact messages for blocking I/O issues.
+
+        Args:
+            is_potential: Whether this is a potential (not definite) issue
+            severity: Issue severity level
+
+        Returns:
+            Tuple of (desc_prefix, desc_suffix, complexity, impact). Issue #620.
+        """
+        desc_prefix = "Potential " if is_potential else ""
+        desc_suffix = " (needs review)" if severity == PerformanceSeverity.LOW else ""
+        complexity = "May block event loop" if is_potential else "Blocks event loop"
+        impact = (
+            "Review needed - may degrade async performance"
+            if is_potential
+            else "Degrades async performance"
+        )
+        if severity == PerformanceSeverity.LOW:
+            impact = "Review needed"
+        return desc_prefix, desc_suffix, complexity, impact
+
     def _create_blocking_issue(
         self,
         call_name: str,
@@ -375,27 +400,14 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         Create and append a blocking I/O performance issue.
 
         Issue #281: Extracted helper to reduce repetition in _check_blocking_in_async.
-
-        Args:
-            call_name: Name of the blocking call
-            node: AST node for line info
-            code: Source code segment
-            severity: Issue severity level
-            confidence: Confidence score (0.0-1.0)
-            recommendation: Suggested fix
-            is_potential: Whether this is a potential (not definite) issue
-            false_positive_reason: Reason why this might be a false positive
+        Issue #620: Further refactored to use _build_blocking_issue_messages helper.
         """
-        desc_prefix = "Potential " if is_potential else ""
-        desc_suffix = " (needs review)" if severity == PerformanceSeverity.LOW else ""
-        complexity = "May block event loop" if is_potential else "Blocks event loop"
-        impact = (
-            "Review needed - may degrade async performance"
-            if is_potential
-            else "Degrades async performance"
-        )
-        if severity == PerformanceSeverity.LOW:
-            impact = "Review needed"
+        (
+            desc_prefix,
+            desc_suffix,
+            complexity,
+            impact,
+        ) = self._build_blocking_issue_messages(is_potential, severity)
 
         self.findings.append(
             PerformanceIssue(
