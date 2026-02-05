@@ -4,14 +4,15 @@
 
 <script setup lang="ts">
 /**
- * Schedule Modal Component (Issue #741 - Phase 7)
+ * Schedule Modal Component (Issue #741 - Phase 7, Issue #779)
  *
  * Modal form for creating and editing update schedules with cron expression
- * support and preset options.
+ * support, preset options, and role-based targeting.
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import type { ScheduleCreateRequest, UpdateSchedule } from '@/composables/useCodeSync'
+import { useRoles } from '@/composables/useRoles'
 
 interface Props {
   show: boolean
@@ -29,12 +30,16 @@ const emit = defineEmits<{
   (e: 'save', schedule: ScheduleCreateRequest): void
 }>()
 
+// Role management (Issue #779)
+const { roles: availableRoles, fetchRoles } = useRoles()
+
 // Form state
 const name = ref('')
 const cronExpression = ref('0 2 * * *')
 const enabled = ref(true)
-const targetType = ref<'all' | 'specific' | 'tag'>('all')
+const targetType = ref<'all' | 'specific' | 'tag' | 'roles'>('all')
 const targetNodes = ref<string[]>([])
+const targetRoles = ref<string[]>([])
 const restartStrategy = ref('graceful')
 const restartAfterSync = ref(true)
 
@@ -78,6 +83,11 @@ const cronDescription = computed(() => {
   return 'Custom schedule'
 })
 
+// Fetch roles when component mounts (Issue #779)
+onMounted(async () => {
+  await fetchRoles()
+})
+
 // Watch for schedule prop changes to populate form
 watch(
   () => props.schedule,
@@ -88,6 +98,7 @@ watch(
       enabled.value = schedule.enabled
       targetType.value = schedule.target_type
       targetNodes.value = schedule.target_nodes || []
+      targetRoles.value = schedule.target_roles || []
       restartStrategy.value = schedule.restart_strategy
       restartAfterSync.value = schedule.restart_after_sync
     } else {
@@ -103,6 +114,7 @@ function resetForm(): void {
   enabled.value = true
   targetType.value = 'all'
   targetNodes.value = []
+  targetRoles.value = []
   restartStrategy.value = 'graceful'
   restartAfterSync.value = true
 }
@@ -122,6 +134,7 @@ function handleSave(): void {
     enabled: enabled.value,
     target_type: targetType.value,
     target_nodes: targetType.value === 'specific' ? targetNodes.value : undefined,
+    target_roles: targetType.value === 'roles' ? targetRoles.value : undefined,
     restart_strategy: restartStrategy.value,
     restart_after_sync: restartAfterSync.value,
   }
@@ -138,12 +151,28 @@ function toggleNodeSelection(nodeId: string): void {
   }
 }
 
+function toggleRoleSelection(roleName: string): void {
+  const index = targetRoles.value.indexOf(roleName)
+  if (index > -1) {
+    targetRoles.value.splice(index, 1)
+  } else {
+    targetRoles.value.push(roleName)
+  }
+}
+
 const isFormValid = computed(() => {
-  return (
-    name.value.trim().length > 0 &&
-    cronExpression.value.trim().length >= 9 &&
-    (targetType.value !== 'specific' || targetNodes.value.length > 0)
-  )
+  const hasValidName = name.value.trim().length > 0
+  const hasValidCron = cronExpression.value.trim().length >= 9
+
+  // Validate target selection based on type
+  if (targetType.value === 'specific') {
+    return hasValidName && hasValidCron && targetNodes.value.length > 0
+  }
+  if (targetType.value === 'roles') {
+    return hasValidName && hasValidCron && targetRoles.value.length > 0
+  }
+
+  return hasValidName && hasValidCron
 })
 </script>
 
@@ -226,6 +255,7 @@ const isFormValid = computed(() => {
               >
                 <option value="all">All outdated nodes</option>
                 <option value="specific">Specific nodes</option>
+                <option value="roles">By Role</option>
               </select>
             </div>
 
@@ -256,6 +286,40 @@ const isFormValid = computed(() => {
               </div>
               <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-gray-500">
                 {{ targetNodes.length }} node(s) selected
+              </p>
+            </div>
+
+            <!-- Role Selection (when roles) - Issue #779 -->
+            <div v-if="targetType === 'roles'" class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Target Roles
+              </label>
+              <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto">
+                <div
+                  v-for="role in availableRoles"
+                  :key="role.name"
+                  @click="toggleRoleSelection(role.name)"
+                  :class="[
+                    'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
+                    targetRoles.includes(role.name) ? 'bg-primary-50' : '',
+                  ]"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="targetRoles.includes(role.name)"
+                    :value="role.name"
+                    class="w-4 h-4 text-primary-600 rounded border-gray-300"
+                    @click.stop
+                    @change="toggleRoleSelection(role.name)"
+                  />
+                  <span class="text-sm text-gray-900">{{ role.display_name || role.name }}</span>
+                </div>
+              </div>
+              <div v-else class="text-sm text-gray-500 italic">
+                No roles available. Please configure roles first.
+              </div>
+              <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500">
+                {{ targetRoles.length }} role(s) selected
               </p>
             </div>
 

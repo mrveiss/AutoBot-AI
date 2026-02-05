@@ -103,8 +103,9 @@ export interface UpdateSchedule {
   name: string
   cron_expression: string
   enabled: boolean
-  target_type: 'all' | 'specific' | 'tag'
+  target_type: 'all' | 'specific' | 'tag' | 'roles'
   target_nodes: string[] | null
+  target_roles: string[] | null  // Issue #779: Role-based targeting
   restart_strategy: string
   restart_after_sync: boolean
   last_run: string | null
@@ -119,8 +120,9 @@ export interface ScheduleCreateRequest {
   name: string
   cron_expression: string
   enabled?: boolean
-  target_type?: 'all' | 'specific' | 'tag'
+  target_type?: 'all' | 'specific' | 'tag' | 'roles'
   target_nodes?: string[]
+  target_roles?: string[]  // Issue #779: Role-based targeting
   restart_strategy?: string
   restart_after_sync?: boolean
 }
@@ -129,8 +131,9 @@ export interface ScheduleUpdateRequest {
   name?: string
   cron_expression?: string
   enabled?: boolean
-  target_type?: 'all' | 'specific' | 'tag'
+  target_type?: 'all' | 'specific' | 'tag' | 'roles'
   target_nodes?: string[]
+  target_roles?: string[]  // Issue #779: Role-based targeting
   restart_strategy?: string
   restart_after_sync?: boolean
 }
