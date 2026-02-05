@@ -143,6 +143,29 @@ const logger = createLogger('ComponentName')
 | VM3 Redis | 172.16.168.23:6379 | Data layer |
 | VM4 AI Stack | 172.16.168.24:8080 | AI processing |
 | VM5 Browser | 172.16.168.25:3000 | Playwright automation |
+| SLM Server | 172.16.168.19:8000 | System Lifecycle Manager |
+
+### Component Architecture (CRITICAL - Don't Mix Up!)
+
+| Directory | Deploys To | Description |
+|-----------|------------|-------------|
+| `src/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
+| `autobot-vue/` | 172.16.168.20 (Main) | Main AutoBot chat interface |
+| `slm-server/` | 172.16.168.19 (SLM) | **SLM backend** - Fleet management, code sync |
+| `slm-admin/` | 172.16.168.21 (Frontend VM) | **SLM admin dashboard** - Vue 3 UI for fleet |
+
+**Before editing, verify:**
+- `src/` or `autobot-vue/` → Main AutoBot functionality
+- `slm-server/` or `slm-admin/` → SLM fleet management (different system!)
+
+**Sync commands:**
+```bash
+# SLM Admin frontend → VM1
+./scripts/utilities/sync-to-vm.sh frontend slm-admin/src/ /home/autobot/AutoBot/slm-admin/src/
+
+# SLM Server backend → SLM machine
+./scripts/utilities/sync-to-vm.sh slm slm-server/ /home/autobot/slm-server/
+```
 
 ### Single Frontend Server (CRITICAL)
 - **ONLY** `172.16.168.21:5173` runs frontend
