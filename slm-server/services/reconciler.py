@@ -605,6 +605,105 @@ class ReconcilerService:
 
                 await self._remediate_failed_service(db, node, service)
 
+    def _check_service_cooldown(
+        self, node_id: str, service_name: str, tracker: dict, now: datetime
+    ) -> bool:
+        """Check if service is in remediation cooldown.
+
+        Helper for _remediate_failed_service (Issue #665).
+
+        Returns True if in cooldown (should skip), False otherwise.
+        """
+        if tracker["last_attempt"]:
+            elapsed = (now - tracker["last_attempt"]).total_seconds()
+            if elapsed < SERVICE_REMEDIATION_COOLDOWN:
+                logger.debug(
+                    "Service %s on %s in remediation cooldown (%d seconds remaining)",
+                    service_name,
+                    node_id,
+                    SERVICE_REMEDIATION_COOLDOWN - elapsed,
+                )
+                return True
+        return False
+
+    async def _create_max_attempts_service_event(
+        self, db: AsyncSession, node: Node, service: Service, tracker: dict
+    ) -> None:
+        """Create event when max service restart attempts exceeded.
+
+        Helper for _remediate_failed_service (Issue #665).
+        """
+        logger.warning(
+            "Service %s on %s exceeded max restart attempts (%d). "
+            "Human intervention required.",
+            service.service_name,
+            node.node_id,
+            MAX_SERVICE_RESTART_ATTEMPTS,
+        )
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.REMEDIATION_COMPLETED.value,
+            severity=EventSeverity.WARNING.value,
+            message=(
+                f"Service {service.service_name} on {node.hostname} requires "
+                f"human intervention after {MAX_SERVICE_RESTART_ATTEMPTS} failed restart attempts"
+            ),
+            details={
+                "service_name": service.service_name,
+                "attempts": tracker["count"],
+                "action_required": "manual_review",
+            },
+        )
+        db.add(event)
+        await db.commit()
+
+    async def _handle_service_restart_result(
+        self,
+        db: AsyncSession,
+        node: Node,
+        service: Service,
+        success: bool,
+        tracker: dict,
+    ) -> None:
+        """Handle success/failure after service restart attempt.
+
+        Helper for _remediate_failed_service (Issue #665).
+        """
+        if success:
+            service.status = ServiceStatus.RUNNING.value
+            logger.info(
+                "Successfully restarted service %s on %s",
+                service.service_name,
+                node.node_id,
+            )
+            await self._broadcast_service_remediation(
+                node.node_id,
+                service.service_name,
+                "completed",
+                success=True,
+                message=f"Successfully restarted {service.service_name}",
+            )
+        else:
+            logger.warning(
+                "Failed to restart service %s on %s (attempt %d/%d)",
+                service.service_name,
+                node.node_id,
+                tracker["count"] + 1,
+                MAX_SERVICE_RESTART_ATTEMPTS,
+            )
+            await self._broadcast_service_remediation(
+                node.node_id,
+                service.service_name,
+                "completed",
+                success=False,
+                message=(
+                    f"Failed to restart {service.service_name} "
+                    f"(attempt {tracker['count'] + 1}/{MAX_SERVICE_RESTART_ATTEMPTS})"
+                ),
+            )
+        await db.commit()
+
     async def _remediate_failed_service(
         self, db: AsyncSession, node: Node, service: Service
     ) -> bool:
@@ -620,44 +719,12 @@ class ReconcilerService:
         )
 
         # Check cooldown
-        if tracker["last_attempt"]:
-            elapsed = (now - tracker["last_attempt"]).total_seconds()
-            if elapsed < SERVICE_REMEDIATION_COOLDOWN:
-                logger.debug(
-                    "Service %s on %s in remediation cooldown (%d seconds remaining)",
-                    service.service_name,
-                    node.node_id,
-                    SERVICE_REMEDIATION_COOLDOWN - elapsed,
-                )
-                return False
+        if self._check_service_cooldown(node.node_id, service.service_name, tracker, now):
+            return False
 
         # Check attempt limit
         if tracker["count"] >= MAX_SERVICE_RESTART_ATTEMPTS:
-            logger.warning(
-                "Service %s on %s exceeded max restart attempts (%d). "
-                "Human intervention required.",
-                service.service_name,
-                node.node_id,
-                MAX_SERVICE_RESTART_ATTEMPTS,
-            )
-            # Create event for human attention
-            event = NodeEvent(
-                event_id=str(uuid.uuid4())[:16],
-                node_id=node.node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
-                severity=EventSeverity.WARNING.value,
-                message=(
-                    f"Service {service.service_name} on {node.hostname} requires "
-                    f"human intervention after {MAX_SERVICE_RESTART_ATTEMPTS} failed restart attempts"
-                ),
-                details={
-                    "service_name": service.service_name,
-                    "attempts": tracker["count"],
-                    "action_required": "manual_review",
-                },
-            )
-            db.add(event)
-            await db.commit()
+            await self._create_max_attempts_service_event(db, node, service, tracker)
             return False
 
         # Attempt restart
@@ -691,41 +758,8 @@ class ReconcilerService:
             "last_attempt": now,
         }
 
-        if success:
-            # Update service status optimistically (will be confirmed on next heartbeat)
-            service.status = ServiceStatus.RUNNING.value
-            logger.info(
-                "Successfully restarted service %s on %s",
-                service.service_name,
-                node.node_id,
-            )
-            await self._broadcast_service_remediation(
-                node.node_id,
-                service.service_name,
-                "completed",
-                success=True,
-                message=f"Successfully restarted {service.service_name}",
-            )
-        else:
-            logger.warning(
-                "Failed to restart service %s on %s (attempt %d/%d)",
-                service.service_name,
-                node.node_id,
-                tracker["count"] + 1,
-                MAX_SERVICE_RESTART_ATTEMPTS,
-            )
-            await self._broadcast_service_remediation(
-                node.node_id,
-                service.service_name,
-                "completed",
-                success=False,
-                message=(
-                    f"Failed to restart {service.service_name} "
-                    f"(attempt {tracker['count'] + 1}/{MAX_SERVICE_RESTART_ATTEMPTS})"
-                ),
-            )
-
-        await db.commit()
+        # Handle result and broadcast
+        await self._handle_service_restart_result(db, node, service, success, tracker)
         return True
 
     async def _broadcast_service_remediation(
