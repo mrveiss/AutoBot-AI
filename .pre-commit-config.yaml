@@ -89,6 +89,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with hardcoded IPs, ports, magic numbers, and role strings"
 
+  # Function length enforcement (Issue #620)
+  - repo: local
+    hooks:
+      - id: function-length-check
+        name: Function Length Check (Issue #620)
+        entry: scripts/hooks/pre-commit-function-length
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
+
 # Configuration for specific file types
 default_language_version:
   python: python3

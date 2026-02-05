@@ -92,6 +92,8 @@ for file in $PY_FILES; do
             continue ;;
         *"test_alertmanager.py")  # Phase 3 test script
             continue ;;
+        *"scripts/hooks/"*)  # Pre-commit hook scripts need terminal output
+            continue ;;
     esac
 
     # Check if file has if __name__ == "__main__"

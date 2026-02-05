@@ -869,6 +869,37 @@ def _build_empty_restart_response(node_id: str) -> RestartAllServicesResponse:
     )
 
 
+def _build_restart_response(
+    node_id: str,
+    results: list,
+    successful: int,
+    failed: int,
+    slm_agent_restarted: bool,
+) -> RestartAllServicesResponse:
+    """
+    Build final response for restart_all_node_services.
+
+    Helper for restart_all_node_services (Issue #665).
+    """
+    total = len(results)
+    overall_success = failed == 0
+    message = (
+        f"Successfully restarted {successful}/{total} services"
+        if overall_success
+        else f"Restarted {successful}/{total} services, {failed} failed"
+    )
+    return RestartAllServicesResponse(
+        node_id=node_id,
+        success=overall_success,
+        message=message,
+        total_services=total,
+        successful_restarts=successful,
+        failed_restarts=failed,
+        results=results,
+        slm_agent_restarted=slm_agent_restarted,
+    )
+
+
 def _separate_and_order_services(
     all_services: list, excluded_services: list
 ) -> tuple[list, list]:
@@ -900,7 +931,6 @@ def _separate_and_order_services(
 async def _restart_single_service(
     node: Node,
     svc: Service,
-    db: AsyncSession,
     node_id: str,
     is_slm: bool,
 ) -> dict:
@@ -1008,7 +1038,7 @@ async def restart_all_node_services(
 
     for svc in ordered_services:
         is_slm = _is_slm_service(svc.service_name)
-        svc_result = await _restart_single_service(node, svc, db, node_id, is_slm)
+        svc_result = await _restart_single_service(node, svc, node_id, is_slm)
         results.append(svc_result)
 
         if svc_result["success"]:
@@ -1020,23 +1050,8 @@ async def restart_all_node_services(
 
     await db.commit()
 
-    total = len(ordered_services)
-    overall_success = failed == 0
-    message = (
-        f"Successfully restarted {successful}/{total} services"
-        if overall_success
-        else f"Restarted {successful}/{total} services, {failed} failed"
-    )
-
-    return RestartAllServicesResponse(
-        node_id=node_id,
-        success=overall_success,
-        message=message,
-        total_services=total,
-        successful_restarts=successful,
-        failed_restarts=failed,
-        results=results,
-        slm_agent_restarted=slm_agent_restarted,
+    return _build_restart_response(
+        node_id, results, successful, failed, slm_agent_restarted
     )
 
 
