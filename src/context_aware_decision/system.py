@@ -16,8 +16,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from src.enhanced_memory_manager import EnhancedMemoryManager
 from src.enhanced_memory_manager_async import TaskPriority
+from src.memory import EnhancedMemoryManager
 from src.task_execution_tracker import task_tracker
 
 from .collectors import ContextCollector
@@ -100,7 +100,7 @@ class ContextAwareDecisionSystem:
         """Update decision history with new decision."""
         self.decision_history.append(decision)
         if len(self.decision_history) > self.max_history:
-            self.decision_history = self.decision_history[-self.max_history:]
+            self.decision_history = self.decision_history[-self.max_history :]
 
     async def _store_decision_in_memory(
         self, decision: Decision, context: DecisionContext

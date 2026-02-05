@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image
 
 from src.desktop_streaming_manager import desktop_streaming
-from src.enhanced_memory_manager import TaskPriority
+from src.memory import TaskPriority
 from src.multimodal_processor import (
     ModalityType,
     MultiModalInput,
