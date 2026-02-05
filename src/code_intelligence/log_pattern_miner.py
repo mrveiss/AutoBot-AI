@@ -664,18 +664,23 @@ class LogPatternMiner:
                     )
                 )
 
-    def _extract_api_patterns(self) -> None:
-        """Extract API usage patterns."""
-        api_entries = [e for e in self.entries if e.endpoint]
+    def _group_entries_by_endpoint(
+        self, api_entries: list
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Group API entries by endpoint and collect statistics.
 
-        if not api_entries:
-            return
+        Args:
+            api_entries: List of log entries with endpoints
 
-        # Group by endpoint
+        Returns:
+            Dictionary mapping endpoints to their statistics
+
+        Issue #620.
+        """
         endpoint_stats: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"count": 0, "durations": [], "status_codes": [], "entries": []}
         )
-
         for entry in api_entries:
             stats = endpoint_stats[entry.endpoint]
             stats["count"] += 1
@@ -684,41 +689,56 @@ class LogPatternMiner:
                 stats["durations"].append(entry.duration_ms)
             if entry.status_code:
                 stats["status_codes"].append(entry.status_code)
+        return endpoint_stats
 
-        # Find high-traffic endpoints
+    def _create_api_pattern(self, endpoint: str, stats: dict[str, Any]) -> LogPattern:
+        """
+        Create a LogPattern for a high-traffic API endpoint.
+
+        Args:
+            endpoint: The API endpoint path
+            stats: Statistics collected for this endpoint
+
+        Returns:
+            LogPattern object for the endpoint
+
+        Issue #620.
+        """
+        durations = stats["durations"]
+        error_count = len([c for c in stats["status_codes"] if c >= 400])
+        return LogPattern(
+            id=f"API-{len(self.patterns) + 1}",
+            pattern_type=PatternType.API_USAGE,
+            description=f"High-traffic endpoint: {endpoint}",
+            occurrences=stats["count"],
+            first_seen=stats["entries"][0].timestamp,
+            last_seen=stats["entries"][-1].timestamp,
+            affected_components=[endpoint.split()[1] if " " in endpoint else endpoint],
+            sample_entries=stats["entries"][:3],
+            severity=LogLevel.WARNING if error_count > 0 else LogLevel.INFO,
+            extra_data={
+                "avg_duration_ms": round(mean(durations), 2) if durations else 0,
+                "error_count": error_count,
+                "success_rate": round(
+                    (stats["count"] - error_count) / stats["count"] * 100, 1
+                ),
+            },
+        )
+
+    def _extract_api_patterns(self) -> None:
+        """Extract API usage patterns."""
+        api_entries = [e for e in self.entries if e.endpoint]
+        if not api_entries:
+            return
+
+        endpoint_stats = self._group_entries_by_endpoint(api_entries)
         sorted_endpoints = sorted(
             endpoint_stats.items(), key=lambda x: x[1]["count"], reverse=True
         )
 
         for endpoint, stats in sorted_endpoints[:10]:
             if stats["count"] >= self.min_pattern_occurrences:
-                durations = stats["durations"]
-                error_count = len([c for c in stats["status_codes"] if c >= 400])
-
-                self.patterns.append(
-                    LogPattern(
-                        id=f"API-{len(self.patterns) + 1}",
-                        pattern_type=PatternType.API_USAGE,
-                        description=f"High-traffic endpoint: {endpoint}",
-                        occurrences=stats["count"],
-                        first_seen=stats["entries"][0].timestamp,
-                        last_seen=stats["entries"][-1].timestamp,
-                        affected_components=[
-                            endpoint.split()[1] if " " in endpoint else endpoint
-                        ],
-                        sample_entries=stats["entries"][:3],
-                        severity=LogLevel.WARNING if error_count > 0 else LogLevel.INFO,
-                        extra_data={
-                            "avg_duration_ms": round(mean(durations), 2)
-                            if durations
-                            else 0,
-                            "error_count": error_count,
-                            "success_rate": round(
-                                (stats["count"] - error_count) / stats["count"] * 100, 1
-                            ),
-                        },
-                    )
-                )
+                self.patterns.append(self._create_api_pattern(endpoint, stats))
 
     def _extract_session_flows(self) -> None:
         """Extract user session flow patterns."""

@@ -86,6 +86,75 @@ class CodePatternScanner:
     RETRY_PATTERNS = RETRY_LOGIC_PATTERNS
 
     @classmethod
+    def _scan_for_llm_patterns(
+        cls, file_path: Path, lines: List[str]
+    ) -> List[UsagePattern]:
+        """
+        Scan lines for LLM API call patterns.
+
+        Args:
+            file_path: Path to the source file
+            lines: List of source code lines
+
+        Returns:
+            List of detected UsagePattern objects
+
+        Issue #620.
+        """
+        usage_patterns = []
+        for line_num, line in enumerate(lines, 1):
+            for pattern, pattern_type in cls.LLM_CALL_PATTERNS:
+                if pattern.search(line):
+                    usage_patterns.append(
+                        UsagePattern(
+                            pattern_id=cls._generate_pattern_id(file_path, line_num),
+                            pattern_type=pattern_type,
+                            file_path=str(file_path),
+                            line_number=line_num,
+                            code_snippet=line.strip()[:200],
+                            optimization_potential=cls._estimate_optimization(line),
+                        )
+                    )
+        return usage_patterns
+
+    @classmethod
+    def _scan_for_retry_patterns(
+        cls, file_path: Path, lines: List[str], content: str
+    ) -> List[RetryPattern]:
+        """
+        Scan lines for retry logic patterns.
+
+        Args:
+            file_path: Path to the source file
+            lines: List of source code lines
+            content: Full file content for context analysis
+
+        Returns:
+            List of detected RetryPattern objects
+
+        Issue #620.
+        """
+        retry_patterns = []
+        for line_num, line in enumerate(lines, 1):
+            for pattern in cls.RETRY_PATTERNS:
+                if pattern.search(line):
+                    retry_patterns.append(
+                        RetryPattern(
+                            pattern_id=cls._generate_pattern_id(
+                                file_path, line_num, "retry"
+                            ),
+                            file_path=str(file_path),
+                            line_number=line_num,
+                            max_retries=cls._extract_retry_count(content, line_num),
+                            backoff_strategy=cls._detect_backoff_strategy(
+                                content, line_num
+                            ),
+                        )
+                    )
+                    break  # Only one retry pattern per line
+        return retry_patterns
+
+    @classmethod
     def scan_file(
         cls, file_path: Path
     ) -> Tuple[List[UsagePattern], List[RetryPattern]]:
@@ -104,42 +173,9 @@ class CodePatternScanner:
             logger.warning("Could not read %s: %s", file_path, e)
             return [], []
 
-        usage_patterns = []
-        retry_patterns = []
-
-        # Issue #380: Scan for LLM calls using pre-compiled regex patterns
         lines = content.split("\n")
-        for line_num, line in enumerate(lines, 1):
-            for pattern, pattern_type in cls.LLM_CALL_PATTERNS:
-                if pattern.search(line):
-                    usage_pattern = UsagePattern(
-                        pattern_id=cls._generate_pattern_id(file_path, line_num),
-                        pattern_type=pattern_type,
-                        file_path=str(file_path),
-                        line_number=line_num,
-                        code_snippet=line.strip()[:200],
-                        optimization_potential=cls._estimate_optimization(line),
-                    )
-                    usage_patterns.append(usage_pattern)
-
-        # Issue #380: Scan for retry patterns using pre-compiled patterns
-        for line_num, line in enumerate(lines, 1):
-            for pattern in cls.RETRY_PATTERNS:
-                if pattern.search(line):
-                    retry_pattern = RetryPattern(
-                        pattern_id=cls._generate_pattern_id(
-                            file_path, line_num, "retry"
-                        ),
-                        file_path=str(file_path),
-                        line_number=line_num,
-                        max_retries=cls._extract_retry_count(content, line_num),
-                        backoff_strategy=cls._detect_backoff_strategy(
-                            content, line_num
-                        ),
-                    )
-                    retry_patterns.append(retry_pattern)
-                    break  # Only one retry pattern per line
-
+        usage_patterns = cls._scan_for_llm_patterns(file_path, lines)
+        retry_patterns = cls._scan_for_retry_patterns(file_path, lines, content)
         return usage_patterns, retry_patterns
 
     @classmethod

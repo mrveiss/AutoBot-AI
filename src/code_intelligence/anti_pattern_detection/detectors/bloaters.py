@@ -67,6 +67,83 @@ class BloaterDetector:
     # God Class Detection
     # =========================================================================
 
+    def _create_god_class_by_methods(
+        self,
+        node: ast.ClassDef,
+        file_path: str,
+        method_count: int,
+        class_lines: int,
+    ) -> AntiPatternResult:
+        """
+        Create AntiPatternResult for god class detected by method count.
+
+        Args:
+            node: AST node for the class
+            file_path: Path to the source file
+            method_count: Number of methods in the class
+            class_lines: Number of lines in the class
+
+        Returns:
+            AntiPatternResult for god class by method count
+
+        Issue #620.
+        """
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.GOD_CLASS,
+            severity=get_god_class_severity(method_count),
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=node.name,
+            description=(
+                f"Class '{node.name}' has {method_count} methods, "
+                f"exceeds threshold of {self.god_class_method_threshold}"
+            ),
+            suggestion=(
+                "Consider breaking into smaller, focused classes "
+                "using composition or inheritance"
+            ),
+            metrics={
+                "method_count": method_count,
+                "line_count": class_lines,
+                "threshold": self.god_class_method_threshold,
+            },
+        )
+
+    def _create_god_class_by_lines(
+        self,
+        node: ast.ClassDef,
+        file_path: str,
+        method_count: int,
+        class_lines: int,
+    ) -> AntiPatternResult:
+        """
+        Create AntiPatternResult for god class detected by line count.
+
+        Args:
+            node: AST node for the class
+            file_path: Path to the source file
+            method_count: Number of methods in the class
+            class_lines: Number of lines in the class
+
+        Returns:
+            AntiPatternResult for god class by line count
+
+        Issue #620.
+        """
+        return AntiPatternResult(
+            pattern_type=AntiPatternType.GOD_CLASS,
+            severity=AntiPatternSeverity.MEDIUM,
+            file_path=file_path,
+            line_number=node.lineno,
+            entity_name=node.name,
+            description=(
+                f"Class '{node.name}' has {class_lines} lines, "
+                f"exceeds threshold of {self.god_class_line_threshold}"
+            ),
+            suggestion="Consider extracting methods or splitting responsibilities",
+            metrics={"method_count": method_count, "line_count": class_lines},
+        )
+
     def check_god_class(
         self,
         node: ast.ClassDef,
@@ -87,39 +164,12 @@ class BloaterDetector:
             AntiPatternResult if god class detected, None otherwise
         """
         if method_count > self.god_class_method_threshold:
-            return AntiPatternResult(
-                pattern_type=AntiPatternType.GOD_CLASS,
-                severity=get_god_class_severity(method_count),
-                file_path=file_path,
-                line_number=node.lineno,
-                entity_name=node.name,
-                description=(
-                    f"Class '{node.name}' has {method_count} methods, "
-                    f"exceeds threshold of {self.god_class_method_threshold}"
-                ),
-                suggestion=(
-                    "Consider breaking into smaller, focused classes "
-                    "using composition or inheritance"
-                ),
-                metrics={
-                    "method_count": method_count,
-                    "line_count": class_lines,
-                    "threshold": self.god_class_method_threshold,
-                },
+            return self._create_god_class_by_methods(
+                node, file_path, method_count, class_lines
             )
         elif class_lines > self.god_class_line_threshold:
-            return AntiPatternResult(
-                pattern_type=AntiPatternType.GOD_CLASS,
-                severity=AntiPatternSeverity.MEDIUM,
-                file_path=file_path,
-                line_number=node.lineno,
-                entity_name=node.name,
-                description=(
-                    f"Class '{node.name}' has {class_lines} lines, "
-                    f"exceeds threshold of {self.god_class_line_threshold}"
-                ),
-                suggestion="Consider extracting methods or splitting responsibilities",
-                metrics={"method_count": method_count, "line_count": class_lines},
+            return self._create_god_class_by_lines(
+                node, file_path, method_count, class_lines
             )
         return None
 

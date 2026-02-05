@@ -566,6 +566,25 @@ class AntiPatternDetector(SemanticAnalysisMixin):
     # Issue #554: Async semantic analysis methods
     # Issue #607: Enhanced with shared cache support
 
+    def _convert_report_to_dict(self, report: AnalysisReport) -> Dict[str, Any]:
+        """
+        Convert an AnalysisReport to dictionary format.
+
+        Handles both reports with to_dict() method and manual conversion.
+        Issue #620.
+        """
+        if hasattr(report, "to_dict"):
+            return report.to_dict()
+        return {
+            "scan_path": report.scan_path,
+            "total_files": report.total_files,
+            "total_classes": report.total_classes,
+            "total_functions": report.total_functions,
+            "anti_patterns": [p.to_dict() for p in report.anti_patterns],
+            "summary": report.summary,
+            "severity_distribution": report.severity_distribution,
+        }
+
     async def analyze_directory_async(
         self,
         directory: str,
@@ -576,6 +595,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
 
         Issue #554: Async version that supports ChromaDB/Redis/LLM infrastructure.
         Issue #607: Uses shared FileListCache and ASTCache for performance.
+        Issue #620: Refactored with _convert_report_to_dict helper.
 
         Args:
             directory: Path to directory to analyze
@@ -590,21 +610,10 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         if self.use_shared_cache:
             report = await self._analyze_directory_with_cache(directory)
         else:
-            # Run standard analysis in thread pool
             report = await asyncio.to_thread(self.analyze_directory, directory)
 
         result = {
-            "report": report.to_dict()
-            if hasattr(report, "to_dict")
-            else {
-                "scan_path": report.scan_path,
-                "total_files": report.total_files,
-                "total_classes": report.total_classes,
-                "total_functions": report.total_functions,
-                "anti_patterns": [p.to_dict() for p in report.anti_patterns],
-                "summary": report.summary,
-                "severity_distribution": report.severity_distribution,
-            },
+            "report": self._convert_report_to_dict(report),
             "semantic_duplicates": [],
             "infrastructure_metrics": {},
         }
@@ -615,8 +624,6 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                 report.anti_patterns
             )
             result["semantic_duplicates"] = semantic_dups
-
-            # Add infrastructure metrics
             result["infrastructure_metrics"] = self._get_infrastructure_metrics()
 
         result["analysis_time_ms"] = (time.time() - start_time) * 1000

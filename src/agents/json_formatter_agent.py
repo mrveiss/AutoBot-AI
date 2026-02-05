@@ -328,33 +328,44 @@ class JSONFormatterAgent:
 
         return reconstructed
 
+    def _create_failed_parse_result(
+        self, text: str, method: str, warning_msg: str
+    ) -> JSONParseResult:
+        """
+        Create a failed JSONParseResult with standard structure.
+
+        Used for consistent failure responses in pattern reconstruction. Issue #620.
+        """
+        return JSONParseResult(
+            success=False,
+            data={},
+            original_text=text,
+            method_used=method,
+            confidence=0.0,
+            warnings=[warning_msg],
+        )
+
     def _reconstruct_from_patterns(
         self, text: str, expected_schema: Optional[Dict[str, Any]] = None
     ) -> JSONParseResult:
-        """Reconstruct JSON from known patterns like empty keys"""
+        """Reconstruct JSON from known patterns like empty keys. Issue #620."""
         warnings = []
 
         if not expected_schema:
-            return JSONParseResult(
-                success=False,
-                data={},
-                original_text=text,
-                method_used="no_schema_for_reconstruction",
-                confidence=0.0,
-                warnings=["No schema provided for reconstruction"],
+            return self._create_failed_parse_result(
+                text,
+                "no_schema_for_reconstruction",
+                "No schema provided for reconstruction",
             )
 
         matches = self._find_empty_key_matches(text)
 
         # Need at least 2 matches and not more than schema fields
         if len(matches) < 2 or len(matches) > len(expected_schema):
-            return JSONParseResult(
-                success=False,
-                data={},
-                original_text=text,
-                method_used="pattern_reconstruction_failed",
-                confidence=0.0,
-                warnings=["Could not reconstruct from patterns"],
+            return self._create_failed_parse_result(
+                text,
+                "pattern_reconstruction_failed",
+                "Could not reconstruct from patterns",
             )
 
         reconstructed = self._reconstruct_values_from_matches(
@@ -362,13 +373,10 @@ class JSONFormatterAgent:
         )
 
         if not reconstructed:
-            return JSONParseResult(
-                success=False,
-                data={},
-                original_text=text,
-                method_used="pattern_reconstruction_failed",
-                confidence=0.0,
-                warnings=["Could not reconstruct from patterns"],
+            return self._create_failed_parse_result(
+                text,
+                "pattern_reconstruction_failed",
+                "Could not reconstruct from patterns",
             )
 
         with self._stats_lock:

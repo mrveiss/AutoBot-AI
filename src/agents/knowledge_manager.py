@@ -818,6 +818,21 @@ class UnifiedKnowledgeManager:
         self.register_content(content_id, meta, content_hash)
         return True
 
+    def _validate_import_params(self, category: str, files: List[str]) -> None:
+        """
+        Validate import parameters for category and file list.
+
+        Raises ValueError if category is empty, files list is empty,
+        or any file path is invalid. Issue #620.
+        """
+        if not category or not category.strip():
+            raise ValueError("category cannot be empty")
+        if not files:
+            raise ValueError("files list cannot be empty")
+        for file_path in files:
+            if not file_path or not file_path.strip():
+                raise ValueError(f"Invalid file path in files list: '{file_path}'")
+
     async def import_knowledge_with_tracking(
         self, category: str, files: List[str], metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -825,6 +840,7 @@ class UnifiedKnowledgeManager:
         Import knowledge with automatic temporal tracking.
 
         Issue #665: Refactored to use extracted helper method.
+        Issue #620: Refactored with _validate_import_params helper.
 
         Args:
             category: Knowledge category (tools, workflows, procedures)
@@ -839,16 +855,7 @@ class UnifiedKnowledgeManager:
             RuntimeError: If not initialized
         """
         await self._ensure_initialized()
-
-        if not category or not category.strip():
-            raise ValueError("category cannot be empty")
-        if not files:
-            raise ValueError("files list cannot be empty")
-
-        # Validate individual file paths
-        for file_path in files:
-            if not file_path or not file_path.strip():
-                raise ValueError(f"Invalid file path in files list: '{file_path}'")
+        self._validate_import_params(category, files)
 
         imported_count = 0
         tracked_count = 0
