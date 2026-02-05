@@ -472,57 +472,110 @@ class ResearchBrowserManager:
             return self.sessions.get(session_id)
         return None
 
+    async def _get_or_create_session(
+        self, conversation_id: str
+    ) -> Optional[ResearchBrowserSession]:
+        """
+        Get existing session or create a new one for the conversation.
+
+        Extracted from research_url() to reduce function length. Issue #620.
+
+        Args:
+            conversation_id: The conversation identifier
+
+        Returns:
+            ResearchBrowserSession if successful, None otherwise
+        """
+        session = self.get_session_by_conversation(conversation_id)
+        if not session:
+            session_id = await self.create_session(conversation_id)
+            if not session_id:
+                return None
+            session = self.sessions[session_id]
+        return session
+
+    def _build_interaction_required_response(
+        self, nav_result: Dict[str, Any], session: ResearchBrowserSession
+    ) -> Dict[str, Any]:
+        """
+        Build response dict when user interaction is required.
+
+        Extracted from research_url() to reduce function length. Issue #620.
+
+        Args:
+            nav_result: Navigation result containing interaction details
+            session: The browser session
+
+        Returns:
+            Response dict indicating interaction is required
+        """
+        return {
+            "success": True,
+            "status": "interaction_required",
+            "message": nav_result["interaction_message"],
+            "session_id": session.session_id,
+            "browser_url": f"/browser/{session.session_id}",
+            "actions": ["wait", "manual_intervention", "save_mhtml"],
+        }
+
+    async def _extract_and_build_success_response(
+        self,
+        session: ResearchBrowserSession,
+        nav_result: Dict[str, Any],
+        extract_content: bool,
+    ) -> Dict[str, Any]:
+        """
+        Extract content and build success response.
+
+        Extracted from research_url() to reduce function length. Issue #620.
+
+        Args:
+            session: The browser session
+            nav_result: Navigation result
+            extract_content: Whether to extract page content
+
+        Returns:
+            Success response dict with content and navigation results
+        """
+        content_result = {}
+        if extract_content:
+            content_result = await session.extract_content()
+            mhtml_path = await session.save_mhtml()
+            if mhtml_path:
+                content_result["mhtml_backup"] = mhtml_path
+
+        return {
+            "success": True,
+            "status": "completed",
+            "navigation": nav_result,
+            "content": content_result,
+            "session_id": session.session_id,
+            "browser_url": f"/browser/{session.session_id}",
+        }
+
     async def research_url(
         self, conversation_id: str, url: str, extract_content: bool = True
     ) -> Dict[str, Any]:
-        """Research a URL with automatic fallbacks"""
-        try:
-            # Get or create session
-            session = self.get_session_by_conversation(conversation_id)
-            if not session:
-                session_id = await self.create_session(conversation_id)
-                if not session_id:
-                    return {
-                        "success": False,
-                        "error": "Failed to create browser session",
-                    }
-                session = self.sessions[session_id]
+        """
+        Research a URL with automatic fallbacks.
 
-            # Navigate to URL
+        Issue #620: Refactored to use extracted helper methods.
+        """
+        try:
+            session = await self._get_or_create_session(conversation_id)
+            if not session:
+                return {"success": False, "error": "Failed to create browser session"}
+
             nav_result = await session.navigate_to(url)
             if not nav_result["success"]:
-                # Try MHTML fallback
                 return await self._try_mhtml_fallback(session, url)
 
-            # Handle interaction requirement
             if nav_result.get("interaction_required"):
-                return {
-                    "success": True,
-                    "status": "interaction_required",
-                    "message": nav_result["interaction_message"],
-                    "session_id": session.session_id,
-                    "browser_url": f"/browser/{session.session_id}",
-                    "actions": ["wait", "manual_intervention", "save_mhtml"],
-                }
+                return self._build_interaction_required_response(nav_result, session)
 
-            # Extract content if requested
-            content_result = {}
-            if extract_content:
-                content_result = await session.extract_content()
-
-                # Save MHTML as backup
-                mhtml_path = await session.save_mhtml()
-                if mhtml_path:
-                    content_result["mhtml_backup"] = mhtml_path
-
-            return {
-                "success": True,
-                "status": "completed",
-                "navigation": nav_result,
-                "content": content_result,
-                "session_id": session.session_id,
-                "browser_url": f"/browser/{session.session_id}",
-            }
+            return await self._extract_and_build_success_response(
+                session, nav_result, extract_content
+            )
 
         except Exception as e:
             logger.error("Research failed for URL %s: %s", url, e)

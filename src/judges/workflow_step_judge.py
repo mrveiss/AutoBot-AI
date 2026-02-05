@@ -250,6 +250,49 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
 
         return f"{context_section}\n\n{criteria_section}\n\n{instructions_section}"
 
+    def _extract_dimension_score(
+        self, judgment: JudgmentResult, dimension: JudgmentDimension
+    ) -> float:
+        """
+        Extract score for a specific dimension from judgment result.
+
+        Args:
+            judgment: The JudgmentResult containing criterion scores.
+            dimension: The JudgmentDimension to extract score for.
+
+        Returns:
+            The score for the dimension, or 0.0 if not found.
+
+        Issue #620.
+        """
+        return next(
+            (s.score for s in judgment.criterion_scores if s.dimension == dimension),
+            0.0,
+        )
+
+    def _check_threshold_violation(
+        self, score: float, threshold: float, score_name: str
+    ) -> Optional[tuple[bool, str]]:
+        """
+        Check if a score violates its threshold.
+
+        Args:
+            score: The actual score value.
+            threshold: The minimum required threshold.
+            score_name: Name of the score for error message.
+
+        Returns:
+            Tuple of (False, reason) if threshold violated, None otherwise.
+
+        Issue #620.
+        """
+        if score < threshold:
+            return (
+                False,
+                f"{score_name} score ({score:.2f}) below threshold ({threshold})",
+            )
+        return None
+
     async def should_approve_step(
         self,
         step_data: Dict[str, Any],
@@ -257,7 +300,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         user_context: Dict[str, Any],
     ) -> tuple[bool, str]:
         """
-        Quick approval check for workflow steps
+        Quick approval check for workflow steps (Issue #620: uses extracted helpers).
 
         Returns:
             tuple: (should_approve: bool, reason: str)
@@ -267,40 +310,28 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
                 step_data, workflow_context, user_context
             )
 
-            # Check safety and quality thresholds
-            safety_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.SAFETY
-                ),
-                0.0,
+            safety_score = self._extract_dimension_score(
+                judgment, JudgmentDimension.SAFETY
             )
-            quality_score = next(
-                (
-                    s.score
-                    for s in judgment.criterion_scores
-                    if s.dimension == JudgmentDimension.QUALITY
-                ),
-                0.0,
+            quality_score = self._extract_dimension_score(
+                judgment, JudgmentDimension.QUALITY
             )
 
-            if safety_score < self.safety_threshold:
-                return (
-                    False,
-                    f"Safety score ({safety_score:.2f}) below threshold ({self.safety_threshold})",
-                )
+            safety_violation = self._check_threshold_violation(
+                safety_score, self.safety_threshold, "Safety"
+            )
+            if safety_violation:
+                return safety_violation
 
-            if quality_score < self.quality_threshold:
-                return (
-                    False,
-                    f"Quality score ({quality_score:.2f}) below threshold ({self.quality_threshold})",
-                )
+            quality_violation = self._check_threshold_violation(
+                quality_score, self.quality_threshold, "Quality"
+            )
+            if quality_violation:
+                return quality_violation
 
             if judgment.recommendation in _APPROVAL_RECOMMENDATIONS:
                 return True, f"Approved: {judgment.reasoning[:100]}..."
-            else:
-                return False, judgment.reasoning
+            return False, judgment.reasoning
 
         except Exception as e:
             logger.error("Error in workflow step approval: %s", e)

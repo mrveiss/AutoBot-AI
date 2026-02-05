@@ -166,6 +166,34 @@ class SecureSandboxExecutor:
             metadata={"validation_failed": True},
         )
 
+    def _create_execution_error_result(
+        self, error: Exception, start_time: float, container_id: str
+    ) -> SandboxResult:
+        """
+        Create a SandboxResult for execution errors.
+
+        Extracted from execute_command() to reduce function length. Issue #620.
+
+        Args:
+            error: The exception that occurred
+            start_time: Execution start timestamp
+            container_id: Container identifier
+
+        Returns:
+            SandboxResult indicating execution error
+        """
+        return SandboxResult(
+            success=False,
+            exit_code=-1,
+            stdout="",
+            stderr=str(error),
+            execution_time=time.time() - start_time,
+            container_id=container_id,
+            security_events=[],
+            resource_usage={},
+            metadata={"error": str(error)},
+        )
+
     def _execute_container_with_timeout(
         self, container, config: SandboxConfig
     ) -> Tuple[int, str, str, Dict[str, Any]]:
@@ -320,19 +348,8 @@ class SecureSandboxExecutor:
 
         except Exception as e:
             self.logger.error("Sandbox execution error: %s", e)
-            return SandboxResult(
-                success=False,
-                exit_code=-1,
-                stdout="",
-                stderr=str(e),
-                execution_time=time.time() - start_time,
-                container_id=container_id,
-                security_events=[],
-                resource_usage={},
-                metadata={"error": str(e)},
-            )
+            return self._create_execution_error_result(e, start_time, container_id)
         finally:
-            # Cleanup
             await self._cleanup_container(container_id)
 
     async def execute_script(

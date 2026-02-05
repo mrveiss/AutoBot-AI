@@ -1187,16 +1187,15 @@ class ModernAIIntegration:
             ),
         }
 
-    async def analyze_screen_with_ai(
-        self,
-        screenshot_base64: str,
-        analysis_goal: str,
-        preferred_provider: Optional[AIProvider] = None,
-    ) -> Dict[str, Any]:
-        """Analyze screenshot using AI vision models (Issue #665: uses extracted helpers)."""
-        provider = self._select_vision_provider(preferred_provider)
+    def _build_screen_analysis_prompts(self) -> tuple[str, str]:
+        """
+        Build system message and prompt template for screen analysis.
 
-        # Create detailed prompt for screen analysis
+        Returns:
+            Tuple of (system_message, prompt_template).
+
+        Issue #620.
+        """
         system_message = """You are an expert at analyzing screenshots and user interfaces.
         Provide detailed analysis of what you see, including:
         1. UI elements and their purposes
@@ -1205,7 +1204,7 @@ class ModernAIIntegration:
         4. Current application or website context
         5. Suggestions for automation or user actions"""
 
-        prompt = """
+        prompt_template = """
         Please analyze this screenshot with the following goal: {analysis_goal}
 
         Provide a detailed analysis in JSON format with the following structure:
@@ -1218,6 +1217,36 @@ class ModernAIIntegration:
             "context_analysis": "Analysis of the application/website context"
         }}
         """
+        return system_message, prompt_template
+
+    def _build_ai_metadata(self, response: Any) -> Dict[str, Any]:
+        """
+        Build metadata dict from AI response.
+
+        Args:
+            response: The AI response object.
+
+        Returns:
+            Dict containing provider, model, confidence, and processing time.
+
+        Issue #620.
+        """
+        return {
+            "provider": response.provider.value,
+            "model": response.model_name,
+            "confidence": response.confidence,
+            "processing_time": response.processing_time,
+        }
+
+    async def analyze_screen_with_ai(
+        self,
+        screenshot_base64: str,
+        analysis_goal: str,
+        preferred_provider: Optional[AIProvider] = None,
+    ) -> Dict[str, Any]:
+        """Analyze screenshot using AI vision models (Issue #620: uses extracted helpers)."""
+        provider = self._select_vision_provider(preferred_provider)
+        system_message, prompt = self._build_screen_analysis_prompts()
 
         response = await self.process_with_ai(
             provider=provider,
@@ -1227,20 +1256,12 @@ class ModernAIIntegration:
             task_type="screen_analysis",
         )
 
-        # Try to parse JSON response
         try:
             analysis = json.loads(response.content)
         except json.JSONDecodeError:
             analysis = self._build_fallback_screen_analysis(response.content)
 
-        # Add metadata
-        analysis["ai_metadata"] = {
-            "provider": response.provider.value,
-            "model": response.model_name,
-            "confidence": response.confidence,
-            "processing_time": response.processing_time,
-        }
-
+        analysis["ai_metadata"] = self._build_ai_metadata(response)
         return analysis
 
     async def generate_automation_code(

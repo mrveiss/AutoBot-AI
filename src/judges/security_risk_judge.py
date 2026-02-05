@@ -303,22 +303,74 @@ class SecurityRiskJudge(BaseLLMJudge):
             logger.error("Error assessing file access risk: %s", e)
             return self._build_file_access_error_response(e)
 
+    def _build_network_context(
+        self,
+        operation_data: Dict[str, Any],
+        network_risks: List[str],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build context dictionary for network operation security evaluation.
+
+        Args:
+            operation_data: Data about the network operation.
+            network_risks: List of identified network risks.
+            context: Additional context information.
+
+        Returns:
+            Dict containing all context needed for judgment.
+
+        Issue #620.
+        """
+        return {
+            "operation_data": operation_data,
+            "network_risks": network_risks,
+            "context": context,
+            "operation_type": operation_data.get("type", "unknown"),
+            "target_host": operation_data.get("host", "unknown"),
+            "port": operation_data.get("port", "unknown"),
+            "protocol": operation_data.get("protocol", "unknown"),
+        }
+
+    def _build_network_security_result(
+        self,
+        judgment: JudgmentResult,
+        network_risks: List[str],
+        operation_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Build result dictionary from network security judgment.
+
+        Args:
+            judgment: The JudgmentResult from security evaluation.
+            network_risks: List of identified network risks.
+            operation_data: Original operation data for security requirements.
+
+        Returns:
+            Dict containing security assessment results.
+
+        Issue #620.
+        """
+        return {
+            "security_assessment": judgment,
+            "network_risks": network_risks,
+            "recommendation": judgment.recommendation,
+            "confidence": judgment.confidence.value,
+            "security_requirements": self._get_network_security_requirements(
+                operation_data
+            ),
+        }
+
     async def evaluate_network_operation_security(
         self, operation_data: Dict[str, Any], context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Evaluate security risks of network operations
+        Evaluate security risks of network operations (Issue #620: uses extracted helpers).
 
         Returns:
             Dict with network security assessment
         """
         try:
-            operation_type = operation_data.get("type", "unknown")
-            target_host = operation_data.get("host", "unknown")
-            port = operation_data.get("port", "unknown")
-            protocol = operation_data.get("protocol", "unknown")
-
-            # Analyze network operation risks
             network_risks = self._analyze_network_risks(operation_data)
 
             criteria = [
@@ -327,29 +379,17 @@ class SecurityRiskJudge(BaseLLMJudge):
                 JudgmentDimension.COMPLIANCE,
             ]
 
-            network_context = {
-                "operation_data": operation_data,
-                "network_risks": network_risks,
-                "context": context,
-                "operation_type": operation_type,
-                "target_host": target_host,
-                "port": port,
-                "protocol": protocol,
-            }
+            network_context = self._build_network_context(
+                operation_data, network_risks, context
+            )
 
             judgment = await self.make_judgment(
                 subject=operation_data, criteria=criteria, context=network_context
             )
 
-            return {
-                "security_assessment": judgment,
-                "network_risks": network_risks,
-                "recommendation": judgment.recommendation,
-                "confidence": judgment.confidence.value,
-                "security_requirements": self._get_network_security_requirements(
-                    operation_data
-                ),
-            }
+            return self._build_network_security_result(
+                judgment, network_risks, operation_data
+            )
 
         except Exception as e:
             logger.error("Error evaluating network operation security: %s", e)

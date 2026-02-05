@@ -220,6 +220,58 @@ class WorkflowExecutor:
         execution_context["interactions"].append(interaction)
         return interaction
 
+    def _build_step_success_result(
+        self,
+        result: Dict[str, Any],
+        agent_id: Optional[str],
+        step_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Build success result dict for a completed step.
+
+        Extracted from _execute_coordinated_step() to reduce function length. Issue #620.
+
+        Args:
+            result: The step execution result
+            agent_id: Agent that executed the step
+            step_id: Step identifier
+
+        Returns:
+            Success result dict
+        """
+        return {
+            "success": True,
+            "result": result,
+            "agent_id": agent_id,
+            "step_id": step_id,
+        }
+
+    def _build_step_failure_result(
+        self,
+        error: Exception,
+        agent_id: Optional[str],
+        step_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Build failure result dict for a failed step.
+
+        Extracted from _execute_coordinated_step() to reduce function length. Issue #620.
+
+        Args:
+            error: The exception that occurred
+            agent_id: Agent that attempted the step
+            step_id: Step identifier
+
+        Returns:
+            Failure result dict
+        """
+        return {
+            "success": False,
+            "error": str(error),
+            "agent_id": agent_id,
+            "step_id": step_id,
+        }
+
     async def _execute_coordinated_step(
         self,
         step: Dict[str, Any],
@@ -228,6 +280,8 @@ class WorkflowExecutor:
     ) -> Dict[str, Any]:
         """
         Execute a single workflow step with agent coordination.
+
+        Issue #620: Refactored to use extracted helper methods.
 
         Args:
             step: The step to execute
@@ -242,39 +296,23 @@ class WorkflowExecutor:
 
         logger.info("Executing step %s with agent %s", step_id, agent_id)
 
-        # Record agent interaction (Issue #620: extracted to helper)
         interaction: Optional[AgentInteraction] = None
         if agent_id:
             interaction = self._create_agent_interaction(step, execution_context)
 
-        # Execute step
         try:
             result = await self._simulate_step_execution(step, context)
-
             if interaction:
                 interaction.outcome = "success"
                 interaction.message["result"] = result
-
-            return {
-                "success": True,
-                "result": result,
-                "agent_id": agent_id,
-                "step_id": step_id,
-            }
+            return self._build_step_success_result(result, agent_id, step_id)
 
         except Exception as e:
             logger.error("Step %s execution failed: %s", step_id, e)
-
             if interaction:
                 interaction.outcome = "failed"
                 interaction.message["error"] = str(e)
-
-            return {
-                "success": False,
-                "error": str(e),
-                "agent_id": agent_id,
-                "step_id": step_id,
-            }
+            return self._build_step_failure_result(e, agent_id, step_id)
 
     async def _simulate_step_execution(
         self,
