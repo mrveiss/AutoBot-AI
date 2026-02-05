@@ -189,6 +189,45 @@ class TakeoverManager:
         self.memory_manager.start_task(task_id)
         return task_id
 
+    def _is_critical_trigger(self, trigger: TakeoverTrigger) -> bool:
+        """Check if trigger requires immediate task pause. Issue #620.
+
+        Args:
+            trigger: The takeover trigger type
+
+        Returns:
+            True if trigger is critical. Issue #620.
+        """
+        return trigger in {
+            TakeoverTrigger.CRITICAL_ERROR,
+            TakeoverTrigger.SECURITY_CONCERN,
+        }
+
+    async def _handle_post_request_actions(
+        self, request: TakeoverRequest, request_id: str
+    ) -> None:
+        """Handle actions after takeover request is created. Issue #620.
+
+        Args:
+            request: The created takeover request
+            request_id: Unique request identifier. Issue #620.
+        """
+        await self._execute_trigger_handlers(request)
+
+        if self._is_critical_trigger(request.trigger):
+            await self._pause_affected_tasks(request.affected_tasks)
+
+        if request.auto_approve:
+            await self._auto_approve_request(request_id)
+
+        logger.info(
+            "Takeover requested: %s - %s - %s",
+            request_id,
+            request.trigger.value,
+            request.reason,
+        )
+        await self._notify_state_change("request_created", request_id)
+
     async def request_takeover(
         self,
         trigger: TakeoverTrigger,
@@ -200,27 +239,9 @@ class TakeoverManager:
         timeout_minutes: Optional[int] = None,
         auto_approve: bool = False,
     ) -> str:
-        """
-        Request human takeover of autonomous operations.
-
-        Issue #665: Refactored to use extracted helper methods.
-
-        Args:
-            trigger: Type of takeover trigger
-            reason: Reason for takeover request
-            requesting_agent: Agent requesting takeover
-            affected_tasks: List of affected task IDs
-            priority: Request priority
-            context_data: Additional context
-            timeout_minutes: Optional timeout override
-            auto_approve: Whether to auto-approve
-
-        Returns:
-            Request ID for tracking
-        """
+        """Request human takeover of autonomous operations. Issue #665, #620."""
         request_id = f"takeover_{int(time.time() * 1000)}"
 
-        # Issue #665: Use helper to create request
         request = self._create_takeover_request(
             request_id,
             trigger,
@@ -233,30 +254,12 @@ class TakeoverManager:
             auto_approve,
         )
 
-        # Issue #665: Use helper to record in memory
         self._record_takeover_in_memory(
             trigger, reason, priority, requesting_agent, affected_tasks
         )
 
-        # Store request and execute handlers
         self.pending_requests[request_id] = request
-        await self._execute_trigger_handlers(request)
-
-        # Auto-pause affected tasks if critical
-        if trigger in {
-            TakeoverTrigger.CRITICAL_ERROR,
-            TakeoverTrigger.SECURITY_CONCERN,
-        }:
-            await self._pause_affected_tasks(request.affected_tasks)
-
-        # Auto-approve if configured
-        if request.auto_approve:
-            await self._auto_approve_request(request_id)
-
-        logger.info(
-            "Takeover requested: %s - %s - %s", request_id, trigger.value, reason
-        )
-        await self._notify_state_change("request_created", request_id)
+        await self._handle_post_request_actions(request, request_id)
 
         return request_id
 

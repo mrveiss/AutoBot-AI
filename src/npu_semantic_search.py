@@ -1118,6 +1118,56 @@ class NPUSemanticSearch:
             logger.error("Failed to store multimodal embedding: %s", e)
             return False
 
+    def _generate_code_doc_id(
+        self, element_type: str, language: str, content_hash: str
+    ) -> str:
+        """Generate unique document ID for code embedding. Issue #620.
+
+        Args:
+            element_type: Type of code element
+            language: Programming language
+            content_hash: Hash of code content
+
+        Returns:
+            Unique document ID string. Issue #620.
+        """
+        return f"code_{element_type}_{language}_{content_hash[:16]}_{int(time.time() * 1000)}"
+
+    def _prepare_code_metadata(
+        self,
+        file_path: str,
+        line_number: int,
+        element_type: str,
+        element_name: str,
+        language: str,
+        content_hash: str,
+        metadata: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Prepare metadata dictionary for code embedding storage. Issue #620.
+
+        Args:
+            file_path: Path to source file
+            line_number: Line number of element
+            element_type: Type of code element
+            element_name: Name of the element
+            language: Programming language
+            content_hash: Hash of code content
+            metadata: Additional metadata to merge
+
+        Returns:
+            Complete metadata dictionary. Issue #620.
+        """
+        return {
+            "file_path": file_path,
+            "line_number": line_number,
+            "element_type": element_type,
+            "element_name": element_name,
+            "language": language,
+            "content_hash": content_hash,
+            "indexed_at": time.time(),
+            **(metadata or {}),
+        }
+
     async def store_code_embedding(
         self,
         embedding: np.ndarray,
@@ -1130,46 +1180,23 @@ class NPUSemanticSearch:
         content_hash: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
-        """
-        Store code element embedding in ChromaDB collection.
-
-        Issue #207: NPU-accelerated semantic code search.
-
-        Args:
-            embedding: Pre-computed embedding vector (768-dim for CodeBERT)
-            code_content: Source code content
-            file_path: Path to the source file
-            line_number: Line number of the element
-            element_type: Type of element ('function', 'class', 'module')
-            element_name: Name of the element
-            language: Programming language
-            content_hash: Hash of the code content for change detection
-            metadata: Additional metadata
-
-        Returns:
-            Document ID if successful, None otherwise
-        """
+        """Store code element embedding in ChromaDB collection. Issue #207, #620."""
         if not self.chroma_client or "code" not in self.collections:
             logger.warning("ChromaDB code collection not available")
             return None
 
         try:
-            # Generate unique document ID
-            doc_id = f"code_{element_type}_{language}_{content_hash[:16]}_{int(time.time() * 1000)}"
+            doc_id = self._generate_code_doc_id(element_type, language, content_hash)
+            doc_metadata = self._prepare_code_metadata(
+                file_path,
+                line_number,
+                element_type,
+                element_name,
+                language,
+                content_hash,
+                metadata,
+            )
 
-            # Prepare metadata
-            doc_metadata = {
-                "file_path": file_path,
-                "line_number": line_number,
-                "element_type": element_type,
-                "element_name": element_name,
-                "language": language,
-                "content_hash": content_hash,
-                "indexed_at": time.time(),
-                **(metadata or {}),
-            }
-
-            # Store in code collection
             collection = self.collections["code"]
             collection.add(
                 embeddings=[embedding.tolist()],

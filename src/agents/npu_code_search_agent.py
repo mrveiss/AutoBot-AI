@@ -484,6 +484,56 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         return "\n".join(lines[start_idx:end_idx])
 
+    async def _store_single_element_embedding(
+        self,
+        element: Dict,
+        element_type: str,
+        content: str,
+        relative_path: str,
+        language: str,
+        embedding_generator: Any,
+    ) -> bool:
+        """Store embedding for a single code element. Issue #620.
+
+        Args:
+            element: Code element dictionary with name and line_number
+            element_type: Type of element (functions, classes)
+            content: Full file content
+            relative_path: Relative path to file
+            language: Programming language
+            embedding_generator: Embedding generator instance
+
+        Returns:
+            True if embedding stored successfully. Issue #620.
+        """
+        element_code = self._extract_element_code(
+            content, element["line_number"], element_type
+        )
+        if not element_code.strip():
+            return False
+
+        content_hash = hashlib.sha256(element_code.encode()).hexdigest()
+        result = await embedding_generator.generate_embedding(element_code, language)
+
+        singular_type = (
+            element_type.rstrip("es") if element_type.endswith("es") else element_type
+        )
+        doc_id = await self.npu_search_engine.store_code_embedding(
+            embedding=result.embedding,
+            code_content=element_code,
+            file_path=relative_path,
+            line_number=element["line_number"],
+            element_type=singular_type,
+            element_name=element["name"],
+            language=language,
+            content_hash=content_hash,
+        )
+
+        if doc_id:
+            element["embedding_id"] = doc_id
+            return True
+        return False
+
     async def _generate_and_store_embeddings(
         self,
         content: str,
@@ -491,56 +541,22 @@ class NPUCodeSearchAgent(StandardizedAgent):
         language: str,
         elements: Dict[str, List[Dict]],
     ) -> int:
-        """
-        Generate and store embeddings for code elements.
-
-        Issue #207: NPU-accelerated semantic code search.
-
-        Args:
-            content: Full file content
-            relative_path: Relative path to the file
-            language: Programming language
-            elements: Extracted code elements
-
-        Returns:
-            Number of embeddings stored
-        """
+        """Generate and store embeddings for code elements. Issue #207, #620."""
         try:
             embedding_generator = await get_code_embedding_generator()
             await self._ensure_search_engine_initialized()
 
             stored_count = 0
-
             for element_type in ["functions", "classes"]:
                 for element in elements.get(element_type, []):
-                    element_code = self._extract_element_code(
-                        content, element["line_number"], element_type
-                    )
-
-                    if not element_code.strip():
-                        continue
-
-                    content_hash = hashlib.sha256(element_code.encode()).hexdigest()
-
-                    result = await embedding_generator.generate_embedding(
-                        element_code, language
-                    )
-
-                    doc_id = await self.npu_search_engine.store_code_embedding(
-                        embedding=result.embedding,
-                        code_content=element_code,
-                        file_path=relative_path,
-                        line_number=element["line_number"],
-                        element_type=element_type.rstrip("es")
-                        if element_type.endswith("es")
-                        else element_type,
-                        element_name=element["name"],
-                        language=language,
-                        content_hash=content_hash,
-                    )
-
-                    if doc_id:
-                        element["embedding_id"] = doc_id
+                    if await self._store_single_element_embedding(
+                        element,
+                        element_type,
+                        content,
+                        relative_path,
+                        language,
+                        embedding_generator,
+                    ):
                         stored_count += 1
 
             return stored_count

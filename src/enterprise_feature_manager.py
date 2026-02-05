@@ -285,57 +285,85 @@ class EnterpriseFeatureManager:
             ),
         }
 
+    def _get_cross_vm_load_balancing_feature(self) -> EnterpriseFeature:
+        """
+        Create cross-VM load balancing feature definition.
+
+        Issue #620.
+        """
+        return EnterpriseFeature(
+            name="Cross-VM Load Balancing",
+            category=FeatureCategory.LOAD_BALANCING,
+            description="Intelligent load distribution across 6-VM infrastructure",
+            configuration={
+                "enable_adaptive_routing": True,
+                "load_balance_algorithm": "weighted_round_robin",
+                "health_check_interval": 30,
+                "failover_threshold": 0.8,
+                "resource_monitoring": True,
+                "auto_scaling": True,
+            },
+            health_check_endpoint="/api/load_balancer/health",
+        )
+
+    def _get_intelligent_task_routing_feature(self) -> EnterpriseFeature:
+        """
+        Create intelligent task routing feature definition.
+
+        Issue #620.
+        """
+        return EnterpriseFeature(
+            name="Intelligent Task Routing",
+            category=FeatureCategory.RESOURCE_OPTIMIZATION,
+            description="Route tasks to optimal hardware (NPU/GPU/CPU) based on requirements",
+            dependencies=["cross_vm_load_balancing"],
+            configuration={
+                "enable_hardware_detection": True,
+                "enable_performance_prediction": True,
+                "routing_strategies": {
+                    "ai_tasks": "npu_preferred",
+                    "gpu_tasks": "gpu_required",
+                    "cpu_tasks": "cpu_optimized",
+                    "memory_tasks": "memory_optimized",
+                },
+                "performance_history_days": 7,
+                "auto_optimization": True,
+            },
+        )
+
+    def _get_dynamic_resource_allocation_feature(self) -> EnterpriseFeature:
+        """
+        Create dynamic resource allocation feature definition.
+
+        Issue #620.
+        """
+        return EnterpriseFeature(
+            name="Dynamic Resource Allocation",
+            category=FeatureCategory.RESOURCE_OPTIMIZATION,
+            description="Automatic resource scaling based on demand",
+            configuration={
+                "enable_auto_scaling": True,
+                "scale_up_threshold": 0.8,
+                "scale_down_threshold": 0.3,
+                "scaling_cooldown_minutes": 5,
+                "resource_limits": {
+                    "max_cpu_percent": 90,
+                    "max_memory_percent": 85,
+                    "max_concurrent_tasks": 50,
+                },
+            },
+        )
+
     def _get_load_balancing_features(self) -> Dict[str, EnterpriseFeature]:
-        """Get load balancing and routing feature definitions."""
+        """
+        Get load balancing and routing feature definitions.
+
+        Issue #620: Refactored to use extracted helper methods.
+        """
         return {
-            "cross_vm_load_balancing": EnterpriseFeature(
-                name="Cross-VM Load Balancing",
-                category=FeatureCategory.LOAD_BALANCING,
-                description="Intelligent load distribution across 6-VM infrastructure",
-                configuration={
-                    "enable_adaptive_routing": True,
-                    "load_balance_algorithm": "weighted_round_robin",
-                    "health_check_interval": 30,
-                    "failover_threshold": 0.8,
-                    "resource_monitoring": True,
-                    "auto_scaling": True,
-                },
-                health_check_endpoint="/api/load_balancer/health",
-            ),
-            "intelligent_task_routing": EnterpriseFeature(
-                name="Intelligent Task Routing",
-                category=FeatureCategory.RESOURCE_OPTIMIZATION,
-                description="Route tasks to optimal hardware (NPU/GPU/CPU) based on requirements",
-                dependencies=["cross_vm_load_balancing"],
-                configuration={
-                    "enable_hardware_detection": True,
-                    "enable_performance_prediction": True,
-                    "routing_strategies": {
-                        "ai_tasks": "npu_preferred",
-                        "gpu_tasks": "gpu_required",
-                        "cpu_tasks": "cpu_optimized",
-                        "memory_tasks": "memory_optimized",
-                    },
-                    "performance_history_days": 7,
-                    "auto_optimization": True,
-                },
-            ),
-            "dynamic_resource_allocation": EnterpriseFeature(
-                name="Dynamic Resource Allocation",
-                category=FeatureCategory.RESOURCE_OPTIMIZATION,
-                description="Automatic resource scaling based on demand",
-                configuration={
-                    "enable_auto_scaling": True,
-                    "scale_up_threshold": 0.8,
-                    "scale_down_threshold": 0.3,
-                    "scaling_cooldown_minutes": 5,
-                    "resource_limits": {
-                        "max_cpu_percent": 90,
-                        "max_memory_percent": 85,
-                        "max_concurrent_tasks": 50,
-                    },
-                },
-            ),
+            "cross_vm_load_balancing": self._get_cross_vm_load_balancing_feature(),
+            "intelligent_task_routing": self._get_intelligent_task_routing_feature(),
+            "dynamic_resource_allocation": self._get_dynamic_resource_allocation_feature(),
         }
 
     def _get_monitoring_features(self) -> Dict[str, EnterpriseFeature]:

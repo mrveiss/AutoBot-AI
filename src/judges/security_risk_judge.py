@@ -42,59 +42,96 @@ _REMOTE_ACCESS_PORTS = frozenset({22, 3389})  # SSH and RDP ports for auth requi
 class SecurityRiskJudge(BaseLLMJudge):
     """Judge for evaluating security risks, command safety, and compliance"""
 
+    def _get_destructive_patterns(self) -> List[str]:
+        """
+        Return patterns for destructive commands.
+
+        Issue #620.
+        """
+        return [
+            r"\brm\s+(-rf?|\-\-recursive)\s+/",
+            r"\bformat\s+[a-zA-Z]:",
+            r"\bdd\s+.*of=/dev/",
+            r"\bmkfs\.",
+            r"\bshred\b",
+            r"\bwipe\b",
+            r">\s*/dev/(sd[a-z]|nvme)",
+            r"\bfdisk\s.*\-\-delete",
+        ]
+
+    def _get_privilege_escalation_patterns(self) -> List[str]:
+        """
+        Return patterns for privilege escalation commands.
+
+        Issue #620.
+        """
+        return [
+            r"\bsudo\s+su\s*\-",
+            r"\bchmod\s+[47]77",
+            r"\bchown\s+root",
+            r"\bsetuid\b",
+            r"\bsetgid\b",
+            r"/etc/sudoers",
+            r"/etc/passwd",
+            r"/etc/shadow",
+        ]
+
+    def _get_network_security_patterns(self) -> List[str]:
+        """
+        Return patterns for network security risk commands.
+
+        Issue #620.
+        """
+        return [
+            r"\bnc\s+.*\-l.*\-p",
+            r"\bnetcat\s+.*\-l",
+            r"\biptables\s+.*DROP",
+            r"\bufw\s+.*deny",
+            r"\bfirewall\-cmd.*\-\-remove",
+            r"\bssh\s+.*\-o\s+StrictHostKeyChecking=no",
+        ]
+
+    def _get_data_exposure_patterns(self) -> List[str]:
+        """
+        Return patterns for data exposure risk commands.
+
+        Issue #620.
+        """
+        return [
+            r"\bcat\s+.*/(etc/)?(passwd|shadow|hosts)",
+            r"\bgrep\s+.*password.*/",
+            r"\bfind\s+.*\-name.*\*\.key",
+            r"\bls\s+.*\.pem$",
+            r"\bps\s+.*aux.*grep.*password",
+        ]
+
+    def _get_system_modification_patterns(self) -> List[str]:
+        """
+        Return patterns for system modification risk commands.
+
+        Issue #620.
+        """
+        return [
+            r"\bcrontab\s+\-e",
+            r"/etc/hosts\s*$",
+            r"/boot/",
+            r"\bsystemctl\s+disable",
+            r"\bchkconfig\s+.*off",
+            r"\bupdate\-rc\.d.*remove",
+        ]
+
     def _get_dangerous_patterns(self) -> Dict[str, List[str]]:
         """
         Return dangerous command patterns organized by risk category.
 
-        Returns:
-            Dict mapping category names to lists of regex patterns.
-
-        Issue #620.
+        Issue #620: Refactored to use extracted helper methods.
         """
         return {
-            "destructive": [
-                r"\brm\s+(-rf?|\-\-recursive)\s+/",
-                r"\bformat\s+[a-zA-Z]:",
-                r"\bdd\s+.*of=/dev/",
-                r"\bmkfs\.",
-                r"\bshred\b",
-                r"\bwipe\b",
-                r">\s*/dev/(sd[a-z]|nvme)",
-                r"\bfdisk\s.*\-\-delete",
-            ],
-            "privilege_escalation": [
-                r"\bsudo\s+su\s*\-",
-                r"\bchmod\s+[47]77",
-                r"\bchown\s+root",
-                r"\bsetuid\b",
-                r"\bsetgid\b",
-                r"/etc/sudoers",
-                r"/etc/passwd",
-                r"/etc/shadow",
-            ],
-            "network_security": [
-                r"\bnc\s+.*\-l.*\-p",
-                r"\bnetcat\s+.*\-l",
-                r"\biptables\s+.*DROP",
-                r"\bufw\s+.*deny",
-                r"\bfirewall\-cmd.*\-\-remove",
-                r"\bssh\s+.*\-o\s+StrictHostKeyChecking=no",
-            ],
-            "data_exposure": [
-                r"\bcat\s+.*/(etc/)?(passwd|shadow|hosts)",
-                r"\bgrep\s+.*password.*/",
-                r"\bfind\s+.*\-name.*\*\.key",
-                r"\bls\s+.*\.pem$",
-                r"\bps\s+.*aux.*grep.*password",
-            ],
-            "system_modification": [
-                r"\bcrontab\s+\-e",
-                r"/etc/hosts\s*$",
-                r"/boot/",
-                r"\bsystemctl\s+disable",
-                r"\bchkconfig\s+.*off",
-                r"\bupdate\-rc\.d.*remove",
-            ],
+            "destructive": self._get_destructive_patterns(),
+            "privilege_escalation": self._get_privilege_escalation_patterns(),
+            "network_security": self._get_network_security_patterns(),
+            "data_exposure": self._get_data_exposure_patterns(),
+            "system_modification": self._get_system_modification_patterns(),
         }
 
     def _get_safe_patterns(self) -> List[str]:
