@@ -221,9 +221,7 @@ def _create_not_found_result(args: List[str]) -> CommandResult:
 
 def _create_execution_error_result(args: List[str], error: Exception) -> CommandResult:
     """
-    Create a CommandResult for a general execution error.
-
-    Issue #620.
+    Create a CommandResult for a general execution error. Issue #620.
 
     Args:
         args: Command arguments that were executed
@@ -241,6 +239,37 @@ def _create_execution_error_result(args: List[str], error: Exception) -> Command
     )
 
 
+async def _communicate_with_process(
+    process: asyncio.subprocess.Process,
+    args: List[str],
+    timeout: Optional[float],
+) -> CommandResult:
+    """
+    Communicate with subprocess and handle timeout. Issue #620.
+
+    Args:
+        process: The subprocess to communicate with
+        args: Command arguments (for error reporting)
+        timeout: Optional timeout in seconds
+
+    Returns:
+        CommandResult with parsed output or timeout error
+    """
+    try:
+        if timeout:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=timeout
+            )
+        else:
+            stdout, stderr = await process.communicate()
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        return _create_timeout_result(args, timeout)
+
+    return _parse_command_output(stdout, stderr, process.returncode)
+
+
 async def execute_command(
     args: List[str],
     timeout: Optional[float] = None,
@@ -250,9 +279,6 @@ async def execute_command(
     """
     Execute a command with arguments (exec-style, not shell).
 
-    Safer than shell execution as it doesn't invoke a shell interpreter.
-    Use this for specific commands with known arguments.
-
     Args:
         args: Command and arguments as a list (e.g., ["man", "-w", "ls"])
         timeout: Optional timeout in seconds
@@ -261,11 +287,6 @@ async def execute_command(
 
     Returns:
         CommandResult with stdout, stderr, return_code, and status
-
-    Example:
-        result = await execute_command(["man", "-w", "ls"], timeout=5.0)
-        if result.status == "success":
-            logger.info("Output: %s", result.stdout)
     """
     try:
         process_env = _prepare_process_env(env)
@@ -276,20 +297,7 @@ async def execute_command(
             cwd=cwd,
             env=process_env,
         )
-
-        try:
-            if timeout:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout
-                )
-            else:
-                stdout, stderr = await process.communicate()
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            return _create_timeout_result(args, timeout)
-
-        return _parse_command_output(stdout, stderr, process.returncode)
+        return await _communicate_with_process(process, args, timeout)
 
     except FileNotFoundError:
         return _create_not_found_result(args)

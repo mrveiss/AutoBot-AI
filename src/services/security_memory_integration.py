@@ -143,6 +143,60 @@ class SecurityMemoryIntegration:
         if not self._initialized:
             await self.initialize()
 
+    def _build_assessment_observations(
+        self,
+        name: str,
+        target: str,
+        scope: list[str],
+        training_mode: bool,
+        metadata: Optional[dict[str, Any]],
+    ) -> list[str]:
+        """
+        Build observations list for a security assessment entity.
+
+        Issue #620.
+        """
+        observations = [
+            f"Security assessment: {name}",
+            f"Primary target: {target}",
+            f"Scope: {', '.join(scope)}",
+            f"Training mode: {'enabled' if training_mode else 'disabled'}",
+        ]
+        if metadata:
+            for key, value in metadata.items():
+                observations.append(f"{key}: {value}")
+        return observations
+
+    async def _store_assessment_in_memory(
+        self,
+        assessment_id: str,
+        name: str,
+        target: str,
+        scope: list[str],
+        training_mode: bool,
+        observations: list[str],
+        metadata: Optional[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Store assessment entity in memory graph.
+
+        Issue #620.
+        """
+        return await self._memory_graph.create_entity(
+            entity_type="task",
+            name=f"Security Assessment: {name}",
+            observations=observations,
+            metadata={
+                "assessment_id": assessment_id,
+                "type": "security_assessment",
+                "target": target,
+                "scope": scope,
+                "training_mode": training_mode,
+                **(metadata or {}),
+            },
+            tags=["security", "assessment", "pentest"],
+        )
+
     async def create_assessment_entity(
         self,
         assessment_id: str,
@@ -167,34 +221,12 @@ class SecurityMemoryIntegration:
             Created entity data
         """
         await self.ensure_initialized()
-
-        observations = [
-            f"Security assessment: {name}",
-            f"Primary target: {target}",
-            f"Scope: {', '.join(scope)}",
-            f"Training mode: {'enabled' if training_mode else 'disabled'}",
-        ]
-
-        if metadata:
-            for key, value in metadata.items():
-                observations.append(f"{key}: {value}")
-
-        # Use 'task' entity type for assessments (closest match in base types)
-        entity = await self._memory_graph.create_entity(
-            entity_type="task",
-            name=f"Security Assessment: {name}",
-            observations=observations,
-            metadata={
-                "assessment_id": assessment_id,
-                "type": "security_assessment",
-                "target": target,
-                "scope": scope,
-                "training_mode": training_mode,
-                **(metadata or {}),
-            },
-            tags=["security", "assessment", "pentest"],
+        observations = self._build_assessment_observations(
+            name, target, scope, training_mode, metadata
         )
-
+        entity = await self._store_assessment_in_memory(
+            assessment_id, name, target, scope, training_mode, observations, metadata
+        )
         logger.info("Created assessment entity: %s", assessment_id)
         return entity
 

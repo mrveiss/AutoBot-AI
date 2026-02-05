@@ -350,6 +350,40 @@ class URLVoidClient:
         """Check if API key is configured."""
         return bool(self._api_key)
 
+    def _extract_domain_from_url(self, url: str) -> str:
+        """
+        Extract and normalize domain from URL.
+
+        Issue #620.
+        """
+        parsed = urlparse(url)
+        domain = parsed.hostname or url
+        return domain.lower().strip()
+
+    async def _handle_domain_response(
+        self, response: aiohttp.ClientResponse, domain: str
+    ) -> Dict[str, Any]:
+        """
+        Handle the HTTP response from URLVoid domain check.
+
+        Issue #620.
+        """
+        if response.status == 200:
+            content = await response.text()
+            return self._parse_response(content, domain)
+        elif response.status == 429:
+            return {
+                "success": False,
+                "error": "URLVoid rate limit exceeded",
+                "score": None,
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"URLVoid API error: HTTP {response.status}",
+                "score": None,
+            }
+
     async def check_domain(self, url: str) -> Dict[str, Any]:
         """
         Check domain reputation using URLVoid API.
@@ -367,36 +401,17 @@ class URLVoidClient:
                 "score": None,
             }
 
+        domain = self._extract_domain_from_url(url)
+
         try:
-            # Extract domain from URL
-            parsed = urlparse(url)
-            domain = parsed.hostname or url
-            domain = domain.lower().strip()
-
             await self._rate_limiter.acquire()
-
             endpoint = f"{self.BASE_URL}/{self._api_key}/host/{domain}/"
 
             async with await self._http_client.get(
                 endpoint,
                 timeout=aiohttp.ClientTimeout(total=self._timeout),
             ) as response:
-                if response.status == 200:
-                    # URLVoid returns XML by default, but can return JSON
-                    content = await response.text()
-                    return self._parse_response(content, domain)
-                elif response.status == 429:
-                    return {
-                        "success": False,
-                        "error": "URLVoid rate limit exceeded",
-                        "score": None,
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"URLVoid API error: HTTP {response.status}",
-                        "score": None,
-                    }
+                return await self._handle_domain_response(response, domain)
 
         except asyncio.TimeoutError:
             logger.warning("URLVoid API timeout for domain: %s", domain)

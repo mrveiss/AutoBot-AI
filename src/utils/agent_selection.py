@@ -275,10 +275,7 @@ def update_agent_performance(
     average_completion_time_attr: str = "average_completion_time",
 ) -> bool:
     """
-    Update agent performance metrics after task completion.
-
-    Updates the agent's success rate using a running average and updates
-    the average completion time with a weighted average favoring recent performance.
+    Update agent performance metrics after task completion. Issue #620.
 
     Args:
         agent_registry: Dictionary mapping agent_id to agent objects
@@ -291,34 +288,32 @@ def update_agent_performance(
 
     Returns:
         True if update was successful, False if agent not found
-
-    Example:
-        >>> update_agent_performance(
-        ...     agent_registry=self.agent_registry,
-        ...     agent_id="research_agent",
-        ...     success=True,
-        ...     execution_time=15.5
-        ... )
     """
     if agent_id not in agent_registry:
         logger.warning("Cannot update performance for unknown agent: %s", agent_id)
         return False
 
     agent = agent_registry[agent_id]
-
     new_success_rate = _update_success_rate(
         agent, success, performance_metrics_attr, success_rate_attr
     )
-
     new_avg_time = _update_average_completion_time(
         agent, execution_time, average_completion_time_attr
     )
-
-    logger.debug(
-        f"Updated agent {agent_id} performance: "
-        f"success_rate={new_success_rate:.2f}, avg_time={new_avg_time:.2f}s"
-    )
+    _log_performance_update(agent_id, new_success_rate, new_avg_time)
     return True
+
+
+def _log_performance_update(
+    agent_id: str, success_rate: float, avg_time: float
+) -> None:
+    """Log agent performance update details. Issue #620."""
+    logger.debug(
+        "Updated agent %s performance: success_rate=%.2f, avg_time=%.2fs",
+        agent_id,
+        success_rate,
+        avg_time,
+    )
 
 
 def reserve_agent(

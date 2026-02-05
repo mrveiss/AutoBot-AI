@@ -160,6 +160,15 @@ class UserService(BaseService):
             },
         )
 
+    async def _persist_user(
+        self, user: User, role_ids: Optional[List[uuid.UUID]]
+    ) -> None:
+        """Add user to session and assign roles. Issue #620."""
+        self.session.add(user)
+        await self.session.flush()
+        if role_ids:
+            await self._assign_roles(user.id, role_ids)
+
     async def create_user(
         self,
         email: str,
@@ -171,7 +180,7 @@ class UserService(BaseService):
         role_ids: Optional[List[uuid.UUID]] = None,
     ) -> User:
         """
-        Create a new user.
+        Create a new user. Issue #620.
 
         Args:
             email: User email (unique)
@@ -202,13 +211,7 @@ class UserService(BaseService):
             effective_org_id,
             is_platform_admin,
         )
-
-        self.session.add(user)
-        await self.session.flush()
-
-        if role_ids:
-            await self._assign_roles(user.id, role_ids)
-
+        await self._persist_user(user, role_ids)
         await self._log_user_creation(
             user, email, username, effective_org_id, is_platform_admin
         )

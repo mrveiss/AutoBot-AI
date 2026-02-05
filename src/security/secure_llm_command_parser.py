@@ -265,30 +265,13 @@ class SecureLLMCommandParser:
 
         return False
 
-    def _validate_single_command(
-        self, command_dict: Dict[str, str], user_goal: str
-    ) -> Optional[ValidatedCommand]:
+    def _run_security_checks(self, command: str, user_goal: str) -> Optional[Any]:
         """
-        Validate a single command for security.
+        Run injection and validator security checks on a command.
 
-        Issue #665: Refactored to use _check_and_block_command helper.
-        Issue #620: Extracted helper methods for validation steps.
-
-        Args:
-            command_dict: Command dictionary with 'command', 'explanation', 'next' keys
-            user_goal: Original user goal for context
-
-        Returns:
-            ValidatedCommand if safe, None if blocked
+        Returns the command_validation result if all checks pass, None if blocked.
+        Issue #620.
         """
-        command = command_dict.get("command", "")
-        explanation = command_dict.get("explanation", "")
-        next_step = command_dict.get("next")
-
-        if not command:
-            return None
-
-        # Step 1: Check for injection in the command itself
         command_validation = self.injection_detector.detect_injection(
             command, context="extracted_command"
         )
@@ -301,7 +284,6 @@ class SecureLLMCommandParser:
         ):
             return None
 
-        # Step 2: Validate with existing CommandValidator
         validator_result = self.command_validator.validate_command(command)
         if self._check_and_block_command(
             command,
@@ -312,10 +294,34 @@ class SecureLLMCommandParser:
         ):
             return None
 
-        # Step 3: Check explanation for injection patterns (informational)
+        return command_validation
+
+    def _validate_single_command(
+        self, command_dict: Dict[str, str], user_goal: str
+    ) -> Optional[ValidatedCommand]:
+        """
+        Validate a single command for security.
+
+        Args:
+            command_dict: Command dictionary with 'command', 'explanation', 'next' keys
+            user_goal: Original user goal for context
+
+        Returns:
+            ValidatedCommand if safe, None if blocked. Issue #620.
+        """
+        command = command_dict.get("command", "")
+        explanation = command_dict.get("explanation", "")
+        next_step = command_dict.get("next")
+
+        if not command:
+            return None
+
+        command_validation = self._run_security_checks(command, user_goal)
+        if command_validation is None:
+            return None
+
         self._check_explanation_for_injection(command, explanation)
 
-        # Command passed all validation
         return self._build_validated_command(
             command, explanation, next_step, command_validation, user_goal
         )

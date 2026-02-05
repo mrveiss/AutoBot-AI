@@ -254,6 +254,189 @@ async def _run_ansible_get_logs(
         return False, f"Error: {str(e)[:200]}"
 
 
+def _build_scan_failure_response(node_id: str, message: str) -> ServiceScanResponse:
+    """
+    Build a failure response for service scan.
+
+    Helper for scan_node_services (Issue #665).
+    """
+    return ServiceScanResponse(
+        node_id=node_id,
+        success=False,
+        message=message,
+        services_discovered=0,
+        services_updated=0,
+        services_created=0,
+    )
+
+
+def _build_service_scan_ssh_command(node: Node) -> list:
+    """
+    Build SSH command for scanning services on a node.
+
+    Helper for scan_node_services (Issue #665).
+
+    Args:
+        node: The node to scan.
+
+    Returns:
+        List of command arguments for subprocess.
+    """
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+    ssh_key = "/home/autobot/.ssh/id_rsa"
+
+    remote_cmd = (
+        "systemctl list-units --type=service --all --no-pager --plain "
+        "--output=json 2>/dev/null || "
+        "systemctl list-units --type=service --all --no-pager --plain"
+    )
+
+    return [
+        "/usr/bin/ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=15",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        ssh_key,
+        "-p",
+        str(ssh_port),
+        f"{ssh_user}@{node.ip_address}",
+        remote_cmd,
+    ]
+
+
+async def _execute_service_scan(node: Node, ssh_cmd: list) -> Tuple[bool, str, str]:
+    """
+    Execute SSH service scan command.
+
+    Helper for scan_node_services (Issue #665).
+
+    Args:
+        node: The node being scanned.
+        ssh_cmd: SSH command arguments list.
+
+    Returns:
+        Tuple of (success, stdout, error_message).
+    """
+    process = await asyncio.create_subprocess_exec(
+        *ssh_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await asyncio.wait_for(
+        process.communicate(),
+        timeout=60.0,
+    )
+
+    if process.returncode != 0:
+        error = stderr.decode("utf-8", errors="replace")
+        logger.error("Service scan failed on %s: %s", node.hostname, error[:500])
+        return False, "", f"SSH command failed: {error[:200]}"
+
+    return True, stdout.decode("utf-8", errors="replace"), ""
+
+
+async def _parse_services_json(
+    services_data: list,
+    db: AsyncSession,
+    node_id: str,
+    now: datetime,
+) -> Tuple[int, int, int]:
+    """
+    Parse JSON format service data and upsert records.
+
+    Helper for scan_node_services (Issue #665).
+
+    Args:
+        services_data: List of service dictionaries from JSON output.
+        db: Database session.
+        node_id: Node identifier.
+        now: Current timestamp.
+
+    Returns:
+        Tuple of (discovered, created, updated) counts.
+    """
+    discovered = 0
+    created = 0
+    updated = 0
+
+    for svc in services_data:
+        service_name = svc.get("unit", "").replace(".service", "")
+        if not service_name:
+            continue
+        discovered += 1
+        was_created, was_updated = await _upsert_service(
+            db, node_id, service_name, svc, now
+        )
+        if was_created:
+            created += 1
+        elif was_updated:
+            updated += 1
+
+    return discovered, created, updated
+
+
+async def _parse_services_plain(
+    output: str,
+    db: AsyncSession,
+    node_id: str,
+    now: datetime,
+) -> Tuple[int, int, int]:
+    """
+    Parse plain text format service data and upsert records.
+
+    Helper for scan_node_services (Issue #665).
+
+    Args:
+        output: Plain text output from systemctl.
+        db: Database session.
+        node_id: Node identifier.
+        now: Current timestamp.
+
+    Returns:
+        Tuple of (discovered, created, updated) counts.
+    """
+    discovered = 0
+    created = 0
+    updated = 0
+
+    for line in output.strip().split("\n"):
+        if not line.strip() or line.startswith("UNIT"):
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        service_name = parts[0].replace(".service", "")
+        if not service_name:
+            continue
+        discovered += 1
+
+        # Parse status from columns: UNIT LOAD ACTIVE SUB DESCRIPTION...
+        active_state = parts[2] if len(parts) > 2 else "unknown"
+        sub_state = parts[3] if len(parts) > 3 else "unknown"
+        description = " ".join(parts[4:]) if len(parts) > 4 else None
+
+        svc_data = {
+            "active": active_state,
+            "sub": sub_state,
+            "description": description,
+        }
+        was_created, was_updated = await _upsert_service(
+            db, node_id, service_name, svc_data, now
+        )
+        if was_created:
+            created += 1
+        elif was_updated:
+            updated += 1
+
+    return discovered, created, updated
+
+
 @router.get("/{node_id}/services", response_model=ServiceListResponse)
 async def list_node_services(
     node_id: str,
@@ -311,150 +494,50 @@ async def scan_node_services(
     'systemctl list-units --type=service' via SSH and updates the database.
     """
     node = await _get_node_or_404(db, node_id)
-
-    # Build SSH command to list all services
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"
-
-    # Get detailed service info in JSON-like format
-    remote_cmd = (
-        "systemctl list-units --type=service --all --no-pager --plain "
-        "--output=json 2>/dev/null || "
-        "systemctl list-units --type=service --all --no-pager --plain"
-    )
-
-    ssh_cmd = [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "ConnectTimeout=15",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        remote_cmd,
-    ]
+    ssh_cmd = _build_service_scan_ssh_command(node)
 
     try:
-        process = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        success, output, error_msg = await _execute_service_scan(node, ssh_cmd)
+        if not success:
+            return _build_scan_failure_response(node_id, error_msg)
 
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=60.0,
-        )
-
-        if process.returncode != 0:
-            error = stderr.decode("utf-8", errors="replace")
-            logger.error("Service scan failed on %s: %s", node.hostname, error[:500])
-            return ServiceScanResponse(
-                node_id=node_id,
-                success=False,
-                message=f"SSH command failed: {error[:200]}",
-                services_discovered=0,
-                services_updated=0,
-                services_created=0,
-            )
-
-        output = stdout.decode("utf-8", errors="replace")
-        services_discovered = 0
-        services_updated = 0
-        services_created = 0
         now = datetime.utcnow()
 
         # Parse output - handle both JSON and plain formats
         try:
             services_data = json.loads(output)
-            # JSON format from newer systemd
-            for svc in services_data:
-                service_name = svc.get("unit", "").replace(".service", "")
-                if not service_name:
-                    continue
-                services_discovered += 1
-                created, updated = await _upsert_service(
-                    db, node_id, service_name, svc, now
-                )
-                if created:
-                    services_created += 1
-                elif updated:
-                    services_updated += 1
+            discovered, created, updated = await _parse_services_json(
+                services_data, db, node_id, now
+            )
         except json.JSONDecodeError:
-            # Plain text format - parse line by line
-            for line in output.strip().split("\n"):
-                if not line.strip() or line.startswith("UNIT"):
-                    continue
-                parts = line.split()
-                if len(parts) < 4:
-                    continue
-                service_name = parts[0].replace(".service", "")
-                if not service_name:
-                    continue
-                services_discovered += 1
-
-                # Parse status from columns: UNIT LOAD ACTIVE SUB DESCRIPTION...
-                active_state = parts[2] if len(parts) > 2 else "unknown"
-                sub_state = parts[3] if len(parts) > 3 else "unknown"
-                description = " ".join(parts[4:]) if len(parts) > 4 else None
-
-                svc_data = {
-                    "active": active_state,
-                    "sub": sub_state,
-                    "description": description,
-                }
-                created, updated = await _upsert_service(
-                    db, node_id, service_name, svc_data, now
-                )
-                if created:
-                    services_created += 1
-                elif updated:
-                    services_updated += 1
+            discovered, created, updated = await _parse_services_plain(
+                output, db, node_id, now
+            )
 
         await db.commit()
         logger.info(
             "Service scan on %s: %d discovered, %d created, %d updated",
             node.hostname,
-            services_discovered,
-            services_created,
-            services_updated,
+            discovered,
+            created,
+            updated,
         )
 
         return ServiceScanResponse(
             node_id=node_id,
             success=True,
-            message=f"Scan complete: {services_discovered} services discovered",
-            services_discovered=services_discovered,
-            services_updated=services_updated,
-            services_created=services_created,
+            message=f"Scan complete: {discovered} services discovered",
+            services_discovered=discovered,
+            services_updated=updated,
+            services_created=created,
         )
 
     except asyncio.TimeoutError:
         logger.warning("Service scan timeout on %s", node.hostname)
-        return ServiceScanResponse(
-            node_id=node_id,
-            success=False,
-            message="SSH command timed out",
-            services_discovered=0,
-            services_updated=0,
-            services_created=0,
-        )
+        return _build_scan_failure_response(node_id, "SSH command timed out")
     except Exception as e:
         logger.exception("Service scan error on %s: %s", node.hostname, e)
-        return ServiceScanResponse(
-            node_id=node_id,
-            success=False,
-            message=f"Error: {str(e)[:200]}",
-            services_discovered=0,
-            services_updated=0,
-            services_created=0,
-        )
+        return _build_scan_failure_response(node_id, f"Error: {str(e)[:200]}")
 
 
 async def _upsert_service(
