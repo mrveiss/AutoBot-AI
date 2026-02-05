@@ -439,6 +439,80 @@ async def renew_tls_certificate(
         )
 
 
+async def _get_credential_and_node(service, db, credential_id: str):
+    """Get credential and associated node, raising HTTPException if not found.
+
+    Helper for rotate_tls_certificate (Issue #665).
+    """
+    credential = await service.get_credential(db, credential_id)
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TLS credential not found",
+        )
+
+    result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    return credential, node
+
+
+async def _handle_certificate_deployment(
+    node,
+    new_credential,
+    db,
+    deploy: bool,
+    deactivate_old: bool,
+    service,
+    old_credential_id: str,
+):
+    """Handle certificate deployment and old certificate deactivation.
+
+    Helper for rotate_tls_certificate (Issue #665).
+    """
+    deployment_result = None
+    if deploy:
+        deployment_result = await _deploy_certificate_to_node(node, new_credential, db)
+
+        if deployment_result.get("success") and deactivate_old:
+            await service.deactivate_credential(db, old_credential_id)
+            logger.info("Deactivated old certificate: %s", old_credential_id)
+
+    return deployment_result
+
+
+def _build_rotation_response(
+    credential_id: str, new_credential, deployment_result, deactivate_old: bool
+):
+    """Build the response dictionary for certificate rotation.
+
+    Helper for rotate_tls_certificate (Issue #665).
+    """
+    return {
+        "success": True,
+        "message": "Certificate rotated successfully",
+        "old_credential_id": credential_id,
+        "old_deactivated": deactivate_old and deployment_result.get("success", False)
+        if deployment_result
+        else False,
+        "new_credential_id": new_credential.credential_id,
+        "expires_at": new_credential.tls_expires_at.isoformat()
+        if new_credential.tls_expires_at
+        else None,
+        "deployed": deployment_result.get("success", False)
+        if deployment_result
+        else False,
+        "deployment_message": deployment_result.get("message")
+        if deployment_result
+        else None,
+    }
+
+
 @tls_router.post(
     "/credentials/{credential_id}/rotate",
 )
@@ -462,44 +536,20 @@ async def rotate_tls_certificate(
     after successful deployment.
     """
     service = get_tls_credential_service()
-    credential = await service.get_credential(db, credential_id)
-
-    if not credential:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="TLS credential not found",
-        )
-
-    # Get the node for deployment
-    result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
-    node = result.scalar_one_or_none()
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Node not found",
-        )
 
     try:
-        # Rotate the certificate (generates new cert with new keys)
-        new_credential = await service.rotate_certificate(db, credential_id)
+        credential, node = await _get_credential_and_node(service, db, credential_id)
 
+        new_credential = await service.rotate_certificate(db, credential_id)
         if not new_credential:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to rotate certificate",
             )
 
-        # Deploy if requested
-        deployment_result = None
-        if deploy:
-            deployment_result = await _deploy_certificate_to_node(
-                node, new_credential, db
-            )
-
-            # Deactivate old cert only if deployment succeeded
-            if deployment_result.get("success") and deactivate_old:
-                await service.deactivate_credential(db, credential_id)
-                logger.info("Deactivated old certificate: %s", credential_id)
+        deployment_result = await _handle_certificate_deployment(
+            node, new_credential, db, deploy, deactivate_old, service, credential_id
+        )
 
         logger.info(
             "TLS certificate rotated: %s -> %s (node: %s)",
@@ -508,25 +558,9 @@ async def rotate_tls_certificate(
             node.hostname,
         )
 
-        return {
-            "success": True,
-            "message": "Certificate rotated successfully",
-            "old_credential_id": credential_id,
-            "old_deactivated": deactivate_old
-            and deployment_result.get("success", False)
-            if deployment_result
-            else False,
-            "new_credential_id": new_credential.credential_id,
-            "expires_at": new_credential.tls_expires_at.isoformat()
-            if new_credential.tls_expires_at
-            else None,
-            "deployed": deployment_result.get("success", False)
-            if deployment_result
-            else False,
-            "deployment_message": deployment_result.get("message")
-            if deployment_result
-            else None,
-        }
+        return _build_rotation_response(
+            credential_id, new_credential, deployment_result, deactivate_old
+        )
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
