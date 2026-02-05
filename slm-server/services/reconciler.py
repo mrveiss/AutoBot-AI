@@ -829,11 +829,13 @@ class ReconcilerService:
             for node in degraded_nodes:
                 await self._check_node_for_rollback(db, node, cutoff)
 
-    async def _check_node_for_rollback(
+    async def _find_recent_deployment_for_rollback(
         self, db: AsyncSession, node: Node, cutoff: datetime
-    ) -> None:
-        """Check if a degraded/error node should have its recent deployment rolled back."""
-        # Find the most recent completed deployment for this node within rollback window
+    ) -> Optional[Deployment]:
+        """Find recent deployment eligible for rollback.
+
+        Helper for _check_node_for_rollback (Issue #665).
+        """
         result = await db.execute(
             select(Deployment)
             .where(Deployment.node_id == node.node_id)
@@ -845,64 +847,74 @@ class ReconcilerService:
         recent_deployment = result.scalar_one_or_none()
 
         if not recent_deployment:
-            return
+            return None
 
         # Check if already rolled back
         if recent_deployment.extra_data and recent_deployment.extra_data.get(
             "auto_rollback_attempted"
         ):
-            return
+            return None
 
+        return recent_deployment
+
+    async def _create_rollback_started_event(
+        self, db: AsyncSession, node: Node, deployment: Deployment
+    ) -> None:
+        """Create and broadcast rollback started event.
+
+        Helper for _check_node_for_rollback (Issue #665).
+        """
         logger.info(
             "Node %s degraded after recent deployment %s - triggering auto-rollback",
             node.node_id,
-            recent_deployment.deployment_id,
+            deployment.deployment_id,
         )
 
-        # Create rollback started event
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
             event_type=EventType.ROLLBACK_STARTED.value,
             severity=EventSeverity.WARNING.value,
-            message=f"Auto-rollback triggered for deployment {recent_deployment.deployment_id}",
+            message=f"Auto-rollback triggered for deployment {deployment.deployment_id}",
             details={
-                "deployment_id": recent_deployment.deployment_id,
-                "roles": recent_deployment.roles,
+                "deployment_id": deployment.deployment_id,
+                "roles": deployment.roles,
                 "reason": f"Node status became {node.status} after deployment",
             },
         )
         db.add(event)
         await db.commit()
 
-        # Broadcast rollback started via WebSocket
         await self._broadcast_rollback_event(
             node.node_id,
-            recent_deployment.deployment_id,
+            deployment.deployment_id,
             "started",
             message=f"Auto-rollback triggered due to {node.status} status after deployment",
         )
 
-        # Perform the rollback
-        success = await self._perform_auto_rollback(db, recent_deployment, node)
+    async def _handle_rollback_result(
+        self, db: AsyncSession, node: Node, deployment: Deployment, success: bool
+    ) -> None:
+        """Create and broadcast completion event based on rollback result.
 
-        # Create completion event
+        Helper for _check_node_for_rollback (Issue #665).
+        """
         if success:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node.node_id,
                 event_type=EventType.ROLLBACK_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
-                message=f"Auto-rollback completed for deployment {recent_deployment.deployment_id}",
+                message=f"Auto-rollback completed for deployment {deployment.deployment_id}",
                 details={
-                    "deployment_id": recent_deployment.deployment_id,
-                    "roles_removed": recent_deployment.roles,
+                    "deployment_id": deployment.deployment_id,
+                    "roles_removed": deployment.roles,
                     "success": True,
                 },
             )
             await self._broadcast_rollback_event(
                 node.node_id,
-                recent_deployment.deployment_id,
+                deployment.deployment_id,
                 "completed",
                 success=True,
                 message="Deployment rolled back successfully",
@@ -913,16 +925,16 @@ class ReconcilerService:
                 node_id=node.node_id,
                 event_type=EventType.ROLLBACK_COMPLETED.value,
                 severity=EventSeverity.ERROR.value,
-                message=f"Auto-rollback failed for deployment {recent_deployment.deployment_id}",
+                message=f"Auto-rollback failed for deployment {deployment.deployment_id}",
                 details={
-                    "deployment_id": recent_deployment.deployment_id,
+                    "deployment_id": deployment.deployment_id,
                     "success": False,
                     "action_required": "manual_review",
                 },
             )
             await self._broadcast_rollback_event(
                 node.node_id,
-                recent_deployment.deployment_id,
+                deployment.deployment_id,
                 "completed",
                 success=False,
                 message="Rollback failed - manual intervention required",
@@ -930,6 +942,23 @@ class ReconcilerService:
 
         db.add(event)
         await db.commit()
+
+    async def _check_node_for_rollback(
+        self, db: AsyncSession, node: Node, cutoff: datetime
+    ) -> None:
+        """Check if a degraded/error node should have its recent deployment rolled back."""
+        recent_deployment = await self._find_recent_deployment_for_rollback(
+            db, node, cutoff
+        )
+
+        if not recent_deployment:
+            return
+
+        await self._create_rollback_started_event(db, node, recent_deployment)
+
+        success = await self._perform_auto_rollback(db, recent_deployment, node)
+
+        await self._handle_rollback_result(db, node, recent_deployment, success)
 
     async def _perform_auto_rollback(
         self, db: AsyncSession, deployment: Deployment, node: Node
