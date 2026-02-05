@@ -129,6 +129,84 @@ def describe_cron_expression(expression: str) -> str:
         return expression
 
 
+async def _get_target_nodes(db, schedule: UpdateSchedule):
+    """
+    Query target nodes based on schedule configuration.
+
+    Helper for execute_schedule (Issue #665).
+    """
+    if schedule.target_type == "all":
+        result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+    elif schedule.target_type == "specific" and schedule.target_nodes:
+        result = await db.execute(
+            select(Node).where(
+                Node.node_id.in_(schedule.target_nodes),
+                Node.code_status == CodeStatus.OUTDATED.value,
+            )
+        )
+    else:
+        # Default to all outdated nodes
+        result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+    return result.scalars().all()
+
+
+async def _sync_single_node(distributor, node: Node, schedule: UpdateSchedule) -> bool:
+    """
+    Sync a single node and return success/failure.
+
+    Helper for execute_schedule (Issue #665).
+    """
+    try:
+        success, message = await distributor.trigger_node_sync(
+            node_id=node.node_id,
+            ip_address=node.ip_address,
+            ssh_user=node.ssh_user or "autobot",
+            ssh_port=node.ssh_port or 22,
+            restart=schedule.restart_after_sync,
+            strategy=schedule.restart_strategy,
+        )
+
+        if not success:
+            logger.warning(
+                "Schedule %s: Node %s sync failed: %s",
+                schedule.name,
+                node.node_id,
+                message,
+            )
+
+        # Brief pause between nodes for rolling strategy
+        await asyncio.sleep(2)
+        return success
+
+    except Exception as e:
+        logger.error(
+            "Schedule %s: Node %s sync error: %s",
+            schedule.name,
+            node.node_id,
+            e,
+        )
+        return False
+
+
+def _format_sync_result(success_count: int, failed_count: int) -> Tuple[bool, str]:
+    """
+    Format the final result tuple based on sync counts.
+
+    Helper for execute_schedule (Issue #665).
+    """
+    total = success_count + failed_count
+    if failed_count == 0:
+        return True, f"Successfully synced {success_count} node(s)"
+    elif success_count == 0:
+        return False, f"All {failed_count} node sync(s) failed"
+    else:
+        return True, f"Synced {success_count}/{total} nodes ({failed_count} failed)"
+
+
 async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
     """
     Execute a single schedule - trigger sync for target nodes.
@@ -144,24 +222,7 @@ async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
     try:
         async with db_service.session() as db:
             # Determine target nodes based on schedule configuration
-            if schedule.target_type == "all":
-                result = await db.execute(
-                    select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-                )
-            elif schedule.target_type == "specific" and schedule.target_nodes:
-                result = await db.execute(
-                    select(Node).where(
-                        Node.node_id.in_(schedule.target_nodes),
-                        Node.code_status == CodeStatus.OUTDATED.value,
-                    )
-                )
-            else:
-                # Default to all outdated nodes
-                result = await db.execute(
-                    select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-                )
-
-            nodes = result.scalars().all()
+            nodes = await _get_target_nodes(db, schedule)
 
             if not nodes:
                 logger.info("Schedule %s has no outdated nodes to sync", schedule.name)
@@ -175,49 +236,13 @@ async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
             failed_count = 0
 
             for node in nodes:
-                try:
-                    success, message = await distributor.trigger_node_sync(
-                        node_id=node.node_id,
-                        ip_address=node.ip_address,
-                        ssh_user=node.ssh_user or "autobot",
-                        ssh_port=node.ssh_port or 22,
-                        restart=schedule.restart_after_sync,
-                        strategy=schedule.restart_strategy,
-                    )
-
-                    if success:
-                        success_count += 1
-                    else:
-                        failed_count += 1
-                        logger.warning(
-                            "Schedule %s: Node %s sync failed: %s",
-                            schedule.name,
-                            node.node_id,
-                            message,
-                        )
-
-                    # Brief pause between nodes for rolling strategy
-                    await asyncio.sleep(2)
-
-                except Exception as e:
+                success = await _sync_single_node(distributor, node, schedule)
+                if success:
+                    success_count += 1
+                else:
                     failed_count += 1
-                    logger.error(
-                        "Schedule %s: Node %s sync error: %s",
-                        schedule.name,
-                        node.node_id,
-                        e,
-                    )
 
-            total = success_count + failed_count
-            if failed_count == 0:
-                return True, f"Successfully synced {success_count} node(s)"
-            elif success_count == 0:
-                return False, f"All {failed_count} node sync(s) failed"
-            else:
-                return (
-                    True,
-                    f"Synced {success_count}/{total} nodes ({failed_count} failed)",
-                )
+            return _format_sync_result(success_count, failed_count)
 
     except Exception as e:
         logger.error("Schedule %s execution failed: %s", schedule.name, e)
