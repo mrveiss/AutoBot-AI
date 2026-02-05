@@ -132,6 +132,105 @@ async def _process_role_report(
     await db.flush()
 
 
+async def _handle_enrollment_started(
+    db: AsyncSession, node_id: str, ssh_password: Optional[str]
+) -> None:
+    """
+    Create event and broadcast for enrollment started.
+
+    Helper for enroll_node (Issue #665).
+    """
+    auth_method_details = {"auth_method": "password" if ssh_password else "key"}
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.DEPLOYMENT_STARTED,
+        EventSeverity.INFO,
+        f"Enrollment started for node {node_id}",
+        auth_method_details,
+    )
+    await db.commit()
+
+    await _broadcast_lifecycle_event(
+        node_id,
+        "enrollment_started",
+        auth_method_details,
+    )
+
+
+async def _handle_enrollment_failed(
+    db: AsyncSession, node_id: str, message: str
+) -> None:
+    """
+    Create event, broadcast, and raise HTTPException on enrollment failure.
+
+    Helper for enroll_node (Issue #665).
+    """
+    error_details = {"error": message}
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.DEPLOYMENT_FAILED,
+        EventSeverity.ERROR,
+        f"Enrollment failed for node {node_id}: {message}",
+        error_details,
+    )
+    await db.commit()
+
+    await _broadcast_lifecycle_event(
+        node_id,
+        "enrollment_failed",
+        error_details,
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=message,
+    )
+
+
+async def _handle_enrollment_completed(
+    db: AsyncSession, node_id: str
+) -> dict:
+    """
+    Refresh node, create event, broadcast, and return success response.
+
+    Helper for enroll_node (Issue #665).
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    completion_details = {
+        "hostname": node.hostname if node else None,
+        "status": node.status if node else None,
+    }
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.DEPLOYMENT_COMPLETED,
+        EventSeverity.INFO,
+        f"Enrollment completed for node {node_id}",
+        completion_details,
+    )
+    await db.commit()
+
+    await _broadcast_lifecycle_event(
+        node_id,
+        "enrollment_completed",
+        completion_details,
+    )
+
+    logger.info("Node enrollment completed: %s", node_id)
+    return {
+        "success": True,
+        "message": "Agent deployed successfully. Node will begin sending heartbeats.",
+        "node": NodeResponse.model_validate(node) if node else None,
+    }
+
+
 @router.get("", response_model=NodeListResponse)
 async def list_nodes(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -695,87 +794,20 @@ async def enroll_node(
     if enroll_request and enroll_request.ssh_password:
         ssh_password = enroll_request.ssh_password
 
-    # Create enrollment started event
-    await _create_node_event(
-        db,
-        node_id,
-        EventType.DEPLOYMENT_STARTED,
-        EventSeverity.INFO,
-        f"Enrollment started for node {node_id}",
-        {"auth_method": "password" if ssh_password else "key"},
-    )
-    await db.commit()
-
-    # Broadcast enrollment started via WebSocket
-    await _broadcast_lifecycle_event(
-        node_id,
-        "enrollment_started",
-        {"auth_method": "password" if ssh_password else "key"},
-    )
+    # Handle enrollment started
+    await _handle_enrollment_started(db, node_id, ssh_password)
 
     # Run enrollment (deploys agent via Ansible)
     success, message = await deployment_service.enroll_node(
         db, node_id, ssh_password=ssh_password
     )
 
+    # Handle failure if enrollment did not succeed
     if not success:
-        # Create enrollment failed event
-        await _create_node_event(
-            db,
-            node_id,
-            EventType.DEPLOYMENT_FAILED,
-            EventSeverity.ERROR,
-            f"Enrollment failed for node {node_id}: {message}",
-            {"error": message},
-        )
-        await db.commit()
+        await _handle_enrollment_failed(db, node_id, message)
 
-        # Broadcast enrollment failed via WebSocket
-        await _broadcast_lifecycle_event(
-            node_id,
-            "enrollment_failed",
-            {"error": message},
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=message,
-        )
-
-    # Refresh node from DB
-    result = await db.execute(select(Node).where(Node.node_id == node_id))
-    node = result.scalar_one_or_none()
-
-    # Create enrollment completed event
-    await _create_node_event(
-        db,
-        node_id,
-        EventType.DEPLOYMENT_COMPLETED,
-        EventSeverity.INFO,
-        f"Enrollment completed for node {node_id}",
-        {
-            "hostname": node.hostname if node else None,
-            "status": node.status if node else None,
-        },
-    )
-    await db.commit()
-
-    # Broadcast enrollment completed via WebSocket
-    await _broadcast_lifecycle_event(
-        node_id,
-        "enrollment_completed",
-        {
-            "hostname": node.hostname if node else None,
-            "status": node.status if node else None,
-        },
-    )
-
-    logger.info("Node enrollment completed: %s", node_id)
-    return {
-        "success": True,
-        "message": "Agent deployed successfully. Node will begin sending heartbeats.",
-        "node": NodeResponse.model_validate(node) if node else None,
-    }
+    # Handle successful completion
+    return await _handle_enrollment_completed(db, node_id)
 
 
 @router.post("/{node_id}/drain", response_model=NodeResponse)
