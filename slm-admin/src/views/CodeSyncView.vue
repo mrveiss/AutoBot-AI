@@ -21,6 +21,8 @@ import {
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
+import CodeSourceModal from '@/components/CodeSourceModal.vue'
+import { useCodeSource } from '@/composables/useCodeSource'
 
 const logger = createLogger('CodeSyncView')
 const codeSync = useCodeSync()
@@ -42,6 +44,11 @@ const runningScheduleId = ref<number | null>(null)
 // Role-based sync state (Issue #779)
 const syncingRole = ref<string | null>(null)
 const isPulling = ref(false)
+
+// Code Source state (Issue #779)
+const codeSourceComposable = useCodeSource()
+const codeSourceData = codeSourceComposable.codeSource
+const showCodeSourceModal = ref(false)
 
 // =============================================================================
 // Computed Properties
@@ -173,6 +180,19 @@ async function handleSyncRole(roleName: string): Promise<void> {
 }
 
 // =============================================================================
+// Code Source Methods (Issue #779)
+// =============================================================================
+
+async function handleCodeSourceSaved(): Promise<void> {
+  await codeSourceComposable.fetchCodeSource()
+}
+
+async function handleRemoveCodeSource(): Promise<void> {
+  if (!confirm('Remove code source assignment?')) return
+  await codeSourceComposable.removeCodeSource()
+}
+
+// =============================================================================
 // Schedule Methods (Issue #741 - Phase 7)
 // =============================================================================
 
@@ -260,6 +280,7 @@ onMounted(async () => {
     codeSync.fetchPendingNodes(),
     codeSync.fetchSchedules(),
     codeSync.fetchRoles(),
+    codeSourceComposable.fetchCodeSource(),
   ])
 })
 </script>
@@ -340,6 +361,36 @@ onMounted(async () => {
             All Up To Date
           </span>
         </div>
+      </div>
+    </div>
+
+    <!-- Code Source Card (Issue #779) -->
+    <div class="card p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Code Source</h2>
+        <button
+          v-if="!codeSourceData"
+          @click="showCodeSourceModal = true"
+          class="btn btn-primary text-sm"
+        >
+          Configure
+        </button>
+      </div>
+
+      <div v-if="codeSourceData" class="flex items-center justify-between">
+        <div>
+          <p class="font-medium text-gray-900">{{ codeSourceData.hostname || codeSourceData.node_id }}</p>
+          <p class="text-sm text-gray-500">{{ codeSourceData.repo_path }} ({{ codeSourceData.branch }})</p>
+          <p class="text-sm text-gray-500">
+            Last commit: <span class="font-mono">{{ codeSourceData.last_known_commit?.slice(0, 12) || 'Unknown' }}</span>
+          </p>
+        </div>
+        <button @click="handleRemoveCodeSource" class="btn btn-danger text-sm">
+          Remove
+        </button>
+      </div>
+      <div v-else class="text-gray-500">
+        No code source configured. Assign a node that has git access to the repository.
       </div>
     </div>
 
@@ -662,6 +713,13 @@ onMounted(async () => {
       :nodes="codeSync.pendingNodes.value"
       @close="closeScheduleModal"
       @save="handleSaveSchedule"
+    />
+
+    <!-- Code Source Modal (Issue #779) -->
+    <CodeSourceModal
+      v-if="showCodeSourceModal"
+      @close="showCodeSourceModal = false"
+      @saved="handleCodeSourceSaved"
     />
   </div>
 </template>
