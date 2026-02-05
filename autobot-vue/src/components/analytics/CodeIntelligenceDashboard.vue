@@ -1,7 +1,7 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
-<!-- Issue #772 - Code Intelligence Dashboard Component -->
+<!-- Issue #566 - Code Intelligence Dashboard Component -->
 
 <template>
   <div class="code-intelligence-dashboard">
@@ -19,15 +19,18 @@
             placeholder="Enter path to analyze..."
             class="path-field"
           />
-          <button
-            @click="runAnalysis"
-            :disabled="loading || !analysisPath"
-            class="btn-primary"
-          >
-            <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-            Analyze
-          </button>
         </div>
+        <button @click="showFileScanModal = true" class="btn-secondary">
+          <i class="fas fa-file-code"></i> Scan File
+        </button>
+        <button
+          @click="runAnalysis"
+          :disabled="loading || !analysisPath"
+          class="btn-primary"
+        >
+          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          Analyze
+        </button>
       </div>
     </div>
 
@@ -77,11 +80,47 @@
       </div>
     </div>
 
-    <!-- Empty state -->
+    <!-- Empty state for scores -->
     <div v-else-if="!loading" class="empty-state">
       <i class="fas fa-code"></i>
       <h3>No Analysis Results</h3>
       <p>Enter a path above and click Analyze to scan your codebase</p>
+    </div>
+
+    <!-- Tabs -->
+    <div v-if="hasScores" class="tabs-section">
+      <div class="tabs-header">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          @click="activeTab = tab.id"
+          :class="['tab-btn', { active: activeTab === tab.id }]"
+        >
+          <i :class="tab.icon"></i>
+          {{ tab.label }}
+          <span v-if="getTabCount(tab.id) > 0" class="tab-count">
+            {{ getTabCount(tab.id) }}
+          </span>
+        </button>
+      </div>
+
+      <div class="tabs-content">
+        <SecurityFindingsPanel
+          v-if="activeTab === 'security'"
+          :findings="securityFindings"
+          :loading="findingsLoading"
+        />
+        <PerformanceFindingsPanel
+          v-if="activeTab === 'performance'"
+          :findings="performanceFindings"
+          :loading="findingsLoading"
+        />
+        <RedisFindingsPanel
+          v-if="activeTab === 'redis'"
+          :findings="redisFindings"
+          :loading="findingsLoading"
+        />
+      </div>
     </div>
 
     <!-- Reports Section -->
@@ -102,13 +141,24 @@
         </button>
       </div>
     </div>
+
+    <!-- File Scan Modal -->
+    <FileScanModal
+      :show="showFileScanModal"
+      @close="showFileScanModal = false"
+      @scan="handleFileScan"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import HealthScoreGauge from './HealthScoreGauge.vue'
+import SecurityFindingsPanel from './code-intelligence/SecurityFindingsPanel.vue'
+import PerformanceFindingsPanel from './code-intelligence/PerformanceFindingsPanel.vue'
+import RedisFindingsPanel from './code-intelligence/RedisFindingsPanel.vue'
+import FileScanModal from './code-intelligence/FileScanModal.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodeIntelligenceDashboard')
@@ -120,21 +170,136 @@ const {
   securityScore,
   performanceScore,
   redisScore,
+  securityFindings,
+  performanceFindings,
+  redisFindings,
   fetchAllScores,
   fetchAllTypes,
+  fetchSecurityFindings,
+  fetchPerformanceFindings,
+  fetchRedisFindings,
+  scanFileSecurity,
+  scanFilePerformance,
+  scanFileRedis,
   downloadReport: doDownloadReport
 } = useCodeIntelligence()
 
 const analysisPath = ref('/home/kali/Desktop/AutoBot')
+const activeTab = ref<'security' | 'performance' | 'redis'>('security')
+const showFileScanModal = ref(false)
+const findingsLoading = ref(false)
+const findingsFetched = ref({ security: false, performance: false, redis: false })
+
+const tabs = [
+  { id: 'security' as const, label: 'Security', icon: 'fas fa-shield-alt' },
+  { id: 'performance' as const, label: 'Performance', icon: 'fas fa-tachometer-alt' },
+  { id: 'redis' as const, label: 'Redis', icon: 'fas fa-database' }
+]
 
 const hasScores = computed(() =>
   healthScore.value || securityScore.value || performanceScore.value || redisScore.value
 )
 
+function getTabCount(tabId: string): number {
+  switch (tabId) {
+    case 'security': return securityFindings.value.length
+    case 'performance': return performanceFindings.value.length
+    case 'redis': return redisFindings.value.length
+    default: return 0
+  }
+}
+
 async function runAnalysis() {
   if (!analysisPath.value) return
   logger.info('Running analysis on:', analysisPath.value)
+
+  // Reset findings cache
+  findingsFetched.value = { security: false, performance: false, redis: false }
+
+  // Fetch scores
   await fetchAllScores(analysisPath.value)
+
+  // Fetch findings for active tab
+  await loadFindingsForTab(activeTab.value)
+}
+
+async function loadFindingsForTab(tab: 'security' | 'performance' | 'redis') {
+  if (findingsFetched.value[tab]) return
+
+  findingsLoading.value = true
+  try {
+    switch (tab) {
+      case 'security':
+        await fetchSecurityFindings(analysisPath.value)
+        break
+      case 'performance':
+        await fetchPerformanceFindings(analysisPath.value)
+        break
+      case 'redis':
+        await fetchRedisFindings(analysisPath.value)
+        break
+    }
+    findingsFetched.value[tab] = true
+  } finally {
+    findingsLoading.value = false
+  }
+}
+
+// Load findings when tab changes
+watch(activeTab, (newTab) => {
+  if (hasScores.value) {
+    loadFindingsForTab(newTab)
+  }
+})
+
+async function handleFileScan(
+  filePath: string,
+  types: { security: boolean; performance: boolean; redis: boolean }
+) {
+  showFileScanModal.value = false
+  findingsLoading.value = true
+
+  try {
+    const results: string[] = []
+
+    if (types.security) {
+      const findings = await scanFileSecurity(filePath)
+      if (findings.length > 0) {
+        findingsFetched.value.security = true
+        results.push(`${findings.length} security`)
+      }
+    }
+
+    if (types.performance) {
+      const findings = await scanFilePerformance(filePath)
+      if (findings.length > 0) {
+        findingsFetched.value.performance = true
+        results.push(`${findings.length} performance`)
+      }
+    }
+
+    if (types.redis) {
+      const findings = await scanFileRedis(filePath)
+      if (findings.length > 0) {
+        findingsFetched.value.redis = true
+        results.push(`${findings.length} Redis`)
+      }
+    }
+
+    if (results.length > 0) {
+      logger.info(`File scan found: ${results.join(', ')} issues`)
+      // Switch to first tab with results
+      if (types.security && securityFindings.value.length > 0) {
+        activeTab.value = 'security'
+      } else if (types.performance && performanceFindings.value.length > 0) {
+        activeTab.value = 'performance'
+      } else if (types.redis && redisFindings.value.length > 0) {
+        activeTab.value = 'redis'
+      }
+    }
+  } finally {
+    findingsLoading.value = false
+  }
 }
 
 async function downloadReport(type: 'security' | 'performance', format: 'json' | 'markdown') {
@@ -181,6 +346,7 @@ onMounted(async () => {
 .header-actions {
   display: flex;
   gap: var(--spacing-2);
+  flex-wrap: wrap;
 }
 
 .path-input {
@@ -272,6 +438,56 @@ onMounted(async () => {
 .empty-state h3 {
   margin: 0 0 var(--spacing-2) 0;
   color: var(--text-primary);
+}
+
+.tabs-section {
+  margin-bottom: var(--spacing-6);
+}
+
+.tabs-header {
+  display: flex;
+  gap: var(--spacing-1);
+  border-bottom: 1px solid var(--border-primary);
+  margin-bottom: var(--spacing-4);
+}
+
+.tab-btn {
+  padding: var(--spacing-2) var(--spacing-4);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: 0.875rem;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  color: var(--color-info-dark);
+  border-bottom-color: var(--color-info-dark);
+}
+
+.tab-count {
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+}
+
+.tab-btn.active .tab-count {
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--color-info-dark);
+}
+
+.tabs-content {
+  min-height: 200px;
 }
 
 .reports-section {
