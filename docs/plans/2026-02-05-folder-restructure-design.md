@@ -176,13 +176,36 @@
 | `OLD_CLAUDE.md` | Deprecated file |
 | Various `*.md` report files at root | Move to docs or delete |
 
-### Gitignored (Runtime Data)
+### Data Directories (Per-Component)
 
-These stay but are gitignored:
-- `data/`, `chroma_db/`, `logs/`, `backups/`, `temp/`, `debug/`, `outputs/`
-- `*.db` files (`autobot_data.db`, `slm.db`)
-- `venv/`, `node_modules/`
-- `test-results/`
+Each component has its own data directory (gitignored):
+
+| Component | Data Location | Contents |
+|-----------|---------------|----------|
+| `autobot-user-backend/data/` | Main (.20) | `autobot.db`, `chroma_db/`, user data |
+| `autobot-slm-backend/data/` | SLM (.19) | `slm.db`, fleet state |
+| `autobot-npu-worker/data/` | NPU (.22) | Model cache, inference data |
+| `autobot-browser-worker/data/` | Browser (.25) | Screenshots, session data |
+
+**Gitignored patterns** (in each component):
+```
+# In each autobot-*/
+data/
+logs/
+*.db
+__pycache__/
+.venv/
+node_modules/
+```
+
+Root-level data folders to migrate:
+| Current | New |
+|---------|-----|
+| `data/` | `autobot-user-backend/data/` |
+| `chroma_db/` | `autobot-user-backend/data/chroma_db/` |
+| `logs/` | Per-component `logs/` |
+| `backups/` | `autobot-slm-backend/data/backups/` (SLM manages backups) |
+| `temp/`, `debug/`, `outputs/` | Per-component as needed |
 
 ---
 
