@@ -1072,30 +1072,37 @@ class ReconcilerService:
                     node.status,
                 )
 
-    async def update_node_heartbeat(
+    async def _find_node_by_id_or_hostname(
+        self, db: AsyncSession, node_id: str
+    ) -> Optional[Node]:
+        """Find node by node_id or fallback to hostname.
+
+        Helper for update_node_heartbeat (Issue #665).
+        """
+        result = await db.execute(select(Node).where(Node.node_id == node_id))
+        node = result.scalar_one_or_none()
+
+        if not node:
+            result = await db.execute(select(Node).where(Node.hostname == node_id))
+            node = result.scalar_one_or_none()
+
+        return node
+
+    async def _update_node_metrics(
         self,
         db: AsyncSession,
-        node_id: str,
+        node: Node,
         cpu_percent: float,
         memory_percent: float,
         disk_percent: float,
         agent_version: Optional[str] = None,
         os_info: Optional[str] = None,
         extra_data: Optional[dict] = None,
-    ) -> Optional[Node]:
-        """Update a node's heartbeat and health metrics."""
-        # Try to find by node_id first, then by hostname
-        result = await db.execute(select(Node).where(Node.node_id == node_id))
-        node = result.scalar_one_or_none()
+    ) -> None:
+        """Update basic metrics and optional fields.
 
-        if not node:
-            # Fallback: try matching by hostname
-            result = await db.execute(select(Node).where(Node.hostname == node_id))
-            node = result.scalar_one_or_none()
-
-        if not node:
-            return None
-
+        Helper for update_node_heartbeat (Issue #665).
+        """
         node.cpu_percent = cpu_percent
         node.memory_percent = memory_percent
         node.disk_percent = disk_percent
@@ -1108,54 +1115,67 @@ class ReconcilerService:
         if extra_data:
             node.extra_data = {**(node.extra_data or {}), **extra_data}
 
-            # Sync discovered services to database (Issue #728)
-            # Support both "discovered_services" (v1.1.0+) and "services" (v1.0.0) keys
             services_data = extra_data.get("discovered_services") or extra_data.get(
                 "services"
             )
             if services_data:
                 await self._sync_discovered_services(db, node.node_id, services_data)
 
-        old_status = node.status
-        new_status = self._calculate_node_status(
-            cpu_percent, memory_percent, disk_percent
+    async def _handle_node_status_change(
+        self,
+        db: AsyncSession,
+        node: Node,
+        old_status: str,
+        new_status: str,
+        cpu_percent: float,
+        memory_percent: float,
+        disk_percent: float,
+    ) -> None:
+        """Create event and broadcast if status changed.
+
+        Helper for update_node_heartbeat (Issue #665).
+        """
+        if old_status == new_status:
+            return
+
+        severity = EventSeverity.INFO
+        if new_status in [NodeStatus.ERROR.value, NodeStatus.OFFLINE.value]:
+            severity = EventSeverity.ERROR
+        elif new_status == NodeStatus.DEGRADED.value:
+            severity = EventSeverity.WARNING
+
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.HEALTH_CHECK.value,
+            severity=severity.value,
+            message=f"Node status changed from {old_status} to {new_status}",
+            details={
+                "old_status": old_status,
+                "new_status": new_status,
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory_percent,
+                "disk_percent": disk_percent,
+            },
         )
+        db.add(event)
+        logger.info(
+            "Node %s status changed: %s -> %s", node.node_id, old_status, new_status
+        )
+        await self._broadcast_node_status(node.node_id, new_status, node.hostname)
 
-        # Create event if status changed
-        if old_status != new_status:
-            severity = EventSeverity.INFO
-            if new_status in [NodeStatus.ERROR.value, NodeStatus.OFFLINE.value]:
-                severity = EventSeverity.ERROR
-            elif new_status == NodeStatus.DEGRADED.value:
-                severity = EventSeverity.WARNING
+    async def _broadcast_heartbeat_update(
+        self,
+        node: Node,
+        cpu_percent: float,
+        memory_percent: float,
+        disk_percent: float,
+        new_status: str,
+    ) -> None:
+        """Broadcast health update via WebSocket.
 
-            event = NodeEvent(
-                event_id=str(uuid.uuid4())[:16],
-                node_id=node.node_id,
-                event_type=EventType.HEALTH_CHECK.value,
-                severity=severity.value,
-                message=f"Node status changed from {old_status} to {new_status}",
-                details={
-                    "old_status": old_status,
-                    "new_status": new_status,
-                    "cpu_percent": cpu_percent,
-                    "memory_percent": memory_percent,
-                    "disk_percent": disk_percent,
-                },
-            )
-            db.add(event)
-            logger.info(
-                "Node %s status changed: %s -> %s", node.node_id, old_status, new_status
-            )
-            # Broadcast status change via WebSocket
-            await self._broadcast_node_status(node.node_id, new_status, node.hostname)
-
-        node.status = new_status
-
-        await db.commit()
-        await db.refresh(node)
-
-        # Broadcast health update via WebSocket
+        Helper for update_node_heartbeat (Issue #665).
+        """
         try:
             from api.websocket import ws_manager
 
@@ -1171,6 +1191,51 @@ class ReconcilerService:
             )
         except Exception as e:
             logger.debug("Failed to broadcast health update: %s", e)
+
+    async def update_node_heartbeat(
+        self,
+        db: AsyncSession,
+        node_id: str,
+        cpu_percent: float,
+        memory_percent: float,
+        disk_percent: float,
+        agent_version: Optional[str] = None,
+        os_info: Optional[str] = None,
+        extra_data: Optional[dict] = None,
+    ) -> Optional[Node]:
+        """Update a node's heartbeat and health metrics."""
+        node = await self._find_node_by_id_or_hostname(db, node_id)
+        if not node:
+            return None
+
+        await self._update_node_metrics(
+            db,
+            node,
+            cpu_percent,
+            memory_percent,
+            disk_percent,
+            agent_version,
+            os_info,
+            extra_data,
+        )
+
+        old_status = node.status
+        new_status = self._calculate_node_status(
+            cpu_percent, memory_percent, disk_percent
+        )
+
+        await self._handle_node_status_change(
+            db, node, old_status, new_status, cpu_percent, memory_percent, disk_percent
+        )
+
+        node.status = new_status
+
+        await db.commit()
+        await db.refresh(node)
+
+        await self._broadcast_heartbeat_update(
+            node, cpu_percent, memory_percent, disk_percent, new_status
+        )
 
         return node
 
