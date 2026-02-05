@@ -358,8 +358,8 @@ async function performCleanup() {
   align-items: center;
   gap: var(--spacing-3);
   margin: 0 0 var(--spacing-1) 0;
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
   color: var(--text-primary);
 }
 

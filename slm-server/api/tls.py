@@ -762,6 +762,78 @@ def _build_enable_tls_response(
     }
 
 
+async def _deploy_certificates_if_needed(
+    ansible_path: str, paths: dict, services: List[str], deploy_certs_first: bool
+) -> dict | None:
+    """
+    Deploy TLS certificates to target nodes if requested.
+
+    Helper for enable_tls_on_services (Issue #665).
+
+    Args:
+        ansible_path: Path to ansible-playbook executable.
+        paths: Dict containing ansible paths from _get_tls_ansible_paths.
+        services: List of service names to deploy certificates to.
+        deploy_certs_first: Whether to deploy certificates.
+
+    Returns:
+        Result dict from playbook execution, or None if skipped.
+    """
+    import os
+
+    if not deploy_certs_first or not os.path.exists(paths["distribute_certs_playbook"]):
+        return None
+
+    limit_hosts = ",".join(services)
+    deploy_cmd = [
+        ansible_path,
+        "-i",
+        paths["inventory"],
+        paths["distribute_certs_playbook"],
+        "--limit",
+        limit_hosts,
+    ]
+    result = await _run_ansible_playbook_async(
+        deploy_cmd, paths["ansible_dir"], timeout=300.0
+    )
+    if not result["success"]:
+        logger.warning(
+            "Certificate deployment had issues: %s",
+            result["stderr"][:500],
+        )
+    return result
+
+
+async def _run_enable_tls_playbook(
+    ansible_path: str, paths: dict, services: List[str]
+) -> dict:
+    """
+    Execute the enable-tls Ansible playbook.
+
+    Helper for enable_tls_on_services (Issue #665).
+
+    Args:
+        ansible_path: Path to ansible-playbook executable.
+        paths: Dict containing ansible paths from _get_tls_ansible_paths.
+        services: List of service names to enable TLS for.
+
+    Returns:
+        Result dict from playbook execution.
+    """
+    limit_hosts = ",".join(services)
+    enable_cmd = [
+        ansible_path,
+        "-i",
+        paths["inventory"],
+        paths["enable_tls_playbook"],
+        "--limit",
+        limit_hosts,
+    ]
+    return await _run_ansible_playbook_async(
+        enable_cmd, paths["ansible_dir"], timeout=600.0, stdout_limit=3000
+    )
+
+
 @tls_router.post(
     "/enable",
 )
@@ -787,44 +859,20 @@ async def enable_tls_on_services(
     Issue #164: Full TLS deployment via SLM.
     """
     import asyncio
-    import os
 
     ansible_path = _check_ansible_availability()
     paths = _get_tls_ansible_paths()
     results = {"deploy_certs": None, "enable_tls": None, "services_enabled": services}
-    limit_hosts = ",".join(services)
 
     try:
         # Step 1: Deploy certificates if requested
-        if deploy_certs_first and os.path.exists(paths["distribute_certs_playbook"]):
-            deploy_cmd = [
-                ansible_path,
-                "-i",
-                paths["inventory"],
-                paths["distribute_certs_playbook"],
-                "--limit",
-                limit_hosts,
-            ]
-            results["deploy_certs"] = await _run_ansible_playbook_async(
-                deploy_cmd, paths["ansible_dir"], timeout=300.0
-            )
-            if not results["deploy_certs"]["success"]:
-                logger.warning(
-                    "Certificate deployment had issues: %s",
-                    results["deploy_certs"]["stderr"][:500],
-                )
+        results["deploy_certs"] = await _deploy_certificates_if_needed(
+            ansible_path, paths, services, deploy_certs_first
+        )
 
         # Step 2: Run enable-tls playbook
-        enable_cmd = [
-            ansible_path,
-            "-i",
-            paths["inventory"],
-            paths["enable_tls_playbook"],
-            "--limit",
-            limit_hosts,
-        ]
-        results["enable_tls"] = await _run_ansible_playbook_async(
-            enable_cmd, paths["ansible_dir"], timeout=600.0, stdout_limit=3000
+        results["enable_tls"] = await _run_enable_tls_playbook(
+            ansible_path, paths, services
         )
 
         return _build_enable_tls_response(

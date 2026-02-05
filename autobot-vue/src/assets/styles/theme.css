@@ -67,6 +67,9 @@
   --border-color-light: #f1f5f9;
   --border-color-dark: #cbd5e1;
 
+  /* Border aliases */
+  --border-default: var(--border-color);
+
   /* ============================================
    * LAYOUT VARIABLES
    * ============================================ */
@@ -82,8 +85,21 @@
 
   /* ============================================
    * SPACING SYSTEM
+   * Tailwind-compatible spacing scale (0-12)
    * ============================================ */
 
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;  /* 4px */
+  --spacing-2: 0.5rem;   /* 8px */
+  --spacing-3: 0.75rem;  /* 12px */
+  --spacing-4: 1rem;     /* 16px */
+  --spacing-5: 1.25rem;  /* 20px */
+  --spacing-6: 1.5rem;   /* 24px */
+  --spacing-8: 2rem;     /* 32px */
+  --spacing-10: 2.5rem;  /* 40px */
+  --spacing-12: 3rem;    /* 48px */
+
+  /* Named spacing aliases */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
