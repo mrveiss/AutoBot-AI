@@ -547,6 +547,95 @@ async def get_code_package(
     )
 
 
+async def _verify_source_node(db: AsyncSession, node_id: str) -> Node:
+    """
+    Verify that the source node exists in the database.
+
+    Helper for notify_code_version (Issue #665).
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    source_node = result.scalar_one_or_none()
+
+    if not source_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source node not found",
+        )
+
+    return source_node
+
+
+async def _update_version_setting(db: AsyncSession, commit: str) -> None:
+    """
+    Update or create the latest version setting.
+
+    Helper for notify_code_version (Issue #665).
+    """
+    setting_result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
+    setting = setting_result.scalar_one_or_none()
+
+    if setting:
+        setting.value = commit
+    else:
+        setting = Setting(
+            key="slm_agent_latest_commit",
+            value=commit,
+        )
+        db.add(setting)
+
+
+async def _mark_outdated_nodes(
+    db: AsyncSession, node_id: str, commit: str
+) -> List[Node]:
+    """
+    Mark all other nodes as outdated if they have different version.
+
+    Helper for notify_code_version (Issue #665).
+    """
+    nodes_result = await db.execute(
+        select(Node).where(
+            Node.node_id != node_id,
+            Node.code_version != commit,
+        )
+    )
+    outdated_nodes = nodes_result.scalars().all()
+
+    for node in outdated_nodes:
+        node.code_status = CodeStatus.OUTDATED.value
+
+    return outdated_nodes
+
+
+async def _broadcast_code_version_update(
+    notification: CodeVersionNotification, outdated_count: int
+) -> None:
+    """
+    Broadcast code version update notification via WebSocket.
+
+    Helper for notify_code_version (Issue #665).
+    """
+    try:
+        from api.websocket import ws_manager
+
+        await ws_manager.broadcast(
+            {
+                "type": "code_version_update",
+                "data": {
+                    "new_version": notification.commit,
+                    "source_node": notification.node_id,
+                    "outdated_nodes": outdated_count,
+                    "timestamp": notification.timestamp.isoformat()
+                    if notification.timestamp
+                    else None,
+                },
+            }
+        )
+    except Exception as e:
+        logger.debug("Failed to broadcast code version update: %s", e)
+
+
 @router.post("/notify", response_model=CodeVersionNotificationResponse)
 async def notify_code_version(
     notification: CodeVersionNotification,
@@ -571,45 +660,17 @@ async def notify_code_version(
     )
 
     # Verify this is from a known code-source node
-    result = await db.execute(select(Node).where(Node.node_id == node_id))
-    source_node = result.scalar_one_or_none()
-
-    if not source_node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Source node not found",
-        )
+    source_node = await _verify_source_node(db, node_id)
 
     # Update or create the latest version setting
-    setting_result = await db.execute(
-        select(Setting).where(Setting.key == "slm_agent_latest_commit")
-    )
-    setting = setting_result.scalar_one_or_none()
-
-    if setting:
-        setting.value = commit
-    else:
-        setting = Setting(
-            key="slm_agent_latest_commit",
-            value=commit,
-        )
-        db.add(setting)
+    await _update_version_setting(db, commit)
 
     # Update the source node's code version
     source_node.code_version = commit
     source_node.code_status = CodeStatus.UP_TO_DATE.value
 
     # Mark all other nodes as outdated (if they have different version)
-    nodes_result = await db.execute(
-        select(Node).where(
-            Node.node_id != node_id,
-            Node.code_version != commit,
-        )
-    )
-    outdated_nodes = nodes_result.scalars().all()
-
-    for node in outdated_nodes:
-        node.code_status = CodeStatus.OUTDATED.value
+    outdated_nodes = await _mark_outdated_nodes(db, node_id, commit)
 
     await db.commit()
 
@@ -620,24 +681,7 @@ async def notify_code_version(
     )
 
     # Broadcast update notification via WebSocket
-    try:
-        from api.websocket import ws_manager
-
-        await ws_manager.broadcast(
-            {
-                "type": "code_version_update",
-                "data": {
-                    "new_version": commit,
-                    "source_node": node_id,
-                    "outdated_nodes": len(outdated_nodes),
-                    "timestamp": notification.timestamp.isoformat()
-                    if notification.timestamp
-                    else None,
-                },
-            }
-        )
-    except Exception as e:
-        logger.debug("Failed to broadcast code version update: %s", e)
+    await _broadcast_code_version_update(notification, len(outdated_nodes))
 
     return CodeVersionNotificationResponse(
         success=True,
