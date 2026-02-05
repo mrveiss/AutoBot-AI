@@ -596,6 +596,37 @@ class ChatWorkflowManager(
             return (new_msg, new_segment_val, new_type)
         return (streaming_msg, current_segment, current_message_type)
 
+    def _execute_type_transition_steps(
+        self,
+        new_type: str,
+        current_message_type: str,
+        streaming_msg,
+        selected_model: str,
+        llm_response: str,
+        chunk_text: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ) -> tuple:
+        """Execute the type transition processing steps. Issue #620."""
+        complete_msg, _, new_segment, new_type = self._handle_type_transition(
+            new_type,
+            current_message_type,
+            streaming_msg.id,
+            selected_model,
+            llm_response,
+            chunk_text,
+        )
+        return self._apply_type_transition(
+            complete_msg,
+            new_segment,
+            new_type,
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+        ) + (complete_msg,)
+
     def _process_chunk_type_transition(
         self,
         chunk_text: str,
@@ -610,13 +641,16 @@ class ChatWorkflowManager(
         current_segment: str,
     ) -> tuple:
         """Process type transitions and update streaming message state. Issue #620."""
-        complete_msg, _, new_segment, new_type = self._handle_type_transition(
+        result = self._execute_type_transition_steps(
             new_type,
             current_message_type,
-            streaming_msg.id,
+            streaming_msg,
             selected_model,
             llm_response,
             chunk_text,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
         )
         (
             new_msg,
@@ -624,15 +658,8 @@ class ChatWorkflowManager(
             new_type,
             just_transitioned,
             transition_content,
-        ) = self._apply_type_transition(
             complete_msg,
-            new_segment,
-            new_type,
-            selected_model,
-            terminal_session_id,
-            used_knowledge,
-            rag_citations,
-        )
+        ) = result
         (
             streaming_msg,
             current_segment,
@@ -1487,6 +1514,23 @@ class ChatWorkflowManager(
             )
             yield (should_return, should_break, yields, new_state)
 
+    def _build_stream_current_state(
+        self,
+        llm_response: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        current_segment: str,
+        current_message_type: str,
+    ) -> tuple:
+        """Build current state tuple for stream iteration. Issue #620."""
+        return (
+            llm_response,
+            tool_call_completed,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        )
+
     async def _stream_llm_response(
         self,
         response,
@@ -1506,7 +1550,6 @@ class ChatWorkflowManager(
             chunk_data = self._parse_stream_chunk(line)
             if not chunk_data:
                 continue
-
             params = self._build_chunk_iteration_params(
                 chunk_data,
                 llm_response,
@@ -1519,7 +1562,7 @@ class ChatWorkflowManager(
                 used_knowledge,
                 rag_citations,
             )
-            current_state = (
+            current_state = self._build_stream_current_state(
                 llm_response,
                 tool_call_completed,
                 streaming_msg,
@@ -1542,7 +1585,6 @@ class ChatWorkflowManager(
                     return
                 if should_break:
                     break
-
             if chunk_data.get("done", False):
                 self._log_stream_completion(llm_response)
                 yield (None, llm_response, True, False)
