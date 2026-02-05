@@ -1,6 +1,6 @@
 <template>
   <div class="audit-logs-view view-container">
-    <div class="container mx-auto px-4 pt-4 pb-6">
+    <div class="w-full px-4 pt-4 pb-6">
       <!-- Page Header -->
       <div class="page-header">
         <div class="header-content">

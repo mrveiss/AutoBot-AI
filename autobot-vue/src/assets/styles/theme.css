@@ -12,11 +12,11 @@
    * COLOR SYSTEM
    * ============================================ */
 
-  /* Primary Colors */
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-primary-light: #a5b4fc;
-  --color-primary-dark: #4338ca;
+  /* Primary Colors - Teal for technical aesthetic */
+  --color-primary: #0d9488;
+  --color-primary-hover: #0f766e;
+  --color-primary-light: #5eead4;
+  --color-primary-dark: #115e59;
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -45,27 +45,27 @@
    * ============================================ */
 
   --bg-primary: #ffffff;
-  --bg-secondary: #f9fafb;
-  --bg-tertiary: #f3f4f6;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
   --bg-elevated: #ffffff;
 
   /* ============================================
    * TEXT COLORS
    * ============================================ */
 
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --text-tertiary: #9ca3af;
-  --text-muted: #d1d5db;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-muted: #cbd5e1;
   --text-inverse: #ffffff;
 
   /* ============================================
    * BORDER COLORS
    * ============================================ */
 
-  --border-color: #e5e7eb;
-  --border-color-light: #f3f4f6;
-  --border-color-dark: #d1d5db;
+  --border-color: #e2e8f0;
+  --border-color-light: #f1f5f9;
+  --border-color-dark: #cbd5e1;
 
   /* ============================================
    * LAYOUT VARIABLES
@@ -182,28 +182,34 @@
  * ============================================ */
 
 [data-theme="dark"] {
-  /* Background Colors */
-  --bg-primary: #111827;
-  --bg-secondary: #1f2937;
-  --bg-tertiary: #374151;
-  --bg-elevated: #1f2937;
+  /* Primary Colors - Lighter teal for dark mode */
+  --color-primary: #2dd4bf;
+  --color-primary-hover: #5eead4;
+  --color-primary-light: #99f6e4;
+  --color-primary-dark: #14b8a6;
+
+  /* Background Colors - Slate palette */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-elevated: #1e293b;
 
   /* Text Colors */
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-tertiary: #9ca3af;
-  --text-muted: #6b7280;
-  --text-inverse: #111827;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
 
   /* Border Colors */
-  --border-color: #374151;
-  --border-color-light: #4b5563;
-  --border-color-dark: #1f2937;
+  --border-color: #334155;
+  --border-color-light: #475569;
+  --border-color-dark: #1e293b;
 
   /* Scrollbar Colors */
-  --scrollbar-track: #374151;
-  --scrollbar-thumb: #6b7280;
-  --scrollbar-thumb-hover: #9ca3af;
+  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #475569;
+  --scrollbar-thumb-hover: #64748b;
 }
 
 /* ============================================
@@ -214,27 +220,33 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    /* Background Colors */
-    --bg-primary: #111827;
-    --bg-secondary: #1f2937;
-    --bg-tertiary: #374151;
-    --bg-elevated: #1f2937;
+    /* Primary Colors - Lighter teal for dark mode */
+    --color-primary: #2dd4bf;
+    --color-primary-hover: #5eead4;
+    --color-primary-light: #99f6e4;
+    --color-primary-dark: #14b8a6;
+
+    /* Background Colors - Slate palette */
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-elevated: #1e293b;
 
     /* Text Colors */
-    --text-primary: #f9fafb;
-    --text-secondary: #d1d5db;
-    --text-tertiary: #9ca3af;
-    --text-muted: #6b7280;
-    --text-inverse: #111827;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    --text-muted: #64748b;
+    --text-inverse: #0f172a;
 
     /* Border Colors */
-    --border-color: #374151;
-    --border-color-light: #4b5563;
-    --border-color-dark: #1f2937;
+    --border-color: #334155;
+    --border-color-light: #475569;
+    --border-color-dark: #1e293b;
 
     /* Scrollbar Colors */
-    --scrollbar-track: #374151;
-    --scrollbar-thumb: #6b7280;
-    --scrollbar-thumb-hover: #9ca3af;
+    --scrollbar-track: #1e293b;
+    --scrollbar-thumb: #475569;
+    --scrollbar-thumb-hover: #64748b;
   }
 }

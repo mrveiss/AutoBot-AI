@@ -1,6 +1,6 @@
 <template>
   <div class="secrets-view view-container">
-    <div class="container mx-auto px-4 pt-4 pb-6">
+    <div class="w-full px-4 pt-4 pb-6">
       <!-- Security notice -->
       <div class="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
         <div class="flex items-start">

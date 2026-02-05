@@ -143,6 +143,9 @@
 
           <!-- Right side - Status and controls -->
           <div class="flex items-center space-x-4">
+            <!-- Dark Mode Toggle -->
+            <DarkModeToggle />
+
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
@@ -507,6 +510,7 @@ export default {
     ToastContainer,
     HostSelectionDialog,
     UnifiedLoadingView,
+    DarkModeToggle: () => import('@/components/ui/DarkModeToggle.vue'),
   },
 
   setup() {

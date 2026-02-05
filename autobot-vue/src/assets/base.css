@@ -1,85 +1,305 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * base.css - Global Base Styles with Design Tokens
+ * Issue #548: Unified design system with CSS variables
+ */
+
+/* ============================================
+ * GLOBAL RESETS & BASE STYLES
+ * ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-family-sans);
+  line-height: var(--line-height-normal);
   font-weight: 400;
 
   color-scheme: light dark;
-  color: var(--color-text);
-  background-color: var(--color-background);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+  /* Smooth theme transitions */
+  transition: background-color var(--transition-slow),
+              color var(--transition-slow);
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ============================================
+ * GLOBAL SCROLLBAR STYLING
+ * Consistent scrollbars across all browsers
+ * ============================================ */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-thumb-radius);
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ============================================
+ * TYPOGRAPHY
+ * ============================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+  margin: 0;
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: var(--font-size-3xl);
 }
+
+h2 {
+  font-size: var(--font-size-2xl);
+}
+
+h3 {
+  font-size: var(--font-size-xl);
+}
+
+h4 {
+  font-size: var(--font-size-lg);
+}
+
+h5, h6 {
+  font-size: var(--font-size-base);
+}
+
+p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* ============================================
+ * LINKS
+ * ============================================ */
+
+a {
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================
+ * BUTTONS
+ * Base button styles (enhanced by components)
+ * ============================================ */
 
 button {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
-  font-size: 1em;
+  font-size: var(--font-size-base);
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  transition: all var(--transition-fast);
 }
 
-@media (prefers-color-scheme: light) {
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+ * FORM ELEMENTS
+ * ============================================ */
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.5em 0.75em;
+  transition: all var(--transition-fast);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* ============================================
+ * CODE BLOCKS
+ * ============================================ */
+
+code,
+pre {
+  font-family: var(--font-family-mono);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+code {
+  padding: 0.2em 0.4em;
+  font-size: 0.9em;
+  color: var(--text-primary);
+}
+
+pre {
+  padding: 1em;
+  overflow-x: auto;
+  line-height: var(--line-height-relaxed);
+}
+
+pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+/* ============================================
+ * FOCUS STATES
+ * Global keyboard navigation support
+ * ============================================ */
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================
+ * ACCESSIBILITY - REDUCED MOTION
+ * Respects user's OS-level preference
+ * ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   :root {
-    --color-text: rgba(0, 0, 0, 0.87);
-    --color-background: #f3f3f3;
-    --color-primary: #3490dc;
-    --color-secondary: #f6ad55;
-    --color-accent: #4299e1;
-    --color-border: #e2e8f0;
-    --color-button-bg: #e2e8f0;
-    --color-button-hover: #cbd5e1;
-    --color-input-bg: #ffffff;
-    --color-text-muted: #718096;
-    --color-error: #e53e3e;
+    transition: none !important;
   }
 }
 
-.dark-mode {
-  --color-text: rgba(255, 255, 255, 0.87);
-  --color-background: #121212;
-  --color-primary: #63b3ed;
-  --color-secondary: #f6ad55;
-  --color-accent: #3182ce;
-  --color-border: #2d3748;
-  --color-button-bg: #2d3748;
-  --color-button-hover: #4a5568;
-  --color-input-bg: #1a202c;
-  --color-text-muted: #a0aec0;
-  --color-error: #f56565;
+/* ============================================
+ * PRINT STYLES
+ * Clean printing for documentation
+ * ============================================ */
+
+@media print {
+  :root {
+    background-color: white;
+    color: black;
+  }
+
+  body {
+    background-color: white;
+  }
+
+  a {
+    text-decoration: underline;
+  }
+
+  button,
+  .no-print {
+    display: none;
+  }
+}
+
+/* ============================================
+ * UTILITY CLASSES
+ * ============================================ */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--text-muted);
 }

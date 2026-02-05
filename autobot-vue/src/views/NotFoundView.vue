@@ -1,6 +1,6 @@
 <template>
   <div class="not-found-view view-container-centered">
-    <div class="container mx-auto px-4 py-12">
+    <div class="w-full px-4 py-12">
       <div class="text-center">
         <!-- 404 Icon -->
         <div class="mb-8">
