@@ -995,6 +995,116 @@ async def acknowledge_remediation(
     }
 
 
+def _build_password_ssh_command(
+    request: ConnectionTestRequest, remote_cmd: str
+) -> list[str]:
+    """
+    Build SSH command with sshpass for password authentication.
+
+    Helper for test_connection (Issue #665).
+    """
+    return [
+        "sshpass",
+        "-p",
+        request.password,
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "PubkeyAuthentication=no",
+        "-p",
+        str(request.ssh_port),
+        f"{request.ssh_user}@{request.ip_address}",
+        remote_cmd,
+    ]
+
+
+def _build_key_ssh_command(
+    request: ConnectionTestRequest, remote_cmd: str
+) -> list[str]:
+    """
+    Build SSH command with BatchMode for key-based authentication.
+
+    Helper for test_connection (Issue #665).
+    """
+    return [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        "-p",
+        str(request.ssh_port),
+        f"{request.ssh_user}@{request.ip_address}",
+        remote_cmd,
+    ]
+
+
+def _build_ssh_success_response(
+    stdout: bytes, latency_ms: float
+) -> ConnectionTestResponse:
+    """
+    Create success ConnectionTestResponse from SSH stdout.
+
+    Helper for test_connection (Issue #665).
+    """
+    os_info = stdout.decode("utf-8", errors="replace").strip()
+    return ConnectionTestResponse(
+        success=True,
+        message="Connection successful",
+        latency_ms=round(latency_ms, 2),
+        os_info=os_info[:500] if os_info else None,
+    )
+
+
+def _build_ssh_failure_response(
+    stderr: bytes, latency_ms: float
+) -> ConnectionTestResponse:
+    """
+    Create failure ConnectionTestResponse from SSH stderr with cleaned error.
+
+    Helper for test_connection (Issue #665).
+    """
+    error_msg = stderr.decode("utf-8", errors="replace").strip()
+    # Clean up error message - don't expose password details
+    if "sshpass" in error_msg.lower():
+        error_msg = "SSH authentication failed. Check credentials."
+    return ConnectionTestResponse(
+        success=False,
+        message="Connection failed",
+        latency_ms=round(latency_ms, 2),
+        error=error_msg[:500] if error_msg else "SSH connection refused",
+    )
+
+
+def _handle_file_not_found_error(error: FileNotFoundError) -> ConnectionTestResponse:
+    """
+    Handle FileNotFoundError for missing SSH tools.
+
+    Helper for test_connection (Issue #665).
+    """
+    error_msg = str(error)
+    if "ssh" in error_msg.lower():
+        return ConnectionTestResponse(
+            success=False,
+            message="Connection failed",
+            error="SSH client not found. Install: sudo apt install openssh-client",
+        )
+    return ConnectionTestResponse(
+        success=False,
+        message="Connection failed",
+        error=f"Required tool not found: {error_msg}",
+    )
+
+
 @router.post("/test-connection", response_model=ConnectionTestResponse)
 async def test_connection(
     request: ConnectionTestRequest,
@@ -1004,92 +1114,35 @@ async def test_connection(
     import shutil
 
     start_time = time.time()
+    remote_cmd = (
+        "uname -a && cat /etc/os-release 2>/dev/null | "
+        "head -5 || echo 'OS info unavailable'"
+    )
 
     try:
-        remote_cmd = (
-            "uname -a && cat /etc/os-release 2>/dev/null | "
-            "head -5 || echo 'OS info unavailable'"
-        )
-
         # Build SSH command based on auth method
         if request.auth_method == "password" and request.password:
-            # Check if sshpass is available for password auth
             if not shutil.which("sshpass"):
                 return ConnectionTestResponse(
                     success=False,
                     message="Connection failed",
                     error="Password auth requires 'sshpass'. Install: sudo apt install sshpass",
                 )
-
-            # Use sshpass for password authentication
-            ssh_cmd = [
-                "sshpass",
-                "-p",
-                request.password,
-                "ssh",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ConnectTimeout=10",
-                "-o",
-                "PubkeyAuthentication=no",
-                "-p",
-                str(request.ssh_port),
-                f"{request.ssh_user}@{request.ip_address}",
-                remote_cmd,
-            ]
+            ssh_cmd = _build_password_ssh_command(request, remote_cmd)
         else:
-            # Use key-based authentication (BatchMode)
-            ssh_cmd = [
-                "ssh",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ConnectTimeout=10",
-                "-o",
-                "BatchMode=yes",
-                "-p",
-                str(request.ssh_port),
-                f"{request.ssh_user}@{request.ip_address}",
-                remote_cmd,
-            ]
+            ssh_cmd = _build_key_ssh_command(request, remote_cmd)
 
         process = await asyncio.create_subprocess_exec(
             *ssh_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=15.0,
-        )
-
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15.0)
         latency_ms = (time.time() - start_time) * 1000
 
         if process.returncode == 0:
-            os_info = stdout.decode("utf-8", errors="replace").strip()
-            return ConnectionTestResponse(
-                success=True,
-                message="Connection successful",
-                latency_ms=round(latency_ms, 2),
-                os_info=os_info[:500] if os_info else None,
-            )
-        else:
-            error_msg = stderr.decode("utf-8", errors="replace").strip()
-            # Clean up error message - don't expose password details
-            if "sshpass" in error_msg.lower():
-                error_msg = "SSH authentication failed. Check credentials."
-            return ConnectionTestResponse(
-                success=False,
-                message="Connection failed",
-                latency_ms=round(latency_ms, 2),
-                error=error_msg[:500] if error_msg else "SSH connection refused",
-            )
+            return _build_ssh_success_response(stdout, latency_ms)
+        return _build_ssh_failure_response(stderr, latency_ms)
 
     except asyncio.TimeoutError:
         return ConnectionTestResponse(
@@ -1098,18 +1151,7 @@ async def test_connection(
             error="SSH connection timed out after 15 seconds",
         )
     except FileNotFoundError as e:
-        error_msg = str(e)
-        if "ssh" in error_msg.lower():
-            return ConnectionTestResponse(
-                success=False,
-                message="Connection failed",
-                error="SSH client not found. Install: sudo apt install openssh-client",
-            )
-        return ConnectionTestResponse(
-            success=False,
-            message="Connection failed",
-            error=f"Required tool not found: {error_msg}",
-        )
+        return _handle_file_not_found_error(e)
     except Exception as e:
         logger.exception("Connection test error: %s", e)
         return ConnectionTestResponse(
