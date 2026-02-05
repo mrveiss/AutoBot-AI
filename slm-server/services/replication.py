@@ -53,7 +53,12 @@ class ReplicationService:
         if service_type != "redis":
             return False, f"Unsupported service type: {service_type}"
 
-        logger.info("Setting up replication %s: %s -> %s", replication_id, source_node.ip_address, target_node.ip_address)
+        logger.info(
+            "Setting up replication %s: %s -> %s",
+            replication_id,
+            source_node.ip_address,
+            target_node.ip_address,
+        )
 
         replication = await self._get_replication_record(db, replication_id)
         if not replication:
