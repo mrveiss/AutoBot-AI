@@ -414,6 +414,40 @@ def _create_error_chunk(
     return error_chunk
 
 
+async def _setup_stream_tasks(
+    process: asyncio.subprocess.Process,
+    output_queue: AsyncQueue,
+    done_event: asyncio.Event,
+    on_output: Optional[Callable[[StreamChunk], None]],
+) -> asyncio.Task:
+    """
+    Set up stream reading tasks and return the completion task.
+
+    Creates tasks to read stdout and stderr concurrently, and a completion
+    task that signals when both streams are done. Issue #620.
+
+    Args:
+        process: The subprocess with stdout/stderr pipes
+        output_queue: Queue to receive stream chunks
+        done_event: Event to signal completion
+        on_output: Optional callback for each chunk
+
+    Returns:
+        Completion task that waits for both stream readers
+    """
+    read_stream = _create_stream_reader(output_queue, on_output)
+
+    stdout_task = asyncio.create_task(read_stream(process.stdout, "stdout"))
+    stderr_task = asyncio.create_task(read_stream(process.stderr, "stderr"))
+
+    async def wait_for_completion():
+        """Wait for both streams to complete."""
+        await asyncio.gather(stdout_task, stderr_task)
+        done_event.set()
+
+    return asyncio.create_task(wait_for_completion())
+
+
 async def execute_shell_command_streaming(
     command: str,
     on_output: Optional[Callable[[StreamChunk], None]] = None,
@@ -444,20 +478,10 @@ async def execute_shell_command_streaming(
 
         output_queue: AsyncQueue[StreamChunk] = AsyncQueue()
         done_event = asyncio.Event()
-        read_stream = _create_stream_reader(output_queue, on_output)
+        completion_task = await _setup_stream_tasks(
+            process, output_queue, done_event, on_output
+        )
 
-        # Start reading both streams concurrently
-        stdout_task = asyncio.create_task(read_stream(process.stdout, "stdout"))
-        stderr_task = asyncio.create_task(read_stream(process.stderr, "stderr"))
-
-        async def wait_for_completion():
-            """Wait for both streams to complete."""
-            await asyncio.gather(stdout_task, stderr_task)
-            done_event.set()
-
-        completion_task = asyncio.create_task(wait_for_completion())
-
-        # Yield chunks as they arrive
         async for chunk in _yield_chunks_from_queue(output_queue, done_event):
             yield chunk
 

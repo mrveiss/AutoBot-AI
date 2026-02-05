@@ -9,13 +9,71 @@ Contains individual optimization strategy implementations.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.utils.performance_monitor import performance_monitor
 
 from .types import GPUCapabilities, GPUOptimizationConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _get_memory_utilization_recommendations(
+    memory_util: float,
+    memory_total_mb: float,
+    memory_limit_mb: Optional[int],
+) -> List[str]:
+    """
+    Generate recommendations based on current GPU memory utilization.
+
+    Args:
+        memory_util: Current memory utilization percentage
+        memory_total_mb: Total GPU memory in MB
+        memory_limit_mb: Configured memory limit in MB (if any)
+
+    Returns:
+        List of recommendation strings. Issue #620.
+    """
+    recommendations = []
+
+    if memory_util > 90:
+        recommendations.append(
+            "GPU memory usage is very high (>90%). " "Consider reducing batch sizes."
+        )
+    elif memory_util < 30:
+        recommendations.append(
+            "GPU memory usage is low (<30%). "
+            "Consider increasing batch sizes for better utilization."
+        )
+
+    if memory_util > 95 and not memory_limit_mb:
+        recommended_limit = int(memory_total_mb * 0.9)
+        recommendations.append(
+            f"Consider setting memory limit to {recommended_limit}MB " "to prevent OOM"
+        )
+
+    return recommendations
+
+
+def _get_memory_config_optimizations(config: GPUOptimizationConfig) -> List[str]:
+    """
+    Generate optimizations list based on memory configuration settings.
+
+    Args:
+        config: GPU optimization configuration
+
+    Returns:
+        List of optimization strings. Issue #620.
+    """
+    optimizations = []
+
+    if config.memory_growth_enabled:
+        optimizations.append("Dynamic memory growth enabled")
+
+    if config.memory_pool_enabled:
+        optimizations.append("GPU memory pooling enabled")
+
+    return optimizations
 
 
 async def optimize_memory_allocation(
@@ -26,38 +84,15 @@ async def optimize_memory_allocation(
         optimizations = []
         recommendations = []
 
-        # Check current memory usage
         gpu_metrics = await performance_monitor.collect_gpu_metrics()
 
         if gpu_metrics:
-            memory_util = gpu_metrics.memory_utilization_percent
-
-            if memory_util > 90:
-                recommendations.append(
-                    "GPU memory usage is very high (>90%). "
-                    "Consider reducing batch sizes."
-                )
-            elif memory_util < 30:
-                recommendations.append(
-                    "GPU memory usage is low (<30%). "
-                    "Consider increasing batch sizes for better utilization."
-                )
-
-            # Enable memory growth if not already enabled
-            if config.memory_growth_enabled:
-                optimizations.append("Dynamic memory growth enabled")
-
-            # Enable memory pooling for better allocation efficiency
-            if config.memory_pool_enabled:
-                optimizations.append("GPU memory pooling enabled")
-
-            # Set appropriate memory limit if very high usage
-            if memory_util > 95 and not config.memory_limit_mb:
-                recommended_limit = int(gpu_metrics.memory_total_mb * 0.9)
-                recommendations.append(
-                    f"Consider setting memory limit to {recommended_limit}MB "
-                    "to prevent OOM"
-                )
+            recommendations = _get_memory_utilization_recommendations(
+                gpu_metrics.memory_utilization_percent,
+                gpu_metrics.memory_total_mb,
+                config.memory_limit_mb,
+            )
+            optimizations = _get_memory_config_optimizations(config)
 
         return {
             "success": len(optimizations) > 0,

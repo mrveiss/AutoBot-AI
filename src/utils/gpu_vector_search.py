@@ -898,6 +898,32 @@ class HybridVectorSearch:
             index_type="none",
         )
 
+    def _build_doc_lookup(self, chromadb_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Build document lookup dictionary from ChromaDB results.
+
+        Args:
+            chromadb_results: Raw results from ChromaDB get operation
+
+        Returns:
+            Dictionary mapping doc_id to content and metadata. Issue #620.
+        """
+        doc_lookup = {}
+        if chromadb_results["ids"]:
+            for i, doc_id in enumerate(chromadb_results["ids"]):
+                doc_lookup[doc_id] = {
+                    "content": (
+                        chromadb_results["documents"][i]
+                        if chromadb_results["documents"]
+                        else None
+                    ),
+                    "metadata": (
+                        chromadb_results["metadatas"][i]
+                        if chromadb_results["metadatas"]
+                        else {}
+                    ),
+                }
+        return doc_lookup
+
     async def _enrich_from_chromadb(
         self,
         results: List[SearchResult],
@@ -909,35 +935,16 @@ class HybridVectorSearch:
             collection = self.chromadb.get_collection(collection_name)
             doc_ids = [r.doc_id for r in results]
 
-            # Fetch from ChromaDB
             chromadb_results = collection.get(
                 ids=doc_ids, include=["documents", "metadatas"]
             )
+            doc_lookup = self._build_doc_lookup(chromadb_results)
 
-            # Build lookup
-            doc_lookup = {}
-            if chromadb_results["ids"]:
-                for i, doc_id in enumerate(chromadb_results["ids"]):
-                    doc_lookup[doc_id] = {
-                        "content": (
-                            chromadb_results["documents"][i]
-                            if chromadb_results["documents"]
-                            else None
-                        ),
-                        "metadata": (
-                            chromadb_results["metadatas"][i]
-                            if chromadb_results["metadatas"]
-                            else {}
-                        ),
-                    }
-
-            # Enrich results
             enriched = []
             for result in results:
                 if result.doc_id in doc_lookup:
                     data = doc_lookup[result.doc_id]
 
-                    # Apply metadata filter if specified
                     if metadata_filter:
                         if not self._matches_filter(data["metadata"], metadata_filter):
                             continue

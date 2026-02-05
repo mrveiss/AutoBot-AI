@@ -429,6 +429,29 @@ class RedisConnectionManager:
                     )
                     raise
 
+    def _apply_tls_params(
+        self, pool_params: Dict[str, Any], config: RedisConfig, database_name: str
+    ) -> None:
+        """Apply TLS parameters to pool configuration if TLS is enabled.
+
+        Args:
+            pool_params: Pool parameters dictionary to modify in-place
+            config: Redis configuration with TLS settings
+            database_name: Name of database for logging. Issue #620.
+        """
+        if not config.ssl:
+            return
+
+        pool_params["connection_class"] = SSLConnection
+        if config.ssl_ca_certs:
+            pool_params["ssl_ca_certs"] = config.ssl_ca_certs
+        if config.ssl_certfile:
+            pool_params["ssl_certfile"] = config.ssl_certfile
+        if config.ssl_keyfile:
+            pool_params["ssl_keyfile"] = config.ssl_keyfile
+        pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
+        logger.info(f"TLS enabled for sync Redis connection '{database_name}'")
+
     def _create_sync_pool_with_keepalive(
         self, database_name: str, config: RedisConfig
     ) -> redis.ConnectionPool:
@@ -445,7 +468,6 @@ class RedisConnectionManager:
             retries=config.max_retries,
         )
 
-        # Filter None values
         pool_params = {
             "host": config.host,
             "port": config.port,
@@ -463,20 +485,7 @@ class RedisConnectionManager:
             "retry": retry_policy,
         }
 
-        # Add TLS parameters if enabled
-        # Use connection_class=SSLConnection for proper TLS handling
-        if config.ssl:
-            pool_params["connection_class"] = SSLConnection
-            if config.ssl_ca_certs:
-                pool_params["ssl_ca_certs"] = config.ssl_ca_certs
-            if config.ssl_certfile:
-                pool_params["ssl_certfile"] = config.ssl_certfile
-            if config.ssl_keyfile:
-                pool_params["ssl_keyfile"] = config.ssl_keyfile
-            pool_params["ssl_cert_reqs"] = config.ssl_cert_reqs or "required"
-            logger.info(f"TLS enabled for sync Redis connection '{database_name}'")
-
-        # Remove None values
+        self._apply_tls_params(pool_params, config, database_name)
         pool_params = {k: v for k, v in pool_params.items() if v is not None}
 
         logger.info(

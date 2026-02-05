@@ -137,6 +137,26 @@ class ContainerizedLibrarianAssistant:
             logger.error("Error during web search: %s", e)
             return []
 
+    def _build_content_data(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Build content data dictionary from extraction result.
+
+        Args:
+            result: Raw result from Playwright extraction service
+
+        Returns:
+            Formatted content data dictionary. Issue #620.
+        """
+        return {
+            "url": result["url"],
+            "title": result["title"],
+            "description": result["description"],
+            "content": result["content"],
+            "domain": result["domain"],
+            "is_trusted": result["is_trusted"],
+            "timestamp": result["timestamp"],
+            "content_length": result["content_length"],
+        }
+
     async def extract_content(self, url: str) -> Optional[Dict[str, Any]]:
         """Extract content from a web page using containerized Playwright.
 
@@ -151,7 +171,6 @@ class ContainerizedLibrarianAssistant:
 
         try:
             payload = {"url": url}
-
             logger.info("Extracting content via Playwright service: %s", url)
 
             async with await self.http_client.post(
@@ -166,17 +185,7 @@ class ContainerizedLibrarianAssistant:
                 result = await response.json()
 
                 if result.get("success"):
-                    content_data = {
-                        "url": result["url"],
-                        "title": result["title"],
-                        "description": result["description"],
-                        "content": result["content"],
-                        "domain": result["domain"],
-                        "is_trusted": result["is_trusted"],
-                        "timestamp": result["timestamp"],
-                        "content_length": result["content_length"],
-                    }
-
+                    content_data = self._build_content_data(result)
                     logger.info(
                         f"Extracted {result['content_length']} characters from "
                         f"{result['domain']}"
