@@ -6,6 +6,7 @@ SLM Nodes API Routes
 """
 
 import asyncio
+import hashlib
 import logging
 import time
 import uuid
@@ -191,9 +192,7 @@ async def _handle_enrollment_failed(
     )
 
 
-async def _handle_enrollment_completed(
-    db: AsyncSession, node_id: str
-) -> dict:
+async def _handle_enrollment_completed(db: AsyncSession, node_id: str) -> dict:
     """
     Refresh node, create event, broadcast, and return success response.
 
@@ -229,6 +228,96 @@ async def _handle_enrollment_completed(
         "message": "Agent deployed successfully. Node will begin sending heartbeats.",
         "node": NodeResponse.model_validate(node) if node else None,
     }
+
+
+async def _check_existing_node(db: AsyncSession, ip_address: str) -> None:
+    """
+    Check for duplicate IP address and raise HTTPException if found.
+
+    Helper for create_node (Issue #665).
+    """
+    existing = await db.execute(select(Node).where(Node.ip_address == ip_address))
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node with this IP address already exists",
+        )
+
+
+def _generate_node_id(node_data: NodeCreate) -> str:
+    """
+    Generate or return node_id based on node_data.
+
+    Helper for create_node (Issue #665).
+    """
+    if node_data.node_id:
+        return node_data.node_id
+    # Generate deterministic ID from hostname (first 8 chars of SHA256)
+    return hashlib.sha256(node_data.hostname.encode()).hexdigest()[:8]
+
+
+def _prepare_extra_data(node_data: NodeCreate) -> dict:
+    """
+    Encrypt SSH password and prepare extra_data dict.
+
+    Helper for create_node (Issue #665).
+    """
+    extra_data = {}
+    if node_data.ssh_password and node_data.auth_method == "password":
+        try:
+            extra_data["ssh_password"] = encrypt_data(node_data.ssh_password)
+            extra_data["ssh_password_encrypted"] = True
+        except Exception as e:
+            logger.error("Failed to encrypt SSH password: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to securely store credentials",
+            )
+    return extra_data
+
+
+async def _create_registration_event(
+    db: AsyncSession,
+    node_id: str,
+    node: Node,
+    node_data: NodeCreate,
+    initial_status: str,
+) -> None:
+    """
+    Create registration event and broadcast lifecycle event.
+
+    Helper for create_node (Issue #665).
+    """
+    event_msg = f"Node registered: {node.hostname} ({node.ip_address})"
+    if node_data.import_existing:
+        event_msg = f"Existing node imported: {node.hostname} ({node.ip_address})"
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.STATE_CHANGE,
+        EventSeverity.INFO,
+        event_msg,
+        {
+            "status": initial_status,
+            "roles": node_data.roles,
+            "import_existing": node_data.import_existing,
+        },
+    )
+
+    logger.info(event_msg)
+
+    await _broadcast_lifecycle_event(
+        node_id,
+        "node_created",
+        {
+            "hostname": node.hostname,
+            "ip_address": node.ip_address,
+            "status": initial_status,
+            "roles": node_data.roles,
+            "import_existing": node_data.import_existing,
+        },
+    )
 
 
 @router.get("", response_model=NodeListResponse)
@@ -269,23 +358,9 @@ async def create_node(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> NodeResponse:
     """Register a new node."""
-    existing = await db.execute(
-        select(Node).where(Node.ip_address == node_data.ip_address)
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Node with this IP address already exists",
-        )
+    await _check_existing_node(db, node_data.ip_address)
 
-    # Use provided node_id, or derive a deterministic one from hostname
-    if node_data.node_id:
-        node_id = node_data.node_id
-    else:
-        # Generate deterministic ID from hostname (first 8 chars of SHA256)
-        import hashlib
-
-        node_id = hashlib.sha256(node_data.hostname.encode()).hexdigest()[:8]
+    node_id = _generate_node_id(node_data)
 
     # If importing an existing node, mark as online immediately
     # Otherwise, mark as pending for enrollment
@@ -294,19 +369,7 @@ async def create_node(
     else:
         initial_status = NodeStatus.PENDING.value
 
-    # Store SSH password in extra_data if provided (for enrollment)
-    # Password is encrypted using AES-256-GCM before storage
-    extra_data = {}
-    if node_data.ssh_password and node_data.auth_method == "password":
-        try:
-            extra_data["ssh_password"] = encrypt_data(node_data.ssh_password)
-            extra_data["ssh_password_encrypted"] = True
-        except Exception as e:
-            logger.error("Failed to encrypt SSH password: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to securely store credentials",
-            )
+    extra_data = _prepare_extra_data(node_data)
 
     node = Node(
         node_id=node_id,
@@ -322,41 +385,10 @@ async def create_node(
     db.add(node)
     await db.flush()
 
-    # Create registration event
-    event_msg = f"Node registered: {node.hostname} ({node.ip_address})"
-    if node_data.import_existing:
-        event_msg = f"Existing node imported: {node.hostname} ({node.ip_address})"
-
-    await _create_node_event(
-        db,
-        node_id,
-        EventType.STATE_CHANGE,
-        EventSeverity.INFO,
-        event_msg,
-        {
-            "status": initial_status,
-            "roles": node_data.roles,
-            "import_existing": node_data.import_existing,
-        },
-    )
+    await _create_registration_event(db, node_id, node, node_data, initial_status)
 
     await db.commit()
     await db.refresh(node)
-
-    logger.info(event_msg)
-
-    # Broadcast lifecycle event via WebSocket
-    await _broadcast_lifecycle_event(
-        node_id,
-        "node_created",
-        {
-            "hostname": node.hostname,
-            "ip_address": node.ip_address,
-            "status": initial_status,
-            "roles": node_data.roles,
-            "import_existing": node_data.import_existing,
-        },
-    )
 
     return NodeResponse.model_validate(node)
 
