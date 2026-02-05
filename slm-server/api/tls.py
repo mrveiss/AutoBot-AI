@@ -631,6 +631,137 @@ async def bulk_renew_expiring_certificates(
     }
 
 
+def _check_ansible_availability() -> str:
+    """
+    Check for ansible-playbook availability and return its path.
+
+    Helper for enable_tls_on_services (Issue #665).
+
+    Returns:
+        Path to ansible-playbook executable.
+
+    Raises:
+        HTTPException: If ansible-playbook is not found.
+    """
+    import shutil
+
+    ansible_path = shutil.which("ansible-playbook")
+    if not ansible_path:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ansible-playbook not found on SLM server",
+        )
+    return ansible_path
+
+
+def _get_tls_ansible_paths() -> dict:
+    """
+    Get paths to ansible directory, inventory, and playbooks for TLS operations.
+
+    Helper for enable_tls_on_services (Issue #665).
+
+    Returns:
+        Dict with keys: ansible_dir, inventory, enable_tls_playbook, distribute_certs_playbook.
+
+    Raises:
+        HTTPException: If enable-tls.yml playbook is not found.
+    """
+    import os
+
+    playbook_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ansible_dir = os.path.join(playbook_dir, "ansible")
+    inventory_path = os.path.join(ansible_dir, "inventory.yml")
+    enable_tls_playbook = os.path.join(ansible_dir, "enable-tls.yml")
+    distribute_certs_playbook = os.path.join(ansible_dir, "distribute-tls-certs.yml")
+
+    if not os.path.exists(enable_tls_playbook):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="enable-tls.yml playbook not found",
+        )
+
+    return {
+        "ansible_dir": ansible_dir,
+        "inventory": inventory_path,
+        "enable_tls_playbook": enable_tls_playbook,
+        "distribute_certs_playbook": distribute_certs_playbook,
+    }
+
+
+async def _run_ansible_playbook_async(
+    cmd: List[str], cwd: str, timeout: float, stdout_limit: int = 2000
+) -> dict:
+    """
+    Execute an ansible playbook asynchronously and return the result.
+
+    Helper for enable_tls_on_services (Issue #665).
+
+    Args:
+        cmd: Command list to execute.
+        cwd: Working directory for the subprocess.
+        timeout: Timeout in seconds.
+        stdout_limit: Maximum characters to keep from stdout (default 2000).
+
+    Returns:
+        Dict with success, returncode, stdout, stderr.
+    """
+    import asyncio
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+    )
+
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+
+    return {
+        "success": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": stdout.decode("utf-8", errors="replace")[-stdout_limit:],
+        "stderr": stderr.decode("utf-8", errors="replace")[-1000:],
+    }
+
+
+def _build_enable_tls_response(
+    success: bool, returncode: int, services: List[str], results: dict
+) -> dict:
+    """
+    Build the final response dict for TLS enablement.
+
+    Helper for enable_tls_on_services (Issue #665).
+
+    Args:
+        success: Whether TLS enablement succeeded.
+        returncode: The return code from the enable-tls playbook.
+        services: List of services that were targeted.
+        results: Dict containing deploy_certs and enable_tls results.
+
+    Returns:
+        Response dict with success, message, services, and results.
+    """
+    message = (
+        "TLS enabled successfully"
+        if success
+        else f"TLS enablement failed with code {returncode}"
+    )
+
+    logger.info(
+        "TLS enablement for %s: %s (code %d)",
+        services,
+        "success" if success else "failed",
+        returncode,
+    )
+
+    return {
+        "success": success,
+        "message": message,
+        "services": services,
+        "results": results,
+    }
+
+
 @tls_router.post(
     "/enable",
 )
@@ -657,114 +788,51 @@ async def enable_tls_on_services(
     """
     import asyncio
     import os
-    import shutil
 
-    # Check for ansible-playbook
-    ansible_path = shutil.which("ansible-playbook")
-    if not ansible_path:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ansible-playbook not found on SLM server",
-        )
-
-    # Path to playbooks directory
-    playbook_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ansible_dir = os.path.join(playbook_dir, "ansible")
-    inventory_path = os.path.join(ansible_dir, "inventory.yml")
-    enable_tls_playbook = os.path.join(ansible_dir, "enable-tls.yml")
-    distribute_certs_playbook = os.path.join(ansible_dir, "distribute-tls-certs.yml")
-
-    # Verify playbooks exist
-    if not os.path.exists(enable_tls_playbook):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="enable-tls.yml playbook not found",
-        )
-
+    ansible_path = _check_ansible_availability()
+    paths = _get_tls_ansible_paths()
     results = {"deploy_certs": None, "enable_tls": None, "services_enabled": services}
+    limit_hosts = ",".join(services)
 
     try:
         # Step 1: Deploy certificates if requested
-        if deploy_certs_first and os.path.exists(distribute_certs_playbook):
-            limit_hosts = ",".join(services)
+        if deploy_certs_first and os.path.exists(paths["distribute_certs_playbook"]):
             deploy_cmd = [
                 ansible_path,
                 "-i",
-                inventory_path,
-                distribute_certs_playbook,
+                paths["inventory"],
+                paths["distribute_certs_playbook"],
                 "--limit",
                 limit_hosts,
             ]
-
-            proc = await asyncio.create_subprocess_exec(
-                *deploy_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=ansible_dir,
+            results["deploy_certs"] = await _run_ansible_playbook_async(
+                deploy_cmd, paths["ansible_dir"], timeout=300.0
             )
-
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-
-            results["deploy_certs"] = {
-                "success": proc.returncode == 0,
-                "returncode": proc.returncode,
-                "stdout": stdout.decode("utf-8", errors="replace")[-2000:],
-                "stderr": stderr.decode("utf-8", errors="replace")[-1000:],
-            }
-
-            if proc.returncode != 0:
+            if not results["deploy_certs"]["success"]:
                 logger.warning(
                     "Certificate deployment had issues: %s",
-                    stderr.decode("utf-8", errors="replace")[:500],
+                    results["deploy_certs"]["stderr"][:500],
                 )
 
         # Step 2: Run enable-tls playbook
-        limit_hosts = ",".join(services)
         enable_cmd = [
             ansible_path,
             "-i",
-            inventory_path,
-            enable_tls_playbook,
+            paths["inventory"],
+            paths["enable_tls_playbook"],
             "--limit",
             limit_hosts,
         ]
-
-        proc = await asyncio.create_subprocess_exec(
-            *enable_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=ansible_dir,
+        results["enable_tls"] = await _run_ansible_playbook_async(
+            enable_cmd, paths["ansible_dir"], timeout=600.0, stdout_limit=3000
         )
 
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600.0)
-
-        results["enable_tls"] = {
-            "success": proc.returncode == 0,
-            "returncode": proc.returncode,
-            "stdout": stdout.decode("utf-8", errors="replace")[-3000:],
-            "stderr": stderr.decode("utf-8", errors="replace")[-1000:],
-        }
-
-        success = proc.returncode == 0
-        message = (
-            "TLS enabled successfully"
-            if success
-            else f"TLS enablement failed with code {proc.returncode}"
-        )
-
-        logger.info(
-            "TLS enablement for %s: %s (code %d)",
+        return _build_enable_tls_response(
+            results["enable_tls"]["success"],
+            results["enable_tls"]["returncode"],
             services,
-            "success" if success else "failed",
-            proc.returncode,
+            results,
         )
-
-        return {
-            "success": success,
-            "message": message,
-            "services": services,
-            "results": results,
-        }
 
     except asyncio.TimeoutError:
         raise HTTPException(
