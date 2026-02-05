@@ -1,3 +1,12 @@
+<!--
+AutoBot - AI-Powered Automation Platform
+Copyright (c) 2025 mrveiss
+Author: mrveiss
+
+DarkModeToggle.vue - Theme Toggle Component
+Issue #753: Dark/Light Mode Refinement
+-->
+
 <template>
   <button
     @click="toggleDarkMode"
@@ -14,7 +23,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('DarkModeToggle')
 const isDark = ref(false)
 
 // Check initial theme
@@ -24,11 +35,14 @@ onMounted(() => {
   if (savedTheme) {
     isDark.value = savedTheme === 'dark'
     applyTheme(savedTheme)
+    logger.debug(`Theme initialized from localStorage: ${savedTheme}`)
   } else {
     // Check system preference
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     isDark.value = prefersDark
-    applyTheme(prefersDark ? 'dark' : 'light')
+    const theme = prefersDark ? 'dark' : 'light'
+    applyTheme(theme)
+    logger.debug(`Theme initialized from system preference: ${theme}`)
   }
 })
 
@@ -37,6 +51,7 @@ function toggleDarkMode() {
   const theme = isDark.value ? 'dark' : 'light'
   applyTheme(theme)
   localStorage.setItem('theme', theme)
+  logger.debug(`Theme switched to: ${theme}`)
 }
 
 function applyTheme(theme: string) {

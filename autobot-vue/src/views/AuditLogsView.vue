@@ -407,12 +407,12 @@ async function performCleanup() {
 }
 
 .btn-danger {
-  background: rgb(239, 68, 68);
+  background: var(--color-error);
   color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: rgb(220, 38, 38);
+  background: var(--color-error-dark);
 }
 
 .btn-danger:disabled {
@@ -604,7 +604,7 @@ async function performCleanup() {
 }
 
 .modal-header h3 i {
-  color: rgb(239, 68, 68);
+  color: var(--color-error);
 }
 
 .modal-body {
