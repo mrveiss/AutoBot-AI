@@ -53,64 +53,27 @@ class ReplicationService:
         if service_type != "redis":
             return False, f"Unsupported service type: {service_type}"
 
-        logger.info(
-            "Setting up replication %s: %s -> %s",
-            replication_id,
-            source_node.ip_address,
-            target_node.ip_address,
-        )
+        logger.info("Setting up replication %s: %s -> %s", replication_id, source_node.ip_address, target_node.ip_address)
 
-        # Get replication record
-        result = await db.execute(
-            select(Replication).where(Replication.replication_id == replication_id)
-        )
-        replication = result.scalar_one_or_none()
+        replication = await self._get_replication_record(db, replication_id)
         if not replication:
             return False, "Replication record not found"
 
-        # Update status to syncing
-        replication.status = ReplicationStatus.SYNCING.value
-        replication.started_at = datetime.utcnow()
-        await db.commit()
-
         try:
-            # Get Redis password from source (if configured)
             redis_password = await self._get_redis_password(
                 source_node.ip_address,
                 source_node.ssh_user or "autobot",
                 source_node.ssh_port or 22,
             )
 
-            # Run Ansible playbook to configure replica
-            success = await self._run_ansible_replication(
-                target_node.ip_address,
-                target_node.ssh_user or "autobot",
-                target_node.ssh_port or 22,
-                source_node.ip_address,
-                redis_password,
+            # Configure and verify replication
+            result = await self._configure_and_verify_replication(
+                db, replication, source_node, target_node, redis_password
             )
+            if result is not None:
+                return result
 
-            if not success:
-                replication.status = ReplicationStatus.FAILED.value
-                replication.error = "Ansible playbook failed"
-                await db.commit()
-                return False, "Failed to configure replication via Ansible"
-
-            # Wait for replication to sync
-            sync_success = await self._wait_for_sync(
-                target_node.ip_address,
-                target_node.ssh_user or "autobot",
-                target_node.ssh_port or 22,
-                redis_password,
-            )
-
-            if not sync_success:
-                replication.status = ReplicationStatus.FAILED.value
-                replication.error = "Replication sync failed or timed out"
-                await db.commit()
-                return False, "Replication sync failed"
-
-            # Get initial sync info
+            # Finalize successful replication
             sync_info = await self._get_replication_info(
                 target_node.ip_address,
                 target_node.ssh_user or "autobot",
@@ -118,23 +81,136 @@ class ReplicationService:
                 redis_password,
             )
 
-            replication.status = ReplicationStatus.ACTIVE.value
-            replication.sync_position = sync_info.get("master_repl_offset", "")
-            replication.lag_bytes = sync_info.get("lag_bytes", 0)
-            await db.commit()
+            await self._finalize_replication_success(
+                db, replication, replication_id, sync_info
+            )
 
-            # Start background monitoring
-            self._start_lag_monitor(replication_id)
-
-            logger.info("Replication %s is now active", replication_id)
             return True, "Replication established successfully"
 
         except Exception as e:
             logger.error("Replication setup failed: %s", e)
-            replication.status = ReplicationStatus.FAILED.value
-            replication.error = str(e)[:500]
-            await db.commit()
+            await self._mark_replication_failed(db, replication, str(e)[:500])
             return False, f"Replication setup error: {e}"
+
+    async def _get_replication_record(
+        self, db: AsyncSession, replication_id: str
+    ) -> Optional[Replication]:
+        """Fetch replication record and update to syncing status.
+
+        Helper for setup_replication (Issue #665).
+
+        Args:
+            db: Database session
+            replication_id: Replication ID to fetch
+
+        Returns:
+            Replication object or None if not found
+        """
+        result = await db.execute(
+            select(Replication).where(Replication.replication_id == replication_id)
+        )
+        replication = result.scalar_one_or_none()
+        if not replication:
+            return None
+
+        replication.status = ReplicationStatus.SYNCING.value
+        replication.started_at = datetime.utcnow()
+        await db.commit()
+        return replication
+
+    async def _mark_replication_failed(
+        self, db: AsyncSession, replication: Replication, error_message: str
+    ) -> None:
+        """Set replication to failed status with error message.
+
+        Helper for setup_replication (Issue #665).
+
+        Args:
+            db: Database session
+            replication: Replication object to update
+            error_message: Error message to store
+        """
+        replication.status = ReplicationStatus.FAILED.value
+        replication.error = error_message
+        await db.commit()
+
+    async def _configure_and_verify_replication(
+        self,
+        db: AsyncSession,
+        replication: Replication,
+        source_node: Node,
+        target_node: Node,
+        redis_password: str,
+    ) -> Optional[Tuple[bool, str]]:
+        """Configure Ansible replication and verify sync.
+
+        Helper for setup_replication (Issue #665).
+
+        Args:
+            db: Database session
+            replication: Replication object
+            source_node: Source node configuration
+            target_node: Target node configuration
+            redis_password: Redis password for authentication
+
+        Returns:
+            Error tuple if failed, None if successful (continue with finalization)
+        """
+        # Run Ansible playbook to configure replica
+        success = await self._run_ansible_replication(
+            target_node.ip_address,
+            target_node.ssh_user or "autobot",
+            target_node.ssh_port or 22,
+            source_node.ip_address,
+            redis_password,
+        )
+
+        if not success:
+            await self._mark_replication_failed(
+                db, replication, "Ansible playbook failed"
+            )
+            return False, "Failed to configure replication via Ansible"
+
+        # Wait for replication to sync
+        sync_success = await self._wait_for_sync(
+            target_node.ip_address,
+            target_node.ssh_user or "autobot",
+            target_node.ssh_port or 22,
+            redis_password,
+        )
+
+        if not sync_success:
+            await self._mark_replication_failed(
+                db, replication, "Replication sync failed or timed out"
+            )
+            return False, "Replication sync failed"
+
+        return None
+
+    async def _finalize_replication_success(
+        self,
+        db: AsyncSession,
+        replication: Replication,
+        replication_id: str,
+        sync_info: Dict,
+    ) -> None:
+        """Update replication to active status and start monitoring.
+
+        Helper for setup_replication (Issue #665).
+
+        Args:
+            db: Database session
+            replication: Replication object to update
+            replication_id: Replication ID for monitoring
+            sync_info: Sync info dict from Redis
+        """
+        replication.status = ReplicationStatus.ACTIVE.value
+        replication.sync_position = sync_info.get("master_repl_offset", "")
+        replication.lag_bytes = sync_info.get("lag_bytes", 0)
+        await db.commit()
+
+        self._start_lag_monitor(replication_id)
+        logger.info("Replication %s is now active", replication_id)
 
     async def verify_sync(
         self,
