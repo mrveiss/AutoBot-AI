@@ -286,15 +286,19 @@ class ReconcilerService:
 
                 await self._remediate_node(db, node)
 
-    async def _remediate_node(self, db: AsyncSession, node: Node) -> bool:
-        """Attempt to remediate a single degraded node.
+    def _check_remediation_limits(
+        self, node_id: str, now: datetime
+    ) -> tuple[bool, Optional[str], dict]:
+        """Check if remediation can proceed based on cooldown and attempt limits.
 
-        Returns True if remediation was attempted, False if skipped.
+        Helper for _remediate_node (Issue #665).
+
+        Returns:
+            (can_proceed, skip_reason, tracker) tuple where:
+            - can_proceed: True if remediation should proceed
+            - skip_reason: "cooldown" or "max_attempts" if skipped, None otherwise
+            - tracker: The remediation tracker dict for this node
         """
-        node_id = node.node_id
-        now = datetime.utcnow()
-
-        # Check remediation tracker
         tracker = self._remediation_tracker.get(
             node_id, {"count": 0, "last_attempt": None}
         )
@@ -308,7 +312,7 @@ class ReconcilerService:
                     node_id,
                     REMEDIATION_COOLDOWN - elapsed,
                 )
-                return False
+                return False, "cooldown", tracker
 
         # Check attempt limit
         if tracker["count"] >= MAX_REMEDIATION_ATTEMPTS:
@@ -317,26 +321,102 @@ class ReconcilerService:
                 node_id,
                 MAX_REMEDIATION_ATTEMPTS,
             )
-            # Create event for human attention
+            return False, "max_attempts", tracker
+
+        return True, None, tracker
+
+    async def _create_max_attempts_event(
+        self, db: AsyncSession, node: Node, tracker: dict
+    ) -> None:
+        """Create event when max remediation attempts exceeded.
+
+        Helper for _remediate_node (Issue #665).
+        """
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.REMEDIATION_COMPLETED.value,
+            severity=EventSeverity.WARNING.value,
+            message=(
+                f"Node {node.hostname} requires human intervention after "
+                f"{MAX_REMEDIATION_ATTEMPTS} failed remediation attempts"
+            ),
+            details={
+                "attempts": tracker["count"],
+                "action_required": "manual_review",
+            },
+        )
+        db.add(event)
+        await db.commit()
+
+    async def _record_remediation_result(
+        self, db: AsyncSession, node: Node, success: bool, tracker: dict
+    ) -> None:
+        """Create completion event and broadcast for remediation result.
+
+        Helper for _remediate_node (Issue #665).
+        """
+        node_id = node.node_id
+
+        if success:
+            event = NodeEvent(
+                event_id=str(uuid.uuid4())[:16],
+                node_id=node_id,
+                event_type=EventType.REMEDIATION_COMPLETED.value,
+                severity=EventSeverity.INFO.value,
+                message=f"Successfully restarted SLM agent on {node.hostname}",
+                details={"action": "restart_agent", "success": True},
+            )
+            logger.info("Remediation successful for node %s", node_id)
+            await self._broadcast_remediation_event(
+                node_id,
+                "completed",
+                success=True,
+                message=f"Successfully restarted SLM agent on {node.hostname}",
+            )
+        else:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
                 event_type=EventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.WARNING.value,
-                message=(
-                    f"Node {node.hostname} requires human intervention after "
-                    f"{MAX_REMEDIATION_ATTEMPTS} failed remediation attempts"
-                ),
+                message=f"Failed to restart SLM agent on {node.hostname}",
                 details={
-                    "attempts": tracker["count"],
-                    "action_required": "manual_review",
+                    "action": "restart_agent",
+                    "success": False,
+                    "attempts_remaining": MAX_REMEDIATION_ATTEMPTS
+                    - tracker["count"]
+                    - 1,
                 },
             )
-            db.add(event)
-            await db.commit()
+            logger.warning("Remediation failed for node %s", node_id)
+            await self._broadcast_remediation_event(
+                node_id,
+                "completed",
+                success=False,
+                message=f"Failed to restart SLM agent on {node.hostname}",
+            )
+
+        db.add(event)
+        await db.commit()
+
+    async def _remediate_node(self, db: AsyncSession, node: Node) -> bool:
+        """Attempt to remediate a single degraded node.
+
+        Returns True if remediation was attempted, False if skipped.
+        """
+        node_id = node.node_id
+        now = datetime.utcnow()
+
+        # Check remediation limits (cooldown and max attempts)
+        can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
+
+        if not can_proceed:
+            if skip_reason == "max_attempts":
+                await self._create_max_attempts_event(db, node, tracker)
             return False
 
-        # Attempt remediation - restart the SLM agent service
+        # Log remediation attempt
         logger.info(
             "Attempting remediation for node %s (attempt %d/%d)",
             node_id,
@@ -371,56 +451,14 @@ class ReconcilerService:
             "slm-agent",
         )
 
-        # Update tracker
+        # Update tracker (reset on success, increment on failure)
         self._remediation_tracker[node_id] = {
-            "count": tracker["count"] + 1 if not success else 0,  # Reset on success
+            "count": tracker["count"] + 1 if not success else 0,
             "last_attempt": now,
         }
 
-        # Create completion event
-        if success:
-            event = NodeEvent(
-                event_id=str(uuid.uuid4())[:16],
-                node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
-                severity=EventSeverity.INFO.value,
-                message=f"Successfully restarted SLM agent on {node.hostname}",
-                details={"action": "restart_agent", "success": True},
-            )
-            logger.info("Remediation successful for node %s", node_id)
-            # Broadcast success via WebSocket
-            await self._broadcast_remediation_event(
-                node_id,
-                "completed",
-                success=True,
-                message=f"Successfully restarted SLM agent on {node.hostname}",
-            )
-        else:
-            event = NodeEvent(
-                event_id=str(uuid.uuid4())[:16],
-                node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
-                severity=EventSeverity.WARNING.value,
-                message=f"Failed to restart SLM agent on {node.hostname}",
-                details={
-                    "action": "restart_agent",
-                    "success": False,
-                    "attempts_remaining": MAX_REMEDIATION_ATTEMPTS
-                    - tracker["count"]
-                    - 1,
-                },
-            )
-            logger.warning("Remediation failed for node %s", node_id)
-            # Broadcast failure via WebSocket
-            await self._broadcast_remediation_event(
-                node_id,
-                "completed",
-                success=False,
-                message=f"Failed to restart SLM agent on {node.hostname}",
-            )
-
-        db.add(event)
-        await db.commit()
+        # Record result and broadcast
+        await self._record_remediation_result(db, node, success, tracker)
         return True
 
     async def _restart_service_via_ssh(
