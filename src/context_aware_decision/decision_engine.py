@@ -632,23 +632,16 @@ class DecisionEngine:
         scored_optimizations: List[tuple],
         optimization_count: int,
     ) -> Decision:
-        """Issue #665: Extracted from _decide_workflow_optimization to reduce function length.
-
-        Builds the Decision object for workflow optimization.
-        """
+        """Build Decision object for workflow optimization. Issue #620."""
         confidence = best_score
         confidence_level = self._determine_confidence_level(confidence)
 
         return Decision(
             decision_id=context.decision_id,
             decision_type=context.decision_type,
-            chosen_action={
-                "action_type": "optimization",
-                "action": "apply_workflow_optimization",
-                "optimization": best_optimization,
-                "optimization_score": best_score,
-                "confidence": confidence,
-            },
+            chosen_action=self._build_optimization_chosen_action(
+                best_optimization, best_score, confidence
+            ),
             alternative_actions=[opt for _, opt in scored_optimizations[1:3]],
             confidence=confidence,
             confidence_level=confidence_level,
@@ -663,22 +656,42 @@ class DecisionEngine:
                 "risk_level": best_optimization.get("risk_level", "low"),
                 "factors": [],
             },
-            expected_outcomes=[
-                {"outcome": "workflow_optimized", "probability": confidence},
-                {"outcome": "efficiency_improved", "probability": confidence * 0.8},
-            ],
+            expected_outcomes=self._build_optimization_expected_outcomes(confidence),
             monitoring_criteria=["workflow_performance", "efficiency_metrics"],
             fallback_plan={"action": "revert_optimization"}
             if best_score < 0.6
             else None,
-            requires_approval=best_score
-            < 0.7,  # Low confidence optimizations need approval
+            requires_approval=best_score < 0.7,
             timestamp=self.time_provider.current_timestamp(),
             metadata={
                 "algorithm": "workflow_optimization",
                 "optimizations_considered": optimization_count,
             },
         )
+
+    def _build_optimization_chosen_action(
+        self,
+        best_optimization: Dict[str, Any],
+        best_score: float,
+        confidence: float,
+    ) -> Dict[str, Any]:
+        """Build the chosen_action dictionary for optimization decisions. Issue #620."""
+        return {
+            "action_type": "optimization",
+            "action": "apply_workflow_optimization",
+            "optimization": best_optimization,
+            "optimization_score": best_score,
+            "confidence": confidence,
+        }
+
+    def _build_optimization_expected_outcomes(
+        self, confidence: float
+    ) -> List[Dict[str, Any]]:
+        """Build expected outcomes list for optimization decisions. Issue #620."""
+        return [
+            {"outcome": "workflow_optimized", "probability": confidence},
+            {"outcome": "efficiency_improved", "probability": confidence * 0.8},
+        ]
 
     async def _decide_workflow_optimization(self, context: DecisionContext) -> Decision:
         """Decide on workflow optimization actions based on context analysis."""

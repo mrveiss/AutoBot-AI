@@ -36,6 +36,37 @@ class ComputerVisionSystem:
 
         logger.info("Computer Vision System initialized")
 
+    def _prepare_analysis_results(
+        self, screen_state: ScreenState, changes: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Prepare comprehensive analysis results from screen state. Issue #620.
+
+        Args:
+            screen_state: The analyzed screen state
+            changes: Detected changes from previous analysis
+
+        Returns:
+            Dictionary containing formatted analysis results
+        """
+        return {
+            "screen_analysis": screen_state.get_analysis_summary(),
+            "ui_elements": screen_state.get_element_collection().to_dict_list(),
+            "context_analysis": screen_state.context_analysis,
+            "automation_opportunities": screen_state.automation_opportunities,
+            "change_detection": changes,
+            "recommendations": screen_state.generate_recommendations(),
+        }
+
+    def _update_analysis_history(self, screen_state: ScreenState) -> None:
+        """Store screen state in history with size limit. Issue #620.
+
+        Args:
+            screen_state: The screen state to add to history
+        """
+        self.analysis_history.append(screen_state)
+        if len(self.analysis_history) > self.max_history:
+            self.analysis_history = self.analysis_history[-self.max_history :]
+
     async def analyze_and_understand_screen(
         self, session_id: Optional[str] = None, context_audio: Optional[bytes] = None
     ) -> Dict[str, Any]:
@@ -58,19 +89,10 @@ class ComputerVisionSystem:
                 changes = await self.screen_analyzer.detect_screen_changes()
 
                 # Store in history
-                self.analysis_history.append(screen_state)
-                if len(self.analysis_history) > self.max_history:
-                    self.analysis_history = self.analysis_history[-self.max_history :]
+                self._update_analysis_history(screen_state)
 
                 # Prepare comprehensive results (Tell, Don't Ask)
-                results = {
-                    "screen_analysis": screen_state.get_analysis_summary(),
-                    "ui_elements": screen_state.get_element_collection().to_dict_list(),
-                    "context_analysis": screen_state.context_analysis,
-                    "automation_opportunities": screen_state.automation_opportunities,
-                    "change_detection": changes,
-                    "recommendations": screen_state.generate_recommendations(),
-                }
+                results = self._prepare_analysis_results(screen_state, changes)
 
                 task_context.set_outputs(
                     {

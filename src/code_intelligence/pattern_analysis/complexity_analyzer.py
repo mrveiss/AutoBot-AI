@@ -325,6 +325,34 @@ class ComplexityAnalyzer:
 
         return module
 
+    def _build_function_complexity_from_cc_result(
+        self, result: Any, file_path: str, tree: ast.AST
+    ) -> FunctionComplexity:
+        """Build FunctionComplexity from a radon cc_visit result. Issue #620.
+
+        Args:
+            result: A radon complexity result object
+            file_path: Path to the analyzed file
+            tree: Parsed AST for additional metrics
+
+        Returns:
+            FunctionComplexity with all calculated metrics
+        """
+        nesting = self._calculate_nesting(tree, result.name)
+        cognitive = self._calculate_cognitive_complexity(tree, result.name)
+
+        return FunctionComplexity(
+            name=result.name,
+            file_path=file_path,
+            start_line=result.lineno,
+            end_line=result.endline,
+            cyclomatic_complexity=result.complexity,
+            cognitive_complexity=cognitive,
+            nesting_depth=nesting,
+            line_count=result.endline - result.lineno + 1,
+            class_name=result.classname if hasattr(result, "classname") else None,
+        )
+
     def _analyze_with_radon(
         self, source: str, file_path: str, tree: ast.AST
     ) -> ModuleComplexity:
@@ -355,22 +383,9 @@ class ComplexityAnalyzer:
         cc_results = cc_visit(source)
 
         for result in cc_results:
-            # Calculate additional metrics
-            nesting = self._calculate_nesting(tree, result.name)
-            cognitive = self._calculate_cognitive_complexity(tree, result.name)
-
-            func_complexity = FunctionComplexity(
-                name=result.name,
-                file_path=file_path,
-                start_line=result.lineno,
-                end_line=result.endline,
-                cyclomatic_complexity=result.complexity,
-                cognitive_complexity=cognitive,
-                nesting_depth=nesting,
-                line_count=result.endline - result.lineno + 1,
-                class_name=result.classname if hasattr(result, "classname") else None,
+            func_complexity = self._build_function_complexity_from_cc_result(
+                result, file_path, tree
             )
-
             module.functions.append(func_complexity)
 
         # Calculate average complexity
@@ -430,6 +445,47 @@ class ComplexityAnalyzer:
 
         return module
 
+    def _calculate_cyclomatic_complexity_fallback(self, node: ast.AST) -> int:
+        """Calculate cyclomatic complexity by counting decision points. Issue #620.
+
+        Args:
+            node: Function AST node to analyze
+
+        Returns:
+            Cyclomatic complexity score (decision points + 1)
+        """
+        cc = 1  # Base complexity
+        for child in ast.walk(node):
+            if isinstance(child, (ast.If, ast.While, ast.For)):
+                cc += 1
+            elif isinstance(child, ast.ExceptHandler):
+                cc += 1
+            elif isinstance(child, ast.BoolOp):
+                cc += len(child.values) - 1
+            elif isinstance(child, ast.comprehension):
+                cc += 1 + len(child.ifs)
+        return cc
+
+    def _count_function_parameters(self, node: ast.AST) -> int:
+        """Count total parameters for a function node. Issue #620.
+
+        Args:
+            node: Function AST node
+
+        Returns:
+            Total number of parameters including args, kwargs, etc.
+        """
+        if not hasattr(node, "args"):
+            return 0
+        args = node.args
+        return (
+            len(args.args)
+            + len(args.posonlyargs)
+            + len(args.kwonlyargs)
+            + (1 if args.vararg else 0)
+            + (1 if args.kwarg else 0)
+        )
+
     def _analyze_function_fallback(
         self, node: ast.AST, file_path: str
     ) -> FunctionComplexity:
@@ -442,48 +498,28 @@ class ComplexityAnalyzer:
         Returns:
             FunctionComplexity with basic metrics
         """
-        # Calculate cyclomatic complexity (decision points + 1)
-        cc = 1  # Base complexity
-        for child in ast.walk(node):
-            if isinstance(child, (ast.If, ast.While, ast.For)):
-                cc += 1
-            elif isinstance(child, ast.ExceptHandler):
-                cc += 1
-            elif isinstance(child, ast.BoolOp):
-                cc += len(child.values) - 1
-            elif isinstance(child, ast.comprehension):
-                cc += 1 + len(child.ifs)
+        # Calculate complexity metrics using helper methods
+        cc = self._calculate_cyclomatic_complexity_fallback(node)
 
-        # Calculate nesting depth
         nesting_visitor = NestingDepthVisitor()
         nesting_visitor.visit(node)
 
-        # Calculate cognitive complexity
         cognitive_visitor = CognitiveComplexityVisitor()
         cognitive_visitor.visit(node)
 
-        # Count parameters
-        param_count = 0
-        if hasattr(node, "args"):
-            args = node.args
-            param_count = (
-                len(args.args)
-                + len(args.posonlyargs)
-                + len(args.kwonlyargs)
-                + (1 if args.vararg else 0)
-                + (1 if args.kwarg else 0)
-            )
+        param_count = self._count_function_parameters(node)
+        end_line = getattr(node, "end_lineno", node.lineno)
 
         return FunctionComplexity(
             name=node.name,
             file_path=file_path,
             start_line=node.lineno,
-            end_line=getattr(node, "end_lineno", node.lineno),
+            end_line=end_line,
             cyclomatic_complexity=cc,
             cognitive_complexity=cognitive_visitor.complexity,
             nesting_depth=nesting_visitor.max_depth,
             parameter_count=param_count,
-            line_count=getattr(node, "end_lineno", node.lineno) - node.lineno + 1,
+            line_count=end_line - node.lineno + 1,
         )
 
     def _calculate_nesting(self, tree: ast.AST, function_name: str) -> int:

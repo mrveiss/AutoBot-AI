@@ -103,8 +103,7 @@ class BaseLLMJudge:
         alternatives: Optional[List[Any]] = None,
         **kwargs,
     ) -> JudgmentResult:
-        """
-        Make a structured judgment with multi-criteria evaluation
+        """Make a structured judgment with multi-criteria evaluation. Issue #620.
 
         Args:
             subject: The item being judged
@@ -119,37 +118,33 @@ class BaseLLMJudge:
         start_time = datetime.now()
 
         try:
-            # Prepare judgment prompt
             judgment_prompt = await self._prepare_judgment_prompt(
                 subject, criteria, context, alternatives, **kwargs
             )
-
-            # Get LLM evaluation
             llm_response = await self._get_llm_evaluation(judgment_prompt)
-
-            # Parse and structure the response
             judgment_result = await self._parse_llm_response(
                 llm_response, subject, criteria, context, alternatives
             )
-
-            # Add metadata
-            judgment_result.judge_type = self.judge_type
-            judgment_result.timestamp = start_time
-            judgment_result.processing_time_ms = (
-                datetime.now() - start_time
-            ).total_seconds() * 1000
-
-            # Store in history
-            self.judgment_history.append(judgment_result)
-
-            # Log judgment for transparency
-            await self._log_judgment(judgment_result)
-
-            return judgment_result
+            return await self._finalize_judgment_result(judgment_result, start_time)
 
         except Exception as e:
             logger.error("Error in %s judgment: %s", self.judge_type, e)
             return await self._create_error_judgment(subject, str(e))
+
+    async def _finalize_judgment_result(
+        self, judgment_result: JudgmentResult, start_time: datetime
+    ) -> JudgmentResult:
+        """Add metadata, store in history, and log the judgment result. Issue #620."""
+        judgment_result.judge_type = self.judge_type
+        judgment_result.timestamp = start_time
+        judgment_result.processing_time_ms = (
+            datetime.now() - start_time
+        ).total_seconds() * 1000
+
+        self.judgment_history.append(judgment_result)
+        await self._log_judgment(judgment_result)
+
+        return judgment_result
 
     async def _prepare_judgment_prompt(
         self,

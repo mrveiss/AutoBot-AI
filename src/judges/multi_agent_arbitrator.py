@@ -63,6 +63,40 @@ ARBITRATION GOALS:
 - Suggest improvements for future multi-agent coordination
 """
 
+# Issue #620: Module-level constant for conflict analysis template
+_CONFLICT_ANALYSIS_TEMPLATE = """
+CONFLICT ANALYSIS REQUIREMENTS:
+
+1. CONSISTENCY CHECK: Identify contradictions between responses
+   - Do agents provide conflicting information?
+   - Are there incompatible recommendations?
+   - Do responses contradict each other's assumptions?
+
+2. ACCURACY VERIFICATION: Check for factual disagreements
+   - Which agents provide more accurate information?
+   - Are there verifiable factual conflicts?
+   - Which claims are better supported?
+
+3. COMPLETENESS COMPARISON: Assess coverage differences
+   - Do some agents miss important aspects others cover?
+   - Are there significant gaps in some responses?
+   - Which response is most comprehensive?
+
+CONFLICT SEVERITY LEVELS:
+- HIGH: Direct contradictions, incompatible actions, factual conflicts
+- MEDIUM: Different approaches, varying priorities, partial disagreements
+- LOW: Minor differences in emphasis, style, or detail level
+
+Please provide detailed conflict analysis in the required JSON format with:
+- Overall consistency score (0.0 to 1.0)
+- Specific conflicts identified with evidence
+- Severity assessment for each conflict
+- Recommendations for conflict resolution
+- Suggested improvements for agent coordination
+
+Focus on identifying real conflicts that would confuse or mislead users, not minor stylistic differences.
+"""
+
 
 class MultiAgentArbitrator(BaseLLMJudge):
     """Judge for arbitrating between multiple agent responses and coordinating agent interactions"""
@@ -394,55 +428,32 @@ ARBITRATION CONTEXT:
         agent_types: List[str],
         context: Dict[str, Any],
     ) -> str:
-        """Prepare prompt specifically for conflict detection"""
+        """Prepare prompt specifically for conflict detection. Issue #620."""
+        prompt = self._build_conflict_detection_header()
+        prompt += self._build_conflict_response_sections(responses, agent_types)
+        prompt += _CONFLICT_ANALYSIS_TEMPLATE
+        return prompt.strip()
 
-        prompt = """
+    def _build_conflict_detection_header(self) -> str:
+        """Build the header section for conflict detection prompt. Issue #620."""
+        return """
 Please analyze the following agent responses for conflicts, contradictions, and inconsistencies:
 
 AGENT RESPONSES:
 """
 
-        # Build response sections using list + join (O(n)) instead of += (O(n²))
+    def _build_conflict_response_sections(
+        self,
+        responses: List[Dict[str, Any]],
+        agent_types: List[str],
+    ) -> str:
+        """Build formatted response sections for conflict detection. Issue #620."""
+        # Build response sections using list + join (O(n)) instead of += (O(n^2))
         response_sections = [
             f"RESPONSE {i+1} - {agent_type.upper()} AGENT:\n{json.dumps(response, indent=2)}"
             for i, (response, agent_type) in enumerate(zip(responses, agent_types), 1)
         ]
-        prompt += "\n" + "\n\n".join(response_sections) + "\n\n"
-
-        prompt += """
-CONFLICT ANALYSIS REQUIREMENTS:
-
-1. CONSISTENCY CHECK: Identify contradictions between responses
-   - Do agents provide conflicting information?
-   - Are there incompatible recommendations?
-   - Do responses contradict each other's assumptions?
-
-2. ACCURACY VERIFICATION: Check for factual disagreements
-   - Which agents provide more accurate information?
-   - Are there verifiable factual conflicts?
-   - Which claims are better supported?
-
-3. COMPLETENESS COMPARISON: Assess coverage differences
-   - Do some agents miss important aspects others cover?
-   - Are there significant gaps in some responses?
-   - Which response is most comprehensive?
-
-CONFLICT SEVERITY LEVELS:
-- HIGH: Direct contradictions, incompatible actions, factual conflicts
-- MEDIUM: Different approaches, varying priorities, partial disagreements
-- LOW: Minor differences in emphasis, style, or detail level
-
-Please provide detailed conflict analysis in the required JSON format with:
-- Overall consistency score (0.0 to 1.0)
-- Specific conflicts identified with evidence
-- Severity assessment for each conflict
-- Recommendations for conflict resolution
-- Suggested improvements for agent coordination
-
-Focus on identifying real conflicts that would confuse or mislead users, not minor stylistic differences.
-"""
-
-        return prompt.strip()
+        return "\n" + "\n\n".join(response_sections) + "\n\n"
 
     def _identify_conflicting_areas(self, judgment: JudgmentResult) -> List[str]:
         """Extract conflicting areas from judgment reasoning"""
