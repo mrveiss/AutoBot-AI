@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 if TYPE_CHECKING:
@@ -29,6 +30,34 @@ logger = logging.getLogger(__name__)
 # Issue #255: Enable authenticated client for service-to-service communication
 # Set to False to fall back to unauthenticated mode (for development/testing)
 USE_AUTHENTICATED_CLIENT = True
+
+
+class CircuitState(Enum):
+    """Circuit breaker states for worker health management"""
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Worker failed, blocking requests
+    HALF_OPEN = "half_open"  # Testing recovery
+
+
+@dataclass
+class WorkerState:
+    """
+    Track per-worker metrics and health status (Issue #168).
+
+    Manages active task count, failure tracking, and circuit breaker state
+    for load balancing and failover.
+    """
+
+    worker_id: str
+    client: "NPUWorkerClient"
+    active_tasks: int = 0
+    total_requests: int = 0
+    failures: int = 0
+    last_health_check: float = 0
+    healthy: bool = True
+    circuit_state: CircuitState = CircuitState.CLOSED
+    circuit_open_until: float = 0
 
 
 @dataclass
