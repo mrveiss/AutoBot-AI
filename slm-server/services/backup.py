@@ -61,47 +61,12 @@ class BackupService:
         await db.commit()
 
         try:
-            # Step 0: Discover Redis configuration (data dir, auth)
-            # Use REDISCLI_AUTH env var to avoid shell escaping issues with special chars
-            redis_auth_prefix = ""
-            auth_cmd = self._build_ssh_command(
-                host,
-                ssh_user,
-                ssh_port,
-                "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'",
+            # Step 1: Discover Redis configuration (data dir, auth)
+            redis_auth_prefix, rdb_path = await self._discover_redis_config(
+                host, ssh_user, ssh_port
             )
-            success, auth_output = await self._run_command(auth_cmd, timeout=10)
-            redis_password = auth_output.strip() if success else ""
-            if redis_password:
-                # Use env var to pass password safely (avoids shell escaping issues)
-                redis_auth_prefix = f"REDISCLI_AUTH=$(grep -E '^requirepass' /etc/redis/redis.conf | awk '{{print $2}}')"
 
-            # Get Redis data directory and filename using env var for auth
-            config_cmd = self._build_ssh_command(
-                host,
-                ssh_user,
-                ssh_port,
-                f"{redis_auth_prefix} redis-cli CONFIG GET dir && {redis_auth_prefix} redis-cli CONFIG GET dbfilename",
-            )
-            success, config_output = await self._run_command(config_cmd, timeout=15)
-
-            # Parse Redis config output (format: "dir\n/path\ndbfilename\nfilename")
-            redis_dir = "/var/lib/redis"  # default fallback
-            redis_dbfilename = "dump.rdb"  # default fallback
-            if success:
-                lines = [
-                    l.strip() for l in config_output.strip().split("\n") if l.strip()
-                ]
-                for i, line in enumerate(lines):
-                    if line == "dir" and i + 1 < len(lines):
-                        redis_dir = lines[i + 1]
-                    elif line == "dbfilename" and i + 1 < len(lines):
-                        redis_dbfilename = lines[i + 1]
-
-            rdb_path = f"{redis_dir}/{redis_dbfilename}"
-            logger.info("Redis RDB path discovered: %s", rdb_path)
-
-            # Step 1: Trigger BGSAVE
+            # Step 2: Trigger BGSAVE
             logger.info("Starting Redis BGSAVE on %s", host)
             bgsave_cmd = self._build_ssh_command(
                 host, ssh_user, ssh_port, f"{redis_auth_prefix} redis-cli BGSAVE"
@@ -110,96 +75,31 @@ class BackupService:
             if not success:
                 return await self._fail_backup(db, backup, f"BGSAVE failed: {output}")
 
-            # Step 2: Wait for BGSAVE to complete
+            # Step 3: Wait for BGSAVE to complete
             logger.info("Waiting for BGSAVE to complete...")
             await self._wait_for_bgsave(host, ssh_user, ssh_port, redis_auth_prefix)
 
-            # Step 3: Get RDB file size
-            size_cmd = self._build_ssh_command(
-                host,
-                ssh_user,
-                ssh_port,
-                f"stat -c '%s' {rdb_path} 2>/dev/null || echo '0'",
+            # Step 4: Get RDB file size and checksum
+            size_bytes, checksum = await self._get_rdb_file_info(
+                host, ssh_user, ssh_port, rdb_path
             )
-            success, size_output = await self._run_command(size_cmd, timeout=15)
-            size_bytes = 0
-            if success:
-                size_str = size_output.strip().split("\n")[-1]
-                if size_str.isdigit():
-                    size_bytes = int(size_str)
-
-            # Step 4: Calculate checksum
-            checksum_cmd = self._build_ssh_command(
-                host,
-                ssh_user,
-                ssh_port,
-                f"sha256sum {rdb_path} 2>/dev/null | cut -d' ' -f1",
-            )
-            success, checksum = await self._run_command(checksum_cmd, timeout=60)
-            checksum = checksum.strip() if success else None
 
             # Step 5: Copy backup to SLM storage
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            backup_filename = f"{backup_id}_{timestamp}.rdb"
-            backup_path = BACKUP_STORAGE_DIR / backup_filename
-
-            scp_cmd = [
-                "/usr/bin/scp",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "ConnectTimeout=30",
-                "-P",
-                str(ssh_port),
-                f"{ssh_user}@{host}:{rdb_path}",
-                str(backup_path),
-            ]
-            success, scp_output = await self._run_command(scp_cmd, timeout=300)
-
-            if not success:
-                # Backup exists on remote but copy failed - still record it
-                backup.status = BackupStatus.COMPLETED.value
-                backup.backup_path = "/var/lib/redis/dump.rdb"
-                backup.size_bytes = size_bytes
-                backup.checksum = checksum
-                backup.extra_data = {
-                    "location": "remote",
-                    "host": host,
-                    "copy_error": scp_output,
-                }
-            else:
-                # Verify local checksum matches
-                local_checksum = await self._calculate_checksum(backup_path)
-                if checksum and local_checksum != checksum:
-                    logger.warning(
-                        "Checksum mismatch: remote=%s, local=%s",
-                        checksum,
-                        local_checksum,
-                    )
-                    backup.extra_data = {"checksum_warning": "mismatch detected"}
-
-                backup.status = BackupStatus.COMPLETED.value
-                backup.backup_path = str(backup_path)
-                backup.size_bytes = (
-                    backup_path.stat().st_size if backup_path.exists() else size_bytes
-                )
-                backup.checksum = local_checksum or checksum
-                backup.extra_data = {
-                    "location": "local",
-                    "remote_checksum": checksum,
-                    "local_checksum": local_checksum,
-                }
-
-            backup.completed_at = datetime.utcnow()
-            await db.commit()
-
-            logger.info(
-                "Backup %s completed: %s bytes, checksum=%s",
-                backup_id,
-                backup.size_bytes,
-                backup.checksum,
+            copy_success, backup_path, copy_error = await self._copy_backup_to_storage(
+                host, ssh_user, ssh_port, rdb_path, backup_id
             )
-            return True, "Backup completed successfully"
+
+            # Step 6: Complete backup and update record
+            return await self._complete_backup(
+                db,
+                backup,
+                copy_success,
+                backup_path,
+                size_bytes,
+                checksum,
+                host,
+                copy_error,
+            )
 
         except asyncio.TimeoutError:
             return await self._fail_backup(db, backup, "Backup timed out")
@@ -441,6 +341,186 @@ class BackupService:
         except Exception as e:
             logger.warning("Checksum calculation failed: %s", e)
             return None
+
+    async def _discover_redis_config(
+        self, host: str, ssh_user: str, ssh_port: int
+    ) -> Tuple[str, str]:
+        """Discover Redis authentication prefix and RDB file path.
+
+        Helper for execute_redis_backup (Issue #665).
+
+        Returns (redis_auth_prefix, rdb_path).
+        """
+        # Check for Redis authentication
+        redis_auth_prefix = ""
+        auth_cmd = self._build_ssh_command(
+            host,
+            ssh_user,
+            ssh_port,
+            "grep -E '^requirepass' /etc/redis/redis.conf 2>/dev/null | awk '{print $2}'",
+        )
+        success, auth_output = await self._run_command(auth_cmd, timeout=10)
+        redis_password = auth_output.strip() if success else ""
+        if redis_password:
+            redis_auth_prefix = (
+                "REDISCLI_AUTH=$(grep -E '^requirepass' /etc/redis/redis.conf "
+                "| awk '{print $2}')"
+            )
+
+        # Get Redis data directory and filename
+        config_cmd = self._build_ssh_command(
+            host,
+            ssh_user,
+            ssh_port,
+            f"{redis_auth_prefix} redis-cli CONFIG GET dir && "
+            f"{redis_auth_prefix} redis-cli CONFIG GET dbfilename",
+        )
+        success, config_output = await self._run_command(config_cmd, timeout=15)
+
+        redis_dir = "/var/lib/redis"
+        redis_dbfilename = "dump.rdb"
+        if success:
+            lines = [
+                ln.strip() for ln in config_output.strip().split("\n") if ln.strip()
+            ]
+            for i, line in enumerate(lines):
+                if line == "dir" and i + 1 < len(lines):
+                    redis_dir = lines[i + 1]
+                elif line == "dbfilename" and i + 1 < len(lines):
+                    redis_dbfilename = lines[i + 1]
+
+        rdb_path = f"{redis_dir}/{redis_dbfilename}"
+        logger.info("Redis RDB path discovered: %s", rdb_path)
+        return redis_auth_prefix, rdb_path
+
+    async def _get_rdb_file_info(
+        self, host: str, ssh_user: str, ssh_port: int, rdb_path: str
+    ) -> Tuple[int, Optional[str]]:
+        """Get RDB file size and checksum from remote host.
+
+        Helper for execute_redis_backup (Issue #665).
+
+        Returns (size_bytes, checksum).
+        """
+        # Get file size
+        size_cmd = self._build_ssh_command(
+            host,
+            ssh_user,
+            ssh_port,
+            f"stat -c '%s' {rdb_path} 2>/dev/null || echo '0'",
+        )
+        success, size_output = await self._run_command(size_cmd, timeout=15)
+        size_bytes = 0
+        if success:
+            size_str = size_output.strip().split("\n")[-1]
+            if size_str.isdigit():
+                size_bytes = int(size_str)
+
+        # Calculate remote checksum
+        checksum_cmd = self._build_ssh_command(
+            host,
+            ssh_user,
+            ssh_port,
+            f"sha256sum {rdb_path} 2>/dev/null | cut -d' ' -f1",
+        )
+        success, checksum = await self._run_command(checksum_cmd, timeout=60)
+        checksum = checksum.strip() if success else None
+
+        return size_bytes, checksum
+
+    async def _copy_backup_to_storage(
+        self,
+        host: str,
+        ssh_user: str,
+        ssh_port: int,
+        rdb_path: str,
+        backup_id: str,
+    ) -> Tuple[bool, Path, str]:
+        """Copy RDB backup file from remote host to local storage via SCP.
+
+        Helper for execute_redis_backup (Issue #665).
+
+        Returns (success, backup_path, error_output).
+        """
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"{backup_id}_{timestamp}.rdb"
+        backup_path = BACKUP_STORAGE_DIR / backup_filename
+
+        scp_cmd = [
+            "/usr/bin/scp",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "ConnectTimeout=30",
+            "-P",
+            str(ssh_port),
+            f"{ssh_user}@{host}:{rdb_path}",
+            str(backup_path),
+        ]
+        success, scp_output = await self._run_command(scp_cmd, timeout=300)
+        return success, backup_path, scp_output
+
+    async def _complete_backup(
+        self,
+        db: AsyncSession,
+        backup: Backup,
+        copy_success: bool,
+        backup_path: Path,
+        size_bytes: int,
+        remote_checksum: Optional[str],
+        host: str,
+        copy_error: str = "",
+    ) -> Tuple[bool, str]:
+        """Update backup record with results and complete the backup.
+
+        Helper for execute_redis_backup (Issue #665).
+
+        Returns (success, message).
+        """
+        if not copy_success:
+            # Backup exists on remote but copy failed - still record it
+            backup.status = BackupStatus.COMPLETED.value
+            backup.backup_path = "/var/lib/redis/dump.rdb"
+            backup.size_bytes = size_bytes
+            backup.checksum = remote_checksum
+            backup.extra_data = {
+                "location": "remote",
+                "host": host,
+                "copy_error": copy_error,
+            }
+        else:
+            # Verify local checksum matches
+            local_checksum = await self._calculate_checksum(backup_path)
+            if remote_checksum and local_checksum != remote_checksum:
+                logger.warning(
+                    "Checksum mismatch: remote=%s, local=%s",
+                    remote_checksum,
+                    local_checksum,
+                )
+                backup.extra_data = {"checksum_warning": "mismatch detected"}
+
+            backup.status = BackupStatus.COMPLETED.value
+            backup.backup_path = str(backup_path)
+            backup.size_bytes = (
+                backup_path.stat().st_size if backup_path.exists() else size_bytes
+            )
+            backup.checksum = local_checksum or remote_checksum
+            backup.extra_data = {
+                "location": "local",
+                "remote_checksum": remote_checksum,
+                "local_checksum": local_checksum,
+            }
+
+        backup.completed_at = datetime.utcnow()
+        await db.commit()
+
+        logger.info(
+            "Backup %s completed: %s bytes, checksum=%s",
+            backup.backup_id,
+            backup.size_bytes,
+            backup.checksum,
+        )
+        return True, "Backup completed successfully"
 
 
 # Global service instance
