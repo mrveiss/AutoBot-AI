@@ -1022,6 +1022,47 @@ class ChatWorkflowManager(
             tool_call_completed,
         )
 
+    def _check_chunk_exit_condition(
+        self,
+        chunk_text: str,
+        should_break: bool,
+        tool_call_completed: bool,
+        done_result,
+        llm_response: str,
+        streaming_msg,
+        current_segment: str,
+        current_message_type: str,
+    ):
+        """Check if chunk processing should exit early. Issue #620.
+
+        Returns:
+            Tuple of (should_exit, exit_result) where exit_result is the
+            value to yield if should_exit is True.
+        """
+        early_exit = self._handle_early_exit_conditions(
+            should_break,
+            tool_call_completed,
+            done_result,
+            llm_response,
+            streaming_msg,
+            current_segment,
+            current_message_type,
+        )
+        if early_exit:
+            return (True, early_exit)
+        if not chunk_text:
+            return (
+                True,
+                self._handle_empty_chunk(
+                    llm_response,
+                    tool_call_completed,
+                    streaming_msg,
+                    current_segment,
+                    current_message_type,
+                ),
+            )
+        return (False, None)
+
     async def _process_stream_chunk_iteration(
         self,
         chunk_data: Dict[str, Any],
@@ -1046,7 +1087,8 @@ class ChatWorkflowManager(
         chunk_text, llm_response, current_segment, new_type = state[:4]
         done_result, should_break, tool_call_completed = state[4:]
 
-        early_exit = self._handle_early_exit_conditions(
+        should_exit, exit_result = self._check_chunk_exit_condition(
+            chunk_text,
             should_break,
             tool_call_completed,
             done_result,
@@ -1055,18 +1097,10 @@ class ChatWorkflowManager(
             current_segment,
             current_message_type,
         )
-        if early_exit:
-            yield early_exit
+        if should_exit:
+            yield exit_result
             return
-        if not chunk_text:
-            yield self._handle_empty_chunk(
-                llm_response,
-                tool_call_completed,
-                streaming_msg,
-                current_segment,
-                current_message_type,
-            )
-            return
+
         ctx = self._build_chunk_iteration_context(
             streaming_msg,
             selected_model,
@@ -1343,6 +1377,33 @@ class ChatWorkflowManager(
         )
         return should_return, should_break, yields, new_state
 
+    def _build_chunk_iteration_params(
+        self,
+        chunk_data: Dict[str, Any],
+        llm_response: str,
+        current_segment: str,
+        current_message_type: str,
+        tool_call_completed: bool,
+        streaming_msg,
+        selected_model: str,
+        terminal_session_id: str,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+    ) -> tuple:
+        """Build parameters tuple for chunk iteration processing. Issue #620."""
+        return (
+            chunk_data,
+            llm_response,
+            current_segment,
+            current_message_type,
+            tool_call_completed,
+            streaming_msg,
+            selected_model,
+            terminal_session_id,
+            used_knowledge,
+            rag_citations,
+        )
+
     async def _stream_llm_response(
         self,
         response,
@@ -1363,7 +1424,7 @@ class ChatWorkflowManager(
             if not chunk_data:
                 continue
 
-            async for result in self._process_stream_chunk_iteration(
+            params = self._build_chunk_iteration_params(
                 chunk_data,
                 llm_response,
                 current_segment,
@@ -1374,7 +1435,8 @@ class ChatWorkflowManager(
                 terminal_session_id,
                 used_knowledge,
                 rag_citations,
-            ):
+            )
+            async for result in self._process_stream_chunk_iteration(*params):
                 current_state = (
                     llm_response,
                     tool_call_completed,
