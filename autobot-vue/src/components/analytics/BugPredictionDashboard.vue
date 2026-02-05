@@ -430,6 +430,9 @@ const selectedPeriod = ref('30d');
 const heatmapGrouping = ref<'directory' | 'flat'>('directory');
 const selectedFile = ref<RiskFile | null>(null);
 const hoveredPoint = ref<TrendPoint | null>(null);
+const isPolling = ref(true);
+const lastUpdateTime = ref<Date | null>(null);
+const pollingInterval = ref<number | null>(null);
 
 const summary = ref<Summary>({
   total_files_analyzed: 0,
