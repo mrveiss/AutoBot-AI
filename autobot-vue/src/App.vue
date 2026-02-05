@@ -119,6 +119,23 @@
                   </div>
                 </router-link>
 
+                <!-- Issue #753: User Preferences -->
+                <router-link
+                  to="/preferences"
+                  :class="{
+                    'bg-white text-indigo-700': $route.path.startsWith('/preferences'),
+                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/preferences')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"></path>
+                    </svg>
+                    <span>Preferences</span>
+                  </div>
+                </router-link>
+
                 <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
                 <a
                   :href="slmAdminUrl"
@@ -260,6 +277,24 @@
                   <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
                 </svg>
                 <span>Secrets</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #753: User Preferences -->
+            <router-link
+              to="/preferences"
+              @click="closeMobileNav"
+              :class="{
+                'bg-white text-indigo-700': $route.path.startsWith('/preferences'),
+                'text-white hover:bg-indigo-600': !$route.path.startsWith('/preferences')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"></path>
+                </svg>
+                <span>Preferences</span>
               </div>
             </router-link>
 

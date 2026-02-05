@@ -274,6 +274,18 @@ const routes: RouteRecordRaw[] = [
       },
     ]
   },
+  // Issue #753: User preferences (appearance, font size, colors, etc.)
+  {
+    path: '/preferences',
+    name: 'preferences',
+    component: () => import('@/views/SettingsView.vue'),
+    meta: {
+      title: 'Preferences',
+      icon: 'fas fa-sliders-h',
+      description: 'Customize your AutoBot experience',
+      requiresAuth: false
+    }
+  },
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
   {
