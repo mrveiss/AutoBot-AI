@@ -107,6 +107,106 @@ class BackupService:
             logger.exception("Backup error: %s", e)
             return await self._fail_backup(db, backup, str(e))
 
+    async def _stop_redis_for_restore(
+        self, host: str, ssh_user: str, ssh_port: int
+    ) -> None:
+        """Stop Redis service on the target node.
+
+        Helper for execute_restore (Issue #665).
+        """
+        logger.info("Stopping Redis on %s for restore", host)
+        stop_cmd = self._build_ssh_command(
+            host, ssh_user, ssh_port, "sudo systemctl stop redis-server"
+        )
+        await self._run_command(stop_cmd, timeout=30)
+
+    async def _copy_local_backup_to_target(
+        self, backup: Backup, host: str, ssh_user: str, ssh_port: int
+    ) -> Tuple[bool, str]:
+        """Copy local backup file to target node and move to Redis directory.
+
+        Helper for execute_restore (Issue #665).
+
+        Returns (success, error_message).
+        """
+        backup_path = backup.backup_path
+
+        # Copy from SLM storage to temporary location
+        scp_cmd = [
+            "/usr/bin/scp",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-P",
+            str(ssh_port),
+            backup_path,
+            f"{ssh_user}@{host}:/tmp/restore.rdb",
+        ]
+        success, _ = await self._run_command(scp_cmd, timeout=300)
+        if not success:
+            return False, "Failed to copy backup to target"
+
+        # Move file to Redis data directory
+        mv_cmd = self._build_ssh_command(
+            host,
+            ssh_user,
+            ssh_port,
+            "sudo mv /tmp/restore.rdb /var/lib/redis/dump.rdb && "
+            "sudo chown redis:redis /var/lib/redis/dump.rdb",
+        )
+        success, output = await self._run_command(mv_cmd, timeout=30)
+        if not success:
+            return False, f"Failed to move backup file: {output}"
+
+        return True, ""
+
+    async def _verify_remote_backup_exists(
+        self, backup_path: str, host: str, ssh_user: str, ssh_port: int
+    ) -> Tuple[bool, str]:
+        """Verify that a remote backup file exists on the target node.
+
+        Helper for execute_restore (Issue #665).
+
+        Returns (success, error_message).
+        """
+        verify_cmd = self._build_ssh_command(
+            host, ssh_user, ssh_port, f"test -f {backup_path} && echo 'exists'"
+        )
+        success, output = await self._run_command(verify_cmd, timeout=10)
+        if not success or "exists" not in output:
+            return False, "Backup file not found on target"
+
+        return True, ""
+
+    async def _start_and_verify_redis(
+        self, host: str, ssh_user: str, ssh_port: int
+    ) -> Tuple[bool, str]:
+        """Start Redis service and verify it's healthy.
+
+        Helper for execute_restore (Issue #665).
+
+        Returns (success, status_output).
+        """
+        # Start Redis
+        logger.info("Starting Redis on %s after restore", host)
+        start_cmd = self._build_ssh_command(
+            host, ssh_user, ssh_port, "sudo systemctl start redis-server"
+        )
+        success, output = await self._run_command(start_cmd, timeout=30)
+        if not success:
+            return False, f"Failed to start Redis: {output}"
+
+        # Wait for Redis to be ready and verify data
+        await asyncio.sleep(3)  # Give Redis time to load data
+
+        verify_cmd = self._build_ssh_command(
+            host, ssh_user, ssh_port, "redis-cli PING && redis-cli DBSIZE"
+        )
+        success, verify_output = await self._run_command(verify_cmd, timeout=15)
+        if not success or "PONG" not in verify_output:
+            return False, f"Redis not healthy after restore: {verify_output}"
+
+        return True, verify_output
+
     async def execute_restore(
         self,
         db: AsyncSession,
@@ -131,67 +231,29 @@ class BackupService:
 
         try:
             # Step 1: Stop Redis
-            logger.info("Stopping Redis on %s for restore", host)
-            stop_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port, "sudo systemctl stop redis-server"
-            )
-            await self._run_command(stop_cmd, timeout=30)
+            await self._stop_redis_for_restore(host, ssh_user, ssh_port)
 
             # Step 2: Copy backup file to target
             backup_path = backup.backup_path
             if backup.extra_data and backup.extra_data.get("location") == "local":
-                # Copy from SLM storage
-                scp_cmd = [
-                    "/usr/bin/scp",
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-P",
-                    str(ssh_port),
-                    backup_path,
-                    f"{ssh_user}@{host}:/tmp/restore.rdb",
-                ]
-                success, _ = await self._run_command(scp_cmd, timeout=300)
-                if not success:
-                    return False, "Failed to copy backup to target"
-
-                # Move file to Redis data directory
-                mv_cmd = self._build_ssh_command(
-                    host,
-                    ssh_user,
-                    ssh_port,
-                    "sudo mv /tmp/restore.rdb /var/lib/redis/dump.rdb && "
-                    "sudo chown redis:redis /var/lib/redis/dump.rdb",
+                success, error = await self._copy_local_backup_to_target(
+                    backup, host, ssh_user, ssh_port
                 )
-                success, output = await self._run_command(mv_cmd, timeout=30)
                 if not success:
-                    return False, f"Failed to move backup file: {output}"
+                    return False, error
             else:
-                # Backup is on the same node, just verify it exists
-                verify_cmd = self._build_ssh_command(
-                    host, ssh_user, ssh_port, f"test -f {backup_path} && echo 'exists'"
+                success, error = await self._verify_remote_backup_exists(
+                    backup_path, host, ssh_user, ssh_port
                 )
-                success, output = await self._run_command(verify_cmd, timeout=10)
-                if not success or "exists" not in output:
-                    return False, "Backup file not found on target"
+                if not success:
+                    return False, error
 
-            # Step 3: Start Redis
-            logger.info("Starting Redis on %s after restore", host)
-            start_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port, "sudo systemctl start redis-server"
+            # Step 3: Start Redis and verify
+            success, verify_output = await self._start_and_verify_redis(
+                host, ssh_user, ssh_port
             )
-            success, output = await self._run_command(start_cmd, timeout=30)
             if not success:
-                return False, f"Failed to start Redis: {output}"
-
-            # Step 4: Wait for Redis to be ready and verify data
-            await asyncio.sleep(3)  # Give Redis time to load data
-
-            verify_cmd = self._build_ssh_command(
-                host, ssh_user, ssh_port, "redis-cli PING && redis-cli DBSIZE"
-            )
-            success, verify_output = await self._run_command(verify_cmd, timeout=15)
-            if not success or "PONG" not in verify_output:
-                return False, f"Redis not healthy after restore: {verify_output}"
+                return False, verify_output
 
             logger.info("Restore completed successfully to %s", host)
             return True, f"Restore completed. Redis status: {verify_output}"
