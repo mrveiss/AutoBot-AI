@@ -11,38 +11,35 @@ and security policy management. Related to Issue #728.
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Optional
 
-from typing_extensions import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select, func, and_, or_
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 from models.database import (
     AuditLog,
-    AuditLogCategory,
     Certificate,
+    PolicyStatus,
     SecurityEvent,
     SecurityEventSeverity,
     SecurityEventType,
     SecurityPolicy,
-    PolicyStatus,
-    User,
 )
 from models.schemas import (
-    AuditLogResponse,
     AuditLogListResponse,
-    SecurityEventResponse,
-    SecurityEventCreate,
+    AuditLogResponse,
     SecurityEventAcknowledge,
-    SecurityEventResolve,
+    SecurityEventCreate,
     SecurityEventListResponse,
-    SecurityPolicyResponse,
-    SecurityPolicyCreate,
-    SecurityPolicyUpdate,
-    SecurityPolicyListResponse,
+    SecurityEventResolve,
+    SecurityEventResponse,
     SecurityOverviewResponse,
+    SecurityPolicyCreate,
+    SecurityPolicyListResponse,
+    SecurityPolicyResponse,
+    SecurityPolicyUpdate,
     ThreatSummary,
 )
 from services.auth import get_current_user
@@ -102,16 +99,11 @@ async def create_audit_log(
 # =============================================================================
 
 
-@router.get("/overview", response_model=SecurityOverviewResponse)
-async def get_security_overview(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> SecurityOverviewResponse:
-    """Get security dashboard overview metrics."""
-    now = datetime.utcnow()
-    last_24h = now - timedelta(hours=24)
-    last_30d = now - timedelta(days=30)
+async def _get_security_event_counts(db: AsyncSession, last_24h: datetime) -> dict:
+    """Get all security event counts for the overview dashboard.
 
+    Helper for get_security_overview (Issue #665).
+    """
     # Failed logins in last 24h
     failed_logins = await db.execute(
         select(func.count(SecurityEvent.id))
@@ -123,13 +115,15 @@ async def get_security_overview(
     # Active threats (unresolved security events with severity >= medium)
     active_threats = await db.execute(
         select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_resolved == False)
+        .where(SecurityEvent.is_resolved.is_(False))
         .where(
-            SecurityEvent.severity.in_([
-                SecurityEventSeverity.MEDIUM.value,
-                SecurityEventSeverity.HIGH.value,
-                SecurityEventSeverity.CRITICAL.value,
-            ])
+            SecurityEvent.severity.in_(
+                [
+                    SecurityEventSeverity.MEDIUM.value,
+                    SecurityEventSeverity.HIGH.value,
+                    SecurityEventSeverity.CRITICAL.value,
+                ]
+            )
         )
     )
     active_threats_count = active_threats.scalar() or 0
@@ -137,7 +131,7 @@ async def get_security_overview(
     # Critical events
     critical_events = await db.execute(
         select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_resolved == False)
+        .where(SecurityEvent.is_resolved.is_(False))
         .where(SecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
     )
     critical_count = critical_events.scalar() or 0
@@ -146,51 +140,87 @@ async def get_security_overview(
     policy_violations = await db.execute(
         select(func.count(SecurityEvent.id))
         .where(SecurityEvent.event_type == SecurityEventType.POLICY_VIOLATION.value)
-        .where(SecurityEvent.is_resolved == False)
+        .where(SecurityEvent.is_resolved.is_(False))
     )
     violations_count = policy_violations.scalar() or 0
 
     # Total events in 24h
     total_events = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.timestamp >= last_24h)
+        select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= last_24h)
     )
     total_events_count = total_events.scalar() or 0
 
-    # Certificates expiring in 30 days
+    return {
+        "failed_logins": failed_logins_count,
+        "active_threats": active_threats_count,
+        "critical": critical_count,
+        "violations": violations_count,
+        "total_events": total_events_count,
+    }
+
+
+async def _get_expiring_certificates_count(
+    db: AsyncSession, now: datetime, last_30d: datetime
+) -> int:
+    """Get count of certificates expiring in the next 30 days.
+
+    Helper for get_security_overview (Issue #665).
+    """
     cert_expiring = await db.execute(
         select(func.count(Certificate.id))
         .where(Certificate.status == "active")
         .where(Certificate.not_after <= last_30d)
         .where(Certificate.not_after > now)
     )
-    certs_expiring_count = cert_expiring.scalar() or 0
+    return cert_expiring.scalar() or 0
 
-    # Calculate security score (simplified algorithm)
-    # Start at 100, deduct for issues
+
+def _calculate_security_score(counts: dict, certs_expiring: int) -> float:
+    """Calculate the overall security score based on event counts.
+
+    Helper for get_security_overview (Issue #665).
+    """
     score = 100.0
-    score -= min(active_threats_count * 5, 30)  # Max 30 points for threats
-    score -= min(critical_count * 10, 20)  # Max 20 points for critical
-    score -= min(failed_logins_count * 0.5, 10)  # Max 10 points for failed logins
-    score -= min(violations_count * 2, 20)  # Max 20 points for violations
-    score -= min(certs_expiring_count * 2, 10)  # Max 10 points for expiring certs
-    score = max(score, 0)  # Minimum 0
+    score -= min(counts["active_threats"] * 5, 30)  # Max 30 points for threats
+    score -= min(counts["critical"] * 10, 20)  # Max 20 points for critical
+    score -= min(counts["failed_logins"] * 0.5, 10)  # Max 10 points for failed logins
+    score -= min(counts["violations"] * 2, 20)  # Max 20 points for violations
+    score -= min(certs_expiring * 2, 10)  # Max 10 points for expiring certs
+    return max(score, 0)  # Minimum 0
+
+
+@router.get("/overview", response_model=SecurityOverviewResponse)
+async def get_security_overview(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> SecurityOverviewResponse:
+    """Get security dashboard overview metrics."""
+    now = datetime.utcnow()
+    last_24h = now - timedelta(hours=24)
+    last_30d = now - timedelta(days=30)
+
+    # Get all security event counts
+    counts = await _get_security_event_counts(db, last_24h)
+
+    # Get expiring certificates count
+    certs_expiring_count = await _get_expiring_certificates_count(db, now, last_30d)
+
+    # Calculate security score
+    score = _calculate_security_score(counts, certs_expiring_count)
 
     # Recent events
     recent = await db.execute(
-        select(SecurityEvent)
-        .order_by(SecurityEvent.timestamp.desc())
-        .limit(10)
+        select(SecurityEvent).order_by(SecurityEvent.timestamp.desc()).limit(10)
     )
     recent_events = recent.scalars().all()
 
     return SecurityOverviewResponse(
         security_score=round(score, 1),
-        active_threats=active_threats_count,
-        failed_logins_24h=failed_logins_count,
-        policy_violations=violations_count,
-        total_events_24h=total_events_count,
-        critical_events=critical_count,
+        active_threats=counts["active_threats"],
+        failed_logins_24h=counts["failed_logins"],
+        policy_violations=counts["violations"],
+        total_events_24h=counts["total_events"],
+        critical_events=counts["critical"],
         certificates_expiring=certs_expiring_count,
         recent_events=[SecurityEventResponse.model_validate(e) for e in recent_events],
     )
@@ -209,8 +239,12 @@ async def list_audit_logs(
     username: Optional[str] = Query(None, description="Filter by username"),
     action: Optional[str] = Query(None, description="Filter by action"),
     success: Optional[bool] = Query(None, description="Filter by success status"),
-    since: Optional[datetime] = Query(None, description="Filter events after this time"),
-    until: Optional[datetime] = Query(None, description="Filter events before this time"),
+    since: Optional[datetime] = Query(
+        None, description="Filter events after this time"
+    ),
+    until: Optional[datetime] = Query(
+        None, description="Filter events before this time"
+    ),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
 ) -> AuditLogListResponse:
@@ -269,9 +303,7 @@ async def get_audit_log(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AuditLogResponse:
     """Get a specific audit log entry."""
-    result = await db.execute(
-        select(AuditLog).where(AuditLog.log_id == log_id)
-    )
+    result = await db.execute(select(AuditLog).where(AuditLog.log_id == log_id))
     log = result.scalar_one_or_none()
 
     if not log:
@@ -294,7 +326,9 @@ async def list_security_events(
     _: Annotated[dict, Depends(get_current_user)],
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
-    acknowledged: Optional[bool] = Query(None, description="Filter by acknowledged status"),
+    acknowledged: Optional[bool] = Query(
+        None, description="Filter by acknowledged status"
+    ),
     resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
     source_ip: Optional[str] = Query(None, description="Filter by source IP"),
     node_id: Optional[str] = Query(None, description="Filter by node ID"),
@@ -329,21 +363,20 @@ async def list_security_events(
         query = query.where(SecurityEvent.timestamp <= until)
 
     # Count total and aggregates
-    count_result = await db.execute(
-        select(func.count(SecurityEvent.id))
-    )
+    count_result = await db.execute(select(func.count(SecurityEvent.id)))
     total = count_result.scalar() or 0
 
     unack_result = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_acknowledged == False)
+        select(func.count(SecurityEvent.id)).where(
+            SecurityEvent.is_acknowledged.is_(False)
+        )
     )
     unacknowledged_count = unack_result.scalar() or 0
 
     critical_result = await db.execute(
         select(func.count(SecurityEvent.id))
         .where(SecurityEvent.severity == SecurityEventSeverity.CRITICAL.value)
-        .where(SecurityEvent.is_resolved == False)
+        .where(SecurityEvent.is_resolved.is_(False))
     )
     critical_count = critical_result.scalar() or 0
 
@@ -404,22 +437,21 @@ async def get_threat_summary(
     # Acknowledged/resolved counts
     ack_result = await db.execute(
         select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_acknowledged == True)
+        .where(SecurityEvent.is_acknowledged.is_(True))
         .where(SecurityEvent.timestamp >= since)
     )
     acknowledged = ack_result.scalar() or 0
 
     resolved_result = await db.execute(
         select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.is_resolved == True)
+        .where(SecurityEvent.is_resolved.is_(True))
         .where(SecurityEvent.timestamp >= since)
     )
     resolved = resolved_result.scalar() or 0
 
     # Total
     total_result = await db.execute(
-        select(func.count(SecurityEvent.id))
-        .where(SecurityEvent.timestamp >= since)
+        select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= since)
     )
     total = total_result.scalar() or 0
 
@@ -436,7 +468,9 @@ async def get_threat_summary(
     )
 
 
-@router.post("/events", response_model=SecurityEventResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/events", response_model=SecurityEventResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_security_event(
     event_data: SecurityEventCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -515,7 +549,9 @@ async def acknowledge_security_event(
     await db.commit()
     await db.refresh(event)
 
-    logger.info("Security event acknowledged: %s by %s", event_id, event.acknowledged_by)
+    logger.info(
+        "Security event acknowledged: %s by %s", event_id, event.acknowledged_by
+    )
     return SecurityEventResponse.model_validate(event)
 
 
@@ -607,7 +643,11 @@ async def list_security_policies(
     )
 
 
-@router.post("/policies", response_model=SecurityPolicyResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/policies",
+    response_model=SecurityPolicyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_security_policy(
     policy_data: SecurityPolicyCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
