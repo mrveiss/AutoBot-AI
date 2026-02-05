@@ -13,11 +13,10 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from typing_extensions import Annotated
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 from models.database import (
     EventSeverity,
@@ -68,10 +67,13 @@ async def _create_node_event(
     return event
 
 
-async def _broadcast_job_update(job_id: str, status: str, progress: int, message: str = None) -> None:
+async def _broadcast_job_update(
+    job_id: str, status: str, progress: int, message: str = None
+) -> None:
     """Broadcast job update via WebSocket."""
     try:
         from api.websocket import ws_manager
+
         await ws_manager.broadcast(
             "events:global",
             {
@@ -89,44 +91,140 @@ async def _broadcast_job_update(job_id: str, status: str, progress: int, message
         logger.debug("Failed to broadcast job update: %s", e)
 
 
+async def _get_update_job_data(
+    db: AsyncSession, job_id: str, node_id: str, update_ids: List[str]
+) -> Optional[tuple]:
+    """
+    Helper for _run_update_job (Issue #665).
+
+    Fetch job, node, and updates from database. Returns tuple of (job, node, updates)
+    or None if validation fails. Sets job to FAILED status if node or updates not found.
+    """
+    result = await db.execute(select(UpdateJob).where(UpdateJob.job_id == job_id))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        logger.error("Update job not found: %s", job_id)
+        return None
+
+    node_result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = node_result.scalar_one_or_none()
+
+    if not node:
+        job.status = UpdateJobStatus.FAILED.value
+        job.error = "Node not found"
+        job.completed_at = datetime.utcnow()
+        await db.commit()
+        return None
+
+    updates_result = await db.execute(
+        select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids))
+    )
+    updates = updates_result.scalars().all()
+
+    if not updates:
+        job.status = UpdateJobStatus.FAILED.value
+        job.error = "No valid updates found"
+        job.completed_at = datetime.utcnow()
+        await db.commit()
+        return None
+
+    return (job, node, updates)
+
+
+async def _process_single_update(
+    db: AsyncSession,
+    job: UpdateJob,
+    node: Node,
+    update: UpdateInfo,
+    output_lines: List[str],
+    completed: int,
+    total: int,
+) -> bool:
+    """
+    Helper for _run_update_job (Issue #665).
+
+    Install one package via SSH, update progress, and broadcast status.
+    Returns True if installation succeeded, False otherwise.
+    """
+    step_msg = f"Installing {update.package_name} ({update.available_version})"
+    job.current_step = step_msg
+    await db.commit()
+
+    progress = int((completed / total) * 100)
+    await _broadcast_job_update(job.job_id, "running", progress, step_msg)
+
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+
+    success = await _install_package_via_ssh(
+        node.ip_address, ssh_user, ssh_port, update.package_name, output_lines
+    )
+
+    if success:
+        update.is_applied = True
+        update.applied_at = datetime.utcnow()
+
+    job.output = "\n".join(output_lines[-100:])
+    await db.commit()
+    return success
+
+
+async def _finalize_update_job(
+    db: AsyncSession,
+    job: UpdateJob,
+    node_id: str,
+    completed: int,
+    failed: int,
+    total: int,
+) -> None:
+    """
+    Helper for _run_update_job (Issue #665).
+
+    Set final job status and create completion event.
+    """
+    if failed > 0:
+        job.status = UpdateJobStatus.FAILED.value
+        job.error = f"Failed to install {failed} package(s)"
+    else:
+        job.status = UpdateJobStatus.COMPLETED.value
+
+    job.progress = 100
+    job.current_step = "Completed"
+    job.completed_at = datetime.utcnow()
+    await db.commit()
+
+    await _broadcast_job_update(
+        job.job_id, job.status, 100, f"Completed: {completed}/{total} updates applied"
+    )
+
+    event_type = (
+        EventType.DEPLOYMENT_COMPLETED if failed == 0 else EventType.DEPLOYMENT_FAILED
+    )
+    severity = EventSeverity.INFO if failed == 0 else EventSeverity.WARNING
+
+    await _create_node_event(
+        db,
+        node_id,
+        event_type,
+        severity,
+        f"Update job {job.job_id} completed: {completed}/{total} applied",
+        {"job_id": job.job_id, "applied": completed, "failed": failed},
+    )
+    await db.commit()
+
+
 async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> None:
     """Execute update job in background."""
     from services.database import db_service
 
     async with db_service.session() as db:
-        # Get the job
-        result = await db.execute(select(UpdateJob).where(UpdateJob.job_id == job_id))
-        job = result.scalar_one_or_none()
-
-        if not job:
-            logger.error("Update job not found: %s", job_id)
+        job_data = await _get_update_job_data(db, job_id, node_id, update_ids)
+        if not job_data:
             return
 
-        # Get the node
-        node_result = await db.execute(select(Node).where(Node.node_id == node_id))
-        node = node_result.scalar_one_or_none()
+        job, node, updates = job_data
 
-        if not node:
-            job.status = UpdateJobStatus.FAILED.value
-            job.error = "Node not found"
-            job.completed_at = datetime.utcnow()
-            await db.commit()
-            return
-
-        # Get updates to apply
-        updates_result = await db.execute(
-            select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids))
-        )
-        updates = updates_result.scalars().all()
-
-        if not updates:
-            job.status = UpdateJobStatus.FAILED.value
-            job.error = "No valid updates found"
-            job.completed_at = datetime.utcnow()
-            await db.commit()
-            return
-
-        # Start the job
         job.status = UpdateJobStatus.RUNNING.value
         job.started_at = datetime.utcnow()
         job.total_steps = len(updates)
@@ -134,73 +232,24 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
 
         await _broadcast_job_update(job_id, "running", 0, "Starting update process...")
 
-        # Execute updates via SSH
         output_lines = []
         failed_updates = []
         completed = 0
 
         try:
-            ssh_user = node.ssh_user or "autobot"
-            ssh_port = node.ssh_port or 22
-
             for update in updates:
-                step_msg = f"Installing {update.package_name} ({update.available_version})"
-                job.current_step = step_msg
-                await db.commit()
-
-                progress = int((completed / len(updates)) * 100)
-                await _broadcast_job_update(job_id, "running", progress, step_msg)
-
-                # Run apt-get install via SSH
-                success = await _install_package_via_ssh(
-                    node.ip_address,
-                    ssh_user,
-                    ssh_port,
-                    update.package_name,
-                    output_lines,
+                success = await _process_single_update(
+                    db, job, node, update, output_lines, completed, len(updates)
                 )
-
                 if success:
-                    update.is_applied = True
-                    update.applied_at = datetime.utcnow()
                     completed += 1
                     job.completed_steps = completed
                 else:
                     failed_updates.append(update.update_id)
 
-                # Update job output
-                job.output = "\n".join(output_lines[-100:])  # Keep last 100 lines
-                await db.commit()
-
-            # Job completed
-            if failed_updates:
-                job.status = UpdateJobStatus.FAILED.value
-                job.error = f"Failed to install {len(failed_updates)} package(s)"
-            else:
-                job.status = UpdateJobStatus.COMPLETED.value
-
-            job.progress = 100
-            job.current_step = "Completed"
-            job.completed_at = datetime.utcnow()
-            await db.commit()
-
-            await _broadcast_job_update(
-                job_id,
-                job.status,
-                100,
-                f"Completed: {completed}/{len(updates)} updates applied"
+            await _finalize_update_job(
+                db, job, node_id, completed, len(failed_updates), len(updates)
             )
-
-            # Create completion event
-            await _create_node_event(
-                db,
-                node_id,
-                EventType.DEPLOYMENT_COMPLETED if not failed_updates else EventType.DEPLOYMENT_FAILED,
-                EventSeverity.INFO if not failed_updates else EventSeverity.WARNING,
-                f"Update job {job_id} completed: {completed}/{len(updates)} applied",
-                {"job_id": job_id, "applied": completed, "failed": len(failed_updates)},
-            )
-            await db.commit()
 
         except asyncio.CancelledError:
             job.status = UpdateJobStatus.CANCELLED.value
@@ -215,7 +264,6 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             job.error = str(e)
             job.completed_at = datetime.utcnow()
             await db.commit()
-
             await _broadcast_job_update(job_id, "failed", job.progress, str(e))
 
 
@@ -231,11 +279,16 @@ async def _install_package_via_ssh(
         # Use apt-get with non-interactive mode
         ssh_cmd = [
             "ssh",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "ConnectTimeout=30",
-            "-o", "BatchMode=yes",
-            "-p", str(ssh_port),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=30",
+            "-o",
+            "BatchMode=yes",
+            "-p",
+            str(ssh_port),
             f"{ssh_user}@{ip_address}",
             f"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y {package_name}",
         ]
@@ -254,8 +307,12 @@ async def _install_package_via_ssh(
             logger.info("Installed %s on %s", package_name, ip_address)
             return True
         else:
-            logger.warning("Failed to install %s on %s: exit code %d",
-                         package_name, ip_address, proc.returncode)
+            logger.warning(
+                "Failed to install %s on %s: exit code %d",
+                package_name,
+                ip_address,
+                proc.returncode,
+            )
             return False
 
     except asyncio.TimeoutError:
@@ -275,7 +332,7 @@ async def check_updates(
     node_id: Optional[str] = Query(None),
 ) -> UpdateCheckResponse:
     """Check for available updates."""
-    query = select(UpdateInfo).where(UpdateInfo.is_applied == False)
+    query = select(UpdateInfo).where(UpdateInfo.is_applied.is_(False))
 
     if node_id:
         query = query.where(
@@ -348,11 +405,17 @@ async def apply_updates(
     await db.commit()
 
     # Start background task
-    task = asyncio.create_task(_run_update_job(job_id, request.node_id, request.update_ids))
+    task = asyncio.create_task(
+        _run_update_job(job_id, request.node_id, request.update_ids)
+    )
     _running_jobs[job_id] = task
 
-    logger.info("Update job created: %s for node %s (%d updates)",
-               job_id, request.node_id, len(updates))
+    logger.info(
+        "Update job created: %s for node %s (%d updates)",
+        job_id,
+        request.node_id,
+        len(updates),
+    )
 
     return UpdateApplyResponse(
         success=True,

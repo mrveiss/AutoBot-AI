@@ -520,6 +520,12 @@ export default {
     const knowledgeStore = useKnowledgeStore();
     const router = useRouter();
 
+    // Initialize user preferences system (Issue #753)
+    import('@/composables/usePreferences').then(({ usePreferences }) => {
+      usePreferences();
+      logger.debug('User preferences system initialized');
+    });
+
     // FIXED: Use useSystemStatus composable instead of duplicate logic
     const {
       systemStatus,
