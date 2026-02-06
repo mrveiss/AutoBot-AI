@@ -1,0 +1,13 @@
+{
+  "name": "autobot-browser-worker",
+  "version": "1.0.0",
+  "description": "AutoBot Browser Automation Worker - Deploys to 172.16.168.25",
+  "private": true,
+  "scripts": {
+    "start": "node playwright-server.js",
+    "test": "npx playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}
