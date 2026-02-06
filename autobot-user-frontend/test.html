@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoBot Test</title>
+</head>
+<body>
+  <div id="test-app">Loading...</div>
+  <script type="module">
+    try {
+      console.log('Test: Starting minimal Vue test...');
+
+      const { createApp } = await import('/node_modules/.vite/deps/vue.js?v=7e33882e');
+      console.log('Test: Vue imported successfully:', !!createApp);
+
+      const app = createApp({
+        template: '<h1>Vue is working! ✅</h1>'
+      });
+
+      app.mount('#test-app');
+      console.log('Test: Vue app mounted successfully');
+
+    } catch (error) {
+      console.error('Test: Vue test failed:', error);
+      document.getElementById('test-app').innerHTML = '<h1 style="color: red;">Vue test failed: ' + error.message + '</h1>';
+    }
+  </script>
+</body>
+</html>

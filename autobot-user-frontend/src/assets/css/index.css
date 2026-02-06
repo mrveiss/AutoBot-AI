@@ -1,0 +1,23 @@
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Copyright (c) 2025 mrveiss
+ * Author: mrveiss
+ *
+ * index.css - Main CSS Entry Point
+ * Issue #704: CSS Design System - Centralized Theming & SSOT Styles
+ *
+ * Import order matters:
+ * 1. Design tokens (base variables)
+ * 2. Theme files (variable overrides)
+ * 3. Utility classes
+ */
+
+/* Design tokens - SSOT for all design values */
+@import './design-tokens.css';
+
+/* Themes - Override tokens based on theme selection */
+@import './themes/dark.css';
+@import './themes/light.css';
+
+/* Utility classes will be added here as needed */
+/* @import './utilities.css'; */

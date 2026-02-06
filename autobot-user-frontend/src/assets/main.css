@@ -1,0 +1,80 @@
+@import './base.css';
+
+/* Accessibility: Screen Reader Only utility class */
+/* Hides content visually but keeps it available to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Accessibility: Focusable screen reader only content */
+/* Makes SR-only content visible when focused (e.g., skip links) */
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    place-items: center;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 2rem;
+  }
+}
+
+/* Accessibility: Reduced Motion Support */
+/* Respects user's OS-level "Reduce Motion" preference */
+/* WCAG 2.1 Success Criterion 2.3.3 Animation from Interactions (AAA) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* Disable all animations */
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+
+    /* Disable all transitions */
+    transition-duration: 0.01ms !important;
+
+    /* Disable scroll behavior smoothing */
+    scroll-behavior: auto !important;
+  }
+}

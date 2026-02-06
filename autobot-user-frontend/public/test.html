@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vue Test</title>
+  <script type="module">
+    import { createApp } from '/node_modules/vue/dist/vue.esm-browser.js'
+
+    const app = createApp({
+      template: '<div>Vue is working!</div>'
+    })
+
+    app.mount('#test-app')
+
+    console.log('✅ Vue mounted successfully')
+  </script>
+</head>
+<body>
+  <h1>Vue Mount Test</h1>
+  <div id="test-app"></div>
+  <script>
+    console.log('✅ HTML loaded')
+  </script>
+</body>
+</html>
