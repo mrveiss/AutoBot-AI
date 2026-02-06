@@ -15,7 +15,9 @@ import json
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
+import yaml
 
 if TYPE_CHECKING:
     from backend.utils.service_client import ServiceHTTPClient
@@ -58,6 +60,63 @@ class WorkerState:
     healthy: bool = True
     circuit_state: CircuitState = CircuitState.CLOSED
     circuit_open_until: float = 0
+
+
+def load_worker_config(config_path: str = "config/npu_workers.yaml") -> List[Dict]:
+    """
+    Parse and validate NPU worker configuration from YAML file (Issue #168).
+
+    Args:
+        config_path: Path to the YAML configuration file
+
+    Returns:
+        List of validated worker configurations with constructed URLs
+    """
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        logger.debug("NPU worker config not found at %s, using defaults", config_path)
+        return []
+    except yaml.YAMLError as e:
+        logger.error("Failed to parse NPU worker config: %s", e)
+        return []
+
+    if not config or "npu" not in config or "workers" not in config.get("npu", {}):
+        logger.debug("No workers defined in NPU config")
+        return []
+
+    workers = []
+    required_fields = {"id", "host", "port", "enabled"}
+
+    for worker in config["npu"]["workers"]:
+        # Validate required fields
+        missing = required_fields - set(worker.keys())
+        if missing:
+            logger.warning(
+                "Skipping worker with missing fields %s: %s", missing, worker
+            )
+            continue
+
+        # Construct URL from host and port
+        host = worker["host"]
+        port = worker["port"]
+        url = f"http://{host}:{port}"
+
+        workers.append(
+            {
+                "id": worker["id"],
+                "url": url,
+                "enabled": worker.get("enabled", True),
+                "priority": worker.get("priority", 5),
+                "max_concurrent": worker.get("max_concurrent", 10),
+                "weight": worker.get("weight", 50),
+                "capabilities": worker.get("capabilities", ["llm"]),
+            }
+        )
+
+    logger.info("Loaded %d NPU workers from config", len(workers))
+    return workers
 
 
 @dataclass
