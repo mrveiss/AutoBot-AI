@@ -722,6 +722,71 @@ async def stop_service(
     "/{node_id}/services/{service_name}/restart",
     response_model=ServiceActionResponse,
 )
+async def _perform_port_aware_restart(
+    node: Node, service_name: str, port: Optional[int]
+) -> Tuple[bool, str]:
+    """Perform port-aware restart sequence.
+
+    Helper for restart_service (Issue #665).
+
+    For services with known ports: stop, kill orphans, start.
+    For others: regular restart.
+    """
+    if port:
+        # Stop service first
+        await _run_ansible_service_action(node, service_name, "stop")
+        # Small delay to let port release
+        await asyncio.sleep(1)
+        # Kill any orphan processes on the port
+        await _kill_orphan_on_port(node, port)
+        # Small delay after kill
+        await asyncio.sleep(1)
+        # Start the service
+        return await _run_ansible_service_action(node, service_name, "start")
+    else:
+        # Regular restart for services without known ports
+        return await _run_ansible_service_action(node, service_name, "restart")
+
+
+async def _update_service_after_restart(
+    db: AsyncSession, node_id: str, service_name: str
+) -> None:
+    """Update service database record after successful restart.
+
+    Helper for restart_service (Issue #665).
+    """
+    result = await db.execute(
+        select(Service).where(
+            Service.node_id == node_id,
+            Service.service_name == service_name,
+        )
+    )
+    service = result.scalar_one_or_none()
+    if service:
+        service.status = ServiceStatus.RUNNING.value
+        service.active_state = "active"
+        service.sub_state = "running"
+        service.last_checked = datetime.utcnow()
+        await db.commit()
+
+
+async def _notify_restart_result(
+    node_id: str, service_name: str, success: bool, message: str
+) -> None:
+    """Send WebSocket notification for restart result.
+
+    Helper for restart_service (Issue #665).
+    """
+    await ws_manager.send_service_status(
+        node_id=node_id,
+        service_name=service_name,
+        status="running" if success else "unknown",
+        action="restart",
+        success=success,
+        message=message,
+    )
+
+
 async def restart_service(
     node_id: str,
     service_name: str,
@@ -741,58 +806,12 @@ async def restart_service(
 
     # Check if service uses a known port - if so, do stop/kill/start
     port = SERVICE_PORT_MAP.get(service_name)
-    if port:
-        # Stop service first
-        await _run_ansible_service_action(node, service_name, "stop")
-        # Small delay to let port release
-        await asyncio.sleep(1)
-        # Kill any orphan processes on the port
-        await _kill_orphan_on_port(node, port)
-        # Small delay after kill
-        await asyncio.sleep(1)
-        # Start the service
-        success, message = await _run_ansible_service_action(
-            node, service_name, "start"
-        )
-    else:
-        # Regular restart for services without known ports
-        success, message = await _run_ansible_service_action(
-            node, service_name, "restart"
-        )
+    success, message = await _perform_port_aware_restart(node, service_name, port)
 
     if success:
-        result = await db.execute(
-            select(Service).where(
-                Service.node_id == node_id,
-                Service.service_name == service_name,
-            )
-        )
-        service = result.scalar_one_or_none()
-        if service:
-            service.status = ServiceStatus.RUNNING.value
-            service.active_state = "active"
-            service.sub_state = "running"
-            service.last_checked = datetime.utcnow()
-            await db.commit()
+        await _update_service_after_restart(db, node_id, service_name)
 
-        # Broadcast status change via WebSocket
-        await ws_manager.send_service_status(
-            node_id=node_id,
-            service_name=service_name,
-            status="running",
-            action="restart",
-            success=True,
-            message=message,
-        )
-    else:
-        await ws_manager.send_service_status(
-            node_id=node_id,
-            service_name=service_name,
-            status="unknown",
-            action="restart",
-            success=False,
-            message=message,
-        )
+    await _notify_restart_result(node_id, service_name, success, message)
 
     return ServiceActionResponse(
         action="restart",
