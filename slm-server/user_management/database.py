@@ -147,3 +147,7 @@ async def close_engines() -> None:
         await _autobot_engine.dispose()
         _autobot_engine = None
         logger.info("Closed AutoBot database engine")
+
+
+# Alias for rbac_middleware compatibility (uses SLM database by default)
+db_session_context = get_slm_session

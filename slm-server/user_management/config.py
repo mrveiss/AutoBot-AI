@@ -60,3 +60,15 @@ def get_autobot_db_config() -> DatabaseConfig:
         user=os.getenv("AUTOBOT_POSTGRES_USER", "autobot_user_admin"),
         password=os.getenv("AUTOBOT_POSTGRES_PASSWORD", ""),
     )
+
+
+@dataclass
+class DeploymentConfig:
+    """Deployment configuration for RBAC middleware."""
+
+    postgres_enabled: bool = True
+
+
+def get_deployment_config() -> DeploymentConfig:
+    """Get deployment configuration. SLM always uses PostgreSQL."""
+    return DeploymentConfig(postgres_enabled=True)
