@@ -4,7 +4,7 @@
 # Collects application-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 SSH_KEY="$HOME/.ssh/autobot_key"
 

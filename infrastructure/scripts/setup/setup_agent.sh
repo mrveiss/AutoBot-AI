@@ -51,7 +51,7 @@ pyenv() {
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Go to project root (two levels up from scripts/setup/)
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 echo "🔍 Detected project root: $PROJECT_ROOT"
 
 # Change to project root directory

@@ -7,7 +7,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 LOGS_DIR="$PROJECT_ROOT/logs"
 CENTRALIZED_DIR="$LOGS_DIR/autobot-centralized"
 CONFIG_DIR="$PROJECT_ROOT/config/logging"
@@ -721,7 +721,7 @@ create_real_time_monitoring() {
 # Monitors logs in real-time and triggers alerts
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 ALERT_WEBHOOK="${ALERT_WEBHOOK:-}"
 
@@ -1207,7 +1207,7 @@ EOF
 # Comprehensive status check for all logging components
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 
 # Color codes

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # AutoBot Log Collection Status
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 
 echo "AutoBot Centralized Logging Status - $(date)"

@@ -34,7 +34,7 @@ log_header() {
 # Issue: #604 - SSOT Phase 4 Cleanup
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a

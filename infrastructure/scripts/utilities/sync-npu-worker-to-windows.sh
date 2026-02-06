@@ -28,7 +28,7 @@ NC='\033[0m' # No Color
 
 # Default paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 SOURCE_PATH="${PROJECT_ROOT}/resources/windows-npu-worker"
 DEST_PATH="/mnt/c/AutoBot/NPU"
 
