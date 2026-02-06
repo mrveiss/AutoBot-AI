@@ -57,6 +57,15 @@ def password_data():
     }
 
 
+@pytest.fixture
+def mock_current_user():
+    """Mock current user with token."""
+    return {
+        "user_id": str(uuid.uuid4()),
+        "token": "current.jwt.token.here",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Test: Rate Limiting
 # ---------------------------------------------------------------------------
@@ -71,6 +80,7 @@ class TestPasswordChangeRateLimiting:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Rate limit should be checked before attempting password change."""
         with patch(
@@ -89,7 +99,9 @@ class TestPasswordChangeRateLimiting:
                 from src.user_management.schemas import PasswordChange
 
                 pwd_change = PasswordChange(**password_data)
-                await change_password(user_id, pwd_change, mock_user_service)
+                await change_password(
+                    user_id, pwd_change, mock_user_service, mock_current_user
+                )
 
                 mock_limiter.check_rate_limit.assert_called_once_with(user_id)
 
@@ -99,6 +111,7 @@ class TestPasswordChangeRateLimiting:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Should return 429 when rate limit is exceeded."""
         with patch(
@@ -120,7 +133,9 @@ class TestPasswordChangeRateLimiting:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service)
+                await change_password(
+                    user_id, pwd_change, mock_user_service, mock_current_user
+                )
 
             assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
             assert "Too many attempts" in str(exc_info.value.detail)
@@ -131,6 +146,7 @@ class TestPasswordChangeRateLimiting:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Successful password change should clear rate limit counter."""
         with patch(
@@ -145,7 +161,9 @@ class TestPasswordChangeRateLimiting:
             from src.user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            await change_password(user_id, pwd_change, mock_user_service)
+            await change_password(
+                user_id, pwd_change, mock_user_service, mock_current_user
+            )
 
             mock_limiter.record_attempt.assert_called_once_with(user_id, success=True)
 
@@ -155,6 +173,7 @@ class TestPasswordChangeRateLimiting:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Failed password change should increment rate limit counter."""
         mock_user_service.change_password = AsyncMock(
@@ -177,7 +196,9 @@ class TestPasswordChangeRateLimiting:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service)
+                await change_password(
+                    user_id, pwd_change, mock_user_service, mock_current_user
+                )
 
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             mock_limiter.record_attempt.assert_called_once_with(user_id, success=False)
@@ -197,6 +218,7 @@ class TestPasswordChangeResponses:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Should return 404 when user is not found."""
         mock_user_service.change_password = AsyncMock(
@@ -218,7 +240,9 @@ class TestPasswordChangeResponses:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service)
+                await change_password(
+                    user_id, pwd_change, mock_user_service, mock_current_user
+                )
 
             assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
@@ -228,6 +252,7 @@ class TestPasswordChangeResponses:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Should return 401 when current password is incorrect."""
         mock_user_service.change_password = AsyncMock(
@@ -250,7 +275,9 @@ class TestPasswordChangeResponses:
             pwd_change = PasswordChange(**password_data)
 
             with pytest.raises(HTTPException) as exc_info:
-                await change_password(user_id, pwd_change, mock_user_service)
+                await change_password(
+                    user_id, pwd_change, mock_user_service, mock_current_user
+                )
 
             assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
             assert "Current password is incorrect" in str(exc_info.value.detail)
@@ -261,6 +288,7 @@ class TestPasswordChangeResponses:
         user_id,
         password_data,
         mock_user_service,
+        mock_current_user,
     ):
         """Should return success message on successful password change."""
         with patch(
@@ -275,7 +303,9 @@ class TestPasswordChangeResponses:
             from src.user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
-            response = await change_password(user_id, pwd_change, mock_user_service)
+            response = await change_password(
+                user_id, pwd_change, mock_user_service, mock_current_user
+            )
 
             assert response.success is True
             assert response.message == "Password changed successfully"
