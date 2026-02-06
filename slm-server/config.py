@@ -5,6 +5,7 @@
 SLM Server Configuration
 
 Centralized configuration for the standalone SLM backend.
+PostgreSQL replaces SQLite for all database operations (Issue #786).
 """
 
 import os
@@ -22,11 +23,34 @@ class Settings(BaseSettings):
     data_dir: Path = Path(__file__).parent / "data"
     config_dir: Path = Path(__file__).parent / "config"
     ansible_dir: Path = Path(__file__).parent / "ansible"
-    backup_dir: Path = Path(os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups")))
+    backup_dir: Path = Path(
+        os.getenv("SLM_BACKUP_DIR", str(Path.home() / "slm-backups"))
+    )
 
-    # Database
-    database_url: str = "sqlite+aiosqlite:///./data/slm.db"
-    database_path: str = "./data/slm.db"
+    # ==========================================================================
+    # PostgreSQL Database Configuration (Issue #786)
+    # ==========================================================================
+    # Main SLM operational database (nodes, deployments, backups, etc.)
+    database_url: str = os.getenv(
+        "SLM_DATABASE_URL", "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm"
+    )
+
+    # SLM admin users database (fleet administrators)
+    slm_users_database_url: str = os.getenv(
+        "SLM_USERS_DATABASE_URL",
+        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm_users",
+    )
+
+    # AutoBot application users database (on Redis VM)
+    autobot_users_database_url: str = os.getenv(
+        "AUTOBOT_USERS_DATABASE_URL",
+        "postgresql+asyncpg://autobot_app@172.16.168.23:5432/autobot_users",
+    )
+
+    # Database connection pool settings
+    db_pool_size: int = int(os.getenv("SLM_DB_POOL_SIZE", "20"))
+    db_pool_max_overflow: int = int(os.getenv("SLM_DB_POOL_MAX_OVERFLOW", "10"))
+    db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", "3600"))
 
     # Server
     host: str = "0.0.0.0"
