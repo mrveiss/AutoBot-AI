@@ -597,6 +597,90 @@ class NPUWorkerPool:
 
         logger.info("Health monitor loop stopped")
 
+    # Retry constants
+    MAX_RETRY_ATTEMPTS = 3
+
+    async def execute_task(
+        self, task_type: str, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Execute a task on the pool with automatic retry and failover.
+
+        Args:
+            task_type: Type of task (e.g., 'text_analysis', 'knowledge_processing')
+            data: Task-specific data
+
+        Returns:
+            Task result dict with 'success' key
+        """
+        excluded_workers: Set[str] = set()
+        last_error = None
+
+        for attempt in range(self.MAX_RETRY_ATTEMPTS):
+            # Select a worker
+            worker = await self._select_worker(excluded_workers)
+
+            if worker is None:
+                logger.warning(
+                    "No available workers for task (attempt %d/%d)",
+                    attempt + 1,
+                    self.MAX_RETRY_ATTEMPTS,
+                )
+                break
+
+            try:
+                # Increment active tasks
+                worker.active_tasks += 1
+                worker.total_requests += 1
+
+                logger.debug(
+                    "Executing task on worker %s (attempt %d/%d)",
+                    worker.worker_id,
+                    attempt + 1,
+                    self.MAX_RETRY_ATTEMPTS,
+                )
+
+                # Execute the task
+                result = await worker.client.offload_heavy_processing(task_type, data)
+
+                # Decrement active tasks
+                worker.active_tasks -= 1
+
+                # Check if result indicates success
+                if result.get("success") or not result.get("error"):
+                    self._record_success(worker)
+                    return result
+                else:
+                    # Task returned error result
+                    self._record_failure(worker)
+                    excluded_workers.add(worker.worker_id)
+                    last_error = result.get("error", "Unknown error")
+                    logger.info(
+                        "Task failed on worker %s: %s",
+                        worker.worker_id,
+                        last_error,
+                    )
+
+            except Exception as e:
+                # Decrement active tasks on exception
+                worker.active_tasks -= 1
+                self._record_failure(worker)
+                excluded_workers.add(worker.worker_id)
+                last_error = str(e)
+                logger.info("Task exception on worker %s: %s", worker.worker_id, e)
+
+        # All attempts failed
+        logger.error(
+            "Task failed after %d attempts: %s",
+            self.MAX_RETRY_ATTEMPTS,
+            last_error,
+        )
+        return {
+            "success": False,
+            "error": last_error or "All workers failed",
+            "fallback": True,
+        }
+
 
 class NPUTaskQueue:
     """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""

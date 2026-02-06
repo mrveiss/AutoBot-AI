@@ -674,3 +674,128 @@ npu:
         assert pool._health_monitor_task is None
     finally:
         os.unlink(config_path)
+
+
+# =============================================================================
+# Task 8: Task Execution with Retry Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_execute_task_success():
+    """execute_task should successfully execute task on selected worker"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        # Mock successful task execution
+        worker.client.offload_heavy_processing = AsyncMock(
+            return_value={"success": True, "result": "test_data"}
+        )
+
+        result = await pool.execute_task("text_analysis", {"text": "hello"})
+
+        assert result["success"] is True
+        assert result["result"] == "test_data"
+        assert worker.failures == 0
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_execute_task_retries_on_failure():
+    """execute_task should retry on different worker after failure"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-2"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+
+        # Worker 1 fails, Worker 2 succeeds
+        pool.workers["worker-1"].client.offload_heavy_processing = AsyncMock(
+            side_effect=Exception("Connection error")
+        )
+        pool.workers["worker-2"].client.offload_heavy_processing = AsyncMock(
+            return_value={"success": True, "result": "fallback"}
+        )
+
+        result = await pool.execute_task("text_analysis", {"text": "hello"})
+
+        assert result["success"] is True
+        # Worker-1 should have a failure recorded
+        assert pool.workers["worker-1"].failures == 1
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_execute_task_returns_error_when_all_fail():
+    """execute_task should return error when all workers fail"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+
+        # Worker fails on all attempts
+        pool.workers["worker-1"].client.offload_heavy_processing = AsyncMock(
+            side_effect=Exception("Connection error")
+        )
+
+        result = await pool.execute_task("text_analysis", {"text": "hello"})
+
+        assert result["success"] is False
+        assert "error" in result
+        assert result.get("fallback") is True
+    finally:
+        os.unlink(config_path)
