@@ -61,6 +61,147 @@ class ServiceDefinition:
     dependencies: List[str] = field(default_factory=list)
 
 
+# Service definitions registry (Issue #665)
+# Module-level constant to avoid long method definition
+_SERVICE_DEFINITIONS = {
+    # Backend API Server (runs on main WSL machine)
+    "backend": ServiceDefinition(
+        name="backend",
+        service_type=AutoBotServiceType.BACKEND,
+        default_host_env="AUTOBOT_BACKEND_HOST",
+        default_port_env="AUTOBOT_BACKEND_PORT",
+        default_host="172.16.168.20",
+        default_port=8001,
+        start_command=(
+            "cd /home/kali/Desktop/AutoBot && "
+            "source venv/bin/activate && "
+            "nohup python backend/main.py > logs/backend.log 2>&1 &"
+        ),
+        stop_command="pkill -f 'python.*backend/main.py'",
+        health_check_path="/api/health",
+        health_check_type="http",
+        requires_sudo=False,
+        working_dir="/home/kali/Desktop/AutoBot",
+        description="FastAPI backend API server",
+    ),
+    # Frontend (Vue.js on frontend VM)
+    "frontend": ServiceDefinition(
+        name="frontend",
+        service_type=AutoBotServiceType.FRONTEND,
+        default_host_env="AUTOBOT_FRONTEND_HOST",
+        default_port_env="AUTOBOT_FRONTEND_PORT",
+        default_host="172.16.168.21",
+        default_port=5173,
+        systemd_service="nginx",  # Production uses nginx
+        start_command=(
+            "cd /home/autobot/autobot-vue && "
+            "nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &"
+        ),
+        stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
+        health_check_path="/",
+        health_check_type="http",
+        requires_sudo=False,
+        working_dir="/home/autobot/autobot-vue",
+        description="Vue.js frontend development server",
+    ),
+    # Redis Stack (database VM)
+    "redis": ServiceDefinition(
+        name="redis",
+        service_type=AutoBotServiceType.REDIS,
+        default_host_env="AUTOBOT_REDIS_HOST",
+        default_port_env="AUTOBOT_REDIS_PORT",
+        default_host="172.16.168.23",
+        default_port=6379,
+        systemd_service="redis-stack-server",
+        health_check_type="redis",
+        requires_sudo=True,
+        description="Redis Stack data layer",
+    ),
+    # NPU Worker (hardware AI acceleration)
+    "npu-worker": ServiceDefinition(
+        name="npu-worker",
+        service_type=AutoBotServiceType.NPU_WORKER,
+        default_host_env="AUTOBOT_NPU_WORKER_HOST",
+        default_port_env="AUTOBOT_NPU_WORKER_PORT",
+        default_host="172.16.168.22",
+        default_port=8081,
+        systemd_service="autobot-npu-worker",
+        start_command=(
+            "cd /home/autobot/AutoBot && "
+            "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 "
+            "> logs/npu-worker.log 2>&1 &"
+        ),
+        stop_command="pkill -f 'npu.*worker'",
+        health_check_path="/health",
+        health_check_type="http",
+        requires_sudo=False,
+        description="NPU hardware AI acceleration worker",
+    ),
+    # AI Stack (Ollama runs locally on backend machine)
+    "ai-stack": ServiceDefinition(
+        name="ai-stack",
+        service_type=AutoBotServiceType.AI_STACK,
+        default_host_env="AUTOBOT_AI_STACK_HOST",
+        default_port_env="AUTOBOT_AI_STACK_PORT",
+        default_host="172.16.168.24",
+        default_port=8080,
+        systemd_service="ollama",
+        start_command="ollama serve",
+        stop_command="pkill -f 'ollama serve'",
+        health_check_path="/api/tags",
+        health_check_type="http",
+        requires_sudo=False,
+        description="Ollama AI LLM server",
+    ),
+    # Browser automation (Playwright)
+    "browser": ServiceDefinition(
+        name="browser",
+        service_type=AutoBotServiceType.BROWSER,
+        default_host_env="AUTOBOT_BROWSER_SERVICE_HOST",
+        default_port_env="AUTOBOT_BROWSER_SERVICE_PORT",
+        default_host="172.16.168.25",
+        default_port=3000,
+        start_command=(
+            "cd /home/autobot/browser && "
+            "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
+        ),
+        stop_command="pkill -f 'playwright-server'",
+        health_check_path="/",
+        health_check_type="http",
+        requires_sudo=False,
+        working_dir="/home/autobot/browser",
+        description="Playwright browser automation service",
+    ),
+    # SLM Backend (this server)
+    "slm-backend": ServiceDefinition(
+        name="slm-backend",
+        service_type=AutoBotServiceType.SLM_BACKEND,
+        default_host_env="SLM_HOST",
+        default_port_env="SLM_PORT",
+        default_host="172.16.168.19",
+        default_port=8000,
+        systemd_service="slm-backend",
+        health_check_path="/api/health",
+        health_check_type="http",
+        requires_sudo=True,
+        description="SLM fleet management backend",
+    ),
+    # SLM Agent (runs on each managed node)
+    "slm-agent": ServiceDefinition(
+        name="slm-agent",
+        service_type=AutoBotServiceType.SLM_AGENT,
+        default_host_env="",
+        default_port_env="",
+        default_host="",
+        default_port=0,
+        systemd_service="autobot-agent",
+        health_check_type="ssh",
+        requires_sudo=True,
+        description="SLM node agent for heartbeats",
+    ),
+}
+
+
 class ServiceRegistry:
     """
     Registry of known AutoBot services with their configurations.
@@ -87,144 +228,11 @@ class ServiceRegistry:
                             os.environ[key] = value
 
     def _build_service_registry(self) -> Dict[str, ServiceDefinition]:
-        """Build the service registry with SSOT configuration."""
-        return {
-            # Backend API Server (runs on main WSL machine)
-            "backend": ServiceDefinition(
-                name="backend",
-                service_type=AutoBotServiceType.BACKEND,
-                default_host_env="AUTOBOT_BACKEND_HOST",
-                default_port_env="AUTOBOT_BACKEND_PORT",
-                default_host="172.16.168.20",
-                default_port=8001,
-                start_command=(
-                    "cd /home/kali/Desktop/AutoBot && "
-                    "source venv/bin/activate && "
-                    "nohup python backend/main.py > logs/backend.log 2>&1 &"
-                ),
-                stop_command="pkill -f 'python.*backend/main.py'",
-                health_check_path="/api/health",
-                health_check_type="http",
-                requires_sudo=False,
-                working_dir="/home/kali/Desktop/AutoBot",
-                description="FastAPI backend API server",
-            ),
-            # Frontend (Vue.js on frontend VM)
-            "frontend": ServiceDefinition(
-                name="frontend",
-                service_type=AutoBotServiceType.FRONTEND,
-                default_host_env="AUTOBOT_FRONTEND_HOST",
-                default_port_env="AUTOBOT_FRONTEND_PORT",
-                default_host="172.16.168.21",
-                default_port=5173,
-                systemd_service="nginx",  # Production uses nginx
-                start_command=(
-                    "cd /home/autobot/autobot-vue && "
-                    "nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &"
-                ),
-                stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
-                health_check_path="/",
-                health_check_type="http",
-                requires_sudo=False,
-                working_dir="/home/autobot/autobot-vue",
-                description="Vue.js frontend development server",
-            ),
-            # Redis Stack (database VM)
-            "redis": ServiceDefinition(
-                name="redis",
-                service_type=AutoBotServiceType.REDIS,
-                default_host_env="AUTOBOT_REDIS_HOST",
-                default_port_env="AUTOBOT_REDIS_PORT",
-                default_host="172.16.168.23",
-                default_port=6379,
-                systemd_service="redis-stack-server",
-                health_check_type="redis",
-                requires_sudo=True,
-                description="Redis Stack data layer",
-            ),
-            # NPU Worker (hardware AI acceleration)
-            "npu-worker": ServiceDefinition(
-                name="npu-worker",
-                service_type=AutoBotServiceType.NPU_WORKER,
-                default_host_env="AUTOBOT_NPU_WORKER_HOST",
-                default_port_env="AUTOBOT_NPU_WORKER_PORT",
-                default_host="172.16.168.22",
-                default_port=8081,
-                systemd_service="autobot-npu-worker",
-                start_command=(
-                    "cd /home/autobot/AutoBot && "
-                    "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 "
-                    "> logs/npu-worker.log 2>&1 &"
-                ),
-                stop_command="pkill -f 'npu.*worker'",
-                health_check_path="/health",
-                health_check_type="http",
-                requires_sudo=False,
-                description="NPU hardware AI acceleration worker",
-            ),
-            # AI Stack (Ollama runs locally on backend machine)
-            "ai-stack": ServiceDefinition(
-                name="ai-stack",
-                service_type=AutoBotServiceType.AI_STACK,
-                default_host_env="AUTOBOT_AI_STACK_HOST",
-                default_port_env="AUTOBOT_AI_STACK_PORT",
-                default_host="172.16.168.24",
-                default_port=8080,
-                systemd_service="ollama",
-                start_command="ollama serve",
-                stop_command="pkill -f 'ollama serve'",
-                health_check_path="/api/tags",
-                health_check_type="http",
-                requires_sudo=False,
-                description="Ollama AI LLM server",
-            ),
-            # Browser automation (Playwright)
-            "browser": ServiceDefinition(
-                name="browser",
-                service_type=AutoBotServiceType.BROWSER,
-                default_host_env="AUTOBOT_BROWSER_SERVICE_HOST",
-                default_port_env="AUTOBOT_BROWSER_SERVICE_PORT",
-                default_host="172.16.168.25",
-                default_port=3000,
-                start_command=(
-                    "cd /home/autobot/browser && "
-                    "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
-                ),
-                stop_command="pkill -f 'playwright-server'",
-                health_check_path="/",
-                health_check_type="http",
-                requires_sudo=False,
-                working_dir="/home/autobot/browser",
-                description="Playwright browser automation service",
-            ),
-            # SLM Backend (this server)
-            "slm-backend": ServiceDefinition(
-                name="slm-backend",
-                service_type=AutoBotServiceType.SLM_BACKEND,
-                default_host_env="SLM_HOST",
-                default_port_env="SLM_PORT",
-                default_host="172.16.168.19",
-                default_port=8000,
-                systemd_service="slm-backend",
-                health_check_path="/api/health",
-                health_check_type="http",
-                requires_sudo=True,
-                description="SLM fleet management backend",
-            ),
-            # SLM Agent (runs on each managed node)
-            "slm-agent": ServiceDefinition(
-                name="slm-agent",
-                service_type=AutoBotServiceType.SLM_AGENT,
-                default_host_env="",
-                default_port_env="",
-                default_host="",
-                default_port=0,
-                systemd_service="autobot-agent",
-                health_check_type="ssh",
-                requires_sudo=True,
-                description="SLM node agent for heartbeats",
-            ),
-        }
+        """Build the service registry with SSOT configuration.
+
+        Service definitions are in _SERVICE_DEFINITIONS module constant (Issue #665).
+        """
+        return _SERVICE_DEFINITIONS.copy()
 
     def get_service(self, name: str) -> Optional[ServiceDefinition]:
         """Get service definition by name."""
