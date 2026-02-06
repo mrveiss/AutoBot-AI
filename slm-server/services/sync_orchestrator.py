@@ -254,41 +254,52 @@ class SyncOrchestrator:
 
             await db.commit()
 
-    async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
+    async def _get_source_node_info(self, db) -> Tuple[bool, str, Optional[dict]]:
         """
-        Pull code from code-source node to SLM cache.
+        Get active code source and node information from database.
+
+        Helper for pull_from_source (Issue #665).
 
         Returns:
-            Tuple of (success, message, commit_hash)
+            Tuple of (success, message, node_info_dict) where node_info_dict contains
+            node_ip, node_user, repo_path, and commit.
         """
-        async with db_service.session() as db:
-            # Get active code source
-            result = await db.execute(
-                select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
-            )
-            source = result.scalar_one_or_none()
+        # Get active code source
+        result = await db.execute(
+            select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
+        )
+        source = result.scalar_one_or_none()
 
-            if not source:
-                return False, "No active code-source configured", None
+        if not source:
+            return False, "No active code-source configured", None
 
-            # Get source node info
-            node_result = await db.execute(
-                select(Node).where(Node.node_id == source.node_id)
-            )
-            node = node_result.scalar_one_or_none()
+        # Get source node info
+        node_result = await db.execute(
+            select(Node).where(Node.node_id == source.node_id)
+        )
+        node = node_result.scalar_one_or_none()
 
-            if not node:
-                return False, f"Code-source node not found: {source.node_id}", None
+        if not node:
+            return False, f"Code-source node not found: {source.node_id}", None
 
-            # Store for use outside context
-            node_ip = node.ip_address
-            node_user = node.ssh_user or "autobot"
-            repo_path = source.repo_path
-            commit = source.last_known_commit or "latest"
+        # Return node info
+        node_info = {
+            "node_ip": node.ip_address,
+            "node_user": node.ssh_user or "autobot",
+            "repo_path": source.repo_path,
+            "commit": source.last_known_commit or "latest",
+        }
 
-        # Pull using rsync
-        cache_path = self.cache_dir / commit
+        return True, "OK", node_info
 
+    def _build_rsync_command(
+        self, node_ip: str, node_user: str, repo_path: str, cache_path: Path
+    ) -> list:
+        """
+        Build rsync command for pulling code from source node.
+
+        Helper for pull_from_source (Issue #665).
+        """
         ssh_opts = (
             "ssh -o StrictHostKeyChecking=no "
             "-o UserKnownHostsFile=/dev/null "
@@ -297,7 +308,7 @@ class SyncOrchestrator:
         if Path(SSH_KEY_PATH).exists():
             ssh_opts += f" -i {SSH_KEY_PATH}"
 
-        rsync_cmd = [
+        return [
             "rsync",
             "-avz",
             "--delete",
@@ -319,8 +330,32 @@ class SyncOrchestrator:
             f"{cache_path}/",
         ]
 
+    async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
+        """
+        Pull code from code-source node to SLM cache.
+
+        Returns:
+            Tuple of (success, message, commit_hash)
+        """
+        # Get source node info from database
+        async with db_service.session() as db:
+            success, msg, node_info = await self._get_source_node_info(db)
+            if not success:
+                return False, msg, None
+
+        # Prepare cache path and rsync command
+        commit = node_info["commit"]
+        cache_path = self.cache_dir / commit
+        rsync_cmd = self._build_rsync_command(
+            node_info["node_ip"],
+            node_info["node_user"],
+            node_info["repo_path"],
+            cache_path,
+        )
+
+        # Execute rsync
         try:
-            logger.info("Pulling code from %s to cache", node_ip)
+            logger.info("Pulling code from %s to cache", node_info["node_ip"])
             proc = await asyncio.create_subprocess_exec(
                 *rsync_cmd,
                 stdout=asyncio.subprocess.PIPE,
