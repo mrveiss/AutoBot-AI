@@ -588,6 +588,30 @@ async function loadTrends(): Promise<void> {
   }
 }
 
+function startPolling(): void {
+  // Clear any existing interval
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value);
+  }
+
+  // Start 30-second polling
+  pollingInterval.value = window.setInterval(async () => {
+    if (isPolling.value) {
+      await loadTrends();
+    }
+  }, 30000); // 30 seconds
+
+  logger.info('Trends polling started (30s interval)');
+}
+
+function stopPolling(): void {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value);
+    pollingInterval.value = null;
+    logger.info('Trends polling stopped');
+  }
+}
+
 async function loadFactors(): Promise<void> {
   try {
     const response = await fetch('/api/analytics/bug-prediction/factors');
