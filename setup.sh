@@ -234,8 +234,8 @@ setup_configuration() {
 
     # Create required directories
     log "Creating required directories..."
-    mkdir -p data/chats data/knowledge logs temp reports analysis models outputs
-    mkdir -p logs/ai-ml analysis/ai-ml outputs/ai-ml
+    mkdir -p data/chats data/knowledge data/outputs logs temp reports analysis models
+    mkdir -p logs/ai-ml analysis/ai-ml data/outputs/ai-ml data/outputs/multimodal
 
     # Setup .env file for environment variables
     if [ ! -f ".env" ]; then
