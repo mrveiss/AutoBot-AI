@@ -19,6 +19,10 @@ from backend.api.user_management.dependencies import (
     get_user_service,
     require_user_management_enabled,
 )
+from src.user_management.middleware.rate_limit import (
+    PasswordChangeRateLimiter,
+    RateLimitExceeded,
+)
 from src.user_management.schemas import (
     PasswordChange,
     UserCreate,
@@ -369,7 +373,18 @@ async def change_password(
     password_data: PasswordChange,
     user_service: UserService = Depends(get_user_service),
 ):
-    """Change user password."""
+    """Change user password with rate limiting."""
+    rate_limiter = PasswordChangeRateLimiter()
+
+    # Check rate limit before attempting password change
+    try:
+        await rate_limiter.check_rate_limit(user_id)
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
+
     try:
         await user_service.change_password(
             user_id=user_id,
@@ -377,6 +392,9 @@ async def change_password(
             new_password=password_data.new_password,
             require_current=password_data.current_password is not None,
         )
+
+        # Record successful attempt (clears rate limit counter)
+        await rate_limiter.record_attempt(user_id, success=True)
 
         return PasswordChangedResponse(
             message="Password changed successfully",
@@ -388,6 +406,8 @@ async def change_password(
             detail=f"User {user_id} not found",
         )
     except InvalidCredentialsError:
+        # Record failed attempt
+        await rate_limiter.record_attempt(user_id, success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",
