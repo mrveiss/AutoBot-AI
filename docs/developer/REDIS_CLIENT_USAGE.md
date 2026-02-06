@@ -4,7 +4,7 @@
 
 This guide provides detailed implementation instructions for the **ALWAYS USE CANONICAL REDIS UTILITY** policy.
 
-> **⚠️ MANDATORY RULE**: ALWAYS use `src/utils/redis_client.py::get_redis_client()`
+> **⚠️ MANDATORY RULE**: ALWAYS use `autobot_shared/redis_client.py::get_redis_client()`
 
 ---
 
@@ -14,7 +14,7 @@ This guide provides detailed implementation instructions for the **ALWAYS USE CA
 
 ```python
 # ✅ CORRECT - Use canonical utility
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Get synchronous client for 'main' database
 redis_client = get_redis_client(async_client=False, database="main")
@@ -83,7 +83,7 @@ from src.utils.redis_helper import ...  # Low priority: Only 1 test uses it
 
 ```python
 # ✅ CORRECT - Named databases (self-documenting)
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 main_db = get_redis_client(database="main")          # General cache/queues
 knowledge_db = get_redis_client(database="knowledge")  # Knowledge base vectors
@@ -119,7 +119,7 @@ db2 = redis.Redis(host="172.16.168.23", db=2)  # What is this for?
 ### Synchronous vs Async Clients
 
 ```python
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Synchronous client (for regular functions)
 def cache_data(key, value):
@@ -140,7 +140,7 @@ async def cache_data_async(key, value):
 
 ```python
 # ✅ CORRECT - Pooling handled automatically
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Each call reuses existing connection pool
 redis1 = get_redis_client(database="main")
@@ -159,7 +159,7 @@ client = redis.Redis(connection_pool=pool)
 ### Error Handling
 
 ```python
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 import redis
 
 def safe_redis_operation():
@@ -273,7 +273,7 @@ class MyService:
         self.redis.set(key, value)
 
 # ✅ AFTER (canonical utility)
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 class MyService:
     def __init__(self):
@@ -310,7 +310,7 @@ grep -l "from src.utils.redis_consolidated" **/*.py
 grep -l "from src.utils.redis_database_manager_fixed" **/*.py
 
 # Check which files correctly use get_redis_client
-grep -l "from src.utils.redis_client import get_redis_client" **/*.py
+grep -l "from autobot_shared.redis_client import get_redis_client" **/*.py
 ```
 
 ---
@@ -321,7 +321,7 @@ grep -l "from src.utils.redis_client import get_redis_client" **/*.py
 
 ```python
 # ✅ DO THIS
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 redis_client = get_redis_client(database="main")
 
 # ❌ NOT THIS

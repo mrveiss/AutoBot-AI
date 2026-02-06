@@ -33,7 +33,7 @@ The pre-commit hook automatically scans staged files before every commit:
 ```bash
 # Runs automatically on git commit
 # Located at: .git/hooks/pre-commit-hardcode-check
-./scripts/detect-hardcoded-values.sh
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh
 ```
 
 **What it checks**:
@@ -54,17 +54,17 @@ Run the detection script manually to audit the entire codebase:
 
 ```bash
 # Scan entire codebase for violations
-./scripts/detect-hardcoded-values.sh
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh
 
 # Get detailed report with line numbers
-./scripts/detect-hardcoded-values.sh | less
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh | less
 
 # Scan specific file or directory
-./scripts/detect-hardcoded-values.sh backend/api/chat.py
-./scripts/detect-hardcoded-values.sh src/
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh backend/api/chat.py
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh src/
 ```
 
-**Script location**: `scripts/detect-hardcoded-values.sh`
+**Script location**: `infrastructure/scripts/detect-hardcoded-values.sh`
 
 ---
 
@@ -81,7 +81,7 @@ redis_host = "172.16.168.23"
 redis_port = 6379
 
 # ✅ GOOD - Use SSOT config
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 
 url = config.backend.url + "/api/chat"
 redis_host = config.redis.host
@@ -126,7 +126,7 @@ BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 model = "llama3.2:1b-instruct-q4_K_M"
 
 # ✅ GOOD - Use SSOT config
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 model = config.llm.default_model
 ```
 
@@ -155,7 +155,7 @@ AUTOBOT_CUSTOM_SETTING=value
 api_url = "http://api.example.com"
 
 # ✅ GOOD - Use SSOT config for standard values
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 backend_url = config.backend.url
 
 # ✅ GOOD - Use os.getenv for custom values
@@ -211,7 +211,7 @@ git commit --no-verify -m "Your message"
 
 ### Script Location
 ```
-scripts/detect-hardcoded-values.sh
+infrastructure/scripts/detect-hardcoded-values.sh
 ```
 
 ### What It Detects
@@ -253,7 +253,7 @@ The script automatically excludes:
 
 The hook is automatically installed via:
 ```bash
-bash scripts/install-pre-commit-hooks.sh
+bash infrastructure/scripts/install-pre-commit-hooks.sh
 ```
 
 ### Manual Installation
@@ -261,12 +261,12 @@ bash scripts/install-pre-commit-hooks.sh
 If needed, install manually:
 ```bash
 # Make script executable
-chmod +x scripts/detect-hardcoded-values.sh
+chmod +x infrastructure/scripts/detect-hardcoded-values.sh
 
 # Create pre-commit hook
 cat > .git/hooks/pre-commit-hardcode-check << 'EOF'
 #!/bin/bash
-./scripts/detect-hardcoded-values.sh --staged
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh --staged
 if [ $? -ne 0 ]; then
     echo "❌ Hardcoded values detected. Fix violations before committing."
     exit 1
@@ -295,10 +295,10 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 ### 2. Run Manual Scans
 ```bash
 # Before starting work
-./scripts/detect-hardcoded-values.sh
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh
 
 # After making changes
-./scripts/detect-hardcoded-values.sh backend/api/
+./infrastructure/infrastructure/scripts/detect-hardcoded-values.sh backend/api/
 ```
 
 ### 3. Keep .env.example Updated
@@ -342,7 +342,7 @@ tests/fixtures/network_mock.py:45:Test fixture requires static IP
 **Solution**:
 ```bash
 # Reinstall hooks
-bash scripts/install-pre-commit-hooks.sh
+bash infrastructure/scripts/install-pre-commit-hooks.sh
 
 # Verify hook exists and is executable
 ls -la .git/hooks/pre-commit-hardcode-check
