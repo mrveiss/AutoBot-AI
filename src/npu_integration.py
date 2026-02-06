@@ -15,7 +15,7 @@ import json
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 import yaml
 
@@ -380,6 +380,58 @@ class NPUWorkerPool:
             )
 
         logger.info("NPUWorkerPool initialized with %d workers", len(self.workers))
+
+    async def _select_worker(self, excluded_workers: Set[str]) -> Optional[WorkerState]:
+        """
+        Select best available worker using priority-first + least-connections.
+
+        Args:
+            excluded_workers: Set of worker IDs to exclude (for retry logic)
+
+        Returns:
+            WorkerState of selected worker, or None if no workers available
+        """
+        async with self._lock:
+            # Filter available workers
+            available = []
+            for worker_id, state in self.workers.items():
+                # Skip excluded workers
+                if worker_id in excluded_workers:
+                    continue
+                # Skip workers with open circuit
+                if state.circuit_state == CircuitState.OPEN:
+                    continue
+                available.append((worker_id, state))
+
+            if not available:
+                logger.debug("No available workers after filtering")
+                return None
+
+            # Group by priority (from config)
+            priority_groups: Dict[int, List[tuple]] = {}
+            for worker_id, state in available:
+                priority = self._worker_configs.get(worker_id, {}).get("priority", 5)
+                if priority not in priority_groups:
+                    priority_groups[priority] = []
+                priority_groups[priority].append((worker_id, state))
+
+            # Select highest priority group
+            max_priority = max(priority_groups.keys())
+            top_group = priority_groups[max_priority]
+
+            # Within group, select least loaded (by active_tasks)
+            # Ties broken by worker_id (alphabetical)
+            top_group.sort(key=lambda x: (x[1].active_tasks, x[0]))
+            selected_id, selected_state = top_group[0]
+
+            logger.debug(
+                "Selected worker %s (priority=%d, active_tasks=%d)",
+                selected_id,
+                max_priority,
+                selected_state.active_tasks,
+            )
+
+            return selected_state
 
 
 class NPUTaskQueue:

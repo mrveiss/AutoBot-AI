@@ -166,3 +166,189 @@ def test_worker_pool_empty_config():
 
     pool = NPUWorkerPool(config_path="/nonexistent/config.yaml")
     assert len(pool.workers) == 0
+
+
+# =============================================================================
+# Task 4: Worker Selection Algorithm Tests
+# =============================================================================
+
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_select_worker_priority_first():
+    """Higher priority worker should be selected even if more loaded"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "high-priority"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "low-priority"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        # Give high-priority more tasks
+        pool.workers["high-priority"].active_tasks = 5
+        pool.workers["low-priority"].active_tasks = 0
+
+        # Should still select high-priority due to priority-first
+        selected = await pool._select_worker(excluded_workers=set())
+        assert selected is not None
+        assert selected.worker_id == "high-priority"
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_select_worker_least_connections():
+    """Within same priority, least loaded worker selected"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-a"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-b"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        pool.workers["worker-a"].active_tasks = 5
+        pool.workers["worker-b"].active_tasks = 2
+
+        # Should select worker-b (fewer active tasks)
+        selected = await pool._select_worker(excluded_workers=set())
+        assert selected is not None
+        assert selected.worker_id == "worker-b"
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_select_worker_excludes_workers():
+    """Excluded workers should not be selected"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-a"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-b"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+
+        # Exclude high-priority worker
+        selected = await pool._select_worker(excluded_workers={"worker-a"})
+        assert selected is not None
+        assert selected.worker_id == "worker-b"
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_select_worker_skips_open_circuit():
+    """Workers with open circuit should not be selected"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-a"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-b"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+
+        # Open circuit on high-priority worker
+        pool.workers["worker-a"].circuit_state = CircuitState.OPEN
+
+        selected = await pool._select_worker(excluded_workers=set())
+        assert selected is not None
+        assert selected.worker_id == "worker-b"
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_select_worker_returns_none_when_all_excluded():
+    """Should return None when all workers are excluded/unavailable"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-a"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        selected = await pool._select_worker(excluded_workers={"worker-a"})
+        assert selected is None
+    finally:
+        os.unlink(config_path)
