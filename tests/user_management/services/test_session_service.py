@@ -8,9 +8,22 @@ Tests for session management and JWT token invalidation.
 Issue #635.
 """
 
+import uuid
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from src.user_management.services.session_service import SessionService
+
+
+@pytest.fixture
+def mock_redis():
+    """Mock Redis client."""
+    mock = AsyncMock()
+    mock.sadd = AsyncMock(return_value=1)
+    mock.expire = AsyncMock(return_value=True)
+    mock.sismember = AsyncMock(return_value=False)
+    return mock
 
 
 @pytest.mark.asyncio
@@ -24,3 +37,23 @@ async def test_hash_token_creates_sha256():
     assert hash1 == hash2  # Deterministic
     assert len(hash1) == 64  # SHA256 hex length
     assert hash1.isalnum()  # Hex string
+
+
+@pytest.mark.asyncio
+async def test_add_token_to_blacklist(mock_redis):
+    """Adding token to blacklist stores hash in Redis set."""
+    user_id = uuid.uuid4()
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+
+    with patch(
+        "src.user_management.services.session_service.get_redis_client",
+        return_value=mock_redis,
+    ):
+        service = SessionService()
+        await service.add_token_to_blacklist(user_id, token, ttl=86400)
+
+    expected_key = f"session:blacklist:{user_id}"
+    expected_hash = SessionService.hash_token(token)
+
+    mock_redis.sadd.assert_called_once_with(expected_key, expected_hash)
+    mock_redis.expire.assert_called_once_with(expected_key, 86400)
