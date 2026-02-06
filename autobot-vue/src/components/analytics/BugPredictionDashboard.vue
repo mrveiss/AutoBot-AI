@@ -197,15 +197,24 @@
       <div class="panel trends-panel">
         <div class="panel-header">
           <h3>&#128200; Prediction Accuracy</h3>
-          <div class="period-selector">
-            <button
-              v-for="period in ['7d', '30d', '90d']"
-              :key="period"
-              :class="{ active: selectedPeriod === period }"
-              @click="selectedPeriod = period; loadTrends()"
-            >
-              {{ period }}
-            </button>
+          <div class="header-actions">
+            <span class="live-badge">
+              <span class="pulse-dot"></span>
+              Live
+            </span>
+            <span v-if="lastUpdateTime" class="update-time">
+              {{ formatTimeAgo(lastUpdateTime) }}
+            </span>
+            <div class="period-selector">
+              <button
+                v-for="period in ['7d', '30d', '90d']"
+                :key="period"
+                :class="{ active: selectedPeriod === period }"
+                @click="selectedPeriod = period; loadTrends()"
+              >
+                {{ period }}
+              </button>
+            </div>
           </div>
         </div>
         <div class="panel-content">
@@ -374,8 +383,9 @@
  * BugPredictionDashboard.vue - Bug prediction analytics dashboard
  * Issue #704: Migrated to design tokens for centralized theming
  */
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { createLogger } from '@/utils/debugUtils';
+import { formatTimeAgo } from '@/utils/formatHelpers';
 
 // Create scoped logger for BugPredictionDashboard
 const logger = createLogger('BugPredictionDashboard');
@@ -430,6 +440,9 @@ const selectedPeriod = ref('30d');
 const heatmapGrouping = ref<'directory' | 'flat'>('directory');
 const selectedFile = ref<RiskFile | null>(null);
 const hoveredPoint = ref<TrendPoint | null>(null);
+const isPolling = ref(true);
+const lastUpdateTime = ref<Date | null>(null);
+const pollingInterval = ref<number | null>(null);
 
 const summary = ref<Summary>({
   total_files_analyzed: 0,
@@ -567,14 +580,54 @@ async function loadTrends(): Promise<void> {
     const response = await fetch(`/api/analytics/bug-prediction/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       const data = await response.json();
-      trendData.value = data.data_points || [];
+      const newDataPoints = data.data_points || [];
+
+      // Only update if data actually changed (avoid unnecessary re-renders)
+      if (JSON.stringify(newDataPoints) !== JSON.stringify(trendData.value)) {
+        trendData.value = newDataPoints;
+        lastUpdateTime.value = new Date();
+      }
     } else {
+      // Silent failure for polling - preserve existing data to avoid UI flicker
       logger.warn('Failed to load trends: HTTP', response.status);
-      trendData.value = [];
     }
   } catch (error) {
-    logger.error('Failed to load trends:', error);
-    trendData.value = [];
+    // Silent failure for polling - preserve existing data to avoid UI flicker
+    logger.warn('Trend polling failed:', error);
+  }
+}
+
+function startPolling(): void {
+  // Clear any existing interval
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value);
+  }
+
+  // Start 30-second polling
+  pollingInterval.value = window.setInterval(async () => {
+    if (isPolling.value) {
+      await loadTrends();
+    }
+  }, 30000); // 30 seconds
+
+  logger.info('Trends polling started (30s interval)');
+}
+
+function stopPolling(): void {
+  if (pollingInterval.value) {
+    clearInterval(pollingInterval.value);
+    pollingInterval.value = null;
+    logger.info('Trends polling stopped');
+  }
+}
+
+function handleVisibilityChange(): void {
+  if (document.hidden) {
+    stopPolling();
+    logger.info('Tab hidden - pausing trends polling');
+  } else {
+    startPolling();
+    logger.info('Tab visible - resuming trends polling');
   }
 }
 
@@ -667,6 +720,15 @@ function getFactorClass(value: number): string {
 // Lifecycle
 onMounted(() => {
   refreshData();
+  startPolling();
+
+  // Pause polling when tab hidden, resume when visible
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  stopPolling();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 
 watch(selectedPeriod, () => {
@@ -1166,6 +1228,49 @@ watch(selectedPeriod, () => {
 }
 
 /* Trends Panel */
+.trends-panel .header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-success);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-success);
+  border-radius: var(--radius-full);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+.update-time {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .period-selector {
   display: flex;
   gap: var(--spacing-1);
