@@ -108,3 +108,61 @@ npu:
         assert len(workers) == 0
     finally:
         os.unlink(config_path)
+
+
+# =============================================================================
+# Task 3: NPUWorkerPool Initialization Tests
+# =============================================================================
+
+
+def test_worker_pool_initialization_with_config():
+    """NPUWorkerPool should initialize workers from config"""
+
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "pool-worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "pool-worker-2"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+    - id: "disabled-worker"
+      host: "192.168.1.12"
+      port: 8083
+      enabled: false
+      priority: 1
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        # Only enabled workers should be initialized
+        assert len(pool.workers) == 2
+        assert "pool-worker-1" in pool.workers
+        assert "pool-worker-2" in pool.workers
+        assert "disabled-worker" not in pool.workers
+        # Check WorkerState is created correctly
+        assert pool.workers["pool-worker-1"].worker_id == "pool-worker-1"
+        assert pool.workers["pool-worker-1"].healthy is True
+        assert pool.workers["pool-worker-1"].circuit_state == CircuitState.CLOSED
+    finally:
+        os.unlink(config_path)
+
+
+def test_worker_pool_empty_config():
+    """NPUWorkerPool should handle empty config gracefully"""
+    from src.npu_integration import NPUWorkerPool
+
+    pool = NPUWorkerPool(config_path="/nonexistent/config.yaml")
+    assert len(pool.workers) == 0

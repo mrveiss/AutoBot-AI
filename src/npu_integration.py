@@ -330,6 +330,58 @@ class NPUWorkerClient:
         # Using HTTPClient singleton - session management is centralized
 
 
+class NPUWorkerPool:
+    """
+    Pool manager for multiple NPU workers with load balancing (Issue #168).
+
+    Manages worker lifecycle, health monitoring, circuit breakers, and
+    intelligent task routing using priority-first + least-connections algorithm.
+    """
+
+    def __init__(self, config_path: str = "config/npu_workers.yaml"):
+        """
+        Initialize worker pool from configuration.
+
+        Args:
+            config_path: Path to worker configuration YAML file
+        """
+        self.config_path = config_path
+        self.workers: Dict[str, WorkerState] = {}
+        self._worker_configs: Dict[str, Dict] = {}
+        self._lock = asyncio.Lock()
+        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._running = False
+
+        # Load initial configuration
+        self._load_workers()
+
+    def _load_workers(self) -> None:
+        """Load workers from configuration file."""
+        worker_configs = load_worker_config(self.config_path)
+
+        for config in worker_configs:
+            if not config.get("enabled", True):
+                logger.debug("Skipping disabled worker: %s", config["id"])
+                continue
+
+            worker_id = config["id"]
+            client = NPUWorkerClient(npu_endpoint=config["url"])
+
+            self.workers[worker_id] = WorkerState(
+                worker_id=worker_id,
+                client=client,
+            )
+            self._worker_configs[worker_id] = config
+
+            logger.info(
+                "Initialized worker %s (priority=%d)",
+                worker_id,
+                config.get("priority", 5),
+            )
+
+        logger.info("NPUWorkerPool initialized with %d workers", len(self.workers))
+
+
 class NPUTaskQueue:
     """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""
 
