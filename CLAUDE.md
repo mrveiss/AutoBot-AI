@@ -95,7 +95,7 @@ When merging duplicate code: **Preserve ALL features** + **Choose BEST implement
 ### Hardcoding Prevention
 ```python
 # ✅ Use SSOT config
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 redis_host = config.redis.host
 ```
 ```typescript
@@ -107,7 +107,7 @@ Pre-commit hook enforces this. Guide: [`docs/developer/HARDCODING_PREVENTION.md`
 ### Redis Client
 ```python
 # ✅ ALWAYS use canonical utility
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 redis_client = get_redis_client(async_client=False, database="main")
 # ❌ NEVER: redis.Redis(host="172.16.168.23", ...)
 ```
@@ -134,48 +134,67 @@ const logger = createLogger('ComponentName')
 
 ## 🖥️ INFRASTRUCTURE
 
-### Service Layout
-| Service | IP:Port | Purpose |
-|---------|---------|---------|
-| Main (WSL) | 172.16.168.20:8001 | Backend API + VNC (6080) |
-| VM1 Frontend | 172.16.168.21:5173 | Web interface (ONLY frontend server) |
-| VM2 NPU | 172.16.168.22:8081 | Hardware AI acceleration |
-| VM3 Redis | 172.16.168.23:6379 | Data layer |
-| VM4 AI Stack | 172.16.168.24:8080 | AI processing |
-| VM5 Browser | 172.16.168.25:3000 | Playwright automation |
-| SLM Server | 172.16.168.19:8000 | System Lifecycle Manager |
+### Service Layout (172.16.168.19-27)
+| Service | IP:Port | Component | Purpose |
+|---------|---------|-----------|---------|
+| SLM Server | 172.16.168.19:8000 | `autobot-slm-backend/` | System Lifecycle Manager |
+| Main (WSL) | 172.16.168.20:8001 | `autobot-user-backend/` | Backend API + VNC (6080) |
+| Frontend VM | 172.16.168.21:5173 | `autobot-slm-frontend/` | SLM Admin UI (ONLY frontend server) |
+| NPU VM | 172.16.168.22:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
+| Redis VM | 172.16.168.23:6379 | — | Data layer (Redis Stack) |
+| AI Stack VM | 172.16.168.24:8080 | — | AI processing |
+| Browser VM | 172.16.168.25:3000 | `autobot-browser-worker/` | Playwright automation |
+| Reserved | 172.16.168.26 | — | (Unassigned) |
+| Reserved | 172.16.168.27 | — | (Unassigned) |
 
 ### Component Architecture (CRITICAL - Don't Mix Up!)
 
 | Directory | Deploys To | Description |
 |-----------|------------|-------------|
-| `src/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
-| `autobot-vue/` | 172.16.168.20 (Main) | Main AutoBot chat interface |
-| `slm-server/` | 172.16.168.19 (SLM) | **SLM backend** - Fleet management, code sync |
-| `slm-admin/` | 172.16.168.21 (Frontend VM) | **SLM admin dashboard** - Vue 3 UI for fleet |
+| `autobot-user-backend/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
+| `autobot-user-frontend/` | 172.16.168.20 (Main) | Main AutoBot chat interface (Vue 3) |
+| `autobot-slm-backend/` | 172.16.168.19 (SLM) | **SLM backend** - Fleet management, monitoring |
+| `autobot-slm-frontend/` | 172.16.168.21 (Frontend VM) | **SLM admin dashboard** - Vue 3 UI for fleet |
+| `autobot-npu-worker/` | 172.16.168.22 (NPU) | NPU acceleration worker |
+| `autobot-browser-worker/` | 172.16.168.25 (Browser) | Playwright automation worker |
+| `autobot-shared/` | All backends | Common utilities (redis, config, logging) |
+| `infrastructure/` | Dev machine | Scripts, docker, tests, config (not deployed) |
 
 **Before editing, verify:**
-- `src/` or `autobot-vue/` → Main AutoBot functionality
-- `slm-server/` or `slm-admin/` → SLM fleet management (different system!)
+- `autobot-user-*` → Main AutoBot functionality
+- `autobot-slm-*` → SLM fleet management (different system!)
+- `autobot-shared/` → Shared code deployed with each backend
 
 **Sync commands:**
 ```bash
-# SLM Admin frontend → VM1
-./scripts/utilities/sync-to-vm.sh frontend slm-admin/src/ /home/autobot/AutoBot/slm-admin/src/
+# User backend → Main server
+./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-backend/
 
-# SLM Server backend → SLM machine
-./scripts/utilities/sync-to-vm.sh slm slm-server/ /home/autobot/slm-server/
+# User frontend → Main server
+./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-frontend/
+
+# SLM backend → SLM server
+./infrastructure/scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/
+
+# SLM frontend → Frontend VM
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/
+
+# NPU worker → NPU VM
+./infrastructure/scripts/utilities/sync-to-vm.sh npu autobot-npu-worker/
+
+# Browser worker → Browser VM
+./infrastructure/scripts/utilities/sync-to-vm.sh browser autobot-browser-worker/
 ```
 
 ### Single Frontend Server (CRITICAL)
-- **ONLY** `172.16.168.21:5173` runs frontend
+- **ONLY** `172.16.168.21:5173` runs SLM Admin frontend
 - ❌ **FORBIDDEN**: `npm run dev` on main machine, any local frontend server
-- ✅ Edit locally → Sync with `./sync-frontend.sh`
+- ✅ Edit locally → Sync with `./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/`
 
 ### Local-Only Development (ZERO TOLERANCE)
 **NEVER edit on remote VMs** - No version control, no backup, VMs are ephemeral.
 1. Edit in `/home/kali/Desktop/AutoBot/`
-2. Sync immediately: `./scripts/utilities/sync-to-vm.sh <vm> <path>`
+2. Sync immediately: `./infrastructure/scripts/utilities/sync-to-vm.sh <vm> <component>/`
 
 ---
 
@@ -210,8 +229,10 @@ bash run_autobot.sh --dev
 curl http://localhost:8001/api/health
 redis-cli -h 172.16.168.23 ping
 
-# Sync to VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
+# Sync to VMs (new paths)
+./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-backend/
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/
+./infrastructure/scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/
 
 # Memory MCP
 mcp__memory__search_nodes --query "keywords"

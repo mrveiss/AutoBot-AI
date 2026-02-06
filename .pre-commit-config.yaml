@@ -74,7 +74,7 @@ repos:
     hooks:
       - id: bandit
         args: [-c, .bandit]
-        files: ^(backend/|src/)
+        files: ^(autobot-user-backend/|autobot-slm-backend/|autobot-shared/)
         additional_dependencies: ["bandit[toml]"]
 
   # Hardcoded value detection (Issue #694)
@@ -82,7 +82,7 @@ repos:
     hooks:
       - id: detect-hardcoded-values
         name: Detect Hardcoded Values (Strict)
-        entry: scripts/hooks/pre-commit-hardcoded-values
+        entry: infrastructure/scripts/hooks/pre-commit-hardcoded-values
         language: script
         types: [python, ts, vue]
         pass_filenames: false
@@ -94,7 +94,7 @@ repos:
     hooks:
       - id: function-length-check
         name: Function Length Check (Issue #620)
-        entry: scripts/hooks/pre-commit-function-length
+        entry: infrastructure/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
         pass_filenames: false
