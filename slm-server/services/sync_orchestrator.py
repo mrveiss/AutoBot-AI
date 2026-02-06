@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class SyncNodeContext:
-    """Context object for sync_node_role operation. Helper for sync_node_role (Issue #665)."""
+    """Context object for sync_node_role operation.
+
+    Helper for sync_node_role (Issue #665).
+    """
 
     def __init__(self):
         self.node_ip: str = ""
