@@ -570,6 +570,83 @@ async def rotate_tls_certificate(
         )
 
 
+async def _renew_single_certificate(db, service, cred, deploy: bool):
+    """Process renewal of a single certificate with optional deployment.
+
+    Helper for bulk_renew_expiring_certificates (Issue #665).
+
+    Args:
+        db: Database session.
+        service: TLS credential service instance.
+        cred: Credential object to renew.
+        deploy: Whether to deploy the renewed certificate.
+
+    Returns:
+        Dict with renewal result including success status and metadata.
+    """
+    try:
+        # Get node
+        result = await db.execute(select(Node).where(Node.node_id == cred.node_id))
+        node = result.scalar_one_or_none()
+
+        # Renew certificate
+        new_cred = await service.renew_certificate(db, cred.credential_id)
+
+        # Deploy if requested
+        deployment_result = None
+        if deploy and node and new_cred:
+            deployment_result = await _deploy_certificate_to_node(node, new_cred, db)
+
+        if new_cred:
+            return {
+                "old_credential_id": cred.credential_id,
+                "new_credential_id": new_cred.credential_id,
+                "node_id": cred.node_id,
+                "success": True,
+                "deployed": deployment_result.get("success", False)
+                if deployment_result
+                else False,
+            }
+        else:
+            return {
+                "old_credential_id": cred.credential_id,
+                "node_id": cred.node_id,
+                "success": False,
+                "error": "Renewal failed",
+            }
+
+    except Exception as e:
+        return {
+            "old_credential_id": cred.credential_id,
+            "node_id": cred.node_id,
+            "success": False,
+            "error": str(e),
+        }
+
+
+def _build_renewal_response(renewed: int, failed: int, results: list) -> dict:
+    """Build the response dictionary for bulk certificate renewal.
+
+    Helper for bulk_renew_expiring_certificates (Issue #665).
+
+    Args:
+        renewed: Count of successfully renewed certificates.
+        failed: Count of failed renewals.
+        results: List of individual renewal results.
+
+    Returns:
+        Response dict with success status, message, counts, and detailed results.
+    """
+    return {
+        "success": failed == 0,
+        "message": f"Renewed {renewed} certificate(s)"
+        + (f", {failed} failed" if failed else ""),
+        "renewed": renewed,
+        "failed": failed,
+        "results": results,
+    }
+
+
 @tls_router.post(
     "/bulk-renew",
 )
@@ -603,66 +680,17 @@ async def bulk_renew_expiring_certificates(
     failed = 0
 
     for cred in credentials:
-        try:
-            # Get node
-            result = await db.execute(select(Node).where(Node.node_id == cred.node_id))
-            node = result.scalar_one_or_none()
+        result = await _renew_single_certificate(db, service, cred, deploy)
+        results.append(result)
 
-            # Renew certificate
-            new_cred = await service.renew_certificate(db, cred.credential_id)
-
-            # Deploy if requested
-            deployment_result = None
-            if deploy and node and new_cred:
-                deployment_result = await _deploy_certificate_to_node(
-                    node, new_cred, db
-                )
-
-            if new_cred:
-                renewed += 1
-                results.append(
-                    {
-                        "old_credential_id": cred.credential_id,
-                        "new_credential_id": new_cred.credential_id,
-                        "node_id": cred.node_id,
-                        "success": True,
-                        "deployed": deployment_result.get("success", False)
-                        if deployment_result
-                        else False,
-                    }
-                )
-            else:
-                failed += 1
-                results.append(
-                    {
-                        "old_credential_id": cred.credential_id,
-                        "node_id": cred.node_id,
-                        "success": False,
-                        "error": "Renewal failed",
-                    }
-                )
-
-        except Exception as e:
+        if result["success"]:
+            renewed += 1
+        else:
             failed += 1
-            results.append(
-                {
-                    "old_credential_id": cred.credential_id,
-                    "node_id": cred.node_id,
-                    "success": False,
-                    "error": str(e),
-                }
-            )
 
     logger.info("Bulk certificate renewal: %d renewed, %d failed", renewed, failed)
 
-    return {
-        "success": failed == 0,
-        "message": f"Renewed {renewed} certificate(s)"
-        + (f", {failed} failed" if failed else ""),
-        "renewed": renewed,
-        "failed": failed,
-        "results": results,
-    }
+    return _build_renewal_response(renewed, failed, results)
 
 
 def _check_ansible_availability() -> str:
