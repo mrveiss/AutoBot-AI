@@ -889,6 +889,57 @@ async def delete_schedule(
     return {"success": True, "message": f"Schedule '{schedule_name}' deleted"}
 
 
+async def _get_schedule_target_nodes(
+    db: AsyncSession, schedule: UpdateSchedule
+) -> List[Node]:
+    """
+    Get target nodes based on schedule configuration.
+
+    Helper for run_schedule (Issue #665).
+    """
+    if schedule.target_type == "all":
+        nodes_result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+    elif schedule.target_type == "specific" and schedule.target_nodes:
+        nodes_result = await db.execute(
+            select(Node).where(Node.node_id.in_(schedule.target_nodes))
+        )
+    else:
+        nodes_result = await db.execute(
+            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
+        )
+
+    return nodes_result.scalars().all()
+
+
+def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> FleetSyncJob:
+    """
+    Create a fleet sync job with target nodes.
+
+    Helper for run_schedule (Issue #665).
+    """
+    job_id = str(uuid.uuid4())[:16]
+
+    job = FleetSyncJob(
+        job_id=job_id,
+        strategy="rolling",
+        batch_size=1,
+        restart=schedule.restart_after_sync,
+    )
+
+    for node in nodes:
+        job.nodes[node.node_id] = NodeSyncState(
+            node_id=node.node_id,
+            hostname=node.hostname,
+            ip_address=node.ip_address,
+            ssh_user=node.ssh_user or "autobot",
+            ssh_port=node.ssh_port or 22,
+        )
+
+    return job
+
+
 @router.post("/schedules/{schedule_id}/run", response_model=ScheduleRunResponse)
 async def run_schedule(
     schedule_id: int,
@@ -912,20 +963,7 @@ async def run_schedule(
         )
 
     # Get target nodes based on schedule configuration
-    if schedule.target_type == "all":
-        nodes_result = await db.execute(
-            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-        )
-    elif schedule.target_type == "specific" and schedule.target_nodes:
-        nodes_result = await db.execute(
-            select(Node).where(Node.node_id.in_(schedule.target_nodes))
-        )
-    else:
-        nodes_result = await db.execute(
-            select(Node).where(Node.code_status == CodeStatus.OUTDATED.value)
-        )
-
-    nodes = nodes_result.scalars().all()
+    nodes = await _get_schedule_target_nodes(db, schedule)
 
     if not nodes:
         return ScheduleRunResponse(
@@ -936,28 +974,12 @@ async def run_schedule(
         )
 
     # Create a fleet sync job
-    job_id = str(uuid.uuid4())[:16]
-
-    job = FleetSyncJob(
-        job_id=job_id,
-        strategy="rolling",
-        batch_size=1,
-        restart=schedule.restart_after_sync,
-    )
-
-    for node in nodes:
-        job.nodes[node.node_id] = NodeSyncState(
-            node_id=node.node_id,
-            hostname=node.hostname,
-            ip_address=node.ip_address,
-            ssh_user=node.ssh_user or "autobot",
-            ssh_port=node.ssh_port or 22,
-        )
+    job = _create_fleet_sync_job(nodes, schedule)
 
     # Store job and start background task
-    _fleet_sync_jobs[job_id] = job
+    _fleet_sync_jobs[job.job_id] = job
     task = asyncio.create_task(_run_fleet_sync_job(job))
-    _running_tasks[job_id] = task
+    _running_tasks[job.job_id] = task
 
     # Update schedule last_run
     schedule.last_run = datetime.utcnow()
@@ -967,7 +989,7 @@ async def run_schedule(
     logger.info(
         "Manually triggered schedule '%s' - job %s for %d nodes",
         schedule.name,
-        job_id,
+        job.job_id,
         len(nodes),
     )
 
@@ -975,7 +997,7 @@ async def run_schedule(
         success=True,
         message=f"Triggered sync for {len(nodes)} node(s)",
         schedule_id=schedule_id,
-        job_id=job_id,
+        job_id=job.job_id,
     )
 
 
