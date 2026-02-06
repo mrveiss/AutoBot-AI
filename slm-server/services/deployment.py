@@ -752,6 +752,73 @@ class DeploymentService:
 
         return output
 
+    def _get_effective_password(
+        self, node: Node, ssh_password: Optional[str]
+    ) -> Optional[str]:
+        """Get SSH password from parameter or decrypt from node storage.
+
+        Helper for enroll_node (Issue #665).
+
+        Args:
+            node: The node record
+            ssh_password: Optional password provided at enrollment time
+
+        Returns:
+            The effective password to use, or None if no password available
+        """
+        if ssh_password:
+            return ssh_password
+
+        if not node.extra_data:
+            return None
+
+        encrypted_password = node.extra_data.get("ssh_password")
+        if not encrypted_password:
+            return None
+
+        # Check if password is encrypted (new format) or plaintext (legacy)
+        if node.extra_data.get("ssh_password_encrypted"):
+            try:
+                return decrypt_data(encrypted_password)
+            except Exception as e:
+                logger.error(
+                    "Failed to decrypt SSH password for node %s: %s", node.node_id, e
+                )
+                raise RuntimeError("Failed to decrypt stored credentials")
+        else:
+            # Legacy plaintext password (migration path)
+            return encrypted_password
+
+    async def _handle_enrollment_success(
+        self, db: AsyncSession, node: Node, output: str
+    ) -> None:
+        """Update node status and clear password after successful enrollment.
+
+        Helper for enroll_node (Issue #665).
+
+        Args:
+            db: Database session
+            node: The node that was enrolled
+            output: Playbook output for logging
+        """
+        # Mark as online - agent will send first heartbeat
+        node.status = NodeStatus.ONLINE.value
+
+        # Update auth method to key-based (SSH keys deployed during enrollment)
+        node.auth_method = "key"
+
+        # Clear stored password from extra_data (no longer needed)
+        if node.extra_data and "ssh_password" in node.extra_data:
+            extra_data = dict(node.extra_data)
+            del extra_data["ssh_password"]
+            node.extra_data = extra_data
+
+        await db.commit()
+
+        logger.info(
+            "Enrollment completed for node %s - auth_method set to key", node.node_id
+        )
+
     async def enroll_node(
         self, db: AsyncSession, node_id: str, ssh_password: Optional[str] = None
     ) -> Tuple[bool, str]:
@@ -791,25 +858,10 @@ class DeploymentService:
 
         logger.info("Starting enrollment for node %s (%s)", node_id, node.ip_address)
 
-        # Use provided password, or fall back to stored password from node registration
-        effective_password = ssh_password
-        if not effective_password and node.extra_data:
-            encrypted_password = node.extra_data.get("ssh_password")
-            if encrypted_password:
-                # Check if password is encrypted (new format) or plaintext (legacy)
-                if node.extra_data.get("ssh_password_encrypted"):
-                    try:
-                        effective_password = decrypt_data(encrypted_password)
-                    except Exception as e:
-                        logger.error(
-                            "Failed to decrypt SSH password for node %s: %s", node_id, e
-                        )
-                        return False, "Failed to decrypt stored credentials"
-                else:
-                    # Legacy plaintext password (migration path)
-                    effective_password = encrypted_password
-
         try:
+            # Get effective password (provided or from stored encrypted)
+            effective_password = self._get_effective_password(node, ssh_password)
+
             # Deploy the slm-agent role
             output = await self._execute_enrollment_playbook(
                 node.ip_address,
@@ -819,23 +871,9 @@ class DeploymentService:
                 ssh_password=effective_password,
             )
 
-            # Mark as online - agent will send first heartbeat
-            node.status = NodeStatus.ONLINE.value
+            # Handle success: update status, clear password, commit
+            await self._handle_enrollment_success(db, node, output)
 
-            # Update auth method to key-based (SSH keys deployed during enrollment)
-            node.auth_method = "key"
-
-            # Clear stored password from extra_data (no longer needed)
-            if node.extra_data and "ssh_password" in node.extra_data:
-                extra_data = dict(node.extra_data)
-                del extra_data["ssh_password"]
-                node.extra_data = extra_data
-
-            await db.commit()
-
-            logger.info(
-                "Enrollment completed for node %s - auth_method set to key", node_id
-            )
             return True, f"Agent deployed successfully. Output:\n{output}"
 
         except Exception as e:
