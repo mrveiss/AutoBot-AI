@@ -822,3 +822,246 @@ async def test_get_npu_pool_returns_singleton():
 
     # Cleanup
     npu_module._npu_pool = None
+
+
+# =============================================================================
+# Task 10: Pool Management Methods Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_pool_stats_returns_metrics():
+    """get_pool_stats should return pool metrics"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-2"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+
+        # Simulate some activity
+        pool.workers["worker-1"].total_requests = 100
+        pool.workers["worker-1"].failures = 5
+        pool.workers["worker-2"].total_requests = 50
+        pool.workers["worker-2"].failures = 2
+        pool.workers["worker-1"].active_tasks = 3
+
+        stats = await pool.get_pool_stats()
+
+        assert stats["total_workers"] == 2
+        assert stats["healthy_workers"] == 2
+        assert stats["total_tasks_processed"] == 150
+        assert stats["active_tasks"] == 3
+        assert stats["success_rate"] > 0
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_get_pool_stats_with_unhealthy_workers():
+    """get_pool_stats should count healthy workers correctly"""
+    import time
+
+    from src.npu_integration import CircuitState, NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-2"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+
+        # Mark one worker as unhealthy via circuit breaker
+        # Set circuit_open_until to future time so it stays OPEN
+        pool.workers["worker-1"].circuit_state = CircuitState.OPEN
+        pool.workers["worker-1"].circuit_open_until = time.time() + 3600  # 1 hour
+
+        stats = await pool.get_pool_stats()
+
+        assert stats["total_workers"] == 2
+        assert stats["healthy_workers"] == 1  # Only worker-2 is healthy
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_reload_config_adds_new_worker():
+    """reload_config should add new workers from config"""
+    from src.npu_integration import NPUWorkerPool
+
+    # Initial config with one worker
+    initial_config = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(initial_config)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        assert len(pool.workers) == 1
+
+        # Update config file with additional worker
+        updated_config = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-2"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(updated_config)
+
+        await pool.reload_config()
+
+        assert len(pool.workers) == 2
+        assert "worker-2" in pool.workers
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_reload_config_removes_worker():
+    """reload_config should remove workers no longer in config"""
+    from src.npu_integration import NPUWorkerPool
+
+    # Initial config with two workers
+    initial_config = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+    - id: "worker-2"
+      host: "192.168.1.11"
+      port: 8082
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(initial_config)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        assert len(pool.workers) == 2
+
+        # Update config file with only one worker
+        updated_config = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(updated_config)
+
+        await pool.reload_config()
+
+        assert len(pool.workers) == 1
+        assert "worker-2" not in pool.workers
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_reload_config_updates_existing_worker():
+    """reload_config should update existing workers"""
+    from src.npu_integration import NPUWorkerPool
+
+    # Initial config with priority 5
+    initial_config = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 5
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(initial_config)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        # Priority is stored in _worker_configs, not on WorkerState
+        assert pool._worker_configs["worker-1"]["priority"] == 5
+
+        # Update config file with higher priority
+        updated_config = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(updated_config)
+
+        await pool.reload_config()
+
+        # Priority should be updated in _worker_configs
+        assert pool._worker_configs["worker-1"]["priority"] == 10
+    finally:
+        os.unlink(config_path)

@@ -681,6 +681,99 @@ class NPUWorkerPool:
             "fallback": True,
         }
 
+    async def get_pool_stats(self) -> Dict[str, Any]:
+        """
+        Get pool-level statistics and metrics (Issue #168).
+
+        Returns:
+            Dict containing pool metrics:
+            - total_workers: Total number of configured workers
+            - healthy_workers: Number of healthy workers
+            - total_tasks_processed: Total tasks executed
+            - active_tasks: Currently executing tasks
+            - success_rate: Task success rate (0.0-1.0)
+        """
+        total_workers = len(self.workers)
+        healthy_workers = sum(
+            1
+            for w in self.workers.values()
+            if w.healthy and self._is_circuit_available(w)
+        )
+        total_tasks = sum(w.total_requests for w in self.workers.values())
+        active_tasks = sum(w.active_tasks for w in self.workers.values())
+        total_failures = sum(w.failures for w in self.workers.values())
+
+        # Calculate success rate
+        success_rate = 0.0
+        if total_tasks > 0:
+            success_rate = round(1.0 - (total_failures / total_tasks), 3)
+
+        return {
+            "total_workers": total_workers,
+            "healthy_workers": healthy_workers,
+            "total_tasks_processed": total_tasks,
+            "active_tasks": active_tasks,
+            "success_rate": success_rate,
+        }
+
+    async def reload_config(self) -> None:
+        """
+        Hot-reload worker configuration from YAML file (Issue #168).
+
+        Reloads config/npu_workers.yaml and updates the worker pool:
+        - New workers are added
+        - Removed workers are removed (after active tasks drain)
+        - Existing workers are updated
+        """
+        logger.info("Reloading pool configuration from %s", self.config_path)
+
+        try:
+            new_configs = load_worker_config(self.config_path)
+        except Exception as e:
+            logger.error("Failed to load worker config during reload: %s", e)
+            raise
+
+        new_worker_ids = {cfg["id"] for cfg in new_configs}
+        current_worker_ids = set(self.workers.keys())
+
+        # Remove workers no longer in config
+        for worker_id in current_worker_ids - new_worker_ids:
+            worker = self.workers.get(worker_id)
+            if worker and worker.active_tasks == 0:
+                del self.workers[worker_id]
+                if worker_id in self._worker_configs:
+                    del self._worker_configs[worker_id]
+                logger.info("Removed worker %s from pool", worker_id)
+            elif worker:
+                logger.warning(
+                    "Worker %s has %d active tasks, deferring removal",
+                    worker_id,
+                    worker.active_tasks,
+                )
+
+        # Add or update workers from new config
+        for config in new_configs:
+            worker_id = config["id"]
+            if worker_id in self.workers:
+                # Update existing worker config
+                self._worker_configs[worker_id] = config
+                logger.debug("Updated worker %s configuration", worker_id)
+            else:
+                # Add new worker
+                if config.get("enabled", True):
+                    client = NPUWorkerClient(npu_endpoint=config["url"])
+                    self.workers[worker_id] = WorkerState(
+                        worker_id=worker_id,
+                        client=client,
+                    )
+                    self._worker_configs[worker_id] = config
+                    logger.info("Added new worker %s to pool", worker_id)
+
+        logger.info(
+            "Pool configuration reloaded: %d workers active",
+            len(self.workers),
+        )
+
 
 class NPUTaskQueue:
     """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""

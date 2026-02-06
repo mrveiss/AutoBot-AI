@@ -27,6 +27,9 @@ Endpoints:
 - GET    /api/npu/status - Get NPU worker pool status
 - POST   /api/npu/workers/heartbeat - Receive worker heartbeat (paired workers only)
 - POST   /api/npu/workers/bootstrap - Bootstrap configuration (deprecated)
+- GET    /api/npu/pool/stats - Get pool-level statistics (Issue #168)
+- GET    /api/npu/pool/workers - Get per-worker health states (Issue #168)
+- POST   /api/npu/pool/reload - Hot-reload pool configuration (Issue #168)
 """
 
 import logging
@@ -1400,4 +1403,144 @@ async def worker_bootstrap(request: dict):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to bootstrap worker: {str(e)}",
+        )
+
+
+# ==============================================
+# POOL MANAGEMENT ENDPOINTS (Issue #168)
+# ==============================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pool_stats",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.get("/npu/pool/stats")
+async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Get NPU worker pool statistics (Issue #168).
+
+    Issue #744: Requires admin authentication.
+
+    Returns pool-level metrics including:
+    - Total and healthy worker counts
+    - Total tasks processed
+    - Active tasks
+    - Success rate
+
+    Returns:
+        Pool-level metrics dict
+    """
+    try:
+        from src.npu_integration import get_npu_pool
+
+        pool = await get_npu_pool()
+        stats = await pool.get_pool_stats()
+        return stats
+
+    except Exception as e:
+        logger.error("Failed to get pool stats: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve pool stats: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pool_workers",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.get("/npu/pool/workers")
+async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Get per-worker health states from the pool (Issue #168).
+
+    Issue #744: Requires admin authentication.
+
+    Returns detailed status for each worker including:
+    - Worker ID and URL
+    - Priority and enabled status
+    - Health and circuit breaker state
+    - Active tasks and total requests
+    - Last health check timestamp
+
+    Returns:
+        Dict with list of worker states
+    """
+    try:
+        from src.npu_integration import get_npu_pool
+
+        pool = await get_npu_pool()
+        workers = []
+
+        for worker_id, state in pool.workers.items():
+            config = pool._worker_configs.get(worker_id, {})
+            workers.append(
+                {
+                    "id": state.worker_id,
+                    "url": config.get("url", ""),
+                    "priority": config.get("priority", 5),
+                    "enabled": config.get("enabled", True),
+                    "healthy": state.healthy,
+                    "circuit_state": state.circuit_state.value,
+                    "active_tasks": state.active_tasks,
+                    "total_requests": state.total_requests,
+                    "failures": state.failures,
+                    "last_health_check": state.last_health_check,
+                }
+            )
+
+        return {"workers": workers}
+
+    except Exception as e:
+        logger.error("Failed to get pool workers: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve pool workers: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reload_pool_config",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.post("/npu/pool/reload")
+async def reload_pool_config(admin_check: bool = Depends(check_admin_permission)):
+    """
+    Hot-reload worker pool configuration (Issue #168).
+
+    Issue #744: Requires admin authentication.
+
+    Reloads the worker configuration from config/npu_workers.yaml
+    without restarting the server. New workers are added, removed
+    workers are removed (after active tasks drain), and existing
+    workers are updated.
+
+    Returns:
+        Result with number of workers loaded and status message
+    """
+    try:
+        from src.npu_integration import get_npu_pool
+
+        pool = await get_npu_pool()
+        await pool.reload_config()
+
+        workers_count = len(pool.workers)
+
+        logger.info("Pool configuration reloaded: %d workers", workers_count)
+
+        return {
+            "success": True,
+            "workers_loaded": workers_count,
+            "message": "Configuration reloaded successfully",
+        }
+
+    except Exception as e:
+        logger.error("Failed to reload pool config: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reload pool configuration: {str(e)}",
         )
