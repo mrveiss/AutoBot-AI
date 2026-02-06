@@ -571,14 +571,20 @@ async function loadTrends(): Promise<void> {
     const response = await fetch(`/api/analytics/bug-prediction/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       const data = await response.json();
-      trendData.value = data.data_points || [];
+      const newDataPoints = data.data_points || [];
+
+      // Only update if data actually changed (avoid unnecessary re-renders)
+      if (JSON.stringify(newDataPoints) !== JSON.stringify(trendData.value)) {
+        trendData.value = newDataPoints;
+        lastUpdateTime.value = new Date();
+      }
     } else {
+      // Silent failure for polling - preserve existing data to avoid UI flicker
       logger.warn('Failed to load trends: HTTP', response.status);
-      trendData.value = [];
     }
   } catch (error) {
-    logger.error('Failed to load trends:', error);
-    trendData.value = [];
+    // Silent failure for polling - preserve existing data to avoid UI flicker
+    logger.warn('Trend polling failed:', error);
   }
 }
 
