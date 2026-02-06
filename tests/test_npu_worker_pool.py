@@ -601,3 +601,76 @@ npu:
         assert worker.circuit_state == CircuitState.HALF_OPEN
     finally:
         os.unlink(config_path)
+
+
+# =============================================================================
+# Task 7: Background Health Monitor Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_start_health_monitor():
+    """Health monitor should start as background task"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        assert pool._health_monitor_task is None
+        assert pool._running is False
+
+        await pool.start_health_monitor()
+
+        assert pool._health_monitor_task is not None
+        assert pool._running is True
+
+        await pool.stop_health_monitor()
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_stop_health_monitor():
+    """Health monitor should stop gracefully"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        await pool.start_health_monitor()
+        assert pool._running is True
+
+        await pool.stop_health_monitor()
+
+        assert pool._running is False
+        assert pool._health_monitor_task is None
+    finally:
+        os.unlink(config_path)

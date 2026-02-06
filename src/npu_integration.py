@@ -538,6 +538,65 @@ class NPUWorkerPool:
 
         return False
 
+    # Health monitor constants
+    HEALTH_CHECK_INTERVAL = 30  # Seconds between health checks
+
+    async def start_health_monitor(self) -> None:
+        """
+        Start background health monitoring task.
+
+        Periodically checks health of all workers and updates their status.
+        """
+        if self._running:
+            logger.warning("Health monitor already running")
+            return
+
+        self._running = True
+        self._health_monitor_task = asyncio.create_task(self._health_monitor_loop())
+        logger.info("Health monitor started")
+
+    async def stop_health_monitor(self) -> None:
+        """
+        Stop background health monitoring task.
+        """
+        self._running = False
+
+        if self._health_monitor_task is not None:
+            self._health_monitor_task.cancel()
+            try:
+                await self._health_monitor_task
+            except asyncio.CancelledError:
+                pass
+            self._health_monitor_task = None
+
+        logger.info("Health monitor stopped")
+
+    async def _health_monitor_loop(self) -> None:
+        """
+        Background task that periodically checks worker health.
+        """
+        logger.info("Health monitor loop started")
+
+        while self._running:
+            try:
+                # Check health of all workers
+                for worker_id, worker in self.workers.items():
+                    try:
+                        await self._check_worker_health(worker)
+                    except Exception as e:
+                        logger.debug("Health check failed for %s: %s", worker_id, e)
+
+                # Wait for next check interval
+                await asyncio.sleep(self.HEALTH_CHECK_INTERVAL)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Health monitor error: %s", e)
+                await asyncio.sleep(self.HEALTH_CHECK_INTERVAL)
+
+        logger.info("Health monitor loop stopped")
+
 
 class NPUTaskQueue:
     """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""
