@@ -1,3 +1,0 @@
-"""
-GUI Widgets Module
-"""

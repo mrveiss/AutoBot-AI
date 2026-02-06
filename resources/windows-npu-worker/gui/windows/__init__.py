@@ -1,3 +1,0 @@
-"""
-GUI Windows Module
-"""

@@ -1,7 +1,0 @@
----
-# AI Stack role variables
-
-ai_stack_port: 8080
-ollama_port: 11434
-model_cache_size: "10gb"
-inference_threads: 4

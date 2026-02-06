@@ -1,8 +1,0 @@
-# AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
----
-- name: restart redis for replication
-  ansible.builtin.systemd:
-    name: redis-server
-    state: restarted
