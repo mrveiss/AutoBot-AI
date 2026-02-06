@@ -197,15 +197,24 @@
       <div class="panel trends-panel">
         <div class="panel-header">
           <h3>&#128200; Prediction Accuracy</h3>
-          <div class="period-selector">
-            <button
-              v-for="period in ['7d', '30d', '90d']"
-              :key="period"
-              :class="{ active: selectedPeriod === period }"
-              @click="selectedPeriod = period; loadTrends()"
-            >
-              {{ period }}
-            </button>
+          <div class="header-actions">
+            <span class="live-badge">
+              <span class="pulse-dot"></span>
+              Live
+            </span>
+            <span v-if="lastUpdateTime" class="update-time">
+              {{ formatTimeAgo(lastUpdateTime) }}
+            </span>
+            <div class="period-selector">
+              <button
+                v-for="period in ['7d', '30d', '90d']"
+                :key="period"
+                :class="{ active: selectedPeriod === period }"
+                @click="selectedPeriod = period; loadTrends()"
+              >
+                {{ period }}
+              </button>
+            </div>
           </div>
         </div>
         <div class="panel-content">
@@ -1219,6 +1228,49 @@ watch(selectedPeriod, () => {
 }
 
 /* Trends Panel */
+.trends-panel .header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-default);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-success);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-success);
+  border-radius: var(--radius-full);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+.update-time {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .period-selector {
   display: flex;
   gap: var(--spacing-1);
