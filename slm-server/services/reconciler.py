@@ -116,6 +116,58 @@ class ReconcilerService:
 
             await asyncio.sleep(settings.reconcile_interval)
 
+    async def _handle_degraded_node(
+        self, db: AsyncSession, node: Node, old_status: str
+    ) -> None:
+        """Mark node as degraded, create event, and broadcast status.
+
+        Helper for _check_node_health (Issue #665).
+        """
+        node.status = NodeStatus.DEGRADED.value
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.HEALTH_CHECK.value,
+            severity=EventSeverity.WARNING.value,
+            message=f"Node {node.hostname} reachable but agent not responding",
+            details={"old_status": old_status, "reason": "no_heartbeat"},
+        )
+        db.add(event)
+        logger.info(
+            "Node %s (%s) reachable but no heartbeat - marking degraded",
+            node.node_id,
+            node.ip_address,
+        )
+        await self._broadcast_node_status(
+            node.node_id, NodeStatus.DEGRADED.value, node.hostname
+        )
+
+    async def _handle_offline_node(
+        self, db: AsyncSession, node: Node, old_status: str
+    ) -> None:
+        """Mark node as offline, create event, and broadcast status.
+
+        Helper for _check_node_health (Issue #665).
+        """
+        node.status = NodeStatus.OFFLINE.value
+        event = NodeEvent(
+            event_id=str(uuid.uuid4())[:16],
+            node_id=node.node_id,
+            event_type=EventType.HEALTH_CHECK.value,
+            severity=EventSeverity.ERROR.value,
+            message=f"Node {node.hostname} is unreachable",
+            details={"old_status": old_status, "reason": "unreachable"},
+        )
+        db.add(event)
+        logger.info(
+            "Node %s (%s) unreachable - marking offline",
+            node.node_id,
+            node.ip_address,
+        )
+        await self._broadcast_node_status(
+            node.node_id, NodeStatus.OFFLINE.value, node.hostname
+        )
+
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats and network reachability."""
         from sqlalchemy import or_
@@ -149,59 +201,15 @@ class ReconcilerService:
             stale_nodes = result.scalars().all()
 
             for node in stale_nodes:
-                # Ping to check if host is reachable
                 is_reachable = await self._ping_host(node.ip_address)
                 old_status = node.status
 
                 if is_reachable:
-                    # Host responds to ping but no heartbeat = degraded (agent not running)
                     if node.status != NodeStatus.DEGRADED.value:
-                        node.status = NodeStatus.DEGRADED.value
-                        # Create degraded event
-                        event = NodeEvent(
-                            event_id=str(uuid.uuid4())[:16],
-                            node_id=node.node_id,
-                            event_type=EventType.HEALTH_CHECK.value,
-                            severity=EventSeverity.WARNING.value,
-                            message=f"Node {node.hostname} reachable but agent not responding",
-                            details={
-                                "old_status": old_status,
-                                "reason": "no_heartbeat",
-                            },
-                        )
-                        db.add(event)
-                        logger.info(
-                            "Node %s (%s) reachable but no heartbeat - marking degraded",
-                            node.node_id,
-                            node.ip_address,
-                        )
-                        # Broadcast status change via WebSocket
-                        await self._broadcast_node_status(
-                            node.node_id, NodeStatus.DEGRADED.value, node.hostname
-                        )
+                        await self._handle_degraded_node(db, node, old_status)
                 else:
-                    # Host doesn't respond to ping = offline
                     if node.status != NodeStatus.OFFLINE.value:
-                        node.status = NodeStatus.OFFLINE.value
-                        # Create offline event
-                        event = NodeEvent(
-                            event_id=str(uuid.uuid4())[:16],
-                            node_id=node.node_id,
-                            event_type=EventType.HEALTH_CHECK.value,
-                            severity=EventSeverity.ERROR.value,
-                            message=f"Node {node.hostname} is unreachable",
-                            details={"old_status": old_status, "reason": "unreachable"},
-                        )
-                        db.add(event)
-                        logger.info(
-                            "Node %s (%s) unreachable - marking offline",
-                            node.node_id,
-                            node.ip_address,
-                        )
-                        # Broadcast status change via WebSocket
-                        await self._broadcast_node_status(
-                            node.node_id, NodeStatus.OFFLINE.value, node.hostname
-                        )
+                        await self._handle_offline_node(db, node, old_status)
 
             await db.commit()
 
@@ -575,7 +583,7 @@ class ReconcilerService:
             result = await db.execute(
                 select(Service).where(
                     Service.status == ServiceStatus.FAILED.value,
-                    Service.enabled == True,
+                    Service.enabled.is_(True),
                     Service.category == ServiceCategory.AUTOBOT.value,
                 )
             )
@@ -719,7 +727,9 @@ class ReconcilerService:
         )
 
         # Check cooldown
-        if self._check_service_cooldown(node.node_id, service.service_name, tracker, now):
+        if self._check_service_cooldown(
+            node.node_id, service.service_name, tracker, now
+        ):
             return False
 
         # Check attempt limit
