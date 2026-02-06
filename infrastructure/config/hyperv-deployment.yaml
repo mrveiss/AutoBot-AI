@@ -1,0 +1,55 @@
+# AutoBot Hyper-V Deployment Configuration
+network:
+  subnet: "192.168.65.0/24"
+  gateway: "192.168.65.1"
+  dns: ["8.8.8.8", "1.1.1.1"]
+
+vms:
+  frontend:
+    ip: "192.168.65.10"
+    hostname: "autobot-frontend"
+    services:
+      - name: "vue-dev"
+        port: 5173
+        command: "npm run dev"
+      - name: "nginx"
+        port: 80
+        command: "nginx -g 'daemon off;'"
+
+  backend:
+    ip: "192.168.65.20"
+    hostname: "autobot-backend"
+    services:
+      - name: "fastapi"
+        port: 8001
+        command: "uvicorn backend.fast_app_factory_fix:app --host 0.0.0.0 --port 8001"
+    environment:
+      REDIS_HOST: "192.168.65.50"
+      AI_STACK_HOST: "192.168.65.30"
+      NPU_WORKER_HOST: "192.168.65.40"
+
+  ai-stack:
+    ip: "192.168.65.30"
+    hostname: "autobot-aistack"
+    services:
+      - name: "llm-server"
+        port: 8080
+        command: "python -m src.ai_stack_main"
+    gpu: true
+
+  npu-worker:
+    ip: "192.168.65.40"
+    hostname: "autobot-npu"
+    services:
+      - name: "npu-service"
+        port: 8081
+        command: "python -m src.npu_worker_main"
+    npu: true
+
+  redis:
+    ip: "192.168.65.50"
+    hostname: "autobot-redis"
+    services:
+      - name: "redis-stack"
+        port: 6379
+        command: "redis-stack-server --bind 0.0.0.0"

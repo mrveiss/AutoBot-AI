@@ -1,0 +1,35 @@
+# Fortune 500 Quality Pre-commit Hooks
+repos:
+  - repo: local
+    hooks:
+      # Check for hardcoded configuration values
+      - id: no-hardcoded-config
+        name: Detect hardcoded configuration values
+        entry: bash
+        language: system
+        files: '\.(js < /dev/null | ts|vue|py)$'
+        args:
+          - -c
+          - |
+            # Check for hardcoded ports
+            if grep -rE '\b(8001|11434|5173|6379|1234|3000|6080|9222)\b' "$@" --exclude-dir=node_modules --exclude-dir=.git; then
+              echo "❌ ERROR: Hardcoded port numbers detected\!"
+              echo "Use configService.get() or environment variables instead."
+              exit 1
+            fi
+
+            # Check for hardcoded IPs
+            if grep -rE '127\.0\.0\.\d+|"localhost"' "$@" --exclude-dir=node_modules --exclude-dir=.git; then
+              echo "❌ ERROR: Hardcoded IP addresses or localhost detected\!"
+              echo "Use configService.get() for host configuration."
+              exit 1
+            fi
+
+            # Check for hardcoded URLs
+            if grep -rE 'https?://(localhost|127\.0\.0\.\d+):\d+' "$@" --exclude-dir=node_modules --exclude-dir=.git; then
+              echo "❌ ERROR: Hardcoded URLs detected\!"
+              echo "Use configService to build URLs dynamically."
+              exit 1
+            fi
+
+            echo "✅ No hardcoded configuration values detected."

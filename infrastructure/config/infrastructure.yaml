@@ -1,0 +1,56 @@
+# Infrastructure Configuration
+# Contains all infrastructure-related settings (Redis, databases, networking)
+
+redis:
+  enabled: true
+  host: 172.16.168.23
+  port: 6379
+  password: null
+  timeout: 5
+  retry_attempts: 3
+  retry_delay: 1
+  max_connections: 20
+  health_check_interval: 30
+
+  # Database allocation by purpose
+  databases:
+    main: 0
+    knowledge: 1
+    prompts: 2
+    agents: 3
+    metrics: 4
+    cache: 5
+    sessions: 6
+    tasks: 7
+    logs: 8
+    temp: 9
+    backup: 10
+    testing: 15
+
+  # Knowledge base specific database setting
+  kb_db: 1
+
+  # Pub/Sub channels
+  channels:
+    command_approval_request: command_approval_request
+    command_approval_response_prefix: command_approval_
+    worker_capabilities: worker_capabilities
+
+networking:
+  backend_host: 172.16.168.20
+  backend_port: 8001
+  frontend_host: 172.16.168.21
+  frontend_port: 5173
+  ollama_host: 172.16.168.20
+  ollama_port: 11434
+
+databases:
+  sqlite:
+    knowledge_base: data/knowledge_base.db
+    project_state: data/project_state.db
+    enhanced_memory: data/enhanced_memory.db
+
+  chromadb:
+    enabled: true
+    path: data/chromadb
+    collection_name: autobot_memory

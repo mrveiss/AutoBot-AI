@@ -1,0 +1,181 @@
+backend:
+  api_endpoint: http://172.16.168.20:8001
+  audit_log_file: logs/audit.log
+  chat_data_dir: data/chats
+  chat_history_file: data/chat_history.json
+  cors_origins: []
+  knowledge_base_db: data/knowledge_base.db
+  llm:
+    ollama:
+      endpoint: http://127.0.0.1:11434
+      models: []
+      selected_model: mistral:7b-instruct
+    unified:
+      local:
+        providers:
+          ollama:
+            host: 127.0.0.1
+            selected_model: mistral:7b-instruct
+      ollama:
+        endpoint: http://127.0.0.1:11434
+        models: []
+        selected_model: mistral:7b-instruct
+      unified:
+        local:
+          providers:
+            ollama:
+              host: 127.0.0.1
+              selected_model: mistral:7b-instruct
+        ollama:
+          endpoint: http://127.0.0.1:11434
+          models: []
+          selected_model: mistral:7b-instruct
+        unified:
+          local:
+            providers:
+              ollama:
+                host: 127.0.0.1
+                selected_model: mistral:7b-instruct
+          ollama:
+            endpoint: http://127.0.0.1:11434
+            models: []
+            selected_model: mistral:7b-instruct
+          unified:
+            local:
+              providers:
+                ollama:
+                  host: 127.0.0.1
+                  selected_model: mistral:7b-instruct
+            ollama:
+              endpoint: http://127.0.0.1:11434
+              models: []
+              selected_model: mistral:7b-instruct
+            unified:
+              local:
+                providers:
+                  ollama:
+                    host: 127.0.0.1
+                    selected_model: mistral:7b-instruct
+              ollama:
+                endpoint: http://127.0.0.1:11434
+                models: []
+                selected_model: mistral:7b-instruct
+              unified:
+                local:
+                  providers:
+                    ollama:
+                      host: 127.0.0.1
+                      selected_model: mistral:7b-instruct
+                ollama:
+                  endpoint: http://127.0.0.1:11434
+                  models: []
+                  selected_model: mistral:7b-instruct
+                unified:
+                  local:
+                    providers:
+                      ollama:
+                        host: 127.0.0.1
+                        selected_model: mistral:7b-instruct
+                  ollama:
+                    endpoint: http://127.0.0.1:11434
+                    models: []
+                    selected_model: mistral:7b-instruct
+                  unified:
+                    local:
+                      providers:
+                        ollama:
+                          host: 127.0.0.1
+                          selected_model: mistral:7b-instruct
+                    ollama:
+                      endpoint: http://127.0.0.1:11434
+                      models: []
+                      selected_model: mistral:7b-instruct
+                    unified:
+                      local:
+                        providers:
+                          ollama:
+                            host: 127.0.0.1
+                            selected_model: mistral:7b-instruct
+                      ollama:
+                        endpoint: http://127.0.0.1:11434
+                        models: []
+                        selected_model: mistral:7b-instruct
+                      unified:
+                        local:
+                          providers:
+                            ollama:
+                              host: 127.0.0.1
+                              selected_model: mistral:7b-instruct
+                        ollama:
+                          endpoint: http://127.0.0.1:11434
+                          models: []
+                          selected_model: mistral:7b-instruct
+                        unified:
+                          local:
+                            providers:
+                              ollama:
+                                host: 127.0.0.1
+                                selected_model: mistral:7b-instruct
+  max_retries: 3
+  reliability_stats_file: data/reliability_stats.json
+  server_host: 172.16.168.20
+  server_port: 8001
+  streaming: true
+  timeout: 60
+chat:
+  auto_scroll: true
+  max_messages: 100
+  message_retention_days: 30
+developer:
+  debug_logging: true
+  enabled: true
+  endpoint_suggestions: true
+  enhanced_errors: true
+knowledge_base:
+  enabled: true
+  update_frequency_days: 7
+logging:
+  console: true
+  log_file_path: logs/system.log
+  log_level: INFO
+  log_requests: false
+  log_sql: false
+  log_to_file: true
+  max_file_size: 10
+memory:
+  chromadb:
+    collection_name: autobot_memory
+    enabled: true
+    path: data/chromadb
+  long_term:
+    enabled: true
+    retention_days: 30
+  redis:
+    enabled: false
+    host: 172.16.168.23
+    port: 6379
+  short_term:
+    duration_minutes: 30
+    enabled: true
+  vector_storage:
+    enabled: true
+    update_frequency_days: 7
+message_display:
+  show_debug: false
+  show_json: false
+  show_planning: true
+  show_thoughts: true
+  show_utility: false
+security:
+  enable_encryption: false
+  session_timeout_minutes: 30
+ui:
+  animations: false
+  developer_mode: true
+  font_size: medium
+  language: en
+  theme: light
+voice_interface:
+  enabled: false
+  speech_rate: 1
+  voice: default

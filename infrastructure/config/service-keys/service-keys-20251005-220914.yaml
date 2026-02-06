@@ -1,0 +1,34 @@
+generated_at: '2025-10-05T22:09:14.870399'
+redis_host: 172.16.168.23
+redis_port: 6379
+services:
+  ai-stack:
+    description: AI/ML processing stack
+    generated_at: '2025-10-05T22:09:14.869135'
+    host: 172.16.168.24
+    key: 097dae86975597f39a09b561b6dc16b62c2e7568aaafca50f762528ca9516a52
+  browser-service:
+    description: Playwright browser automation
+    generated_at: '2025-10-05T22:09:14.869824'
+    host: 172.16.168.25
+    key: 7989d0efd117041522f47511197d78f88a55f89c9bcbc855ef16c60ebf493380
+  frontend:
+    description: Vue.js frontend web interface
+    generated_at: '2025-10-05T22:09:14.866861'
+    host: 172.16.168.21
+    key: d0f15188b26b624b9fcaad1c063dd12d43da4525bf5111e23a5bf2541fb66b12
+  main-backend:
+    description: Main backend API server
+    generated_at: '2025-10-05T22:09:14.865823'
+    host: 172.16.168.20
+    key: ca164d91b9ae28ff7c83c4d226c6f6d76b64f7f618eb7a781d3dfcdde1e641c3
+  npu-worker:
+    description: NPU hardware acceleration worker
+    generated_at: '2025-10-05T22:09:14.867717'
+    host: 172.16.168.22
+    key: 6a879ad99839b17b48d6759d09f7c381ee832509f023df1ad18f23cc1c84af69
+  redis-stack:
+    description: Redis Stack database
+    generated_at: '2025-10-05T22:09:14.868428'
+    host: 172.16.168.23
+    key: 88efa3e65dac1d2ebccf69d3b92204bd80fbe88ae594d63f593697f400eeb660

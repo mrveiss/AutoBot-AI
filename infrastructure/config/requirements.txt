@@ -1,0 +1,131 @@
+# ===== CORE FRAMEWORK DEPENDENCIES =====
+fastapi>=0.115.0
+starlette>=0.49.1                 # SECURITY UPDATE - CVE fix (GHSA-7f5h-v6xp-fcq8)
+python-multipart>=0.0.9           # Required for FastAPI form data handling
+uvicorn>=0.30.0
+requests==2.32.4
+aiohttp==3.12.15
+aiofiles>=23.0.0
+aiosqlite>=0.17.0
+beautifulsoup4>=4.12.0
+pyyaml==6.0.1
+pydantic>=2.8.0
+pydantic-settings>=2.1.0          # Pydantic v2 settings management (Issue #768)
+websockets>=11.0.0
+
+# ===== MULTI-AGENT ARCHITECTURE DEPENDENCIES =====
+# LLM & AI Framework Support
+openai>=1.0.0                    # OpenAI API support for future cloud models
+anthropic>=0.7.0                 # Claude API support for future integration
+tiktoken>=0.5.0                  # Token counting for different models
+transformers>=4.55.2             # HuggingFace transformers for model utils - SECURITY UPDATE
+sentence-transformers>=2.2.0     # Embedding models support
+torch>=2.0.0,<2.5.0              # PyTorch for model operations - compatible version
+torchvision>=0.15.0              # PyTorch vision models for CLIP and image processing
+torchaudio>=2.0.0                # PyTorch audio models for Whisper and audio processing
+accelerate>=0.25.0               # HuggingFace model optimization and GPU acceleration
+
+# Agent Communication & Coordination
+asyncio-mqtt>=0.16.0             # MQTT for agent communication (future)
+celery>=5.3.4                    # Task queue for agent coordination - version bump for IaC platform
+kombu>=5.3.0                     # Messaging for Celery
+ansible-runner>=2.3.4            # Ansible playbook execution with event streaming for IaC
+
+# Memory & Storage
+redis>=5.0,<6.0                  # Redis for agent state and coordination
+chromadb>=0.4.0                  # Vector database for RAG agents
+# sqlite3                        # Built-in Python module, not a pip package
+sqlalchemy>=2.0.0                # Database ORM for advanced storage
+
+# ===== SPECIALIZED AGENT DEPENDENCIES =====
+# System Commands Agent
+psutil>=5.9.0                    # System information and process management
+sh>=2.0.0                        # Shell command execution wrapper
+# subprocess32>=3.5.4              # Not needed in Python 3.3+, subprocess is built-in
+
+# Research Agent & Web Integration
+selenium>=4.15.0                 # Web automation (backup to Playwright)
+playwright>=1.40.0               # Primary web automation
+httpx>=0.25.0                    # Async HTTP client for research
+newspaper3k>=0.2.8               # Article extraction
+readability>=0.3.1               # Content extraction
+python-magic>=0.4.27             # File type detection
+
+# RAG Agent & Knowledge Processing
+python-docx>=1.1.0               # Document processing
+pypdf>=6.4.0                     # PDF processing - SECURITY UPDATE (4 CVE fixes)
+python-pptx>=0.6.23              # PowerPoint processing
+openpyxl>=3.1.0                  # Excel processing
+markdown>=3.5.0                  # Markdown processing
+pytesseract>=0.3.10              # OCR for image text extraction
+
+# Chat Agent & NLP
+nltk>=3.8.0                      # Natural language processing
+spacy>=3.7.0                     # Advanced NLP (optional)
+textstat>=0.7.3                  # Text complexity analysis
+
+# ===== GPU-ACCELERATED MULTI-MODAL AI DEPENDENCIES =====
+# Audio Processing & Speech Recognition
+librosa>=0.10.0                  # Audio preprocessing and feature extraction
+scipy>=1.11.0                    # Scientific computing for audio processing
+
+# ===== GUI & AUTOMATION =====
+pyautogui==0.9.54
+mouseinfo==0.1.3
+pillow>=10.0.0
+numpy>=1.21.0,<1.25.0
+opencv-python>=4.8.0             # Computer vision for GUI automation
+pygetwindow>=0.0.9               # Window management
+
+# ===== EXISTING INTEGRATIONS =====
+markdownify>=0.14.1              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73r)
+langchain
+langchain-community
+langchain-experimental             # For advanced LangChain features
+llama-index
+llama-index-llms-ollama
+llama-index-embeddings-ollama
+llama-index-vector-stores-redis
+llama-index-readers-file          # File readers for RAG
+
+# ===== VOICE INTERFACE DEPENDENCIES =====
+# Moved to requirements-voice.txt to avoid CI/CD build failures
+# Install separately: pip install -r requirements-voice.txt
+# These require system audio libraries not available in all environments
+
+# ===== SECURITY & DEVELOPMENT TOOLS =====
+pre-commit>=3.6.0
+detect-secrets>=1.4.0
+pycryptodome>=3.19.0              # Encryption for secure agent communication
+cryptography>=45.0.6             # Additional crypto support - SECURITY UPDATE
+pyjwt>=2.8.0                     # JWT token authentication
+bcrypt>=4.0.0                    # Password hashing
+
+# ===== MONITORING & OBSERVABILITY =====
+prometheus-client==0.20.0         # Prometheus metrics collection for timeout tracking
+structlog>=23.2.0                # Structured logging
+rich>=13.7.0                     # Enhanced console output
+tqdm==4.67.1                     # Progress bars for long operations - pinned
+
+# ===== CONFIGURATION & UTILITIES =====
+python-dotenv>=1.0.0             # Environment variable management
+click>=8.1.0                     # CLI interface utilities
+jsonschema>=4.20.0               # JSON schema validation
+validators>=0.22.0               # Input validation utilities
+python-json-logger>=2.0.7
+paramiko>=3.4.0                   # SSH client library for infrastructure provisioning
+
+# ===== LLM INFERENCE OPTIMIZATION =====
+# vLLM - High-performance LLM inference with prefix caching (Optional)
+# Provides 3-4x throughput improvement with 98.7% cache efficiency
+# Requires: CUDA-compatible GPU, Enable in config: llm.vllm.enabled = true
+# Installation: Automatically installed via setup.sh
+# Note: GPU-required - system will fall back to Ollama if GPU unavailable
+vllm>=0.6.0
+
+# ===== GPU-ACCELERATED VECTOR SEARCH (Issue #387) =====
+# FAISS - GPU-Accelerated Vector Similarity Search
+# Provides 10-100x speedup for vector similarity search operations
+# Use faiss-gpu for CUDA support, faiss-cpu for CPU-only fallback
+# Note: faiss-gpu requires CUDA toolkit installation
+faiss-gpu>=1.7.4

@@ -1,0 +1,370 @@
+# Advanced Threat Detection Configuration for AutoBot Enterprise Security
+# Provides behavioral anomaly detection, ML-based threat detection, and enhanced security monitoring
+
+# Detection modules - enable/disable specific detection capabilities
+detection_modes:
+  behavioral_analysis: true           # User behavior profiling and anomaly detection
+  command_injection_detection: true  # Enhanced command injection prevention
+  file_upload_scanning: true         # Malicious file detection
+  api_abuse_detection: true          # API rate limiting and abuse detection
+  brute_force_detection: true        # Brute force attack detection
+  insider_threat_detection: true     # Insider threat behavioral analysis
+  privilege_escalation_detection: true # Privilege escalation attempt detection
+  data_exfiltration_detection: true  # Large data transfer monitoring
+  reconnaissance_detection: true     # Port scanning and enumeration detection
+  lateral_movement_detection: true   # Network lateral movement detection
+
+# Machine Learning Models Configuration
+ml_models:
+  anomaly_detection: true            # Enable ML-based anomaly detection
+  clustering_analysis: true         # User behavior clustering
+  pattern_recognition: true         # Pattern-based threat recognition
+  model_retrain_hours: 24          # Retrain models every 24 hours
+  min_training_samples: 1000       # Minimum samples required for training
+  contamination_rate: 0.1          # Expected anomaly rate for Isolation Forest
+  enable_auto_tuning: true         # Automatically tune model parameters
+
+  # Model persistence
+  model_storage_path: "/home/kali/Desktop/AutoBot/data/security/models"
+  save_trained_models: true
+  load_existing_models: true
+
+# Detection Thresholds
+thresholds:
+  # Anomaly detection
+  anomaly_score: 0.7               # Minimum anomaly score to trigger alert
+  confidence_threshold: 0.8        # Minimum confidence for threat classification
+
+  # Brute force detection
+  brute_force_attempts: 5          # Failed login attempts threshold
+  brute_force_window_minutes: 15   # Time window for brute force detection
+  distributed_brute_force_ips: 3   # Multiple IPs targeting same account
+
+  # Behavioral analysis
+  unusual_hour_threshold: 0.1      # Probability threshold for unusual access hours
+  deviation_threshold: 2.0         # Standard deviations for behavioral anomalies
+  new_location_threshold: 0.05     # Threshold for new geographic locations
+
+  # File security
+  file_size_suspicious_mb: 100     # Suspicious file size threshold
+  executable_file_block: true      # Block executable file uploads
+  script_file_scan: true          # Scan script files for malicious content
+
+  # API security
+  api_rate_limit_per_minute: 100   # API requests per minute per user
+  api_rate_limit_per_hour: 1000    # API requests per hour per user
+  bulk_data_threshold_mb: 100      # Large data download threshold
+  unusual_endpoint_threshold: 0.05 # Unusual endpoint access threshold
+
+  # Network security
+  failed_connection_threshold: 20   # Failed network connections
+  port_scan_threshold: 10          # Port scan detection threshold
+  data_transfer_suspicious_mb: 500  # Suspicious data transfer volume
+
+# Behavioral Analysis Configuration
+behavioral_analysis:
+  # Profile management
+  profile_update_hours: 6          # Update user profiles every 6 hours
+  baseline_days: 30               # Days of data for baseline behavior
+  min_events_for_profile: 50      # Minimum events needed to create profile
+  profile_retention_days: 365     # Keep user profiles for 1 year
+
+  # Behavior tracking
+  track_login_patterns: true      # Track login time patterns
+  track_ip_patterns: true        # Track source IP patterns
+  track_command_patterns: true    # Track command execution patterns
+  track_file_access_patterns: true # Track file access patterns
+  track_api_usage_patterns: true  # Track API usage patterns
+  track_network_patterns: true    # Track network access patterns
+
+  # Risk scoring
+  base_risk_score: 0.3           # Base risk score for new users
+  risk_decay_factor: 0.95        # Daily risk score decay factor
+  max_risk_score: 1.0           # Maximum risk score
+
+  # Anomaly weights
+  time_anomaly_weight: 0.2       # Weight for time-based anomalies
+  location_anomaly_weight: 0.3   # Weight for location-based anomalies
+  action_anomaly_weight: 0.3     # Weight for action-based anomalies
+  volume_anomaly_weight: 0.2     # Weight for volume-based anomalies
+
+# Command Injection Detection Patterns
+command_injection:
+  # Shell metacharacters
+  shell_metacharacters:
+    - pattern: "[;&|`$(){}[\\]\\\\]"
+      severity: "high"
+      description: "Shell metacharacters indicating injection attempt"
+      category: "shell_injection"
+
+    - pattern: "(\\|\\||&&)"
+      severity: "high"
+      description: "Command chaining operators"
+      category: "command_chaining"
+
+  # Destructive commands
+  destructive_commands:
+    - pattern: "(rm\\s+-rf|del\\s+/[sf]|format\\s+c:|mkfs)"
+      severity: "critical"
+      description: "Destructive file system operations"
+      category: "destructive_operations"
+
+    - pattern: "(shutdown|reboot|halt|poweroff)\\s"
+      severity: "high"
+      description: "System shutdown commands"
+      category: "system_control"
+
+  # Network tools
+  network_tools:
+    - pattern: "(wget|curl|nc|netcat|telnet|ssh)\\s+"
+      severity: "high"
+      description: "Network tools for data exfiltration or lateral movement"
+      category: "network_tools"
+
+    - pattern: "(nmap|masscan|zmap)\\s+"
+      severity: "critical"
+      description: "Network scanning tools"
+      category: "reconnaissance_tools"
+
+  # Encoding and obfuscation
+  encoding_tools:
+    - pattern: "(base64|xxd|hexdump|od)\\s+"
+      severity: "medium"
+      description: "Encoding tools for obfuscation"
+      category: "encoding_tools"
+
+    - pattern: "(echo\\s+.*\\||cat\\s+.*\\|)"
+      severity: "medium"
+      description: "Piped commands for obfuscation"
+      category: "command_obfuscation"
+
+  # Privilege escalation
+  privilege_escalation:
+    - pattern: "(sudo|su|chmod\\s+777|chown)"
+      severity: "high"
+      description: "Privilege escalation attempts"
+      category: "privilege_escalation"
+
+    - pattern: "/etc/(passwd|shadow|sudoers|group)"
+      severity: "critical"
+      description: "Critical system file access"
+      category: "system_file_access"
+
+  # Script execution
+  script_execution:
+    - pattern: "(python\\s+-c|perl\\s+-e|ruby\\s+-e|php\\s+-r)"
+      severity: "medium"
+      description: "Inline script execution"
+      category: "script_injection"
+
+    - pattern: "(eval|exec|system|shell_exec)\\s*\\("
+      severity: "high"
+      description: "Dynamic code execution functions"
+      category: "code_injection"
+
+# File Security Configuration
+file_security:
+  # Blocked file extensions
+  blocked_extensions:
+    - ".exe"
+    - ".scr"
+    - ".bat"
+    - ".cmd"
+    - ".com"
+    - ".pif"
+    - ".msi"
+    - ".dll"
+    - ".jar"
+    - ".sh"
+    - ".ps1"
+    - ".vbs"
+
+  # Suspicious file patterns
+  suspicious_patterns:
+    - "eval("
+    - "exec("
+    - "system("
+    - "shell_exec("
+    - "passthru("
+    - "base64_decode("
+    - "<?php"
+    - "<%"
+    - "<script"
+
+  # Magic byte signatures for executables
+  executable_signatures:
+    - "4D5A"      # PE (Windows executable)
+    - "7F454C46"  # ELF (Linux executable)
+    - "CAFEBABE"  # Java class file
+    - "504B0304"  # ZIP archive
+    - "52617221"  # RAR archive
+
+  # Suspicious filenames
+  suspicious_names:
+    - "cmd.php"
+    - "shell.jsp"
+    - "backdoor"
+    - "webshell"
+    - "c99.php"
+    - "r57.php"
+    - "exploit"
+    - "rootkit"
+
+# API Security Configuration
+api_security:
+  # Rate limiting tiers
+  rate_limits:
+    guest:
+      requests_per_minute: 10
+      requests_per_hour: 100
+      requests_per_day: 1000
+
+    user:
+      requests_per_minute: 50
+      requests_per_hour: 1000
+      requests_per_day: 10000
+
+    admin:
+      requests_per_minute: 200
+      requests_per_hour: 5000
+      requests_per_day: 50000
+
+  # Suspicious API patterns
+  suspicious_patterns:
+    - pattern: "rapid_sequential_requests"
+      description: "Rapid API requests indicating automation"
+      threshold: 50  # requests per minute
+      severity: "medium"
+
+    - pattern: "unusual_endpoint_access"
+      description: "Access to rarely used endpoints"
+      threshold: 0.05  # 5% of normal usage
+      severity: "medium"
+
+    - pattern: "bulk_data_download"
+      description: "Large data download operations"
+      threshold: 1000  # MB downloaded
+      severity: "high"
+
+    - pattern: "privilege_boundary_crossing"
+      description: "Accessing resources beyond normal permissions"
+      severity: "high"
+
+    - pattern: "error_rate_spike"
+      description: "Unusual error rate indicating enumeration"
+      threshold: 0.5  # 50% error rate
+      severity: "medium"
+
+# Response Actions Configuration
+response_actions:
+  # Automated responses
+  auto_block_critical: false       # Automatically block critical threats
+  auto_quarantine_files: true      # Automatically quarantine suspicious files
+  auto_rate_limit_suspicious: true # Apply rate limiting to suspicious users
+  auto_disable_accounts: false     # Automatically disable compromised accounts
+
+  # Alert configurations
+  alert_security_team: true        # Send alerts to security team
+  create_incident_tickets: false   # Auto-create incident tickets
+  send_user_notifications: false   # Notify users of security events
+
+  # Escalation rules
+  escalation_matrix:
+    critical:
+      immediate: ["security_team", "ciso"]
+      within_15_minutes: ["management"]
+      within_1_hour: ["legal_team"]
+
+    high:
+      immediate: ["security_team"]
+      within_1_hour: ["security_manager"]
+      within_4_hours: ["management"]
+
+    medium:
+      within_1_hour: ["security_team"]
+      within_24_hours: ["security_manager"]
+
+    low:
+      within_24_hours: ["security_team"]
+
+# Integration Configuration
+integrations:
+  # SIEM integration
+  siem_export: false
+  siem_format: "json"              # json, cef, leef
+  siem_endpoint: ""
+
+  # Threat intelligence feeds
+  threat_intel_feeds:
+    - name: "abuse_ch_malware"
+      url: "https://urlhaus.abuse.ch/downloads/text/"
+      format: "text"
+      enabled: true
+      update_interval_hours: 6
+
+    - name: "phishtank"
+      url: "http://data.phishtank.com/data/online-valid.csv"
+      format: "csv"
+      enabled: false
+      update_interval_hours: 1
+
+  # External services
+  virustotal_integration: false
+  hybrid_analysis_integration: false
+
+  # Notification services
+  slack_webhook: ""
+  email_smtp_server: ""
+  sms_service: false
+
+# Performance Configuration
+performance:
+  # Processing optimization
+  batch_size: 1000                # Events to process in batch
+  processing_threads: 4           # Parallel processing threads
+  memory_limit_mb: 512           # Memory limit for threat detection
+
+  # Caching
+  cache_user_profiles: true      # Cache user profiles in memory
+  cache_threat_patterns: true    # Cache threat patterns
+  cache_size_mb: 128            # Cache size limit
+  cache_ttl_hours: 24           # Cache time-to-live
+
+  # Storage optimization
+  compress_old_data: true        # Compress old threat data
+  archive_after_days: 90        # Archive data after 90 days
+  cleanup_interval_hours: 24    # Cleanup interval
+
+# Monitoring and Metrics
+monitoring:
+  # Health monitoring
+  enable_health_checks: true     # Enable system health monitoring
+  health_check_interval_minutes: 5
+
+  # Metrics collection
+  collect_performance_metrics: true
+  collect_detection_metrics: true
+  collect_user_metrics: true
+
+  # Dashboard
+  enable_dashboard: true         # Enable threat detection dashboard
+  dashboard_refresh_seconds: 30
+
+  # Alerting
+  alert_on_detection_failures: true
+  alert_on_performance_issues: true
+  alert_threshold_processing_delay_seconds: 60
+
+# Privacy and Compliance
+privacy:
+  # Data anonymization
+  anonymize_user_data: true      # Anonymize user identifiers in logs
+  hash_ip_addresses: true       # Hash IP addresses for privacy
+
+  # Data retention
+  threat_data_retention_days: 2555  # 7 years for compliance
+  user_profile_retention_days: 365  # 1 year for profiles
+
+  # GDPR compliance
+  enable_data_subject_rights: true  # Support data deletion requests
+  data_processing_consent: true     # Track consent for processing

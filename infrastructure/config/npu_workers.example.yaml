@@ -1,0 +1,180 @@
+# Multi-NPU Worker Configuration Example
+# Copy this file to npu_workers.yaml and customize for your environment
+
+npu:
+  # Load Balancing Configuration
+  load_balancing:
+    # Strategy options: round-robin, least-loaded, weighted-random, priority-failover
+    strategy: "least-loaded"
+
+    # Maximum retry attempts when a worker fails
+    max_retries: 3
+
+    # Request timeout in seconds
+    request_timeout: 300
+
+  # Health Monitoring Configuration
+  health_monitoring:
+    # Enable/disable health monitoring
+    enabled: true
+
+    # Interval between health checks (seconds)
+    check_interval: 30
+
+    # Health check request timeout (seconds)
+    timeout: 5
+
+    # Number of consecutive failures before marking worker unhealthy
+    failure_threshold: 3
+
+  # Circuit Breaker Configuration
+  circuit_breaker:
+    # Enable/disable circuit breaker protection
+    enabled: true
+
+    # Number of failures before opening circuit
+    failure_threshold: 5
+
+    # Number of successes to close circuit from half-open state
+    success_threshold: 2
+
+    # Time to wait before retry attempt (seconds)
+    retry_timeout: 60
+
+  # Worker Definitions
+  workers:
+    # ═══════════════════════════════════════════════════════════════════
+    # Existing VM NPU Worker (Primary) - DO NOT MODIFY WITHOUT TESTING
+    # ═══════════════════════════════════════════════════════════════════
+    - id: "vm-npu-1"
+      name: "VM NPU Worker (Primary)"
+      host: "172.16.168.22"
+      port: 8081
+      enabled: true
+
+      # Priority: 1-10 (higher = preferred, used in priority-failover strategy)
+      priority: 10
+
+      # Weight: 1-100 (used in weighted-random strategy)
+      weight: 50
+
+      # Maximum concurrent requests this worker can handle
+      max_concurrent: 10
+
+      # Capabilities this worker supports
+      capabilities:
+        - "llm"           # Large Language Model inference
+        - "vision"        # Computer vision tasks
+        - "audio"         # Audio processing
+
+      # Custom metadata tags
+      tags:
+        environment: "production"
+        location: "vm"
+        hardware: "npu"
+        cost: "low"
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Windows Native NPU Worker (Optional)
+    # ═══════════════════════════════════════════════════════════════════
+    - id: "windows-npu-1"
+      name: "Windows Native NPU Worker"
+      host: "172.16.168.20"  # Windows host machine
+      port: 8082
+      enabled: false  # Set to true when worker is ready
+
+      priority: 8
+      weight: 30
+      max_concurrent: 8
+
+      capabilities:
+        - "llm"
+        - "vision"
+
+      tags:
+        environment: "production"
+        location: "windows-host"
+        hardware: "native-npu"
+        cost: "low"
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Cloud NPU Worker Example (Disabled by default)
+    # ═══════════════════════════════════════════════════════════════════
+    - id: "cloud-npu-1"
+      name: "Cloud NPU Worker (AWS)"
+      host: "npu-worker.aws.example.com"
+      port: 443
+      enabled: false  # Enable when cloud worker is deployed
+
+      priority: 5  # Lower priority than on-prem workers
+      weight: 20   # Lower weight to prefer on-prem
+      max_concurrent: 20
+
+      capabilities:
+        - "llm"
+        - "vision"
+        - "audio"
+        - "video"
+
+      tags:
+        environment: "production"
+        location: "cloud"
+        provider: "aws"
+        region: "us-east-1"
+        cost: "high"
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Development Worker Example (Local testing)
+    # ═══════════════════════════════════════════════════════════════════
+    - id: "dev-npu-1"
+      name: "Development NPU Worker"
+      host: "localhost"
+      port: 8083
+      enabled: false  # Only enable in development environment
+
+      priority: 1
+      weight: 10
+      max_concurrent: 5
+
+      capabilities:
+        - "llm"
+
+      tags:
+        environment: "development"
+        location: "local"
+        hardware: "cpu-fallback"
+
+# ═════════════════════════════════════════════════════════════════════════
+# Configuration Notes
+# ═════════════════════════════════════════════════════════════════════════
+
+# Worker Priority:
+#   10 = Highest (primary worker)
+#   5  = Medium (backup/secondary)
+#   1  = Lowest (fallback only)
+
+# Worker Weight (for weighted-random strategy):
+#   Higher weight = more requests routed to this worker
+#   Total weights don't need to sum to 100
+#   Example: weights of 70, 20, 10 means 70%, 20%, 10% distribution
+
+# Load Balancing Strategies:
+#   - round-robin: Distribute requests evenly across all healthy workers
+#   - least-loaded: Route to worker with lowest current load
+#   - weighted-random: Random selection based on worker weights
+#   - priority-failover: Always use highest priority healthy worker
+
+# Capabilities:
+#   - llm: Large Language Model inference (text generation, chat)
+#   - vision: Computer vision (image classification, object detection)
+#   - audio: Audio processing (speech recognition, TTS)
+#   - video: Video processing (transcoding, analysis)
+
+# Worker States:
+#   - HEALTHY: Worker is operational and accepting requests
+#   - UNHEALTHY: Worker failed health checks, not accepting requests
+#   - DISABLED: Worker manually disabled via configuration
+#   - CIRCUIT_OPEN: Circuit breaker opened due to failures
+
+# To reload configuration without restart:
+#   curl -X POST http://172.16.168.20:8001/api/npu/config/reload

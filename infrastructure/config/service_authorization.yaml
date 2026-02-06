@@ -1,0 +1,172 @@
+# Service-to-Service Authorization Matrix for AutoBot
+# Defines which services can access which endpoints
+#
+# AutoBot VM Architecture:
+# - main-backend (172.16.168.20:8001) - Primary API server
+# - frontend (172.16.168.21:5173) - Vue.js web interface
+# - npu-worker (172.16.168.22:8081) - NPU hardware acceleration
+# - redis-stack (172.16.168.23:6379) - Data layer
+# - ai-stack (172.16.168.24:8080) - AI processing and inference
+# - browser-service (172.16.168.25:3000) - Playwright automation
+
+authorization_matrix:
+  # Main Backend Service (172.16.168.20:8001)
+  # Primary API server - coordinates all other services
+  main-backend:
+    allowed_services:
+      - service: npu-worker
+        description: "NPU worker can report status and request tasks"
+        endpoints:
+          - "/api/npu/register"
+          - "/api/npu/heartbeat"
+          - "/api/npu/status"
+          - "/api/health"
+
+      - service: ai-stack
+        description: "AI stack provides inference and embeddings"
+        endpoints:
+          - "/api/chat"
+          - "/api/inference"
+          - "/api/models"
+          - "/api/embeddings"
+          - "/api/health"
+
+      - service: browser-service
+        description: "Browser service for web automation"
+        endpoints:
+          - "/api/research-browser/*"
+          - "/api/screenshot"
+          - "/api/health"
+
+      - service: redis-stack
+        description: "Redis stack for data storage"
+        endpoints:
+          - "ALL"  # Redis can access all backend endpoints for data sync
+
+      - service: frontend
+        description: "Frontend can access all user-facing APIs"
+        endpoints:
+          - "/api/*"  # All API endpoints
+
+  # Frontend Service (172.16.168.21:5173)
+  # Vue.js web interface - only receives requests, doesn't make authenticated calls
+  frontend:
+    allowed_services:
+      - service: main-backend
+        description: "Backend serves frontend API requests"
+        endpoints:
+          - "ALL"  # Frontend has no protected endpoints
+
+  # NPU Worker Service (172.16.168.22:8081)
+  # Hardware AI acceleration service
+  npu-worker:
+    allowed_services:
+      - service: main-backend
+        description: "Backend can dispatch tasks to NPU worker"
+        endpoints:
+          - "/api/process"
+          - "/api/inference"
+          - "/api/status"
+          - "/api/health"
+
+      - service: ai-stack
+        description: "AI stack can offload work to NPU"
+        endpoints:
+          - "/api/process"
+          - "/api/inference"
+
+      - service: redis-stack
+        description: "Redis for caching and vectors"
+        endpoints:
+          - "/cache/*"
+          - "/vectors/*"
+          - "/health"
+
+  # Redis Stack Service (172.16.168.23:6379)
+  # Data layer - all services need Redis access
+  redis-stack:
+    allowed_services:
+      - service: main-backend
+        description: "Backend primary data access"
+        endpoints:
+          - "ALL"
+
+      - service: npu-worker
+        description: "NPU worker caching and vectors"
+        endpoints:
+          - "ALL"
+
+      - service: ai-stack
+        description: "AI stack model and embedding storage"
+        endpoints:
+          - "ALL"
+
+      - service: browser-service
+        description: "Browser session storage"
+        endpoints:
+          - "ALL"
+
+  # AI Stack Service (172.16.168.24:8080)
+  # AI processing and inference service
+  ai-stack:
+    allowed_services:
+      - service: main-backend
+        description: "Backend dispatches AI tasks"
+        endpoints:
+          - "/api/inference"
+          - "/api/chat"
+          - "/api/embeddings"
+          - "/api/models"
+          - "/api/health"
+
+      - service: npu-worker
+        description: "NPU worker can offload to AI stack"
+        endpoints:
+          - "/api/inference"
+          - "/api/embeddings"
+
+      - service: redis-stack
+        description: "Redis for model caching"
+        endpoints:
+          - "/cache/*"
+          - "/models/*"
+          - "/embeddings/*"
+
+  # Browser Service (172.16.168.25:3000)
+  # Playwright web automation service
+  browser-service:
+    allowed_services:
+      - service: main-backend
+        description: "Backend controls browser automation"
+        endpoints:
+          - "/api/navigate"
+          - "/api/screenshot"
+          - "/api/click"
+          - "/api/evaluate"
+          - "/api/sessions/*"
+          - "/api/health"
+
+      - service: redis-stack
+        description: "Redis for session persistence"
+        endpoints:
+          - "/sessions/*"
+          - "/cache/*"
+
+# Endpoint Pattern Matching Rules:
+# - "ALL" - Matches all endpoints on this service
+# - "/api/chat" - Exact match for specific endpoint
+# - "/api/npu/*" - Wildcard match for all endpoints under /api/npu/
+# - Multiple patterns can be specified per service
+
+# Security Notes:
+# 1. Each service must have a unique API key stored in Redis
+# 2. All requests must include X-Service-ID, X-Service-Signature, X-Service-Timestamp headers
+# 3. Signatures use HMAC-SHA256 with service's secret key
+# 4. Timestamp must be within 300 seconds (5 minutes) to prevent replay attacks
+# 5. Health check endpoints (/api/health) should be accessible without auth
+
+# Deployment Strategy:
+# - Day 1: Generate and distribute service keys to all VMs
+# - Day 2: Deploy logging middleware to observe authentication patterns
+# - Day 3: Deploy enforcement middleware to block unauthorized requests
+# - Day 4+: Monitor and refine authorization matrix based on actual usage

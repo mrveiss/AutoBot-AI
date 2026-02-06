@@ -1,0 +1,34 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.13, pytest-8.4.1, pluggy-1.6.0 -- /home/kali/.pyenv/versions/3.10.13/bin/python
+cachedir: .pytest_cache
+rootdir: /home/kali/Desktop/AutoBot
+plugins: asyncio-1.1.0, langsmith-0.4.5, anyio-4.10.0
+asyncio: mode=auto, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 24 items
+
+tests/test_autobot_memory_graph.py::TestEntityManagement::test_create_all_entity_types PASSED [  4%]
+tests/test_autobot_memory_graph.py::TestEntityManagement::test_entity_retrieval PASSED [  8%]
+tests/test_autobot_memory_graph.py::TestEntityManagement::test_add_observations PASSED [ 12%]
+tests/test_autobot_memory_graph.py::TestEntityManagement::test_entity_deletion PASSED [ 16%]
+tests/test_autobot_memory_graph.py::TestEntityManagement::test_invalid_entity_operations PASSED [ 20%]
+tests/test_autobot_memory_graph.py::TestRelationManagement::test_create_all_relation_types PASSED [ 25%]
+tests/test_autobot_memory_graph.py::TestRelationManagement::test_bidirectional_relations PASSED [ 29%]
+tests/test_autobot_memory_graph.py::TestRelationManagement::test_get_related_entities PASSED [ 33%]
+tests/test_autobot_memory_graph.py::TestRelationManagement::test_delete_relation PASSED [ 37%]
+tests/test_autobot_memory_graph.py::TestRelationManagement::test_cascade_delete PASSED [ 41%]
+tests/test_autobot_memory_graph.py::TestRelationManagement::test_invalid_relation_operations PASSED [ 45%]
+tests/test_autobot_memory_graph.py::TestSearchFunctionality::test_basic_search PASSED [ 50%]
+tests/test_autobot_memory_graph.py::TestSearchFunctionality::test_filtered_search PASSED [ 54%]
+tests/test_autobot_memory_graph.py::TestSearchFunctionality::test_status_filtering PASSED [ 58%]
+tests/test_autobot_memory_graph.py::TestSearchFunctionality::test_search_result_limit PASSED [ 62%]
+tests/test_autobot_memory_graph.py::TestPerformance::test_entity_creation_performance PASSED [ 66%]
+tests/test_autobot_memory_graph.py::TestPerformance::test_search_performance PASSED [ 70%]
+tests/test_autobot_memory_graph.py::TestPerformance::test_relation_traversal_performance PASSED [ 75%]
+tests/test_autobot_memory_graph.py::TestIntegration::test_memory_graph_initialization PASSED [ 79%]
+tests/test_autobot_memory_graph.py::TestIntegration::test_concurrent_operations PASSED [ 83%]
+tests/test_autobot_memory_graph.py::TestIntegration::test_error_recovery PASSED [ 87%]
+tests/test_autobot_memory_graph.py::TestDataIntegrity::test_entity_metadata_preservation PASSED [ 91%]
+tests/test_autobot_memory_graph.py::TestDataIntegrity::test_observation_ordering PASSED [ 95%]
+tests/test_autobot_memory_graph.py::TestDataIntegrity::test_relation_metadata_preservation PASSED [100%]
+
+============================== 24 passed in 0.62s ==============================

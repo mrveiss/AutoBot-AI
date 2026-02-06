@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="22.517" timestamp="2025-10-05T22:34:35.613160+03:00" hostname="MV-Stealth"><testcase classname="tests.integration.test_config_migration.TestConfigurationMigration" name="test_llm_interface_config_migration" time="0.027"><failure message="AttributeError: &lt;module 'src.llm_interface' from '/home/kali/Desktop/AutoBot/src/llm_interface.py'&gt; does not have the attribute 'config_manager'">tests/integration/test_config_migration.py:27: in test_llm_interface_config_migration
+    with patch('src.llm_interface.config_manager', test_config):
+../../.pyenv/versions/3.10.13/lib/python3.10/unittest/mock.py:1447: in __enter__
+    original, local = self.get_original()
+../../.pyenv/versions/3.10.13/lib/python3.10/unittest/mock.py:1420: in get_original
+    raise AttributeError(
+E   AttributeError: &lt;module 'src.llm_interface' from '/home/kali/Desktop/AutoBot/src/llm_interface.py'&gt; does not have the attribute 'config_manager'</failure></testcase></testsuite></testsuites>

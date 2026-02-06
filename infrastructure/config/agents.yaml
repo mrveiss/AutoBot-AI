@@ -1,0 +1,71 @@
+# AI Agents Configuration
+# Contains all AI agent and LLM-related settings
+
+llm:
+  # Default model for most operations
+  default_model: dolphin-llama3:8b
+
+  # Model assignments by agent type
+  models:
+    chat: dolphin-llama3:8b
+    classification: gemma2:2b
+    kb_librarian: dolphin-llama3:8b
+    rag: dolphin-llama3:8b
+    research: dolphin-llama3:8b
+    security_scanner: dolphin-llama3:8b
+    system_commands: dolphin-llama3:8b
+    interactive_terminal: dolphin-llama3:8b
+
+agents:
+  chat:
+    enabled: true
+    max_history: 100
+    streaming: true
+
+  classification:
+    enabled: true
+    fallback_enabled: true
+    timeout_seconds: 10
+    preferred_model: gemma2:2b
+    use_gemma: true
+
+  interactive_terminal:
+    enabled: true
+    session_timeout_minutes: 30
+
+  kb_librarian:
+    enabled: true
+    max_results: 5
+    timeout_seconds: 15
+
+  rag:
+    enabled: true
+    max_context_length: 4000
+
+  research:
+    browser_enabled: false
+    enabled: true
+    timeout_seconds: 30
+
+  security_scanner:
+    enabled: false
+    scan_timeout_seconds: 60
+
+  system_commands:
+    approval_required: true
+    enabled: true
+    safety_enabled: true
+
+knowledge_base:
+  enabled: true
+  force_embedding_consistency: true
+  update_frequency_days: 7
+
+  semantic_chunking:
+    enabled: true
+    model: nomic-embed-text:latest
+    percentile_threshold: 95.0
+
+embeddings:
+  model: nomic-embed-text:latest
+  dimensions: 768

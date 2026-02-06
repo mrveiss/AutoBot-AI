@@ -1,0 +1,23 @@
+load_balancing:
+  health_check_interval: 30
+  retry_cooldown_seconds: 60
+  retry_failed_workers: true
+  strategy: priority
+  timeout_seconds: 10
+workers:
+- enabled: true
+  id: npu-worker-vm2
+  max_concurrent_tasks: 4
+  name: NPU Worker VM2 (Linux)
+  platform: linux
+  priority: 5
+  url: http://172.16.168.22:8081
+  weight: 1
+- enabled: true
+  id: windows-npu-worker-main
+  max_concurrent_tasks: 4
+  name: Windows NPU Worker (Main Machine)
+  platform: windows
+  priority: 1
+  url: http://172.16.168.20:8082
+  weight: 5

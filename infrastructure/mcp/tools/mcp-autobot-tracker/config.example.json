@@ -1,0 +1,67 @@
+{
+  "redis": {
+    "host": "172.16.168.23",
+    "port": 6379,
+    "tracking_db": 10,
+    "knowledge_db": 1,
+    "main_db": 0
+  },
+  "monitoring": {
+    "log_files": {
+      "backend": "/home/kali/Desktop/AutoBot/data/logs/backend.log",
+      "frontend": "/home/kali/Desktop/AutoBot/data/logs/frontend.log",
+      "redis": "/home/kali/Desktop/AutoBot/data/logs/redis.log"
+    },
+    "docker_services": [
+      "autobot-backend",
+      "autobot-frontend",
+      "autobot-redis",
+      "autobot-ai-stack",
+      "autobot-npu-worker",
+      "autobot-browser"
+    ],
+    "health_check_interval": 300000,
+    "cleanup_interval": 1800000
+  },
+  "knowledge": {
+    "analysis_interval": 1800000,
+    "pattern_thresholds": {
+      "error_pattern_min_count": 3,
+      "task_pattern_min_count": 2,
+      "correlation_threshold": 0.3
+    },
+    "confidence_weights": {
+      "error": 0.7,
+      "task": 0.6,
+      "system": 0.8
+    }
+  },
+  "extraction": {
+    "task_patterns": {
+      "todo": "(?:TODO|FIXME|TASK|FIX|IMPLEMENT|CREATE|UPDATE|REFACTOR):\\s*(.+?)(?:\\n|$)",
+      "action": "(?:need to|should|must|have to|going to|will)\\s+(.+?)(?:\\.|,|\\n|$)",
+      "numbered": "(?:^\\d+\\.\\s+)(.+?)(?:\\n|$)",
+      "bullet": "(?:^[-*]\\s+)(.+?)(?:\\n|$)",
+      "checkbox": "\\[ \\]\\s+(.+?)(?:\\n|$)"
+    },
+    "error_patterns": {
+      "generic": "(?:error|exception|traceback|failed):\\s*(.+?)(?:\\n|$)",
+      "specific": "(?:Error|Exception|Failed)\\s+(.+?)(?:\\n|at\\s|$)",
+      "log_error": "\\[ERROR\\]\\s*(.+?)(?:\\n|$)",
+      "emoji_error": "❌\\s*(.+?)(?:\\n|$)"
+    },
+    "completion_indicators": {
+      "completed": "(?:done|completed|fixed|resolved|implemented|✓|✅)",
+      "failed": "(?:failed|error|couldn't|can't|unable|blocked)",
+      "in_progress": "(?:working on|implementing|fixing|updating|creating)"
+    }
+  },
+  "system": {
+    "max_errors_stored": 1000,
+    "max_warnings_stored": 500,
+    "max_tasks_stored": 2000,
+    "max_insights_stored": 100,
+    "data_retention_days": 30,
+    "log_level": "info"
+  }
+}

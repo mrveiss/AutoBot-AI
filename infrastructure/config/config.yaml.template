@@ -1,0 +1,180 @@
+# AutoBot Configuration - User Preferences Template
+# =================================================
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# IMPORTANT: This file contains USER PREFERENCES only.
+# Infrastructure configuration (IPs, ports, hosts) is managed by:
+#   - .env file (SSOT - Single Source of Truth)
+#   - src/config/ssot_config.py (typed Python access)
+#   - autobot-vue/src/config/ssot-config.ts (typed TypeScript access)
+#
+# To use: Copy this file to config/config.yaml and customize
+# See: docs/developer/SSOT_CONFIG_GUIDE.md
+
+# ============================================================================
+# User Interface Settings
+# ============================================================================
+ui:
+  theme: light              # light, dark, system
+  language: en              # Language code
+  font_size: medium         # small, medium, large
+  animations: true          # Enable UI animations
+  developer_mode: false     # Show developer tools
+
+# ============================================================================
+# Chat Settings
+# ============================================================================
+chat:
+  auto_scroll: true         # Auto-scroll to new messages
+  max_messages: 100         # Max messages in view
+  message_retention_days: 30  # Days to keep message history
+
+# ============================================================================
+# Message Display Settings
+# ============================================================================
+message_display:
+  show_debug: false         # Show debug messages
+  show_json: false          # Show raw JSON responses
+  show_planning: true       # Show agent planning
+  show_thoughts: true       # Show AI thought process
+  show_utility: false       # Show utility messages
+
+# ============================================================================
+# Voice Interface Settings
+# ============================================================================
+voice_interface:
+  enabled: false            # Enable voice input/output
+  speech_rate: 1.0          # Speech rate (0.5 - 2.0)
+  voice: default            # Voice selection
+
+# ============================================================================
+# Logging Settings
+# ============================================================================
+logging:
+  log_level: INFO           # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_to_file: true         # Write logs to file
+  log_file_path: logs/system.log  # Log file location
+
+# ============================================================================
+# Security Settings (User-configurable options only)
+# ============================================================================
+security:
+  enable_encryption: false  # Enable data encryption
+  session_timeout_minutes: 30  # Session timeout
+
+# ============================================================================
+# Developer Settings
+# ============================================================================
+developer:
+  enabled: false            # Enable developer mode
+  debug_logging: false      # Enable debug logging
+  endpoint_suggestions: true  # Show API endpoint suggestions
+  enhanced_errors: true     # Show detailed error messages
+
+# ============================================================================
+# Knowledge Base Settings
+# ============================================================================
+knowledge_base:
+  enabled: true             # Enable knowledge base
+  update_frequency_days: 7  # Auto-update frequency
+
+# ============================================================================
+# Memory Settings (Storage preferences - hosts come from SSOT/.env)
+# ============================================================================
+memory:
+  chromadb:
+    collection_name: autobot_memory
+    enabled: true
+    path: data/chromadb
+  long_term:
+    enabled: true
+    retention_days: 30
+  short_term:
+    duration_minutes: 30
+    enabled: true
+  vector_storage:
+    enabled: true
+    update_frequency_days: 7
+
+# ============================================================================
+# LLM Settings (Model preferences - endpoints come from SSOT/.env)
+# ============================================================================
+# Note: Network endpoints (ollama_url, etc.) come from SSOT/.env
+# This section contains user model PREFERENCES only
+llm:
+  provider_type: local
+  default_provider: ollama
+  models:
+    # Available models list - for UI dropdown display
+    - phi:2.7b
+    - phi:latest
+    - tinyllama:latest
+    - llama2:latest
+    - llama3.2:3b
+    - mistral:7b-instruct
+    - nomic-embed-text:latest
+  classification_model: gemma2:2b
+  vllm:
+    enabled: false
+    default_model: meta-llama/Llama-3.2-3B-Instruct
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.9
+    max_model_len: 8192
+    trust_remote_code: false
+    dtype: auto
+    enable_chunked_prefill: true
+
+# ============================================================================
+# Backend Settings (User tunable - network config comes from SSOT/.env)
+# ============================================================================
+backend:
+  # Data paths
+  audit_log_file: logs/audit.log
+  chat_data_dir: data/chats
+  chat_history_file: data/chat_history.json
+  knowledge_base_db: data/knowledge_base.db
+  reliability_stats_file: data/reliability_stats.json
+  # Behavior settings
+  max_retries: 3
+  streaming: false
+  timeout: 60
+
+# ============================================================================
+# Timeout Configuration (all values in seconds)
+# ============================================================================
+timeouts:
+  redis:
+    connection:
+      socket_connect: 2.0
+      socket_timeout: 2.0
+      health_check: 1.0
+    operations:
+      get: 1.0
+      set: 1.0
+      hgetall: 2.0
+      pipeline: 5.0
+      scan_iter: 10.0
+  llamaindex:
+    embedding:
+      generation: 10.0
+      batch: 30.0
+    search:
+      query: 10.0
+      hybrid: 15.0
+  http:
+    standard: 30.0
+    long_running: 120.0
+    streaming: 300.0
+  llm:
+    default: 120.0
+    fast: 30.0
+    reasoning: 300.0
+
+# ============================================================================
+# Monitoring Settings
+# ============================================================================
+monitoring:
+  metrics:
+    collection_interval: 10
+    retention_hours: 24

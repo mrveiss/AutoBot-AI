@@ -1,0 +1,147 @@
+# AutoBot Distributed Architecture Configuration
+# Main WSL Coordinator (172.16.168.20) configuration for distributed 6-VM setup
+
+# Deployment Architecture
+deployment:
+  mode: "distributed"
+  coordinator_host: "172.16.168.20"
+  total_vms: 6
+  architecture: "6-vm-distributed"
+
+# VM Infrastructure Mapping
+infrastructure:
+  vms:
+    coordinator:
+      host: "172.16.168.20"
+      role: "backend-coordinator"
+      services: ["backend-api", "ollama-llm", "vnc-desktop"]
+      description: "Main WSL machine - Backend API coordination"
+
+    frontend:
+      host: "172.16.168.21"
+      port: 5173
+      role: "frontend-ui"
+      services: ["vue-frontend", "web-interface"]
+      description: "Vue.js frontend serving"
+
+    npu_worker:
+      host: "172.16.168.22"
+      port: 8081
+      role: "ai-acceleration"
+      services: ["npu-worker", "intel-openvino", "hardware-acceleration"]
+      description: "Intel NPU + OpenVINO acceleration"
+
+    redis:
+      host: "172.16.168.23"
+      port: 6379
+      role: "data-layer"
+      services: ["redis-stack", "redis-insight", "vector-storage"]
+      description: "Redis Stack with RedisInsight dashboard"
+
+    ai_stack:
+      host: "172.16.168.24"
+      port: 8080
+      role: "ai-processing"
+      services: ["ai-stack", "multimodal-processing"]
+      description: "AI processing and multimodal services"
+
+    browser:
+      host: "172.16.168.25"
+      port: 3000
+      role: "browser-automation"
+      services: ["playwright", "web-automation"]
+      description: "Playwright browser automation"
+
+# Service URLs (Computed from infrastructure)
+services:
+  backend_api: "http://172.16.168.20:8001"
+  frontend: "http://172.16.168.21:5173"
+  redis: "redis://172.16.168.23:6379"
+  redis_insight: "http://172.16.168.23:8002"
+  npu_worker: "http://172.16.168.22:8081"
+  ai_stack: "http://172.16.168.24:8080"
+  browser: "http://172.16.168.25:3000"
+  ollama: "http://127.0.0.1:11434"
+  vnc_desktop: "http://127.0.0.1:6080"
+
+# Network Configuration
+network:
+  subnet: "172.16.168.0/24"
+  gateway: "172.16.168.1"
+  coordinator_ip: "172.16.168.20"
+  vm_range: "172.16.168.21-25"
+
+# Hardware Optimization
+hardware:
+  coordinator:
+    cpu: "Intel Ultra 9 185H (22 cores)"
+    gpu: "RTX 4070"
+    ram: "32GB+"
+    role: "Backend coordination + Local LLM"
+
+  npu_worker:
+    cpu: "Multi-core"
+    npu: "Intel NPU (AI Boost)"
+    gpu: "Intel Arc (if available)"
+    role: "Hardware AI acceleration"
+
+  redis:
+    cpu: "Multi-core"
+    ram: "High memory"
+    storage: "SSD recommended"
+    role: "High-performance data layer"
+
+# Performance Configuration
+performance:
+  api_timeout: 10000
+  llm_timeout: 30
+  max_concurrent_requests: 50
+  redis_connection_timeout: 2
+  health_check_interval: 30
+
+# Security Configuration
+security:
+  ssh_key_file: "~/.ssh/autobot_distributed"
+  allowed_networks: ["172.16.168.0/24", "127.0.0.0/8"]
+  firewall_enabled: true
+
+# Monitoring Configuration
+monitoring:
+  health_checks:
+    enabled: true
+    interval_seconds: 30
+    timeout_seconds: 5
+
+  logging:
+    level: "INFO"
+    distributed_collection: true
+    aggregation_host: "172.16.168.20"
+
+# Backup Configuration
+backup:
+  strategy: "distributed"
+  collection_host: "172.16.168.20"
+  schedule: "daily"
+  retention_days: 7
+
+  targets:
+    - name: "redis_data"
+      host: "172.16.168.23"
+      path: "/var/lib/redis/"
+
+    - name: "knowledge_base"
+      host: "172.16.168.20"
+      path: "./data/"
+
+    - name: "logs"
+      hosts: ["172.16.168.21", "172.16.168.22", "172.16.168.23", "172.16.168.24", "172.16.168.25"]
+      path: "/var/log/autobot/"
+
+# Feature Flags for Distributed Mode
+features:
+  distributed_mode: true
+  remote_redis: true
+  remote_frontend: true
+  hardware_acceleration: true
+  distributed_logging: true
+  ssh_automation: true

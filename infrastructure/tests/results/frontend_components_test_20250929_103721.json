@@ -1,0 +1,64 @@
+{
+  "timestamp": "2025-09-29T10:37:21.529823",
+  "total_tests": 8,
+  "passed_tests": 8,
+  "overall_success": true,
+  "test_results": [
+    {
+      "test": "Frontend Server Accessibility",
+      "success": true,
+      "details": "HTTP 200, Headers: {'Vary': 'Origin', 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Etag': 'W/\"2dc-6jNwtfb82IBwRoz+K9bVt/5xHSY\"', 'Pragma': 'no-cache', 'Expires': '0', 'X-Content-Type-Options': 'nosniff', 'Last-Modified': 'Mon, 29 Sep 2025 07:31:40 GMT', 'Surrogate-Control': 'no-store', 'X-Cache-Bust': '1759131100451', 'X-AutoBot-Build': '0.0.1', 'Date': 'Mon, 29 Sep 2025 07:37:21 GMT', 'Connection': 'keep-alive', 'Keep-Alive': 'timeout=5'}",
+      "timestamp": "2025-09-29T10:37:21.475131",
+      "response_time_ms": 5
+    },
+    {
+      "test": "HTML Content Loading",
+      "success": true,
+      "details": "HTML size: 732 chars, Contains app div: Yes, Contains main.ts: Yes",
+      "timestamp": "2025-09-29T10:37:21.479497",
+      "response_time_ms": 4
+    },
+    {
+      "test": "Vue Main Script Loading",
+      "success": true,
+      "details": "Script size: 15777 chars, Contains createApp: Yes",
+      "timestamp": "2025-09-29T10:37:21.482410",
+      "response_time_ms": 2
+    },
+    {
+      "test": "Vite Dev Server Features",
+      "success": true,
+      "details": "Vite client script accessible, size: 177658 chars",
+      "timestamp": "2025-09-29T10:37:21.500528",
+      "response_time_ms": 17
+    },
+    {
+      "test": "API Proxy Functionality",
+      "success": true,
+      "details": "Backend status: healthy, Response: {\n  \"status\": \"healthy\",\n  \"backend\": \"connected\",\n  \"timestamp\": \"2025-09-29T10:37:21.504480\",\n  \"fast_startup\": true,\n  \"uptime\": 951.9027943611145,\n  \"uptime_human\": \"951.9 seconds\",\n  \"response_time\": \"< 10ms\"\n}",
+      "timestamp": "2025-09-29T10:37:21.506425",
+      "response_time_ms": 5
+    },
+    {
+      "test": "Knowledge Manager API",
+      "success": true,
+      "details": "Knowledge base data: {\n  \"total_documents\": 0,\n  \"total_chunks\": 0,\n  \"categories\": [\n    \"documentation\",\n    \"system\",\n    \"configuration\"\n  ],\n  \"total_facts\": 1,\n  \"status\": \"live_data\",\n  \"indexed_documents\": 0,\n  \"vector_index_sync\": true\n}",
+      "timestamp": "2025-09-29T10:37:21.515761",
+      "response_time_ms": 9
+    },
+    {
+      "test": "WebSocket Endpoint",
+      "success": true,
+      "details": "WebSocket endpoint HTTP 101 (expected 101/400/426 for existing endpoint)",
+      "timestamp": "2025-09-29T10:37:21.525271",
+      "response_time_ms": 9
+    },
+    {
+      "test": "Direct Backend Connection",
+      "success": true,
+      "details": "Direct backend connection successful: healthy",
+      "timestamp": "2025-09-29T10:37:21.529483",
+      "response_time_ms": 4
+    }
+  ]
+}

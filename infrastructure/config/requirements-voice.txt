@@ -1,0 +1,26 @@
+# ===== VOICE INTERFACE DEPENDENCIES =====
+# These dependencies are optional and only needed for voice functionality
+# Install with: pip install -r requirements-voice.txt
+#
+# Updated in Issue #454 to include Vosk and Coqui TTS.
+
+# Core speech recognition
+speechrecognition==3.10.0
+pydub==0.25.1
+pyaudio==0.2.11
+
+# Online TTS (Google)
+gtts==2.3.1
+
+# Offline STT (Vosk) - requires model download from https://alphacephei.com/vosk/models
+vosk>=0.3.45
+
+# Neural TTS (Coqui) - high-quality voice synthesis
+TTS>=0.22.0
+
+# Audio I/O for Vosk/Coqui playback
+sounddevice>=0.4.6
+soundfile>=0.12.1
+
+# Offline TTS (pyttsx3) - system voices
+pyttsx3>=2.90
