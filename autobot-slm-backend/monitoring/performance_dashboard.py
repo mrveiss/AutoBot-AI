@@ -13,19 +13,18 @@ from pathlib import Path
 
 import aiohttp_jinja2
 import jinja2
-from aiohttp import web, WSMsgType
-from src.constants.network_constants import NetworkConstants
-
+from aiohttp import WSMsgType, web
 from performance_monitor import PerformanceMonitor
+
+from src.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 from src.utils.html_dashboard_utils import (
-    get_dark_theme_css,
     create_dashboard_header,
     create_metric_card,
+    get_dark_theme_css,
 )
 from src.utils.template_loader import load_css, template_exists
-
 
 # ============================================================================
 # Dashboard Template Helper Functions (Issue #398: extracted)
@@ -389,13 +388,10 @@ def _get_dashboard_html_body(header_html: str, metric_cards: str) -> str:
 
 
 def _build_dashboard_html(
-    dark_theme_css: str,
-    additional_css: str,
-    body_html: str,
-    javascript: str
+    dark_theme_css: str, additional_css: str, body_html: str, javascript: str
 ) -> str:
     """Build the complete dashboard HTML template (Issue #398: extracted)."""
-    return f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -412,7 +408,8 @@ def _build_dashboard_html(
 
 {javascript}
 </body>
-</html>'''
+</html>"""
+
 
 class PerformanceDashboard:
     """Real-time performance dashboard for AutoBot distributed system."""
@@ -428,73 +425,91 @@ class PerformanceDashboard:
 
     def setup_routes(self):
         """Set up HTTP routes for the dashboard."""
-        self.app.router.add_get('/', self.dashboard_home)
-        self.app.router.add_get('/api/metrics/current', self.get_current_metrics)
-        self.app.router.add_get('/api/metrics/history', self.get_metrics_history)
-        self.app.router.add_get('/api/system/status', self.get_system_status)
-        self.app.router.add_get('/api/alerts', self.get_alerts)
-        self.app.router.add_get('/ws', self.websocket_handler)
-        self.app.router.add_static('/static', Path(__file__).parent / 'static')
+        self.app.router.add_get("/", self.dashboard_home)
+        self.app.router.add_get("/api/metrics/current", self.get_current_metrics)
+        self.app.router.add_get("/api/metrics/history", self.get_metrics_history)
+        self.app.router.add_get("/api/system/status", self.get_system_status)
+        self.app.router.add_get("/api/alerts", self.get_alerts)
+        self.app.router.add_get("/ws", self.websocket_handler)
+        self.app.router.add_static("/static", Path(__file__).parent / "static")
 
     def setup_templates(self):
         """Set up Jinja2 templates for HTML rendering."""
-        template_dir = Path(__file__).parent / 'templates'
+        template_dir = Path(__file__).parent / "templates"
         template_dir.mkdir(exist_ok=True)
-        aiohttp_jinja2.setup(self.app, loader=jinja2.FileSystemLoader(str(template_dir)))
+        aiohttp_jinja2.setup(
+            self.app, loader=jinja2.FileSystemLoader(str(template_dir))
+        )
 
         # Create dashboard HTML template if it doesn't exist
         self.create_dashboard_template()
 
     def create_dashboard_template(self):
         """Create the main dashboard HTML template (Issue #398: refactored)."""
-        template_path = Path(__file__).parent / 'templates' / 'dashboard.html'
+        template_path = Path(__file__).parent / "templates" / "dashboard.html"
         template_path.parent.mkdir(exist_ok=True)
 
         # Generate dashboard components using utility functions
         header_html = create_dashboard_header(
-            title="🤖 AutoBot Performance Dashboard",
-            status="healthy",
-            theme="dark"
+            title="🤖 AutoBot Performance Dashboard", status="healthy", theme="dark"
         )
 
         # Generate metric cards
-        metric_cards = "\n".join([
-            create_metric_card("CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"),
-            create_metric_card("Memory Usage", "--%", '<span id="memory-available">--GB</span> available', "memory-usage"),
-            create_metric_card("GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"),
-            create_metric_card("Active Services", "--/--", "Distributed across 6 VMs", "active-services"),
-        ])
+        metric_cards = "\n".join(
+            [
+                create_metric_card(
+                    "CPU Usage", "--%", "22-core Intel Ultra 9 185H", "cpu-usage"
+                ),
+                create_metric_card(
+                    "Memory Usage",
+                    "--%",
+                    '<span id="memory-available">--GB</span> available',
+                    "memory-usage",
+                ),
+                create_metric_card(
+                    "GPU Utilization", "--%", "NVIDIA RTX 4070", "gpu-usage"
+                ),
+                create_metric_card(
+                    "Active Services",
+                    "--/--",
+                    "Distributed across 6 VMs",
+                    "active-services",
+                ),
+            ]
+        )
 
         # Build HTML content using extracted helper functions
         html_content = _build_dashboard_html(
             dark_theme_css=get_dark_theme_css(),
             additional_css=_get_dashboard_additional_css(),
             body_html=_get_dashboard_html_body(header_html, metric_cards),
-            javascript=_get_dashboard_javascript()
+            javascript=_get_dashboard_javascript(),
         )
 
-        with open(template_path, 'w', encoding='utf-8') as f:
+        with open(template_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
-    @aiohttp_jinja2.template('dashboard.html')
+    @aiohttp_jinja2.template("dashboard.html")
     async def dashboard_home(self, request):
         """Serve the main dashboard page."""
         return {
-            'main_ip': NetworkConstants.MAIN_MACHINE_IP,
-            'frontend_ip': NetworkConstants.FRONTEND_VM_IP,
-            'npu_worker_ip': NetworkConstants.NPU_WORKER_VM_IP,
-            'redis_ip': NetworkConstants.REDIS_VM_IP,
-            'ai_stack_ip': NetworkConstants.AI_STACK_VM_IP,
-            'browser_ip': NetworkConstants.BROWSER_VM_IP
+            "main_ip": NetworkConstants.MAIN_MACHINE_IP,
+            "frontend_ip": NetworkConstants.FRONTEND_VM_IP,
+            "npu_worker_ip": NetworkConstants.NPU_WORKER_VM_IP,
+            "redis_ip": NetworkConstants.REDIS_VM_IP,
+            "ai_stack_ip": NetworkConstants.AI_STACK_VM_IP,
+            "browser_ip": NetworkConstants.BROWSER_VM_IP,
         }
 
     async def get_current_metrics(self, request):
         """Get current performance metrics."""
         try:
             metrics = await self.monitor.generate_performance_report()
-            return web.json_response(metrics, dumps=lambda obj: json.dumps(obj, default=str))
+            return web.json_response(
+                metrics, dumps=lambda obj: json.dumps(obj, default=str)
+            )
         except Exception as e:
-            return web.json_response({'error': str(e)}, status=500)
+            return web.json_response({"error": str(e)}, status=500)
 
     async def get_metrics_history(self, request):
         """Get historical performance metrics."""
@@ -507,8 +522,7 @@ class PerformanceDashboard:
                 self.redis_client = get_redis_client(database="metrics")
                 if self.redis_client is None:
                     return web.json_response(
-                        {'error': 'Redis not available', 'history': []},
-                        status=503
+                        {"error": "Redis not available", "history": []}, status=503
                     )
 
             # Get last 100 metrics entries
@@ -525,7 +539,7 @@ class PerformanceDashboard:
             return web.json_response(parsed_history)
 
         except Exception as e:
-            return web.json_response({'error': str(e), 'history': []}, status=500)
+            return web.json_response({"error": str(e), "history": []}, status=500)
 
     async def get_system_status(self, request):
         """Get overall system status summary."""
@@ -551,16 +565,18 @@ class PerformanceDashboard:
                 "services": {
                     "healthy": healthy_services,
                     "total": total_services,
-                    "availability": (healthy_services / total_services * 100) if total_services > 0 else 0
+                    "availability": (healthy_services / total_services * 100)
+                    if total_services > 0
+                    else 0,
                 },
                 "alerts": len(alerts),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
 
             return web.json_response(status_summary)
 
         except Exception as e:
-            return web.json_response({'error': str(e)}, status=500)
+            return web.json_response({"error": str(e)}, status=500)
 
     async def get_alerts(self, request):
         """Get current performance alerts."""
@@ -572,15 +588,17 @@ class PerformanceDashboard:
             critical_alerts = [a for a in alerts if "DOWN" in a or "ERROR" in a]
             warning_alerts = [a for a in alerts if a not in critical_alerts]
 
-            return web.json_response({
-                "critical": critical_alerts,
-                "warnings": warning_alerts,
-                "total": len(alerts),
-                "timestamp": datetime.now().isoformat()
-            })
+            return web.json_response(
+                {
+                    "critical": critical_alerts,
+                    "warnings": warning_alerts,
+                    "total": len(alerts),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
         except Exception as e:
-            return web.json_response({'error': str(e)}, status=500)
+            return web.json_response({"error": str(e)}, status=500)
 
     async def websocket_handler(self, request):
         """Handle WebSocket connections for real-time updates."""
@@ -592,12 +610,12 @@ class PerformanceDashboard:
         try:
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
-                    if msg.data == 'close':
+                    if msg.data == "close":
                         await ws.close()
                 elif msg.type == WSMsgType.ERROR:
-                    logger.error(f'WebSocket error: {ws.exception()}')
+                    logger.error(f"WebSocket error: {ws.exception()}")
         except Exception as e:
-            logger.error(f'WebSocket connection error: {e}')
+            logger.error(f"WebSocket connection error: {e}")
         finally:
             self.websocket_connections.discard(ws)
 
@@ -608,11 +626,14 @@ class PerformanceDashboard:
         if not self.websocket_connections:
             return
 
-        message = json.dumps({
-            "type": "metrics_update",
-            "data": metrics,
-            "timestamp": datetime.now().isoformat()
-        }, default=str)
+        message = json.dumps(
+            {
+                "type": "metrics_update",
+                "data": metrics,
+                "timestamp": datetime.now().isoformat(),
+            },
+            default=str,
+        )
 
         # Send to all connected clients
         disconnected = set()
@@ -652,10 +673,12 @@ class PerformanceDashboard:
         # Start the web server
         runner = web.AppRunner(self.app)
         await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', self.port)
+        site = web.TCPSite(runner, "0.0.0.0", self.port)
         await site.start()
 
-        logger.info(f"AutoBot Performance Dashboard running on http://localhost:{self.port}")
+        logger.info(
+            f"AutoBot Performance Dashboard running on http://localhost:{self.port}"
+        )
         logger.info("Real-time monitoring active with WebSocket updates")
 
         # Keep the server running
@@ -667,17 +690,21 @@ class PerformanceDashboard:
         finally:
             await runner.cleanup()
 
+
 async def main():
     """Main function to run the performance dashboard."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='AutoBot Performance Dashboard')
-    parser.add_argument('--port', type=int, default=9090, help='Dashboard port (default: 9090)')
+    parser = argparse.ArgumentParser(description="AutoBot Performance Dashboard")
+    parser.add_argument(
+        "--port", type=int, default=9090, help="Dashboard port (default: 9090)"
+    )
 
     args = parser.parse_args()
 
     dashboard = PerformanceDashboard(port=args.port)
     await dashboard.run()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

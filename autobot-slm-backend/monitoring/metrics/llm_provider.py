@@ -46,7 +46,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         self.requests_total = Counter(
             "autobot_llm_requests_total",
             "Total LLM requests",
-            ["provider", "model", "request_type"],  # request_type: chat, completion, embedding
+            [
+                "provider",
+                "model",
+                "request_type",
+            ],  # request_type: chat, completion, embedding
             registry=self.registry,
         )
 
@@ -135,7 +139,11 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         self.errors_total = Counter(
             "autobot_llm_errors_total",
             "Total LLM errors",
-            ["provider", "model", "error_type"],  # error_type: rate_limit, timeout, auth, api, other
+            [
+                "provider",
+                "model",
+                "error_type",
+            ],  # error_type: rate_limit, timeout, auth, api, other
             registry=self.registry,
         )
 
@@ -273,28 +281,28 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
     ) -> None:
         """Record cost for a request."""
         total_cost = input_cost + output_cost
-        self.cost_dollars.labels(
-            provider=provider, model=model, cost_type="input"
-        ).inc(input_cost)
+        self.cost_dollars.labels(provider=provider, model=model, cost_type="input").inc(
+            input_cost
+        )
         self.cost_dollars.labels(
             provider=provider, model=model, cost_type="output"
         ).inc(output_cost)
-        self.cost_dollars.labels(
-            provider=provider, model=model, cost_type="total"
-        ).inc(total_cost)
+        self.cost_dollars.labels(provider=provider, model=model, cost_type="total").inc(
+            total_cost
+        )
         self.cost_per_request.labels(provider=provider, model=model).observe(total_cost)
 
     def set_budget_remaining(self, provider: str, remaining_dollars: float) -> None:
         """Set remaining daily budget."""
-        self.daily_cost_budget_remaining.labels(provider=provider).set(remaining_dollars)
+        self.daily_cost_budget_remaining.labels(provider=provider).set(
+            remaining_dollars
+        )
 
     # =========================================================================
     # Error Methods
     # =========================================================================
 
-    def record_error(
-        self, provider: str, model: str, error_type: str
-    ) -> None:
+    def record_error(self, provider: str, model: str, error_type: str) -> None:
         """Record an LLM error."""
         # Decrement in-flight on error
         self.requests_in_flight.labels(provider=provider).dec()
@@ -324,12 +332,12 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         reset_seconds: float,
     ) -> None:
         """Update rate limit metrics from API response headers."""
-        self.rate_limit_remaining.labels(
-            provider=provider, limit_type="requests"
-        ).set(requests_remaining)
-        self.rate_limit_remaining.labels(
-            provider=provider, limit_type="tokens"
-        ).set(tokens_remaining)
+        self.rate_limit_remaining.labels(provider=provider, limit_type="requests").set(
+            requests_remaining
+        )
+        self.rate_limit_remaining.labels(provider=provider, limit_type="tokens").set(
+            tokens_remaining
+        )
         self.rate_limit_reset_seconds.labels(
             provider=provider, limit_type="requests"
         ).set(reset_seconds)

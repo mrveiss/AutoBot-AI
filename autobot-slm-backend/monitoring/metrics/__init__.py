@@ -27,20 +27,22 @@ Package Structure:
 """
 
 from .base import BaseMetricsRecorder
-from .workflow import WorkflowMetricsRecorder
-from .github import GitHubMetricsRecorder
-from .task import TaskMetricsRecorder
-from .system import SystemMetricsRecorder
 from .claude_api import ClaudeAPIMetricsRecorder
-from .service_health import ServiceHealthMetricsRecorder
-from .performance import PerformanceMetricsRecorder
+
+# Issue #476: Frontend RUM metrics recorder
+from .frontend import FrontendMetricsRecorder
+from .github import GitHubMetricsRecorder
+
 # Issue #470: New domain-specific recorders
 from .knowledge_base import KnowledgeBaseMetricsRecorder
 from .llm_provider import LLMProviderMetricsRecorder
-from .websocket import WebSocketMetricsRecorder
+from .performance import PerformanceMetricsRecorder
 from .redis import RedisMetricsRecorder
-# Issue #476: Frontend RUM metrics recorder
-from .frontend import FrontendMetricsRecorder
+from .service_health import ServiceHealthMetricsRecorder
+from .system import SystemMetricsRecorder
+from .task import TaskMetricsRecorder
+from .websocket import WebSocketMetricsRecorder
+from .workflow import WorkflowMetricsRecorder
 
 __all__ = [
     "BaseMetricsRecorder",

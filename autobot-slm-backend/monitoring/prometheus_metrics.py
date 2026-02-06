@@ -30,18 +30,18 @@ from prometheus_client import (
 # Issue #470: Added KnowledgeBase, LLMProvider, WebSocket, Redis recorders
 # Issue #476: Added FrontendMetricsRecorder for RUM metrics
 from .metrics import (
-    WorkflowMetricsRecorder,
-    GitHubMetricsRecorder,
-    TaskMetricsRecorder,
-    SystemMetricsRecorder,
     ClaudeAPIMetricsRecorder,
-    ServiceHealthMetricsRecorder,
-    PerformanceMetricsRecorder,
+    FrontendMetricsRecorder,
+    GitHubMetricsRecorder,
     KnowledgeBaseMetricsRecorder,
     LLMProviderMetricsRecorder,
-    WebSocketMetricsRecorder,
+    PerformanceMetricsRecorder,
     RedisMetricsRecorder,
-    FrontendMetricsRecorder,
+    ServiceHealthMetricsRecorder,
+    SystemMetricsRecorder,
+    TaskMetricsRecorder,
+    WebSocketMetricsRecorder,
+    WorkflowMetricsRecorder,
 )
 
 # Issue #380: Module-level dicts for state value mapping (avoid repeated dict creation)
@@ -215,7 +215,9 @@ class PrometheusMetricsManager:
     # Core Infrastructure Metric Recording Methods
     # =========================================================================
 
-    def record_timeout(self, operation_type: str, database: str, timed_out: bool) -> None:
+    def record_timeout(
+        self, operation_type: str, database: str, timed_out: bool
+    ) -> None:
         """Record a timeout event."""
         status = "timeout" if timed_out else "success"
         self.timeout_total.labels(
@@ -469,9 +471,7 @@ class PrometheusMetricsManager:
         """Set bottleneck detection status for a category."""
         self._performance.set_bottleneck(category, detected)
 
-    def record_optimization_recommendation(
-        self, category: str, priority: str
-    ) -> None:
+    def record_optimization_recommendation(self, category: str, priority: str) -> None:
         """Record an optimization recommendation."""
         self._performance.record_optimization_recommendation(category, priority)
 
@@ -487,7 +487,9 @@ class PrometheusMetricsManager:
         self, modality: str, duration_seconds: float, success: bool
     ) -> None:
         """Record a multi-modal processing operation."""
-        self._performance.record_multimodal_processing(modality, duration_seconds, success)
+        self._performance.record_multimodal_processing(
+            modality, duration_seconds, success
+        )
 
     # =========================================================================
     # Knowledge Base Metrics (Issue #470: Delegates to KnowledgeBaseMetricsRecorder)
@@ -503,7 +505,9 @@ class PrometheusMetricsManager:
         self, operation: str, collection: str, size_bytes: int = 0
     ) -> None:
         """Record a document operation."""
-        self._knowledge_base.record_document_operation(operation, collection, size_bytes)
+        self._knowledge_base.record_document_operation(
+            operation, collection, size_bytes
+        )
 
     def set_vector_count(self, count: int, collection: str) -> None:
         """Set total vector count for a collection."""
@@ -513,7 +517,9 @@ class PrometheusMetricsManager:
         self, operation: str, model: str, latency_seconds: float = 0
     ) -> None:
         """Record an embedding operation."""
-        self._knowledge_base.record_embedding_operation(operation, model, latency_seconds)
+        self._knowledge_base.record_embedding_operation(
+            operation, model, latency_seconds
+        )
 
     def record_knowledge_search(
         self,
@@ -730,9 +736,7 @@ class PrometheusMetricsManager:
         """Record an unhandled Promise rejection from frontend."""
         self._frontend.record_unhandled_rejection(page)
 
-    def record_frontend_component_error(
-        self, component: str, error_type: str
-    ) -> None:
+    def record_frontend_component_error(self, component: str, error_type: str) -> None:
         """Record a Vue component error from frontend."""
         self._frontend.record_component_error(component, error_type)
 

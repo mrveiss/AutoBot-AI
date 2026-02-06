@@ -290,9 +290,9 @@ bash scripts/run-optimization.sh
 
 #### Overall System Score Calculation
 ```
-Overall Score = (API Performance × 0.3) + 
-                (Database Performance × 0.25) + 
-                (Network Performance × 0.2) + 
+Overall Score = (API Performance × 0.3) +
+                (Database Performance × 0.25) +
+                (Network Performance × 0.2) +
                 (System Performance × 0.25)
 ```
 

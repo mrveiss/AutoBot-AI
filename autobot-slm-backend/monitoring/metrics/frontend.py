@@ -311,9 +311,7 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
                 endpoint=normalized_endpoint, method=method
             ).inc()
 
-    def record_api_error(
-        self, endpoint: str, method: str, error_type: str
-    ) -> None:
+    def record_api_error(self, endpoint: str, method: str, error_type: str) -> None:
         """Record a frontend API error."""
         normalized_endpoint = self._normalize_endpoint(endpoint)
         self.api_errors_total.labels(
@@ -397,9 +395,7 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_ws_message(self, direction: str, event_type: str) -> None:
         """Record a WebSocket message."""
-        self.ws_messages_total.labels(
-            direction=direction, event_type=event_type
-        ).inc()
+        self.ws_messages_total.labels(direction=direction, event_type=event_type).inc()
 
     # =========================================================================
     # Resource Timing Methods
@@ -409,7 +405,9 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
         """Record a slow resource load."""
         self.slow_resources_total.labels(resource_type=resource_type).inc()
 
-    def record_resource_load(self, resource_type: str, load_time_seconds: float) -> None:
+    def record_resource_load(
+        self, resource_type: str, load_time_seconds: float
+    ) -> None:
         """Record resource load time."""
         self.resource_load_seconds.labels(resource_type=resource_type).observe(
             load_time_seconds
