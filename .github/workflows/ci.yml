@@ -84,15 +84,15 @@ jobs:
 
         # Code formatting check
         echo "Checking code formatting with black..."
-        black --check src/ backend/ --line-length=88 || echo "⚠️ Code formatting issues found"
+        black --check autobot-user-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88 || echo "⚠️ Code formatting issues found"
 
         # Import sorting check
         echo "Checking import sorting with isort..."
-        isort --check-only src/ backend/ || echo "⚠️ Import sorting issues found"
+        isort --check-only autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || echo "⚠️ Import sorting issues found"
 
         # Linting
         echo "Running flake8 linter..."
-        flake8 src/ backend/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
+        flake8 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
 
     - name: Run security analysis
       run: |
@@ -100,7 +100,7 @@ jobs:
         echo "🔒 Running security analysis..."
 
         # Security vulnerability scan
-        bandit -r src/ backend/ -f json -o bandit-report.json || echo "⚠️ Security issues found"
+        bandit -r autobot-user-backend/ autobot-slm-backend/ autobot-shared/ -f json -o bandit-report.json || echo "⚠️ Security issues found"
         if [ -f bandit-report.json ]; then
           echo "Security report generated"
           cat bandit-report.json | python -m json.tool || echo "No security issues to report"

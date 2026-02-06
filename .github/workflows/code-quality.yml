@@ -39,9 +39,9 @@ jobs:
       continue-on-error: true
       run: |
         source .venv/bin/activate
-        python3 -m black --check --line-length=88 backend/ src/ || {
+        python3 -m black --check --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Black formatting check failed"
-          echo "Run 'python3 -m black --line-length=88 backend/ src/' to fix"
+          echo "Run 'python3 -m black --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/' to fix"
           echo "See Issue #173 for tracking"
         }
 
@@ -49,9 +49,9 @@ jobs:
       continue-on-error: true
       run: |
         source .venv/bin/activate
-        python3 -m isort --check --profile=black --line-length=88 backend/ src/ || {
+        python3 -m isort --check --profile=black --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ isort check failed"
-          echo "Run 'python3 -m isort --profile=black --line-length=88 backend/ src/' to fix"
+          echo "Run 'python3 -m isort --profile=black --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/' to fix"
           echo "See Issue #173 for tracking"
         }
 
@@ -59,7 +59,7 @@ jobs:
       continue-on-error: true
       run: |
         source .venv/bin/activate
-        python3 -m flake8 backend/ src/ \
+        python3 -m flake8 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ \
           --max-line-length=100 \
           --extend-ignore=E203,W503 \
           --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive \
@@ -76,7 +76,7 @@ jobs:
         python3 -m autoflake --check --recursive \
           --remove-all-unused-imports \
           --remove-unused-variables \
-          backend/ src/ || {
+          autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Unused imports/variables detected"
           echo "See Issue #173 for tracking"
         }
@@ -85,7 +85,7 @@ jobs:
       continue-on-error: true
       run: |
         source .venv/bin/activate
-        python3 -m bandit -c .bandit -r backend/ src/ || {
+        python3 -m bandit -c .bandit -r autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Security issues detected - review bandit output"
         }
 
