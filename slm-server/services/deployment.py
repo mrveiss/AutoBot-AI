@@ -882,31 +882,21 @@ class DeploymentService:
             await db.commit()
             return False, str(e)
 
-    async def _execute_enrollment_playbook(
+    def _build_enrollment_command(
         self,
+        playbook_path: Path,
         host: str,
         node_id: str,
         ssh_user: str,
         ssh_port: int,
-        ssh_password: Optional[str] = None,
-    ) -> str:
-        """Execute the SLM agent enrollment playbook."""
-        playbook_path = self.ansible_dir / "enroll.yml"
+        admin_url: str,
+    ) -> List[str]:
+        """Build the ansible-playbook command for enrollment.
 
-        # Create enrollment playbook if it doesn't exist
-        if not playbook_path.exists():
-            await self._create_enrollment_playbook(playbook_path)
-
-        # Use external_url from config for the admin URL that nodes will use
-        admin_url = settings.external_url
-
-        # Find ansible-playbook executable
+        Helper for _execute_enrollment_playbook (Issue #665).
+        """
         ansible_cmd = self._find_ansible_playbook()
-
-        # Build the ansible command
-        # Always skip host key checking for automated enrollment
-        # Use ControlPath=none to avoid PTY issues when running from uvicorn
-        cmd = [
+        return [
             ansible_cmd,
             str(playbook_path),
             "-i",
@@ -929,33 +919,55 @@ class DeploymentService:
             "ansible_ssh_pipelining=false",
         ]
 
+    def _add_enrollment_password_auth(self, cmd: List[str], ssh_password: str) -> None:
+        """Add password authentication options to enrollment command.
+
+        Helper for _execute_enrollment_playbook (Issue #665).
+        """
+        if not shutil.which("sshpass"):
+            raise RuntimeError(
+                "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
+            )
+        cmd.extend(
+            [
+                "-e",
+                "ansible_ssh_pass=" + ssh_password,
+                "-e",
+                "ansible_become_pass=" + ssh_password,
+            ]
+        )
+
+    async def _execute_enrollment_playbook(
+        self,
+        host: str,
+        node_id: str,
+        ssh_user: str,
+        ssh_port: int,
+        ssh_password: Optional[str] = None,
+    ) -> str:
+        """Execute the SLM agent enrollment playbook."""
+        playbook_path = self.ansible_dir / "enroll.yml"
+
+        # Create enrollment playbook if it doesn't exist
+        if not playbook_path.exists():
+            await self._create_enrollment_playbook(playbook_path)
+
+        # Use external_url from config for the admin URL that nodes will use
+        admin_url = settings.external_url
+
+        # Build the ansible command
+        cmd = self._build_enrollment_command(
+            playbook_path, host, node_id, ssh_user, ssh_port, admin_url
+        )
+
         # Add password authentication if provided
         if ssh_password:
-            if not shutil.which("sshpass"):
-                raise RuntimeError(
-                    "Password auth requires 'sshpass'. Install: sudo apt install sshpass"
-                )
-            # Use sshpass with ansible for both SSH and sudo
-            cmd.extend(
-                [
-                    "-e",
-                    "ansible_ssh_pass=" + ssh_password,
-                    "-e",
-                    "ansible_become_pass=" + ssh_password,
-                ]
-            )
+            self._add_enrollment_password_auth(cmd, ssh_password)
 
         logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
 
-        # Set environment to avoid TTY issues when running from uvicorn
-        env = {
-            **os.environ,
-            "ANSIBLE_FORCE_COLOR": "0",
-            "ANSIBLE_NOCOLOR": "1",
-            "ANSIBLE_HOST_KEY_CHECKING": "False",
-            "ANSIBLE_SSH_RETRIES": "3",
-        }
-
+        # Execute playbook with appropriate environment
+        env = self._get_ansible_environment()
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
