@@ -643,6 +643,61 @@ async def delete_node(
     )
 
 
+async def _check_ip_conflict(
+    db: AsyncSession,
+    new_ip: str,
+    current_ip: str,
+) -> None:
+    """Check if new IP conflicts with another node.
+
+    Helper for replace_node (Issue #665).
+
+    Args:
+        db: Database session
+        new_ip: The new IP address to check
+        current_ip: The current node's IP address
+
+    Raises:
+        HTTPException: If IP conflict detected
+    """
+    if new_ip != current_ip:
+        existing = await db.execute(select(Node).where(Node.ip_address == new_ip))
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Another node with this IP address already exists",
+            )
+
+
+async def _prepare_node_extra_data(node_data: NodeCreate) -> Optional[dict]:
+    """Prepare extra_data dict with encrypted password if needed.
+
+    Helper for replace_node (Issue #665).
+
+    Args:
+        node_data: The node creation data
+
+    Returns:
+        Dictionary with encrypted password or None
+
+    Raises:
+        HTTPException: If password encryption fails
+    """
+    if node_data.ssh_password and node_data.auth_method == "password":
+        try:
+            return {
+                "ssh_password": encrypt_data(node_data.ssh_password),
+                "ssh_password_encrypted": True,
+            }
+        except Exception as e:
+            logger.error("Failed to encrypt SSH password: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to securely store credentials",
+            )
+    return None
+
+
 @router.put("/{node_id}/replace", response_model=NodeResponse)
 async def replace_node(
     node_id: str,
@@ -667,15 +722,7 @@ async def replace_node(
         )
 
     # Check if new IP conflicts with another node (not the one being replaced)
-    if node_data.ip_address != old_node.ip_address:
-        existing = await db.execute(
-            select(Node).where(Node.ip_address == node_data.ip_address)
-        )
-        if existing.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Another node with this IP address already exists",
-            )
+    await _check_ip_conflict(db, node_data.ip_address, old_node.ip_address)
 
     # Delete the old node
     await db.delete(old_node)
@@ -690,17 +737,7 @@ async def replace_node(
         initial_status = NodeStatus.PENDING.value
 
     # Store encrypted SSH password if provided
-    extra_data = {}
-    if node_data.ssh_password and node_data.auth_method == "password":
-        try:
-            extra_data["ssh_password"] = encrypt_data(node_data.ssh_password)
-            extra_data["ssh_password_encrypted"] = True
-        except Exception as e:
-            logger.error("Failed to encrypt SSH password: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to securely store credentials",
-            )
+    extra_data = await _prepare_node_extra_data(node_data)
 
     new_node = Node(
         node_id=new_node_id,
@@ -711,7 +748,7 @@ async def replace_node(
         ssh_port=node_data.ssh_port,
         auth_method=node_data.auth_method,
         status=initial_status,
-        extra_data=extra_data if extra_data else None,
+        extra_data=extra_data,
     )
     db.add(new_node)
     await db.commit()
