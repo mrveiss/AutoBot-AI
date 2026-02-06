@@ -80,3 +80,36 @@ async def test_is_token_blacklisted(mock_redis):
 
     mock_redis.sismember.assert_called_once_with(expected_key, expected_hash)
     assert result is True
+
+
+@pytest.mark.asyncio
+async def test_invalidate_user_sessions_except_current(mock_redis):
+    """Invalidate all user sessions except the current token."""
+    user_id = uuid.uuid4()
+    current_token = "current.token.here"
+
+    # Mock existing tokens in Redis
+    existing_tokens = ["old.token.1", "old.token.2", current_token]
+    mock_redis.smembers = AsyncMock(
+        return_value={SessionService.hash_token(t) for t in existing_tokens}
+    )
+    mock_redis.sadd = AsyncMock()
+    mock_redis.expire = AsyncMock()
+
+    with patch(
+        "src.user_management.services.session_service.get_redis_client",
+        return_value=mock_redis,
+    ):
+        service = SessionService()
+        count = await service.invalidate_user_sessions(
+            user_id, except_token=current_token
+        )
+
+    # Should invalidate 2 tokens (excluding current)
+    assert count == 2
+
+    # Verify current token hash NOT added to blacklist
+    current_hash = SessionService.hash_token(current_token)
+    calls = mock_redis.sadd.call_args_list
+    for call in calls:
+        assert current_hash not in call[0][1]  # Not in added tokens
