@@ -26,17 +26,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from models.database import (
-    BlueGreenDeployment,
-    BlueGreenStatus,
-    Node,
-    NodeStatus,
-)
-from models.schemas import (
-    BlueGreenCreate,
-    BlueGreenResponse,
-    EligibleNodeResponse,
-)
+from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
+from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +40,123 @@ DEFAULT_HEALTH_CHECK_INTERVAL = 10
 DEFAULT_HEALTH_CHECK_TIMEOUT = 300
 
 # Security: Valid roles allowlist (prevents command injection)
-VALID_ROLES = frozenset({
-    "slm-agent", "redis", "backend", "frontend", "npu-worker",
-    "browser-automation", "monitoring", "ai-stack", "llm", "vnc",
-})
+VALID_ROLES = frozenset(
+    {
+        "slm-agent",
+        "redis",
+        "backend",
+        "frontend",
+        "npu-worker",
+        "browser-automation",
+        "monitoring",
+        "ai-stack",
+        "llm",
+        "vnc",
+    }
+)
 
 # Security: Valid service name pattern (alphanumeric, hyphen, underscore only)
 VALID_SERVICE_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+# Purge playbook template for clean role removal
+_PURGE_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Role Purge Playbook - Clean slate for role release
+---
+- name: Purge Roles from Node
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    purge_roles: ""
+    role_service_map:
+      slm-agent:
+        - slm-agent
+        - autobot-agent
+      redis:
+        - redis-server
+        - redis
+      backend:
+        - autobot-backend
+        - autobot
+      frontend:
+        - autobot-frontend
+      npu-worker:
+        - autobot-npu-worker
+      browser-automation:
+        - playwright-server
+        - browser-automation
+      monitoring:
+        - prometheus
+        - grafana-server
+        - node_exporter
+      ai-stack:
+        - autobot-ai-stack
+      llm:
+        - ollama
+
+    role_data_dirs:
+      redis:
+        - /var/lib/redis
+        - /etc/redis
+      backend:
+        - /opt/autobot/backend
+        - /var/log/autobot
+      frontend:
+        - /opt/autobot/frontend
+      monitoring:
+        - /var/lib/prometheus
+        - /var/lib/grafana
+        - /etc/prometheus
+        - /etc/grafana
+
+  tasks:
+    - name: Parse purge roles
+      ansible.builtin.set_fact:
+        role_list: "{{ purge_roles.split(',') | map('trim') | list }}"
+
+    - name: Stop and disable services for each role
+      ansible.builtin.systemd:
+        name: "{{ item.1 }}"
+        state: stopped
+        enabled: false
+      loop: "{{ role_list | product(role_service_map[item] | default([])) | list }}"
+      when: item.0 in role_service_map
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.1 | default(item) }}"
+
+    - name: Remove service files
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ item.1 }}.service"
+        state: absent
+      loop: "{{ role_list | product(role_service_map[item] | default([])) | list }}"
+      when: item.0 in role_service_map
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.1 | default(item) }}"
+
+    - name: Remove role data directories
+      ansible.builtin.file:
+        path: "{{ item.1 }}"
+        state: absent
+      loop: "{{ role_list | product(role_data_dirs[item] | default([])) | list }}"
+      when: item.0 in role_data_dirs
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.1 | default(item) }}"
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Display purge summary
+      ansible.builtin.debug:
+        msg: "Purged roles: {{ role_list | join(', ') }}"
+"""
 
 
 def _validate_role(role: str) -> bool:
@@ -205,9 +306,7 @@ class BlueGreenService:
 
         return True, "Rollback initiated"
 
-    async def cancel(
-        self, db: AsyncSession, bg_deployment_id: str
-    ) -> Tuple[bool, str]:
+    async def cancel(self, db: AsyncSession, bg_deployment_id: str) -> Tuple[bool, str]:
         """Cancel a pending blue-green deployment."""
         deployment = await self._get_deployment(db, bg_deployment_id)
         if not deployment:
@@ -239,7 +338,8 @@ class BlueGreenService:
         green_node = await self._get_node(db, deployment.green_node_id)
 
         if not blue_node or blue_node.status not in [
-            NodeStatus.ONLINE.value, NodeStatus.DEGRADED.value
+            NodeStatus.ONLINE.value,
+            NodeStatus.DEGRADED.value,
         ]:
             return False, "Blue node is no longer available for retry"
 
@@ -257,9 +357,7 @@ class BlueGreenService:
         await db.commit()
 
         # Start deployment in background
-        task = asyncio.create_task(
-            self._execute_deployment(bg_deployment_id)
-        )
+        task = asyncio.create_task(self._execute_deployment(bg_deployment_id))
         self._running_deployments[bg_deployment_id] = task
 
         logger.info(
@@ -374,9 +472,7 @@ class BlueGreenService:
         if deployment.purge_on_complete:
             deployment.current_step = "Purging roles from blue node"
             await db.commit()
-            await self.purge_roles(
-                db, deployment.blue_node_id, deployment.blue_roles
-            )
+            await self.purge_roles(db, deployment.blue_node_id, deployment.blue_roles)
 
         deployment.status = BlueGreenStatus.COMPLETED.value
         deployment.progress_percent = 100
@@ -496,7 +592,9 @@ class BlueGreenService:
         """Check if a node has capacity for role borrowing."""
         cpu_headroom = 100 - (node.cpu_percent or 0)
         memory_headroom = 100 - (node.memory_percent or 0)
-        return cpu_headroom >= MIN_CPU_HEADROOM and memory_headroom >= MIN_MEMORY_HEADROOM
+        return (
+            cpu_headroom >= MIN_CPU_HEADROOM and memory_headroom >= MIN_MEMORY_HEADROOM
+        )
 
     async def _calculate_capacity(self, node: Node) -> float:
         """Calculate available capacity (average of CPU and memory headroom)."""
@@ -558,7 +656,9 @@ class BlueGreenService:
                 # Phase 3: Health verification
                 healthy = await self._phase_verify_health(db, deployment)
                 if not healthy:
-                    await self._handle_verification_failure(db, deployment, bg_deployment_id)
+                    await self._handle_verification_failure(
+                        db, deployment, bg_deployment_id
+                    )
                     return
 
                 # Phase 4: Switch traffic
@@ -591,8 +691,9 @@ class BlueGreenService:
         await db.commit()
 
         await self._broadcast_deployment_event(
-            bg_deployment_id, "started",
-            f"Blue-green deployment started for roles: {deployment.blue_roles}"
+            bg_deployment_id,
+            "started",
+            f"Blue-green deployment started for roles: {deployment.blue_roles}",
         )
 
         # Phase 2: Deploy roles
@@ -666,9 +767,7 @@ class BlueGreenService:
 
         # Update node roles
         green_node = await self._get_node(db, deployment.green_node_id)
-        blue_node.roles = list(
-            set(blue_node.roles or []) - set(deployment.blue_roles)
-        )
+        blue_node.roles = list(set(blue_node.roles or []) - set(deployment.blue_roles))
         green_node.roles = list(
             set(green_node.roles or []) | set(deployment.blue_roles)
         )
@@ -689,13 +788,14 @@ class BlueGreenService:
         await db.commit()
 
         await self._broadcast_deployment_event(
-            bg_deployment_id, "active",
-            "Traffic switched to green node - now live"
+            bg_deployment_id, "active", "Traffic switched to green node - now live"
         )
 
         # Phase 6: Optional monitoring
         if deployment.post_deploy_monitor_duration > 0 and deployment.auto_rollback:
-            await self._start_post_deployment_monitoring(db, deployment, bg_deployment_id)
+            await self._start_post_deployment_monitoring(
+                db, deployment, bg_deployment_id
+            )
             return  # Monitoring task handles completion
 
         # No monitoring - complete now
@@ -717,8 +817,9 @@ class BlueGreenService:
         await db.commit()
 
         await self._broadcast_deployment_event(
-            bg_deployment_id, "monitoring_started",
-            f"Post-deployment health monitoring started for {deployment.post_deploy_monitor_duration}s"
+            bg_deployment_id,
+            "monitoring_started",
+            f"Post-deployment health monitoring started for {deployment.post_deploy_monitor_duration}s",
         )
 
         # Start monitoring task (non-blocking)
@@ -744,9 +845,7 @@ class BlueGreenService:
         # Optional: Purge roles from blue node
         if deployment.purge_on_complete:
             deployment.current_step = "Purging roles from blue node"
-            await self.purge_roles(
-                db, deployment.blue_node_id, deployment.blue_roles
-            )
+            await self.purge_roles(db, deployment.blue_node_id, deployment.blue_roles)
 
         deployment.status = BlueGreenStatus.COMPLETED.value
         deployment.progress_percent = 100
@@ -755,8 +854,9 @@ class BlueGreenService:
         await db.commit()
 
         await self._broadcast_deployment_event(
-            bg_deployment_id, "completed",
-            "Blue-green deployment completed successfully"
+            bg_deployment_id,
+            "completed",
+            "Blue-green deployment completed successfully",
         )
 
         logger.info("Blue-green deployment completed: %s", bg_deployment_id)
@@ -769,9 +869,7 @@ class BlueGreenService:
         error: Exception,
     ) -> None:
         """Handle deployment error with optional auto-rollback."""
-        logger.error(
-            "Blue-green deployment failed: %s - %s", bg_deployment_id, error
-        )
+        logger.error("Blue-green deployment failed: %s - %s", bg_deployment_id, error)
         deployment.error = str(error)
         await db.commit()
 
@@ -826,9 +924,7 @@ class BlueGreenService:
         await self._deploy_roles_to_node(blue_node, deployment.blue_roles)
 
         # Restore node roles
-        blue_node.roles = list(
-            set(blue_node.roles or []) | set(deployment.blue_roles)
-        )
+        blue_node.roles = list(set(blue_node.roles or []) | set(deployment.blue_roles))
         green_node.roles = deployment.green_original_roles
         await db.commit()
 
@@ -855,8 +951,9 @@ class BlueGreenService:
         await db.commit()
 
         await self._broadcast_deployment_event(
-            bg_deployment_id, "rolled_back",
-            "Blue-green deployment rolled back successfully"
+            bg_deployment_id,
+            "rolled_back",
+            "Blue-green deployment rolled back successfully",
         )
 
         logger.info("Rollback completed for deployment: %s", bg_deployment_id)
@@ -879,11 +976,17 @@ class BlueGreenService:
             async with db_service.session() as db:
                 deployment = await self._get_deployment(db, bg_deployment_id)
                 if not deployment:
-                    logger.error("Deployment not found for monitoring: %s", bg_deployment_id)
+                    logger.error(
+                        "Deployment not found for monitoring: %s", bg_deployment_id
+                    )
                     return
 
                 monitoring_config = self._get_monitoring_config(deployment)
-                stats = {"consecutive_failures": 0, "total_checks": 0, "successful_checks": 0}
+                stats = {
+                    "consecutive_failures": 0,
+                    "total_checks": 0,
+                    "successful_checks": 0,
+                }
 
                 await self._run_monitoring_loop(
                     bg_deployment_id, deployment, monitoring_config, stats
@@ -904,7 +1007,8 @@ class BlueGreenService:
         """Extract monitoring configuration from deployment."""
         monitoring_start = deployment.monitoring_started_at or datetime.utcnow()
         return {
-            "deadline": monitoring_start + timedelta(seconds=deployment.post_deploy_monitor_duration),
+            "deadline": monitoring_start
+            + timedelta(seconds=deployment.post_deploy_monitor_duration),
             "interval": deployment.health_check_interval,
             "failure_threshold": deployment.health_failure_threshold,
             "green_node_id": deployment.green_node_id,
@@ -919,11 +1023,12 @@ class BlueGreenService:
         stats: dict,
     ) -> None:
         """Run the health monitoring loop."""
-        from services.database import db_service
 
         while datetime.utcnow() < config["deadline"]:
             # Check if deployment status changed externally
-            should_continue = await self._check_monitoring_should_continue(bg_deployment_id)
+            should_continue = await self._check_monitoring_should_continue(
+                bg_deployment_id
+            )
             if not should_continue:
                 return
 
@@ -940,19 +1045,27 @@ class BlueGreenService:
             if healthy:
                 stats["consecutive_failures"] = 0
                 stats["successful_checks"] += 1
-                logger.debug("Health check passed for %s (check #%d)", bg_deployment_id, stats["total_checks"])
+                logger.debug(
+                    "Health check passed for %s (check #%d)",
+                    bg_deployment_id,
+                    stats["total_checks"],
+                )
             else:
                 stats["consecutive_failures"] += 1
                 await self._handle_health_check_failure(bg_deployment_id, config, stats)
 
                 if stats["consecutive_failures"] >= config["failure_threshold"]:
-                    await self._trigger_monitoring_rollback(bg_deployment_id, config, stats)
+                    await self._trigger_monitoring_rollback(
+                        bg_deployment_id, config, stats
+                    )
                     return
 
             await asyncio.sleep(config["interval"])
 
         # Monitoring completed successfully
-        await self._complete_monitoring_successfully(bg_deployment_id, deployment, stats)
+        await self._complete_monitoring_successfully(
+            bg_deployment_id, deployment, stats
+        )
 
     async def _check_monitoring_should_continue(self, bg_deployment_id: str) -> bool:
         """Check if monitoring should continue based on deployment status."""
@@ -1081,7 +1194,9 @@ class BlueGreenService:
             f"({stats['successful_checks']}/{stats['total_checks']} checks)",
         )
 
-    async def _handle_monitoring_error(self, bg_deployment_id: str, error: Exception) -> None:
+    async def _handle_monitoring_error(
+        self, bg_deployment_id: str, error: Exception
+    ) -> None:
         """Handle unexpected error during health monitoring."""
         from services.database import db_service
 
@@ -1114,12 +1229,18 @@ class BlueGreenService:
             cmd = [
                 "ansible-playbook",
                 str(playbook_path),
-                "-i", f"{node.ip_address},",
-                "-e", f"target_roles={shlex.quote(roles_str)}",
-                "-e", f"target_host={node.ip_address}",
-                "-e", f"ansible_user={node.ssh_user or 'autobot'}",
-                "-e", f"ansible_port={node.ssh_port or 22}",
-                "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "-i",
+                f"{node.ip_address},",
+                "-e",
+                f"target_roles={shlex.quote(roles_str)}",
+                "-e",
+                f"target_host={node.ip_address}",
+                "-e",
+                f"ansible_user={node.ssh_user or 'autobot'}",
+                "-e",
+                f"ansible_port={node.ssh_port or 22}",
+                "-e",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -1172,11 +1293,16 @@ class BlueGreenService:
         try:
             cmd = [
                 "ssh",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "ConnectTimeout=10",
-                "-o", "BatchMode=yes",
-                "-p", str(ssh_port),
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "BatchMode=yes",
+                "-p",
+                str(ssh_port),
                 f"{ssh_user}@{ip_address}",
                 f"sudo systemctl stop {shlex.quote(service)}",
             ]
@@ -1258,11 +1384,16 @@ class BlueGreenService:
             cmd = [
                 "ansible-playbook",
                 str(playbook_path),
-                "-i", f"{ip_address},",
-                "-e", f"purge_roles={shlex.quote(roles_str)}",
-                "-e", f"ansible_user={ssh_user}",
-                "-e", f"ansible_port={ssh_port}",
-                "-e", "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "-i",
+                f"{ip_address},",
+                "-e",
+                f"purge_roles={shlex.quote(roles_str)}",
+                "-e",
+                f"ansible_user={ssh_user}",
+                "-e",
+                f"ansible_port={ssh_port}",
+                "-e",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -1288,106 +1419,13 @@ class BlueGreenService:
             return False
 
     async def _create_purge_playbook(self, path: Path) -> None:
-        """Create the role purge playbook."""
-        playbook_content = """# AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
-# Author: mrveiss
-#
-# Role Purge Playbook - Clean slate for role release
----
-- name: Purge Roles from Node
-  hosts: all
-  become: true
-  gather_facts: false
+        """Create the role purge playbook.
 
-  vars:
-    purge_roles: ""
-    role_service_map:
-      slm-agent:
-        - slm-agent
-        - autobot-agent
-      redis:
-        - redis-server
-        - redis
-      backend:
-        - autobot-backend
-        - autobot
-      frontend:
-        - autobot-frontend
-      npu-worker:
-        - autobot-npu-worker
-      browser-automation:
-        - playwright-server
-        - browser-automation
-      monitoring:
-        - prometheus
-        - grafana-server
-        - node_exporter
-      ai-stack:
-        - autobot-ai-stack
-      llm:
-        - ollama
+        Writes the Ansible purge playbook template to the specified path.
 
-    role_data_dirs:
-      redis:
-        - /var/lib/redis
-        - /etc/redis
-      backend:
-        - /opt/autobot/backend
-        - /var/log/autobot
-      frontend:
-        - /opt/autobot/frontend
-      monitoring:
-        - /var/lib/prometheus
-        - /var/lib/grafana
-        - /etc/prometheus
-        - /etc/grafana
-
-  tasks:
-    - name: Parse purge roles
-      ansible.builtin.set_fact:
-        role_list: "{{ purge_roles.split(',') | map('trim') | list }}"
-
-    - name: Stop and disable services for each role
-      ansible.builtin.systemd:
-        name: "{{ item.1 }}"
-        state: stopped
-        enabled: false
-      loop: "{{ role_list | product(role_service_map[item] | default([])) | list }}"
-      when: item.0 in role_service_map
-      ignore_errors: true
-      loop_control:
-        label: "{{ item.1 | default(item) }}"
-
-    - name: Remove service files
-      ansible.builtin.file:
-        path: "/etc/systemd/system/{{ item.1 }}.service"
-        state: absent
-      loop: "{{ role_list | product(role_service_map[item] | default([])) | list }}"
-      when: item.0 in role_service_map
-      ignore_errors: true
-      loop_control:
-        label: "{{ item.1 | default(item) }}"
-
-    - name: Remove role data directories
-      ansible.builtin.file:
-        path: "{{ item.1 }}"
-        state: absent
-      loop: "{{ role_list | product(role_data_dirs[item] | default([])) | list }}"
-      when: item.0 in role_data_dirs
-      ignore_errors: true
-      loop_control:
-        label: "{{ item.1 | default(item) }}"
-
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    - name: Display purge summary
-      ansible.builtin.debug:
-        msg: "Purged roles: {{ role_list | join(', ') }}"
-"""
-        path.write_text(playbook_content, encoding="utf-8")
+        Related to: Issue #665 (function length reduction via template extraction)
+        """
+        path.write_text(_PURGE_PLAYBOOK_TEMPLATE, encoding="utf-8")
         logger.info("Created purge playbook: %s", path)
 
     async def _broadcast_deployment_event(
@@ -1396,6 +1434,7 @@ class BlueGreenService:
         """Broadcast deployment event via WebSocket."""
         try:
             from api.websocket import ws_manager
+
             await ws_manager.broadcast(
                 "events:global",
                 {
