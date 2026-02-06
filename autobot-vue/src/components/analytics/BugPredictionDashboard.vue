@@ -374,7 +374,7 @@
  * BugPredictionDashboard.vue - Bug prediction analytics dashboard
  * Issue #704: Migrated to design tokens for centralized theming
  */
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { createLogger } from '@/utils/debugUtils';
 import { formatTimeAgo } from '@/utils/formatHelpers';
 
@@ -612,6 +612,16 @@ function stopPolling(): void {
   }
 }
 
+function handleVisibilityChange(): void {
+  if (document.hidden) {
+    stopPolling();
+    logger.info('Tab hidden - pausing trends polling');
+  } else {
+    startPolling();
+    logger.info('Tab visible - resuming trends polling');
+  }
+}
+
 async function loadFactors(): Promise<void> {
   try {
     const response = await fetch('/api/analytics/bug-prediction/factors');
@@ -701,6 +711,15 @@ function getFactorClass(value: number): string {
 // Lifecycle
 onMounted(() => {
   refreshData();
+  startPolling();
+
+  // Pause polling when tab hidden, resume when visible
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  stopPolling();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 
 watch(selectedPeriod, () => {
