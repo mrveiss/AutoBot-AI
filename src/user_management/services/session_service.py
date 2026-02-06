@@ -52,3 +52,20 @@ class SessionService:
         await redis_client.expire(key, ttl)
 
         logger.info("Added token to blacklist for user %s", user_id)
+
+    async def is_token_blacklisted(self, user_id: uuid.UUID, token: str) -> bool:
+        """
+        Check if token is blacklisted.
+
+        Args:
+            user_id: User whose token to check
+            token: JWT token to verify
+
+        Returns:
+            True if token is blacklisted, False otherwise
+        """
+        redis_client = get_redis_client(async_client=True, database="main")
+        key = f"session:blacklist:{user_id}"
+        token_hash = self.hash_token(token)
+
+        return await redis_client.sismember(key, token_hash)

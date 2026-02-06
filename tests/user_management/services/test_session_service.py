@@ -57,3 +57,26 @@ async def test_add_token_to_blacklist(mock_redis):
 
     mock_redis.sadd.assert_called_once_with(expected_key, expected_hash)
     mock_redis.expire.assert_called_once_with(expected_key, 86400)
+
+
+@pytest.mark.asyncio
+async def test_is_token_blacklisted(mock_redis):
+    """Checking blacklisted token returns True when token exists in set."""
+    user_id = uuid.uuid4()
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+
+    # Mock sismember to return True (token is blacklisted)
+    mock_redis.sismember = AsyncMock(return_value=True)
+
+    with patch(
+        "src.user_management.services.session_service.get_redis_client",
+        return_value=mock_redis,
+    ):
+        service = SessionService()
+        result = await service.is_token_blacklisted(user_id, token)
+
+    expected_key = f"session:blacklist:{user_id}"
+    expected_hash = SessionService.hash_token(token)
+
+    mock_redis.sismember.assert_called_once_with(expected_key, expected_hash)
+    assert result is True
