@@ -433,3 +433,171 @@ npu:
         assert worker.healthy is False
     finally:
         os.unlink(config_path)
+
+
+# =============================================================================
+# Task 6: Circuit Breaker Tests
+# =============================================================================
+
+
+def test_record_failure_increments_count():
+    """Recording failure should increment failure count"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        assert worker.failures == 0
+        pool._record_failure(worker)
+        assert worker.failures == 1
+        pool._record_failure(worker)
+        assert worker.failures == 2
+    finally:
+        os.unlink(config_path)
+
+
+def test_record_failure_opens_circuit_after_threshold():
+    """Circuit should open after 5 failures"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        # 4 failures - circuit still closed
+        for _ in range(4):
+            pool._record_failure(worker)
+        assert worker.circuit_state == CircuitState.CLOSED
+
+        # 5th failure - circuit opens
+        pool._record_failure(worker)
+        assert worker.circuit_state == CircuitState.OPEN
+        assert worker.circuit_open_until > time.time()
+    finally:
+        os.unlink(config_path)
+
+
+def test_record_success_resets_failures():
+    """Recording success should reset failure count"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        worker.failures = 3
+        pool._record_success(worker)
+        assert worker.failures == 0
+    finally:
+        os.unlink(config_path)
+
+
+def test_record_success_closes_circuit_from_half_open():
+    """Success in half-open state should close circuit"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        worker.circuit_state = CircuitState.HALF_OPEN
+        pool._record_success(worker)
+        assert worker.circuit_state == CircuitState.CLOSED
+    finally:
+        os.unlink(config_path)
+
+
+def test_circuit_transitions_to_half_open_after_cooldown():
+    """Open circuit should transition to half-open after cooldown"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        # Set circuit to open with expired cooldown
+        worker.circuit_state = CircuitState.OPEN
+        worker.circuit_open_until = time.time() - 1  # Already expired
+
+        # Check availability should transition to half-open
+        is_available = pool._is_circuit_available(worker)
+        assert is_available is True
+        assert worker.circuit_state == CircuitState.HALF_OPEN
+    finally:
+        os.unlink(config_path)

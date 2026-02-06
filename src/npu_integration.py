@@ -468,6 +468,76 @@ class NPUWorkerPool:
             logger.debug("Health check failed for worker %s: %s", worker.worker_id, e)
             return False
 
+    # Circuit breaker constants
+    CIRCUIT_FAILURE_THRESHOLD = 5  # Open after 5 failures
+    CIRCUIT_COOLDOWN_SECONDS = 60  # Stay open for 60 seconds
+
+    def _record_failure(self, worker: WorkerState) -> None:
+        """
+        Record a task failure for a worker.
+
+        Opens circuit if failure threshold is reached.
+        """
+        import time
+
+        worker.failures += 1
+        logger.debug("Worker %s failure count: %d", worker.worker_id, worker.failures)
+
+        if worker.failures >= self.CIRCUIT_FAILURE_THRESHOLD:
+            worker.circuit_state = CircuitState.OPEN
+            worker.circuit_open_until = time.time() + self.CIRCUIT_COOLDOWN_SECONDS
+            logger.error(
+                "Circuit OPEN for worker %s after %d failures, cooldown until %s",
+                worker.worker_id,
+                worker.failures,
+                worker.circuit_open_until,
+            )
+
+    def _record_success(self, worker: WorkerState) -> None:
+        """
+        Record a task success for a worker.
+
+        Resets failure count and closes circuit from half-open state.
+        """
+        worker.failures = 0
+
+        if worker.circuit_state == CircuitState.HALF_OPEN:
+            worker.circuit_state = CircuitState.CLOSED
+            logger.info(
+                "Circuit CLOSED for worker %s after successful request",
+                worker.worker_id,
+            )
+
+    def _is_circuit_available(self, worker: WorkerState) -> bool:
+        """
+        Check if circuit allows requests.
+
+        Handles state transitions:
+        - CLOSED: Always available
+        - OPEN: Not available unless cooldown expired (then → HALF_OPEN)
+        - HALF_OPEN: Available (test request)
+        """
+        import time
+
+        if worker.circuit_state == CircuitState.CLOSED:
+            return True
+
+        if worker.circuit_state == CircuitState.HALF_OPEN:
+            return True
+
+        # Circuit is OPEN - check if cooldown expired
+        if worker.circuit_state == CircuitState.OPEN:
+            if time.time() >= worker.circuit_open_until:
+                worker.circuit_state = CircuitState.HALF_OPEN
+                logger.info(
+                    "Circuit HALF_OPEN for worker %s, allowing test request",
+                    worker.worker_id,
+                )
+                return True
+            return False
+
+        return False
+
 
 class NPUTaskQueue:
     """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""
