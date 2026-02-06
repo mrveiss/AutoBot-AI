@@ -15,6 +15,8 @@ from contextlib import asynccontextmanager
 from api import (
     agents_router,
     auth_router,
+    autobot_teams_router,
+    autobot_users_router,
     blue_green_router,
     code_sync_router,
     config_router,
@@ -34,6 +36,8 @@ from api import (
     security_router,
     services_router,
     settings_router,
+    slm_auth_router,
+    slm_users_router,
     stateful_router,
     tls_router,
     updates_router,
@@ -194,6 +198,12 @@ app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(node_config_router, prefix="/api/nodes")
 app.include_router(npu_router, prefix="/api")
+
+# User Management routers (Issue #576)
+app.include_router(slm_users_router, prefix="/api")
+app.include_router(slm_auth_router, prefix="/api")
+app.include_router(autobot_users_router, prefix="/api")
+app.include_router(autobot_teams_router, prefix="/api")
 
 
 @app.get("/")
