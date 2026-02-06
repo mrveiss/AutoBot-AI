@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from src.user_management.models import Role, User, UserRole
 from src.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from src.user_management.services.base_service import BaseService, TenantContext
+from src.user_management.services.session_service import SessionService
 
 logger = logging.getLogger(__name__)
 
@@ -458,6 +459,7 @@ class UserService(BaseService):
         current_password: Optional[str],
         new_password: str,
         require_current: bool = True,
+        current_token: Optional[str] = None,
     ) -> bool:
         """
         Change user password.
@@ -467,6 +469,7 @@ class UserService(BaseService):
             current_password: Current password (for verification)
             new_password: New password
             require_current: Whether to require current password verification
+            current_token: Current JWT token to preserve (other sessions invalidated)
 
         Returns:
             True if password changed
@@ -489,11 +492,20 @@ class UserService(BaseService):
         user.updated_at = datetime.now(timezone.utc)
         await self.session.flush()
 
+        # Invalidate all sessions except current one
+        session_service = SessionService()
+        invalidated_count = await session_service.invalidate_user_sessions(
+            user_id=user_id, except_token=current_token
+        )
+
         await self._audit_log(
             action=AuditAction.PASSWORD_CHANGED,
             resource_type=AuditResourceType.USER,
             resource_id=user_id,
-            details={"method": "user_initiated"},
+            details={
+                "method": "user_initiated",
+                "sessions_invalidated": invalidated_count,
+            },
         )
 
         return True

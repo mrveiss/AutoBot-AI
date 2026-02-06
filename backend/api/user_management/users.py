@@ -19,6 +19,10 @@ from backend.api.user_management.dependencies import (
     get_user_service,
     require_user_management_enabled,
 )
+from src.user_management.middleware.rate_limit import (
+    PasswordChangeRateLimiter,
+    RateLimitExceeded,
+)
 from src.user_management.schemas import (
     PasswordChange,
     UserCreate,
@@ -368,15 +372,34 @@ async def change_password(
     user_id: uuid.UUID,
     password_data: PasswordChange,
     user_service: UserService = Depends(get_user_service),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Change user password."""
+    """Change user password with rate limiting and session invalidation."""
+    rate_limiter = PasswordChangeRateLimiter()
+
+    # Check rate limit before attempting password change
     try:
+        await rate_limiter.check_rate_limit(user_id)
+    except RateLimitExceeded as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e),
+        )
+
+    try:
+        # Extract current token to preserve this session
+        current_token = current_user.get("token")
+
         await user_service.change_password(
             user_id=user_id,
             current_password=password_data.current_password,
             new_password=password_data.new_password,
             require_current=password_data.current_password is not None,
+            current_token=current_token,
         )
+
+        # Record successful attempt (clears rate limit counter)
+        await rate_limiter.record_attempt(user_id, success=True)
 
         return PasswordChangedResponse(
             message="Password changed successfully",
@@ -388,6 +411,8 @@ async def change_password(
             detail=f"User {user_id} not found",
         )
     except InvalidCredentialsError:
+        # Record failed attempt
+        await rate_limiter.record_attempt(user_id, success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",

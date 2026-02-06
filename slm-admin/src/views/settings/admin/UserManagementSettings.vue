@@ -8,11 +8,13 @@
  *
  * Migrated from main AutoBot frontend for Issue #729.
  * Provides user profile management, preferences, security settings, and RBAC.
+ * Updated to use shared PasswordChangeForm component for Issue #635.
  */
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAutobotApi, type UserResponse } from '@/composables/useAutobotApi'
+import PasswordChangeForm from '@/../shared-components/PasswordChangeForm.vue'
 
 const authStore = useAuthStore()
 const api = useAutobotApi()
@@ -46,13 +48,6 @@ const newUserForm = reactive({
   roles: ['user'],
 })
 
-// Password change form
-const passwordForm = reactive({
-  currentPassword: '',
-  newPassword: '',
-  confirmPassword: '',
-})
-
 // Preferences
 const preferences = reactive({
   enableNotifications: true,
@@ -80,6 +75,22 @@ const rbacInitOptions = reactive({
 
 // Computed
 const isAdmin = computed(() => authStore.isAdmin)
+
+// Get current user from users list for ID access
+const currentUser = computed(() => {
+  return users.value.find(u => u.username === authStore.user?.username) || null
+})
+
+// Determine if admin is resetting another user's password (no current password needed)
+const isAdminReset = computed(() => {
+  // Admin resetting another user's password doesn't require current password
+  return isAdmin.value && selectedUser.value?.id !== currentUser.value?.id
+})
+
+// Get the user ID for password change (selected user or current user)
+const passwordChangeUserId = computed(() => {
+  return selectedUser.value?.id || currentUser.value?.id || ''
+})
 
 // Methods
 async function loadUsers(): Promise<void> {
@@ -152,48 +163,23 @@ async function deleteUser(userId: string): Promise<void> {
   }
 }
 
-async function changePassword(): Promise<void> {
-  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-    error.value = 'New passwords do not match'
-    return
-  }
+function openPasswordChangeModal(user?: UserResponse): void {
+  // If a user is provided (admin action), set as selected
+  // Otherwise, use current user for self-service password change
+  selectedUser.value = user || currentUser.value
+  showChangePasswordModal.value = true
+}
 
-  saving.value = true
-  error.value = null
+function handlePasswordChangeSuccess(message: string): void {
+  success.value = message
+  showChangePasswordModal.value = false
+  selectedUser.value = null
+  setTimeout(() => { success.value = null }, 3000)
+}
 
-  try {
-    // Call password change API through AutoBot backend
-    const response = await fetch('/autobot-api/auth/change-password', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authStore.token}`,
-      },
-      body: JSON.stringify({
-        current_password: passwordForm.currentPassword,
-        new_password: passwordForm.newPassword,
-      }),
-    })
-
-    if (!response.ok) {
-      const data = await response.json()
-      throw new Error(data.detail || 'Failed to change password')
-    }
-
-    success.value = 'Password changed successfully'
-    showChangePasswordModal.value = false
-
-    // Reset form
-    passwordForm.currentPassword = ''
-    passwordForm.newPassword = ''
-    passwordForm.confirmPassword = ''
-
-    setTimeout(() => { success.value = null }, 3000)
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to change password'
-  } finally {
-    saving.value = false
-  }
+function handlePasswordChangeError(errorMsg: string): void {
+  error.value = errorMsg
+  setTimeout(() => { error.value = null }, 5000)
 }
 
 async function checkRbacStatus(): Promise<void> {
@@ -482,7 +468,7 @@ watch(() => authStore.user, (newUser) => {
             <p class="text-xs text-gray-500 mt-1">Change your account password</p>
           </div>
           <button
-            @click="showChangePasswordModal = true"
+            @click="openPasswordChangeModal()"
             class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center gap-2"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -566,15 +552,26 @@ watch(() => authStore.user, (newUser) => {
               </td>
               <td class="py-3 px-4 text-sm text-gray-600">{{ user.last_login || 'Never' }}</td>
               <td class="py-3 px-4 text-right">
-                <button
-                  @click="deleteUser(user.id)"
-                  class="text-red-600 hover:text-red-800 p-1"
-                  title="Delete user"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <div class="flex justify-end gap-2">
+                  <button
+                    @click="openPasswordChangeModal(user)"
+                    class="text-amber-600 hover:text-amber-800 p-1"
+                    title="Reset password"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </button>
+                  <button
+                    @click="deleteUser(user.id)"
+                    class="text-red-600 hover:text-red-800 p-1"
+                    title="Delete user"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="users.length === 0">
@@ -651,57 +648,26 @@ watch(() => authStore.user, (newUser) => {
 
     <!-- Change Password Modal -->
     <div v-if="showChangePasswordModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false"></div>
+      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Change Password</h3>
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          {{ isAdminReset ? `Reset Password for ${selectedUser?.username}` : 'Change Password' }}
+        </h3>
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-            <input
-              v-model="passwordForm.currentPassword"
-              type="password"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-            <input
-              v-model="passwordForm.newPassword"
-              type="password"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            />
-            <p class="text-xs text-gray-500 mt-1">
-              At least 8 characters with uppercase, lowercase, and a number.
-            </p>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-            <input
-              v-model="passwordForm.confirmPassword"
-              type="password"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-        </div>
+        <PasswordChangeForm
+          v-if="passwordChangeUserId"
+          :user-id="passwordChangeUserId"
+          :require-current-password="!isAdminReset"
+          @success="handlePasswordChangeSuccess"
+          @error="handlePasswordChangeError"
+        />
 
-        <div class="flex justify-end gap-3 mt-6">
+        <div class="flex justify-end mt-4">
           <button
-            @click="showChangePasswordModal = false"
+            @click="showChangePasswordModal = false; selectedUser = null"
             class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
           >
             Cancel
-          </button>
-          <button
-            @click="changePassword"
-            :disabled="saving"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Change Password
           </button>
         </div>
       </div>

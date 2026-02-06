@@ -239,7 +239,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
         "host": "127.0.0.1:8001"
       },
       "redis": {
-        "status": "healthy", 
+        "status": "healthy",
         "memory_usage": "245MB / 1GB",
         "connected_clients": 12,
         "operations_per_sec": 150,
@@ -273,7 +273,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
     },
     "resource_usage": {
       "cpu_percent": 34.5,
-      "memory_usage": "2.1GB / 16GB", 
+      "memory_usage": "2.1GB / 16GB",
       "disk_usage": "45GB / 500GB",
       "network_throughput": "125 Mbps"
     },
@@ -338,7 +338,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
           "confidence": 0.95
         },
         {
-          "type": "fill_field", 
+          "type": "fill_field",
           "target": "username_field",
           "value": "extracted_from_audio",
           "confidence": 0.87
@@ -369,7 +369,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
         },
         {
           "type": "button",
-          "label": "Submit", 
+          "label": "Submit",
           "coordinates": [420, 300, 480, 340],
           "confidence": 0.95
         }
@@ -398,7 +398,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
       "npu_acceleration_used": true,
       "model_versions": {
         "text": "gpt-4-turbo-2024-04-09",
-        "vision": "claude-3-opus-20240229", 
+        "vision": "claude-3-opus-20240229",
         "audio": "whisper-large-v3"
       },
       "resource_usage": {
@@ -443,7 +443,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
       "depends_on": ["check_disk_space"]
     },
     {
-      "id": "verify_backup", 
+      "id": "verify_backup",
       "type": "validation",
       "checks": ["file_exists", "checksum_match"],
       "depends_on": ["create_backup"]
@@ -468,7 +468,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
   "data": {
     "workflow_id": "wf_abc123",
     "status": "created",
-    "estimated_duration": "30-45 minutes", 
+    "estimated_duration": "30-45 minutes",
     "next_execution": "2025-09-11T02:00:00Z",
     "validation_results": {
       "syntax_valid": true,
@@ -482,7 +482,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 }
 ```
 
-### 6. Terminal & System Control (43 endpoints) 
+### 6. Terminal & System Control (43 endpoints)
 **Module**: `backend/api/terminal.py`, `backend/api/terminal_websocket.py`
 
 #### POST /api/terminal/execute
@@ -582,7 +582,7 @@ Content-Type: application/json
         "extracted_text_preview": "AutoBot System Architecture..."
       },
       "auto_indexing": {
-        "status": "queued", 
+        "status": "queued",
         "estimated_completion": "2025-09-10T10:35:00Z"
       },
       "metadata_extraction": {
@@ -633,7 +633,7 @@ Content-Type: application/json
       "username": "admin",
       "roles": ["admin", "operator"],
       "permissions": [
-        "system:read", "system:write", 
+        "system:read", "system:write",
         "workflows:create", "knowledge:manage"
       ],
       "preferences": {
@@ -650,6 +650,74 @@ Content-Type: application/json
   }
 }
 ```
+
+### 9. User Management (10+ endpoints)
+
+**Module**: `backend/api/user_management/users.py`
+
+#### POST /api/users/{user_id}/change-password
+
+**Purpose**: Change user password with rate limiting and session invalidation
+
+**Authentication**: Required (Bearer token)
+
+**Rate Limiting**: 3 attempts per 30 minutes per user
+
+**Request Body**:
+```json
+{
+  "current_password": "CurrentP@ss123!",
+  "new_password": "NewSecureP@ss456!"
+}
+```
+
+**Password Requirements**:
+
+- Minimum 8 characters
+- At least one uppercase letter
+- At least one lowercase letter
+- At least one number
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "message": "Password changed successfully"
+}
+```
+
+**Error Responses**:
+
+401 Unauthorized (invalid current password):
+```json
+{
+  "detail": "Current password is incorrect"
+}
+```
+
+404 Not Found (user not found):
+```json
+{
+  "detail": "User {user_id} not found"
+}
+```
+
+429 Too Many Requests (rate limit exceeded):
+```json
+{
+  "detail": "Too many attempts. Try again in 15 minutes."
+}
+```
+
+**Security Features**:
+
+- **Session Invalidation**: All sessions except current are invalidated on successful password change
+- **Token Blacklisting**: Previous tokens added to Redis blacklist with 24h TTL
+- **Rate Limiting**: Failed attempts tracked per user, blocks after 3 failures for 30 minutes
+- **Bcrypt Hashing**: Passwords stored using bcrypt with secure work factor
+
+**Admin Reset Mode**:
+When `current_password` is null or omitted, the endpoint operates in admin reset mode (no current password verification required). This is used by administrators to reset user passwords.
 
 ## Advanced Features
 
@@ -699,13 +767,13 @@ ws.onmessage = (event) => {
       "body": {"query": "automation tutorial"}
     },
     {
-      "id": "op2", 
+      "id": "op2",
       "method": "GET",
       "endpoint": "/api/system/health"
     },
     {
       "id": "op3",
-      "method": "POST", 
+      "method": "POST",
       "endpoint": "/api/terminal/execute",
       "body": {"command": "ps aux"}
     }
@@ -811,7 +879,7 @@ result = await client.multimodal.process({
 
 # Knowledge base search
 knowledge = await client.knowledge.search({
-    "query": "terminal automation best practices", 
+    "query": "terminal automation best practices",
     "limit": 10,
     "search_mode": "semantic"
 })
