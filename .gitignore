@@ -95,6 +95,7 @@ secrets.yaml
 secrets.conf
 secrets.key
 **/secrets.key
+.infra_encryption_key
 
 # Authentication tokens
 *.token
@@ -146,7 +147,7 @@ logs/
 # === ROOT DIRECTORY PROTECTION ===
 # Prevent files that should be in organized directories from polluting root
 /test*.py            # Test files belong in tests/
-/TEST*.py           # Test files belong in tests/  
+/TEST*.py           # Test files belong in tests/
 /*REPORT*.md        # Reports belong in reports/
 /*SUMMARY*.md       # Summaries belong in reports/
 /*GUIDE*.md         # Guides belong in docs/ or reports/

@@ -1,2 +1,0 @@
-# Nmap 7.95 scan initiated Fri Oct 24 02:38:11 2025 as: /usr/lib/nmap/nmap -sn -oG - 192.168.*
-# Nmap done at Fri Oct 24 02:38:11 2025 -- 0 IP addresses (0 hosts up) scanned in 0.00 seconds
