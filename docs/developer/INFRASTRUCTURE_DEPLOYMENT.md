@@ -84,28 +84,28 @@ ssh autobot-redis
 
 ### Sync Script
 
-**Script Location**: `./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh`
+**Script Location**: `./infrastructure/scripts/utilities/sync-to-vm.sh`
 
 **Basic Usage**:
 ```bash
 # Syntax
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh <vm-name> <local-path> <remote-path>
+./infrastructure/scripts/utilities/sync-to-vm.sh <vm-name> <local-path> <remote-path>
 
 # Example: Sync frontend component to Frontend VM
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/Chat.vue /home/autobot/autobot-vue/src/components/Chat.vue
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/Chat.vue /home/autobot/autobot-vue/src/components/Chat.vue
 
 # Example: Sync entire directory
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
 ```
 
 ### Sync to All VMs
 
 ```bash
 # Sync to ALL VMs at once
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
+./infrastructure/scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
 
 # Sync directory to all VMs
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all src/utils/ /home/autobot/src/utils/
+./infrastructure/scripts/utilities/sync-to-vm.sh all src/utils/ /home/autobot/src/utils/
 ```
 
 ### Common Sync Patterns
@@ -113,17 +113,17 @@ ssh autobot-redis
 **Sync frontend changes**:
 ```bash
 # Single component
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend \
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend \
     autobot-vue/src/components/ChatMessages.vue \
     /home/autobot/autobot-vue/src/components/ChatMessages.vue
 
 # Entire components directory
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend \
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend \
     autobot-vue/src/components/ \
     /home/autobot/autobot-vue/src/components/
 
 # Full frontend rebuild
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend \
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend \
     autobot-vue/ \
     /home/autobot/autobot-vue/
 ```
@@ -131,12 +131,12 @@ ssh autobot-redis
 **Sync backend changes**:
 ```bash
 # Single API file
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all \
+./infrastructure/scripts/utilities/sync-to-vm.sh all \
     backend/api/chat.py \
     /home/autobot/backend/api/chat.py
 
 # Entire backend directory
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all \
+./infrastructure/scripts/utilities/sync-to-vm.sh all \
     backend/ \
     /home/autobot/backend/
 ```
@@ -144,12 +144,12 @@ ssh autobot-redis
 **Sync configuration**:
 ```bash
 # Environment file (be careful with secrets!)
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all \
+./infrastructure/scripts/utilities/sync-to-vm.sh all \
     .env.example \
     /home/autobot/.env.example
 
 # Config file
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all \
+./infrastructure/scripts/utilities/sync-to-vm.sh all \
     config/config.yaml \
     /home/autobot/config/config.yaml
 ```
@@ -162,7 +162,7 @@ ssh autobot-redis
 ./sync-frontend.sh
 
 # Equivalent to:
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
 ```
 
 ---
@@ -196,7 +196,7 @@ ssh autobot-redis
 vim /home/kali/Desktop/AutoBot/backend/api/chat.py
 
 # Step 2: Sync immediately
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all backend/api/chat.py /home/autobot/backend/api/chat.py
+./infrastructure/scripts/utilities/sync-to-vm.sh all backend/api/chat.py /home/autobot/backend/api/chat.py
 
 # Step 3: Commit changes (version control)
 git add backend/api/chat.py
@@ -369,7 +369,7 @@ bash run_autobot.sh --dev
 vim /home/kali/Desktop/AutoBot/backend/api/chat.py
 
 # 3. Sync changes to VMs
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all backend/api/chat.py /home/autobot/backend/api/chat.py
+./infrastructure/scripts/utilities/sync-to-vm.sh all backend/api/chat.py /home/autobot/backend/api/chat.py
 
 # 4. Restart affected services
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
@@ -388,7 +388,7 @@ git add .
 git commit -m "Production-ready changes"
 
 # 3. Sync to all VMs
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all ./ /home/autobot/
+./infrastructure/scripts/utilities/sync-to-vm.sh all ./ /home/autobot/
 
 # 4. Start in production mode
 bash run_autobot.sh --prod
@@ -403,14 +403,14 @@ curl http://172.16.168.21:5173
 **Update one VM at a time**:
 ```bash
 # Update Frontend VM
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
+./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
 
 # Wait for health check
 curl http://172.16.168.21:5173
 
 # Update NPU Worker VM
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh npu-worker src/ /home/autobot/src/
+./infrastructure/scripts/utilities/sync-to-vm.sh npu-worker src/ /home/autobot/src/
 ssh autobot@172.16.168.22 "cd /home/autobot && bash run_autobot.sh --restart"
 
 # Continue for other VMs...
@@ -504,7 +504,7 @@ ssh autobot@172.16.168.21 "curl http://172.16.168.20:8001/api/health"
 **Solution**:
 ```bash
 # Full re-sync of entire project
-./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh all ./ /home/autobot/
+./infrastructure/scripts/utilities/sync-to-vm.sh all ./ /home/autobot/
 
 # Restart services
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
@@ -533,7 +533,7 @@ md5sum /home/kali/Desktop/AutoBot/backend/api/chat.py
 - [ ] Services bind to `0.0.0.0` (not localhost)
 - [ ] Using `NetworkConstants` for IPs/ports (not hardcoded)
 - [ ] Tested locally first (`bash run_autobot.sh --dev`)
-- [ ] Synced to VMs (`./infrastructure/infrastructure/scripts/utilities/sync-to-vm.sh`)
+- [ ] Synced to VMs (`./infrastructure/scripts/utilities/sync-to-vm.sh`)
 - [ ] Health checks pass on all services
 
 **Development workflow**:
