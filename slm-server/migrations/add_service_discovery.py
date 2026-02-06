@@ -9,13 +9,22 @@ Adds:
 - node_configs table for per-node configuration
 - service_conflicts table for incompatible services
 
+Updated for PostgreSQL (Issue #786).
+
 Run: python migrations/add_service_discovery.py
 """
 
 import logging
-import sqlite3
 import sys
-from pathlib import Path
+
+import psycopg2
+
+from migrations.utils import (
+    add_column_if_not_exists,
+    create_index_if_not_exists,
+    get_connection,
+    table_exists,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -44,23 +53,11 @@ SERVICE_DEFAULTS = {
 }
 
 
-def add_column_if_not_exists(
-    cursor: sqlite3.Cursor, table: str, column: str, column_def: str
-) -> bool:
-    """Add column if it doesn't exist. Returns True if added."""
-    cursor.execute(f"PRAGMA table_info({table})")
-    columns = [col[1] for col in cursor.fetchall()]
-    if column not in columns:
-        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
-        return True
-    return False
+def migrate(db_url: str) -> None:
+    """Run the migration (#786)."""
+    logger.info("Running service discovery migration")
 
-
-def migrate(db_path: str) -> None:
-    """Run the migration."""
-    logger.info("Running service discovery migration on: %s", db_path)
-
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_url)
     cursor = conn.cursor()
 
     # 1. Add discovery columns to services table
@@ -75,7 +72,7 @@ def migrate(db_path: str) -> None:
     if add_column_if_not_exists(cursor, "services", "endpoint_path", "VARCHAR(256)"):
         added.append("endpoint_path")
     if add_column_if_not_exists(
-        cursor, "services", "is_discoverable", "BOOLEAN DEFAULT 1"
+        cursor, "services", "is_discoverable", "BOOLEAN DEFAULT TRUE"
     ):
         added.append("is_discoverable")
 
@@ -86,47 +83,49 @@ def migrate(db_path: str) -> None:
 
     # 2. Create node_configs table
     logger.info("Creating node_configs table...")
-    cursor.execute(
+    if not table_exists(cursor, "node_configs"):
+        cursor.execute(
+            """
+            CREATE TABLE node_configs (
+                id SERIAL PRIMARY KEY,
+                node_id VARCHAR(64),
+                config_key VARCHAR(128) NOT NULL,
+                config_value TEXT,
+                value_type VARCHAR(20) DEFAULT 'string',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(node_id, config_key)
+            )
         """
-        CREATE TABLE IF NOT EXISTS node_configs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            node_id VARCHAR(64),
-            config_key VARCHAR(128) NOT NULL,
-            config_value TEXT,
-            value_type VARCHAR(20) DEFAULT 'string',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(node_id, config_key)
         )
-    """
+    create_index_if_not_exists(
+        cursor, "ix_node_configs_node_id", "node_configs", "node_id"
     )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS ix_node_configs_node_id ON node_configs(node_id)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS ix_node_configs_key ON node_configs(config_key)"
+    create_index_if_not_exists(
+        cursor, "ix_node_configs_key", "node_configs", "config_key"
     )
 
     # 3. Create service_conflicts table
     logger.info("Creating service_conflicts table...")
-    cursor.execute(
+    if not table_exists(cursor, "service_conflicts"):
+        cursor.execute(
+            """
+            CREATE TABLE service_conflicts (
+                id SERIAL PRIMARY KEY,
+                service_name_a VARCHAR(128) NOT NULL,
+                service_name_b VARCHAR(128) NOT NULL,
+                reason TEXT,
+                conflict_type VARCHAR(32) DEFAULT 'port',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(service_name_a, service_name_b)
+            )
         """
-        CREATE TABLE IF NOT EXISTS service_conflicts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            service_name_a VARCHAR(128) NOT NULL,
-            service_name_b VARCHAR(128) NOT NULL,
-            reason TEXT,
-            conflict_type VARCHAR(32) DEFAULT 'port',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(service_name_a, service_name_b)
         )
-    """
+    create_index_if_not_exists(
+        cursor, "ix_service_conflicts_a", "service_conflicts", "service_name_a"
     )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS ix_service_conflicts_a ON service_conflicts(service_name_a)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS ix_service_conflicts_b ON service_conflicts(service_name_b)"
+    create_index_if_not_exists(
+        cursor, "ix_service_conflicts_b", "service_conflicts", "service_name_b"
     )
 
     # 4. Seed known conflicts
@@ -137,12 +136,14 @@ def migrate(db_path: str) -> None:
             cursor.execute(
                 """INSERT INTO service_conflicts
                    (service_name_a, service_name_b, reason, conflict_type)
-                   VALUES (?, ?, ?, ?)""",
+                   VALUES (%s, %s, %s, %s)
+                   ON CONFLICT DO NOTHING""",
                 (service_a, service_b, reason, conflict_type),
             )
-            conflict_count += 1
-        except sqlite3.IntegrityError:
-            pass  # Already exists
+            if cursor.rowcount > 0:
+                conflict_count += 1
+        except psycopg2.IntegrityError:
+            conn.rollback()  # Required for PostgreSQL after constraint violation
 
     logger.info("  Seeded %d conflicts", conflict_count)
 
@@ -152,10 +153,10 @@ def migrate(db_path: str) -> None:
     for service_name, defaults in SERVICE_DEFAULTS.items():
         cursor.execute(
             """UPDATE services
-               SET port = COALESCE(port, ?),
-                   protocol = COALESCE(protocol, ?),
-                   endpoint_path = COALESCE(endpoint_path, ?)
-               WHERE service_name = ? AND port IS NULL""",
+               SET port = COALESCE(port, %s),
+                   protocol = COALESCE(protocol, %s),
+                   endpoint_path = COALESCE(endpoint_path, %s)
+               WHERE service_name = %s AND port IS NULL""",
             (
                 defaults["port"],
                 defaults["protocol"],
@@ -174,13 +175,7 @@ def migrate(db_path: str) -> None:
 
 
 if __name__ == "__main__":
-    db_path = Path(__file__).parent.parent / "data" / "slm.db"
+    from migrations.runner import get_db_url
 
-    if len(sys.argv) > 1:
-        db_path = Path(sys.argv[1])
-
-    if not db_path.exists():
-        logger.error("Database not found: %s", db_path)
-        sys.exit(1)
-
-    migrate(str(db_path))
+    db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
+    migrate(db_url)

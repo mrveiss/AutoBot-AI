@@ -9,14 +9,12 @@ import logging
 import os
 import time
 
-from typing_extensions import Annotated
-
 import psutil
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
-from config import settings
 from models.database import Node, NodeStatus
 from models.schemas import HealthResponse, SystemMetrics
 from services.auth import get_current_user
@@ -88,3 +86,11 @@ async def readiness_check(
 async def liveness_check() -> dict:
     """Kubernetes-style liveness probe."""
     return {"status": "alive"}
+
+
+@router.get("/health/database")
+async def database_health_check() -> dict:
+    """Detailed database health check endpoint (#786)."""
+    from services.database import db_service
+
+    return await db_service.health_check()

@@ -9,24 +9,22 @@ This adds:
 - ssh_port (INTEGER, default 22)
 - ssh_password_encrypted (VARCHAR(512), nullable)
 - auth_method (VARCHAR(20), default 'password')
+
+Updated for PostgreSQL (Issue #786).
 """
 
 import logging
-import sqlite3
 import sys
+
+from migrations.utils import add_column_if_not_exists, get_connection
 
 logger = logging.getLogger(__name__)
 
 
-def migrate(db_path: str) -> None:
-    """Add SSH columns to nodes table if they don't exist."""
-    conn = sqlite3.connect(db_path)
+def migrate(db_url: str) -> None:
+    """Add SSH columns to nodes table if they don't exist (#786)."""
+    conn = get_connection(db_url)
     cursor = conn.cursor()
-
-    # Get existing columns
-    cursor.execute("PRAGMA table_info(nodes)")
-    existing_columns = {row[1] for row in cursor.fetchall()}
-    logger.info("Existing columns: %s", existing_columns)
 
     # Define new columns with their SQL definitions
     new_columns = [
@@ -38,12 +36,7 @@ def migrate(db_path: str) -> None:
 
     # Add missing columns
     for col_name, col_def in new_columns:
-        if col_name not in existing_columns:
-            sql = f"ALTER TABLE nodes ADD COLUMN {col_name} {col_def}"
-            logger.info("Adding column: %s", col_name)
-            cursor.execute(sql)
-        else:
-            logger.info("Column already exists: %s", col_name)
+        add_column_if_not_exists(cursor, "nodes", col_name, col_def)
 
     conn.commit()
     conn.close()
@@ -52,10 +45,8 @@ def migrate(db_path: str) -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    if len(sys.argv) < 2:
-        db_path = "/home/autobot/AutoBot/slm-server/slm.db"
-    else:
-        db_path = sys.argv[1]
+    from migrations.runner import get_db_url
 
-    logger.info("Migrating database: %s", db_path)
-    migrate(db_path)
+    db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
+    logger.info("Migrating database: %s", db_url)
+    migrate(db_url)
