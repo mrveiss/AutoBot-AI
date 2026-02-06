@@ -799,3 +799,26 @@ npu:
         assert result.get("fallback") is True
     finally:
         os.unlink(config_path)
+
+
+# =============================================================================
+# Task 9: Global Singleton Functions Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_npu_pool_returns_singleton():
+    """get_npu_pool should return the same instance"""
+    import src.npu_integration as npu_module
+
+    # Reset global state
+    npu_module._npu_pool = None
+
+    pool1 = await npu_module.get_npu_pool()
+    pool2 = await npu_module.get_npu_pool()
+
+    assert pool1 is pool2
+    assert isinstance(pool1, npu_module.NPUWorkerPool)
+
+    # Cleanup
+    npu_module._npu_pool = None

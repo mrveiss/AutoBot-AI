@@ -770,8 +770,10 @@ class NPUTaskQueue:
 # Global NPU client instance (thread-safe)
 _npu_client = None
 _npu_queue = None
+_npu_pool = None
 _npu_client_lock = asyncio.Lock()
 _npu_queue_lock = asyncio.Lock()
+_npu_pool_lock = asyncio.Lock()
 
 
 async def get_npu_client() -> NPUWorkerClient:
@@ -796,6 +798,27 @@ async def get_npu_queue() -> NPUTaskQueue:
                 client = await get_npu_client()
                 _npu_queue = NPUTaskQueue(client)
     return _npu_queue
+
+
+async def get_npu_pool() -> NPUWorkerPool:
+    """
+    Get or create global NPU worker pool instance (thread-safe).
+
+    Issue #168: The pool provides load-balanced access to multiple NPU workers
+    with automatic failover, health monitoring, and circuit breaker protection.
+
+    Returns:
+        NPUWorkerPool singleton instance
+    """
+    global _npu_pool
+    if _npu_pool is None:
+        async with _npu_pool_lock:
+            # Double-check after acquiring lock
+            if _npu_pool is None:
+                _npu_pool = NPUWorkerPool()
+                await _npu_pool.start_health_monitor()
+                logger.info("NPU worker pool initialized (Issue #168)")
+    return _npu_pool
 
 
 async def process_with_npu_fallback(
