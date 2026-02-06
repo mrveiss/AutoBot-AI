@@ -1,0 +1,29 @@
+---
+# Frontend role handlers
+
+- name: restart nginx
+  systemd:
+    name: nginx
+    state: restarted
+  become: yes
+
+- name: test nginx config
+  command: nginx -t
+  become: yes
+
+- name: restart frontend
+  systemd:
+    name: autobot-frontend
+    state: restarted
+  become: yes
+  ignore_errors: yes
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: reload firewall
+  ufw:
+    state: reloaded
+  become: yes

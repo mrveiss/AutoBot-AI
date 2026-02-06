@@ -1,0 +1,65 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# PostgreSQL Database Creation Tasks
+---
+
+- name: Generate database password
+  ansible.builtin.set_fact:
+    db_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+  when: db_password is not defined
+  no_log: true
+
+- name: Create database user
+  community.postgresql.postgresql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    state: present
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+  no_log: true
+
+- name: Create databases
+  community.postgresql.postgresql_db:
+    name: "{{ item }}"
+    owner: "{{ db_user }}"
+    encoding: UTF8
+    lc_collate: en_US.UTF-8
+    lc_ctype: en_US.UTF-8
+    template: template0
+    state: present
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+  loop: "{{ databases }}"
+
+- name: Grant privileges on databases
+  community.postgresql.postgresql_privs:
+    database: "{{ item }}"
+    privs: ALL
+    type: database
+    role: "{{ db_user }}"
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+  loop: "{{ databases }}"
+
+- name: Save credentials to file
+  ansible.builtin.template:
+    src: db-credentials.env.j2
+    dest: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+    owner: "{{ autobot_user }}"
+    group: "{{ autobot_group }}"
+    mode: '0600'
+  become: true
+  no_log: true
+
+- name: Display database setup completion
+  ansible.builtin.debug:
+    msg:
+      - "PostgreSQL databases created successfully"
+      - "User: {{ db_user }}"
+      - "Databases: {{ databases | join(', ') }}"
+      - "Credentials saved to: {{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"

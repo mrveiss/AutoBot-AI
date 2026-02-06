@@ -1,0 +1,221 @@
+---
+# Development VM Deployment: Services run directly on VMs in development mode
+# Uses npm run dev instead of static build for hot reload and development workflow
+
+- name: Deploy Development Frontend on VM1
+  hosts: frontend
+  become: yes
+
+  tasks:
+    - name: Stop any existing services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - autobot-frontend-dev
+        - nginx
+      ignore_errors: yes
+
+    - name: Install Node.js 20 for development
+      block:
+        - name: Add NodeSource GPG key
+          apt_key:
+            url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+            state: present
+
+        - name: Add NodeSource repository
+          apt_repository:
+            repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main"
+            state: present
+
+        - name: Install Node.js and npm
+          apt:
+            name:
+              - nodejs
+              - npm
+            state: present
+            update_cache: yes
+
+    - name: Copy frontend source files from deployment directory
+      copy:
+        src: "{{ lookup('env', 'SOURCE_DIR') | default('/tmp/autobot-deployment') }}/autobot-vue/"
+        dest: /opt/autobot/src/autobot-vue/
+        owner: autobot-service
+        group: autobot-service
+        mode: preserve
+
+    - name: Install frontend dependencies
+      shell: |
+        cd /opt/autobot/src/autobot-vue
+        npm install
+      become_user: autobot-service
+
+    - name: Create development environment file
+      copy:
+        content: |
+          # Development Environment Variables
+          NODE_ENV=development
+          VITE_BACKEND_HOST=172.16.168.20
+          VITE_BACKEND_PORT=8001
+          VITE_WS_HOST=172.16.168.20
+          VITE_WS_PORT=8001
+          VITE_REDIS_HOST=172.16.168.23
+          VITE_AI_STACK_HOST=172.16.168.24
+          VITE_BROWSER_HOST=172.16.168.25
+          VITE_NPU_WORKER_HOST=172.16.168.22
+          DEBUG_PROXY=false
+          LOG_LEVEL=info
+        dest: /opt/autobot/config/frontend-dev.env
+        owner: autobot-service
+        group: autobot-service
+        mode: '0644'
+
+    - name: Create development systemd service for Vite dev server
+      copy:
+        content: |
+          [Unit]
+          Description=AutoBot Frontend Development Server (Vite)
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=autobot-service
+          Group=autobot-service
+          WorkingDirectory=/opt/autobot/src/autobot-vue
+          Environment="NODE_ENV=development"
+          EnvironmentFile=/opt/autobot/config/frontend-dev.env
+          ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5173
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+          SyslogIdentifier=autobot-frontend-dev
+
+          # Development specific settings
+          KillMode=mixed
+          TimeoutStopSec=30
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/autobot-frontend-dev.service
+        backup: yes
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start development frontend service
+      systemd:
+        name: autobot-frontend-dev
+        enabled: yes
+        state: started
+
+    - name: Configure firewall for development frontend
+      ufw:
+        rule: allow
+        port: "5173"
+        proto: tcp
+        comment: "Vite development server"
+
+    - name: Wait for frontend to be ready
+      wait_for:
+        host: 172.16.168.21
+        port: 5173
+        delay: 10
+        timeout: 60
+
+    - name: Test frontend development server
+      uri:
+        url: "http://172.16.168.21:5173"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: frontend_test
+
+    - name: Display frontend development status
+      debug:
+        msg: |
+          Frontend Development Server Status:
+          - URL: http://172.16.168.21:5173
+          - Status: {{ frontend_test.status }}
+          - Service: autobot-frontend-dev
+          - Mode: Development (hot reload enabled)
+          - Environment: /opt/autobot/config/frontend-dev.env
+
+# Update run_autobot.sh to support development mode
+- name: Update AutoBot startup script for development mode
+  hosts: backend
+  become: yes
+
+  tasks:
+    - name: Backup current run_autobot.sh
+      copy:
+        src: /home/kali/Desktop/AutoBot/run_autobot.sh
+        dest: /home/kali/Desktop/AutoBot/run_autobot.sh.backup
+        remote_src: yes
+
+    - name: Update run_autobot.sh to support --dev mode for distributed architecture
+      blockinfile:
+        path: /home/kali/Desktop/AutoBot/run_autobot.sh
+        marker: "# {mark} DEVELOPMENT MODE FRONTEND MANAGEMENT"
+        block: |
+          start_frontend_dev() {
+              echo "🌐 Starting Frontend Development Server on VM 172.16.168.21..."
+
+              # Start development frontend service via Ansible
+              ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=restarted enabled=yes" -b
+
+              # Wait for frontend to be ready
+              echo "⏳ Waiting for frontend development server to start..."
+              sleep 10
+
+              # Test frontend availability
+              if curl -s -o /dev/null -w "%{http_code}" http://172.16.168.21:5173 | grep -q "200"; then
+                  echo "✅ Frontend development server ready at http://172.16.168.21:5173"
+              else
+                  echo "⚠️  Frontend development server may not be fully ready yet"
+                  echo "   Check status with: ansible frontend -i ansible/inventory/production.yml -m shell -a 'systemctl status autobot-frontend-dev'"
+              fi
+          }
+
+          # Add frontend dev start to main dev mode function
+          if [[ "$*" == *"--dev"* ]]; then
+              start_frontend_dev
+          fi
+
+    - name: Make run_autobot.sh executable
+      file:
+        path: /home/kali/Desktop/AutoBot/run_autobot.sh
+        mode: '0755'
+
+# Display final status
+- name: Development Setup Complete
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Display development setup summary
+      debug:
+        msg: |
+          🚀 Development Environment Ready!
+
+          Frontend Development Server:
+          - URL: http://172.16.168.21:5173
+          - Service: autobot-frontend-dev (systemd)
+          - Hot reload: Enabled
+          - Source: /opt/autobot/src/autobot-vue
+
+          Backend:
+          - URL: http://172.16.168.20:8001
+          - Service: Runs via run_autobot.sh --dev
+
+          Usage:
+          - Start all: bash run_autobot.sh --dev
+          - Frontend only: ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=started"
+          - Check status: ansible frontend -i ansible/inventory/production.yml -m shell -a "systemctl status autobot-frontend-dev"
+
+          Configuration:
+          - Environment: /opt/autobot/config/frontend-dev.env
+          - Service: /etc/systemd/system/autobot-frontend-dev.service

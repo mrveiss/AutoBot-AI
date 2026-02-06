@@ -1,0 +1,97 @@
+---
+# NPU Worker role - Intel OpenVINO and NPU acceleration
+
+- name: "NPU Worker | Install OpenVINO dependencies"
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - cmake
+      - build-essential
+      - libopencv-dev
+      - ocl-icd-libopencl1
+    state: present
+  become: yes
+  tags: ['npu_worker', 'packages']
+
+- name: "NPU Worker | Create OpenVINO directory"
+  file:
+    path: /opt/intel/openvino
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: '0755'
+  become: yes
+  tags: ['npu_worker', 'directories']
+
+- name: "NPU Worker | Install OpenVINO via pip"
+  pip:
+    name:
+      - openvino
+      - openvino-dev
+      - onnx
+    state: present
+    executable: pip3
+  become: yes
+  tags: ['npu_worker', 'packages']
+
+- name: "NPU Worker | Configure NPU device permissions"
+  file:
+    path: "{{ npu_device_path }}"
+    mode: '0666'
+  become: yes
+  when: npu_device_path is defined
+  ignore_errors: yes
+  tags: ['npu_worker', 'hardware']
+
+- name: "NPU Worker | Add autobot user to render group (GPU access)"
+  user:
+    name: autobot
+    groups: render
+    append: yes
+  become: yes
+  tags: ['npu_worker', 'hardware']
+
+- name: "NPU Worker | Create NPU worker systemd service"
+  template:
+    src: npu-worker.service.j2
+    dest: /etc/systemd/system/autobot-npu-worker.service
+    mode: '0644'
+  become: yes
+  notify:
+    - reload systemd
+    - restart npu-worker
+  tags: ['npu_worker', 'systemd']
+
+- name: "NPU Worker | Configure firewall - Allow NPU worker port"
+  ufw:
+    rule: allow
+    port: "{{ npu_worker_port }}"
+    proto: tcp
+    from_ip: "{{ network_subnet }}"
+    comment: "NPU Worker API"
+  become: yes
+  notify: reload firewall
+  tags: ['npu_worker', 'firewall']
+
+- name: "NPU Worker | Enable and start NPU worker service"
+  systemd:
+    name: autobot-npu-worker
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+  tags: ['npu_worker', 'service']
+
+- name: "NPU Worker | Display configuration summary"
+  debug:
+    msg:
+      - "=== NPU Worker Configuration Complete ==="
+      - "OpenVINO: Installed via pip"
+      - "NPU Device: {{ npu_device_path | default('Auto-detect') }}"
+      - "Worker Port: {{ npu_worker_port }}"
+      - "Device Priority: NPU > GPU > CPU"
+      - "Service: autobot-npu-worker (configured)"
+      - "Note: Service will start when code is synced"
+  tags: ['npu_worker', 'report']

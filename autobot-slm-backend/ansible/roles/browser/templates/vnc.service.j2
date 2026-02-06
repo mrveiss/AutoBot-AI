@@ -1,0 +1,25 @@
+[Unit]
+Description=AutoBot VNC Server
+After=network.target
+
+[Service]
+Type=forking
+User=autobot
+Group=autobot
+
+# VNC startup
+ExecStartPre=/bin/bash -c '/usr/bin/vncserver -kill {{ vnc_display }} > /dev/null 2>&1 || :'
+ExecStart=/usr/bin/vncserver {{ vnc_display }} -geometry 1280x720 -depth 24
+ExecStop=/usr/bin/vncserver -kill {{ vnc_display }}
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-vnc
+
+[Install]
+WantedBy=multi-user.target

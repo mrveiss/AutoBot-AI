@@ -1,0 +1,22 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Monitoring Role - Main Tasks
+---
+
+- name: Include Prometheus installation
+  ansible.builtin.include_tasks: prometheus.yml
+  when: monitoring_install_prometheus | bool
+
+- name: Include Grafana installation
+  ansible.builtin.include_tasks: grafana.yml
+  when: monitoring_install_grafana | bool
+
+- name: Include Node Exporter installation
+  ansible.builtin.include_tasks: node_exporter.yml
+  when: monitoring_install_node_exporter | bool
+
+- name: Configure firewall rules
+  ansible.builtin.include_tasks: firewall.yml
+  when: ansible_os_family == "Debian"

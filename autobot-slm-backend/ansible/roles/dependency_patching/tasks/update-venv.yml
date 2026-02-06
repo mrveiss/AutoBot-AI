@@ -1,0 +1,88 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Python Virtual Environment Update Tasks
+# Issue #682: Update Python packages with CVE fixes
+
+- name: Get current service definition
+  ansible.builtin.set_fact:
+    current_service: "{{ service_definitions[group_names | first] | default({}) }}"
+
+- name: Set venv path for this host
+  ansible.builtin.set_fact:
+    host_venv_path: "{{ current_service.venv_path | default(venv_path) }}"
+
+- name: Check if venv exists
+  ansible.builtin.stat:
+    path: "{{ host_venv_path }}/bin/pip"
+  register: venv_exists
+
+- name: Fail if venv does not exist
+  ansible.builtin.fail:
+    msg: "Virtual environment not found at {{ host_venv_path }}"
+  when: not venv_exists.stat.exists
+
+- name: Get current package versions (for audit log)
+  ansible.builtin.command:
+    cmd: "{{ host_venv_path }}/bin/pip freeze"
+  register: pip_freeze_before
+  changed_when: false
+
+- name: Create temporary requirements file with security updates
+  ansible.builtin.template:
+    src: requirements-security-update.txt.j2
+    dest: /tmp/requirements-security-update.txt
+    mode: '0644'
+
+- name: Update Python packages with security fixes
+  block:
+    - name: Upgrade pip first (if needed)
+      ansible.builtin.pip:
+        name: pip
+        state: latest
+        virtualenv: "{{ host_venv_path }}"
+        extra_args: "{{ pip_extra_args }}"
+      when: "'pip' in python_security_updates"
+
+    - name: Install security updates
+      ansible.builtin.pip:
+        requirements: /tmp/requirements-security-update.txt
+        virtualenv: "{{ host_venv_path }}"
+        extra_args: "{{ pip_extra_args }}"
+      register: pip_update
+      timeout: "{{ update_timeout }}"
+
+    - name: Get updated package versions (for audit log)
+      ansible.builtin.command:
+        cmd: "{{ host_venv_path }}/bin/pip freeze"
+      register: pip_freeze_after
+      changed_when: false
+
+    - name: Log package update summary
+      ansible.builtin.debug:
+        msg: |
+          Package update completed on {{ inventory_hostname }}
+          Changed packages:
+          {{ pip_update.stdout_lines | default(['No changes']) | join('\n') }}
+
+  rescue:
+    - name: Update failed - initiate rollback
+      ansible.builtin.include_tasks: rollback.yml
+      when: rollback_on_failure
+
+    - name: Fail the play after rollback
+      ansible.builtin.fail:
+        msg: "Package update failed on {{ inventory_hostname }}. Rollback {{ 'completed' if rollback_on_failure else 'skipped' }}."
+
+- name: Clean up temporary requirements file
+  ansible.builtin.file:
+    path: /tmp/requirements-security-update.txt
+    state: absent
+
+- name: Record update results
+  ansible.builtin.set_fact:
+    update_results:
+      host: "{{ inventory_hostname }}"
+      packages_updated: "{{ pip_update.changed | default(false) }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"

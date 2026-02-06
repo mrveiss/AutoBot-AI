@@ -1,0 +1,155 @@
+---
+# Redis Service Management Configuration Playbook
+# Configures sudoers permissions for Redis service control
+
+- name: "Configure Redis Service Management Permissions"
+  hosts: database
+  become: true
+  gather_facts: true
+
+  vars:
+    redis_service_name: "redis-stack-server"
+    sudoers_file: "/etc/sudoers.d/autobot-redis-service"
+    autobot_user: "autobot"
+
+  pre_tasks:
+    - name: Display configuration information
+      debug:
+        msg:
+          - "🔧 Configuring Redis Service Management"
+          - "Host: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "User: {{ autobot_user }}"
+          - "Service: {{ redis_service_name }}"
+          - "Sudoers file: {{ sudoers_file }}"
+
+  tasks:
+    # ==========================================
+    # VALIDATION
+    # ==========================================
+
+    - name: Verify autobot user exists
+      command: id {{ autobot_user }}
+      register: user_check
+      failed_when: user_check.rc != 0
+      changed_when: false
+
+    - name: Verify Redis service exists
+      systemd:
+        name: "{{ redis_service_name }}"
+        state: started
+      check_mode: true
+      register: service_check
+
+    - name: Display user and service status
+      debug:
+        msg:
+          - "✅ User {{ autobot_user }} exists: UID {{ user_check.stdout.split()[0].split('=')[1].split('(')[0] }}"
+          - "✅ Service {{ redis_service_name }} is configured"
+
+    # ==========================================
+    # SUDOERS CONFIGURATION
+    # ==========================================
+
+    - name: Create Redis service management sudoers configuration
+      copy:
+        content: |
+          # AutoBot Redis Service Management
+          # Allows autobot user to manage Redis Stack service without password
+          # Created by: Ansible playbook configure-redis-service-management.yml
+          # Date: {{ ansible_date_time.iso8601 }}
+
+          # Allow autobot user to manage redis-stack-server service
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl start {{ redis_service_name }}
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl stop {{ redis_service_name }}
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl restart {{ redis_service_name }}
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl status {{ redis_service_name }}
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl is-active {{ redis_service_name }}
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/systemctl reload {{ redis_service_name }}
+          {{ autobot_user }} ALL=(ALL) NOPASSWD: /bin/journalctl -u {{ redis_service_name }} *
+        dest: "{{ sudoers_file }}.tmp"
+        owner: root
+        group: root
+        mode: '0440'
+
+    - name: Validate sudoers file syntax
+      command: visudo -cf {{ sudoers_file }}.tmp
+      register: visudo_check
+      changed_when: false
+
+    - name: Display validation result
+      debug:
+        msg: "✅ Sudoers file syntax is valid"
+      when: visudo_check.rc == 0
+
+    - name: Move validated sudoers file to final location
+      command: mv {{ sudoers_file }}.tmp {{ sudoers_file }}
+      when: visudo_check.rc == 0
+
+    - name: Ensure sudoers file has correct permissions
+      file:
+        path: "{{ sudoers_file }}"
+        owner: root
+        group: root
+        mode: '0440'
+        state: file
+
+    # ==========================================
+    # VERIFICATION
+    # ==========================================
+
+    - name: Test sudo permissions for Redis service
+      become: true
+      become_user: "{{ autobot_user }}"
+      command: sudo -n -l
+      register: sudo_test
+      changed_when: false
+
+    - name: Display sudo permissions
+      debug:
+        msg: "{{ sudo_test.stdout_lines }}"
+
+    - name: Verify specific Redis service commands
+      become: true
+      become_user: "{{ autobot_user }}"
+      command: "sudo -n systemctl {{ item }} {{ redis_service_name }}"
+      loop:
+        - "status"
+        - "is-active"
+      register: command_tests
+      changed_when: false
+      failed_when: false
+
+    - name: Display command test results
+      debug:
+        msg:
+          - "Command: sudo systemctl {{ item.item }} {{ redis_service_name }}"
+          - "Result: {{ 'SUCCESS' if item.rc == 0 else 'FAILED' }}"
+          - "Output: {{ item.stdout | default('N/A') }}"
+      loop: "{{ command_tests.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+  post_tasks:
+    - name: Create configuration marker file
+      file:
+        path: "/etc/autobot/redis-service-management-configured"
+        state: touch
+        mode: '0644'
+        owner: "{{ autobot_user }}"
+        group: "{{ autobot_user }}"
+
+    - name: Display configuration summary
+      debug:
+        msg:
+          - "✅ Redis Service Management Configuration Complete"
+          - "📋 Sudoers file: {{ sudoers_file }}"
+          - "👤 User: {{ autobot_user }}"
+          - "🔧 Service: {{ redis_service_name }}"
+          - "✅ Permissions verified and active"
+          - ""
+          - "🚀 The autobot user can now manage Redis service without password:"
+          - "   sudo systemctl start {{ redis_service_name }}"
+          - "   sudo systemctl stop {{ redis_service_name }}"
+          - "   sudo systemctl restart {{ redis_service_name }}"
+          - "   sudo systemctl status {{ redis_service_name }}"
+          - "   sudo journalctl -u {{ redis_service_name }}"

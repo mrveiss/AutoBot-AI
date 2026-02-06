@@ -1,0 +1,36 @@
+[Unit]
+Description=Redis Stack Server for AutoBot
+Documentation=https://redis.io/docs/latest/operate/oss_and_stack/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+User={{ redis_user }}
+Group={{ redis_group }}
+WorkingDirectory=/var/lib/redis-stack
+
+# Ensure correct ownership before starting
+ExecStartPre=/bin/chown -R {{ redis_user }}:{{ redis_group }} /var/lib/redis-stack
+ExecStartPre=/bin/chown -R {{ redis_user }}:{{ redis_group }} /var/log/redis-stack
+
+ExecStart=/opt/redis-stack/bin/redis-stack-server /etc/redis-stack/redis-stack.conf
+ExecStop=/bin/kill -s TERM $MAINPID
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+# Resource limits
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/redis-stack /var/log/redis-stack
+
+[Install]
+WantedBy=multi-user.target

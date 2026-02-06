@@ -1,0 +1,83 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Ansible Playbook - Main Deployment Entry Point
+# Supports blue-green deployments with role borrowing (Issue #726)
+---
+
+- name: Deploy Roles to Target Host
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    target_roles: "{{ target_roles | default('slm-agent') }}"
+
+  tasks:
+    - name: Parse target roles
+      ansible.builtin.set_fact:
+        role_list: "{{ target_roles.split(',') | map('trim') | list }}"
+
+    - name: Display roles to deploy
+      ansible.builtin.debug:
+        msg: "Deploying roles: {{ role_list | join(', ') }}"
+
+    # Core Infrastructure Roles
+    - name: Deploy slm-agent role
+      ansible.builtin.include_role:
+        name: slm-agent
+      when: "'slm-agent' in role_list"
+
+    - name: Deploy redis role
+      ansible.builtin.include_role:
+        name: redis
+      when: "'redis' in role_list"
+
+    - name: Deploy backend role
+      ansible.builtin.include_role:
+        name: backend
+      when: "'backend' in role_list"
+
+    - name: Deploy frontend role
+      ansible.builtin.include_role:
+        name: frontend
+      when: "'frontend' in role_list"
+
+    # AI/ML Roles
+    - name: Deploy npu-worker role
+      ansible.builtin.include_role:
+        name: npu-worker
+      when: "'npu-worker' in role_list"
+
+    - name: Deploy ai-stack role
+      ansible.builtin.include_role:
+        name: ai-stack
+      when: "'ai-stack' in role_list"
+
+    - name: Deploy llm role
+      ansible.builtin.include_role:
+        name: llm
+      when: "'llm' in role_list"
+
+    # Automation Roles
+    - name: Deploy browser-automation role
+      ansible.builtin.include_role:
+        name: browser-automation
+      when: "'browser-automation' in role_list"
+
+    # Remote Access Roles
+    - name: Deploy vnc role
+      ansible.builtin.include_role:
+        name: vnc
+      when: "'vnc' in role_list"
+
+    # Monitoring Roles
+    - name: Deploy monitoring role
+      ansible.builtin.include_role:
+        name: monitoring
+      when: "'monitoring' in role_list"
+
+    - name: Deployment complete
+      ansible.builtin.debug:
+        msg: "Successfully deployed roles: {{ role_list | join(', ') }}"

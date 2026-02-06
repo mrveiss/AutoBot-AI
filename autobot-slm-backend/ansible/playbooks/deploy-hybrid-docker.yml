@@ -1,0 +1,505 @@
+---
+# Hybrid Deployment: Docker Containers on VMs
+# Deploys AutoBot services as Docker containers on Hyper-V VMs
+# Backend remains on host machine
+
+- name: Deploy Docker Containers to VMs
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    docker_compose_version: "2.29.1"
+    autobot_repo: "https://github.com/autobot/autobot.git"
+    autobot_dir: "/opt/autobot"
+
+  tasks:
+    - name: Install Docker on all VMs
+      block:
+        - name: Install Docker dependencies
+          apt:
+            name:
+              - apt-transport-https
+              - ca-certificates
+              - curl
+              - gnupg
+              - lsb-release
+              - software-properties-common
+            state: present
+            update_cache: yes
+
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+
+        - name: Add Docker repository
+          apt_repository:
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+
+        - name: Install Docker
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-compose-plugin
+            state: present
+            update_cache: yes
+
+        - name: Add autobot user to docker group
+          user:
+            name: autobot
+            groups: docker
+            append: yes
+
+        - name: Start and enable Docker
+          systemd:
+            name: docker
+            state: started
+            enabled: yes
+
+        - name: Install Docker Compose
+          get_url:
+            url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+            dest: /usr/local/bin/docker-compose
+            mode: '0755'
+
+    - name: Create AutoBot directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: autobot
+        group: autobot
+        mode: '0755'
+      loop:
+        - "{{ autobot_dir }}"
+        - "{{ autobot_dir }}/data"
+        - "{{ autobot_dir }}/logs"
+        - "{{ autobot_dir }}/config"
+        - "{{ autobot_dir }}/compose"
+
+    - name: Configure firewall for each service
+      ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: tcp
+        comment: "{{ item.name }}"
+      loop: "{{ service_ports[inventory_hostname_short] | default([]) }}"
+      vars:
+        service_ports:
+          'autobot-frontend':
+            - { name: 'Vue Frontend', port: '5173' }
+            - { name: 'Nginx HTTP', port: '80' }
+            - { name: 'Nginx HTTPS', port: '443' }
+          'autobot-database':
+            - { name: 'Redis', port: '6379' }
+            - { name: 'RedisInsight', port: '8002' }
+          'autobot-aiml':
+            - { name: 'AI Stack', port: '8080' }
+            - { name: 'NPU Worker', port: '8081' }
+          'autobot-browser':
+            - { name: 'Playwright', port: '3000' }
+            - { name: 'VNC', port: '5900' }
+
+---
+# Deploy Redis Stack on VM3 (Database VM)
+- name: Deploy Redis Stack
+  hosts: database
+  become: yes
+  vars:
+    container_name: autobot-redis
+
+  tasks:
+    - name: Create Redis docker-compose.yml
+      copy:
+        content: |
+          version: '3.8'
+          services:
+            redis:
+              image: redis/redis-stack:7.4.0-v1
+              container_name: {{ container_name }}
+              restart: unless-stopped
+              ports:
+                - "6379:6379"
+                - "8002:8001"  # RedisInsight
+              volumes:
+                - redis_data:/data
+                - redis_logs:/var/log/redis
+              environment:
+                - REDIS_ARGS=--appendonly yes --save 60 1 --requirepass {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
+                - REDISINSIGHT_PORT=8001
+              healthcheck:
+                test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}", "ping"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              networks:
+                - autobot_network
+
+          volumes:
+            redis_data:
+            redis_logs:
+
+          networks:
+            autobot_network:
+              driver: bridge
+        dest: "{{ autobot_dir }}/compose/redis-docker-compose.yml"
+        owner: autobot
+        group: autobot
+
+    - name: Start Redis Stack
+      docker_compose:
+        project_src: "{{ autobot_dir }}/compose"
+        files:
+          - redis-docker-compose.yml
+        state: present
+      become_user: autobot
+
+    - name: Wait for Redis to be ready
+      wait_for:
+        port: 6379
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 5
+        timeout: 60
+
+    - name: Test Redis connectivity
+      shell: |
+        docker exec {{ container_name }} redis-cli --no-auth-warning -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+      register: redis_test
+
+    - name: Display Redis status
+      debug:
+        msg: "Redis Status: {{ redis_test.stdout }}"
+
+---
+# Deploy Frontend on VM1
+- name: Deploy Frontend
+  hosts: frontend
+  become: yes
+  vars:
+    container_name: autobot-frontend
+
+  tasks:
+    - name: Create Frontend docker-compose.yml
+      copy:
+        content: |
+          version: '3.8'
+          services:
+            frontend:
+              image: autobot-frontend:latest
+              container_name: {{ container_name }}
+              restart: unless-stopped
+              ports:
+                - "5173:5173"
+                - "80:80"
+                - "443:443"
+              volumes:
+                - frontend_dist:/app/dist
+                - frontend_logs:/var/log/nginx
+              environment:
+                - NODE_ENV=production
+                - VITE_BACKEND_HOST={{ hostvars['autobot-backend']['ansible_host'] | default('172.16.168.1') }}
+                - VITE_BACKEND_PORT=8001
+                - VITE_REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
+                - VITE_AI_STACK_HOST={{ hostvars['autobot-aiml']['ansible_host'] }}
+                - VITE_BROWSER_HOST={{ hostvars['autobot-browser']['ansible_host'] }}
+              build:
+                context: /tmp/autobot
+                dockerfile: docker/frontend/Dockerfile
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:5173"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              networks:
+                - autobot_network
+
+          volumes:
+            frontend_dist:
+            frontend_logs:
+
+          networks:
+            autobot_network:
+              driver: bridge
+        dest: "{{ autobot_dir }}/compose/frontend-docker-compose.yml"
+        owner: autobot
+        group: autobot
+
+    - name: Copy AutoBot source for building
+      synchronize:
+        src: /home/kali/Desktop/AutoBot/
+        dest: /tmp/autobot/
+        delete: no
+        recursive: yes
+      delegate_to: localhost
+
+    - name: Build and start Frontend
+      docker_compose:
+        project_src: "{{ autobot_dir }}/compose"
+        files:
+          - frontend-docker-compose.yml
+        build: yes
+        state: present
+      become_user: autobot
+
+    - name: Wait for Frontend to be ready
+      wait_for:
+        port: 5173
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+        timeout: 120
+
+---
+# Deploy AI Stack and NPU Worker on VM4
+- name: Deploy AI Stack and NPU Worker
+  hosts: aiml
+  become: yes
+  vars:
+    ai_container: autobot-ai-stack
+    npu_container: autobot-npu-worker
+
+  tasks:
+    - name: Create AI Stack docker-compose.yml
+      copy:
+        content: |
+          version: '3.8'
+          services:
+            ai-stack:
+              image: autobot-ai-stack:latest
+              container_name: {{ ai_container }}
+              restart: unless-stopped
+              ports:
+                - "8080:8080"
+              volumes:
+                - ai_models:/app/models
+                - ai_data:/app/data
+                - ai_logs:/app/logs
+              environment:
+                - AI_SERVER_HOST=0.0.0.0
+                - AI_SERVER_PORT=8080
+                - REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
+                - REDIS_PORT=6379
+                - REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
+                - OLLAMA_HOST=http://localhost:11434
+              build:
+                context: /tmp/autobot
+                dockerfile: docker/ai-stack/Dockerfile
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              networks:
+                - autobot_network
+
+            npu-worker:
+              image: autobot-npu-worker:latest
+              container_name: {{ npu_container }}
+              restart: unless-stopped
+              ports:
+                - "8081:8081"
+              volumes:
+                - npu_models:/app/models
+                - npu_data:/app/data
+                - npu_logs:/app/logs
+              environment:
+                - NPU_SERVER_HOST=0.0.0.0
+                - NPU_SERVER_PORT=8081
+                - REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
+                - DEVICE=CPU  # Change to NPU when available
+              build:
+                context: /tmp/autobot
+                dockerfile: docker/npu-worker/Dockerfile
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              networks:
+                - autobot_network
+
+            ollama:
+              image: ollama/ollama:latest
+              container_name: autobot-ollama
+              restart: unless-stopped
+              ports:
+                - "11434:11434"
+              volumes:
+                - ollama_models:/root/.ollama
+              environment:
+                - OLLAMA_HOST=0.0.0.0
+              networks:
+                - autobot_network
+
+          volumes:
+            ai_models:
+            ai_data:
+            ai_logs:
+            npu_models:
+            npu_data:
+            npu_logs:
+            ollama_models:
+
+          networks:
+            autobot_network:
+              driver: bridge
+        dest: "{{ autobot_dir }}/compose/aiml-docker-compose.yml"
+        owner: autobot
+        group: autobot
+
+    - name: Copy AutoBot source for building
+      synchronize:
+        src: /home/kali/Desktop/AutoBot/
+        dest: /tmp/autobot/
+        delete: no
+        recursive: yes
+      delegate_to: localhost
+
+    - name: Build and start AI Stack and NPU Worker
+      docker_compose:
+        project_src: "{{ autobot_dir }}/compose"
+        files:
+          - aiml-docker-compose.yml
+        build: yes
+        state: present
+      become_user: autobot
+
+    - name: Pull Ollama model
+      shell: |
+        docker exec autobot-ollama ollama pull llama3.2:1b
+      register: ollama_pull
+      ignore_errors: yes
+
+    - name: Wait for services to be ready
+      wait_for:
+        port: "{{ item }}"
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+        timeout: 120
+      loop:
+        - 8080  # AI Stack
+        - 8081  # NPU Worker
+        - 11434 # Ollama
+
+---
+# Deploy Browser Service on VM5
+- name: Deploy Browser Service
+  hosts: browser
+  become: yes
+  vars:
+    container_name: autobot-browser
+
+  tasks:
+    - name: Install X11 and VNC dependencies
+      apt:
+        name:
+          - xvfb
+          - x11vnc
+          - fluxbox
+          - xterm
+          - chromium-browser
+          - firefox
+        state: present
+
+    - name: Create Browser docker-compose.yml
+      copy:
+        content: |
+          version: '3.8'
+          services:
+            browser:
+              image: mcr.microsoft.com/playwright:v1.40.0-jammy
+              container_name: {{ container_name }}
+              restart: unless-stopped
+              ports:
+                - "3000:3000"
+                - "5900:5900"
+              volumes:
+                - browser_data:/app/data
+                - browser_logs:/app/logs
+              environment:
+                - PLAYWRIGHT_SERVER_PORT=3000
+                - DISPLAY=:99
+                - REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
+              command: >
+                sh -c "Xvfb :99 -screen 0 1920x1080x24 &
+                       npx playwright run-server --port 3000 --host 0.0.0.0"
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              networks:
+                - autobot_network
+
+          volumes:
+            browser_data:
+            browser_logs:
+
+          networks:
+            autobot_network:
+              driver: bridge
+        dest: "{{ autobot_dir }}/compose/browser-docker-compose.yml"
+        owner: autobot
+        group: autobot
+
+    - name: Start Browser Service
+      docker_compose:
+        project_src: "{{ autobot_dir }}/compose"
+        files:
+          - browser-docker-compose.yml
+        state: present
+      become_user: autobot
+
+    - name: Wait for Browser service to be ready
+      wait_for:
+        port: 3000
+        host: "{{ ansible_default_ipv4.address }}"
+        delay: 10
+        timeout: 120
+
+---
+# Final validation and configuration
+- name: Validate All Services
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Check Docker container status
+      shell: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+      register: docker_status
+
+    - name: Display container status
+      debug:
+        msg: "{{ docker_status.stdout_lines }}"
+
+    - name: Test service endpoints
+      uri:
+        url: "{{ item.url }}"
+        method: GET
+        status_code: "{{ item.expected_status | default(200) }}"
+      loop: "{{ service_tests[inventory_hostname_short] | default([]) }}"
+      vars:
+        service_tests:
+          'autobot-frontend':
+            - { url: 'http://localhost:5173', name: 'Frontend' }
+          'autobot-database':
+            - { url: 'http://localhost:8002', name: 'RedisInsight' }
+          'autobot-aiml':
+            - { url: 'http://localhost:8080/health', name: 'AI Stack' }
+            - { url: 'http://localhost:8081/health', name: 'NPU Worker' }
+          'autobot-browser':
+            - { url: 'http://localhost:3000/health', name: 'Browser Service' }
+      ignore_errors: yes
+
+    - name: Create service summary
+      set_fact:
+        service_summary: |
+          VM: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+          Services: {{ docker_status.stdout_lines | length - 1 }} containers running
+          Status: Deployment complete
+
+    - name: Display service summary
+      debug:
+        msg: "{{ service_summary }}"

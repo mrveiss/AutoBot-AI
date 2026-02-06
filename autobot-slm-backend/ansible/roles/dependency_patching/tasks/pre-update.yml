@@ -1,0 +1,89 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Pre-Update Tasks
+# Issue #682: Backup, drain connections, prepare for update
+
+- name: Get current timestamp for backup naming
+  ansible.builtin.set_fact:
+    backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+
+- name: Ensure backup directory exists
+  ansible.builtin.file:
+    path: "{{ backup_base_path }}"
+    state: directory
+    mode: '0755'
+  when: backup_enabled
+
+- name: Get current service definition
+  ansible.builtin.set_fact:
+    current_service: "{{ service_definitions[group_names | first] | default({}) }}"
+
+- name: Create venv backup before update
+  ansible.builtin.archive:
+    path: "{{ current_service.venv_path | default(venv_path) }}"
+    dest: "{{ backup_base_path }}/venv-{{ backup_timestamp }}.tar.gz"
+    format: gz
+  when:
+    - backup_enabled
+    - current_service.has_python_venv | default(false)
+  register: venv_backup
+
+- name: Record backup location
+  ansible.builtin.set_fact:
+    latest_backup: "{{ backup_base_path }}/venv-{{ backup_timestamp }}.tar.gz"
+  when: venv_backup is defined and venv_backup.changed
+
+- name: Log backup creation
+  ansible.builtin.debug:
+    msg: "Created venv backup at {{ latest_backup | default('N/A') }}"
+  when: backup_enabled
+
+- name: Check if service has drain endpoint
+  ansible.builtin.uri:
+    url: "http://localhost:{{ current_service.health_port }}/admin/drain"
+    method: GET
+    status_code: [200, 404, 405]
+  register: drain_check
+  when:
+    - drain_enabled
+    - current_service.health_endpoint is defined
+  ignore_errors: yes
+
+- name: Drain active connections (if endpoint exists)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ current_service.health_port }}/admin/drain"
+    method: POST
+    timeout: "{{ drain_timeout }}"
+  when:
+    - drain_enabled
+    - drain_check is defined
+    - drain_check.status == 200
+  ignore_errors: yes
+
+- name: Wait for connections to drain
+  ansible.builtin.wait_for:
+    timeout: "{{ drain_timeout }}"
+  when:
+    - drain_enabled
+    - drain_check is defined
+    - drain_check.status == 200
+
+- name: Enter maintenance mode - stop service gracefully
+  ansible.builtin.systemd:
+    name: "{{ current_service.service_name }}"
+    state: stopped
+  when:
+    - current_service.service_name is defined
+    - restart_service_after_update
+  register: service_stopped
+  ignore_errors: yes
+
+- name: Record pre-update state
+  ansible.builtin.set_fact:
+    pre_update_state:
+      backup_created: "{{ venv_backup.changed | default(false) }}"
+      backup_path: "{{ latest_backup | default('none') }}"
+      service_was_running: "{{ service_stopped.changed | default(false) }}"
+      timestamp: "{{ backup_timestamp }}"

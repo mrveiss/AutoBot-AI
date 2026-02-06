@@ -1,0 +1,456 @@
+---
+# Database Deployment Playbook (VM3)
+# Deploys Redis Stack, model storage, and data persistence infrastructure
+
+- name: "Deploy Database Infrastructure (Redis Stack + Model Storage)"
+  hosts: database
+  become: true
+  gather_facts: true
+  serial: 1  # Deploy database nodes one at a time
+
+  vars:
+    redis_user: "autobot"
+    redis_group: "autobot"
+    redis_home: "/var/lib/redis-stack"
+    redis_config_dir: "/etc/redis-stack"
+    redis_log_dir: "/var/log/redis-stack"
+
+  pre_tasks:
+    - name: Display database deployment information
+      debug:
+        msg:
+          - "🗄️  Deploying Database Infrastructure"
+          - "VM: {{ inventory_hostname }} ({{ ansible_default_ipv4.address }})"
+          - "Services: Redis Stack {{ redis.version }}, Model Storage"
+          - "Memory Allocation: {{ redis.memory.maxmemory }}"
+          - "Persistence: RDB + AOF enabled"
+          - "Databases: {{ database_schema.databases | length }} configured"
+
+  tasks:
+    # ==========================================
+    # REDIS STACK INSTALLATION
+    # ==========================================
+
+    - name: Add Redis Stack repository key
+      apt_key:
+        url: "{{ repositories.redis.key_url }}"
+        state: present
+      retries: 3
+      delay: 10
+
+    - name: Add Redis Stack repository
+      apt_repository:
+        repo: "{{ repositories.redis.repo }}"
+        state: present
+        update_cache: true
+      retries: 3
+      delay: 10
+
+    - name: Install Redis Stack and dependencies
+      apt:
+        name:
+          - "{{ redis.package }}"
+          - "redis-tools"
+          - "python3-redis"
+        state: present
+        update_cache: true
+      retries: 3
+      delay: 10
+
+    # ==========================================
+    # USER AND DIRECTORY SETUP
+    # ==========================================
+
+    # Note: Using existing autobot user instead of creating redis-stack user
+    # This aligns with AutoBot's standardized ownership architecture
+    # The autobot user is created during initial system setup
+
+    # - name: Create Redis Stack group
+    #   group:
+    #     name: "{{ redis_group }}"
+    #     system: true
+    #     state: present
+    #
+    # - name: Create Redis Stack user
+    #   user:
+    #     name: "{{ redis_user }}"
+    #     group: "{{ redis_group }}"
+    #     system: true
+    #     home: "{{ redis_home }}"
+    #     create_home: true
+    #     shell: /bin/bash
+    #     state: present
+
+    - name: Verify autobot user exists
+      command: id {{ redis_user }}
+      register: user_check
+      failed_when: user_check.rc != 0
+      changed_when: false
+
+    - name: Create Redis directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ redis_user }}"
+        group: "{{ redis_group }}"
+        mode: '0750'
+      loop:
+        - "{{ redis_home }}"
+        - "{{ redis_config_dir }}"
+        - "{{ redis_log_dir }}"
+        - "/var/lib/redis-stack/backups"
+
+    - name: Create model storage directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+      loop:
+        - "{{ model_storage.directories.base_dir }}"
+        - "{{ model_storage.directories.cache_dir }}"
+        - "{{ model_storage.directories.versions_dir }}"
+        - "{{ model_storage.directories.temp_dir }}"
+      loop_control:
+        loop_var: item
+      with_items: "{{ model_storage.categories.values() | map(attribute='path') | list }}"
+      when: item is defined
+
+    # ==========================================
+    # REDIS CONFIGURATION
+    # ==========================================
+
+    - name: Generate Redis Stack configuration
+      template:
+        src: ../templates/redis/redis-stack.conf.j2
+        dest: "{{ redis_config_dir }}/redis-stack.conf"
+        owner: "{{ redis_user }}"
+        group: "{{ redis_group }}"
+        mode: '0640'
+        backup: true
+      notify: restart redis-stack
+
+    - name: Configure Redis ACL (if enabled)
+      template:
+        src: redis-acl.conf.j2
+        dest: "{{ redis_config_dir }}/acl.conf"
+        owner: "{{ redis_user }}"
+        group: "{{ redis_group }}"
+        mode: '0600'
+        backup: true
+      when: security.redis_security.acl_enabled
+      notify: restart redis-stack
+
+    # ==========================================
+    # REDIS INSIGHT CONFIGURATION
+    # ==========================================
+
+    - name: Configure RedisInsight
+      template:
+        src: redisinsight.conf.j2
+        dest: "{{ redis_config_dir }}/redisinsight.conf"
+        owner: "{{ redis_user }}"
+        group: "{{ redis_group }}"
+        mode: '0644'
+      when: redis_insight.enabled
+      notify: restart redis-stack
+
+    # ==========================================
+    # SYSTEMD SERVICE CONFIGURATION
+    # ==========================================
+
+    - name: Create Redis Stack systemd service
+      template:
+        src: redis-stack-server.service.j2
+        dest: /etc/systemd/system/redis-stack-server.service
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart redis-stack
+
+    - name: Create model storage manager systemd service
+      template:
+        src: autobot-model-manager.service.j2
+        dest: /etc/systemd/system/autobot-model-manager.service
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Create backup service and timer
+      template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: '0644'
+      loop:
+        - autobot-backup.service
+        - autobot-backup.timer
+      notify: reload systemd
+
+    # ==========================================
+    # BACKUP CONFIGURATION
+    # ==========================================
+
+    - name: Create backup scripts
+      template:
+        src: "{{ item }}.j2"
+        dest: "/opt/autobot/scripts/{{ item }}"
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+      loop:
+        - backup-database.sh
+        - restore-database.sh
+        - cleanup-model-cache.sh
+
+    - name: Configure backup cron jobs
+      cron:
+        name: "AutoBot {{ item.name }}"
+        minute: "{{ item.minute }}"
+        hour: "{{ item.hour }}"
+        job: "{{ item.job }}"
+        user: "{{ autobot.user }}"
+      loop:
+        - name: "critical backup"
+          minute: "0"
+          hour: "*/4"
+          job: "/opt/autobot/scripts/backup-database.sh --critical"
+        - name: "full backup"
+          minute: "0"
+          hour: "1"
+          job: "/opt/autobot/scripts/backup-database.sh --full"
+      when: backup.enabled
+
+    # ==========================================
+    # PERFORMANCE OPTIMIZATION
+    # ==========================================
+
+    - name: Configure system parameters for Redis
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: true
+      loop: "{{ performance.system.kernel_params | dict2items }}"
+
+    - name: Disable transparent huge pages (Redis recommendation)
+      lineinfile:
+        path: /etc/rc.local
+        line: "echo never > /sys/kernel/mm/transparent_hugepage/enabled"
+        create: true
+        mode: '0755'
+
+    - name: Configure Redis optimization script
+      template:
+        src: optimize-redis.sh.j2
+        dest: /opt/autobot/scripts/optimize-redis.sh
+        mode: '0755'
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+
+    # ==========================================
+    # MONITORING SETUP
+    # ==========================================
+
+    - name: Create Redis monitoring script
+      template:
+        src: monitor-redis.sh.j2
+        dest: /opt/autobot/scripts/monitor-redis.sh
+        mode: '0755'
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+
+    - name: Configure Redis monitoring cron job
+      cron:
+        name: "Redis monitoring"
+        minute: "*/5"
+        job: "/opt/autobot/scripts/monitor-redis.sh >> /var/log/autobot/redis-monitor.log 2>&1"
+        user: "{{ autobot.user }}"
+      when: monitoring.redis_monitoring.enabled
+
+    - name: Install Redis monitoring tools
+      apt:
+        name:
+          - "redis-tools"
+          - "python3-prometheus-client"
+        state: present
+
+    # ==========================================
+    # MODEL STORAGE MANAGEMENT
+    # ==========================================
+
+    - name: Create model management scripts
+      template:
+        src: "{{ item }}.j2"
+        dest: "/opt/autobot/scripts/{{ item }}"
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+      loop:
+        - model-manager.py
+        - sync-models.sh
+        - optimize-models.sh
+
+    - name: Configure model cache cleanup
+      cron:
+        name: "Model cache cleanup"
+        minute: "0"
+        hour: "3"
+        job: "/opt/autobot/scripts/cleanup-model-cache.sh >> /var/log/autobot/model-cleanup.log 2>&1"
+        user: "{{ autobot.user }}"
+
+    # ==========================================
+    # SECURITY CONFIGURATION
+    # ==========================================
+
+    - name: Configure file permissions for Redis data
+      file:
+        path: "{{ item }}"
+        owner: "{{ redis_user }}"
+        group: "{{ redis_group }}"
+        mode: '0750'
+        recurse: true
+        state: directory
+      loop:
+        - "{{ redis_home }}"
+        - "{{ redis_log_dir }}"
+
+    - name: Configure file permissions for model storage
+      file:
+        path: "{{ model_storage.directories.base_dir }}"
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+        mode: '0755'
+        recurse: true
+        state: directory
+
+    - name: Configure Redis log rotation
+      template:
+        src: redis-logrotate.j2
+        dest: /etc/logrotate.d/redis-stack
+        mode: '0644'
+
+    # ==========================================
+    # SERVICE STARTUP
+    # ==========================================
+
+    - name: Enable and start Redis Stack service
+      systemd:
+        name: redis-stack-server
+        enabled: true
+        state: started
+        daemon_reload: true
+      register: redis_service_result
+
+    - name: Wait for Redis to be ready
+      wait_for:
+        host: "{{ redis.bind }}"
+        port: "{{ redis.port }}"
+        timeout: 60
+        delay: 5
+
+    - name: Enable and start backup timer
+      systemd:
+        name: autobot-backup.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: backup.enabled
+
+    # ==========================================
+    # DATABASE INITIALIZATION
+    # ==========================================
+
+    - name: Test Redis connectivity
+      command: redis-cli -h {{ redis.bind }} -p {{ redis.port }} ping
+      register: redis_ping
+      changed_when: false
+
+    - name: Display Redis connectivity result
+      debug:
+        msg: "Redis connectivity test: {{ redis_ping.stdout }}"
+
+    - name: Initialize database schemas
+      command: >
+        redis-cli -h {{ redis.bind }} -p {{ redis.port }}
+        -n {{ item.value.id }}
+        SET "db:info:description" "{{ item.value.description }}"
+      loop: "{{ database_schema.databases | dict2items }}"
+      changed_when: false
+
+    - name: Configure Redis memory usage alerts
+      command: >
+        redis-cli -h {{ redis.bind }} -p {{ redis.port }}
+        CONFIG SET notify-keyspace-events "Ex"
+      changed_when: false
+
+    # ==========================================
+    # HEALTH CHECKS
+    # ==========================================
+
+    - name: Verify Redis Stack services
+      systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - redis-stack-server
+      register: service_status
+
+    - name: Test Redis Stack functionality
+      command: "{{ item }}"
+      loop:
+        - "redis-cli -h {{ redis.bind }} -p {{ redis.port }} info server"
+        - "redis-cli -h {{ redis.bind }} -p {{ redis.port }} config get maxmemory"
+      register: redis_tests
+      changed_when: false
+
+    - name: Display Redis Stack test results
+      debug:
+        msg: "Redis Stack tests completed successfully"
+      when: redis_tests is succeeded
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: true
+
+    - name: restart redis-stack
+      systemd:
+        name: redis-stack-server
+        state: restarted
+
+  post_tasks:
+    - name: Display database deployment summary
+      debug:
+        msg:
+          - "✅ Database infrastructure deployed successfully"
+          - "🗄️  Redis Stack: {{ redis.version }} running on {{ redis.bind }}:{{ redis.port }}"
+          - "💾 Persistence: RDB + AOF enabled"
+          - "📊 Memory Limit: {{ redis.memory.maxmemory }}"
+          - "🗂️  Databases: {{ database_schema.databases | length }} configured"
+          - "📁 Model Storage: {{ model_storage.directories.base_dir }}"
+          - "🔧 RedisInsight: {{ redis_insight.enabled | ternary('http://' + ansible_default_ipv4.address + ':8002', 'Disabled') }}"
+          - "💾 Backup: {{ backup.enabled | ternary('Scheduled', 'Manual only') }}"
+
+    - name: Create database deployment marker
+      file:
+        path: "/etc/autobot/database-deployed"
+        state: touch
+        mode: '0644'
+        owner: "{{ autobot.user }}"
+        group: "{{ autobot.group }}"
+
+    - name: Verify critical database functionality
+      command: |
+        redis-cli -h {{ redis.bind }} -p {{ redis.port }} eval "
+        redis.call('SET', 'deployment:test', 'success');
+        local result = redis.call('GET', 'deployment:test');
+        redis.call('DEL', 'deployment:test');
+        return result
+        " 0
+      register: redis_functionality_test
+      changed_when: false
+
+    - name: Confirm database deployment success
+      debug:
+        msg: "🎉 Database deployment completed successfully - Redis functional test: {{ redis_functionality_test.stdout }}"
+      when: redis_functionality_test.stdout == "success"

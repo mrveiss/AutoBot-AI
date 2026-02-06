@@ -1,0 +1,49 @@
+# AutoBot Ansible Inventory - Using Existing Router
+# Alternative configuration using your existing router as gateway
+
+all:
+  vars:
+    ansible_user: autobot
+    ansible_ssh_private_key_file: ~/.ssh/autobot_key
+    python_interpreter: /usr/bin/python3
+
+  children:
+    autobot_cluster:
+      vars:
+        # Use your existing router's network
+        network_subnet: "192.168.1.0/24"  # Adjust to your router's subnet
+        network_gateway: "192.168.1.1"    # Your router's IP
+        dns_servers:
+          - "8.8.8.8"
+          - "1.1.1.1"
+
+      children:
+        frontend:
+          hosts:
+            autobot-frontend:
+              # Static IPs in your router's range, or use DHCP reservations
+              ansible_host: 192.168.1.110
+
+        backend:
+          hosts:
+            autobot-backend:
+              ansible_host: 192.168.1.120
+              environment:
+                REDIS_HOST: "192.168.1.150"
+                AI_STACK_HOST: "192.168.1.130"
+                NPU_WORKER_HOST: "192.168.1.140"
+
+        ai_stack:
+          hosts:
+            autobot-aistack:
+              ansible_host: 192.168.1.130
+
+        npu_workers:
+          hosts:
+            autobot-npu:
+              ansible_host: 192.168.1.140
+
+        database:
+          hosts:
+            autobot-redis:
+              ansible_host: 192.168.1.150

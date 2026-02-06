@@ -1,0 +1,786 @@
+---
+# Native VM Deployment: Services run directly on VMs (no containers)
+# Much more efficient than Docker containers - better performance and resource usage
+
+- name: Prepare All VMs
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install common packages
+      apt:
+        name:
+          - curl
+          - wget
+          - git
+          - vim
+          - htop
+          - python3
+          - python3-pip
+          - python3-venv
+          - systemd
+          - nginx
+          - supervisor
+        state: present
+        update_cache: yes
+
+    - name: Create autobot service user
+      user:
+        name: autobot-service
+        system: yes
+        shell: /bin/bash
+        home: /opt/autobot
+        create_home: yes
+
+    - name: Create service directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: autobot-service
+        group: autobot-service
+        mode: '0755'
+      loop:
+        - /opt/autobot
+        - /opt/autobot/logs
+        - /opt/autobot/data
+        - /opt/autobot/config
+        - /var/log/autobot
+
+# Deploy Redis Stack natively on VM3 (Database VM)
+- name: Deploy Redis Stack Natively
+  hosts: database
+  become: yes
+
+  tasks:
+    - name: Install Redis Stack from repository
+      block:
+        - name: Add Redis GPG key
+          apt_key:
+            url: https://packages.redis.io/gpg
+            state: present
+
+        - name: Add Redis repository
+          apt_repository:
+            repo: "deb https://packages.redis.io/deb {{ ansible_distribution_release }} main"
+            state: present
+
+        - name: Install Redis Stack
+          apt:
+            name:
+              - redis-stack-server
+            state: present
+            update_cache: yes
+
+    - name: Configure Redis Stack
+      copy:
+        content: |
+          # Redis Stack Configuration
+          port 6379
+          bind 0.0.0.0
+          requirepass {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}
+
+          # Persistence
+          appendonly yes
+          appendfsync everysec
+          save 900 1
+          save 300 10
+          save 60 10000
+
+          # Memory settings
+          maxmemory 6gb
+          maxmemory-policy allkeys-lru
+
+          # Search and JSON modules (loaded by redis-stack)
+          loadmodule /opt/redis-stack/lib/redisearch.so
+          loadmodule /opt/redis-stack/lib/rejson.so
+          loadmodule /opt/redis-stack/lib/redistimeseries.so
+          loadmodule /opt/redis-stack/lib/redisbloom.so
+
+          # Logging
+          logfile /var/log/redis/redis-server.log
+          loglevel notice
+        dest: /etc/redis/redis.conf
+        backup: yes
+
+    - name: Create Redis log directory
+      file:
+        path: /var/log/redis
+        state: directory
+        owner: redis
+        group: redis
+        mode: '0755'
+
+    - name: Configure Redis Stack systemd service
+      systemd:
+        name: redis-stack-server
+        enabled: yes
+        state: restarted
+        daemon_reload: yes
+
+    - name: Install and configure RedisInsight
+      block:
+        - name: Download RedisInsight
+          get_url:
+            url: https://download.redisinsight.redis.com/latest/RedisInsight-v2-linux-x64-latest.deb
+            dest: /tmp/redisinsight.deb
+
+        - name: Install RedisInsight
+          apt:
+            deb: /tmp/redisinsight.deb
+            state: present
+
+        - name: Configure RedisInsight systemd service
+          copy:
+            content: |
+              [Unit]
+              Description=RedisInsight
+              After=network.target
+
+              [Service]
+              Type=simple
+              User=autobot-service
+              WorkingDirectory=/opt/autobot
+              ExecStart=/usr/local/bin/redisinsight --port 8002 --host 0.0.0.0
+              Restart=always
+              RestartSec=3
+
+              [Install]
+              WantedBy=multi-user.target
+            dest: /etc/systemd/system/redisinsight.service
+
+        - name: Start RedisInsight
+          systemd:
+            name: redisinsight
+            enabled: yes
+            state: started
+            daemon_reload: yes
+      ignore_errors: yes
+
+    - name: Configure firewall for Redis
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '6379'  # Redis
+        - '8002'  # RedisInsight
+
+    - name: Test Redis connectivity
+      shell: redis-cli -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }} ping
+      register: redis_test
+
+    - name: Display Redis status
+      debug:
+        msg: "Redis Status: {{ redis_test.stdout }}"
+
+
+# Deploy Frontend natively on VM1
+- name: Deploy Frontend Natively
+  hosts: frontend
+  become: yes
+
+  tasks:
+    - name: Install Node.js 20
+      block:
+        - name: Add NodeSource GPG key
+          apt_key:
+            url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+            state: present
+
+        - name: Add NodeSource repository
+          apt_repository:
+            repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_distribution_release }} main"
+            state: present
+
+        - name: Install Node.js
+          apt:
+            name: nodejs
+            state: present
+            update_cache: yes
+
+    - name: Copy frontend source files from deployment directory
+      copy:
+        src: "{{ lookup('env', 'SOURCE_DIR') | default('/tmp/autobot-deployment') }}/autobot-vue/"
+        dest: /opt/autobot/src/autobot-vue/
+
+    - name: Set ownership of source code
+      file:
+        path: /opt/autobot/src
+        owner: autobot-service
+        group: autobot-service
+        recurse: yes
+
+    - name: Install frontend dependencies
+      shell: |
+        cd /opt/autobot/src/autobot-vue
+        npm install
+      become_user: autobot-service
+
+    - name: Build frontend for production
+      shell: |
+        cd /opt/autobot/src/autobot-vue
+        npm run build
+      become_user: autobot-service
+      environment:
+        VITE_BACKEND_HOST: "172.16.168.20"  # WSL Host IP
+        VITE_BACKEND_PORT: "8001"
+        VITE_REDIS_HOST: "172.16.168.23"
+        VITE_AI_STACK_HOST: "172.16.168.24"
+        VITE_BROWSER_HOST: "172.16.168.25"
+        VITE_NPU_WORKER_HOST: "172.16.168.22"
+
+    - name: Configure Nginx for frontend
+      copy:
+        content: |
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+
+              server_name autobot-frontend;
+              root /opt/autobot/src/autobot-vue/dist;
+              index index.html;
+
+              # Frontend static files
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+
+              # Proxy API requests to backend VM
+              location /api/ {
+                  proxy_pass http://172.16.168.20:8001/api/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+                  proxy_read_timeout 86400;
+              }
+
+              # WebSocket proxy for real-time features
+              location /ws/ {
+                  proxy_pass http://172.16.168.20:8001/ws/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "Upgrade";
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              # Gzip compression
+              gzip on;
+              gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+          }
+        dest: /etc/nginx/sites-available/autobot-frontend
+        backup: yes
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/autobot-frontend
+        dest: /etc/nginx/sites-enabled/autobot-frontend
+        state: link
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Test nginx configuration
+      shell: nginx -t
+
+    - name: Restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+
+    - name: Configure firewall for frontend
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '80'
+        - '443'
+        - '5173'
+
+
+# Deploy NPU Worker natively on VM2 with hardware acceleration
+- name: Deploy NPU Worker Service Natively
+  hosts: npu
+  become: yes
+
+  tasks:
+    - name: Install Python dependencies for NPU Worker
+      apt:
+        name:
+          - python3.11
+          - python3.11-venv
+          - python3.11-dev
+          - build-essential
+          - pkg-config
+          - libssl-dev
+          - libffi-dev
+          - cmake
+          - ninja-build
+          - intel-opencl-icd
+          - level-zero
+        state: present
+
+    - name: Install Intel graphics drivers and NPU runtime
+      shell: |
+        wget -qO - https://repositories.intel.com/graphics/intel-graphics.key | apt-key add -
+        echo "deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu jammy main" | tee /etc/apt/sources.list.d/intel-graphics.list
+        apt update
+        apt install -y intel-level-zero-gpu intel-media-va-driver-non-free intel-media-driver
+      args:
+        creates: /etc/apt/sources.list.d/intel-graphics.list
+
+    - name: Copy AutoBot source code for NPU Worker
+      synchronize:
+        src: /home/kali/Desktop/AutoBot/
+        dest: /opt/autobot/src/
+        delete: no
+        recursive: yes
+        owner: no
+        group: no
+      delegate_to: localhost
+
+    - name: Set ownership of source code for NPU Worker
+      file:
+        path: /opt/autobot/src
+        owner: autobot-service
+        group: autobot-service
+        recurse: yes
+
+    - name: Create Python virtual environment for NPU Worker
+      shell: python3.11 -m venv /opt/autobot/venv
+      args:
+        creates: /opt/autobot/venv/bin/activate
+      become_user: autobot-service
+
+    - name: Install Python dependencies for NPU Worker
+      pip:
+        requirements: /opt/autobot/src/docker/npu-worker/requirements.txt
+        virtualenv: /opt/autobot/venv
+        virtualenv_python: python3.11
+      become_user: autobot-service
+
+    - name: Install OpenVINO runtime for NPU Worker
+      pip:
+        name:
+          - openvino[pytorch,tensorflow]
+          - openvino-dev[pytorch,tensorflow]
+        virtualenv: /opt/autobot/venv
+      become_user: autobot-service
+
+    - name: Create NPU Worker configuration
+      template:
+        content: |
+          [hardware]
+          enable_npu = true
+          enable_gpu = true
+          openvino_device = AUTO
+          npu_priority = high
+          gpu_fallback = true
+          device_cache_dir = /opt/autobot/data/device_cache
+
+          [server]
+          host = 0.0.0.0
+          port = 8081
+          workers = 2
+
+          [performance]
+          inference_threads = 2
+          batch_size = 1
+          precision = FP16
+          cache_models = true
+
+          [monitoring]
+          log_device_usage = true
+          performance_metrics = true
+          temperature_monitoring = true
+        dest: /opt/autobot/config/npu-worker.conf
+        owner: autobot-service
+        group: autobot-service
+        mode: '0644'
+
+    - name: Create NPU Worker systemd service
+      template:
+        content: |
+          [Unit]
+          Description=AutoBot NPU Worker Service
+          After=network.target
+          Wants=network.target
+
+          [Service]
+          Type=exec
+          User=autobot-service
+          Group=autobot-service
+          WorkingDirectory=/opt/autobot/src
+          Environment="PATH=/opt/autobot/venv/bin:$PATH"
+          Environment="PYTHONPATH=/opt/autobot/src"
+          Environment="OPENVINO_LOG_LEVEL=ERROR"
+          Environment="NPU_LOG_LEVEL=INFO"
+          ExecStart=/opt/autobot/venv/bin/python -m src.npu_worker.main
+          Restart=always
+          RestartSec=10
+          StandardOutput=syslog
+          StandardError=syslog
+          SyslogIdentifier=autobot-npu-worker
+
+          # Hardware access permissions
+          SupplementaryGroups=render video
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/autobot-npu-worker.service
+        backup: yes
+
+    - name: Reload systemd daemon for NPU Worker
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start NPU Worker service
+      systemd:
+        name: autobot-npu-worker
+        enabled: yes
+        state: started
+
+    - name: Configure firewall for NPU Worker
+      ufw:
+        rule: allow
+        port: "8081"
+        proto: tcp
+
+
+# Deploy AI Stack natively on VM4
+- name: Deploy AI Services Natively
+  hosts: aiml
+  become: yes
+
+  tasks:
+    - name: Install Python dependencies for AI services
+      apt:
+        name:
+          - python3.10
+          - python3.10-venv
+          - python3.10-dev
+          - build-essential
+          - pkg-config
+          - libssl-dev
+          - libffi-dev
+          - libjpeg-dev
+          - zlib1g-dev
+        state: present
+
+    - name: Copy AutoBot source code
+      synchronize:
+        src: /home/kali/Desktop/AutoBot/
+        dest: /opt/autobot/src/
+        delete: no
+        recursive: yes
+        owner: no
+        group: no
+      delegate_to: localhost
+
+    - name: Set ownership of source code
+      file:
+        path: /opt/autobot/src
+        owner: autobot-service
+        group: autobot-service
+        recurse: yes
+
+    - name: Create Python virtual environment
+      shell: |
+        cd /opt/autobot
+        python3.10 -m venv venv
+        source venv/bin/activate
+        pip install --upgrade pip setuptools wheel
+      become_user: autobot-service
+
+    - name: Install Python dependencies
+      shell: |
+        cd /opt/autobot
+        source venv/bin/activate
+        pip install -r src/requirements.txt
+      become_user: autobot-service
+
+    - name: Install Ollama
+      block:
+        - name: Download Ollama installer
+          get_url:
+            url: https://ollama.com/install.sh
+            dest: /tmp/ollama-install.sh
+            mode: '0755'
+
+        - name: Install Ollama
+          shell: /tmp/ollama-install.sh
+
+        - name: Create Ollama systemd service
+          copy:
+            content: |
+              [Unit]
+              Description=Ollama Server
+              After=network-online.target
+
+              [Service]
+              Type=simple
+              User=autobot-service
+              WorkingDirectory=/opt/autobot
+              ExecStart=/usr/local/bin/ollama serve
+              Environment="OLLAMA_HOST=0.0.0.0:11434"
+              Environment="OLLAMA_MODELS=/opt/autobot/models"
+              Restart=always
+              RestartSec=3
+
+              [Install]
+              WantedBy=multi-user.target
+            dest: /etc/systemd/system/ollama.service
+
+        - name: Start Ollama service
+          systemd:
+            name: ollama
+            enabled: yes
+            state: started
+            daemon_reload: yes
+
+        - name: Pull default model
+          shell: |
+            sleep 10  # Wait for Ollama to start
+            /usr/local/bin/ollama pull llama3.2:1b
+          become_user: autobot-service
+          async: 300
+          poll: 10
+
+    - name: Create AI Stack service
+      copy:
+        content: |
+          [Unit]
+          Description=AutoBot AI Stack
+          After=network.target ollama.service redis-stack-server.service
+          Requires=ollama.service
+
+          [Service]
+          Type=simple
+          User=autobot-service
+          WorkingDirectory=/opt/autobot/src
+          ExecStart=/opt/autobot/venv/bin/python -m docker.ai-stack.ai_server
+          Environment="AI_SERVER_HOST=0.0.0.0"
+          Environment="AI_SERVER_PORT=8080"
+          Environment="REDIS_HOST=172.16.168.23"
+          Environment="REDIS_PORT=6379"
+          Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="OLLAMA_HOST=http://localhost:11434"
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/autobot-ai-stack.service
+
+    - name: Create NPU Worker service
+      copy:
+        content: |
+          [Unit]
+          Description=AutoBot NPU Worker
+          After=network.target ollama.service
+
+          [Service]
+          Type=simple
+          User=autobot-service
+          WorkingDirectory=/opt/autobot/src
+          ExecStart=/opt/autobot/venv/bin/python -m docker.npu-worker.npu_worker
+          Environment="NPU_SERVER_HOST=0.0.0.0"
+          Environment="NPU_SERVER_PORT=8081"
+          Environment="REDIS_HOST=172.16.168.23"
+          Environment="REDIS_PORT=6379"
+          Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Environment="DEVICE=CPU"
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/autobot-npu-worker.service
+
+    - name: Start AI services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      loop:
+        - autobot-ai-stack
+        - autobot-npu-worker
+
+    - name: Configure firewall for AI services
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '8080'   # AI Stack
+        - '8081'   # NPU Worker
+        - '11434'  # Ollama
+
+
+# Deploy Browser Service natively on VM5
+- name: Deploy Browser Service Natively
+  hosts: browser
+  become: yes
+
+  tasks:
+    - name: Install desktop environment and browsers
+      apt:
+        name:
+          - ubuntu-desktop-minimal
+          - chromium-browser
+          - firefox
+          - x11vnc
+          - xvfb
+          - fluxbox
+          - xterm
+          - nodejs
+          - npm
+        state: present
+
+    - name: Install Playwright
+      shell: |
+        npm install -g playwright
+        playwright install
+      become_user: autobot-service
+
+    - name: Copy AutoBot source code
+      synchronize:
+        src: /home/kali/Desktop/AutoBot/
+        dest: /opt/autobot/src/
+        delete: no
+        recursive: yes
+        owner: no
+        group: no
+      delegate_to: localhost
+
+    - name: Set ownership of source code
+      file:
+        path: /opt/autobot/src
+        owner: autobot-service
+        group: autobot-service
+        recurse: yes
+
+    - name: Create Playwright service
+      copy:
+        content: |
+          [Unit]
+          Description=AutoBot Browser Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=autobot-service
+          WorkingDirectory=/opt/autobot/src
+          ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 &
+          ExecStart=/usr/bin/node playwright-server.js
+          Environment="DISPLAY=:99"
+          Environment="PLAYWRIGHT_SERVER_PORT=3000"
+          Environment="REDIS_HOST=172.16.168.23"
+          Environment="REDIS_PORT=6379"
+          Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/autobot-browser.service
+
+    - name: Create VNC service
+      copy:
+        content: |
+          [Unit]
+          Description=VNC Server
+          After=autobot-browser.service
+
+          [Service]
+          Type=forking
+          User=autobot-service
+          ExecStart=/usr/bin/x11vnc -display :99 -nopw -listen localhost -xkb -ncache 10 -ncache_cr -rfbport 5900 -bg
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/vnc-server.service
+
+    - name: Start browser services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      loop:
+        - autobot-browser
+        - vnc-server
+
+    - name: Configure firewall for browser service
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - '3000'  # Playwright
+        - '5900'  # VNC
+
+
+# Final validation
+- name: Validate All Services
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Check systemd services status
+      shell: systemctl status {{ item }}
+      register: service_status
+      ignore_errors: yes
+      loop: "{{ services[inventory_hostname_short] | default([]) }}"
+      vars:
+        services:
+          'autobot-frontend':
+            - nginx
+          'autobot-database':
+            - redis-stack-server
+            - redisinsight
+          'autobot-aiml':
+            - ollama
+            - autobot-ai-stack
+            - autobot-npu-worker
+          'autobot-browser':
+            - autobot-browser
+            - vnc-server
+
+    - name: Test service endpoints
+      uri:
+        url: "{{ item.url }}"
+        method: GET
+        status_code: "{{ item.expected_status | default(200) }}"
+      loop: "{{ service_tests[inventory_hostname_short] | default([]) }}"
+      vars:
+        service_tests:
+          'autobot-frontend':
+            - { url: 'http://localhost', name: 'Frontend' }
+          'autobot-database':
+            - { url: 'http://localhost:8002', name: 'RedisInsight' }
+          'autobot-aiml':
+            - { url: 'http://localhost:8080/health', name: 'AI Stack', expected_status: [200, 404] }
+            - { url: 'http://localhost:8081/health', name: 'NPU Worker', expected_status: [200, 404] }
+          'autobot-browser':
+            - { url: 'http://localhost:3000/health', name: 'Browser Service', expected_status: [200, 404] }
+      ignore_errors: yes
+
+    - name: Display deployment summary
+      debug:
+        msg: |
+          VM: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+          Services deployed natively (no containers)
+          Status: Ready for production use

@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+NPU Worker - Intel NPU acceleration service.
+Handles model inference requests using OpenVINO.
+"""
+
+import logging
+import os
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("npu-worker")
+
+DEVICE = os.getenv("NPU_DEVICE", "NPU")
+MODELS_DIR = Path(os.getenv("NPU_MODELS_DIR", "/var/lib/autobot/models"))
+HOST = os.getenv("NPU_HOST", "0.0.0.0")
+PORT = int(os.getenv("NPU_PORT", "8081"))
+
+
+def main():
+    """Start NPU worker service."""
+    logger.info("NPU Worker starting on %s:%d (device=%s)", HOST, PORT, DEVICE)
+    logger.info("Models directory: %s", MODELS_DIR)
+
+    # Placeholder - full implementation in main codebase
+    import time
+    while True:
+        logger.debug("NPU Worker heartbeat")
+        time.sleep(60)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,23 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Quick fix playbook to configure passwordless sudo for SLM service management
+---
+- name: Configure passwordless sudo for SLM
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Configure passwordless sudo for SLM user
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/slm-agent
+        content: |
+          # SLM Agent passwordless sudo for deployment automation
+          # Full NOPASSWD required for package installation and service management
+          {{ slm_user | default('autobot') }} ALL=(ALL) NOPASSWD: ALL
+        mode: "0440"
+        owner: root
+        group: root
+        validate: "visudo -cf %s"
