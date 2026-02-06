@@ -11,7 +11,7 @@ Provides:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -79,7 +79,7 @@ class SoftDeleteMixin:
     def soft_delete(self) -> None:
         """Mark the record as deleted."""
         self.is_deleted = True
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(timezone.utc)
 
     def restore(self) -> None:
         """Restore a soft-deleted record."""

@@ -15,7 +15,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.user_management.models.base import Base
+from user_management.models.base import Base
 
 
 class AuditLog(Base):

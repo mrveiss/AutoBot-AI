@@ -8,22 +8,22 @@ Core user model with authentication, profile, and tenant association.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.api_key import APIKey
-    from src.user_management.models.mfa import UserMFA
-    from src.user_management.models.organization import Organization
-    from src.user_management.models.role import UserRole
-    from src.user_management.models.sso import UserSSOLink
-    from src.user_management.models.team import TeamMembership
+    from user_management.models.api_key import APIKey
+    from user_management.models.mfa import UserMFA
+    from user_management.models.organization import Organization
+    from user_management.models.role import UserRole
+    from user_management.models.sso import UserSSOLink
+    from user_management.models.team import TeamMembership
 
 
 class User(Base, TimestampMixin):
@@ -193,7 +193,7 @@ class User(Base, TimestampMixin):
 
     def soft_delete(self) -> None:
         """Soft delete the user."""
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(timezone.utc)
         self.is_active = False
 
     def get_preference(self, key: str, default=None):
@@ -226,9 +226,9 @@ class User(Base, TimestampMixin):
 
     def record_login(self) -> None:
         """Record a successful login."""
-        self.last_login_at = datetime.utcnow()
+        self.last_login_at = datetime.now(timezone.utc)
 
     def verify_email(self) -> None:
         """Mark email as verified."""
         self.is_verified = True
-        self.email_verified_at = datetime.utcnow()
+        self.email_verified_at = datetime.now(timezone.utc)

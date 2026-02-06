@@ -18,12 +18,11 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.constants.threshold_constants import CategoryDefaults
-from src.user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.organization import Organization
-    from src.user_management.models.user import User
+    from user_management.models.organization import Organization
+    from user_management.models.user import User
 
 
 class SSOProviderType(str, Enum):
@@ -111,7 +110,7 @@ class SSOProvider(Base, TimestampMixin):
     default_role: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
-        default=CategoryDefaults.ROLE_USER,
+        default="user",
     )
 
     # Group/team mapping configuration

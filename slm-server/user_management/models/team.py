@@ -16,12 +16,12 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstr
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.user_management.models.base import Base, TenantMixin, TimestampMixin
+from user_management.models.base import Base, TenantMixin, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.api_key import APIKey
-    from src.user_management.models.organization import Organization
-    from src.user_management.models.user import User
+    from user_management.models.api_key import APIKey
+    from user_management.models.organization import Organization
+    from user_management.models.user import User
 
 
 class TeamRole(str, Enum):
