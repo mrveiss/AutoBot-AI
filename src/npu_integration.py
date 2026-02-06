@@ -433,6 +433,41 @@ class NPUWorkerPool:
 
             return selected_state
 
+    async def _check_worker_health(self, worker: WorkerState) -> bool:
+        """
+        Check health of a single worker and update its state.
+
+        Args:
+            worker: WorkerState to check
+
+        Returns:
+            True if worker is healthy, False otherwise
+        """
+        import time
+
+        try:
+            health_result = await worker.client.check_health()
+            worker.last_health_check = time.time()
+
+            if health_result.get("status") == "healthy":
+                worker.healthy = True
+                logger.debug("Worker %s is healthy", worker.worker_id)
+                return True
+            else:
+                worker.healthy = False
+                logger.debug(
+                    "Worker %s is unhealthy: %s",
+                    worker.worker_id,
+                    health_result.get("error", "unknown"),
+                )
+                return False
+
+        except Exception as e:
+            worker.healthy = False
+            worker.last_health_check = time.time()
+            logger.debug("Health check failed for worker %s: %s", worker.worker_id, e)
+            return False
+
 
 class NPUTaskQueue:
     """Queue for managing NPU processing tasks (Issue #376 - use named constants)."""

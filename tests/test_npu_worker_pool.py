@@ -352,3 +352,84 @@ npu:
         assert selected is None
     finally:
         os.unlink(config_path)
+
+
+# =============================================================================
+# Task 5: Health Check Tests
+# =============================================================================
+
+import time
+from unittest.mock import AsyncMock
+
+
+@pytest.mark.asyncio
+async def test_check_worker_health_updates_timestamp():
+    """Health check should update last_health_check timestamp"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        # Mock the client's check_health to return healthy
+        worker.client.check_health = AsyncMock(return_value={"status": "healthy"})
+
+        before = time.time()
+        await pool._check_worker_health(worker)
+        after = time.time()
+
+        assert before <= worker.last_health_check <= after
+        assert worker.healthy is True
+    finally:
+        os.unlink(config_path)
+
+
+@pytest.mark.asyncio
+async def test_check_worker_health_marks_unhealthy():
+    """Health check should mark worker unhealthy on failure"""
+    from src.npu_integration import NPUWorkerPool
+
+    config_content = """
+npu:
+  workers:
+    - id: "worker-1"
+      host: "192.168.1.10"
+      port: 8081
+      enabled: true
+      priority: 10
+"""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(config_content)
+        config_path = f.name
+
+    try:
+        pool = NPUWorkerPool(config_path=config_path)
+        worker = pool.workers["worker-1"]
+
+        # Mock the client's check_health to return unhealthy
+        worker.client.check_health = AsyncMock(
+            return_value={"status": "unhealthy", "error": "Connection refused"}
+        )
+
+        await pool._check_worker_health(worker)
+
+        assert worker.healthy is False
+    finally:
+        os.unlink(config_path)
