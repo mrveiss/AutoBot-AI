@@ -6,32 +6,32 @@ Migration: Add code_version and code_status columns to nodes table.
 
 Adds fields for tracking deployed code version on each node.
 Related to Issue #741 (SLM Code Distribution).
+Updated for PostgreSQL (Issue #786).
 """
 
 import logging
-import os
-import sqlite3
 import sys
-from pathlib import Path
+
+from migrations.utils import (
+    add_column_if_not_exists,
+    create_index_if_not_exists,
+    get_connection,
+    table_exists,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def migrate(db_path: str) -> None:
-    """Add code_version and code_status columns to nodes table."""
-    conn = sqlite3.connect(db_path)
+def migrate(db_url: str) -> None:
+    """Add code_version and code_status columns to nodes table (#786)."""
+    conn = get_connection(db_url)
     cursor = conn.cursor()
 
     # Check if nodes table exists
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nodes'")
-    if not cursor.fetchone():
+    if not table_exists(cursor, "nodes"):
         logger.error("nodes table does not exist. Database may not be initialized.")
         conn.close()
         return
-
-    # Get existing columns
-    cursor.execute("PRAGMA table_info(nodes)")
-    existing_columns = {row[1] for row in cursor.fetchall()}
 
     # Add code version columns if they don't exist
     code_columns = [
@@ -43,43 +43,20 @@ def migrate(db_path: str) -> None:
     ]
 
     for column_name, column_type in code_columns:
-        if column_name not in existing_columns:
-            logger.info("Adding column: %s", column_name)
-            cursor.execute(f"ALTER TABLE nodes ADD COLUMN {column_name} {column_type}")
-        else:
-            logger.info("Column %s already exists", column_name)
+        add_column_if_not_exists(cursor, "nodes", column_name, column_type)
 
     # Create index on code_status for filtering outdated nodes
-    try:
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_nodes_code_status ON nodes(code_status)"
-        )
-        logger.info("Created index on code_status")
-    except sqlite3.OperationalError as e:
-        logger.debug("Index creation skipped: %s", e)
+    create_index_if_not_exists(cursor, "idx_nodes_code_status", "nodes", "code_status")
 
     conn.commit()
     conn.close()
     logger.info("Code version migration completed successfully!")
 
 
-def get_default_db_path() -> str:
-    """Get default database path from config or environment."""
-    db_path = os.getenv("SLM_DATABASE_PATH")
-    if db_path:
-        return db_path
-
-    base_dir = Path(__file__).parent.parent
-    return str(base_dir / "data" / "slm.db")
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    from migrations.runner import get_db_url
 
-    if len(sys.argv) < 2:
-        db_path = get_default_db_path()
-    else:
-        db_path = sys.argv[1]
-
-    logger.info("Migrating database: %s", db_path)
-    migrate(db_path)
+    db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
+    logger.info("Migrating database: %s", db_url)
+    migrate(db_url)

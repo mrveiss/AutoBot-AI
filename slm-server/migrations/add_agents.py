@@ -5,36 +5,36 @@
 Migration: Add agents table for per-agent LLM configuration.
 
 Issue #760 Phase 2
+Updated for PostgreSQL (Issue #786).
 """
 
 import logging
-import sqlite3
-from pathlib import Path
+import sys
+
+from migrations.utils import create_index_if_not_exists, get_connection, table_exists
 
 logger = logging.getLogger(__name__)
 
 
-def run_migration(db_path: str = "slm.db") -> bool:
-    """Run the agents table migration."""
+def migrate(db_url: str) -> None:
+    """Run the agents table migration (#786)."""
     logger.info("Running agents migration...")
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_url)
     cursor = conn.cursor()
 
     try:
         # Check if table already exists
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='agents'"
-        )
-        if cursor.fetchone():
+        if table_exists(cursor, "agents"):
             logger.info("agents table already exists, skipping creation")
-            return True
+            conn.close()
+            return
 
         # Create agents table
         cursor.execute(
             """
             CREATE TABLE agents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 agent_id VARCHAR(64) UNIQUE NOT NULL,
                 name VARCHAR(128) NOT NULL,
                 description TEXT,
@@ -47,16 +47,18 @@ def run_migration(db_path: str = "slm.db") -> bool:
                 llm_max_tokens INTEGER,
                 is_default BOOLEAN DEFAULT FALSE,
                 is_active BOOLEAN DEFAULT TRUE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """
         )
         logger.info("Created agents table")
 
         # Create indexes
-        cursor.execute("CREATE INDEX idx_agents_agent_id ON agents(agent_id)")
-        cursor.execute("CREATE INDEX idx_agents_is_default ON agents(is_default)")
+        create_index_if_not_exists(cursor, "idx_agents_agent_id", "agents", "agent_id")
+        create_index_if_not_exists(
+            cursor, "idx_agents_is_default", "agents", "is_default"
+        )
         logger.info("Created indexes")
 
         # Seed default agent
@@ -71,27 +73,21 @@ def run_migration(db_path: str = "slm.db") -> bool:
 
         conn.commit()
         logger.info("Migration complete")
-        return True
 
     except Exception as e:
         logger.error("Migration failed: %s", e)
         conn.rollback()
-        return False
+        raise
     finally:
         conn.close()
 
 
+# Alias for compatibility with migration runner
+run_migration = migrate
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    from migrations.runner import get_db_url
 
-    # Find database
-    db_path = Path("slm.db")
-    if not db_path.exists():
-        db_path = Path("data/slm.db")
-
-    if not db_path.exists():
-        logger.error("Database not found")
-        exit(1)
-
-    success = run_migration(str(db_path))
-    exit(0 if success else 1)
+    db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
+    migrate(db_url)

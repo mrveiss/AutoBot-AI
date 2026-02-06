@@ -6,6 +6,7 @@ Migration Runner - Automatic database schema updates.
 
 This module provides automatic migration running on SLM server startup.
 Migrations are tracked in a `migrations_applied` table to prevent re-running.
+Uses PostgreSQL for all database operations (Issue #786).
 
 Usage:
     # Run all pending migrations
@@ -18,12 +19,11 @@ Usage:
 
 import importlib
 import logging
-import os
-import sqlite3
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import List, Tuple
+
+import psycopg2
 
 logger = logging.getLogger(__name__)
 
@@ -46,47 +46,80 @@ MIGRATIONS = [
 ]
 
 
-def get_db_path() -> str:
-    """Get database path from environment or default."""
-    base_dir = Path(__file__).parent.parent
-    return os.environ.get("SLM_DATABASE_PATH", str(base_dir / "data" / "slm.db"))
+def get_db_url() -> str:
+    """Get PostgreSQL database URL from environment or config (#786)."""
+    from config import settings
+
+    # Convert async URL to sync URL for psycopg2
+    url = settings.database_url
+    return url.replace("postgresql+asyncpg://", "postgresql://")
 
 
-def ensure_migrations_table(conn: sqlite3.Connection) -> None:
-    """Create migrations tracking table if it doesn't exist."""
-    conn.execute(
+def _parse_db_url(url: str) -> dict:
+    """Parse PostgreSQL URL into connection parameters (#786)."""
+    # postgresql://user:pass@host:port/database
+    # postgresql://user@host:port/database (no password)
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return {
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 5432,
+        "database": parsed.path.lstrip("/") if parsed.path else "slm",
+        "user": parsed.username or "slm_app",
+        "password": parsed.password,
+    }
+
+
+def get_connection(db_url: str = None) -> psycopg2.extensions.connection:
+    """Get a PostgreSQL connection (#786)."""
+    if db_url is None:
+        db_url = get_db_url()
+    params = _parse_db_url(db_url)
+    # Remove None password to use peer auth if available
+    if params["password"] is None:
+        del params["password"]
+    return psycopg2.connect(**params)
+
+
+def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
+    """Create migrations tracking table if it doesn't exist (#786)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS migrations_applied (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """
-        CREATE TABLE IF NOT EXISTS migrations_applied (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name VARCHAR(255) NOT NULL UNIQUE,
-            applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-    """
-    )
     conn.commit()
 
 
-def get_applied_migrations(conn: sqlite3.Connection) -> List[str]:
-    """Get list of already applied migration names."""
-    cursor = conn.execute("SELECT name FROM migrations_applied ORDER BY id")
-    return [row[0] for row in cursor.fetchall()]
+def get_applied_migrations(conn: psycopg2.extensions.connection) -> List[str]:
+    """Get list of already applied migration names (#786)."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT name FROM migrations_applied ORDER BY id")
+        return [row[0] for row in cur.fetchall()]
 
 
-def mark_migration_applied(conn: sqlite3.Connection, name: str) -> None:
-    """Mark a migration as applied."""
-    conn.execute(
-        "INSERT INTO migrations_applied (name, applied_at) VALUES (?, ?)",
-        (name, datetime.utcnow().isoformat()),
-    )
+def mark_migration_applied(conn: psycopg2.extensions.connection, name: str) -> None:
+    """Mark a migration as applied (#786)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO migrations_applied (name, applied_at) VALUES (%s, %s)",
+            (name, datetime.utcnow()),
+        )
     conn.commit()
 
 
-def run_migration(db_path: str, name: str) -> Tuple[bool, str]:
+def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
     """
-    Run a single migration by name.
+    Run a single migration by name (#786).
 
     Args:
-        db_path: Path to the SQLite database file
+        db_url: PostgreSQL connection URL
         name: Migration module name
 
     Returns:
@@ -96,12 +129,12 @@ def run_migration(db_path: str, name: str) -> Tuple[bool, str]:
         # Import the migration module
         module = importlib.import_module(f"migrations.{name}")
 
-        # Check if it has a migrate() function (passes db_path)
+        # Check if it has a migrate() function (passes db_url)
         if hasattr(module, "migrate"):
-            module.migrate(db_path)
+            module.migrate(db_url)
             return True, f"Applied migration: {name}"
         elif hasattr(module, "run"):
-            module.run(db_path)
+            module.run(db_url)
             return True, f"Applied migration: {name}"
         else:
             # Some migrations might just be seed scripts
@@ -111,22 +144,19 @@ def run_migration(db_path: str, name: str) -> Tuple[bool, str]:
         return False, f"Failed to apply {name}: {e}"
 
 
-def run_all_migrations(db_path: str = None) -> List[Tuple[str, bool, str]]:
+def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
     """
-    Run all pending migrations.
+    Run all pending migrations (#786).
 
     Returns:
         List of (migration_name, success, message) tuples
     """
-    if db_path is None:
-        db_path = get_db_path()
+    if db_url is None:
+        db_url = get_db_url()
 
     results = []
 
-    # Ensure database directory exists
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_url)
     try:
         ensure_migrations_table(conn)
         applied = get_applied_migrations(conn)
@@ -137,10 +167,10 @@ def run_all_migrations(db_path: str = None) -> List[Tuple[str, bool, str]]:
             logger.info("No pending migrations")
             return results
 
-        logger.info(f"Running {len(pending)} pending migration(s)")
+        logger.info("Running %d pending migration(s)", len(pending))
 
         for migration_name in pending:
-            success, message = run_migration(db_path, migration_name)
+            success, message = run_migration(db_url, migration_name)
             results.append((migration_name, success, message))
 
             if success:
@@ -157,20 +187,17 @@ def run_all_migrations(db_path: str = None) -> List[Tuple[str, bool, str]]:
     return results
 
 
-def check_schema_sync(db_path: str = None) -> Tuple[bool, List[str]]:
+def check_schema_sync(db_url: str = None) -> Tuple[bool, List[str]]:
     """
-    Check if schema is in sync (no pending migrations).
+    Check if schema is in sync (no pending migrations) (#786).
 
     Returns:
         Tuple of (is_synced, pending_migrations)
     """
-    if db_path is None:
-        db_path = get_db_path()
+    if db_url is None:
+        db_url = get_db_url()
 
-    if not Path(db_path).exists():
-        return False, MIGRATIONS
-
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_url)
     try:
         ensure_migrations_table(conn)
         applied = get_applied_migrations(conn)
@@ -181,22 +208,22 @@ def check_schema_sync(db_path: str = None) -> Tuple[bool, List[str]]:
 
 
 # Async wrapper for use with FastAPI startup
-async def run_migrations_async(db_path: str = None) -> List[Tuple[str, bool, str]]:
-    """Async wrapper for run_all_migrations."""
+async def run_migrations_async(db_url: str = None) -> List[Tuple[str, bool, str]]:
+    """Async wrapper for run_all_migrations (#786)."""
     import asyncio
 
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, run_all_migrations, db_path)
+    return await loop.run_in_executor(None, run_all_migrations, db_url)
 
 
 if __name__ == "__main__":
     # Allow running directly: python3 -m migrations.runner
     logging.basicConfig(level=logging.INFO)
 
-    db_path = sys.argv[1] if len(sys.argv) > 1 else get_db_path()
-    print(f"Running migrations on: {db_path}")
+    db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
+    print(f"Running migrations on PostgreSQL: {db_url}")
 
-    results = run_all_migrations(db_path)
+    results = run_all_migrations(db_url)
 
     if results:
         print("\nMigration Results:")

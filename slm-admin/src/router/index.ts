@@ -71,6 +71,13 @@ const router = createRouter({
       meta: { title: 'Agent Configuration' }
     },
     {
+      // Issue #786: Infrastructure setup wizard
+      path: '/infrastructure',
+      name: 'infrastructure',
+      component: () => import('@/views/InfrastructureView.vue'),
+      meta: { title: 'Infrastructure Setup' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),

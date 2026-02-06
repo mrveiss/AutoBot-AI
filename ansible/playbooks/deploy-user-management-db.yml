@@ -1,0 +1,195 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# User Management Database Deployment Playbook
+# Issue: #786 - Ansible playbooks for user management database setup
+#
+# This playbook sets up PostgreSQL databases for user management:
+# - SLM Server (172.16.168.19): slm, slm_users databases
+# - Redis VM (172.16.168.23): autobot_users database
+#
+# Usage:
+#   ansible-playbook -i slm-server/ansible/inventory.yml ansible/playbooks/deploy-user-management-db.yml
+#   ansible-playbook -i slm-server/ansible/inventory.yml ansible/playbooks/deploy-user-management-db.yml --limit slm
+#   ansible-playbook -i slm-server/ansible/inventory.yml ansible/playbooks/deploy-user-management-db.yml --limit redis
+---
+
+# =============================================================================
+# Phase 1: SLM Server PostgreSQL Setup
+# =============================================================================
+- name: "Deploy PostgreSQL on SLM Server (172.16.168.19)"
+  hosts: slm
+  become: true
+  gather_facts: true
+
+  vars:
+    db_user: "slm_app"
+    db_env_prefix: "SLM"
+    db_host: "127.0.0.1"
+    databases:
+      - slm
+      - slm_users
+    postgresql_listen_addresses: "localhost"
+
+  pre_tasks:
+    - name: Display SLM database deployment info
+      ansible.builtin.debug:
+        msg:
+          - "======================================"
+          - "Phase 1: SLM Server PostgreSQL Setup"
+          - "======================================"
+          - "Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "User: {{ db_user }}"
+          - "Databases: {{ databases | join(', ') }}"
+
+  roles:
+    - role: postgresql
+      tags:
+        - postgresql
+        - slm
+
+  post_tasks:
+    - name: Verify SLM databases are accessible
+      community.postgresql.postgresql_ping:
+        db: "{{ item }}"
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: 127.0.0.1
+      loop: "{{ databases }}"
+
+    - name: Display SLM database setup completion
+      ansible.builtin.debug:
+        msg:
+          - "SLM PostgreSQL setup complete"
+          - "Databases accessible: {{ databases | join(', ') }}"
+
+
+# =============================================================================
+# Phase 2: Redis VM PostgreSQL Setup
+# =============================================================================
+- name: "Deploy PostgreSQL on Redis VM (172.16.168.23)"
+  hosts: redis
+  become: true
+  gather_facts: true
+
+  vars:
+    db_user: "autobot_app"
+    db_env_prefix: "AUTOBOT"
+    db_host: "127.0.0.1"
+    databases:
+      - autobot_users
+    postgresql_listen_addresses: "*"
+    pg_hba_remote_access:
+      - database: autobot_users
+        user: autobot_app
+        address: "172.16.168.19/32"
+      - database: autobot_users
+        user: autobot_app
+        address: "172.16.168.20/32"
+
+  pre_tasks:
+    - name: Display Redis VM database deployment info
+      ansible.builtin.debug:
+        msg:
+          - "======================================"
+          - "Phase 2: Redis VM PostgreSQL Setup"
+          - "======================================"
+          - "Host: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "User: {{ db_user }}"
+          - "Databases: {{ databases | join(', ') }}"
+          - "Remote access from: SLM (172.16.168.19), Main (172.16.168.20)"
+
+  roles:
+    - role: postgresql
+      tags:
+        - postgresql
+        - redis
+
+  post_tasks:
+    - name: Configure firewall for PostgreSQL
+      community.general.ufw:
+        rule: allow
+        port: "{{ postgresql_port }}"
+        src: "{{ item }}"
+        proto: tcp
+      loop:
+        - "172.16.168.19"
+        - "172.16.168.20"
+
+    - name: Verify autobot_users database is accessible
+      community.postgresql.postgresql_ping:
+        db: autobot_users
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: 127.0.0.1
+
+    - name: Display Redis VM database setup completion
+      ansible.builtin.debug:
+        msg:
+          - "Redis VM PostgreSQL setup complete"
+          - "Database accessible: autobot_users"
+          - "Remote access configured for SLM and Main Backend"
+
+
+# =============================================================================
+# Phase 3: Verify Cross-VM Connectivity
+# =============================================================================
+- name: "Verify Database Connectivity from SLM"
+  hosts: slm
+  become: true
+  gather_facts: false
+
+  vars:
+    autobot_db_host: "172.16.168.23"
+    autobot_db_user: "autobot_app"
+
+  tasks:
+    - name: Display connectivity verification info
+      ansible.builtin.debug:
+        msg:
+          - "======================================"
+          - "Phase 3: Cross-VM Connectivity Check"
+          - "======================================"
+          - "Testing: SLM -> Redis VM PostgreSQL"
+
+    - name: Load Redis VM credentials
+      ansible.builtin.slurp:
+        src: /etc/autobot/db-credentials.env
+      delegate_to: "{{ groups['redis'][0] }}"
+      register: redis_creds_b64
+
+    - name: Parse Redis VM password
+      ansible.builtin.set_fact:
+        autobot_db_password: "{{ redis_creds_b64.content | b64decode | regex_search('AUTOBOT_DB_PASSWORD=(.+)', '\\1') | first }}"
+      no_log: true
+
+    - name: Test connectivity to autobot_users from SLM
+      community.postgresql.postgresql_ping:
+        db: autobot_users
+        login_user: "{{ autobot_db_user }}"
+        login_password: "{{ autobot_db_password }}"
+        login_host: "{{ autobot_db_host }}"
+
+    - name: Display final deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "======================================"
+          - "User Management Database Setup Complete"
+          - "======================================"
+          - ""
+          - "SLM Server (172.16.168.19):"
+          - "  - Database: slm (operational data)"
+          - "  - Database: slm_users (admin accounts)"
+          - "  - Credentials: /etc/autobot/db-credentials.env"
+          - ""
+          - "Redis VM (172.16.168.23):"
+          - "  - Database: autobot_users (app users)"
+          - "  - Credentials: /etc/autobot/db-credentials.env"
+          - "  - Remote access: SLM, Main Backend"
+          - ""
+          - "Cross-VM connectivity: VERIFIED"
+          - ""
+          - "Next steps:"
+          - "  1. Run Alembic migrations"
+          - "  2. Restart SLM services"

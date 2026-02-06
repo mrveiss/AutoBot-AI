@@ -6,15 +6,16 @@ Migration: Add category column to services table
 
 Adds the 'category' column and auto-categorizes existing services
 based on naming patterns.
+Updated for PostgreSQL (Issue #786).
 
 Run: python migrations/add_service_category.py
 """
 
 import logging
 import re
-import sqlite3
 import sys
-from pathlib import Path
+
+from migrations.utils import add_column_if_not_exists, get_connection
 
 # Configure logging for CLI execution
 logging.basicConfig(
@@ -55,7 +56,6 @@ AUTOBOT_PATTERNS = [
 
 def categorize_service(service_name: str) -> str:
     """Determine category for a service."""
-    # Python 3.8 compatible - removesuffix requires 3.9+
     suffix = ".service"
     if service_name.endswith(suffix):
         name = service_name[: -len(suffix)]
@@ -67,25 +67,22 @@ def categorize_service(service_name: str) -> str:
     return "system"
 
 
-def migrate(db_path: str) -> None:
-    """Run the migration."""
-    logger.info("Running migration on: %s", db_path)
+def migrate(db_url: str) -> None:
+    """Run the migration (#786)."""
+    logger.info("Running migration")
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_url)
     cursor = conn.cursor()
 
-    # Check if column already exists
-    cursor.execute("PRAGMA table_info(services)")
-    columns = [col[1] for col in cursor.fetchall()]
+    # Add column if it doesn't exist
+    added = add_column_if_not_exists(
+        cursor, "services", "category", "VARCHAR(20) DEFAULT 'system'"
+    )
 
-    if "category" in columns:
-        logger.info("Column 'category' already exists. Updating existing NULL values...")
-    else:
-        logger.info("Adding 'category' column to services table...")
-        cursor.execute(
-            "ALTER TABLE services ADD COLUMN category VARCHAR(20) DEFAULT 'system'"
+    if not added:
+        logger.info(
+            "Column 'category' already exists. Updating existing NULL values..."
         )
-        logger.info("Column added successfully.")
 
     # Get all services and update categories
     logger.info("Auto-categorizing existing services...")
@@ -98,7 +95,7 @@ def migrate(db_path: str) -> None:
     for service_id, service_name in services:
         category = categorize_service(service_name)
         cursor.execute(
-            "UPDATE services SET category = ? WHERE id = ?",
+            "UPDATE services SET category = %s WHERE id = %s",
             (category, service_id),
         )
         if category == "autobot":
@@ -115,14 +112,7 @@ def migrate(db_path: str) -> None:
 
 
 if __name__ == "__main__":
-    # Default database path
-    db_path = Path(__file__).parent.parent / "data" / "slm.db"
+    from migrations.runner import get_db_url
 
-    if len(sys.argv) > 1:
-        db_path = Path(sys.argv[1])
-
-    if not db_path.exists():
-        logger.error("Database not found: %s", db_path)
-        sys.exit(1)
-
-    migrate(str(db_path))
+    db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
+    migrate(db_url)

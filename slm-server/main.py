@@ -23,6 +23,7 @@ from api import (
     errors_router,
     fleet_services_router,
     health_router,
+    infrastructure_router,
     maintenance_router,
     monitoring_router,
     node_config_router,
@@ -194,6 +195,8 @@ app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
 app.include_router(node_config_router, prefix="/api/nodes")
 app.include_router(npu_router, prefix="/api")
+# Issue #786: Infrastructure setup playbooks
+app.include_router(infrastructure_router, prefix="/api")
 
 
 @app.get("/")

@@ -5,14 +5,13 @@
 SLM Database Service
 
 Database connection and session management.
+Uses PostgreSQL for all database operations (Issue #786).
 """
 
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import AsyncGenerator
 
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from config import settings
@@ -30,20 +29,21 @@ class DatabaseService:
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Initialize the database connection and create tables."""
+        """Initialize the database connection and create tables (#786)."""
         if self._initialized:
             return
 
-        db_path = Path(settings.database_path)
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        database_url = f"sqlite+aiosqlite:///{db_path}"
-        logger.info("Connecting to database: %s", db_path)
+        database_url = settings.database_url
+        logger.info("Connecting to PostgreSQL database")
 
         self.engine = create_async_engine(
             database_url,
             echo=settings.debug,
             future=True,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_pool_max_overflow,
+            pool_recycle=settings.db_pool_recycle,
+            pool_pre_ping=True,  # Verify connections before use
         )
 
         self.session_factory = async_sessionmaker(
@@ -68,31 +68,45 @@ class DatabaseService:
             required_settings = {
                 "initialized": ("true", "bool", "Database initialization flag"),
                 "monitoring_location": (
-                    "local", "string", "Monitoring services location (local/external)"
+                    "local",
+                    "string",
+                    "Monitoring services location (local/external)",
                 ),
                 "prometheus_url": (
-                    "http://localhost:9090", "string", "Prometheus server URL"
+                    "http://localhost:9090",
+                    "string",
+                    "Prometheus server URL",
                 ),
                 "grafana_url": (
-                    "http://localhost:3000", "string", "Grafana server URL"
+                    "http://localhost:3000",
+                    "string",
+                    "Grafana server URL",
                 ),
-                "heartbeat_timeout": (
-                    "60", "int", "Node heartbeat timeout in seconds"
-                ),
+                "heartbeat_timeout": ("60", "int", "Node heartbeat timeout in seconds"),
                 "auto_reconcile": (
-                    "false", "bool", "Enable automatic role reconciliation"
+                    "false",
+                    "bool",
+                    "Enable automatic role reconciliation",
                 ),
                 "auto_remediate": (
-                    "true", "bool", "Enable auto-restart of SLM agent on degraded nodes"
+                    "true",
+                    "bool",
+                    "Enable auto-restart of SLM agent on degraded nodes",
                 ),
                 "auto_restart_services": (
-                    "true", "bool", "Enable auto-restart of failed AutoBot services"
+                    "true",
+                    "bool",
+                    "Enable auto-restart of failed AutoBot services",
                 ),
                 "auto_rollback": (
-                    "false", "bool", "Enable automatic deployment rollback on failure"
+                    "false",
+                    "bool",
+                    "Enable automatic deployment rollback on failure",
                 ),
                 "rollback_window_seconds": (
-                    "600", "int", "Time window (seconds) for auto-rollback eligibility"
+                    "600",
+                    "int",
+                    "Time window (seconds) for auto-rollback eligibility",
                 ),
             }
 
@@ -104,12 +118,14 @@ class DatabaseService:
             added = []
             for key, (value, value_type, description) in required_settings.items():
                 if key not in existing_keys:
-                    session.add(Setting(
-                        key=key,
-                        value=value,
-                        value_type=value_type,
-                        description=description,
-                    ))
+                    session.add(
+                        Setting(
+                            key=key,
+                            value=value,
+                            value_type=value_type,
+                            description=description,
+                        )
+                    )
                     added.append(key)
 
             if added:
@@ -122,6 +138,22 @@ class DatabaseService:
             await self.engine.dispose()
             self._initialized = False
             logger.info("Database connection closed")
+
+    async def health_check(self) -> dict:
+        """Check database connectivity and return health status (#786)."""
+        if not self._initialized:
+            return {"status": "unhealthy", "error": "Database not initialized"}
+
+        try:
+            async with self.session_factory() as session:
+                from sqlalchemy import text
+
+                result = await session.execute(text("SELECT 1"))
+                result.scalar()
+            return {"status": "healthy", "database": "postgresql"}
+        except Exception as e:
+            logger.error("Database health check failed: %s", e)
+            return {"status": "unhealthy", "error": str(e)}
 
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
