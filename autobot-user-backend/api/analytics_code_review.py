@@ -20,8 +20,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.constants.threshold_constants import TimingConstants
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -619,7 +619,7 @@ async def submit_feedback(
     Used for model improvement and learning.
     """
     try:
-        from src.utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         redis = get_redis_client(async_client=False, database="analytics")
         if redis:

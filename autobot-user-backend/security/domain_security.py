@@ -22,12 +22,12 @@ from urllib.parse import urlparse
 import aiohttp
 import yaml
 
-from src.constants.security_constants import SecurityConstants
-from src.security.threat_intelligence import (
+from constants.security_constants import SecurityConstants
+from security.threat_intelligence import (
     ThreatIntelligenceService,
     get_threat_intelligence_service,
 )
-from src.utils.http_client import get_http_client
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

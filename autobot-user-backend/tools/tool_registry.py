@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 
 if TYPE_CHECKING:
-    from src.knowledge_base import KnowledgeBase
-    from src.worker_node import WorkerNode
+    from knowledge_base import KnowledgeBase
+    from worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 

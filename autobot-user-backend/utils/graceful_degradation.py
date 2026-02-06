@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

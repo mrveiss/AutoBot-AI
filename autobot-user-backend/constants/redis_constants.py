@@ -12,11 +12,11 @@ SSOT Migration (Issue #763):
     Cache → Redis → Environment → Registry Defaults → Caller Default
 
     For Redis connection parameters, prefer:
-        from src.config.registry import ConfigRegistry
+        from config.registry import ConfigRegistry
         db_main = int(ConfigRegistry.get("redis.db_main", "0"))
 
 Usage:
-    from src.constants.redis_constants import REDIS_KEY, REDIS_CONFIG
+    from constants.redis_constants import REDIS_KEY, REDIS_CONFIG
 
     # Get Redis keys
     key = REDIS_KEY.PROMPTS_FILE_STATES
@@ -27,7 +27,7 @@ Usage:
 
 from dataclasses import dataclass
 
-from src.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class RedisConnectionConfig:
 
     SSOT Migration (Issue #602):
         For host/port/database numbers, use SSOT config directly:
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
             host = config.vm.redis
             port = config.port.redis
     """

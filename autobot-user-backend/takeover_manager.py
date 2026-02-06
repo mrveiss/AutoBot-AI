@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from src.memory import EnhancedMemoryManager, TaskPriority
+from memory import EnhancedMemoryManager, TaskPriority
 
 logger = logging.getLogger(__name__)
 

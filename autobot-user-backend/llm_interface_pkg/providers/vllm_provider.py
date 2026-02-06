@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Optional
 
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 from ..models import LLMRequest, LLMResponse
 
@@ -38,7 +38,7 @@ class VLLMProviderHandler:
             model_name: Model name to use for initialization
         """
         if self._vllm_provider is None:
-            from src.llm_providers.vllm_provider import VLLMProvider
+            from llm_providers.vllm_provider import VLLMProvider
 
             model_name = model_name or config.get(
                 "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"

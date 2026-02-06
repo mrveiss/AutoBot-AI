@@ -12,7 +12,7 @@ import logging
 from typing import List
 
 from backend.type_defs.common import Metadata
-from src.llm_interface import LLMInterface
+from llm_interface import LLMInterface
 
 from .models import WorkflowComplexity, WorkflowIntent
 

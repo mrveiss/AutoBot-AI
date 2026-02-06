@@ -16,11 +16,11 @@ package for backward compatibility. All functionality has been extracted to:
 - src/workflow_templates/analysis.py: Analysis workflow templates
 - src/workflow_templates/manager.py: WorkflowTemplateManager coordinator
 
-DEPRECATED: Import directly from src.workflow_templates instead.
+DEPRECATED: Import directly from workflow_templates instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from src.workflow_templates import (
+from workflow_templates import (
     # Core types
     TemplateCategory,
     WorkflowStep,

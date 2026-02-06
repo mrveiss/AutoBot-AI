@@ -20,13 +20,13 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.utils.catalog_http_exceptions import (
+from utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
     raise_service_unavailable,
     raise_validation_error,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -38,8 +38,8 @@ except ImportError as e:
 
 # Import LLM judges for validation enhancement
 try:
-    from src.judges.agent_response_judge import AgentResponseJudge
-    from src.judges.workflow_step_judge import WorkflowStepJudge
+    from judges.agent_response_judge import AgentResponseJudge
+    from judges.workflow_step_judge import WorkflowStepJudge
 
     VALIDATION_JUDGES_AVAILABLE = True
 except ImportError:

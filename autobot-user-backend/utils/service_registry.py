@@ -35,11 +35,11 @@ import aiohttp
 import yaml
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()
-from src.utils.http_client import get_http_client
+from autobot_shared.http_client import get_http_client
 
 
 class ServiceStatus(Enum):

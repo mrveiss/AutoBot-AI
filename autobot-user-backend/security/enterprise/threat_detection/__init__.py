@@ -13,7 +13,7 @@ Original module: 1,517 lines
 New package: ~1,300 lines across multiple focused modules
 
 Usage:
-    from src.security.enterprise.threat_detection import (
+    from security.enterprise.threat_detection import (
         ThreatDetectionEngine,
         ThreatLevel,
         ThreatCategory,

@@ -11,7 +11,7 @@ import logging
 import re
 from pathlib import Path
 
-from src.utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
+from utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ async def get_redis_connection():
     For async operations, use get_redis_connection_async() instead.
     """
     # Use canonical Redis utility - returns sync client
-    from src.utils.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     redis_client = get_redis_client(database="analytics", async_client=False)
     if redis_client is None:
@@ -52,7 +52,7 @@ async def get_redis_connection_async():
     Returns an ASYNC Redis client for native async operations.
     Use this when you want to avoid thread pool blocking.
     """
-    from src.utils.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     redis_client = await get_redis_client(database="analytics", async_client=True)
     if redis_client is None:

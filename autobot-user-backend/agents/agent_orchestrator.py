@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 # Re-export pattern constants for backward compatibility
 # Re-export all public API from the package for backward compatibility
-from src.agents.agent_orchestration import (  # noqa: F401
+from agents.agent_orchestration import (  # noqa: F401
     CLASSIFICATION_TERMS,
     CODE_SEARCH_TERMS,
     DEFAULT_AGENT_CAPABILITIES,
@@ -39,18 +39,18 @@ from src.agents.agent_orchestration import (  # noqa: F401
     DistributedAgentInfo,
     DistributedAgentManager,
 )
-from src.config.ssot_config import (
+from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from src.llm_interface import LLMInterface
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
 # Import communication protocol
 try:
-    from src.protocols.agent_communication import get_communication_manager
+    from protocols.agent_communication import get_communication_manager
 
     COMMUNICATION_AVAILABLE = True
 except ImportError:

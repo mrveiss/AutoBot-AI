@@ -11,8 +11,8 @@ import logging
 
 from fastapi import APIRouter
 
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ async def get_fresh_kb_stats():
     """Get knowledge base stats using a fresh instance (bypasses cache)"""
     try:
         # Import here to get fresh instance
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         logger.info("Creating fresh knowledge base instance for testing")
 
@@ -59,7 +59,7 @@ async def get_fresh_kb_stats():
 async def test_rebuild_search_index():
     """Test rebuilding the search index"""
     try:
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         logger.info("Creating fresh knowledge base for index rebuild")
 

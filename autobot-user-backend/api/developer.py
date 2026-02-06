@@ -18,8 +18,8 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.type_defs.common import Metadata
-from src.config import unified_config_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from config import unified_config_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

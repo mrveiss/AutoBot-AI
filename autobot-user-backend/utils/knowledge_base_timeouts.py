@@ -13,7 +13,7 @@ Part of KB-ASYNC-014: Timeout Configuration Centralization
 import os
 from typing import Dict
 
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()

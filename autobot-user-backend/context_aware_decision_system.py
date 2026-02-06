@@ -16,7 +16,7 @@ New facade: ~100 lines (94% reduction)
 """
 
 # Re-export all public API from the package for backward compatibility
-from src.context_aware_decision import (
+from context_aware_decision import (
     # Types and enums
     ConfidenceLevel,
     ContextType,

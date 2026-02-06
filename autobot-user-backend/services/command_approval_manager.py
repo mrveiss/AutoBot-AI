@@ -27,11 +27,11 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from backend.type_defs.common import Metadata
-from src.secure_command_executor import CommandRisk
+from secure_command_executor import CommandRisk
 
 # Permission system v2 imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
-    from src.config.ssot_config import PermissionMode
+    from autobot_shared.ssot_config import PermissionMode
 
 logger = logging.getLogger(__name__)
 
@@ -464,7 +464,7 @@ class CommandApprovalManager:
             True if permission v2 is enabled
         """
         try:
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
 
             return config.permission.enabled
         except ImportError:
@@ -479,7 +479,7 @@ class CommandApprovalManager:
             Current PermissionMode or None if v2 disabled
         """
         try:
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
 
             if not config.permission.enabled:
                 return None
@@ -510,7 +510,7 @@ class CommandApprovalManager:
             - rule_info contains matched rule details or None
         """
         try:
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
 
             if not config.permission.enabled:
                 return None, None
@@ -576,7 +576,7 @@ class CommandApprovalManager:
             True if command should be auto-approved from memory
         """
         try:
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
 
             if (
                 not config.permission.enabled
@@ -628,7 +628,7 @@ class CommandApprovalManager:
             True if stored successfully
         """
         try:
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
 
             if (
                 not config.permission.enabled

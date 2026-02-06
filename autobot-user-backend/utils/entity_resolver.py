@@ -17,16 +17,16 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-from src.config import config_manager
-from src.models.atomic_fact import AtomicFact
-from src.models.entity_mapping import (
+from config import config_manager
+from models.atomic_fact import AtomicFact
+from models.entity_mapping import (
     EntityMapping,
     EntityResolutionResult,
     EntityType,
     SimilarityMethod,
 )
-from src.utils.logging_manager import get_llm_logger
-from src.utils.redis_client import get_redis_client
+from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("entity_resolver")
 

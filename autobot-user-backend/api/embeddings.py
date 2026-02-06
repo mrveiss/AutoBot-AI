@@ -17,9 +17,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.services.config_service import ConfigService
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.config import unified_config_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission, get_current_user
+from config import unified_config_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ async def get_embedding_settings(
 
         if not embedding_config:
             # Return default configuration if none exists
-            from src.config.ssot_config import config
+            from autobot_shared.ssot_config import config
 
             embedding_config = {
                 "provider": "ollama",

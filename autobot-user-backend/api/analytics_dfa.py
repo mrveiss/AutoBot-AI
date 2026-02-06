@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 

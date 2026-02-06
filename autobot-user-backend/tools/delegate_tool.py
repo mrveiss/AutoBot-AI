@@ -186,7 +186,7 @@ class DelegateTool:
         Returns:
             DelegateToolResponse with delegation result
         """
-        from src.utils.errors import RepairableException
+        from utils.errors import RepairableException
 
         logger.info(
             "[Issue #657] Delegate tool invoked: task=%s, reason=%s",

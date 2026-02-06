@@ -24,11 +24,11 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
-from src.config import UnifiedConfigManager
-from src.utils.http_client import get_http_client
+from config import UnifiedConfigManager
+from autobot_shared.http_client import get_http_client
 
 # Re-export all public API from the package for backward compatibility
-from src.utils.model_optimization import (
+from utils.model_optimization import (
     CODE_COMPLEXITY_KEYWORDS,
     CODE_TASK_TYPES,
     ModelClassifier,
@@ -41,7 +41,7 @@ from src.utils.model_optimization import (
     TaskComplexity,
     TaskRequest,
 )
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()

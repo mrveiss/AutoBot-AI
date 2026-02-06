@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
-from src.utils.redis_client import get_redis_client, RedisDatabase
+from autobot_shared.redis_client import get_redis_client, RedisDatabase
 
 logger = logging.getLogger(__name__)
 

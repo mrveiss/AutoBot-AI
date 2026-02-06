@@ -13,8 +13,8 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
-from src.autobot_types import TaskComplexity
-from src.patterns.conversation_patterns import ConversationPatterns, ConversationType
+from autobot_types import TaskComplexity
+from patterns.conversation_patterns import ConversationPatterns, ConversationType
 
 logger = logging.getLogger(__name__)
 

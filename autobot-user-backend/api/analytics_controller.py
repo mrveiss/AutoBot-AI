@@ -27,11 +27,11 @@ import redis
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from backend.type_defs.common import Metadata
-from src.config import UnifiedConfigManager
-from src.constants import PATH
-from src.constants.threshold_constants import TimingConstants
-from src.utils.redis_client import RedisDatabase, get_redis_client
-from src.utils.system_metrics import get_metrics_collector
+from config import UnifiedConfigManager
+from constants import PATH
+from constants.threshold_constants import TimingConstants
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor

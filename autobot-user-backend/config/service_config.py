@@ -10,8 +10,8 @@ import logging
 import os
 from typing import Any, Dict
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.path_constants import PATH
+from constants.network_constants import NetworkConstants
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class ServiceConfigMixin:
             "max_request_size": 10485760,  # 10MB
         }
 
-        from src.config.loader import deep_merge
+        from config.loader import deep_merge
 
         return deep_merge(defaults, backend_config)
 
@@ -157,7 +157,7 @@ class ServiceConfigMixin:
 
     def get_redis_config(self) -> Dict[str, Any]:
         """Get Redis configuration from SSOT config (single source of truth)."""
-        from src.config.ssot_config import config as ssot
+        from autobot_shared.ssot_config import config as ssot
 
         return {
             "enabled": ssot.redis.enabled,

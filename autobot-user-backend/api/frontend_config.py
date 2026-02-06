@@ -7,9 +7,9 @@ from typing import Any, Dict
 from fastapi import APIRouter
 
 from backend.services.config_service import ConfigService
-from src.constants.network_constants import NetworkConstants
-from src.constants.path_constants import PathConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from constants.network_constants import NetworkConstants
+from constants.path_constants import PathConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ def _build_fallback_config() -> Dict[str, Any]:
     Returns:
         Complete fallback frontend configuration dict
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     backend_config = unified_config_manager.get_backend_config()
 

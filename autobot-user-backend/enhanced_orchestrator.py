@@ -9,7 +9,7 @@ Issue #381: Refactored to thin facade - delegates to orchestration package.
 Advanced multi-agent coordination with self-documenting workflows and knowledge management.
 
 This module re-exports from the orchestration package for backward compatibility.
-New code should import directly from src.orchestration.
+New code should import directly from orchestration.
 """
 
 import asyncio
@@ -20,17 +20,17 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from src.circuit_breaker import circuit_breaker_async
-from src.constants.threshold_constants import (
+from circuit_breaker import circuit_breaker_async
+from constants.threshold_constants import (
     AgentThresholds,
     CircuitBreakerDefaults,
     RetryConfig,
 )
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
 
 # Issue #381: Import from refactored orchestration package
-from src.orchestration import (
+from orchestration import (
     AgentCapability,
     AgentInteraction,
     AgentProfile,
@@ -44,14 +44,14 @@ from src.orchestration import (
 )
 
 # Import existing orchestrator components
-from src.orchestrator import Orchestrator, TaskComplexity
-from src.retry_mechanism import RetryStrategy, retry_async
+from orchestrator import Orchestrator, TaskComplexity
+from retry_mechanism import RetryStrategy, retry_async
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from src.utils.agent_selection import find_best_agent_for_task as _find_best_agent
-from src.utils.agent_selection import release_agent as _release_agent
-from src.utils.agent_selection import reserve_agent as _reserve_agent
-from src.utils.agent_selection import update_agent_performance as _update_performance
+from utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from utils.agent_selection import release_agent as _release_agent
+from utils.agent_selection import reserve_agent as _reserve_agent
+from utils.agent_selection import update_agent_performance as _update_performance
 
 # Re-export for backward compatibility
 __all__ = [
@@ -174,7 +174,7 @@ class EnhancedOrchestrator:
         """
         Find the best agent for a specific task.
 
-        Uses shared utility from src.utils.agent_selection (Issue #292).
+        Uses shared utility from utils.agent_selection (Issue #292).
         """
         return _find_best_agent(
             agent_registry=self.agent_registry,

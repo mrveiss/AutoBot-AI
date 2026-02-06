@@ -21,18 +21,18 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from src.config import cfg
+from config import cfg
 
 # Import centralized components
-from src.constants.model_constants import model_config
-from src.constants.threshold_constants import (
+from constants.model_constants import model_config
+from constants.threshold_constants import (
     HardwareAcceleratorConfig,
     ResourceThresholds,
     TimingConstants,
 )
-from src.utils.http_client import get_http_client
-from src.utils.logging_manager import get_llm_logger
-from src.utils.redis_client import get_redis_client
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
 
 # Import transformers models for multi-modal embeddings
 try:
@@ -668,7 +668,7 @@ class AIHardwareAccelerator:
         self, content: Any, device: torch.device
     ) -> np.ndarray:
         """Generate text embedding (Issue #315)."""
-        from src.utils.semantic_chunker import get_semantic_chunker
+        from utils.semantic_chunker import get_semantic_chunker
 
         chunker = get_semantic_chunker()
         await chunker._initialize_model()

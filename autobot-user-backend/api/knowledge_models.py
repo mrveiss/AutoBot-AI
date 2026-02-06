@@ -42,8 +42,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, validator
 
 from backend.type_defs.common import Metadata
-from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
-from src.utils.path_validation import contains_path_traversal
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from utils.path_validation import contains_path_traversal
 
 # Issue #380: Module-level frozenset for tag operations
 _VALID_TAG_OPERATIONS = frozenset({"add", "remove"})

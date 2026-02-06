@@ -36,10 +36,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import check_admin_permission
-from src.autobot_memory_graph import AutoBotMemoryGraph
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.request_utils import generate_request_id
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration

@@ -13,9 +13,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
-from src.auth_middleware import get_current_user
-from src.error_handler import log_error, safe_api_error, with_error_handling
-from src.exceptions import (
+from auth_middleware import get_current_user
+from error_handler import log_error, safe_api_error, with_error_handling
+from exceptions import (
     AutoBotError,
     InternalError,
     ResourceNotFoundError,
@@ -24,7 +24,7 @@ from src.exceptions import (
 )
 
 # Issue #756: Consolidated from src/utils/request_utils.py
-from src.utils.request_utils import generate_request_id
+from utils.request_utils import generate_request_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -16,12 +16,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.enhanced_project_state_tracker import (
+from enhanced_project_state_tracker import (
     StateChangeType,
     TrackingMetric,
     get_state_tracker,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

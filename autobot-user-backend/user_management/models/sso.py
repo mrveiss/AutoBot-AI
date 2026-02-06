@@ -17,13 +17,13 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from src.constants.threshold_constants import CategoryDefaults
+from constants.threshold_constants import CategoryDefaults
 
-from src.user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.organization import Organization
-    from src.user_management.models.user import User
+    from user_management.models.organization import Organization
+    from user_management.models.user import User
 
 
 class SSOProviderType(str, Enum):

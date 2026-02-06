@@ -14,12 +14,12 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.agents.development_speedup_agent import (
+from agents.development_speedup_agent import (
     analyze_codebase,
     find_duplicates,
     get_development_speedup_agent,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -550,7 +550,7 @@ async def get_development_speedup_status():
     and analysis capabilities.
     """
     try:
-        from src.agents.npu_code_search_agent import npu_code_search
+        from agents.npu_code_search_agent import npu_code_search
 
         # Get NPU and search status
         search_status = await npu_code_search.get_index_status()

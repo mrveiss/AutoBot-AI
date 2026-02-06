@@ -17,9 +17,9 @@ from backend.services.workflow_automation import (
     WorkflowStep,
 )
 from backend.type_defs.common import Metadata
-from src.enhanced_orchestrator import EnhancedOrchestrator
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
+from enhanced_orchestrator import EnhancedOrchestrator
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
 
 from .intent_analyzer import IntentAnalyzer
 from .learning_engine import WorkflowLearningEngine

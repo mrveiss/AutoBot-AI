@@ -8,8 +8,8 @@ Issue #658: Provides default extensions that demonstrate the
 extension system and provide useful functionality.
 """
 
-from src.extensions.builtin.logging_extension import LoggingExtension
-from src.extensions.builtin.secret_masking import SecretMaskingExtension
+from extensions.builtin.logging_extension import LoggingExtension
+from extensions.builtin.secret_masking import SecretMaskingExtension
 
 __all__ = [
     "LoggingExtension",

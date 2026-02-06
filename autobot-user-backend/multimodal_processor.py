@@ -7,7 +7,7 @@ import logging
 from typing import Any, Dict
 
 # Import from implementation module for consistency
-from src.multimodal_processor_impl import (
+from multimodal_processor_impl import (
     ConfidenceLevel,
     ModalityType,
     MultiModalInput,

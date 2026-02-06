@@ -24,7 +24,7 @@ from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.services.captcha_human_loop import (
+from services.captcha_human_loop import (
     CaptchaResolutionStatus,
     get_captcha_human_loop,
 )

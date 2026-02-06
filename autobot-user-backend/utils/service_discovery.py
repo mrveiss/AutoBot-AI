@@ -17,10 +17,10 @@ from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
-from src.utils.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ class ServiceDiscovery:
 
     def _init_default_services(self):
         """Initialize default service definitions from unified configuration."""
-        from src.config import unified_config_manager
+        from config import unified_config_manager
 
         services_config = unified_config_manager.get_distributed_services_config()
         backend_config = unified_config_manager.get_backend_config()
@@ -502,7 +502,7 @@ class ServiceDiscovery:
         NOTE: This method uses direct redis.Redis() instantiation intentionally
         for health check diagnostics. This is a monitoring/diagnostic function,
         NOT for production client creation. For production clients, use
-        get_redis_client() from src.utils.redis_client.
+        get_redis_client() from autobot_shared.redis_client.
 
         Direct instantiation is appropriate here because:
         - Tests arbitrary endpoints (not just canonical Redis VM)

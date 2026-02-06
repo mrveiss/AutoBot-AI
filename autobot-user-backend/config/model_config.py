@@ -40,7 +40,7 @@ class ModelConfigMixin:
             return env_model
 
         # Final fallback - use centralized constant (lazy import to avoid circular dep)
-        from src.constants.model_constants import ModelConstants
+        from constants.model_constants import ModelConstants
 
         fallback_model = ModelConstants.DEFAULT_OLLAMA_MODEL
         logger.warning(
@@ -69,7 +69,7 @@ class ModelConfigMixin:
         Issue #620.
         """
         # Lazy import to avoid circular dependency
-        from src.constants.network_constants import NetworkConstants
+        from constants.network_constants import NetworkConstants
 
         return {
             "provider_type": "local",

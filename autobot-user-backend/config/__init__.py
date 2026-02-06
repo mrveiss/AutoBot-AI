@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Type hints for IDE support without runtime import
 if TYPE_CHECKING:
-    from src.config.compat import (
+    from config.compat import (
         API_BASE_URL,
         BACKEND_HOST_IP,
         BACKEND_PORT,
@@ -47,8 +47,8 @@ if TYPE_CHECKING:
         Config,
         get_vnc_direct_url,
     )
-    from src.config.manager import UnifiedConfigManager, get_unified_config_manager
-    from src.config.settings import UnifiedConfigSettings
+    from config.manager import UnifiedConfigManager, get_unified_config_manager
+    from config.settings import UnifiedConfigSettings
 
 # Cache for lazily imported modules/objects
 _lazy_cache: dict = {}
@@ -57,7 +57,7 @@ _lazy_cache: dict = {}
 def _lazy_import_manager():
     """Lazily import the manager module."""
     if "manager" not in _lazy_cache:
-        from src.config.manager import UnifiedConfigManager, get_unified_config_manager
+        from config.manager import UnifiedConfigManager, get_unified_config_manager
 
         _lazy_cache["manager"] = {
             "UnifiedConfigManager": UnifiedConfigManager,
@@ -71,7 +71,7 @@ def _lazy_import_manager():
 def _lazy_import_settings():
     """Lazily import the settings module."""
     if "settings" not in _lazy_cache:
-        from src.config.settings import UnifiedConfigSettings
+        from config.settings import UnifiedConfigSettings
 
         _lazy_cache["settings"] = {"UnifiedConfigSettings": UnifiedConfigSettings}
     return _lazy_cache["settings"]
@@ -80,7 +80,7 @@ def _lazy_import_settings():
 def _lazy_import_compat():
     """Lazily import the compat module."""
     if "compat" not in _lazy_cache:
-        from src.config.compat import (
+        from config.compat import (
             API_BASE_URL,
             BACKEND_HOST_IP,
             BACKEND_PORT,

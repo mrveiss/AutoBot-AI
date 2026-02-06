@@ -11,7 +11,7 @@ Writes to both Prometheus and legacy systems during transition.
 import logging
 from typing import Optional
 
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.prometheus_metrics import get_metrics_manager
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class MetricsAdapter:
         """Lazy load legacy ClaudeAPIMonitor"""
         if self._legacy_claude_monitor is None:
             try:
-                from src.monitoring.claude_api_monitor import ClaudeAPIMonitor
+                from monitoring.claude_api_monitor import ClaudeAPIMonitor
 
                 self._legacy_claude_monitor = ClaudeAPIMonitor()
             except ImportError:

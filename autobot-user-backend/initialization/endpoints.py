@@ -12,7 +12,7 @@ from datetime import datetime
 
 from fastapi import FastAPI
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

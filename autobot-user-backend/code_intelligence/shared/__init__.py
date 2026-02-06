@@ -15,7 +15,7 @@ Components:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-from src.code_intelligence.shared.file_cache import (
+from code_intelligence.shared.file_cache import (
     FileListCache,
     get_python_files,
     get_frontend_files,
@@ -24,7 +24,7 @@ from src.code_intelligence.shared.file_cache import (
     get_file_cache_stats,
 )
 
-from src.code_intelligence.shared.ast_cache import (
+from code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,
     get_ast_safe,
@@ -34,7 +34,7 @@ from src.code_intelligence.shared.ast_cache import (
 )
 
 # Issue #686: Scoring utilities for consistent score calculation
-from src.code_intelligence.shared.scoring import (
+from code_intelligence.shared.scoring import (
     calculate_exponential_score,
     calculate_weighted_deduction,
     calculate_score_from_severity_counts,

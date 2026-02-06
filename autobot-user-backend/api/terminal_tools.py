@@ -22,7 +22,7 @@ import logging
 from fastapi import APIRouter
 
 from backend.api.terminal_models import ToolInstallRequest
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ router = APIRouter(tags=["terminal-tools"])
 async def install_tool(request: ToolInstallRequest):
     """Install a tool with terminal streaming"""
     # Import system command agent for tool installation
-    from src.agents.system_command_agent import SystemCommandAgent
+    from agents.system_command_agent import SystemCommandAgent
 
     system_command_agent = SystemCommandAgent()
 
@@ -66,7 +66,7 @@ async def install_tool(request: ToolInstallRequest):
 @router.post("/check-tool")
 async def check_tool_installed(tool_name: str):
     """Check if a tool is installed"""
-    from src.agents.system_command_agent import SystemCommandAgent
+    from agents.system_command_agent import SystemCommandAgent
 
     system_command_agent = SystemCommandAgent()
     result = await system_command_agent.check_tool_installed(tool_name)
@@ -81,7 +81,7 @@ async def check_tool_installed(tool_name: str):
 @router.post("/validate-command")
 async def validate_command(command: str):
     """Validate command safety"""
-    from src.agents.system_command_agent import SystemCommandAgent
+    from agents.system_command_agent import SystemCommandAgent
 
     system_command_agent = SystemCommandAgent()
     result = await system_command_agent.validate_command_safety(command)
@@ -96,7 +96,7 @@ async def validate_command(command: str):
 @router.get("/package-managers")
 async def get_package_managers():
     """Get available package managers"""
-    from src.agents.system_command_agent import SystemCommandAgent
+    from agents.system_command_agent import SystemCommandAgent
 
     system_command_agent = SystemCommandAgent()
     detected = await system_command_agent.detect_package_manager()

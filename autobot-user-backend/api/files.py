@@ -26,10 +26,10 @@ from pydantic import BaseModel, field_validator
 
 from backend.utils.io_executor import run_in_file_executor
 from backend.utils.paths_manager import ensure_data_directory, get_data_path
-from src.auth_middleware import auth_middleware
-from src.security_layer import SecurityLayer
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.path_validation import is_invalid_name
+from auth_middleware import auth_middleware
+from security_layer import SecurityLayer
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.path_validation import is_invalid_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -257,7 +257,7 @@ def _calculate_parent_path(path: str) -> Optional[str]:
     return str(parent) if str(parent) != "." else ""
 
 
-# Path validation imported from src.utils.path_validation (Issue #328 - shared utility)
+# Path validation imported from utils.path_validation (Issue #328 - shared utility)
 
 
 def validate_and_resolve_path(path: str) -> Path:

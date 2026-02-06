@@ -8,7 +8,7 @@ This package provides monitoring and metrics collection for AutoBot,
 including Prometheus metrics for timeout tracking and performance monitoring.
 """
 
-from src.monitoring.prometheus_metrics import (
+from monitoring.prometheus_metrics import (
     PrometheusMetricsManager,
     get_metrics_manager,
 )

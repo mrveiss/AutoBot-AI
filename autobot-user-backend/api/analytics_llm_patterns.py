@@ -30,7 +30,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
-from src.utils.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Issue #552: Added prefix to match frontend calls at /api/llm-patterns/*
 router = APIRouter(prefix="/llm-patterns", tags=["llm-patterns", "analytics"])

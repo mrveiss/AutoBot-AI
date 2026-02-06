@@ -15,7 +15,7 @@ from typing import Optional
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from src.circuit_breaker import circuit_breaker_async
+from circuit_breaker import circuit_breaker_async
 
 from ..models import LLMRequest, LLMResponse
 

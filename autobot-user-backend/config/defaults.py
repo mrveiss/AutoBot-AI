@@ -13,7 +13,7 @@ SSOT Migration (Issue #639):
 import os
 from typing import Any, Dict
 
-from src.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 
 def _get_backend_config(
@@ -28,7 +28,7 @@ def _get_backend_config(
         backend_port: Backend API port
     """
     # Lazy import to avoid circular dependency
-    from src.constants.model_constants import ModelConstants
+    from constants.model_constants import ModelConstants
 
     # Build provider-agnostic LLM config (default provider is Ollama)
     llm_base_url = f"http://{llm_host}:{llm_port}"
@@ -347,7 +347,7 @@ def get_default_config() -> Dict[str, Any]:
     Note: LLM host/port are provider-agnostic. The default provider is Ollama,
     but agents can override via their individual configurations.
     """
-    from src.constants.network_constants import NetworkConstants
+    from constants.network_constants import NetworkConstants
 
     llm_host = ConfigRegistry.get("vm.llm", NetworkConstants.AI_STACK_HOST)
     llm_port = int(ConfigRegistry.get("port.llm", str(NetworkConstants.OLLAMA_PORT)))

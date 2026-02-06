@@ -14,7 +14,7 @@ This package provides:
 - Built-in extensions (logging, secret_masking)
 
 Usage:
-    from src.extensions import (
+    from extensions import (
         HookPoint,
         Extension,
         HookContext,
@@ -40,9 +40,9 @@ Usage:
     await manager.invoke_hook(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
 """
 
-from src.extensions.base import Extension, HookContext
-from src.extensions.hooks import HookPoint, get_hook_metadata, HOOK_METADATA
-from src.extensions.manager import (
+from extensions.base import Extension, HookContext
+from extensions.hooks import HookPoint, get_hook_metadata, HOOK_METADATA
+from extensions.manager import (
     ExtensionManager,
     get_extension_manager,
     reset_extension_manager,

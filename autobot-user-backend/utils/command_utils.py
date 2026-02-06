@@ -11,7 +11,7 @@ Eliminates duplicate subprocess handling code across the codebase.
 Issue #751: Consolidate Common Utilities
 
 Usage:
-    from src.utils.command_utils import execute_command, execute_shell_command
+    from utils.command_utils import execute_command, execute_shell_command
 
     # Simple exec-style (for specific commands like 'man')
     result = await execute_command(["man", "-w", "ls"], timeout=5.0)
@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
-from src.utils.encoding_utils import strip_ansi_codes
+from utils.encoding_utils import strip_ansi_codes
 
 logger = logging.getLogger(__name__)
 

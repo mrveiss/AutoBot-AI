@@ -13,8 +13,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.llm_self_awareness import get_llm_self_awareness
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from llm_self_awareness import get_llm_self_awareness
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

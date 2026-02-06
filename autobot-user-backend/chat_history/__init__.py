@@ -21,7 +21,7 @@ Architecture:
     └── MessagesMixin (message operations)
 
 Usage:
-    from src.chat_history import ChatHistoryManager
+    from chat_history import ChatHistoryManager
 
     manager = ChatHistoryManager()
     await manager.create_session()
@@ -30,16 +30,16 @@ Usage:
 
 from typing import Optional
 
-from src.chat_history.analysis import AnalysisMixin
-from src.chat_history.base import ChatHistoryBase
-from src.chat_history.cache import CacheMixin
-from src.chat_history.deduplication import DeduplicationMixin
-from src.chat_history.file_io import FileIOMixin
-from src.chat_history.memory import MemoryMixin
-from src.chat_history.messages import MessagesMixin
-from src.chat_history.security import SecurityMixin
-from src.chat_history.session import SessionMixin
-from src.chat_history.session_listing import SessionListingMixin
+from chat_history.analysis import AnalysisMixin
+from chat_history.base import ChatHistoryBase
+from chat_history.cache import CacheMixin
+from chat_history.deduplication import DeduplicationMixin
+from chat_history.file_io import FileIOMixin
+from chat_history.memory import MemoryMixin
+from chat_history.messages import MessagesMixin
+from chat_history.security import SecurityMixin
+from chat_history.session import SessionMixin
+from chat_history.session_listing import SessionListingMixin
 
 
 class ChatHistoryManager(

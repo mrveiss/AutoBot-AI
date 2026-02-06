@@ -12,7 +12,7 @@ import asyncio
 import logging
 from typing import Any, Callable, Dict, Tuple
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 from .types import AgentTask, ExecutionStrategy, WorkflowPlan
 

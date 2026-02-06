@@ -10,15 +10,15 @@ All models use UUID primary keys and include:
 - Multi-tenancy via org_id foreign key
 """
 
-from src.user_management.models.base import Base, TenantMixin, TimestampMixin
-from src.user_management.models.organization import Organization
-from src.user_management.models.user import User
-from src.user_management.models.team import Team, TeamMembership
-from src.user_management.models.role import Permission, Role, RolePermission, UserRole
-from src.user_management.models.api_key import APIKey
-from src.user_management.models.sso import SSOProvider, UserSSOLink
-from src.user_management.models.mfa import UserMFA
-from src.user_management.models.audit import AuditLog
+from user_management.models.base import Base, TenantMixin, TimestampMixin
+from user_management.models.organization import Organization
+from user_management.models.user import User
+from user_management.models.team import Team, TeamMembership
+from user_management.models.role import Permission, Role, RolePermission, UserRole
+from user_management.models.api_key import APIKey
+from user_management.models.sso import SSOProvider, UserSSOLink
+from user_management.models.mfa import UserMFA
+from user_management.models.audit import AuditLog
 
 __all__ = [
     "Base",

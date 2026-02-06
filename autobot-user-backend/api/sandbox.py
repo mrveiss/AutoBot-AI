@@ -18,15 +18,15 @@ from backend.utils.response_builder import (
     service_unavailable_response,
     success_response,
 )
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.constants.network_constants import NetworkConstants
-from src.secure_sandbox_executor import (
+from auth_middleware import check_admin_permission, get_current_user
+from constants.network_constants import NetworkConstants
+from secure_sandbox_executor import (
     SandboxConfig,
     SandboxExecutionMode,
     SandboxSecurityLevel,
     get_secure_sandbox,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import APIRouter, Query
 
-from src.config.ssot_config import get_config
-from src.utils.http_client import get_http_client
+from autobot_shared.ssot_config import get_config
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

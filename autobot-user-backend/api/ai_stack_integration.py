@@ -22,8 +22,8 @@ from backend.type_defs.common import Metadata
 
 # Import shared response utilities (Issue #292 - Eliminate duplicate code)
 from backend.utils.response_helpers import create_success_response
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

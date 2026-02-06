@@ -16,8 +16,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.api.analytics_models import CodeAnalysisRequest
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import shared analytics controller from analytics module
 # This will be set after analytics.py is updated

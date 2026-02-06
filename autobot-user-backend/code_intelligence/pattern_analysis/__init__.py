@@ -37,7 +37,7 @@ Architecture:
     └─────────────────────────────────────────────────────────────────────┘
 
 Usage:
-    from src.code_intelligence.pattern_analysis import (
+    from code_intelligence.pattern_analysis import (
         CodePatternAnalyzer,
         analyze_codebase_patterns,
         PatternAnalysisReport,

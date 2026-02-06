@@ -17,7 +17,7 @@ Functions:
 
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.utils.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger("agent_selection")
 

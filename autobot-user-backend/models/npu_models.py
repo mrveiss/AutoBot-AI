@@ -13,8 +13,8 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, validator
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import CategoryDefaults
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import CategoryDefaults
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")

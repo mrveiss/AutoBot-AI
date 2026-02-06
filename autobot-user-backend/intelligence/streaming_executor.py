@@ -18,9 +18,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
-from src.llm_interface import LLMInterface
-from src.utils.command_validator import CommandValidator
+from constants.network_constants import NetworkConstants
+from llm_interface import LLMInterface
+from utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)
 
@@ -541,7 +541,7 @@ class StreamingCommandExecutor:
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
-        from src.utils.command_utils import get_timestamp
+        from utils.command_utils import get_timestamp
 
         return get_timestamp()
 

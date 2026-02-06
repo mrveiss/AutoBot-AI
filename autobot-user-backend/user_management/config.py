@@ -25,7 +25,7 @@ def _get_default_postgres_host() -> str:
     Issue #694: Config consolidation - uses SSOT with proper fallback.
     """
     try:
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         return get_config().vm.redis
     except Exception:

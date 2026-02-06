@@ -21,9 +21,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from src.auth_middleware import auth_middleware
-from src.security_layer import SecurityLayer
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import auth_middleware
+from security_layer import SecurityLayer
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

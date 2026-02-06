@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ class ResourceMonitor:
 
         # Quick Redis check
         try:
-            from src.utils.redis_immediate_test import redis_circuit_breaker
+            from utils.redis_immediate_test import redis_circuit_breaker
 
             self.redis_available = not redis_circuit_breaker.is_circuit_open
         except Exception:

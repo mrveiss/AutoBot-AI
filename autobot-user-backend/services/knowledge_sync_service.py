@@ -23,11 +23,11 @@ from typing import Any, Dict
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from src.advanced_rag_optimizer import get_rag_optimizer
-from src.constants.threshold_constants import TimingConstants
-from src.knowledge_sync_incremental import IncrementalKnowledgeSync
-from src.utils.catalog_http_exceptions import raise_kb_error
-from src.utils.logging_manager import get_llm_logger
+from advanced_rag_optimizer import get_rag_optimizer
+from constants.threshold_constants import TimingConstants
+from knowledge_sync_incremental import IncrementalKnowledgeSync
+from utils.catalog_http_exceptions import raise_kb_error
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_sync_service")
 

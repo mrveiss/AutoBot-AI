@@ -12,7 +12,7 @@ import yaml
 
 # Import SSOT for Ollama defaults
 try:
-    from src.config.ssot_config import get_config as get_ssot_config
+    from autobot_shared.ssot_config import get_config as get_ssot_config
 
     _SSOT_AVAILABLE = True
 except ImportError:

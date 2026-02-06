@@ -30,12 +30,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.utils.redis_client import RedisDatabase, get_redis_client
+from auth_middleware import check_admin_permission
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # LLM Interface for real code generation
 try:
-    from src.llm_interface import LLMInterface
+    from llm_interface import LLMInterface
 
     LLM_INTERFACE_AVAILABLE = True
 except ImportError:

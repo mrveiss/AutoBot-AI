@@ -20,8 +20,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from backend.services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["analytics", "agents"])

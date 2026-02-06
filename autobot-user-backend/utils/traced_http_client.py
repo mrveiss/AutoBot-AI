@@ -8,8 +8,8 @@ Provides HTTP client utilities that automatically propagate OpenTelemetry
 trace context across AutoBot's distributed VM infrastructure.
 
 Usage:
-    from src.utils.traced_http_client import TracedHttpClient
-    from src.constants.network_constants import ServiceURLs
+    from utils.traced_http_client import TracedHttpClient
+    from constants.network_constants import ServiceURLs
 
     async with TracedHttpClient() as client:
         response = await client.post(
@@ -26,8 +26,8 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import TimingConstants
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ async def traced_http_client(
     Convenience async context manager for traced HTTP client.
 
     Usage:
-        from src.constants.network_constants import ServiceURLs
+        from constants.network_constants import ServiceURLs
 
         async with traced_http_client() as client:
             response = await client.get(f"{ServiceURLs.AI_STACK}/api/status")

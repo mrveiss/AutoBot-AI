@@ -19,9 +19,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from src.auth_middleware import check_admin_permission
-from src.utils.catalog_http_exceptions import raise_server_error
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from utils.catalog_http_exceptions import raise_server_error
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = logging.getLogger(__name__)

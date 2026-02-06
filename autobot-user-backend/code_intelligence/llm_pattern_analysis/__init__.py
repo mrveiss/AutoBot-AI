@@ -16,7 +16,7 @@ Package Structure:
 - recommendation_engine.py: RecommendationEngine class
 
 Usage:
-    from src.code_intelligence.llm_pattern_analysis import (
+    from code_intelligence.llm_pattern_analysis import (
         # Enums
         OptimizationCategory, OptimizationPriority, CacheOpportunityType,
         UsagePatternType, PromptIssueType,
@@ -35,7 +35,7 @@ still exports all classes directly.
 """
 
 # Types and constants
-from src.code_intelligence.llm_pattern_analysis.types import (
+from code_intelligence.llm_pattern_analysis.types import (
     CacheOpportunityType,
     EXCESSIVE_CONTEXT_PATTERNS,
     FORMAT_INEFFICIENCY_PATTERNS,
@@ -53,7 +53,7 @@ from src.code_intelligence.llm_pattern_analysis.types import (
 )
 
 # Data models
-from src.code_intelligence.llm_pattern_analysis.data_models import (
+from code_intelligence.llm_pattern_analysis.data_models import (
     AnalysisResult,
     BatchingOpportunity,
     CacheOpportunity,
@@ -67,17 +67,17 @@ from src.code_intelligence.llm_pattern_analysis.data_models import (
 )
 
 # Analyzers and scanners
-from src.code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
-from src.code_intelligence.llm_pattern_analysis.scanners import (
+from code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
+from code_intelligence.llm_pattern_analysis.scanners import (
     BatchingAnalyzer,
     CacheOpportunityDetector,
     CodePatternScanner,
 )
-from src.code_intelligence.llm_pattern_analysis.calculators import (
+from code_intelligence.llm_pattern_analysis.calculators import (
     CostCalculator,
     TokenTracker,
 )
-from src.code_intelligence.llm_pattern_analysis.recommendation_engine import (
+from code_intelligence.llm_pattern_analysis.recommendation_engine import (
     RecommendationEngine,
 )
 

@@ -22,11 +22,11 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Set
 
-from src.agents.agent_client import AgentRegistry as AgentClientRegistry
-from src.agents.llm_failsafe_agent import get_robust_llm_response
+from agents.agent_client import AgentRegistry as AgentClientRegistry
+from agents.llm_failsafe_agent import get_robust_llm_response
 
 # Re-export all public API from the package for backward compatibility
-from src.enhanced_orchestration import (
+from enhanced_orchestration import (
     FALLBACK_TIERS,
     AgentCapability,
     AgentPerformance,
@@ -36,8 +36,8 @@ from src.enhanced_orchestration import (
     WorkflowPlan,
     WorkflowPlanner,
 )
-from src.event_manager import event_manager
-from src.utils.redis_client import get_redis_client
+from event_manager import event_manager
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ class EnhancedMultiAgentOrchestrator:
         if response.tier_used.value in FALLBACK_TIERS:
             return self._planner.create_fallback_plan(goal)
 
-        from src.agents.json_formatter_agent import json_formatter
+        from agents.json_formatter_agent import json_formatter
 
         parse_result = json_formatter.parse_llm_response(response.content)
 

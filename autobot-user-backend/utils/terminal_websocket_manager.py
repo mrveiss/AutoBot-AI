@@ -17,7 +17,7 @@ import time
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
-from src.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

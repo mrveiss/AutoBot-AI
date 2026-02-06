@@ -29,7 +29,7 @@ class SemanticHasher:
 
     def __init__(self):
         """Initialize semantic hasher with AST hasher dependency."""
-        from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+        from code_intelligence.fingerprinting.ast_hasher import ASTHasher
 
         self.ast_hasher = ASTHasher()
 

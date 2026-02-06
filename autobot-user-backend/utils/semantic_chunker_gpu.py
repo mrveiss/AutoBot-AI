@@ -39,7 +39,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 # Import centralized logging
-from src.utils.logging_manager import get_llm_logger
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("semantic_chunker_gpu")
 

@@ -12,7 +12,7 @@ import logging
 import time
 from typing import Optional
 
-from src.extensions.base import Extension, HookContext
+from extensions.base import Extension, HookContext
 
 logger = logging.getLogger(__name__)
 

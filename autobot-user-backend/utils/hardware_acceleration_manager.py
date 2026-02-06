@@ -8,6 +8,6 @@ Re-exports the HardwareAccelerationManager from the main hardware_acceleration m
 
 
 # Re-export the HardwareAccelerationManager from the main module
-from src.hardware_acceleration import HardwareAccelerationManager
+from hardware_acceleration import HardwareAccelerationManager
 
 __all__ = ["HardwareAccelerationManager"]

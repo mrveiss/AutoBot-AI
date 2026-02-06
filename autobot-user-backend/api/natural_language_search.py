@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.constants.threshold_constants import QueryDefaults
+from constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -852,7 +852,7 @@ class CodeExplainer:
         context: str,
     ) -> CodeExplanation:
         """Use LLM to explain code."""
-        from src.llm_manager import get_llm_manager
+        from llm_manager import get_llm_manager
 
         llm = get_llm_manager()
 

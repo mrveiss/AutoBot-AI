@@ -13,7 +13,7 @@ import time
 from typing import Dict, Optional
 
 from backend.services.command_approval_manager import CommandApprovalManager
-from src.secure_command_executor import CommandRisk
+from secure_command_executor import CommandRisk
 
 from .models import AgentTerminalSession
 
@@ -182,7 +182,7 @@ class ApprovalHandler:
 
             # IMPLEMENTED: Real-time WebSocket broadcasting via event_manager
             try:
-                from src.event_manager import event_manager
+                from event_manager import event_manager
 
                 await event_manager.publish(
                     event_type="command_approval_status",

@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import yaml
 
-from src.agents.kb_librarian import EnhancedKBLibrarian
-from src.knowledge_base import KnowledgeBase
+from agents.kb_librarian import EnhancedKBLibrarian
+from knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class SystemKnowledgeManager:
     async def _load_file_state_cache(self) -> Optional[Dict[str, str]]:
         """Load cached file states from Redis"""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis_client = get_redis_client(database="knowledge")
 
@@ -174,7 +174,7 @@ class SystemKnowledgeManager:
     async def _update_system_knowledge_cache(self):
         """Update the cached file states in Redis"""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis_client = get_redis_client(database="knowledge")
 

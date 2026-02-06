@@ -18,7 +18,7 @@ Solution:
     - LRU eviction to bound memory usage
 
 Usage:
-    from src.code_intelligence.shared import get_ast, get_ast_safe
+    from code_intelligence.shared import get_ast, get_ast_safe
 
     # Get cached AST (raises on parse error)
     tree = get_ast("/path/to/file.py")

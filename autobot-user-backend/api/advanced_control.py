@@ -14,13 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import check_admin_permission
-from src.constants.threshold_constants import TimingConstants
-from src.desktop_streaming_manager import desktop_streaming
-from src.enhanced_memory_manager_async import TaskPriority
-from src.takeover_manager import TakeoverTrigger, takeover_manager
-from src.task_execution_tracker import task_tracker
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import TimingConstants
+from desktop_streaming_manager import desktop_streaming
+from enhanced_memory_manager_async import TaskPriority
+from takeover_manager import TakeoverTrigger, takeover_manager
+from task_execution_tracker import task_tracker
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["advanced_control"])

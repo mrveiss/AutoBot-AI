@@ -34,14 +34,14 @@ except ImportError:
 import aiohttp
 from dotenv import load_dotenv
 
-from src.utils.config_manager import config_manager
-from src.utils.logging_manager import get_llm_logger
+from utils.config_manager import config_manager
+from autobot_shared.logging_manager import get_llm_logger
 
 load_dotenv()
 
 # SSOT config for Ollama defaults - Issue #694
 try:
-    from src.config.ssot_config import get_config as get_ssot_config
+    from autobot_shared.ssot_config import get_config as get_ssot_config
 
     _OLLAMA_DEFAULT_URL = get_ssot_config().ollama_url
 except Exception:

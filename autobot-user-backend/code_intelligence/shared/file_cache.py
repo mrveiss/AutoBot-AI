@@ -18,7 +18,7 @@ Solution:
     - Automatic invalidation on timeout or explicit call
 
 Usage:
-    from src.code_intelligence.shared import get_python_files, get_frontend_files
+    from code_intelligence.shared import get_python_files, get_frontend_files
 
     # Get cached Python files (fast after first call)
     python_files = await get_python_files()
@@ -42,8 +42,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional
 
-from src.constants.path_constants import PATH
-from src.utils.file_categorization import SKIP_DIRS
+from constants.path_constants import PATH
+from utils.file_categorization import SKIP_DIRS
 
 logger = logging.getLogger(__name__)
 

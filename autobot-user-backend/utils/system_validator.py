@@ -16,12 +16,12 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
-from src.config import UnifiedConfigManager
-from src.utils.http_client import get_http_client
+from config import UnifiedConfigManager
+from autobot_shared.http_client import get_http_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 # Issue #380: Module-level tuple for expected system metrics
 _EXPECTED_SYSTEM_METRICS = ("cpu_percent", "memory_percent", "disk_usage")
@@ -177,7 +177,7 @@ class SystemValidator:
 
     async def _validate_kb_integration(self, component: str) -> None:
         """Validate knowledge base integration (Issue #333 - extracted helper)."""
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         try:
             kb = KnowledgeBase()
@@ -300,7 +300,7 @@ class SystemValidator:
         component = "Knowledge Base Cache"
 
         try:
-            from src.utils.advanced_cache_manager import get_knowledge_cache
+            from utils.advanced_cache_manager import get_knowledge_cache
 
             # Test 1: Cache system initialization (Issue #620: uses helper)
             start_time = time.time()
@@ -956,8 +956,8 @@ class SystemValidator:
         Returns:
             Tuple of (hybrid_engine, init_time_ms) or (None, 0) if failed
         """
-        from src.knowledge_base import KnowledgeBase
-        from src.utils.hybrid_search import get_hybrid_search_engine
+        from knowledge_base import KnowledgeBase
+        from utils.hybrid_search import get_hybrid_search_engine
 
         start_time = time.time()
         kb = KnowledgeBase()
@@ -1115,7 +1115,7 @@ class SystemValidator:
         component = "Monitoring System"
 
         try:
-            from src.utils.system_metrics import get_metrics_collector
+            from utils.system_metrics import get_metrics_collector
 
             # Test 1: Metrics collector initialization
             start_time = time.time()
@@ -1180,7 +1180,7 @@ class SystemValidator:
         component = "Model Optimization"
 
         try:
-            from src.utils.model_optimizer import (
+            from utils.model_optimizer import (
                 TaskComplexity,
                 TaskRequest,
                 get_model_optimizer,

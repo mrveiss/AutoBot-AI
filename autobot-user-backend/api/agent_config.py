@@ -21,9 +21,9 @@ from pydantic import BaseModel
 from backend.services.config_service import ConfigService
 from backend.services.slm_client import get_slm_client
 from backend.utils.connection_utils import ModelManager
-from src.auth_middleware import check_admin_permission
-from src.constants.model_constants import ModelConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from constants.model_constants import ModelConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -550,7 +550,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
 
     Issue #744: Requires admin authentication.
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     llm_config = unified_config_manager.get_llm_config()
     provider_type = llm_config.get("provider_type", "local")
@@ -629,7 +629,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 
     Issue #744: Requires admin authentication.
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     backend_agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
@@ -700,7 +700,7 @@ async def get_agent_config(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     base_config = DEFAULT_AGENT_CONFIGS[agent_id]
 
@@ -772,7 +772,7 @@ async def update_agent_model(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     # Validate the update request
     if update.agent_id != agent_id:
@@ -834,7 +834,7 @@ async def enable_agent(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
     unified_config_manager.save_settings()
@@ -869,7 +869,7 @@ async def disable_agent(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
     unified_config_manager.save_settings()
@@ -904,7 +904,7 @@ async def check_agent_health(
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", True)
     model = unified_config_manager.get_nested(
@@ -977,7 +977,7 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
 
     Issue #744: Requires admin authentication.
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     total_agents = len(DEFAULT_AGENT_CONFIGS)
     enabled_agents = 0

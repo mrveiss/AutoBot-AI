@@ -10,7 +10,7 @@ Issue #748: Tiered Model Distribution Implementation.
 from dataclasses import dataclass, field
 from typing import Dict
 
-from src.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 
 @dataclass

@@ -29,8 +29,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.utils.redis_client import RedisDatabase, get_redis_client
+from auth_middleware import check_admin_permission
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

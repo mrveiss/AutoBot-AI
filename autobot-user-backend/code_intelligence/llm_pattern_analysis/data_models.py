@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.code_intelligence.llm_pattern_analysis.types import (
+from code_intelligence.llm_pattern_analysis.types import (
     CacheOpportunityType,
     HIGH_PRIORITY_LEVELS,
     OptimizationCategory,
@@ -112,7 +112,7 @@ class PromptTemplate:
         Fixes Feature Envy: Template analyzes itself (Issue #312)
         """
         # Import here to avoid circular dependency
-        from src.code_intelligence.llm_pattern_analysis.prompt_analyzer import (
+        from code_intelligence.llm_pattern_analysis.prompt_analyzer import (
             PromptAnalyzer,
         )
 

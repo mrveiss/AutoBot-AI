@@ -13,8 +13,8 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from backend.type_defs.common import Metadata
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import get_redis_client
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

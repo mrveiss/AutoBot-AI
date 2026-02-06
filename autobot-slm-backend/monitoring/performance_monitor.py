@@ -22,9 +22,9 @@ import aiofiles
 import aiohttp
 import psutil
 
-from src.config import UnifiedConfigManager
-from src.constants.network_constants import NetworkConstants
-from src.utils.redis_client import get_redis_client
+from config import UnifiedConfigManager
+from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.redis_client import get_redis_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -157,7 +157,7 @@ class PerformanceMonitor:
         """Initialize Redis connection for metrics storage using canonical utility."""
         try:
             # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:

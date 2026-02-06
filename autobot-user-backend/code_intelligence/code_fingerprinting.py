@@ -29,7 +29,7 @@ backward compatibility by re-exporting all classes.
 from typing import Dict, List, Optional
 
 # Import all classes from the fingerprinting package (Issue #381 refactoring)
-from src.code_intelligence.fingerprinting.types import (
+from code_intelligence.fingerprinting.types import (
     CloneType,
     FingerprintType,
     CloneSeverity,
@@ -39,11 +39,11 @@ from src.code_intelligence.fingerprinting.types import (
     CloneGroup,
     CloneDetectionReport,
 )
-from src.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
-from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
-from src.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
-from src.code_intelligence.fingerprinting.similarity import SimilarityCalculator
-from src.code_intelligence.fingerprinting.detector import CloneDetector
+from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
+from code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
+from code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from code_intelligence.fingerprinting.detector import CloneDetector
 
 # Re-export for backward compatibility
 __all__ = [

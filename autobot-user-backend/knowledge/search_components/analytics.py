@@ -84,7 +84,7 @@ class SearchAnalytics:
         if not ctx.track_analytics:
             return
 
-        from src.knowledge.search_quality import get_search_analytics
+        from knowledge.search_quality import get_search_analytics
 
         analytics = get_search_analytics()
         analytics.record_search(

@@ -15,8 +15,8 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.knowledge_base import KnowledgeBase
-from src.prompt_manager import prompt_manager
+from knowledge_base import KnowledgeBase
+from prompt_manager import prompt_manager
 
 logger = logging.getLogger(__name__)
 

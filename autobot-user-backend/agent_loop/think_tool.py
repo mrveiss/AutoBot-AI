@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from src.agent_loop.types import ThinkCategory, ThinkResult
+from agent_loop.types import ThinkCategory, ThinkResult
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +327,7 @@ class ThinkTool:
         # Use Ollama directly
         import httpx
 
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         ssot = get_config()
         ollama_url = f"{ssot.ollama_url}/api/generate"

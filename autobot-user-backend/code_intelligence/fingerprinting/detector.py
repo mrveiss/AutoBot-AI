@@ -20,10 +20,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
-from src.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
-from src.code_intelligence.fingerprinting.similarity import SimilarityCalculator
-from src.code_intelligence.fingerprinting.types import (
+from code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
+from code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from code_intelligence.fingerprinting.types import (
     CloneDetectionReport,
     CloneGroup,
     CloneInstance,
@@ -36,7 +36,7 @@ from src.code_intelligence.fingerprinting.types import (
 
 # Issue #607: Import shared caches for performance optimization
 try:
-    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    from code_intelligence.shared.ast_cache import get_ast_with_content
 
     HAS_SHARED_CACHE = True
 except ImportError:

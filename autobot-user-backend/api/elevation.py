@@ -16,7 +16,7 @@ from typing import Dict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

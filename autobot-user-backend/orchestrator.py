@@ -20,34 +20,34 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from src.config import config_manager
-from src.constants.threshold_constants import LLMDefaults, TimingConstants
-from src.conversation import ConversationManager
-from src.llm_interface import LLMInterface
-from src.memory import LongTermMemoryManager
+from config import config_manager
+from constants.threshold_constants import LLMDefaults, TimingConstants
+from conversation import ConversationManager
+from llm_interface import LLMInterface
+from memory import LongTermMemoryManager
 
 # Issue #381: Import shared types from orchestration package
-from src.orchestration import (
+from orchestration import (
     AgentCapability,
     AgentInteraction,
     AgentProfile,
     DocumentationType,
     WorkflowDocumentation,
 )
-from src.task_execution_tracker import Priority, TaskType, task_tracker
+from task_execution_tracker import Priority, TaskType, task_tracker
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from src.utils.agent_selection import find_best_agent_for_task as _find_best_agent
-from src.utils.agent_selection import release_agent as _release_agent
-from src.utils.agent_selection import reserve_agent as _reserve_agent
-from src.utils.agent_selection import update_agent_performance as _update_performance
-from src.utils.logging_manager import get_logger
+from utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from utils.agent_selection import release_agent as _release_agent
+from utils.agent_selection import reserve_agent as _reserve_agent
+from utils.agent_selection import update_agent_performance as _update_performance
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger("orchestrator")
 
 # Import KnowledgeBase for enhanced features
 try:
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
     KNOWLEDGE_BASE_AVAILABLE = True
 except ImportError:
@@ -55,14 +55,14 @@ except ImportError:
     logger.warning("KnowledgeBase not available - auto-documentation features disabled")
 
 # Import TaskComplexity from correct location (always available)
-from src.autobot_types import TaskComplexity
+from autobot_types import TaskComplexity
 
 # Import task classification (optional)
 try:
-    from src.agents.gemma_classification_agent import GemmaClassificationAgent
+    from agents.gemma_classification_agent import GemmaClassificationAgent
 
     # Note: TaskClassificationResult doesn't exist yet, using quoted type annotations
-    # from src.task_classification import TaskClassificationResult
+    # from task_classification import TaskClassificationResult
 
     CLASSIFICATION_AVAILABLE = True
 except ImportError:
@@ -70,7 +70,7 @@ except ImportError:
 
 # Import agent manager
 try:
-    from src.agents.agent_manager import AgentManager
+    from agents.agent_manager import AgentManager
 
     AGENT_MANAGER_AVAILABLE = True
 except ImportError:
@@ -93,8 +93,8 @@ except ImportError:
 
 # Import workflow types for backward compatibility
 try:
-    from src.workflow_scheduler import WorkflowStatus
-    from src.workflow_templates import WorkflowStep
+    from workflow_scheduler import WorkflowStatus
+    from workflow_templates import WorkflowStep
 
     WORKFLOW_TYPES_AVAILABLE = True
 except ImportError:
@@ -134,7 +134,7 @@ class OrchestrationMode(Enum):
 
 
 # Issue #381: AgentCapability, DocumentationType, AgentProfile, WorkflowDocumentation,
-# and AgentInteraction are now imported from src.orchestration
+# and AgentInteraction are now imported from orchestration
 
 
 class OrchestratorConfig:
@@ -196,7 +196,7 @@ class ConsolidatedOrchestrator:
 
     def _init_core_components(self, config_mgr) -> None:
         """Initialize core orchestrator components. Issue #620."""
-        from src.config import config_manager as global_config_manager
+        from config import config_manager as global_config_manager
 
         self.config_manager = config_mgr or global_config_manager
         self.config = OrchestratorConfig(self.config_manager)
@@ -882,7 +882,7 @@ class ConsolidatedOrchestrator:
         """
         Find the best agent for a specific task based on capabilities and current workload.
 
-        Uses shared utility from src.utils.agent_selection (Issue #292).
+        Uses shared utility from utils.agent_selection (Issue #292).
         """
         return _find_best_agent(
             agent_registry=self.agent_registry,
@@ -893,14 +893,14 @@ class ConsolidatedOrchestrator:
     def _reserve_agent(self, agent_id: str):
         """Reserve an agent for task execution.
 
-        Uses shared utility from src.utils.agent_selection (Issue #292).
+        Uses shared utility from utils.agent_selection (Issue #292).
         """
         _reserve_agent(self.agent_registry, agent_id)
 
     def _release_agent(self, agent_id: str):
         """Release an agent after task completion.
 
-        Uses shared utility from src.utils.agent_selection (Issue #292).
+        Uses shared utility from utils.agent_selection (Issue #292).
         """
         _release_agent(self.agent_registry, agent_id)
 
@@ -909,7 +909,7 @@ class ConsolidatedOrchestrator:
     ):
         """Update agent performance metrics.
 
-        Uses shared utility from src.utils.agent_selection (Issue #292).
+        Uses shared utility from utils.agent_selection (Issue #292).
         """
         _update_performance(
             agent_registry=self.agent_registry,
@@ -925,7 +925,7 @@ class ConsolidatedOrchestrator:
 
         # Publish configuration change
         try:
-            from src.utils.event_manager import event_manager
+            from utils.event_manager import event_manager
 
             event_manager.publish("settings_update", {"phi2_enabled": enabled})
         except ImportError:

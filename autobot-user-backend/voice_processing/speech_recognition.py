@@ -15,10 +15,10 @@ from typing import Any, Dict, List
 
 import numpy as np
 
-from src.enhanced_memory_manager_async import TaskPriority
-from src.task_execution_tracker import task_tracker
-from src.voice_processing.models import AudioInput, SpeechRecognitionResult
-from src.voice_processing.types import SpeechQuality
+from enhanced_memory_manager_async import TaskPriority
+from task_execution_tracker import task_tracker
+from voice_processing.models import AudioInput, SpeechRecognitionResult
+from voice_processing.types import SpeechQuality
 
 logger = logging.getLogger(__name__)
 

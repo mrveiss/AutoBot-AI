@@ -21,12 +21,12 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.chat_history import ChatHistoryManager
+from chat_history import ChatHistoryManager
 
 # Import existing components
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

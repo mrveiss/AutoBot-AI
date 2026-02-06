@@ -20,10 +20,10 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from src.code_embedding_generator import get_code_embedding_generator
-from src.npu_semantic_search import get_npu_search_engine
-from src.utils.redis_client import get_redis_client
-from src.worker_node import WorkerNode
+from code_embedding_generator import get_code_embedding_generator
+from npu_semantic_search import get_npu_search_engine
+from autobot_shared.redis_client import get_redis_client
+from worker_node import WorkerNode
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent

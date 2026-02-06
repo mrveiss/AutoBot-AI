@@ -22,7 +22,7 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from src.utils.error_boundaries import (  # noqa: E402
+from autobot_shared.error_boundaries import (  # noqa: E402
     ErrorContext,
     RecoveryStrategy,
     error_boundary,
@@ -165,7 +165,7 @@ class CustomRecoveryHandler:
         self.error_manager = get_error_boundary_manager()
 
         # Add custom fallback handler for this service
-        from src.utils.error_boundaries import FallbackRecoveryHandler
+        from autobot_shared.error_boundaries import FallbackRecoveryHandler
 
         custom_fallbacks = {
             "example_service.risky_calculation": 0.0,
@@ -189,7 +189,7 @@ def integrate_with_knowledge_base():
         """Wrapped KB search with error boundary"""
         try:
             # Import KB here to avoid circular imports
-            from src.knowledge_base import KnowledgeBase
+            from knowledge_base import KnowledgeBase
 
             kb = KnowledgeBase()
             results = kb.search_chunks(query, limit=limit)
@@ -214,7 +214,7 @@ def integrate_with_llm_interface():
         """Wrapped LLM chat with error boundary"""
         try:
             # Import LLM interface here to avoid circular imports
-            from src.llm_interface import LLMInterface
+            from llm_interface import LLMInterface
 
             llm = LLMInterface()
             response = await llm.achat_completion(messages, **kwargs)
@@ -281,7 +281,7 @@ async def run_examples():
 
     # Show error statistics
     print("\n📊 Error Statistics:")
-    from src.utils.error_boundaries import get_error_statistics
+    from autobot_shared.error_boundaries import get_error_statistics
 
     stats = get_error_statistics()
     if stats.get("total_errors", 0) > 0:

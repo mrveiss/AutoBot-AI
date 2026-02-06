@@ -12,7 +12,7 @@ This package provides:
 - Configuration and metrics for monitoring
 
 Usage:
-    from src.llm_interface_pkg.tiered_routing import (
+    from llm_interface_pkg.tiered_routing import (
         TieredModelRouter,
         get_tiered_router,
         TierConfig,

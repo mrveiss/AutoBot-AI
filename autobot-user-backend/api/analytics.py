@@ -27,10 +27,10 @@ from backend.api.analytics_controller import (
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import RedisDatabase
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor

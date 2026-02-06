@@ -23,9 +23,9 @@ import redis.asyncio as redis
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from src.constants.network_constants import ServiceURLs
-from src.constants.threshold_constants import TimingConstants
-from src.utils.catalog_http_exceptions import (
+from constants.network_constants import ServiceURLs
+from constants.threshold_constants import TimingConstants
+from utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
     raise_validation_error,

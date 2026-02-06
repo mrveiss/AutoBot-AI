@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple
 
-from src.code_intelligence.base_analyzer import (
+from code_intelligence.base_analyzer import (
     AnalysisIssue,
     BaseLanguageAnalyzer,
     IssueCategory,

@@ -19,9 +19,9 @@ from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.rag_config import get_rag_config, update_rag_config
 from backend.services.rag_service import RAGService
 from backend.type_defs.common import Metadata
-from src.auth_middleware import get_current_user
-from src.constants.threshold_constants import QueryDefaults
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from constants.threshold_constants import QueryDefaults
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

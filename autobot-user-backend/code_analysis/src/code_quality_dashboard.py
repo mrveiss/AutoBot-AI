@@ -12,15 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from src.code_analyzer import CodeAnalyzer
-from src.env_analyzer import EnvironmentVariableAnalyzer
-from src.performance_analyzer import PerformanceAnalyzer
-from src.security_analyzer import SecurityAnalyzer
-from src.api_consistency_analyzer import APIConsistencyAnalyzer
-from src.testing_coverage_analyzer import TestingCoverageAnalyzer
-from src.architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
-from src.utils.redis_client import get_redis_client
-from src.config import UnifiedConfig
+from code_analyzer import CodeAnalyzer
+from env_analyzer import EnvironmentVariableAnalyzer
+from performance_analyzer import PerformanceAnalyzer
+from security_analyzer import SecurityAnalyzer
+from api_consistency_analyzer import APIConsistencyAnalyzer
+from testing_coverage_analyzer import TestingCoverageAnalyzer
+from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
+from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 
 # Initialize unified config

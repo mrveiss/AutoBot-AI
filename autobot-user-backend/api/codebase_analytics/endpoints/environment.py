@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ def _get_environment_analyzer():
     if the tools module is not available.
 
     Issue #542: Fixed import path resolution by adding project root to sys.path
-    before the tools path, allowing env_analyzer.py to import from src.utils.
+    before the tools path, allowing env_analyzer.py to import from utils.
 
     Issue #611: Fixed namespace conflict - the 'src' package from project root
     is cached in sys.modules, preventing import of src.env_analyzer from
@@ -209,7 +209,7 @@ def _get_environment_analyzer():
     try:
         import importlib.util
 
-        # Issue #542: Add project root so env_analyzer.py can import from src.utils
+        # Issue #542: Add project root so env_analyzer.py can import from utils
         project_root = str(Path(__file__).resolve().parents[4])
         if project_root not in sys.path:
             sys.path.insert(0, project_root)

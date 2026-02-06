@@ -25,14 +25,14 @@ except ImportError:
     Page = None
     PLAYWRIGHT_AVAILABLE = False
 
-from src.config import config
-from src.config.ssot_config import (
+from config import config
+from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

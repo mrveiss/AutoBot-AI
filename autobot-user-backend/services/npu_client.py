@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from src.config.ssot_config import get_config
+from autobot_shared.ssot_config import get_config
 
 logger = logging.getLogger(__name__)
 

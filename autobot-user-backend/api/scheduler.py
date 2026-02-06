@@ -13,11 +13,11 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.constants.threshold_constants import RetryConfig
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.workflow_scheduler import WorkflowPriority
-from src.workflow_scheduler import WorkflowScheduleRequest as InternalScheduleRequest
-from src.workflow_scheduler import WorkflowStatus, workflow_scheduler
+from constants.threshold_constants import RetryConfig
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from workflow_scheduler import WorkflowPriority
+from workflow_scheduler import WorkflowScheduleRequest as InternalScheduleRequest
+from workflow_scheduler import WorkflowStatus, workflow_scheduler
 
 router = APIRouter()
 
@@ -365,7 +365,7 @@ async def schedule_template_workflow(
             )
 
     # Validate template exists
-    from src.workflow_templates import workflow_template_manager
+    from workflow_templates import workflow_template_manager
 
     template = workflow_template_manager.get_template(template_id)
     if not template:

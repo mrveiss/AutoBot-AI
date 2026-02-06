@@ -11,7 +11,7 @@ from pathlib import Path
 # Add the parent directory to the path so we can import from src
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.frontend_analyzer import FrontendAnalyzer
+from frontend_analyzer import FrontendAnalyzer
 
 
 def _print_analysis_summary(results: dict) -> None:

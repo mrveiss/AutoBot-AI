@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Re-export all public API from the package
-from src.utils.long_running_operations import (  # Types and dataclasses; Managers
+from utils.long_running_operations import (  # Types and dataclasses; Managers
     LongRunningOperation,
     LongRunningOperationManager,
     LongRunningTimeoutConfig,
@@ -467,7 +467,7 @@ async def execute_comprehensive_test_suite(
 
 # Example usage and testing
 if __name__ == "__main__":
-    from src.constants.path_constants import PATH
+    from constants.path_constants import PATH
 
     async def example_usage():
         """Demonstrate long-running operations framework with example tasks."""

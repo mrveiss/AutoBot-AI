@@ -26,9 +26,9 @@ from typing import Any, Optional
 
 import websockets
 
-from src.constants.threshold_constants import TimingConstants
-from src.task_execution_tracker import TaskPriority, task_tracker
-from src.config import config_manager
+from constants.threshold_constants import TimingConstants
+from task_execution_tracker import TaskPriority, task_tracker
+from config import config_manager
 
 # Type aliases for clarity
 SessionDict = dict[str, Any]

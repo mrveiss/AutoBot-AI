@@ -16,7 +16,7 @@ import jinja2
 from aiohttp import WSMsgType, web
 from performance_monitor import PerformanceMonitor
 
-from src.constants.network_constants import NetworkConstants
+from autobot_shared.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 from src.utils.html_dashboard_utils import (
@@ -517,7 +517,7 @@ class PerformanceDashboard:
             # Connect to Redis for historical data using canonical utility
             # This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
             if not self.redis_client:
-                from src.utils.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_redis_client
 
                 self.redis_client = get_redis_client(database="metrics")
                 if self.redis_client is None:

@@ -26,9 +26,9 @@ import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Request
 
 from backend.knowledge_factory import get_or_create_knowledge_base
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.template_loader import knowledge_data_exists, load_knowledge_data
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 logger = logging.getLogger(__name__)
 
@@ -862,8 +862,8 @@ async def _process_doc_file(
 
 def _build_system_config_info() -> str:
     """Build system configuration info string."""
-    from src.constants.network_constants import NetworkConstants
-    from src.constants.path_constants import PATH
+    from constants.network_constants import NetworkConstants
+    from constants.path_constants import PATH
 
     return f"""AutoBot System Configuration
 
@@ -1131,7 +1131,7 @@ async def _scan_and_store_man_pages(
     Issue #423: Uses ManPageParser for structured content extraction.
     """
     from backend.services.fast_document_scanner import FastDocumentScanner
-    from src.utils.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     try:
         redis_client = get_redis_client(async_client=False, database="main")
@@ -1175,7 +1175,7 @@ async def _scan_and_store_man_pages(
 def _get_system_context_safe(machine_id: str) -> dict:
     """Get system context for metadata, fallback to machine_id (Issue #398: extracted)."""
     try:
-        from src.utils.system_context import get_system_context
+        from utils.system_context import get_system_context
 
         return get_system_context()
     except ImportError:
@@ -1275,7 +1275,7 @@ async def scan_man_pages_changes(
     import socket
 
     from backend.services.fast_document_scanner import FastDocumentScanner
-    from src.utils.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:

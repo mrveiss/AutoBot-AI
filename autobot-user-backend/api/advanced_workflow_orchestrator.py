@@ -21,10 +21,10 @@ from backend.api.workflow_automation import (
     WorkflowAutomationManager,
     WorkflowStep,
 )
-from src.auth_middleware import check_admin_permission
-from src.enhanced_orchestrator import EnhancedOrchestrator
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
+from auth_middleware import check_admin_permission
+from enhanced_orchestrator import EnhancedOrchestrator
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -604,7 +604,7 @@ class AdvancedWorkflowOrchestrator:
             }
 
             # Generate base steps using existing orchestrator
-            from src.type_definitions import TaskComplexity
+            from type_definitions import TaskComplexity
 
             complexity = getattr(
                 TaskComplexity,

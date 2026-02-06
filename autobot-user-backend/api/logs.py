@@ -23,10 +23,10 @@ from fastapi.responses import StreamingResponse
 
 from backend.type_defs.common import Metadata
 from backend.utils.io_executor import run_in_log_executor
-from src.auth_middleware import check_admin_permission
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

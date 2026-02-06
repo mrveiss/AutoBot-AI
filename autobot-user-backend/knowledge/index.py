@@ -170,7 +170,7 @@ class IndexMixin:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
+            from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 
             logger.info("Starting ChromaDB index rebuild with optimized HNSW params...")
             chroma_client = create_chromadb_client(
@@ -219,7 +219,7 @@ class IndexMixin:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
         try:
-            from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
+            from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 
             chroma_path = Path(self.chromadb_path)
             chroma_client = create_chromadb_client(

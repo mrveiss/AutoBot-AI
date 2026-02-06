@@ -16,12 +16,12 @@ import os
 import threading
 from typing import Optional
 
-from src.autobot_memory_graph import AutoBotMemoryGraph
-from src.constants.network_constants import NetworkConstants
-from src.context_window_manager import ContextWindowManager
-from src.encryption_service import get_encryption_service, is_encryption_enabled
-from src.config import config as global_config_manager
-from src.utils.redis_client import get_redis_client
+from autobot_memory_graph import AutoBotMemoryGraph
+from constants.network_constants import NetworkConstants
+from context_window_manager import ContextWindowManager
+from encryption_service import get_encryption_service, is_encryption_enabled
+from config import config as global_config_manager
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class ChatHistoryBase:
             redis_host: Optional override for Redis host
             redis_port: Optional override for Redis port
         """
-        from src.config import UnifiedConfigManager
+        from config import UnifiedConfigManager
 
         data_config = global_config_manager.get("data", {})
         redis_config = global_config_manager.get_redis_config()

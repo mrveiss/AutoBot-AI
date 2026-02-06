@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Try to import fingerprinting and anti-pattern detection
 try:
-    from src.code_intelligence.fingerprinting import CloneDetector
+    from code_intelligence.fingerprinting import CloneDetector
 
     FINGERPRINTING_AVAILABLE = True
 except ImportError:
@@ -40,7 +40,7 @@ except ImportError:
     logger.warning("Fingerprinting module not available")
 
 try:
-    from src.code_intelligence.anti_pattern_detection import AntiPatternDetector
+    from code_intelligence.anti_pattern_detection import AntiPatternDetector
 
     ANTI_PATTERN_AVAILABLE = True
 except ImportError:
@@ -50,7 +50,7 @@ except ImportError:
 
 # Embedding generation (uses existing infrastructure)
 try:
-    from src.knowledge.embedding_cache import EmbeddingCache
+    from knowledge.embedding_cache import EmbeddingCache
 
     EMBEDDING_CACHE_AVAILABLE = True
 except ImportError:

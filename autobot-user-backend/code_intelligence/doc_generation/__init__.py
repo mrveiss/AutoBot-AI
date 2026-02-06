@@ -17,7 +17,7 @@ Package Structure:
 - module_analyzer.py: AST analysis for modules/classes/functions (Issue #394)
 
 Usage:
-    from src.code_intelligence.doc_generation import (
+    from code_intelligence.doc_generation import (
         DocFormat, DocSection, ElementType, DocCompleteness, DiagramType,
         ParameterDoc, ReturnDoc, ExceptionDoc, ExampleDoc,
         FunctionDoc, ClassDoc, ModuleDoc, PackageDoc,
@@ -30,7 +30,7 @@ still exports all classes directly.
 """
 
 # Types and simple data classes
-from src.code_intelligence.doc_generation.types import (
+from code_intelligence.doc_generation.types import (
     DiagramType,
     DocCompleteness,
     DocFormat,
@@ -43,7 +43,7 @@ from src.code_intelligence.doc_generation.types import (
 )
 
 # Larger data classes / models
-from src.code_intelligence.doc_generation.models import (
+from code_intelligence.doc_generation.models import (
     ClassDoc,
     DiagramSpec,
     FunctionDoc,
@@ -53,20 +53,20 @@ from src.code_intelligence.doc_generation.models import (
 )
 
 # Docstring parsing (Issue #394)
-from src.code_intelligence.doc_generation.docstring_parser import (
+from code_intelligence.doc_generation.docstring_parser import (
     DocstringParser,
     enhance_function_doc,
 )
 
 # Markdown generation (Issue #394)
-from src.code_intelligence.doc_generation.markdown_generator import (
+from code_intelligence.doc_generation.markdown_generator import (
     MarkdownGenerator,
     generate_api_docs,
     generate_module_overview,
 )
 
 # Module analysis (Issue #394)
-from src.code_intelligence.doc_generation.module_analyzer import (
+from code_intelligence.doc_generation.module_analyzer import (
     ModuleAnalyzer,
     analyze_module,
     analyze_package,

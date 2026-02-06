@@ -29,10 +29,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import get_current_user
-from src.services.graph_rag_service import GraphRAGService
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.request_utils import generate_request_id
+from auth_middleware import get_current_user
+from services.graph_rag_service import GraphRAGService
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration

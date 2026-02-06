@@ -20,9 +20,9 @@ import aiohttp
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from src.circuit_breaker import circuit_breaker_async
-from src.config import UnifiedConfigManager
-from src.utils.http_client import get_http_client
+from circuit_breaker import circuit_breaker_async
+from config import UnifiedConfigManager
+from autobot_shared.http_client import get_http_client
 
 from ..models import LLMRequest, LLMResponse, LLMSettings
 from ..streaming import StreamingManager
@@ -334,7 +334,7 @@ class OllamaProvider:
         Returns:
             Response dictionary with accumulated content
         """
-        from src.utils.async_stream_processor import process_llm_stream
+        from utils.async_stream_processor import process_llm_stream
 
         accumulated_content, completed_successfully = await process_llm_stream(
             response,

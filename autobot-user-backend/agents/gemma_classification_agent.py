@@ -12,16 +12,16 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from src.agents.classification_agent import ClassificationResult
-from src.autobot_types import TaskComplexity
-from src.config.ssot_config import (
+from agents.classification_agent import ClassificationResult
+from autobot_types import TaskComplexity
+from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from src.utils.http_client import get_http_client
-from src.utils.redis_client import get_redis_client
-from src.workflow_classifier import WorkflowClassifier
+from autobot_shared.http_client import get_http_client
+from autobot_shared.redis_client import get_redis_client
+from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent

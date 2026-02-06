@@ -45,9 +45,9 @@ from backend.services.terminal_websocket import (
     LOGGING_SECURITY_LEVELS,
     SHELL_OPERATORS,
 )
-from src.chat_history import ChatHistoryManager
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
+from chat_history import ChatHistoryManager
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -74,7 +74,7 @@ async def _flush_cleanup_buffer(
 
     Strips ANSI codes and saves clean content to chat history.
     """
-    from src.utils.encoding_utils import strip_ansi_codes
+    from utils.encoding_utils import strip_ansi_codes
 
     if not output_buffer.strip():
         return
@@ -106,7 +106,7 @@ async def _save_buffered_output_to_chat(
     Returns:
         Tuple of (should_reset_buffer, skip_reason or None)
     """
-    from src.utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
+    from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
 
     clean_content = strip_ansi_codes(output_buffer).strip()
     is_prompt = is_terminal_prompt(clean_content)
@@ -181,7 +181,7 @@ class ConsolidatedTerminalWebSocket:
 
         # Initialize TerminalLogger for persistent command logging
         if conversation_id:
-            from src.logging.terminal_logger import TerminalLogger
+            from logging.terminal_logger import TerminalLogger
 
             self.terminal_logger = TerminalLogger(
                 redis_client=redis_client, data_dir="data/chats"
@@ -640,7 +640,7 @@ class ConsolidatedTerminalWebSocket:
 
             import aiofiles
 
-            from src.utils.encoding_utils import strip_ansi_codes
+            from utils.encoding_utils import strip_ansi_codes
 
             # Strip ANSI escape codes before writing to transcript
             clean_text = strip_ansi_codes(text)
@@ -1182,7 +1182,7 @@ class ConsolidatedTerminalWebSocket:
 
         import aiofiles
 
-        from src.utils.encoding_utils import strip_ansi_codes
+        from utils.encoding_utils import strip_ansi_codes
 
         try:
             # Strip ANSI escape codes before writing to transcript

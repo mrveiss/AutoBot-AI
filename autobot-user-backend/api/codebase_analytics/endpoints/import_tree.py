@@ -15,7 +15,7 @@ import aiofiles
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
 

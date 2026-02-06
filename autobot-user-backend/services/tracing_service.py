@@ -47,7 +47,7 @@ from opentelemetry.sdk.trace.sampling import (
 from opentelemetry.trace import Status, StatusCode, SpanKind
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

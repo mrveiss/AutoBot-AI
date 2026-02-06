@@ -17,10 +17,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from src.config import UnifiedConfigManager
-from src.constants.network_constants import NetworkConstants
-from src.research_browser_manager import research_browser_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from config import UnifiedConfigManager
+from constants.network_constants import NetworkConstants
+from research_browser_manager import research_browser_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -326,7 +326,7 @@ def _get_or_create_browser_session(session_id: str):
 async def _get_docker_browser_info(session) -> dict:
     """Get Docker browser container info (Issue #665: extracted helper)."""
     try:
-        from src.config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
+        from config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
 
         return {
             "available": True,
@@ -471,7 +471,7 @@ async def get_chat_browser_session(conversation_id: str):
     # Get VNC info for frontend integration
     docker_browser_info = None
     try:
-        from src.config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
+        from config import PLAYWRIGHT_VNC_URL, get_vnc_direct_url
 
         docker_browser_info = {
             "available": True,

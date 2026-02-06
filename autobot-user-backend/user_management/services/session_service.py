@@ -13,7 +13,7 @@ import logging
 import uuid
 from typing import Optional
 
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

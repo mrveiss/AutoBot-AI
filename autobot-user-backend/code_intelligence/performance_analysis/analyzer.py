@@ -21,7 +21,7 @@ from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
-    from src.code_intelligence.analytics_infrastructure import (
+    from code_intelligence.analytics_infrastructure import (
         SIMILARITY_MEDIUM,
         SemanticAnalysisMixin,
     )
@@ -33,7 +33,7 @@ except ImportError:
 
 # Issue #607: Import shared caches for performance optimization
 try:
-    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    from code_intelligence.shared.ast_cache import get_ast_with_content
 
     HAS_SHARED_CACHE = True
 except ImportError:
@@ -294,7 +294,7 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         Scores now degrade gracefully instead of immediately hitting 0.
         """
         # Import scoring utilities
-        from src.code_intelligence.shared.scoring import (
+        from code_intelligence.shared.scoring import (
             calculate_score_from_severity_counts,
             get_grade_from_score,
         )

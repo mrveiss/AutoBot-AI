@@ -24,13 +24,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.services.audit_logger import AuditResult, get_audit_logger
-from src.auth_middleware import auth_middleware
-from src.utils.catalog_http_exceptions import (
+from auth_middleware import auth_middleware
+from utils.catalog_http_exceptions import (
     raise_auth_error,
     raise_server_error,
     raise_validation_error,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger(__name__)

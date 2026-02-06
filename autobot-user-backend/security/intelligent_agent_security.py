@@ -22,11 +22,11 @@ INSTALLATION:
 import logging
 from typing import Dict, List
 
-from src.enhanced_security_layer import EnhancedSecurityLayer
-from src.security.prompt_injection_detector import (
+from enhanced_security_layer import EnhancedSecurityLayer
+from security.prompt_injection_detector import (
     get_prompt_injection_detector,
 )
-from src.security.secure_llm_command_parser import get_secure_llm_parser
+from security.secure_llm_command_parser import get_secure_llm_parser
 
 logger = logging.getLogger(__name__)
 
@@ -196,9 +196,9 @@ PATCH_INSTRUCTIONS = """
 
 2. ADD SECURITY IMPORTS (at top of file, after existing imports):
 
-   from src.security.prompt_injection_detector import get_prompt_injection_detector, InjectionRisk
-   from src.security.secure_llm_command_parser import get_secure_llm_parser
-   from src.enhanced_security_layer import EnhancedSecurityLayer
+   from security.prompt_injection_detector import get_prompt_injection_detector, InjectionRisk
+   from security.secure_llm_command_parser import get_secure_llm_parser
+   from enhanced_security_layer import EnhancedSecurityLayer
 
 3. INITIALIZE SECURITY IN __init__ (add to IntelligentAgent.__init__):
 

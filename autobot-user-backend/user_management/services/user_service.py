@@ -19,10 +19,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.user_management.models import Role, User, UserRole
-from src.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
-from src.user_management.services.base_service import BaseService, TenantContext
-from src.user_management.services.session_service import SessionService
+from user_management.models import Role, User, UserRole
+from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from user_management.services.base_service import BaseService, TenantContext
+from user_management.services.session_service import SessionService
 
 logger = logging.getLogger(__name__)
 

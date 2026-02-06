@@ -122,7 +122,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
-from src.utils.error_boundaries import error_boundary
+from autobot_shared.error_boundaries import error_boundary
 
 logger = logging.getLogger(__name__)
 

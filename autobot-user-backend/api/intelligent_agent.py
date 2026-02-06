@@ -16,13 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 
 if TYPE_CHECKING:
-    from src.intelligence.intelligent_agent import IntelligentAgent
+    from intelligence.intelligent_agent import IntelligentAgent
 
-from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
@@ -40,11 +40,11 @@ _agent_initialization_lock = (
 def get_lazy_dependencies():
     """Lazy import of heavy dependencies to prevent startup blocking"""
     try:
-        from src.intelligence.intelligent_agent import IntelligentAgent
-        from src.knowledge_base import KnowledgeBase
-        from src.llm_interface import LLMInterface
-        from src.utils.command_validator import CommandValidator
-        from src.worker_node import WorkerNode
+        from intelligence.intelligent_agent import IntelligentAgent
+        from knowledge_base import KnowledgeBase
+        from llm_interface import LLMInterface
+        from utils.command_validator import CommandValidator
+        from worker_node import WorkerNode
 
         return (
             IntelligentAgent,

@@ -12,8 +12,8 @@ import uuid
 from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
-from src.enhanced_orchestrator import EnhancedOrchestrator
-from src.orchestrator import Orchestrator
+from enhanced_orchestrator import EnhancedOrchestrator
+from orchestrator import Orchestrator
 
 from .controller import WorkflowController
 from .executor import WorkflowExecutor

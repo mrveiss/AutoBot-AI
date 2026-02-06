@@ -21,9 +21,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.constants.model_constants import model_config
-from src.utils.logging_manager import get_llm_logger
-from src.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+from constants.model_constants import model_config
+from autobot_shared.logging_manager import get_llm_logger
+from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
 
@@ -159,7 +159,7 @@ class AdvancedRAGOptimizer:
         try:
             # Use singleton factory to get properly initialized knowledge base
             # This ensures consistent KB state across the application
-            from src.knowledge import get_knowledge_base
+            from knowledge import get_knowledge_base
 
             self.kb = await get_knowledge_base()
 

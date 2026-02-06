@@ -8,7 +8,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 
 import yaml
 
-from src.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

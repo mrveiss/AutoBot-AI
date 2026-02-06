@@ -8,10 +8,10 @@ This module provides utilities for lazy-initializing singleton objects on app st
 or other storage mechanisms. Eliminates duplicate lazy initialization code across API files.
 
 Usage:
-    from src.utils.lazy_singleton import lazy_init_singleton
+    from utils.lazy_singleton import lazy_init_singleton
 
     def get_chat_history_manager(request):
-        from src.chat_history import ChatHistoryManager
+        from chat_history import ChatHistoryManager
         return lazy_init_singleton(request.app.state, "chat_history_manager", ChatHistoryManager)
 """
 
@@ -265,7 +265,7 @@ def singleton_getter(attribute_name: str, factory: Callable):
     Example:
         >>> @singleton_getter("chat_history_manager", ChatHistoryManager)
         ... def get_chat_history_manager(request):
-        ...     from src.chat_history import ChatHistoryManager
+        ...     from chat_history import ChatHistoryManager
         ...     return ChatHistoryManager
     """
 

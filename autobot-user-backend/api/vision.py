@@ -16,9 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import get_current_user
-from src.computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)

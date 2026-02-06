@@ -14,12 +14,12 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.enterprise_feature_manager import (
+from enterprise_feature_manager import (
     FeatureCategory,
     FeatureStatus,
     get_enterprise_manager,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

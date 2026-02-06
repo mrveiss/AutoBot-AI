@@ -13,7 +13,7 @@ Components:
 - utils: Helper functions for event handling
 
 Usage:
-    from src.events import EventStreamManager, AgentEvent, EventType
+    from events import EventStreamManager, AgentEvent, EventType
 
     # Initialize manager
     manager = EventStreamManager()
@@ -29,7 +29,7 @@ Usage:
     events = await manager.get_latest(count=10)
 """
 
-from src.events.types import (
+from events.types import (
     EventType,
     AgentEvent,
     MessageContent,
@@ -38,7 +38,7 @@ from src.events.types import (
     PlanContent,
     KnowledgeContent,
 )
-from src.events.stream_manager import EventStreamManager, RedisEventStreamManager
+from events.stream_manager import EventStreamManager, RedisEventStreamManager
 
 __all__ = [
     # Types

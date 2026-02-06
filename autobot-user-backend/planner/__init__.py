@@ -12,7 +12,7 @@ Components:
 - planner: Planner interface and LLM implementation
 
 Usage:
-    from src.planner import PlannerModule, ExecutionPlan, PlanStep
+    from planner import PlannerModule, ExecutionPlan, PlanStep
 
     planner = PlannerModule(llm_client, event_stream)
 
@@ -26,13 +26,13 @@ Usage:
         await planner.complete_step(plan.plan_id, step.step_id)
 """
 
-from src.planner.types import (
+from planner.types import (
     StepStatus,
     PlanStatus,
     PlanStep,
     ExecutionPlan,
 )
-from src.planner.planner import PlannerModule, LLMPlannerModule
+from planner.planner import PlannerModule, LLMPlannerModule
 
 __all__ = [
     # Types

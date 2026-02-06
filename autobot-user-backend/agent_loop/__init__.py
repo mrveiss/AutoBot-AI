@@ -16,7 +16,7 @@ The Agent Loop:
     6. ENTER STANDBY     → Idle state, await new tasks
 
 Usage:
-    from src.agent_loop import AgentLoop, AgentLoopConfig
+    from agent_loop import AgentLoop, AgentLoopConfig
 
     loop = AgentLoop(
         event_stream=event_manager,
@@ -28,15 +28,15 @@ Usage:
     result = await loop.run_task("Implement feature X")
 """
 
-from src.agent_loop.types import (
+from agent_loop.types import (
     LoopState,
     LoopPhase,
     IterationResult,
     AgentLoopConfig,
     ThinkResult,
 )
-from src.agent_loop.loop import AgentLoop
-from src.agent_loop.think_tool import ThinkTool, ThinkCategory
+from agent_loop.loop import AgentLoop
+from agent_loop.think_tool import ThinkTool, ThinkCategory
 
 __all__ = [
     # Types

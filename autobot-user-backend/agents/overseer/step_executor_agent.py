@@ -24,8 +24,8 @@ import time
 from datetime import datetime
 from typing import AsyncGenerator, Optional, Tuple, Union
 
-from src.security.command_patterns import check_dangerous_patterns, is_safe_command
-from src.utils.command_utils import execute_shell_command_streaming
+from security.command_patterns import check_dangerous_patterns, is_safe_command
+from utils.command_utils import execute_shell_command_streaming
 
 from .command_explanation_service import (
     CommandExplanationService,
@@ -163,7 +163,7 @@ class StepExecutorAgent:
         """
         Validate a command for safety before execution.
 
-        Issue #765: Uses centralized patterns from src.security.command_patterns.
+        Issue #765: Uses centralized patterns from security.command_patterns.
 
         Args:
             command: The shell command to validate
@@ -546,7 +546,7 @@ class StepExecutorAgent:
         """Get or create chat history manager."""
         if self._chat_history_manager is None:
             try:
-                from src.chat_history import ChatHistoryManager
+                from chat_history import ChatHistoryManager
 
                 self._chat_history_manager = ChatHistoryManager()
             except ImportError:
@@ -576,7 +576,7 @@ class StepExecutorAgent:
                     self.pty_session_id,
                 )
                 # Try to create a new PTY session
-                from src.constants.path_constants import PATH
+                from constants.path_constants import PATH
 
                 pty = simple_pty_manager.create_session(
                     self.pty_session_id, initial_cwd=str(PATH.PROJECT_ROOT)
@@ -693,7 +693,7 @@ class StepExecutorAgent:
             Extracted terminal output text, or empty string if none found.
             Issue #620.
         """
-        from src.utils.encoding_utils import strip_ansi_codes
+        from utils.encoding_utils import strip_ansi_codes
 
         for msg in reversed(messages):
             if msg.get("sender") == "terminal" and msg.get("text"):

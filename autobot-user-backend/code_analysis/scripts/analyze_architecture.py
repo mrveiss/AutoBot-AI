@@ -13,7 +13,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
+from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 
 
 async def analyze_architectural_patterns():

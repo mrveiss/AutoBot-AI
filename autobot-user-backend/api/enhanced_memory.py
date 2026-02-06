@@ -17,16 +17,16 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.enhanced_memory_manager_async import (
+from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     TaskEntry,
     TaskPriority,
     TaskStatus,
     get_async_enhanced_memory_manager,
 )
-from src.markdown_reference_system import MarkdownReferenceSystem
-from src.task_execution_tracker import task_tracker
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from markdown_reference_system import MarkdownReferenceSystem
+from task_execution_tracker import task_tracker
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ async def get_memory_manager() -> (
             if _markdown_system is None:
                 # Note: MarkdownReferenceSystem still uses sync manager internally
                 # This is a compatibility bridge until it's also converted
-                from src.enhanced_memory_manager import EnhancedMemoryManager
+                from enhanced_memory_manager import EnhancedMemoryManager
 
                 _sync_memory_manager = EnhancedMemoryManager()
                 _markdown_system = MarkdownReferenceSystem(_sync_memory_manager)
@@ -319,7 +319,7 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
         _, _ = await get_memory_manager()  # Issue #382: markdown_system unused here
 
         # Wrap sync operation in thread (MarkdownReferenceSystem uses sync memory manager)
-        from src.enhanced_memory_manager import EnhancedMemoryManager
+        from enhanced_memory_manager import EnhancedMemoryManager
 
         sync_manager = EnhancedMemoryManager()
 
@@ -449,7 +449,7 @@ async def get_embedding_cache_stats():
     """
     try:
         # Use sync memory manager for embedding cache (async manager doesn't have this)
-        from src.enhanced_memory_manager import EnhancedMemoryManager
+        from enhanced_memory_manager import EnhancedMemoryManager
 
         sync_manager = EnhancedMemoryManager()
         cache_size = await asyncio.to_thread(sync_manager._get_embedding_cache_size)

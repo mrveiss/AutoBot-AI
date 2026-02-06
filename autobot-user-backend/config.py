@@ -21,7 +21,7 @@ import yaml
 def _get_ssot_ollama_url() -> str:
     """Get Ollama URL from SSOT config with fallback."""
     try:
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         return get_config().ollama_url
     except Exception:
@@ -630,7 +630,7 @@ class ConfigManager:
             Dict containing hardware acceleration settings
         """
         try:
-            from src.hardware_acceleration import get_hardware_acceleration_manager
+            from hardware_acceleration import get_hardware_acceleration_manager
 
             hw_manager = get_hardware_acceleration_manager()
             device_config = hw_manager.get_ollama_device_config(task_type)

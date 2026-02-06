@@ -19,19 +19,19 @@ from backend.api.user_management.dependencies import (
     get_user_service,
     require_user_management_enabled,
 )
-from src.user_management.middleware.rate_limit import (
+from user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
     RateLimitExceeded,
 )
-from src.user_management.schemas import (
+from user_management.schemas import (
     PasswordChange,
     UserCreate,
     UserListResponse,
     UserResponse,
     UserUpdate,
 )
-from src.user_management.services import UserService
-from src.user_management.services.user_service import (
+from user_management.services import UserService
+from user_management.services.user_service import (
     DuplicateUserError,
     InvalidCredentialsError,
     UserNotFoundError,
@@ -164,7 +164,7 @@ async def get_current_user_profile(
     - single_user: Returns default admin user (no DB required)
     - Other modes: Returns user from database or session
     """
-    from src.user_management.config import DeploymentMode, get_deployment_config
+    from user_management.config import DeploymentMode, get_deployment_config
 
     config = get_deployment_config()
     username = current_user.get("username")
@@ -483,7 +483,7 @@ async def revoke_role(
 
 def _user_to_response(user) -> UserResponse:
     """Convert User model to UserResponse schema."""
-    from src.user_management.schemas.user import RoleResponse
+    from user_management.schemas.user import RoleResponse
 
     roles = []
     if hasattr(user, "roles") and user.roles:

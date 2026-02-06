@@ -20,8 +20,8 @@ import aiohttp
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.http_client import get_http_client
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/unified", tags=["unified-analytics"])
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/unified", tags=["unified-analytics"])
 async def fetch_quality_health() -> Dict[str, Any]:
     """Fetch quality health score data via HTTP."""
     try:
-        from src.constants.network_constants import ServiceURLs
+        from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
@@ -54,7 +54,7 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import ServiceURLs
+        from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
@@ -86,7 +86,7 @@ async def fetch_debt_summary() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import ServiceURLs
+        from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)
@@ -110,7 +110,7 @@ async def fetch_performance_summary() -> Dict[str, Any]:
     try:
         import aiohttp
 
-        from src.constants.network_constants import ServiceURLs
+        from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
         # Use singleton HTTP client (Issue #65 P1: 60-80% overhead reduction)

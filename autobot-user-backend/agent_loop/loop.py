@@ -22,8 +22,8 @@ import time
 import uuid
 from typing import Any, Optional
 
-from src.agent_loop.think_tool import ThinkTool
-from src.agent_loop.types import (
+from agent_loop.think_tool import ThinkTool
+from agent_loop.types import (
     AgentLoopConfig,
     AgentMessage,
     IterationResult,
@@ -33,10 +33,10 @@ from src.agent_loop.types import (
     TaskContext,
     ThinkCategory,
 )
-from src.events import EventStreamManager, EventType
-from src.events.types import create_message_event
-from src.planner import PlannerModule
-from src.tools.parallel import ParallelToolExecutor
+from events import EventStreamManager, EventType
+from events.types import create_message_event
+from planner import PlannerModule
+from tools.parallel import ParallelToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -423,7 +423,7 @@ class AgentLoop:
 
         if self.tool_executor and self.config.enable_parallel_tools:
             # Use parallel executor
-            from src.tools.parallel import create_tool_calls
+            from tools.parallel import create_tool_calls
 
             tool_calls = create_tool_calls(tools)
             return await self.tool_executor.execute_batch(

@@ -15,8 +15,8 @@ from typing import Dict, Optional
 
 import yaml
 
-from src.constants.path_constants import PATH
-from src.utils.error_boundaries import ErrorCategory
+from constants.path_constants import PATH
+from autobot_shared.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 

@@ -48,8 +48,8 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
-from src.config.ssot_config import config
-from src.utils.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

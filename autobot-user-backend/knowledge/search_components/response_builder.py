@@ -81,7 +81,7 @@ class ResponseBuilder:
         if not enable_clustering or not results:
             return None, results
 
-        from src.knowledge.search_quality import get_result_clusterer
+        from knowledge.search_quality import get_result_clusterer
 
         clusterer = get_result_clusterer()
         cluster_objects, unclustered = clusterer.cluster_results(results)

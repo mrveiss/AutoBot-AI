@@ -20,8 +20,8 @@ from backend.api.user_management.dependencies import (
     require_platform_admin,
     require_user_management_enabled,
 )
-from src.user_management.services import OrganizationService
-from src.user_management.services.organization_service import (
+from user_management.services import OrganizationService
+from user_management.services.organization_service import (
     DuplicateOrganizationError,
     OrganizationNotFoundError,
 )

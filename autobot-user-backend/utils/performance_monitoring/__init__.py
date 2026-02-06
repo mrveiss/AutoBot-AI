@@ -17,7 +17,7 @@ Package Structure:
 - monitor.py: Main PerformanceMonitor class
 
 Usage:
-    from src.utils.performance_monitoring import (
+    from utils.performance_monitoring import (
         # Main monitor class
         PerformanceMonitor,
         # Metrics dataclasses
@@ -41,7 +41,7 @@ still exports all classes and functions directly.
 """
 
 # Types and constants
-from src.utils.performance_monitoring.types import (
+from utils.performance_monitoring.types import (
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_COLLECTION_INTERVAL,
     DEFAULT_PERFORMANCE_BASELINES,
@@ -50,7 +50,7 @@ from src.utils.performance_monitoring.types import (
 )
 
 # Metrics dataclasses
-from src.utils.performance_monitoring.metrics import (
+from utils.performance_monitoring.metrics import (
     GPUMetrics,
     MultiModalMetrics,
     NPUMetrics,
@@ -59,10 +59,10 @@ from src.utils.performance_monitoring.metrics import (
 )
 
 # Hardware detection
-from src.utils.performance_monitoring.hardware import HardwareDetector
+from utils.performance_monitoring.hardware import HardwareDetector
 
 # Collectors
-from src.utils.performance_monitoring.collectors import (
+from utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
     NPUCollector,
@@ -71,19 +71,19 @@ from src.utils.performance_monitoring.collectors import (
 )
 
 # Analyzers
-from src.utils.performance_monitoring.analyzers import (
+from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
 )
 
 # Decorator
-from src.utils.performance_monitoring.decorator import (
+from utils.performance_monitoring.decorator import (
     monitor_performance,
     set_redis_client,
 )
 
 # Main monitor class
-from src.utils.performance_monitoring.monitor import PerformanceMonitor
+from utils.performance_monitoring.monitor import PerformanceMonitor
 
 # Re-export for convenience
 __all__ = [

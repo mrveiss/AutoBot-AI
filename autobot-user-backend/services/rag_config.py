@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from backend.type_defs.common import Metadata
-from src.constants.model_constants import model_config
-from src.utils.logging_manager import get_llm_logger
+from constants.model_constants import model_config
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_config")
 

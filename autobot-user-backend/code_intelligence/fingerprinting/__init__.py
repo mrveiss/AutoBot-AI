@@ -16,7 +16,7 @@ Package Structure:
 - detector.py: Main clone detection orchestrator
 
 Usage:
-    from src.code_intelligence.fingerprinting import (
+    from code_intelligence.fingerprinting import (
         CloneType, CloneSeverity, FingerprintType,
         CodeFragment, Fingerprint, CloneInstance, CloneGroup,
         CloneDetectionReport, ASTNormalizer, ASTHasher, SemanticHasher,
@@ -28,7 +28,7 @@ still exports all classes directly.
 """
 
 # Types and data classes
-from src.code_intelligence.fingerprinting.types import (
+from code_intelligence.fingerprinting.types import (
     CloneType,
     FingerprintType,
     CloneSeverity,
@@ -40,19 +40,19 @@ from src.code_intelligence.fingerprinting.types import (
 )
 
 # AST Normalizer
-from src.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
+from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
 # AST Hasher
-from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from code_intelligence.fingerprinting.ast_hasher import ASTHasher
 
 # Semantic Hasher
-from src.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
+from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
 
 # Similarity Calculator
-from src.code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from code_intelligence.fingerprinting.similarity import SimilarityCalculator
 
 # Clone Detector
-from src.code_intelligence.fingerprinting.detector import CloneDetector
+from code_intelligence.fingerprinting.detector import CloneDetector
 
 # Re-export for convenience
 __all__ = [

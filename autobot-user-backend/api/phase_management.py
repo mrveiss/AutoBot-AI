@@ -16,8 +16,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from scripts.phase_validation_system import PhaseValidator
-from src.phase_progression_manager import get_progression_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from phase_progression_manager import get_progression_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

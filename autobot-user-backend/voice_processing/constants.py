@@ -10,7 +10,7 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 
 import re
 
-from src.voice_processing.types import VoiceCommand
+from voice_processing.types import VoiceCommand
 
 # Issue #315: Intent extraction dispatch tables to reduce nesting
 AUTOMATION_INTENT_PATTERNS = [

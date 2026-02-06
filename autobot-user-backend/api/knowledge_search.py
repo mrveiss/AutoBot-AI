@@ -27,11 +27,11 @@ from backend.api.knowledge_models import (
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.type_defs.common import Metadata
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import RAG Agent for enhanced search capabilities
 try:
-    from src.agents.rag_agent import get_rag_agent
+    from agents.rag_agent import get_rag_agent
 
     RAG_AVAILABLE = True
 except ImportError:
@@ -1074,7 +1074,7 @@ async def get_search_analytics():
     - recent_failed_queries: Recent searches with no results
     """
     try:
-        from src.knowledge.search_quality import get_search_analytics
+        from knowledge.search_quality import get_search_analytics
 
         analytics = get_search_analytics()
         return {
@@ -1107,7 +1107,7 @@ async def record_search_click(request: dict):
     - session_id: Optional session identifier
     """
     try:
-        from src.knowledge.search_quality import get_search_analytics
+        from knowledge.search_quality import get_search_analytics
 
         query = request.get("query", "")
         result_id = request.get("result_id", "")
@@ -1148,7 +1148,7 @@ async def expand_query(request: dict):
     - expanded_queries: List of expanded query variations
     """
     try:
-        from src.knowledge.search_quality import get_query_expander
+        from knowledge.search_quality import get_query_expander
 
         query = request.get("query", "")
         if not query:

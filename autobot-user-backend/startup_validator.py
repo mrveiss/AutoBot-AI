@@ -16,7 +16,7 @@ Key Features:
 - Service connectivity testing
 
 Usage:
-    from src.startup_validator import validate_startup_dependencies
+    from startup_validator import validate_startup_dependencies
 
     # In app startup
     validation_result = await validate_startup_dependencies()
@@ -32,9 +32,9 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.config import UnifiedConfigManager
-from src.constants.path_constants import PATH
-from src.utils.http_client import get_http_client
+from config import UnifiedConfigManager
+from constants.path_constants import PATH
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +282,7 @@ class StartupValidator:
 
             # Use canonical Redis utility instead of direct instantiation
             # This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             client = get_redis_client(database="main")
             if client is None:

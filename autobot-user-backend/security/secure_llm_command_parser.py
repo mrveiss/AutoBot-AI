@@ -13,13 +13,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from src.enhanced_security_layer import EnhancedSecurityLayer
-from src.security.prompt_injection_detector import (
+from enhanced_security_layer import EnhancedSecurityLayer
+from security.prompt_injection_detector import (
     InjectionRisk,
     PromptInjectionDetector,
     get_prompt_injection_detector,
 )
-from src.utils.command_validator import CommandValidator
+from utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)
 

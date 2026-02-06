@@ -16,7 +16,7 @@ Original module: 1,591 lines
 New package: ~1,200 lines across multiple focused modules
 
 Usage:
-    from src.context_aware_decision import (
+    from context_aware_decision import (
         ContextAwareDecisionSystem,
         DecisionType,
         ConfidenceLevel,

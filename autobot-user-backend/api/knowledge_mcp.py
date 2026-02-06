@@ -16,12 +16,12 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import get_current_user
-from src.config import config as global_config_manager
-from src.knowledge_base import KnowledgeBase
-from src.langchain_agent_orchestrator import LangChainAgentOrchestrator
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import RedisDatabase, get_redis_client
+from auth_middleware import get_current_user
+from config import config as global_config_manager
+from knowledge_base import KnowledgeBase
+from langchain_agent_orchestrator import LangChainAgentOrchestrator
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])

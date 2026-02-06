@@ -187,7 +187,7 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._chromadb_collection is None:
                     try:
-                        from src.utils.async_chromadb_client import (
+                        from utils.async_chromadb_client import (
                             get_async_chromadb_client,
                         )
 
@@ -218,7 +218,7 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._redis_client is None:
                     try:
-                        from src.utils.redis_client import get_redis_client
+                        from autobot_shared.redis_client import get_redis_client
 
                         self._redis_client = await get_redis_client(
                             async_client=True, database=self._redis_database
@@ -238,7 +238,7 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._embedding_cache is None:
                     try:
-                        from src.knowledge.embedding_cache import EmbeddingCache
+                        from knowledge.embedding_cache import EmbeddingCache
 
                         self._embedding_cache = EmbeddingCache(
                             maxsize=self._embedding_cache_size,
@@ -359,7 +359,7 @@ class AnalyticsInfrastructureMixin:
         try:
             import aiohttp
 
-            from src.config.ssot_config import get_config
+            from autobot_shared.ssot_config import get_config
 
             ssot = get_config()
             url = f"{ssot.ollama_url}/api/embeddings"

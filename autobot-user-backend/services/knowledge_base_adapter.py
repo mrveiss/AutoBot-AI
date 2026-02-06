@@ -12,7 +12,7 @@ providing a consistent interface for the RAG service layer.
 from typing import Any, List, Protocol
 
 from backend.type_defs.common import Metadata
-from src.utils.logging_manager import get_llm_logger
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("knowledge_base_adapter")
 

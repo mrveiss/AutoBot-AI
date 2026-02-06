@@ -13,7 +13,7 @@ import threading
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from .manager import WorkflowAutomationManager
 from .models import (

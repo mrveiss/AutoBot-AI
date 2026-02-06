@@ -239,12 +239,12 @@ class TLSConfig(BaseSettings):
 def _get_vm_definitions() -> Dict[str, str]:
     """Get VM definitions from SSOT config with fallback."""
     try:
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         return get_config().vm_definitions
     except Exception:
         # Fallback for standalone PKI tool usage - use SSOT defaults
-        from src.config.ssot_config import VMConfig
+        from autobot_shared.ssot_config import VMConfig
 
         vm = VMConfig()
         return {

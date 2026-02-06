@@ -28,11 +28,11 @@ Feature Envy Refactoring (Issue #312):
 - Refactored ElementClassifier to use data objects
 - All changes maintain backward compatibility
 
-DEPRECATED: Import directly from src.computer_vision instead.
+DEPRECATED: Import directly from computer_vision instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from src.computer_vision import (
+from computer_vision import (
     # Types
     FORM_SUBMISSION_KEYWORDS,
     ElementType,

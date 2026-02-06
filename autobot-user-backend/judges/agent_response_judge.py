@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from src.constants import AgentThresholds
+from constants import AgentThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 

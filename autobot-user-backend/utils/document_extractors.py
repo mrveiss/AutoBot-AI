@@ -15,7 +15,7 @@ This module is designed to be reusable by ANY component in the codebase,
 not locked to the knowledge base.
 
 Usage:
-    from src.utils.document_extractors import DocumentExtractor
+    from utils.document_extractors import DocumentExtractor
 
     # Extract from single file
     text = await DocumentExtractor.extract_from_pdf(Path("document.pdf"))

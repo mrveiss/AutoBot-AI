@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
-from src.autobot_types import TaskComplexity
+from autobot_types import TaskComplexity
 
 
 class TemplateCategory(Enum):

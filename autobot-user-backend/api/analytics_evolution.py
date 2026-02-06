@@ -23,9 +23,9 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import get_redis_client
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

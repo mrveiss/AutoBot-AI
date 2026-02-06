@@ -21,7 +21,7 @@ from backend.initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
-from src.constants.network_constants import (  # noqa: F401 - used in docstring example
+from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
 

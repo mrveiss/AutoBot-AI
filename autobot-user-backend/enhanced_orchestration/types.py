@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
-from src.constants.status_enums import TaskStatus
-from src.constants.threshold_constants import RetryConfig, TimingConstants
+from constants.status_enums import TaskStatus
+from constants.threshold_constants import RetryConfig, TimingConstants
 
 # Module-level frozenset for fallback tier checks
 FALLBACK_TIERS: FrozenSet[str] = frozenset({"basic", "emergency"})

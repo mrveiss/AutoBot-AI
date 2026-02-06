@@ -16,10 +16,10 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.user import User
+    from user_management.models.user import User
 
 
 class MFAMethod(str, Enum):

@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from src.pki.config import (
+from pki.config import (
     VM_DEFINITIONS,
     CertificateStatus,
     TLSConfig,

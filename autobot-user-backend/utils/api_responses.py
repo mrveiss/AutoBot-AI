@@ -25,7 +25,7 @@ BENEFITS:
 
 USAGE PATTERN:
 ==============
-from src.utils.api_responses import success_response, error_response, not_found
+from utils.api_responses import success_response, error_response, not_found
 
 # Old pattern (8 lines)
 try:

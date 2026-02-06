@@ -45,7 +45,7 @@ from .system_handlers import (
 )
 
 if TYPE_CHECKING:
-    from src.worker_node import WorkerNode
+    from worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 

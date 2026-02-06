@@ -13,7 +13,7 @@ Issue #765: Consolidates duplicate patterns from:
 - src/secure_command_executor.py
 
 Usage:
-    from src.security.command_patterns import (
+    from security.command_patterns import (
         is_dangerous_command,
         is_safe_command,
         check_dangerous_patterns,

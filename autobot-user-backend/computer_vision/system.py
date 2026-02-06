@@ -13,8 +13,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from src.memory import EnhancedMemoryManager, TaskPriority
-from src.task_execution_tracker import task_tracker
+from memory import EnhancedMemoryManager, TaskPriority
+from task_execution_tracker import task_tracker
 
 from .screen_analyzer import ScreenAnalyzer
 from .types import ScreenState

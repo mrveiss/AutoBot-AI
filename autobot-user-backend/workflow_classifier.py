@@ -12,9 +12,9 @@ from typing import Any, Dict, List, Optional
 
 import redis
 
-from src.autobot_types import TaskComplexity
-from src.constants.threshold_constants import StringParsingConstants
-from src.utils.redis_client import get_redis_client
+from autobot_types import TaskComplexity
+from constants.threshold_constants import StringParsingConstants
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +277,7 @@ class WorkflowClassifier:
             condition = condition.replace(" AND ", " and ").replace(" OR ", " or ")
 
             # Safely evaluate the condition using AST parser
-            from src.utils.safe_expression_evaluator import safe_evaluator
+            from utils.safe_expression_evaluator import safe_evaluator
 
             # Create evaluation context with variable values
             eval_context = {}

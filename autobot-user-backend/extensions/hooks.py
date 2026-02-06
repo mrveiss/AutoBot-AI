@@ -27,7 +27,7 @@ class HookPoint(Enum):
     - Approval flow (ON_APPROVAL_REQUIRED, ON_APPROVAL_RECEIVED)
 
     Usage:
-        from src.extensions.hooks import HookPoint
+        from extensions.hooks import HookPoint
 
         # Invoke hook at specific point
         await extension_manager.invoke_hook(

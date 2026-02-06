@@ -14,7 +14,7 @@ Features:
 - Automatic stream trimming to manage storage
 
 Usage:
-    from src.events import RedisEventStreamManager, AgentEvent, EventType
+    from events import RedisEventStreamManager, AgentEvent, EventType
 
     manager = RedisEventStreamManager()
 
@@ -40,7 +40,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional
 
-from src.events.types import AgentEvent, EventType
+from events.types import AgentEvent, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class RedisEventStreamManager(EventStreamManager):
         """Get async Redis client with lazy initialization"""
         if self._redis is None:
             try:
-                from src.utils.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_redis_client
 
                 self._redis = await get_redis_client(async_client=True, database="main")
                 self._initialized = True

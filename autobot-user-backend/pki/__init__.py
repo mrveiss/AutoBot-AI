@@ -22,7 +22,7 @@ Architecture:
 - ServiceConfigurator: Updates service configs for TLS
 
 Usage:
-    from src.pki import PKIManager
+    from pki import PKIManager
 
     # During setup - automatically handles everything
     pki = PKIManager()
@@ -36,10 +36,10 @@ Usage:
         await pki.renew()
 """
 
-from src.pki.manager import PKIManager
-from src.pki.generator import CertificateGenerator
-from src.pki.distributor import CertificateDistributor
-from src.pki.configurator import ServiceConfigurator
+from pki.manager import PKIManager
+from pki.generator import CertificateGenerator
+from pki.distributor import CertificateDistributor
+from pki.configurator import ServiceConfigurator
 
 __all__ = [
     "PKIManager",

@@ -20,11 +20,11 @@ from fastapi import FastAPI
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.slm_client import init_slm_client, shutdown_slm_client
 from backend.type_defs.common import Metadata
-from src.chat_history import ChatHistoryManager
-from src.chat_workflow import ChatWorkflowManager
-from src.config import UnifiedConfigManager
-from src.security_layer import SecurityLayer
-from src.utils.background_llm_sync import BackgroundLLMSync
+from chat_history import ChatHistoryManager
+from chat_workflow import ChatWorkflowManager
+from config import UnifiedConfigManager
+from security_layer import SecurityLayer
+from utils.background_llm_sync import BackgroundLLMSync
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -112,7 +112,7 @@ async def _init_conversation_file_manager(app: FastAPI) -> None:
     """
     logger.info("✅ [ 40%] Conversation Files DB: Initializing database schema...")
     try:
-        from src.conversation_file_manager import get_conversation_file_manager
+        from conversation_file_manager import get_conversation_file_manager
 
         conversation_file_manager = await get_conversation_file_manager()
         await conversation_file_manager.initialize()
@@ -199,7 +199,7 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #743: Register caches with CacheCoordinator for memory optimization
         logger.info("✅ [ 55%] Cache: Registering caches with CacheCoordinator...")
         try:
-            from src.cache import register_all_caches
+            from cache import register_all_caches
 
             cache_count = register_all_caches()
             logger.info(
@@ -263,7 +263,7 @@ async def _warmup_npu_connection():
     """
     logger.info("✅ [ 82%] NPU Warmup: Warming up NPU connection...")
     try:
-        from src.knowledge.facts import warmup_npu_connection
+        from knowledge.facts import warmup_npu_connection
 
         result = await warmup_npu_connection()
 
@@ -384,7 +384,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     try:
         from backend.services.rag_config import RAGConfig
         from backend.services.rag_service import RAGService
-        from src.services.graph_rag_service import GraphRAGService
+        from services.graph_rag_service import GraphRAGService
 
         if app.state.knowledge_base:
             rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
@@ -423,8 +423,8 @@ async def _init_entity_extractor(app: FastAPI, memory_graph):
     """
     logger.info("✅ [ 88%] Entity Extractor: Initializing entity extractor...")
     try:
-        from src.agents.graph_entity_extractor import GraphEntityExtractor
-        from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+        from agents.graph_entity_extractor import GraphEntityExtractor
+        from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 
         knowledge_extraction_agent = KnowledgeExtractionAgent()
         entity_extractor = GraphEntityExtractor(
@@ -454,7 +454,7 @@ async def _init_memory_graph(app: FastAPI):
     """
     logger.info("✅ [ 85%] Memory Graph: Initializing memory graph...")
     try:
-        from src.autobot_memory_graph import AutoBotMemoryGraph
+        from autobot_memory_graph import AutoBotMemoryGraph
 
         memory_graph = AutoBotMemoryGraph(
             chat_history_manager=app.state.chat_history_manager
@@ -486,7 +486,7 @@ async def _init_slm_client():
     logger.info("✅ [ 89%] SLM Client: Initializing SLM client for agent configs...")
     try:
         # Issue #768: Get SLM URL from SSOT config, fallback to env var
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         slm_url = os.getenv("SLM_URL") or get_config().slm_url
         slm_token = os.getenv("SLM_AUTH_TOKEN")

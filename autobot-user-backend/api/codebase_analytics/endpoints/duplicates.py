@@ -22,8 +22,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from src.constants.threshold_constants import AnalyticsConfig
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import AnalyticsConfig
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..duplicate_detector import DuplicateCodeDetector, detect_duplicates_async
 from ..storage import get_code_collection

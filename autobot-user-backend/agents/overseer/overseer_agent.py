@@ -21,7 +21,7 @@ import uuid
 from typing import Any, AsyncGenerator, Dict, Optional
 
 from backend.dependencies import global_config_manager
-from src.utils.http_client import get_http_client
+from autobot_shared.http_client import get_http_client
 
 from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
 
@@ -116,7 +116,7 @@ class OverseerAgent:
             return endpoint
         except Exception as e:
             logger.error("Failed to get Ollama endpoint: %s", e)
-            from src.config import UnifiedConfigManager
+            from config import UnifiedConfigManager
 
             config = UnifiedConfigManager()
             return f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/generate"

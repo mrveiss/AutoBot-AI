@@ -21,9 +21,9 @@ from backend.models.npu_models import (LoadBalancingConfig, NPUWorkerConfig,
                                        NPUWorkerDetails, NPUWorkerMetrics,
                                        NPUWorkerStatus, WorkerStatus,
                                        WorkerTestResult)
-from src.constants.threshold_constants import TimingConstants
-from src.event_manager import event_manager
-from src.npu_integration import NPUWorkerClient
+from constants.threshold_constants import TimingConstants
+from event_manager import event_manager
+from npu_integration import NPUWorkerClient
 
 logger = logging.getLogger(__name__)
 

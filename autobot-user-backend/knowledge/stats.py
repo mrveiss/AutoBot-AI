@@ -355,7 +355,7 @@ class StatsMixin:
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive knowledge base statistics (Issue #398: refactored)."""
-        from src.knowledge.embedding_cache import get_embedding_cache
+        from knowledge.embedding_cache import get_embedding_cache
 
         logger.info("=== get_stats() called with caching ===")
         try:

@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-from src.utils.redis_client import get_redis_client
-from src.config import UnifiedConfig
+from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 
 # Initialize unified config

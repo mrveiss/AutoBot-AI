@@ -16,9 +16,9 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from src.enhanced_memory_manager_async import TaskPriority
-from src.memory import EnhancedMemoryManager
-from src.task_execution_tracker import task_tracker
+from enhanced_memory_manager_async import TaskPriority
+from memory import EnhancedMemoryManager
+from task_execution_tracker import task_tracker
 
 from .collectors import ContextCollector
 from .decision_engine import DecisionEngine

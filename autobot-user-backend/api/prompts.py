@@ -10,8 +10,8 @@ from typing import Dict, Optional
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
@@ -63,7 +63,7 @@ async def _read_prompt_file(
     """
     async with semaphore:
         try:
-            from src.utils.async_file_operations import read_file_async
+            from utils.async_file_operations import read_file_async
 
             content = await read_file_async(full_path)
 
@@ -150,7 +150,7 @@ async def _load_prompts_with_cancellation(
     Raises:
         HTTPException: If loading times out and no prompts were loaded
     """
-    from src.utils.async_cancellation import execute_with_cancellation
+    from utils.async_cancellation import execute_with_cancellation
 
     try:
         await execute_with_cancellation(

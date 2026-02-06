@@ -10,7 +10,7 @@ Contains research-related workflow template definitions.
 
 from typing import List
 
-from src.autobot_types import TaskComplexity
+from autobot_types import TaskComplexity
 
 from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
 

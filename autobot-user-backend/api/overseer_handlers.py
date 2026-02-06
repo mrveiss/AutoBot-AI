@@ -16,20 +16,20 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from src.agents.overseer import (
+from agents.overseer import (
     OverseerAgent,
     OverseerUpdate,
     StepExecutorAgent,
     StepResult,
 )
-from src.agents.overseer.types import (
+from agents.overseer.types import (
     CommandBreakdownPart,
     CommandExplanation,
     OutputExplanation,
     StepStatus,
 )
-from src.auth_middleware import get_current_user
-from src.chat_history import ChatHistoryManager
+from auth_middleware import get_current_user
+from chat_history import ChatHistoryManager
 
 logger = logging.getLogger(__name__)
 

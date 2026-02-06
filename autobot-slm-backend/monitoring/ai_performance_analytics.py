@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiofiles
 import psutil
 
-from src.constants.network_constants import NetworkConstants
+from autobot_shared.network_constants import NetworkConstants
 
 
 @dataclass
@@ -133,7 +133,7 @@ class AIPerformanceAnalytics:
     async def initialize_redis_connection(self):
         """Initialize Redis connection for AI metrics using canonical utility."""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:

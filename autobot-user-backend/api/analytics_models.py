@@ -22,7 +22,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
-from src.constants import PATH
+from constants import PATH
 
 
 class AnalyticsOverview(BaseModel):

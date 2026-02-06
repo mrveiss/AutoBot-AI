@@ -13,10 +13,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.config import config
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
-from src.utils.http_client import get_http_client
+from config import config
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
+from autobot_shared.http_client import get_http_client
 
 from ..utils.service_registry import get_service_url
 

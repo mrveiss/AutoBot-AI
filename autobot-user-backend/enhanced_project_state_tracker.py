@@ -16,7 +16,7 @@ import asyncio
 import sys
 
 # Re-export all public APIs from the package
-from src.project_state_tracking import (
+from project_state_tracking import (
     # Types and enums
     REDIS_METRIC_KEYS,
     SIGNIFICANT_CHANGES,

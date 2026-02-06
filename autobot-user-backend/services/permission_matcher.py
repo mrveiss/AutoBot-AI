@@ -38,7 +38,7 @@ from typing import Dict, List, Optional, Tuple
 
 import yaml
 
-from src.config.ssot_config import PermissionAction, PermissionMode, config
+from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 
 logger = logging.getLogger(__name__)
 

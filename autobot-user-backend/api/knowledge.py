@@ -23,11 +23,11 @@ from pydantic import BaseModel, Field, field_validator
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from backend.knowledge_factory import get_or_create_knowledge_base
-from src.auth_middleware import check_admin_permission
-from src.constants.threshold_constants import CategoryDefaults, QueryDefaults
-from src.exceptions import InternalError
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.path_validation import contains_path_traversal
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from exceptions import InternalError
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.path_validation import contains_path_traversal
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
@@ -83,7 +83,7 @@ ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"}
 
 # Import RAG Agent for enhanced search capabilities
 try:
-    from src.agents.rag_agent import get_rag_agent
+    from agents.rag_agent import get_rag_agent
 
     RAG_AVAILABLE = True
 except ImportError:

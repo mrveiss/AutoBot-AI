@@ -14,7 +14,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
-from src.utils.error_boundaries import ErrorCategory
+from autobot_shared.error_boundaries import ErrorCategory
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class ErrorMetricsCollector:
 
         # Phase 2 (Issue #345): Prometheus integration - primary metrics store
         try:
-            from src.monitoring.prometheus_metrics import get_metrics_manager
+            from monitoring.prometheus_metrics import get_metrics_manager
 
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:

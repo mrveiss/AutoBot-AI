@@ -13,7 +13,7 @@ Provides centralized chat workflow orchestration with modular architecture:
 - Manager: Main orchestration class
 
 Usage:
-    from src.chat_workflow import (
+    from chat_workflow import (
         ChatWorkflowManager,
         WorkflowSession,
         get_chat_workflow_manager,

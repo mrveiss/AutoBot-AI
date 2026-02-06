@@ -14,8 +14,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from src.chat_workflow.models import AgentContext
-from src.utils.errors import RepairableException
+from chat_workflow.models import AgentContext
+from utils.errors import RepairableException
 
 logger = logging.getLogger(__name__)
 

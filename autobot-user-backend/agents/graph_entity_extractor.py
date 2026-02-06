@@ -26,9 +26,9 @@ Key Features:
 - Duplicate detection and merging
 
 Usage:
-    from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
-    from src.autobot_memory_graph import AutoBotMemoryGraph
-    from src.agents.graph_entity_extractor import GraphEntityExtractor
+    from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+    from autobot_memory_graph import AutoBotMemoryGraph
+    from agents.graph_entity_extractor import GraphEntityExtractor
 
     # Initialize dependencies
     extractor = KnowledgeExtractionAgent()
@@ -56,11 +56,11 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
-from src.autobot_memory_graph import AutoBotMemoryGraph
-from src.models.atomic_fact import AtomicFact, FactType, TemporalType
-from src.utils.error_boundaries import error_boundary
-from src.utils.logging_manager import get_llm_logger
+from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+from autobot_memory_graph import AutoBotMemoryGraph
+from models.atomic_fact import AtomicFact, FactType, TemporalType
+from autobot_shared.error_boundaries import error_boundary
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("graph_entity_extractor")
 

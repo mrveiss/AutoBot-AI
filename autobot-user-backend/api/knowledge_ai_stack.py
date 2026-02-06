@@ -27,8 +27,8 @@ from backend.utils.response_helpers import (
     create_success_response,
     handle_ai_stack_error,
 )
-from src.auth_middleware import get_current_user
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

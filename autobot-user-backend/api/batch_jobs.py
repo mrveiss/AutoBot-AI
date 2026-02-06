@@ -21,9 +21,9 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import get_current_user
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import get_redis_client
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])

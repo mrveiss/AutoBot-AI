@@ -12,8 +12,8 @@ SSOT Migration (Issue #639):
 
 from typing import Any, Dict
 
-from src.config.registry import ConfigRegistry
-from src.constants.network_constants import NetworkConstants
+from config.registry import ConfigRegistry
+from constants.network_constants import NetworkConstants
 
 
 class Config:

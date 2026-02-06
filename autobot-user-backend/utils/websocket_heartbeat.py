@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

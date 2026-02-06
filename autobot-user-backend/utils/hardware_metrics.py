@@ -20,7 +20,7 @@ import aiohttp
 import psutil
 import redis
 
-from src.config_helper import cfg
+from config_helper import cfg
 
 # Import existing monitoring infrastructure
 
@@ -202,7 +202,7 @@ class Phase9PerformanceMonitor:
         """Initialize Redis client for metrics storage. Issue #694."""
         try:
             # Use SSOT config for Redis connection
-            from src.config.ssot_config import get_config
+            from autobot_shared.ssot_config import get_config
 
             ssot_config = get_config()
 
@@ -380,7 +380,7 @@ class Phase9PerformanceMonitor:
     async def _get_npu_worker_stats(self) -> Dict[str, Any]:
         """Get statistics from NPU worker service. Issue #694."""
         try:
-            from src.config.ssot_config import get_config
+            from autobot_shared.ssot_config import get_config
 
             ssot_config = get_config()
 
@@ -636,7 +636,7 @@ class Phase9PerformanceMonitor:
     async def _measure_network_latency(self) -> float:
         """Measure network latency to backend service. Issue #694."""
         try:
-            from src.config.ssot_config import get_config
+            from autobot_shared.ssot_config import get_config
 
             ssot_config = get_config()
             start_time = time.time()
@@ -687,7 +687,7 @@ class Phase9PerformanceMonitor:
 
         Issue #620: Extracted from collect_service_performance_metrics. Issue #620.
         """
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         ssot_config = get_config()
 

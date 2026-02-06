@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from src.constants.model_constants import ModelConfig, ModelConstants
-from src.constants.network_constants import NetworkConstants
+from constants.model_constants import ModelConfig, ModelConstants
+from constants.network_constants import NetworkConstants
 
 from .types import LLMType, ProviderType
 

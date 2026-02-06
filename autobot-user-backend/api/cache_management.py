@@ -13,9 +13,9 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.utils.advanced_cache_manager import advanced_cache
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission, get_current_user
+from utils.advanced_cache_manager import advanced_cache
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cache", tags=["cache_management"])
@@ -225,7 +225,7 @@ async def clear_all_cache(
 
 async def _warm_templates_cache() -> bool:
     """Warm cache for workflow templates (Issue #372 - uses model methods)."""
-    from src.workflow_templates import workflow_template_manager
+    from workflow_templates import workflow_template_manager
 
     templates = workflow_template_manager.list_templates()
     # Issue #372: Use model method to reduce feature envy
@@ -287,7 +287,7 @@ async def _warm_system_status_cache() -> bool:
 
 async def _warm_project_status_cache() -> bool:
     """Warm cache for project status."""
-    from src.project_state_manager import get_project_state_manager
+    from project_state_manager import get_project_state_manager
 
     try:
         manager = get_project_state_manager()

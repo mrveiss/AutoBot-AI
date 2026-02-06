@@ -11,8 +11,8 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ async def get_fresh_knowledge_stats(request: Request = None):
         if "src.knowledge_base" in sys.modules:
             importlib.reload(sys.modules["src.knowledge_base"])
 
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         # Create completely fresh instance
         kb = KnowledgeBase()
@@ -103,7 +103,7 @@ async def debug_redis_connection():
     """
     try:
         # Use canonical Redis utility instead of direct instantiation
-        from src.utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         redis_client = get_redis_client(database="knowledge")
         if redis_client is None:
@@ -168,7 +168,7 @@ async def rebuild_search_index():
     try:
         logger.info("=== Rebuilding search index ===")
 
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         # Create fresh instance
         kb = KnowledgeBase()

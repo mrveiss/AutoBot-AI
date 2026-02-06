@@ -27,9 +27,9 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
-from src.knowledge_base_factory import get_knowledge_base
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
+from knowledge_base_factory import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 

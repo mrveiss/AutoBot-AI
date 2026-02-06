@@ -14,8 +14,8 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
-from src.auth_middleware import auth_middleware
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -236,7 +236,7 @@ async def get_current_user_info(request: Request):
     """
     try:
         # Check deployment mode - in single_user mode, return synthetic admin
-        from src.user_management.config import DeploymentMode, get_deployment_config
+        from user_management.config import DeploymentMode, get_deployment_config
 
         config = get_deployment_config()
         if config.mode == DeploymentMode.SINGLE_USER:
@@ -285,7 +285,7 @@ async def check_authentication(request: Request):
     """
     try:
         # Check deployment mode
-        from src.user_management.config import DeploymentMode, get_deployment_config
+        from user_management.config import DeploymentMode, get_deployment_config
 
         config = get_deployment_config()
         if config.mode == DeploymentMode.SINGLE_USER:
@@ -388,7 +388,7 @@ def _verify_current_password(
 
 def _persist_password_change(username: str, new_password_hash: str) -> None:
     """Persist password change to config file."""
-    from src.config import UnifiedConfigManager
+    from config import UnifiedConfigManager
 
     # Update in-memory config
     allowed_users = auth_middleware.security_config.get("allowed_users", {})
@@ -418,7 +418,7 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
     Rate limited to 5 attempts per 5 minutes.
     """
     try:
-        from src.user_management.config import DeploymentMode, get_deployment_config
+        from user_management.config import DeploymentMode, get_deployment_config
 
         config = get_deployment_config()
         if config.mode == DeploymentMode.SINGLE_USER:

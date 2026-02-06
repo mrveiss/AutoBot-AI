@@ -11,10 +11,10 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.autobot_types import TaskComplexity
-from src.utils.advanced_cache_manager import smart_cache
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.workflow_templates import TemplateCategory, workflow_template_manager
+from autobot_types import TaskComplexity
+from utils.advanced_cache_manager import smart_cache
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from workflow_templates import TemplateCategory, workflow_template_manager
 
 router = APIRouter()
 

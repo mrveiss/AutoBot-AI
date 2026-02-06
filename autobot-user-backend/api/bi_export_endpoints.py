@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from backend.services.analytics_service import get_analytics_service
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/bi", tags=["bi-export"])
 

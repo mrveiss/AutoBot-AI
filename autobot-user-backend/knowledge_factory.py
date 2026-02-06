@@ -65,7 +65,7 @@ async def _create_new_knowledge_base(app: FastAPI):
     import traceback
 
     try:
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         logger.info("Creating KnowledgeBase with ChromaDB vector store...")
         kb = KnowledgeBase()
@@ -160,7 +160,7 @@ async def get_knowledge_base_async() -> Optional["KnowledgeBase"]:  # noqa: F821
                     return _knowledge_base_instance
 
             # Create new instance
-            from src.knowledge_base import KnowledgeBase
+            from knowledge_base import KnowledgeBase
 
             logger.info("Creating KnowledgeBase singleton (no app context)...")
             kb = KnowledgeBase()

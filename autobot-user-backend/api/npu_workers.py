@@ -47,8 +47,8 @@ from backend.models.npu_models import (
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -723,7 +723,7 @@ def _generate_repair_bootstrap_config() -> dict:
     Returns:
         Dict with redis, backend, models, and logging configuration.
     """
-    from src.config.ssot_config import config as ssot_config
+    from autobot_shared.ssot_config import config as ssot_config
 
     return {
         "redis": {
@@ -946,7 +946,7 @@ def _build_pairing_config() -> Tuple[Dict, str]:
     Returns:
         Tuple of (worker_config dict, main_host string)
     """
-    from src.config.ssot_config import config as ssot_config
+    from autobot_shared.ssot_config import config as ssot_config
 
     worker_config = {
         "redis": {
@@ -1161,7 +1161,7 @@ def _update_prometheus_heartbeat_metrics(heartbeat: WorkerHeartbeat) -> None:
     import time
 
     try:
-        from src.monitoring.prometheus_metrics import get_metrics_manager
+        from monitoring.prometheus_metrics import get_metrics_manager
 
         metrics = get_metrics_manager()
         if metrics and hasattr(metrics, "performance"):
@@ -1376,7 +1376,7 @@ async def worker_bootstrap(request: dict):
             logger.info("Reusing existing worker ID: %s", worker_id)
 
         # Get configuration from SSOT (Issue #665: uses extracted helpers)
-        from src.config.ssot_config import config as ssot_config
+        from autobot_shared.ssot_config import config as ssot_config
 
         logger.info(
             "Bootstrap config sent to worker %s (%s) at %s",
@@ -1433,7 +1433,7 @@ async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
         Pool-level metrics dict
     """
     try:
-        from src.npu_integration import get_npu_pool
+        from npu_integration import get_npu_pool
 
         pool = await get_npu_pool()
         stats = await pool.get_pool_stats()
@@ -1470,7 +1470,7 @@ async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
         Dict with list of worker states
     """
     try:
-        from src.npu_integration import get_npu_pool
+        from npu_integration import get_npu_pool
 
         pool = await get_npu_pool()
         workers = []
@@ -1523,7 +1523,7 @@ async def reload_pool_config(admin_check: bool = Depends(check_admin_permission)
         Result with number of workers loaded and status message
     """
     try:
-        from src.npu_integration import get_npu_pool
+        from npu_integration import get_npu_pool
 
         pool = await get_npu_pool()
         await pool.reload_config()

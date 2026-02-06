@@ -15,12 +15,12 @@ from typing import Any, Dict
 import aiohttp
 import psutil
 
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()
-from src.utils.http_client import get_http_client
-from src.utils.redis_client import get_redis_client
+from autobot_shared.http_client import get_http_client
+from autobot_shared.redis_client import get_redis_client
 
 
 @dataclass
@@ -55,7 +55,7 @@ class SystemMetricsCollector:
 
         # Phase 5 (Issue #348): Prometheus is now the primary metrics store
         try:
-            from src.monitoring.prometheus_metrics import get_metrics_manager
+            from monitoring.prometheus_metrics import get_metrics_manager
 
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:

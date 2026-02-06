@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create FastAPI router
 router = APIRouter()

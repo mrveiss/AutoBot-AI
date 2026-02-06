@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # LLM Interface availability
 try:
-    from src.llm_interface import LLMInterface
+    from llm_interface import LLMInterface
 
     LLM_INTERFACE_AVAILABLE = True
 except ImportError:

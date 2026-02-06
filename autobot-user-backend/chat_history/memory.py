@@ -20,7 +20,7 @@ import logging
 import os
 from typing import Any, Dict
 
-from src.chat_history.file_io import run_in_chat_io_executor
+from chat_history.file_io import run_in_chat_io_executor
 
 logger = logging.getLogger(__name__)
 

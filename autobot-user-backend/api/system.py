@@ -9,13 +9,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
-from src.auth_middleware import check_admin_permission
-from src.config import UnifiedConfigManager
-from src.constants.model_constants import ModelConstants as ModelConsts
+from auth_middleware import check_admin_permission
+from config import UnifiedConfigManager
+from constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
-from src.utils.advanced_cache_manager import cache_manager, cache_response
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from utils.advanced_cache_manager import cache_manager, cache_response
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -304,7 +304,7 @@ async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
 
     # Try to reload prompts if available
     try:
-        from src.prompt_manager import prompt_manager
+        from prompt_manager import prompt_manager
 
         prompt_manager.reload_prompts()
         message = "Prompts reloaded successfully"
@@ -747,7 +747,7 @@ async def get_cache_coordinator_stats(
     Issue #744: Requires admin authentication.
     """
     try:
-        from src.cache import get_cache_coordinator
+        from cache import get_cache_coordinator
 
         coordinator = get_cache_coordinator()
         return coordinator.get_unified_stats()
@@ -773,7 +773,7 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
     Issue #744: Requires admin authentication.
     """
     try:
-        from src.cache import get_cache_coordinator
+        from cache import get_cache_coordinator
 
         coordinator = get_cache_coordinator()
         evicted = await coordinator._coordinated_evict()
@@ -808,7 +808,7 @@ async def clear_cache(
     Issue #744: Requires admin authentication.
     """
     try:
-        from src.cache import get_cache_coordinator
+        from cache import get_cache_coordinator
 
         coordinator = get_cache_coordinator()
         if cache_name in coordinator._caches:

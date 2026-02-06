@@ -101,7 +101,7 @@ class AsyncOperationsMixin:
             return None
 
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             cache_key = self._get_redis_cache_key(config_type)
             redis_client = await get_redis_client(async_client=True, database="main")
@@ -126,7 +126,7 @@ class AsyncOperationsMixin:
             return
 
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             # Filter sensitive data before caching
             filtered_data = self._filter_sensitive_data(data)

@@ -17,10 +17,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
-from src.ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
-from src.auth_middleware import get_current_user
-from src.constants.threshold_constants import QueryDefaults
-from src.multimodal_processor import (
+from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
+from auth_middleware import get_current_user
+from constants.threshold_constants import QueryDefaults
+from multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
@@ -28,8 +28,8 @@ from src.multimodal_processor import (
 )
 
 # Import AutoBot multi-modal components
-from src.npu_semantic_search import get_npu_search_engine
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from npu_semantic_search import get_npu_search_engine
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

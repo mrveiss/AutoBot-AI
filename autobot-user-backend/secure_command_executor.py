@@ -14,8 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from src.constants.network_constants import NetworkConstants
-from src.security.command_patterns import (
+from constants.network_constants import NetworkConstants
+from security.command_patterns import (
     FORBIDDEN_COMMANDS,
     HIGH_RISK_COMMANDS,
     MODERATE_RISK_COMMANDS,
@@ -24,7 +24,7 @@ from src.security.command_patterns import (
     SYSTEM_PATHS,
     check_dangerous_patterns,
 )
-from src.utils.command_utils import execute_shell_command
+from utils.command_utils import execute_shell_command
 
 # Permission system imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Issue #765: Path constants now imported from src.security.command_patterns
+# Issue #765: Path constants now imported from security.command_patterns
 
 
 class CommandRisk(Enum):
@@ -49,7 +49,7 @@ class CommandRisk(Enum):
 class SecurityPolicy:
     """Security policy for command execution.
 
-    Issue #765: Now uses centralized patterns from src.security.command_patterns.
+    Issue #765: Now uses centralized patterns from security.command_patterns.
     """
 
     def __init__(self):
@@ -59,7 +59,7 @@ class SecurityPolicy:
         Issue #281: Refactored from 148 lines to use extracted helper methods.
         Issue #765: Command sets now delegate to centralized command_patterns module.
         """
-        # Issue #765: Use centralized command sets from src.security.command_patterns
+        # Issue #765: Use centralized command sets from security.command_patterns
         self.safe_commands = SAFE_COMMANDS
         self.moderate_commands = MODERATE_RISK_COMMANDS
         self.high_risk_commands = HIGH_RISK_COMMANDS
@@ -198,7 +198,7 @@ class SecureCommandExecutor:
         Returns:
             PermissionMatcher instance if permission v2 is enabled, None otherwise
         """
-        from src.config.ssot_config import config
+        from autobot_shared.ssot_config import config
 
         if not config.permission.enabled:
             return None
@@ -221,7 +221,7 @@ class SecureCommandExecutor:
         Returns:
             ApprovalMemoryManager instance if enabled, None otherwise
         """
-        from src.config.ssot_config import config
+        from autobot_shared.ssot_config import config
 
         if (
             not config.permission.enabled
@@ -472,7 +472,7 @@ class SecureCommandExecutor:
         """
         Assess the risk level of a command.
 
-        Issue #765: Uses centralized patterns from src.security.command_patterns.
+        Issue #765: Uses centralized patterns from security.command_patterns.
         Issue #620: Refactored using extracted helper methods.
 
         Returns:

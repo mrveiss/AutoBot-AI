@@ -11,7 +11,7 @@ SSOT Migration (Issue #763):
     Cache → Redis → Environment → Registry Defaults → Caller Default
 
     For infrastructure values, use ConfigRegistry:
-        from src.config.registry import ConfigRegistry
+        from config.registry import ConfigRegistry
         redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
         default_model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 """
@@ -23,16 +23,16 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from src.config.async_ops import AsyncOperationsMixin
-from src.config.file_watcher import FileWatcherMixin
-from src.config.loader import load_configuration
-from src.config.model_config import ModelConfigMixin
-from src.config.service_config import ServiceConfigMixin
-from src.config.settings import UnifiedConfigSettings
-from src.config.sync_ops import SyncOperationsMixin
-from src.config.timeout_config import TimeoutConfigMixin
-from src.config.validation import ValidationMixin
-from src.constants.path_constants import PATH
+from config.async_ops import AsyncOperationsMixin
+from config.file_watcher import FileWatcherMixin
+from config.loader import load_configuration
+from config.model_config import ModelConfigMixin
+from config.service_config import ServiceConfigMixin
+from config.settings import UnifiedConfigSettings
+from config.sync_ops import SyncOperationsMixin
+from config.timeout_config import TimeoutConfigMixin
+from config.validation import ValidationMixin
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

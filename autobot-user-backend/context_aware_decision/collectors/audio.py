@@ -29,7 +29,7 @@ class AudioContextCollector:
     async def collect(self) -> List[ContextElement]:
         """Collect audio/voice context."""
         try:
-            from src.voice_processing_system import voice_processing_system
+            from voice_processing_system import voice_processing_system
 
             voice_status = voice_processing_system.get_system_status()
             audio_elements = []

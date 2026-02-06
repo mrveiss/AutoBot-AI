@@ -12,7 +12,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from src.extensions.base import Extension, HookContext
+from extensions.base import Extension, HookContext
 
 logger = logging.getLogger(__name__)
 

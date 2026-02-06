@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import threading
 
 # Import communication protocol
-from src.protocols.agent_communication import (
+from protocols.agent_communication import (
     AgentIdentity,
     MessageHeader,
     MessagePayload,
@@ -380,7 +380,7 @@ class BaseAgent(ABC):
             return None
 
         try:
-            from src.protocols.agent_communication import send_agent_request
+            from protocols.agent_communication import send_agent_request
 
             return await send_agent_request(
                 self.agent_id, recipient_id, message_data, timeout
@@ -396,7 +396,7 @@ class BaseAgent(ABC):
             return 0
 
         try:
-            from src.protocols.agent_communication import broadcast_to_all_agents
+            from protocols.agent_communication import broadcast_to_all_agents
 
             return await broadcast_to_all_agents(self.agent_id, message_data)
         except Exception as e:

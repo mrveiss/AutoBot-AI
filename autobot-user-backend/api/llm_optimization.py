@@ -14,11 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.auth_middleware import check_admin_permission
-from src.config import UnifiedConfigManager
-from src.llm_interface import LLMInterface
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.model_optimizer import TaskRequest, get_model_optimizer
+from auth_middleware import check_admin_permission
+from config import UnifiedConfigManager
+from llm_interface import LLMInterface
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -791,8 +791,8 @@ async def get_provider_optimization_summary(
     Issue #744: Requires admin authentication.
     """
     try:
-        from src.llm_interface_pkg.optimization import get_optimization_router
-        from src.llm_interface_pkg.types import ProviderType
+        from llm_interface_pkg.optimization import get_optimization_router
+        from llm_interface_pkg.types import ProviderType
 
         # Map provider string to enum
         provider_map = {

@@ -17,7 +17,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from backend.type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -465,7 +465,7 @@ def _register_event_manager_broadcast(broadcast_event: Callable) -> None:
         broadcast_event: Broadcast callback function
     """
     try:
-        from src.event_manager import event_manager
+        from event_manager import event_manager
 
         event_manager.register_websocket_broadcast(broadcast_event)
         logger.info("Successfully registered WebSocket broadcast with event manager")
@@ -482,7 +482,7 @@ def _unregister_event_manager_broadcast() -> None:
     Issue #665: Extracted from websocket_endpoint to reduce function length.
     """
     try:
-        from src.event_manager import event_manager
+        from event_manager import event_manager
 
         event_manager.register_websocket_broadcast(None)
         logger.info("WebSocket broadcast unregistered from event manager")
@@ -785,7 +785,7 @@ def init_npu_worker_websocket():
             return
 
         try:
-            from src.event_manager import event_manager
+            from event_manager import event_manager
 
             # Subscribe to all NPU worker events
             event_manager.subscribe(

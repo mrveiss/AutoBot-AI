@@ -21,7 +21,7 @@ import numpy as np
 from jinja2 import Template
 from performance_monitor import ALERT_THRESHOLDS
 
-from src.constants.network_constants import NetworkConstants
+from autobot_shared.network_constants import NetworkConstants
 
 # Issue #380: Module-level tuple for numeric type checks
 _NUMERIC_TYPES = (int, float)
@@ -128,7 +128,7 @@ class BusinessIntelligenceDashboard:
         """Initialize Redis connection for BI metrics using canonical utility."""
         try:
             # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:

@@ -15,7 +15,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from src.async_chat_workflow import WorkflowMessage
+    from async_chat_workflow import WorkflowMessage
 
 
 class StreamingOperation(Enum):
@@ -157,7 +157,7 @@ class StreamingMessage:
             WorkflowMessage with streaming metadata for frontend handling
         """
         # Import here to avoid circular dependency
-        from src.async_chat_workflow import WorkflowMessage
+        from async_chat_workflow import WorkflowMessage
 
         # Issue #716: Filter internal prompts from content before sending to frontend
         filtered_content = self._filter_internal_prompts(self.content)

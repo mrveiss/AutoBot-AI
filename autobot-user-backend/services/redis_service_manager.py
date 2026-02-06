@@ -28,8 +28,8 @@ from backend.type_defs.common import Metadata
 
 # TODO (#729): SSH proxied through SLM API
 # from backend.services.ssh_manager import RemoteCommandResult, SSHManager
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import TimingConstants
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

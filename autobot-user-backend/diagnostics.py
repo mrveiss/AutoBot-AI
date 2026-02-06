@@ -19,13 +19,13 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 try:
-    from src.constants.threshold_constants import (
+    from constants.threshold_constants import (
         ResourceThresholds,
         RetryConfig,
         TimingConstants,
     )
-    from src.event_manager import event_manager
-    from src.utils.redis_client import get_redis_client
+    from event_manager import event_manager
+    from autobot_shared.redis_client import get_redis_client
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 

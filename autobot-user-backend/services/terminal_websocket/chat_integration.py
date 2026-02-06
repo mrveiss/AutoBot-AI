@@ -15,8 +15,8 @@ from typing import Optional
 
 import aiofiles
 
-from src.chat_history import ChatHistoryManager
-from src.utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
+from chat_history import ChatHistoryManager
+from utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
 
 logger = logging.getLogger(__name__)
 

@@ -19,8 +19,8 @@ from backend.api.user_management.dependencies import (
     require_org_context,
     require_user_management_enabled,
 )
-from src.user_management.services import TeamService, TenantContext
-from src.user_management.services.team_service import (
+from user_management.services import TeamService, TenantContext
+from user_management.services.team_service import (
     DuplicateTeamError,
     MembershipError,
     TeamNotFoundError,

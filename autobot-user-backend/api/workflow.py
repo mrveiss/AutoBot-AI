@@ -16,12 +16,12 @@ from pydantic import BaseModel
 
 from backend.models.task_context import WorkflowStepContext
 from backend.type_defs.common import Metadata
-from src.auth_middleware import check_admin_permission
-from src.event_manager import event_manager
-from src.metrics.system_monitor import system_monitor
-from src.metrics.workflow_metrics import workflow_metrics
-from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from event_manager import event_manager
+from metrics.system_monitor import system_monitor
+from metrics.workflow_metrics import workflow_metrics
+from monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
@@ -33,7 +33,7 @@ prometheus_metrics = get_metrics_manager()
 # Issue #322: Refactored to use WorkflowStepContext to eliminate data clump pattern
 async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
     """Handle librarian agent step (Issue #336 - extracted handler)."""
-    from src.agents.kb_librarian_agent import KBLibrarianAgent
+    from agents.kb_librarian_agent import KBLibrarianAgent
 
     kb_agent = KBLibrarianAgent()
     search_query = ctx.action.replace("Search Knowledge Base", "").strip()
@@ -47,7 +47,7 @@ async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     """Handle research agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from src.agents.research_agent import ResearchAgent, ResearchRequest
+    from agents.research_agent import ResearchAgent, ResearchRequest
 
     research_agent = ResearchAgent()
     action_lower = ctx.action.lower()
@@ -96,7 +96,7 @@ async def _handle_orchestrator_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
     """Handle knowledge manager agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
     kb = KnowledgeBase()
     content = f"Workflow step result: {ctx.step.get('result', ctx.action)}"
@@ -113,7 +113,7 @@ async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_security_scanner_step(ctx: WorkflowStepContext) -> None:
     """Handle security scanner agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from src.agents.security_scanner_agent import security_scanner_agent
+    from agents.security_scanner_agent import security_scanner_agent
 
     scan_context = ctx.step.get("inputs", {})
     action_lower = ctx.action.lower()
@@ -154,7 +154,7 @@ def _detect_network_task_type(action_lower: str) -> str | None:
 
 async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
     """Handle network discovery agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from src.agents.network_discovery_agent import network_discovery_agent
+    from agents.network_discovery_agent import network_discovery_agent
 
     discovery_context = ctx.step.get("inputs", {})
 
@@ -174,7 +174,7 @@ async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_system_commands_step(ctx: WorkflowStepContext) -> None:
     """Handle system commands agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from src.agents.enhanced_system_commands_agent import EnhancedSystemCommandsAgent
+    from agents.enhanced_system_commands_agent import EnhancedSystemCommandsAgent
 
     cmd_agent = EnhancedSystemCommandsAgent()
     action_lower = ctx.action.lower()
@@ -666,7 +666,7 @@ async def _wait_for_step_approval(
     Returns:
         True if approved, False if cancelled, None if timeout
     """
-    from src.utils.async_cancellation import execute_with_cancellation
+    from utils.async_cancellation import execute_with_cancellation
 
     approval_key = f"{workflow_id}_{step['step_id']}"
     approval_future = asyncio.Future()

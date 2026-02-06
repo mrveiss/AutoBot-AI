@@ -27,20 +27,20 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
 
 # Import our long-running operations framework
 try:
-    from src.utils.long_running_operations_framework import (
+    from utils.long_running_operations_framework import (
         OperationStatus,
         OperationType,
     )
-    from src.utils.operation_timeout_integration import (
+    from utils.operation_timeout_integration import (
         CreateOperationRequest,
         OperationMigrator,
         operation_integration_manager,

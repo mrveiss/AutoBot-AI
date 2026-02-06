@@ -23,7 +23,7 @@ FEATURES:
 
 USAGE:
 ======
-from src.utils.performance_monitor import (
+from utils.performance_monitor import (
     PerformanceMonitor,
     GPUMetrics, NPUMetrics, SystemPerformanceMetrics,
     start_monitoring, stop_monitoring,
@@ -51,37 +51,37 @@ import logging
 from typing import Any, Dict, List
 
 # Import all types, dataclasses, and classes from the package (Issue #381 refactoring)
-from src.utils.performance_monitoring.types import (
+from utils.performance_monitoring.types import (
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_COLLECTION_INTERVAL,
     DEFAULT_PERFORMANCE_BASELINES,
     DEFAULT_RETENTION_HOURS,
     AUTOBOT_PROCESS_KEYWORDS,
 )
-from src.utils.performance_monitoring.metrics import (
+from utils.performance_monitoring.metrics import (
     GPUMetrics,
     MultiModalMetrics,
     NPUMetrics,
     ServicePerformanceMetrics,
     SystemPerformanceMetrics,
 )
-from src.utils.performance_monitoring.hardware import HardwareDetector
-from src.utils.performance_monitoring.collectors import (
+from utils.performance_monitoring.hardware import HardwareDetector
+from utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
     NPUCollector,
     ServiceCollector,
     SystemCollector,
 )
-from src.utils.performance_monitoring.analyzers import (
+from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
 )
-from src.utils.performance_monitoring.decorator import (
+from utils.performance_monitoring.decorator import (
     monitor_performance,
     set_redis_client,
 )
-from src.utils.performance_monitoring.monitor import PerformanceMonitor
+from utils.performance_monitoring.monitor import PerformanceMonitor
 
 logger = logging.getLogger(__name__)
 

@@ -140,7 +140,7 @@ class SessionManager:
             PTY session ID if successful, None otherwise
         """
         from backend.services.simple_pty import simple_pty_manager
-        from src.constants.path_constants import PATH
+        from constants.path_constants import PATH
 
         existing_pty = simple_pty_manager.get_session(pty_session_id)
 

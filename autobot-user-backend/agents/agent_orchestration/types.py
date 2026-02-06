@@ -14,7 +14,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, List, Set
 
 if TYPE_CHECKING:
-    from src.agents.base_agent import AgentHealth, BaseAgent
+    from agents.base_agent import AgentHealth, BaseAgent
 
 
 # Performance optimization: O(1) lookup for routing patterns (Issue #326)

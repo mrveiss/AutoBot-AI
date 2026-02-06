@@ -24,12 +24,12 @@ except ImportError:
                 "package for Ollama support."
             )
 
-from src.constants.model_constants import ModelConstants
-from src.event_manager import event_manager
-from src.knowledge_base import KnowledgeBase
-from src.tools import ToolRegistry
-from src.utils.service_registry import get_service_url
-from src.worker_node import WorkerNode
+from constants.model_constants import ModelConstants
+from event_manager import event_manager
+from knowledge_base import KnowledgeBase
+from tools import ToolRegistry
+from utils.service_registry import get_service_url
+from worker_node import WorkerNode
 
 
 class LangChainAgentOrchestrator:
@@ -75,7 +75,7 @@ class LangChainAgentOrchestrator:
 
     def _get_llm_config(self) -> tuple:
         """Get LLM model and base URL from config."""
-        from src.config import config as global_config
+        from config import config as global_config
 
         llm_config = global_config.get_llm_config()
         llm_model = ModelConstants.DEFAULT_OLLAMA_MODEL

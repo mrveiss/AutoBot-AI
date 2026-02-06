@@ -15,9 +15,9 @@ from typing import Callable, List, Optional, Set
 
 from fastapi import HTTPException, Request, status
 
-from src.user_management.config import get_deployment_config
-from src.user_management.database import db_session_context
-from src.user_management.services import TenantContext, UserService
+from user_management.config import get_deployment_config
+from user_management.database import db_session_context
+from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
 

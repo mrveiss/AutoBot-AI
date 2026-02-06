@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def _get_ownership_analyzer():
     try:
         import importlib.util
 
-        # Add project root so ownership_analyzer.py can import from src.utils
+        # Add project root so ownership_analyzer.py can import from utils
         project_root = str(Path(__file__).resolve().parents[4])
         if project_root not in sys.path:
             sys.path.insert(0, project_root)

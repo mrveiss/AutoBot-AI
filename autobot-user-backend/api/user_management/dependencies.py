@@ -12,10 +12,10 @@ import uuid
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth_middleware import auth_middleware
-from src.user_management.config import DeploymentMode, get_deployment_config
-from src.user_management.database import get_async_session
-from src.user_management.services import (
+from auth_middleware import auth_middleware
+from user_management.config import DeploymentMode, get_deployment_config
+from user_management.database import get_async_session
+from user_management.services import (
     OrganizationService,
     TeamService,
     TenantContext,

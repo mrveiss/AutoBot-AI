@@ -371,7 +371,7 @@ class QueryDefaults:
     pagination, and query parameters.
 
     Usage:
-        from src.constants.threshold_constants import QueryDefaults
+        from constants.threshold_constants import QueryDefaults
 
         limit = QueryDefaults.DEFAULT_SEARCH_LIMIT
         offset = QueryDefaults.DEFAULT_OFFSET
@@ -403,7 +403,7 @@ class CategoryDefaults:
     types, and default classifications.
 
     Usage:
-        from src.constants.threshold_constants import CategoryDefaults
+        from constants.threshold_constants import CategoryDefaults
 
         category = CategoryDefaults.GENERAL
         search_mode = CategoryDefaults.SEARCH_MODE_HYBRID

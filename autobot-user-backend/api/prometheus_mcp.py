@@ -18,9 +18,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
-from src.config.ssot_config import get_config
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.http_client import get_http_client
+from autobot_shared.ssot_config import get_config
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["prometheus_mcp", "mcp", "monitoring"])

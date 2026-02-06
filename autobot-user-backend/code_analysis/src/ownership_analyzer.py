@@ -29,8 +29,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from src.utils.redis_client import get_redis_client
-    from src.config import UnifiedConfig
+    from autobot_shared.redis_client import get_redis_client
+    from config import UnifiedConfig
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:

@@ -17,7 +17,7 @@ import threading
 from contextlib import contextmanager
 from typing import Dict, List, Optional
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 from ..utils.service_registry import get_service_url
 
@@ -28,7 +28,7 @@ _YES_NO_KEYWORDS = frozenset({"yes", "no", "y/n"})
 
 # Import configuration for fallback defaults
 try:
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     _config_available = True
 except ImportError:

@@ -11,7 +11,7 @@ for the AutoBot backend.
 from fastapi import FastAPI
 
 from backend.services.ai_stack_client import get_ai_stack_client
-from src.utils.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__, "backend")
 

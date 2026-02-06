@@ -14,7 +14,7 @@ Original module: 1,512 lines
 New package: ~1,100 lines across focused modules
 
 Usage:
-    from src.multimodal_processor import (
+    from multimodal_processor import (
         UnifiedMultiModalProcessor,
         ModalityType,
         ProcessingIntent,

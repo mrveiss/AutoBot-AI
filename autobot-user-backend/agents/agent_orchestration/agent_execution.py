@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType
 
 if TYPE_CHECKING:
-    from src.agents.base_agent import AgentRequest, BaseAgent
+    from agents.base_agent import AgentRequest, BaseAgent
 
     from .distributed_management import DistributedAgentManager
     from .routing import AgentRouter
@@ -74,7 +74,7 @@ class AgentExecutor:
         Returns:
             Configured AgentRequest object. Issue #620.
         """
-        from src.agents.base_agent import AgentRequest
+        from agents.base_agent import AgentRequest
 
         return AgentRequest(
             request_id=task_id,

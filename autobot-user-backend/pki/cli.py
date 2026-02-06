@@ -15,7 +15,7 @@ Usage:
     python -m src.pki.cli renew
 
     # From setup.py
-    from src.pki.cli import run_pki_setup
+    from pki.cli import run_pki_setup
     asyncio.run(run_pki_setup())
 """
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.pki.manager import PKIManager, setup_pki
+from pki.manager import PKIManager, setup_pki
 
 logging.basicConfig(
     level=logging.INFO,

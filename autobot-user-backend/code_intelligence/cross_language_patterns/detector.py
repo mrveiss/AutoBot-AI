@@ -134,7 +134,7 @@ class CrossLanguagePatternDetector:
         """Get or create ChromaDB collection for patterns."""
         if self._chromadb_collection is None:
             try:
-                from src.utils.async_chromadb_client import get_async_chromadb_client
+                from utils.async_chromadb_client import get_async_chromadb_client
 
                 chromadb_path = self.project_root / "data" / "chromadb"
                 self._chromadb_client = await get_async_chromadb_client(
@@ -162,7 +162,7 @@ class CrossLanguagePatternDetector:
         """Get Redis client for caching."""
         if self._redis_client is None and self.use_cache:
             try:
-                from src.utils.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_redis_client
 
                 self._redis_client = await get_redis_client(
                     async_client=True, database="analytics"
@@ -180,7 +180,7 @@ class CrossLanguagePatternDetector:
                 # Double-check pattern to avoid race condition
                 if self._embedding_cache is None:
                     try:
-                        from src.knowledge.embedding_cache import EmbeddingCache
+                        from knowledge.embedding_cache import EmbeddingCache
 
                         self._embedding_cache = EmbeddingCache(
                             maxsize=500, ttl_seconds=3600
@@ -211,7 +211,7 @@ class CrossLanguagePatternDetector:
         try:
             import aiohttp
 
-            from src.config.ssot_config import get_config
+            from autobot_shared.ssot_config import get_config
 
             ssot = get_config()
             url = f"{ssot.ollama_url}/api/embeddings"

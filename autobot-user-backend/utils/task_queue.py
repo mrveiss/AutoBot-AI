@@ -22,23 +22,23 @@ from typing import Any, Callable, Dict, List, Optional
 try:
     from redis.exceptions import RedisError
 
-    from src.utils.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 except ImportError:
     RedisError = Exception  # Fallback if redis not available
     get_redis_client = None
 
-from src.constants.threshold_constants import RetryConfig, TimingConstants
+from constants.threshold_constants import RetryConfig, TimingConstants
 
 # Temporary implementations until proper modules are created
 # try:
-#     from src.utils.error_handler import error_handler, ErrorCategory
+#     from utils.error_handler import error_handler, ErrorCategory
 # except ImportError:
 error_handler = None
 ErrorCategory = None
 
 
 # try:
-#     from src.utils.logging_config import log_performance_metric
+#     from utils.logging_config import log_performance_metric
 # except ImportError:
 def log_performance_metric(*args, **kwargs):
     """Log performance metric placeholder until logging_config module is created."""

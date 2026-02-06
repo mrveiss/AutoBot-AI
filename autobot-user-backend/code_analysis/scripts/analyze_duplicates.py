@@ -14,7 +14,7 @@ import json
 import logging
 from pathlib import Path
 
-from src.code_analyzer import CodeAnalyzer
+from code_analyzer import CodeAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ def _print_migration_outline() -> None:
     """Print migration script outline (Issue #398: extracted)."""
     logger.info("=== Migration Script Outline ===")
     logger.info("1. Update imports in all files:")
-    logger.info("   from src.utils.command_utils import execute_shell_command")
+    logger.info("   from utils.command_utils import execute_shell_command")
     logger.info("2. Replace function calls:")
     logger.info("   # Before: await self._run_command(cmd)")
     logger.info("   # After:  result = await execute_shell_command(cmd)")

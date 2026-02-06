@@ -20,7 +20,7 @@ from typing import Dict, Optional
 
 import asyncssh
 
-from src.pki.config import VM_DEFINITIONS, TLSConfig
+from pki.config import VM_DEFINITIONS, TLSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +234,7 @@ class ServiceConfigurator:
             auth_clients: Client authentication mode ("optional", "yes", "no")
             disable_plain_port: If True, disables non-TLS port (port 0)
         """
-        from src.config.ssot_config import config
+        from autobot_shared.ssot_config import config
 
         vm_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
         logger.info("Configuring Redis Stack for TLS")
@@ -323,7 +323,7 @@ class ServiceConfigurator:
 
     def get_redis_tls_url(self) -> str:
         """Get Redis URL with TLS. Issue #694: Use SSOT config."""
-        from src.config.ssot_config import config
+        from autobot_shared.ssot_config import config
 
         redis_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
         return f"rediss://{redis_ip}:6380"

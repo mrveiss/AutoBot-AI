@@ -817,13 +817,13 @@ class RedisOptimizer:
                     line_start=line_number,
                     line_end=line_number,
                     description="Direct redis.Redis() instantiation - violates canonical pattern",
-                    suggestion="Use get_redis_client() from src.utils.redis_client. Provides pooling and monitoring.",
+                    suggestion="Use get_redis_client() from autobot_shared.redis_client. Provides pooling and monitoring.",
                     estimated_improvement="Connection reuse, automatic retry, health monitoring",
                     current_code=self._get_code_range(
                         source_lines, line_number, line_number + 2
                     ),
                     optimized_code=(
-                        "from src.utils.redis_client import get_redis_client\n"
+                        "from autobot_shared.redis_client import get_redis_client\n"
                         "redis = get_redis_client(database='main')"
                     ),
                     metrics={"violates_canonical_pattern": True},
@@ -1066,7 +1066,7 @@ async def get_with_lock(redis, key, compute_fn, ttl=300):
         Issue #686: Uses exponential decay scoring to prevent score overflow.
         """
         # Import scoring utilities
-        from src.code_intelligence.shared.scoring import (
+        from code_intelligence.shared.scoring import (
             calculate_score_from_severity_counts,
             get_grade_from_score,
         )

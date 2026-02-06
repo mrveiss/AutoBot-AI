@@ -160,7 +160,7 @@ class BaseLLMJudge:
     async def _get_llm_evaluation(self, prompt: str) -> Dict[str, Any]:
         """Get structured evaluation from LLM"""
         if not self.llm_interface:
-            from src.llm_interface import LLMInterface
+            from llm_interface import LLMInterface
 
             self.llm_interface = LLMInterface()
 

@@ -333,7 +333,7 @@ class ClaudeAPIMonitor:
 
         # Phase 2 (Issue #345): Add Prometheus integration for dual-write migration
         try:
-            from src.monitoring.prometheus_metrics import get_metrics_manager
+            from monitoring.prometheus_metrics import get_metrics_manager
 
             self.prometheus = get_metrics_manager()
         except (ImportError, Exception) as e:

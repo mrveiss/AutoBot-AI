@@ -13,12 +13,12 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Tuple
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 from .types import DistributedAgentInfo
 
 if TYPE_CHECKING:
-    from src.agents.base_agent import AgentHealth, BaseAgent
+    from agents.base_agent import AgentHealth, BaseAgent
 
 logger = logging.getLogger(__name__)
 

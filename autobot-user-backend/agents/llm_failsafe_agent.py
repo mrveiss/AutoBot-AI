@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.config.ssot_config import (
+from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
@@ -430,7 +430,7 @@ class LLMFailsafeAgent:
         """Try primary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.PRIMARY]["requests"] += 1
         try:
-            from src.llm_interface import LLMInterface
+            from llm_interface import LLMInterface
 
             llm = LLMInterface()
             for model in self.primary_models:
@@ -464,7 +464,7 @@ class LLMFailsafeAgent:
         """Try secondary LLM communication (Issue #398: refactored)."""
         self.tier_stats[LLMTier.SECONDARY]["requests"] += 1
         try:
-            from src.llm_interface import LLMInterface
+            from llm_interface import LLMInterface
 
             llm = LLMInterface()
             simplified_prompt = self._simplify_prompt(prompt)

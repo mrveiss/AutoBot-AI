@@ -13,8 +13,8 @@ import logging
 
 import aiofiles
 
-from src.task_execution_tracker import task_tracker
-from src.voice_processing.models import SpeechSynthesisRequest
+from task_execution_tracker import task_tracker
+from voice_processing.models import SpeechSynthesisRequest
 
 logger = logging.getLogger(__name__)
 

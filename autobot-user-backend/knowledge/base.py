@@ -22,11 +22,11 @@ from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmb
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from src.config import UnifiedConfigManager
-from src.utils.chromadb_client import get_chromadb_client as create_chromadb_client
-from src.utils.chromadb_client import wrap_collection_async
-from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
-from src.utils.knowledge_base_timeouts import kb_timeouts
+from config import UnifiedConfigManager
+from utils.chromadb_client import get_chromadb_client as create_chromadb_client
+from utils.chromadb_client import wrap_collection_async
+from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
     pass
@@ -271,7 +271,7 @@ class KnowledgeBaseCore:
         No fallbacks - settings must be explicitly configured.
         Issue #665: Refactored to use extracted helper methods.
         """
-        from src.config.ssot_config import config as ssot_config
+        from autobot_shared.ssot_config import config as ssot_config
 
         llm_provider = ssot_config.llm.llamaindex_llm_provider.lower()
         llm_endpoint = ssot_config.llm.llamaindex_llm_endpoint
@@ -312,7 +312,7 @@ class KnowledgeBaseCore:
         """Initialize Redis connections using canonical utility"""
         try:
             # Use canonical Redis utility following CLAUDE.md "🔴 REDIS CLIENT USAGE" policy
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             # Get sync Redis client for knowledge base operations
             # Note: Uses DB 1 (knowledge) - canonical utility handles connection pooling

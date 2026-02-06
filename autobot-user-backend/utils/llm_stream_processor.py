@@ -14,7 +14,7 @@ from typing import Tuple
 
 import aiohttp
 
-from src.utils.http_client import get_http_client
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

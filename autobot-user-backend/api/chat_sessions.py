@@ -26,9 +26,9 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from src.auth_middleware import auth_middleware
-from src.autobot_memory_graph import AutoBotMemoryGraph
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import auth_middleware
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # ====================================================================
 # Router Configuration

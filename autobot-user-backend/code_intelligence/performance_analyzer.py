@@ -25,11 +25,11 @@ Identifies performance anti-patterns and bottlenecks including:
 Part of Issue #222 - Performance Pattern Analysis
 Parent Epic: #217 - Advanced Code Intelligence
 
-DEPRECATED: Import directly from src.code_intelligence.performance_analysis instead.
+DEPRECATED: Import directly from code_intelligence.performance_analysis instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from src.code_intelligence.performance_analysis import (
+from code_intelligence.performance_analysis import (
     # Types
     COMPLEXITY_LEVELS,
     PerformanceIssue,

@@ -13,10 +13,10 @@ from typing import Dict
 
 from fastapi import APIRouter, Depends
 
-from src.auth_middleware import check_admin_permission
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import TimingConstants
-from src.utils.error_boundaries import with_error_handling
+from auth_middleware import check_admin_permission
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
+from autobot_shared.error_boundaries import with_error_handling
 
 logger = logging.getLogger(__name__)
 

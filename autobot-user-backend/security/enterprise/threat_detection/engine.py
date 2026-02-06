@@ -25,8 +25,8 @@ from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 from .analyzers import (
     APIAbuseAnalyzer,

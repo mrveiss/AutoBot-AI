@@ -11,8 +11,8 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Any
 
-from src.utils.redis_client import get_redis_client
-from src.config import UnifiedConfig
+from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 
 # Initialize unified config

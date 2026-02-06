@@ -7,7 +7,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.performance_analyzer import PerformanceAnalyzer
+from performance_analyzer import PerformanceAnalyzer
 
 
 async def analyze_performance_issues():

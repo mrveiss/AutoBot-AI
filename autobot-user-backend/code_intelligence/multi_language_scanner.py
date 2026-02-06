@@ -18,15 +18,15 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from src.code_intelligence.base_analyzer import (
+from code_intelligence.base_analyzer import (
     AnalysisIssue,
     AnalysisResult,
     Language,
     MultiLanguageAnalyzer,
 )
-from src.code_intelligence.shell_analyzer import ShellAnalyzer
-from src.code_intelligence.typescript_analyzer import TypeScriptAnalyzer
-from src.code_intelligence.vue_analyzer import VueAnalyzer
+from code_intelligence.shell_analyzer import ShellAnalyzer
+from code_intelligence.typescript_analyzer import TypeScriptAnalyzer
+from code_intelligence.vue_analyzer import VueAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,7 @@ class CodebaseScanner:
         Returns:
             List of high/critical severity issues
         """
-        from src.code_intelligence.base_analyzer import IssueSeverity
+        from code_intelligence.base_analyzer import IssueSeverity
 
         return [
             issue
@@ -238,7 +238,7 @@ class CodebaseScanner:
         Returns:
             List of security issues
         """
-        from src.code_intelligence.base_analyzer import IssueCategory
+        from code_intelligence.base_analyzer import IssueCategory
 
         return [
             issue for issue in result.issues if issue.category == IssueCategory.SECURITY
@@ -253,7 +253,7 @@ class CodebaseScanner:
         Returns:
             List of performance issues
         """
-        from src.code_intelligence.base_analyzer import IssueCategory
+        from code_intelligence.base_analyzer import IssueCategory
 
         return [
             issue
@@ -270,7 +270,7 @@ class CodebaseScanner:
         Returns:
             Dictionary with report data
         """
-        from src.code_intelligence.base_analyzer import IssueCategory, IssueSeverity
+        from code_intelligence.base_analyzer import IssueCategory, IssueSeverity
 
         # Count by severity
         severity_counts = {sev.value: 0 for sev in IssueSeverity}

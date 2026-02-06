@@ -33,8 +33,8 @@ from backend.services.feature_flags import (
     FeatureFlags,
     get_feature_flags,
 )
-from src.auth_middleware import get_current_user
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

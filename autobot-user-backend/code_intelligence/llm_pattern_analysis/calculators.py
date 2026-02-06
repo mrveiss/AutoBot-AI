@@ -14,12 +14,12 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 from datetime import datetime
 from typing import Any, Dict, List
 
-from src.code_intelligence.llm_pattern_analysis.data_models import (
+from code_intelligence.llm_pattern_analysis.data_models import (
     CostEstimate,
     TokenUsage,
     UsagePattern,
 )
-from src.code_intelligence.llm_pattern_analysis.types import UsagePatternType
+from code_intelligence.llm_pattern_analysis.types import UsagePatternType
 
 # =============================================================================
 # Token Tracker

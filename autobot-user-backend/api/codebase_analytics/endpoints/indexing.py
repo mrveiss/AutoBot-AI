@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 
 class IndexCodebaseRequest(BaseModel):
@@ -28,7 +28,7 @@ class IndexCodebaseRequest(BaseModel):
     )
 
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..scanner import (
     _active_tasks,

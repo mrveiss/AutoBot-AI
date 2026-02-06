@@ -15,8 +15,8 @@ import subprocess
 import threading
 from typing import Optional
 
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

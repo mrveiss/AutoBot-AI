@@ -14,29 +14,29 @@ import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
 
-from src.intelligence.goal_processor import GoalProcessor, ProcessedGoal
+from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Issue #380: Module-level frozenset for package managers requiring sudo
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
     {"apt", "yum", "dn", "pacman", "zypper"}
 )
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
-from src.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
-from src.intelligence.streaming_executor import (
+from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
+from intelligence.streaming_executor import (
     ChunkType,
     StreamChunk,
     StreamingCommandExecutor,
 )
-from src.intelligence.tool_selector import OSAwareToolSelector
-from src.knowledge_base import KnowledgeBase
+from intelligence.tool_selector import OSAwareToolSelector
+from knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
-from src.llm_interface import LLMInterface
-from src.utils.command_validator import CommandValidator
-from src.worker_node import WorkerNode
+from llm_interface import LLMInterface
+from utils.command_validator import CommandValidator
+from worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 
@@ -747,7 +747,7 @@ OS-specific commands.
 
     def _get_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
-        from src.utils.command_utils import get_timestamp
+        from utils.command_utils import get_timestamp
 
         return get_timestamp()
 

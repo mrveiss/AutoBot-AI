@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from src.constants import WorkflowThresholds
+from constants import WorkflowThresholds
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 

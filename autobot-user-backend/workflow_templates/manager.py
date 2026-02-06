@@ -10,7 +10,7 @@ Lean coordinator that manages workflow templates using composition pattern.
 
 from typing import Any, Dict, List, Optional
 
-from src.autobot_types import TaskComplexity
+from autobot_types import TaskComplexity
 
 from .analysis import get_all_analysis_templates
 from .development import get_all_development_templates

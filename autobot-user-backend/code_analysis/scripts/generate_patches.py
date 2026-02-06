@@ -8,8 +8,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.automated_fix_generator import AutomatedFixGenerator
-from src.code_quality_dashboard import CodeQualityDashboard
+from automated_fix_generator import AutomatedFixGenerator
+from code_quality_dashboard import CodeQualityDashboard
 
 
 def _print_fix_summary_stats(fix_results: dict) -> None:

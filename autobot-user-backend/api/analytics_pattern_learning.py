@@ -340,7 +340,7 @@ class PatternLearningEngine:
                 return True
 
             try:
-                from src.utils.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_redis_client
 
                 self.redis_client = await get_redis_client(
                     async_client=True, database="analytics"

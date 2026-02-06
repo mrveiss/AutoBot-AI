@@ -16,8 +16,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from backend.services.knowledge_base_adapter import KnowledgeBaseAdapter
 from backend.services.rag_config import RAGConfig, get_rag_config
 from backend.type_defs.common import Metadata
-from src.advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
-from src.utils.logging_manager import get_llm_logger
+from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_service")
 

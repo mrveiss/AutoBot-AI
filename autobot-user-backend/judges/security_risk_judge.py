@@ -13,8 +13,8 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from src.constants import SecurityThresholds
-from src.constants.network_constants import NetworkConstants
+from constants import SecurityThresholds
+from constants.network_constants import NetworkConstants
 
 from . import BaseLLMJudge, JudgmentDimension, JudgmentResult
 

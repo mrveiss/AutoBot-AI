@@ -12,7 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 # Issue #673: Import from autobot_types to avoid circular import with src.orchestrator
-from src.autobot_types import TaskComplexity
+from autobot_types import TaskComplexity
 
 from .types import AgentCapability, AgentProfile
 

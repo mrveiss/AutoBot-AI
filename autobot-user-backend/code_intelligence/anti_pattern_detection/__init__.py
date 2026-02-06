@@ -12,7 +12,7 @@ into focused, single-responsibility modules.
 Part of Issue #381 - God Class Refactoring
 
 Usage:
-    from src.code_intelligence.anti_pattern_detection import (
+    from code_intelligence.anti_pattern_detection import (
         AntiPatternDetector,
         AntiPatternType,
         AntiPatternSeverity,

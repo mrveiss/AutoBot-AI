@@ -18,13 +18,13 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.agents.npu_code_search_agent import (
+from agents.npu_code_search_agent import (
     get_npu_code_search,
     index_project,
     search_codebase,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.redis_client import get_redis_client
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import get_redis_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

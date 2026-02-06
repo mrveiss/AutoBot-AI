@@ -92,7 +92,7 @@ class QueryProcessor:
         if not enable_expansion:
             return [query]
 
-        from src.knowledge.search_quality import get_query_expander
+        from knowledge.search_quality import get_query_expander
 
         expander = get_query_expander()
         queries = expander.expand_query(query)

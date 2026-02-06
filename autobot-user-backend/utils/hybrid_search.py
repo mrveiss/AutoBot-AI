@@ -12,7 +12,7 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()

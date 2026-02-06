@@ -31,10 +31,10 @@ from backend.utils.response_helpers import (
     create_success_response,
     handle_ai_stack_error,
 )
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.constants.threshold_constants import TimingConstants
-from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission, get_current_user
+from constants.threshold_constants import TimingConstants
+from monitoring.prometheus_metrics import get_metrics_manager
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -779,7 +779,7 @@ async def receive_goal(
         JSONResponse: Returns a 403 error if permission is denied, or a 500
             error if an internal error occurs.
     """
-    from src.event_manager import event_manager
+    from event_manager import event_manager
 
     orchestrator = request.app.state.orchestrator
     security_layer = request.app.state.security_layer
@@ -829,7 +829,7 @@ async def pause_agent_api(
     without actual functionality. Full implementation will be added with
     backend integration.
     """
-    from src.event_manager import event_manager
+    from event_manager import event_manager
 
     security_layer = request.app.state.security_layer
     orchestrator = request.app.state.orchestrator
@@ -879,7 +879,7 @@ async def resume_agent_api(
     actual functionality.
     Full implementation will be added with backend integration.
     """
-    from src.event_manager import event_manager
+    from event_manager import event_manager
 
     security_layer = request.app.state.security_layer
     orchestrator = request.app.state.orchestrator
@@ -987,7 +987,7 @@ async def execute_command(
                       a 403 error if permission is denied,
                       or a 500 error if an internal error occurs.
     """
-    from src.event_manager import event_manager
+    from event_manager import event_manager
 
     security_layer = request.app.state.security_layer
     command = command_data.get("command")

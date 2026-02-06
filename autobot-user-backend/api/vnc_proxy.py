@@ -20,10 +20,10 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import Response
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import get_current_user
-from src.constants.network_constants import NetworkConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.http_client import get_http_client
+from auth_middleware import get_current_user
+from constants.network_constants import NetworkConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

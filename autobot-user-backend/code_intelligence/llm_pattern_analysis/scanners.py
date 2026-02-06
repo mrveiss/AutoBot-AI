@@ -19,13 +19,13 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from src.code_intelligence.llm_pattern_analysis.data_models import (
+from code_intelligence.llm_pattern_analysis.data_models import (
     BatchingOpportunity,
     CacheOpportunity,
     RetryPattern,
     UsagePattern,
 )
-from src.code_intelligence.llm_pattern_analysis.types import (
+from code_intelligence.llm_pattern_analysis.types import (
     RETRY_COUNT_PATTERNS,
     RETRY_LOGIC_PATTERNS,
     SIMPLE_LLM_MODELS,

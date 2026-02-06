@@ -23,11 +23,11 @@ Features:
 
 Part of EPIC #217 - Advanced Code Intelligence Methods (Issue #227).
 
-DEPRECATED: Import directly from src.code_intelligence.conversation_analysis instead.
+DEPRECATED: Import directly from code_intelligence.conversation_analysis instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from src.code_intelligence.conversation_analysis import (
+from code_intelligence.conversation_analysis import (
     # Types
     SATISFACTION_SIGNALS,
     AnalysisResult,

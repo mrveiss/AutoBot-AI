@@ -30,7 +30,7 @@ import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -91,8 +91,8 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from src.config import unified_config_manager
-from src.utils.redis_client import get_redis_client as get_redis_manager
+from config import unified_config_manager
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
 logger = logging.getLogger(__name__)
 

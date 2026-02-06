@@ -14,11 +14,11 @@ from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.user_management.models.base import Base, TimestampMixin
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from src.user_management.models.organization import Organization
-    from src.user_management.models.user import User
+    from user_management.models.organization import Organization
+    from user_management.models.user import User
 
 
 class Permission(Base, TimestampMixin):

@@ -18,7 +18,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +384,7 @@ class WebResearchIntegration:
         """Execute basic web research"""
         if self._basic_agent is None:
             try:
-                from src.agents.web_research_assistant import WebResearchAssistant
+                from agents.web_research_assistant import WebResearchAssistant
 
                 self._basic_agent = WebResearchAssistant(self.config)
                 logger.info("Basic research agent initialized")
@@ -411,7 +411,7 @@ class WebResearchIntegration:
         """Execute advanced web research with Playwright"""
         if self._advanced_agent is None:
             try:
-                from src.agents.advanced_web_research import AdvancedWebResearcher
+                from agents.advanced_web_research import AdvancedWebResearcher
 
                 self._advanced_agent = AdvancedWebResearcher(self.config)
                 await self._advanced_agent.initialize()
@@ -433,7 +433,7 @@ class WebResearchIntegration:
         """Execute API-based web research"""
         if self._api_agent is None:
             try:
-                from src.agents.research_agent import ResearchAgent, ResearchRequest
+                from agents.research_agent import ResearchAgent, ResearchRequest
 
                 self._api_agent = ResearchAgent()
                 logger.info("API research agent initialized")
@@ -585,7 +585,7 @@ _global_research_integration_lock = threading.Lock()
 def _load_web_research_config() -> Dict[str, Any]:
     """Load web research config from config manager (Issue #334 - extracted helper)."""
     try:
-        from src.config import config_manager
+        from config import config_manager
         return config_manager.get_nested("web_research", {})
     except Exception as e:
         logger.warning("Could not load web research config: %s", e)

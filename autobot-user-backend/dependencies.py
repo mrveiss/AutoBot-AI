@@ -12,7 +12,7 @@ import threading
 
 from fastapi import Depends
 
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 global_config_manager = UnifiedConfigManager()
 
@@ -40,7 +40,7 @@ def get_diagnostics(config: UnifiedConfigManager = Depends(get_config)):
     Returns:
         Diagnostics: Diagnostics instance configured with the provided config
     """
-    from src.diagnostics import Diagnostics
+    from diagnostics import Diagnostics
 
     return Diagnostics(config_manager=config)
 
@@ -55,7 +55,7 @@ def get_knowledge_base(config: UnifiedConfigManager = Depends(get_config)):
     Returns:
         KnowledgeBase: Knowledge base instance configured with the provided config
     """
-    from src.knowledge_base import KnowledgeBase as KnowledgeBase
+    from knowledge_base import KnowledgeBase as KnowledgeBase
 
     return KnowledgeBase()
 
@@ -70,7 +70,7 @@ def get_llm_interface(config: UnifiedConfigManager = Depends(get_config)):
     Returns:
         LLMInterface: LLM interface instance configured with the provided config
     """
-    from src.llm_interface import LLMInterface
+    from llm_interface import LLMInterface
 
     return LLMInterface()
 
@@ -94,7 +94,7 @@ def get_orchestrator(
         Orchestrator: Orchestrator instance configured with all dependencies
     """
     # Lazy import to reduce startup time
-    from src.orchestrator import Orchestrator
+    from orchestrator import Orchestrator
 
     return Orchestrator(
         config_manager=config,
@@ -115,7 +115,7 @@ def get_security_layer(config: UnifiedConfigManager = Depends(get_config)):
         Optional[SecurityLayer]: Security layer instance if enabled, None otherwise
     """
     try:
-        from src.security_layer import SecurityLayer
+        from security_layer import SecurityLayer
 
         return SecurityLayer()
     except Exception:
@@ -168,7 +168,7 @@ def get_cached_knowledge_base(config: UnifiedConfigManager = Depends(get_config)
     Returns:
         KnowledgeBase: Cached knowledge base instance
     """
-    from src.knowledge_base import KnowledgeBase as KnowledgeBase
+    from knowledge_base import KnowledgeBase as KnowledgeBase
 
     return dependency_cache.get_or_create("knowledge_base", lambda: KnowledgeBase())
 
@@ -190,7 +190,7 @@ def get_cached_orchestrator(config: UnifiedConfigManager = Depends(get_config)):
     # Lazy import inside cache function to defer loading
     def _create_orchestrator():
         """Create orchestrator instance with configuration manager."""
-        from src.orchestrator import Orchestrator
+        from orchestrator import Orchestrator
 
         return Orchestrator(config_manager=config)
 
@@ -204,7 +204,7 @@ def get_redis_client():
     Returns:
         Redis client instance (sync)
     """
-    from src.utils.redis_client import get_redis_client as _get_redis_client
+    from autobot_shared.redis_client import get_redis_client as _get_redis_client
 
     return _get_redis_client()
 
@@ -221,7 +221,7 @@ async def get_async_redis_client(database: str = "main"):
     Returns:
         Async Redis client instance
     """
-    from src.utils.redis_client import get_redis_client as _get_redis_client
+    from autobot_shared.redis_client import get_redis_client as _get_redis_client
 
     return await _get_redis_client(async_client=True, database=database)
 

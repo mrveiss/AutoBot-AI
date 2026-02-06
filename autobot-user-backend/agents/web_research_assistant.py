@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 
 
 try:
-    from src.agents.advanced_web_research import AdvancedWebResearcher
+    from agents.advanced_web_research import AdvancedWebResearcher
 
     ADVANCED_RESEARCH_AVAILABLE = True
 except ImportError:

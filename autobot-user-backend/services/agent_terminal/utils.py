@@ -11,7 +11,7 @@ import re
 from typing import TYPE_CHECKING, Optional
 
 from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
-from src.secure_command_executor import CommandRisk
+from secure_command_executor import CommandRisk
 
 if TYPE_CHECKING:
     from .models import AgentTerminalSession

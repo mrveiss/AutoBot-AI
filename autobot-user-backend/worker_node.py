@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 import psutil
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -31,22 +31,22 @@ except ImportError:
     torch = None
 
 # Import the centralized ConfigManager and Redis client utility
-from src.config import config as global_config_manager
-from src.event_manager import event_manager
-from src.knowledge_base import KnowledgeBase
-from src.llm_interface import LLMInterface
-from src.security_layer import SecurityLayer
-from src.system_integration import SystemIntegration
-from src.task_handlers import TaskExecutor
-from src.utils.redis_client import get_redis_client
+from config import config as global_config_manager
+from event_manager import event_manager
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
+from security_layer import SecurityLayer
+from system_integration import SystemIntegration
+from task_handlers import TaskExecutor
+from autobot_shared.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith("linux"):
-    from src.gui_controller_dummy import GUIController
+    from gui_controller_dummy import GUIController
 
     GUI_AUTOMATION_SUPPORTED = False
 else:
-    from src.gui_controller import GUIController
+    from gui_controller import GUIController
 
     GUI_AUTOMATION_SUPPORTED = True
 

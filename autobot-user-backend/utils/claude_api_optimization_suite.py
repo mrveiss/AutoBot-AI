@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 

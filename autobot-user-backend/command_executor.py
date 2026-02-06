@@ -15,10 +15,10 @@ Production Usage: None (zero imports found)
 
 Usage:
     # Old import (deprecated but still works):
-    from src.command_executor import CommandExecutor
+    from command_executor import CommandExecutor
 
     # New recommended import:
-    from src.secure_command_executor import SecureCommandExecutor
+    from secure_command_executor import SecureCommandExecutor
 
 Security Notes:
 - SecureCommandExecutor provides comprehensive security validation
@@ -39,11 +39,11 @@ warnings.warn(
 )
 
 # Re-export SecureCommandExecutor as CommandExecutor for backward compatibility
-from src.secure_command_executor import (
+from secure_command_executor import (
     CommandRisk,
 )
-from src.secure_command_executor import SecureCommandExecutor as CommandExecutor
-from src.secure_command_executor import (
+from secure_command_executor import SecureCommandExecutor as CommandExecutor
+from secure_command_executor import (
     SecurityPolicy,
 )
 

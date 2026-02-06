@@ -7,8 +7,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.constants.network_constants import NetworkConstants
-from src.env_analyzer import EnvironmentAnalyzer
+from constants.network_constants import NetworkConstants
+from env_analyzer import EnvironmentAnalyzer
 
 
 async def analyze_environment_variables():

@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
 
-from src.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +407,7 @@ class PromptManager:
     def _load_prompt_change_cache(self) -> Optional[Dict[str, str]]:
         """Load cached prompt file states from Redis"""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis_client = get_redis_client(database="prompts")
 
@@ -429,7 +429,7 @@ class PromptManager:
     def _update_prompt_change_cache(self):
         """Update the cached prompt file states in Redis"""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis_client = get_redis_client(database="prompts")
 
@@ -487,7 +487,7 @@ class PromptManager:
     def _load_from_redis_cache(self, cache_key: str) -> Optional[Dict]:
         """Load prompts from Redis cache using dedicated prompts database"""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis_client = get_redis_client(database="prompts")
             if not redis_client:
@@ -504,7 +504,7 @@ class PromptManager:
     def _save_to_redis_cache(self, cache_key: str, data: Dict) -> None:
         """Save prompts to Redis cache using dedicated prompts database"""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis_client = get_redis_client(database="prompts")
             if not redis_client:

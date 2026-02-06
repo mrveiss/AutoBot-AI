@@ -14,8 +14,8 @@ from typing import Any, Dict, List
 
 import yaml
 
-from src.config.defaults import get_default_config
-from src.constants.threshold_constants import StringParsingConstants
+from config.defaults import get_default_config
+from constants.threshold_constants import StringParsingConstants
 
 logger = logging.getLogger(__name__)
 

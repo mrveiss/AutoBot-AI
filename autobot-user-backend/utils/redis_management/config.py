@@ -19,9 +19,9 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.redis_constants import REDIS_CONFIG
-from src.constants.threshold_constants import RetryConfig
+from constants.network_constants import NetworkConstants
+from constants.redis_constants import REDIS_CONFIG
+from constants.threshold_constants import RetryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class RedisConfigLoader:
             Dict mapping database names to RedisConfig objects
         """
         try:
-            from src.utils.service_registry import get_service_registry
+            from utils.service_registry import get_service_registry
 
             registry = get_service_registry()
             redis_config = registry.get_service_config("redis")
@@ -234,7 +234,7 @@ class RedisConfigLoader:
             Dict with timeout and retry configuration
         """
         try:
-            from src.config.timeout_config import get_redis_timeout_config
+            from config.timeout_config import get_redis_timeout_config
 
             return get_redis_timeout_config()
         except (ImportError, AttributeError):

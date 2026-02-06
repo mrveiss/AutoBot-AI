@@ -9,15 +9,15 @@ from fastapi.responses import JSONResponse
 
 from backend.services.config_service import ConfigService
 from backend.utils.connection_utils import ConnectionTester, ModelManager
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.config import UnifiedConfigManager
+from auth_middleware import check_admin_permission, get_current_user
+from config import UnifiedConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
-from src.constants.model_constants import ModelConstants
+from constants.model_constants import ModelConstants
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
-from src.utils.advanced_cache_manager import cache_response
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from utils.advanced_cache_manager import cache_response
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
 config = UnifiedConfigManager()

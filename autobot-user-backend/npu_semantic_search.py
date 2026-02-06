@@ -18,29 +18,29 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiohttp
 import numpy as np
 
-from src.ai_hardware_accelerator import (
+from ai_hardware_accelerator import (
     HardwareDevice,
     accelerated_embedding_generation,
     get_ai_accelerator,
 )
-from src.config import cfg
+from config import cfg
 
 # Import existing AutoBot components
-from src.constants.threshold_constants import TimingConstants
-from src.knowledge.embedding_cache import get_embedding_cache
-from src.knowledge_base import KnowledgeBase
-from src.utils.chromadb_client import get_chromadb_client
+from constants.threshold_constants import TimingConstants
+from knowledge.embedding_cache import get_embedding_cache
+from knowledge_base import KnowledgeBase
+from utils.chromadb_client import get_chromadb_client
 
 # Issue #387: GPU-accelerated vector search
-from src.utils.gpu_vector_search import (
+from utils.gpu_vector_search import (
     FAISS_AVAILABLE,
     FAISS_GPU_AVAILABLE,
     HybridVectorSearch,
     VectorSearchConfig,
     get_hybrid_vector_search,
 )
-from src.utils.http_client import get_http_client
-from src.utils.logging_manager import get_llm_logger
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_llm_logger
 
 # Import ChromaDB for multi-modal vector storage
 try:
@@ -498,7 +498,7 @@ class NPUSemanticSearch:
             embedding = await accelerated_embedding_generation(text)
             return embedding, "auto_selected"
 
-        from src.utils.semantic_chunker import get_semantic_chunker
+        from utils.semantic_chunker import get_semantic_chunker
 
         chunker = get_semantic_chunker()
         await chunker._initialize_model()
@@ -514,7 +514,7 @@ class NPUSemanticSearch:
         Returns:
             Tuple of (embedding array, device name)
         """
-        from src.utils.semantic_chunker import get_semantic_chunker
+        from utils.semantic_chunker import get_semantic_chunker
 
         chunker = get_semantic_chunker()
         embeddings = chunker._compute_sentence_embeddings([text])

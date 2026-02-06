@@ -17,7 +17,7 @@ from typing import Any, Dict
 
 import psutil
 
-from src.config import config_manager
+from config import config_manager
 
 logger = logging.getLogger(__name__)
 

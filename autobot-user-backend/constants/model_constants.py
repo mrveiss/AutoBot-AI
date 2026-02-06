@@ -13,7 +13,7 @@ MIGRATION (Issue #763):
     Cache → Redis → Environment → Registry Defaults → Caller Default
 
 Usage:
-    from src.constants.model_constants import ModelConstants
+    from constants.model_constants import ModelConstants
 
     # Use default model
     model_name = ModelConstants.DEFAULT_OLLAMA_MODEL
@@ -22,7 +22,7 @@ Usage:
     ollama_url = ModelConstants.get_ollama_url()
 
     # Preferred: Use ConfigRegistry directly
-    from src.config.registry import ConfigRegistry
+    from config.registry import ConfigRegistry
     model_name = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 """
 
@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-from src.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
@@ -53,7 +53,7 @@ class ModelConstants:
         All models now use ConfigRegistry with five-tier fallback.
 
     Usage remains unchanged for backward compatibility:
-        from src.constants.model_constants import ModelConstants
+        from constants.model_constants import ModelConstants
         model = ModelConstants.DEFAULT_OLLAMA_MODEL
     """
 
@@ -110,7 +110,7 @@ class ModelConstants:
 
         Issue #763: Now uses ConfigRegistry with NetworkConstants fallback.
         """
-        from src.constants.network_constants import NetworkConstants
+        from constants.network_constants import NetworkConstants
 
         host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_VM_IP)
         port = ConfigRegistry.get("port.ollama", str(NetworkConstants.OLLAMA_PORT))
@@ -119,7 +119,7 @@ class ModelConstants:
     @staticmethod
     def get_lm_studio_url() -> str:
         """Get LM Studio service URL from environment or default"""
-        from src.constants.network_constants import NetworkConstants
+        from constants.network_constants import NetworkConstants
 
         host = os.getenv("AUTOBOT_LM_STUDIO_HOST", NetworkConstants.LOCALHOST_IP)
         port = os.getenv("AUTOBOT_LM_STUDIO_PORT", "1234")
@@ -197,7 +197,7 @@ def get_default_model(provider: Optional[str] = None) -> str:
     Get the default model for a specific provider or the system default.
 
     Issue #763: Prefer using ConfigRegistry directly:
-        from src.config.registry import ConfigRegistry
+        from config.registry import ConfigRegistry
         model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 
     Issue #380: Added @lru_cache since models don't change at runtime.
@@ -226,7 +226,7 @@ def get_model_endpoint(provider: str) -> str:
     Get the endpoint URL for a specific provider.
 
     Issue #763: Prefer using ConfigRegistry directly:
-        from src.config.registry import ConfigRegistry
+        from config.registry import ConfigRegistry
         host = ConfigRegistry.get("vm.ollama", "172.16.168.24")
         port = ConfigRegistry.get("port.ollama", "11434")
 

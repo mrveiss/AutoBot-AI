@@ -34,8 +34,8 @@ from backend.api.knowledge_models import (
     UpdateCollectionRequest,
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
-from src.constants.threshold_constants import QueryDefaults
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import QueryDefaults
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

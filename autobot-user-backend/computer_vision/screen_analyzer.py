@@ -19,15 +19,15 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from src.desktop_streaming_manager import desktop_streaming
-from src.memory import TaskPriority
-from src.multimodal_processor import (
+from desktop_streaming_manager import desktop_streaming
+from memory import TaskPriority
+from multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
     unified_processor,
 )
-from src.task_execution_tracker import task_tracker
+from task_execution_tracker import task_tracker
 
 from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEngine
 from .collections import ProcessingResultExtractor, UIElementCollection
@@ -575,7 +575,7 @@ class ScreenAnalyzer:
         """Find UI elements matching voice description using cross-modal search"""
         try:
             # Import npu_semantic_search for cross-modal capabilities
-            from src.npu_semantic_search import NPUSearchEngine
+            from npu_semantic_search import NPUSearchEngine
 
             # Get NPU search engine instance
             search_engine = NPUSearchEngine()

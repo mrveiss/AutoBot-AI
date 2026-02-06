@@ -54,7 +54,7 @@ class DocumentsMixin:
         Returns:
             Result dictionary with status and details
         """
-        from src.utils.knowledge_base_timeouts import kb_timeouts
+        from utils.knowledge_base_timeouts import kb_timeouts
 
         if not content.strip():
             return {"status": "error", "message": "Empty content provided"}

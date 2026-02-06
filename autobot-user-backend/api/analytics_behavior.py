@@ -24,8 +24,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from backend.services.user_behavior_analytics import UserEvent, get_behavior_analytics
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])

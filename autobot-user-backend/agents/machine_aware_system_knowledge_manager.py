@@ -20,9 +20,9 @@ from typing import Any, Dict, List, Optional, Set
 import aiofiles
 import yaml
 
-from src.agents.system_knowledge_manager import SystemKnowledgeManager
-from src.intelligence.os_detector import LinuxDistro, OSType, get_os_detector
-from src.knowledge_base import KnowledgeBase
+from agents.system_knowledge_manager import SystemKnowledgeManager
+from intelligence.os_detector import LinuxDistro, OSType, get_os_detector
+from knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -670,7 +670,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         Returns:
             Tuple of (integrator, commands_to_integrate) or (None, []) if unavailable
         """
-        from src.agents.man_page_knowledge_integrator import get_man_page_integrator
+        from agents.man_page_knowledge_integrator import get_man_page_integrator
 
         integrator = await get_man_page_integrator()
         machine_dir = self._get_machine_knowledge_dir()

@@ -17,8 +17,8 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
-from src.constants.threshold_constants import RetryConfig as ThresholdRetryConfig
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import RetryConfig as ThresholdRetryConfig
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

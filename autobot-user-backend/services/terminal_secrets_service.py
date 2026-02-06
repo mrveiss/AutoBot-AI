@@ -38,7 +38,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from src.services.agent_secrets_integration import (
+from services.agent_secrets_integration import (
     AgentSecretsIntegration,
     get_agent_secrets_integration,
 )

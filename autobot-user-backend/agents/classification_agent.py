@@ -12,17 +12,17 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from src.agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
-from src.agents.llm_failsafe_agent import get_robust_llm_response
-from src.autobot_types import TaskComplexity
-from src.config.ssot_config import (
+from agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
+from agents.llm_failsafe_agent import get_robust_llm_response
+from autobot_types import TaskComplexity
+from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from src.llm_interface import LLMInterface
-from src.utils.redis_client import get_redis_client
-from src.workflow_classifier import WorkflowClassifier
+from llm_interface import LLMInterface
+from autobot_shared.redis_client import get_redis_client
+from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent
@@ -532,7 +532,7 @@ if __name__ == "__main__":
 
         while True:
             try:
-                from src.utils.terminal_input_handler import safe_input
+                from utils.terminal_input_handler import safe_input
 
                 message = safe_input("\n> ", timeout=10.0, default="exit").strip()
                 if not message or message == "exit":

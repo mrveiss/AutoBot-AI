@@ -13,8 +13,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 
-from src.enhanced_memory_manager_async import TaskPriority
-from src.voice_processing.types import SpeechQuality, VoiceCommand
+from enhanced_memory_manager_async import TaskPriority
+from voice_processing.types import SpeechQuality, VoiceCommand
 
 
 @dataclass

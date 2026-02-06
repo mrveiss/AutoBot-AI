@@ -9,7 +9,7 @@ Exposes Prometheus-format metrics for scraping
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.prometheus_metrics import get_metrics_manager
 
 router = APIRouter()
 

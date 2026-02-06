@@ -576,7 +576,7 @@ class FactsMixin:
             return
 
         # Import sanitization utility
-        from src.knowledge.utils import (
+        from knowledge.utils import (
             sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
         )
 
@@ -843,7 +843,7 @@ class FactsMixin:
 
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
         """
-        from src.knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
+        from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
         sanitized_metadata = _sanitize(current_metadata)
         sanitized_metadata["fact_id"] = fact_id

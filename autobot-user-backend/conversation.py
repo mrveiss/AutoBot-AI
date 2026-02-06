@@ -13,15 +13,15 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.agents import get_kb_librarian
-from src.agents.classification_agent import ClassificationAgent, ClassificationResult
-from src.agents.llm_failsafe_agent import get_robust_llm_response
-from src.autobot_types import TaskComplexity
-from src.config import config as global_config_manager
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import TimingConstants
-from src.research_browser_manager import research_browser_manager
-from src.source_attribution import (
+from agents import get_kb_librarian
+from agents.classification_agent import ClassificationAgent, ClassificationResult
+from agents.llm_failsafe_agent import get_robust_llm_response
+from autobot_types import TaskComplexity
+from config import config as global_config_manager
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
+from research_browser_manager import research_browser_manager
+from source_attribution import (
     SourceType,
     clear_sources,
     get_attribution,
@@ -116,7 +116,7 @@ class Conversation:
             if use_gemma:
                 try:
                     # Try to import and use Gemma classification agent
-                    from src.agents.gemma_classification_agent import (
+                    from agents.gemma_classification_agent import (
                         GemmaClassificationAgent,
                     )
 

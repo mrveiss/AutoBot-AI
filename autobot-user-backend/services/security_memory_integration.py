@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, FrozenSet, Optional
 
-from src.autobot_memory_graph import AutoBotMemoryGraph
+from autobot_memory_graph import AutoBotMemoryGraph
 
 # Issue #380: Module-level frozenset for security-related tags
 _SECURITY_TAGS: FrozenSet[str] = frozenset(

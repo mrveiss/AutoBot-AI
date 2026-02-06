@@ -25,8 +25,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from src.utils.redis_client import get_redis_client
-    from src.config import UnifiedConfig
+    from autobot_shared.redis_client import get_redis_client
+    from config import UnifiedConfig
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:
@@ -38,7 +38,7 @@ except ImportError:
 
 # Issue #642: SSOT mapping integration
 try:
-    from src.config.ssot_mappings import (
+    from config.ssot_mappings import (
         get_mapping_for_value,
         validate_against_ssot,
         generate_ssot_coverage_report,

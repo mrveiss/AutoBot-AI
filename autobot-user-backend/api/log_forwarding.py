@@ -25,9 +25,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.config.ssot_config import config
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.ssot_config import config
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Add scripts path for log forwarder import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

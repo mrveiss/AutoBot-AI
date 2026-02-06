@@ -13,9 +13,9 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.project_state_manager import DevelopmentPhase, get_project_state_manager
-from src.utils.advanced_cache_manager import smart_cache
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from project_state_manager import DevelopmentPhase, get_project_state_manager
+from utils.advanced_cache_manager import smart_cache
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

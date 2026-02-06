@@ -14,12 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.auth_middleware import check_admin_permission, get_current_user
-from src.enhanced_multi_agent_orchestrator import (
+from auth_middleware import check_admin_permission, get_current_user
+from enhanced_multi_agent_orchestrator import (
     create_and_execute_workflow,
     enhanced_orchestrator,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -243,7 +243,7 @@ async def recommend_agents(
     Issue #744: Requires authenticated user.
     """
     try:
-        from src.enhanced_multi_agent_orchestrator import AgentCapability
+        from enhanced_multi_agent_orchestrator import AgentCapability
 
         # Convert capability strings to enums
         capabilities_needed = set()

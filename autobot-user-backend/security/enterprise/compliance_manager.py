@@ -23,7 +23,7 @@ import aiofiles
 import yaml
 from cryptography.fernet import Fernet
 
-from src.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

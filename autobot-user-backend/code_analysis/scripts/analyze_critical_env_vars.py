@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

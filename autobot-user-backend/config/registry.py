@@ -15,7 +15,7 @@ ARCHITECTURE:
 - Five-tier fallback: Cache -> Redis -> Environment -> Registry Defaults -> Caller Default
 
 USAGE:
-    from src.config.registry import ConfigRegistry
+    from config.registry import ConfigRegistry
 
     # Get single value with fallback
     redis_host = ConfigRegistry.get("redis.host", "172.16.168.23")
@@ -87,7 +87,7 @@ class ConfigRegistry:
                 return env_value
 
             # Try registry defaults
-            from src.config.registry_defaults import get_default
+            from config.registry_defaults import get_default
 
             registry_default = get_default(key)
             if registry_default is not None:
@@ -138,7 +138,7 @@ class ConfigRegistry:
         """Lazy Redis connection - only when first needed."""
         if cls._redis_client is None:
             try:
-                from src.utils.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_redis_client
 
                 cls._redis_client = get_redis_client(database="main")
             except Exception as e:

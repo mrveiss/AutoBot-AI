@@ -22,8 +22,8 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
 
-from src.autobot_types import TaskComplexity
-from src.constants.threshold_constants import RetryConfig, WorkflowConfig
+from autobot_types import TaskComplexity
+from constants.threshold_constants import RetryConfig, WorkflowConfig
 
 
 class WorkflowPriority(Enum):

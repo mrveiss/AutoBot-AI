@@ -17,8 +17,8 @@ from pathlib import Path
 
 from celery import Celery
 
-from src.config.ssot_config import config as ssot_config
-from src.config import UnifiedConfigManager
+from autobot_shared.ssot_config import config as ssot_config
+from config import UnifiedConfigManager
 
 # Create singleton config instance for extended config values
 config = UnifiedConfigManager()

@@ -32,10 +32,10 @@ import aiofiles
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.constants.threshold_constants import TimingConstants
-from src.knowledge_base import KnowledgeBase
-from src.utils.logging_manager import get_llm_logger
-from src.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+from constants.threshold_constants import TimingConstants
+from knowledge_base import KnowledgeBase
+from autobot_shared.logging_manager import get_llm_logger
+from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("knowledge_sync_incremental")
 

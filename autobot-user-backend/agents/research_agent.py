@@ -15,10 +15,10 @@ from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from src.agents.advanced_web_research import AdvancedWebResearcher
-from src.constants.network_constants import NetworkConstants
-from src.utils.http_client import get_http_client
-from src.utils.logging_manager import get_logger
+from agents.advanced_web_research import AdvancedWebResearcher
+from constants.network_constants import NetworkConstants
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_logger
 
 # Get centralized logger
 logger = get_logger(__name__, "backend")

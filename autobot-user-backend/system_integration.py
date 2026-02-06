@@ -13,7 +13,7 @@ from markdownify import (
     markdownify as md,  # Import markdownify for HTML to Markdown conversion
 )
 
-from src.utils.http_client import get_http_client
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +276,7 @@ class SystemIntegration:
         """Manage Linux service with elevation (Issue #665: extracted helper)."""
         import asyncio
 
-        from src.elevation_wrapper import execute_with_elevation
+        from elevation_wrapper import execute_with_elevation
 
         elevation_result = asyncio.run(
             execute_with_elevation(

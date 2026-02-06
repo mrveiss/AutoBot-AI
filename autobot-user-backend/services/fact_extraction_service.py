@@ -13,17 +13,17 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.agents.knowledge_extraction_agent import KnowledgeExtractionAgent
-from src.config import config_manager
-from src.models.atomic_fact import (
+from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+from config import config_manager
+from models.atomic_fact import (
     AtomicFact,
     FactExtractionResult,
     FactType,
     TemporalType,
 )
-from src.utils.entity_resolver import entity_resolver
-from src.utils.logging_manager import get_llm_logger
-from src.utils.redis_client import get_redis_client
+from utils.entity_resolver import entity_resolver
+from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("fact_extraction_service")
 
@@ -908,7 +908,7 @@ class FactExtractionService:
         """
         try:
             # Import here to avoid circular imports
-            from src.services.temporal_invalidation_service import (
+            from services.temporal_invalidation_service import (
                 get_temporal_invalidation_service,
             )
 

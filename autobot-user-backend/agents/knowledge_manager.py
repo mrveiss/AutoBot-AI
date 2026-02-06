@@ -34,20 +34,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
-from src.agents.machine_aware_system_knowledge_manager import (
+from agents.machine_aware_system_knowledge_manager import (
     MachineAwareSystemKnowledgeManager,
     MachineProfile,
 )
-from src.agents.system_knowledge_manager import SystemKnowledgeManager
-from src.knowledge_base import KnowledgeBase
-from src.temporal_knowledge_manager import (
+from agents.system_knowledge_manager import SystemKnowledgeManager
+from knowledge_base import KnowledgeBase
+from temporal_knowledge_manager import (
     FreshnessStatus,
     InvalidationJob,
     KnowledgePriority,
     TemporalKnowledgeManager,
     TemporalMetadata,
 )
-from src.utils.logging_manager import get_llm_logger
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("unified_knowledge_manager")
 

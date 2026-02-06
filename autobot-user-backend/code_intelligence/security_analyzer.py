@@ -28,7 +28,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
-    from src.code_intelligence.analytics_infrastructure import (
+    from code_intelligence.analytics_infrastructure import (
         SIMILARITY_MEDIUM,
         SemanticAnalysisMixin,
     )
@@ -40,7 +40,7 @@ except ImportError:
 
 # Issue #607: Import shared caches for performance optimization
 try:
-    from src.code_intelligence.shared.ast_cache import get_ast_with_content
+    from code_intelligence.shared.ast_cache import get_ast_with_content
 
     HAS_SHARED_CACHE = True
 except ImportError:
@@ -1032,7 +1032,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         Issue #686: Uses exponential decay scoring to prevent score overflow.
         Scores now degrade gracefully instead of immediately hitting 0.
         """
-        from src.code_intelligence.shared.scoring import (
+        from code_intelligence.shared.scoring import (
             calculate_score_from_severity_counts,
             get_risk_level_from_score,
         )

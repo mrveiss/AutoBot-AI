@@ -5,14 +5,14 @@
 Memory Manager Enums - Shared enumeration types
 
 Issue #670: Re-exports from centralized src.constants.status_enums for backward compatibility.
-New code should import directly from src.constants.status_enums.
+New code should import directly from constants.status_enums.
 """
 
 # Re-export from centralized location for backward compatibility
 from enum import Enum
 
-from src.constants.status_enums import Priority as TaskPriority
-from src.constants.status_enums import TaskStatus
+from constants.status_enums import Priority as TaskPriority
+from constants.status_enums import TaskStatus
 
 
 class MemoryCategory(Enum):

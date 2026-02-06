@@ -16,8 +16,8 @@ import aiohttp
 import yaml
 from cachetools import TTLCache
 
-from src.constants.path_constants import PATH
-from src.utils.http_client import get_http_client
+from constants.path_constants import PATH
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

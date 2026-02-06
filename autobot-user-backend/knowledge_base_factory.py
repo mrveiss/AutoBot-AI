@@ -15,7 +15,7 @@ Key Features:
 - Configuration integration with unified config
 
 Usage:
-    from src.knowledge_base_factory import get_knowledge_base
+    from knowledge_base_factory import get_knowledge_base
 
     # Async context
     kb = await get_knowledge_base()
@@ -29,11 +29,11 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from src.constants.threshold_constants import TimingConstants
-from src.config import UnifiedConfigManager
+from constants.threshold_constants import TimingConstants
+from config import UnifiedConfigManager
 
 if TYPE_CHECKING:
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class KnowledgeBaseInitializer:
                 logger.info("Initializing knowledge base with async factory pattern...")
 
                 # Import here to avoid circular dependencies
-                from src.knowledge_base import KnowledgeBase
+                from knowledge_base import KnowledgeBase
 
                 # Create instance with async initialization
                 cls._instance = KnowledgeBase()

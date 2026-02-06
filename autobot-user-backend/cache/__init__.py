@@ -9,7 +9,7 @@ Provides unified cache coordination with memory-pressure-aware eviction.
 Issue #743: Memory Optimization - Unified CacheCoordinator
 
 Usage:
-    from src.cache import get_cache_coordinator, register_all_caches
+    from cache import get_cache_coordinator, register_all_caches
 
     # At application startup
     register_all_caches()
@@ -47,27 +47,27 @@ def _get_cache_registry() -> List[Tuple[str, str, Callable[[], CacheProtocol]]]:
     """
 
     def _lru_cache_factory() -> CacheProtocol:
-        from src.memory.cache import LRUCacheManager
+        from memory.cache import LRUCacheManager
 
         return LRUCacheManager()
 
     def _embedding_cache_factory() -> CacheProtocol:
-        from src.knowledge.embedding_cache import EmbeddingCache
+        from knowledge.embedding_cache import EmbeddingCache
 
         return EmbeddingCache()
 
     def _llm_cache_factory() -> CacheProtocol:
-        from src.llm_interface_pkg.cache import LLMResponseCache
+        from llm_interface_pkg.cache import LLMResponseCache
 
         return LLMResponseCache()
 
     def _ast_cache_factory() -> CacheProtocol:
-        from src.code_intelligence.shared.ast_cache import ASTCache
+        from code_intelligence.shared.ast_cache import ASTCache
 
         return ASTCache()
 
     def _file_cache_factory() -> CacheProtocol:
-        from src.code_intelligence.shared.file_cache import FileListCache
+        from code_intelligence.shared.file_cache import FileListCache
 
         return FileListCache()
 
@@ -128,7 +128,7 @@ def register_all_caches() -> int:
         Number of caches successfully registered
 
     Example:
-        from src.cache import register_all_caches
+        from cache import register_all_caches
         count = register_all_caches()
         logger.info(f"Registered {count} caches with coordinator")
     """

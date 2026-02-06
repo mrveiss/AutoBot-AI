@@ -4,25 +4,25 @@
 """
 Knowledge Base - Backward Compatibility Wrapper
 
-This module provides backward compatibility for code importing from src.knowledge_base.
+This module provides backward compatibility for code importing from knowledge_base.
 The actual implementation has been refactored into src/knowledge/ for better maintainability.
 
 All imports from this module are re-exported from the modular implementation.
 
-For new code, prefer importing directly from src.knowledge:
-    from src.knowledge import KnowledgeBase, get_knowledge_base
+For new code, prefer importing directly from knowledge:
+    from knowledge import KnowledgeBase, get_knowledge_base
 """
 
 # Re-export everything from the modular implementation
-from src.knowledge import (
+from knowledge import (
     KnowledgeBase,
     get_knowledge_base,
 )
-from src.knowledge.embedding_cache import (
+from knowledge.embedding_cache import (
     EmbeddingCache,
     get_embedding_cache,
 )
-from src.knowledge.utils import (
+from knowledge.utils import (
     sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
 )
 

@@ -12,7 +12,7 @@ import time
 
 from fastapi import FastAPI
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 
 def register_health_endpoints(app: FastAPI, get_status_fn) -> None:

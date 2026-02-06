@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..storage import get_redis_connection
 from .shared import _in_memory_storage

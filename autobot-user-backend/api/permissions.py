@@ -32,8 +32,8 @@ from pydantic import BaseModel, Field
 
 from backend.services.approval_memory import get_approval_memory
 from backend.services.permission_matcher import get_permission_matcher
-from src.auth_middleware import check_admin_permission
-from src.config.ssot_config import PermissionAction, PermissionMode, config
+from auth_middleware import check_admin_permission
+from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 
 logger = logging.getLogger(__name__)
 

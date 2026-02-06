@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.memory import EnhancedMemoryManager
+from memory import EnhancedMemoryManager
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,8 @@ import socket
 from typing import List, Optional
 from urllib.parse import urlparse
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.security_constants import SecurityConstants
+from constants.network_constants import NetworkConstants
+from constants.security_constants import SecurityConstants
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")

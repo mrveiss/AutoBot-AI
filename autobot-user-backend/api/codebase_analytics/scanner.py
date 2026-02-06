@@ -19,8 +19,8 @@ from typing import Dict, List, Optional, Tuple
 from fastapi import HTTPException
 
 from backend.type_defs.common import Metadata
-from src.constants.path_constants import PATH
-from src.utils.file_categorization import (
+from constants.path_constants import PATH
+from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,
     CSS_EXTENSIONS,
@@ -41,7 +41,7 @@ from src.utils.file_categorization import (
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
-from src.utils.file_categorization import (
+from utils.file_categorization import (
     get_file_category as _get_file_category,  # Category constants; Extension sets; Directory sets; Functions
 )
 
@@ -327,7 +327,7 @@ async def _generate_batch_embeddings_fallback(
     Returns:
         List of embedding vectors (384 dimensions for MiniLM-L6-v2)
     """
-    from src.utils.semantic_chunker import get_semantic_chunker
+    from utils.semantic_chunker import get_semantic_chunker
 
     try:
         chunker = get_semantic_chunker()

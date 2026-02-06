@@ -379,7 +379,7 @@ def get_ssot_suggestion(value: str, file_type: str = "python") -> Optional[str]:
         return None
 
     if file_type == "python":
-        return f"Use {mapping.python_config} from src.config.ssot_config"
+        return f"Use {mapping.python_config} from autobot_shared.ssot_config"
     else:
         return f"Use {mapping.typescript_config} from @/config/ssot-config"
 

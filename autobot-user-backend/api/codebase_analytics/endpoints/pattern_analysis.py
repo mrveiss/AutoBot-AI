@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import QueryDefaults
+from constants.path_constants import PATH
+from constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
     """
     try:
         # Import here to avoid circular imports
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         _analysis_tasks[task_id]["status"] = "running"
         _analysis_tasks[task_id]["started_at"] = datetime.now().isoformat()
@@ -401,7 +401,7 @@ async def get_pattern_summary(
     without full pattern details.
     """
     try:
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         analyzer = CodePatternAnalyzer(
             enable_embedding_storage=False,  # Skip storage for quick summary
@@ -434,7 +434,7 @@ async def get_duplicate_patterns(
     This endpoint specifically analyzes for code duplication.
     """
     try:
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=True,
@@ -463,7 +463,7 @@ async def get_regex_opportunities(
     Identifies string operations that could be replaced with regex.
     """
     try:
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=False,
@@ -497,7 +497,7 @@ async def get_complexity_hotspots(
     Identifies functions with high cyclomatic or cognitive complexity.
     """
     try:
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=False,
@@ -534,7 +534,7 @@ async def get_refactoring_suggestions(
     Analyzes the codebase and generates actionable refactoring proposals.
     """
     try:
-        from src.code_intelligence.pattern_analysis import (
+        from code_intelligence.pattern_analysis import (
             CodePatternAnalyzer,
             RefactoringSuggestionGenerator,
         )
@@ -568,7 +568,7 @@ async def get_pattern_report(
     Returns either JSON or Markdown format based on the format parameter.
     """
     try:
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
         analyzer = CodePatternAnalyzer(enable_embedding_storage=False)
         report = await analyzer.analyze_directory(path)
@@ -595,7 +595,7 @@ async def get_pattern_storage_stats() -> Dict[str, Any]:
     Returns information about the code_patterns collection.
     """
     try:
-        from src.code_intelligence.pattern_analysis.storage import get_pattern_stats
+        from code_intelligence.pattern_analysis.storage import get_pattern_stats
 
         return await get_pattern_stats()
 
@@ -674,7 +674,7 @@ async def get_cached_pattern_summary() -> Dict[str, Any]:
     Returns summary data from stored patterns, not requiring full analysis.
     """
     try:
-        from src.code_intelligence.pattern_analysis.storage import (
+        from code_intelligence.pattern_analysis.storage import (
             get_pattern_collection_async,
         )
 
@@ -814,7 +814,7 @@ async def get_cached_patterns(
     Supports filtering by pattern_type and severity, with pagination.
     """
     try:
-        from src.code_intelligence.pattern_analysis.storage import (
+        from code_intelligence.pattern_analysis.storage import (
             get_pattern_collection_async,
         )
 
@@ -861,7 +861,7 @@ async def clear_pattern_storage() -> Dict[str, str]:
     WARNING: This is destructive and cannot be undone.
     """
     try:
-        from src.code_intelligence.pattern_analysis.storage import clear_patterns
+        from code_intelligence.pattern_analysis.storage import clear_patterns
 
         success = await clear_patterns()
 
@@ -893,8 +893,8 @@ async def search_similar_patterns_endpoint(
     try:
         # Generate embedding for query code
         # (Using the analyzer's embedding method)
-        from src.code_intelligence.pattern_analysis import CodePatternAnalyzer
-        from src.code_intelligence.pattern_analysis.storage import (
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
+        from code_intelligence.pattern_analysis.storage import (
             search_similar_patterns,
         )
 

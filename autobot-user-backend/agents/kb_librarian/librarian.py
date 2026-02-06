@@ -13,9 +13,9 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.agents.web_research_assistant import WebResearchAssistant
-from src.event_manager import event_manager
-from src.knowledge_base import KnowledgeBase
+from agents.web_research_assistant import WebResearchAssistant
+from event_manager import event_manager
+from knowledge_base import KnowledgeBase
 
 from .formatters import ToolInfoFormatter
 from .parsers import InstructionParser

@@ -12,9 +12,9 @@ import re
 import threading
 from typing import Any, Dict, List, Optional
 
-from src.constants.network_constants import ServiceURLs
-from src.constants.path_constants import PATH
-from src.utils.logging_manager import get_llm_logger
+from constants.network_constants import ServiceURLs
+from constants.path_constants import PATH
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("doc_searcher")
 
@@ -75,7 +75,7 @@ class DocumentationSearcher:
         try:
             from llama_index.embeddings.ollama import OllamaEmbedding
 
-            from src.utils.chromadb_client import get_chromadb_client
+            from utils.chromadb_client import get_chromadb_client
 
             # Initialize ChromaDB
             chromadb_path = PROJECT_ROOT / "data" / "chromadb"

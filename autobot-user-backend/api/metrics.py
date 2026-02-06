@@ -7,9 +7,9 @@ Metrics API endpoints for workflow performance monitoring
 
 from fastapi import APIRouter, HTTPException, Query
 
-from src.metrics.system_monitor import system_monitor
-from src.metrics.workflow_metrics import workflow_metrics
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from metrics.system_monitor import system_monitor
+from metrics.workflow_metrics import workflow_metrics
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 

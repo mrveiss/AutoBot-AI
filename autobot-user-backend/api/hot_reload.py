@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ async def reload_chat_workflow():
     """
     try:
         # Import hot reload manager (lazy import to avoid circular dependencies)
-        from src.utils.hot_reload_manager import hot_reload_manager
+        from utils.hot_reload_manager import hot_reload_manager
 
         logger.info("Hot reload request: chat workflow modules")
 
@@ -100,7 +100,7 @@ async def reload_module(request: ReloadRequest):
             raise HTTPException(status_code=400, detail="module_name is required")
 
         # Import hot reload manager
-        from src.utils.hot_reload_manager import hot_reload_manager
+        from utils.hot_reload_manager import hot_reload_manager
 
         logger.info("Hot reload request: %s", request.module_name)
 
@@ -143,7 +143,7 @@ async def get_reload_status():
     Get hot reload manager status
     """
     try:
-        from src.utils.hot_reload_manager import hot_reload_manager
+        from utils.hot_reload_manager import hot_reload_manager
 
         status = await hot_reload_manager.get_status()
         return status
@@ -164,7 +164,7 @@ async def start_hot_reload():
     Start the hot reload manager
     """
     try:
-        from src.utils.hot_reload_manager import hot_reload_manager
+        from utils.hot_reload_manager import hot_reload_manager
 
         await hot_reload_manager.start()
 
@@ -196,7 +196,7 @@ async def stop_hot_reload():
     Stop the hot reload manager
     """
     try:
-        from src.utils.hot_reload_manager import hot_reload_manager
+        from utils.hot_reload_manager import hot_reload_manager
 
         await hot_reload_manager.stop()
 
@@ -220,7 +220,7 @@ async def hot_reload_health():
     Health check for hot reload functionality
     """
     try:
-        from src.utils.hot_reload_manager import hot_reload_manager
+        from utils.hot_reload_manager import hot_reload_manager
 
         status = await hot_reload_manager.get_status()
 

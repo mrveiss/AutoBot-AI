@@ -17,7 +17,7 @@ from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional
 
-from src.constants import CircuitBreakerDefaults
+from constants import CircuitBreakerDefaults
 
 logger = logging.getLogger(__name__)
 

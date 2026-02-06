@@ -23,8 +23,8 @@ from backend.services.redis_service_manager import (
     RedisConnectionError,
     RedisServiceManager,
 )
-from src.auth_middleware import auth_middleware
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Redis Service Management"])

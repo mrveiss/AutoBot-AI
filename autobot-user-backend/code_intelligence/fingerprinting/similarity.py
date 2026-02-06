@@ -16,7 +16,7 @@ import ast
 import re
 from typing import List, Set
 
-from src.code_intelligence.fingerprinting.types import CodeFragment
+from code_intelligence.fingerprinting.types import CodeFragment
 
 
 class SimilarityCalculator:
@@ -31,7 +31,7 @@ class SimilarityCalculator:
 
     def __init__(self):
         """Initialize similarity calculator with AST hasher for comparisons."""
-        from src.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+        from code_intelligence.fingerprinting.ast_hasher import ASTHasher
 
         self.ast_hasher = ASTHasher()
 

@@ -9,7 +9,7 @@ This module provides shared enums to replace hardcoded status strings
 throughout the codebase.
 
 Usage:
-    from src.constants.status_enums import TaskStatus, Severity, Priority
+    from constants.status_enums import TaskStatus, Severity, Priority
 
     status = TaskStatus.PENDING
     if status == TaskStatus.COMPLETED:

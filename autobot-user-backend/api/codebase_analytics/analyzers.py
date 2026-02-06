@@ -17,8 +17,8 @@ from typing import Dict, List, Optional, Set, Tuple
 import aiofiles
 
 from backend.type_defs.common import Metadata
-from src.constants.network_constants import NetworkConstants
-from src.llm_interface import LLMInterface
+from constants.network_constants import NetworkConstants
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 _analyzers_lock = threading.Lock()
 
 try:
-    from src.code_intelligence.anti_pattern_detector import AntiPatternDetector
-    from src.code_intelligence.bug_predictor import BugPredictor
-    from src.code_intelligence.performance_analyzer import PerformanceAnalyzer
+    from code_intelligence.anti_pattern_detector import AntiPatternDetector
+    from code_intelligence.bug_predictor import BugPredictor
+    from code_intelligence.performance_analyzer import PerformanceAnalyzer
 
     _anti_pattern_detector: Optional[AntiPatternDetector] = None
     _performance_analyzer: Optional[PerformanceAnalyzer] = None

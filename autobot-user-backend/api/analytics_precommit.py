@@ -21,8 +21,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.constants.network_constants import NetworkConstants
+from auth_middleware import check_admin_permission
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

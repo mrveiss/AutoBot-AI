@@ -35,9 +35,9 @@ class WorkflowStepEvaluator:
     def _initialize_judges(self) -> None:
         """Initialize LLM judges if available"""
         try:
-            from src.judges.multi_agent_arbitrator import MultiAgentArbitrator
-            from src.judges.security_risk_judge import SecurityRiskJudge
-            from src.judges.workflow_step_judge import WorkflowStepJudge
+            from judges.multi_agent_arbitrator import MultiAgentArbitrator
+            from judges.security_risk_judge import SecurityRiskJudge
+            from judges.workflow_step_judge import WorkflowStepJudge
 
             self.workflow_step_judge = WorkflowStepJudge()
             self.security_risk_judge = SecurityRiskJudge()

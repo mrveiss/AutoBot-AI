@@ -22,10 +22,10 @@ import yaml
 from backend.type_defs.common import Metadata
 
 # SSOT Migration (Issue #602): Import SSOT config as primary source
-from src.config.ssot_config import get_config as get_ssot_config
+from autobot_shared.ssot_config import get_config as get_ssot_config
 
 # Legacy import for backward compatibility - these now read from SSOT
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 # Get SSOT config
 _ssot = get_ssot_config()
@@ -35,7 +35,7 @@ BACKEND_HOST_IP = _ssot.vm.main if _ssot else NetworkConstants.MAIN_MACHINE_IP
 BACKEND_PORT = _ssot.port.backend if _ssot else NetworkConstants.BACKEND_PORT
 HTTP_PROTOCOL = "http"
 REDIS_HOST_IP = _ssot.vm.redis if _ssot else NetworkConstants.REDIS_VM_IP
-from src.config import unified_config_manager
+from config import unified_config_manager
 
 logger = logging.getLogger(__name__)
 

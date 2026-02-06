@@ -14,9 +14,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from src.constants.security_constants import SecurityConstants
-from src.constants.threshold_constants import TimingConstants
-from src.services.captcha_human_loop import get_captcha_human_loop
+from constants.security_constants import SecurityConstants
+from constants.threshold_constants import TimingConstants
+from services.captcha_human_loop import get_captcha_human_loop
 
 # Issue #380: Module-level frozenset for CAPTCHA detection keywords
 _CAPTCHA_KEYWORDS: frozenset = frozenset({"captcha", "challenge", "verification"})
@@ -37,7 +37,7 @@ except ImportError:
 try:
     pass
 
-    from src.utils.http_client import get_http_client
+    from autobot_shared.http_client import get_http_client
 
     AIOHTTP_AVAILABLE = True
 except ImportError:

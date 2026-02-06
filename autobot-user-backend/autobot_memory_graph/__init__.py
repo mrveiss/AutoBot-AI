@@ -27,7 +27,7 @@ Key Features:
 
 Backward Compatibility:
 - All existing imports continue to work:
-  `from src.autobot_memory_graph import AutoBotMemoryGraph`
+  `from autobot_memory_graph import AutoBotMemoryGraph`
 """
 
 from .core import (  # noqa: F401 - re-exports for package API
@@ -74,7 +74,7 @@ class AutoBotMemoryGraph(
 
     Usage:
         ```python
-        from src.autobot_memory_graph import AutoBotMemoryGraph
+        from autobot_memory_graph import AutoBotMemoryGraph
 
         memory = AutoBotMemoryGraph()
         await memory.initialize()

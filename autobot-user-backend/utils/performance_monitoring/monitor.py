@@ -19,21 +19,21 @@ from dataclasses import asdict
 from typing import Any, Callable, Dict, List
 
 # Issue #469: Import Prometheus metrics manager
-from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.performance_monitoring.analyzers import (
+from monitoring.prometheus_metrics import get_metrics_manager
+from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
 )
-from src.utils.performance_monitoring.collectors import (
+from utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
     NPUCollector,
     ServiceCollector,
     SystemCollector,
 )
-from src.utils.performance_monitoring.decorator import set_redis_client
-from src.utils.performance_monitoring.hardware import HardwareDetector
-from src.utils.performance_monitoring.types import (
+from utils.performance_monitoring.decorator import set_redis_client
+from utils.performance_monitoring.hardware import HardwareDetector
+from utils.performance_monitoring.types import (
     DEFAULT_COLLECTION_INTERVAL,
     DEFAULT_PERFORMANCE_BASELINES,
     DEFAULT_RETENTION_HOURS,
@@ -103,7 +103,7 @@ class PerformanceMonitor:
     def _initialize_redis(self):
         """Initialize Redis client for metrics storage."""
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             self.redis_client = get_redis_client(database="metrics")
             if self.redis_client is None:

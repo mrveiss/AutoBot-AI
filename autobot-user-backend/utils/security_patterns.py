@@ -13,7 +13,7 @@ Performance Optimizations:
 - finditer() recommended for memory-efficient iteration
 
 Usage:
-    from src.utils.security_patterns import HARDCODED_PATTERNS, find_hardcoded_values
+    from utils.security_patterns import HARDCODED_PATTERNS, find_hardcoded_values
 
     # Direct pattern access
     for category, pattern in HARDCODED_PATTERNS.items():

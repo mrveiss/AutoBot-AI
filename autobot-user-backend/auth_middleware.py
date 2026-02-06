@@ -17,9 +17,9 @@ import bcrypt
 import jwt
 from fastapi import Request
 
-from src.config import UnifiedConfigManager
-from src.security_layer import SecurityLayer
-from src.utils.catalog_http_exceptions import raise_auth_error
+from config import UnifiedConfigManager
+from security_layer import SecurityLayer
+from utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class AuthenticationMiddleware:
         try:
             redis_config = config.get_redis_config()
             if redis_config["enabled"]:
-                from src.utils.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_redis_client
 
                 # Use sessions database for authentication sessions
                 # REFACTORED: Use centralized Redis client management
@@ -665,7 +665,7 @@ def check_admin_permission(request: Request) -> bool:
         HTTPException: 401 if not authenticated, 403 if not admin
     """
     # Check for single user mode - bypass auth and grant admin access
-    from src.user_management.config import DeploymentMode, get_deployment_config
+    from user_management.config import DeploymentMode, get_deployment_config
 
     deployment_config = get_deployment_config()
     if deployment_config.mode == DeploymentMode.SINGLE_USER:

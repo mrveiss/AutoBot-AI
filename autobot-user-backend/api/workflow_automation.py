@@ -17,11 +17,11 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel
 
 from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
-from src.auth_middleware import get_current_user
-from src.enhanced_orchestrator import EnhancedOrchestrator
+from auth_middleware import get_current_user
+from enhanced_orchestrator import EnhancedOrchestrator
 
 # Import existing orchestrator and workflow components
-from src.orchestrator import Orchestrator
+from orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
 

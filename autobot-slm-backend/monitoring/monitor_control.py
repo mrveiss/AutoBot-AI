@@ -18,7 +18,7 @@ from performance_benchmark import PerformanceBenchmark
 from performance_monitor import PerformanceMonitor
 from performance_optimizer import PerformanceOptimizer
 
-from src.constants.network_constants import NetworkConstants
+from autobot_shared.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

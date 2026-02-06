@@ -11,7 +11,7 @@ import logging
 
 from fastapi import Request
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class ResourceFactory:
                     return kb
 
             # Fallback to module-level import and creation
-            from src.knowledge_base import KnowledgeBase
+            from knowledge_base import KnowledgeBase
 
             logger.info("Creating new KnowledgeBase instance (expensive operation)")
 
@@ -61,7 +61,7 @@ class ResourceFactory:
                     return llm
 
             # Fallback to module-level import and creation
-            from src.llm_interface import LLMInterface
+            from llm_interface import LLMInterface
 
             logger.info("Creating new LLMInterface instance (expensive operation)")
 
@@ -92,7 +92,7 @@ class ResourceFactory:
                     return orch
 
             # Fallback to module-level import and creation
-            from src.enhanced_orchestrator import EnhancedOrchestrator
+            from enhanced_orchestrator import EnhancedOrchestrator
 
             logger.info(
                 "Creating new EnhancedOrchestrator instance (expensive operation)"
@@ -127,8 +127,8 @@ class ResourceFactory:
                     return chm
 
             # Fallback to module-level import and creation
-            from src.chat_history import ChatHistoryManager
-            from src.config import config as global_config_manager
+            from chat_history import ChatHistoryManager
+            from config import config as global_config_manager
 
             logger.info(
                 "Creating new ChatHistoryManager instance (expensive operation)"

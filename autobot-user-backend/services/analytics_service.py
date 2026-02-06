@@ -29,7 +29,7 @@ from backend.services.user_behavior_analytics import (
     UserBehaviorAnalytics,
     get_behavior_analytics,
 )
-from src.utils.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 logger = logging.getLogger(__name__)
 

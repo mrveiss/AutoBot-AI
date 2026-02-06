@@ -14,7 +14,7 @@ import logging
 import time
 from typing import Callable
 
-from src.constants.threshold_constants import RetryConfig
+from constants.threshold_constants import RetryConfig
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy

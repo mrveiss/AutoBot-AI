@@ -13,10 +13,10 @@ Archived: archives/2025-11-11_cache_consolidation/knowledge_cache.py
 
 Usage:
     # Old import (deprecated but still works):
-    from src.utils.knowledge_cache import get_knowledge_cache
+    from utils.knowledge_cache import get_knowledge_cache
 
     # New recommended import:
-    from src.utils.advanced_cache_manager import get_knowledge_cache
+    from utils.advanced_cache_manager import get_knowledge_cache
 
 All methods are preserved with identical signatures.
 """
@@ -33,7 +33,7 @@ warnings.warn(
 )
 
 # Re-export everything from advanced_cache_manager for backward compatibility
-from src.utils.advanced_cache_manager import (
+from utils.advanced_cache_manager import (
     cache_knowledge_results,
     clear_knowledge_cache,
     get_cached_knowledge_results,

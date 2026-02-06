@@ -10,10 +10,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import TimingConstants
-from src.utils.agent_command_helpers import run_agent_command
-from src.utils.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
+from utils.agent_command_helpers import run_agent_command
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -435,7 +435,7 @@ class SecurityScannerAgent:
         """Use research agent to find appropriate scanning tools"""
         try:
             # Import research agent
-            from src.agents.research_agent import ResearchAgent, ResearchRequest
+            from agents.research_agent import ResearchAgent, ResearchRequest
 
             research_agent = ResearchAgent()
             query = f"{scan_type} tools for security assessment Kali Linux 2024"
@@ -513,7 +513,7 @@ class SecurityScannerAgent:
     async def get_tool_installation_guide(self, tool_name: str) -> Dict[str, Any]:
         """Get installation guide for a specific tool using research agent"""
         try:
-            from src.agents.research_agent import ResearchAgent, ResearchRequest
+            from agents.research_agent import ResearchAgent, ResearchRequest
 
             research_agent = ResearchAgent()
             query = f"how to install {tool_name} on Kali Linux Ubuntu apt package manager 2024"

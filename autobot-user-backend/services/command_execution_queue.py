@@ -18,7 +18,7 @@ import logging
 from typing import List, Optional
 
 from backend.models.command_execution import CommandExecution, CommandState
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

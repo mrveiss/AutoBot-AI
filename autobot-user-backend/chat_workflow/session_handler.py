@@ -24,8 +24,8 @@ from backend.intent_classifier import (
     IntentClassification,
     IntentClassifier,
 )
-from src.async_chat_workflow import AsyncChatWorkflow
-from src.utils.error_boundaries import error_boundary
+from async_chat_workflow import AsyncChatWorkflow
+from autobot_shared.error_boundaries import error_boundary
 
 from .models import WorkflowSession
 

@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import Dict
 
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.prometheus_metrics import get_metrics_manager
 
 from .executor import WorkflowExecutor
 from .messaging import WorkflowMessenger

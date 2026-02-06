@@ -34,9 +34,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from backend.type_defs.common import Metadata
-from src.auth_middleware import check_admin_permission
-from src.autobot_memory_graph import AutoBotMemoryGraph
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

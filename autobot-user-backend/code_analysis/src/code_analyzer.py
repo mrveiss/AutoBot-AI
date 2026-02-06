@@ -17,8 +17,8 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from src.utils.redis_client import get_redis_client
-from src.config import UnifiedConfig
+from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 
 # Initialize unified config
@@ -402,7 +402,7 @@ class CodeAnalyzer:
 {func.source_code}
 
 # In original files, replace with:
-from src.utils.{module_name}_utils import {func.name}
+from utils.{module_name}_utils import {func.name}
 """
 
         return example.strip()

@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from src.knowledge.embedding_cache import get_embedding_cache
-from src.utils.logging_manager import get_llm_logger
-from src.worker_node import WorkerNode
+from knowledge.embedding_cache import get_embedding_cache
+from autobot_shared.logging_manager import get_llm_logger
+from worker_node import WorkerNode
 
 logger = get_llm_logger("code_embedding_generator")
 

@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class ResearchPreferences(BaseModel):
 async def get_research_status():
     """Get current web research status and configuration"""
     try:
-        from src.agents.web_research_integration import get_web_research_integration
+        from agents.web_research_integration import get_web_research_integration
 
         # Get web research integration instance
         integration = get_web_research_integration()
@@ -104,8 +104,8 @@ async def enable_web_research():
     """Enable web research functionality"""
     try:
         from backend.services.config_service import ConfigService
-        from src.agents.web_research_integration import get_web_research_integration
-        from src.unified_unified_config_manager import unified_unified_config_manager
+        from agents.web_research_integration import get_web_research_integration
+        from unified_unified_config_manager import unified_unified_config_manager
 
         # Enable in integration
         integration = get_web_research_integration()
@@ -157,8 +157,8 @@ async def disable_web_research():
     """Disable web research functionality"""
     try:
         from backend.services.config_service import ConfigService
-        from src.agents.web_research_integration import get_web_research_integration
-        from src.unified_unified_config_manager import unified_unified_config_manager
+        from agents.web_research_integration import get_web_research_integration
+        from unified_unified_config_manager import unified_unified_config_manager
 
         # Disable in integration
         integration = get_web_research_integration()
@@ -209,7 +209,7 @@ async def disable_web_research():
 async def get_research_settings():
     """Get current web research settings"""
     try:
-        from src.config import UnifiedConfigManager
+        from config import UnifiedConfigManager
 
         # Get settings from config
         unified_config_manager = UnifiedConfigManager()
@@ -264,7 +264,7 @@ async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
         from backend.services.config_service import ConfigService
-        from src.config import unified_config_manager
+        from config import unified_config_manager
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)
@@ -325,7 +325,7 @@ async def update_research_settings(settings: WebResearchSettings):
 async def test_web_research(query: str = "test query"):
     """Test web research functionality"""
     try:
-        from src.agents.web_research_integration import conduct_web_research
+        from agents.web_research_integration import conduct_web_research
 
         logger.info("Testing web research with query: %s", query)
 
@@ -368,7 +368,7 @@ async def test_web_research(query: str = "test query"):
 async def clear_research_cache():
     """Clear web research cache"""
     try:
-        from src.agents.web_research_integration import get_web_research_integration
+        from agents.web_research_integration import get_web_research_integration
 
         integration = get_web_research_integration()
 
@@ -402,7 +402,7 @@ async def clear_research_cache():
 async def reset_circuit_breakers():
     """Reset all circuit breakers for web research"""
     try:
-        from src.agents.web_research_integration import get_web_research_integration
+        from agents.web_research_integration import get_web_research_integration
 
         integration = get_web_research_integration()
 
@@ -436,7 +436,7 @@ async def reset_circuit_breakers():
 async def get_usage_stats():
     """Get web research usage statistics"""
     try:
-        from src.agents.web_research_integration import get_web_research_integration
+        from agents.web_research_integration import get_web_research_integration
 
         integration = get_web_research_integration()
 

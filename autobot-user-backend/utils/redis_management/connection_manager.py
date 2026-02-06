@@ -35,18 +35,18 @@ from redis.connection import ConnectionPool, SSLConnection
 from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
 
-from src.config import config as config_manager
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import RetryConfig, TimingConstants
-from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
-from src.utils.redis_management.statistics import (
+from config import config as config_manager
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import RetryConfig, TimingConstants
+from monitoring.prometheus_metrics import get_metrics_manager
+from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
+from utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-from src.utils.redis_management.types import DATABASE_MAPPING, ConnectionState
+from utils.redis_management.types import DATABASE_MAPPING, ConnectionState
 
 logger = logging.getLogger(__name__)
 

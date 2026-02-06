@@ -196,7 +196,7 @@ async def _get_semantic_chunker():
     async with _semantic_chunker_lock:
         if _semantic_chunker_cache is None:
             try:
-                from src.utils.semantic_chunker import get_semantic_chunker
+                from utils.semantic_chunker import get_semantic_chunker
 
                 _semantic_chunker_cache = get_semantic_chunker()
                 await _semantic_chunker_cache._initialize_model()

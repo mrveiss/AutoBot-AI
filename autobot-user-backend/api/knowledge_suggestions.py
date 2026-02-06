@@ -24,7 +24,7 @@ from backend.api.knowledge_models import (
     SuggestCategoriesRequest,
     SuggestTagsRequest,
 )
-from src.knowledge import get_knowledge_base
+from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 

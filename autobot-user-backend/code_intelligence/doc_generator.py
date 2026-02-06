@@ -36,7 +36,7 @@ import os
 from typing import List, Optional, Set
 
 # Import types and models from the doc_generation package (Issue #381 refactoring)
-from src.code_intelligence.doc_generation.types import (
+from code_intelligence.doc_generation.types import (
     DiagramType,
     DocCompleteness,
     DocFormat,
@@ -47,7 +47,7 @@ from src.code_intelligence.doc_generation.types import (
     ParameterDoc,
     ReturnDoc,
 )
-from src.code_intelligence.doc_generation.models import (
+from code_intelligence.doc_generation.models import (
     ClassDoc,
     DiagramSpec,
     FunctionDoc,
@@ -57,9 +57,9 @@ from src.code_intelligence.doc_generation.models import (
 )
 
 # Issue #394: Import refactored modules for delegation
-from src.code_intelligence.doc_generation.docstring_parser import DocstringParser
-from src.code_intelligence.doc_generation.markdown_generator import MarkdownGenerator
-from src.code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
+from code_intelligence.doc_generation.docstring_parser import DocstringParser
+from code_intelligence.doc_generation.markdown_generator import MarkdownGenerator
+from code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
 
 logger = logging.getLogger(__name__)
 

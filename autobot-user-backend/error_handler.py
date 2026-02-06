@@ -17,8 +17,8 @@ import traceback
 from contextlib import contextmanager
 from typing import Any, Callable, Optional, Type, TypeVar
 
-from src.constants.threshold_constants import TimingConstants
-from src.exceptions import AutoBotError, InternalError
+from constants.threshold_constants import TimingConstants
+from exceptions import AutoBotError, InternalError
 
 logger = logging.getLogger(__name__)
 

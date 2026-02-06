@@ -11,7 +11,7 @@ Based on Cursor's dependency detection patterns.
 import logging
 from typing import Callable, Optional
 
-from src.tools.parallel.types import DependencyType, ToolCall
+from tools.parallel.types import DependencyType, ToolCall
 
 logger = logging.getLogger(__name__)
 

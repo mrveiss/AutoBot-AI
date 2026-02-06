@@ -19,8 +19,8 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from src.code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

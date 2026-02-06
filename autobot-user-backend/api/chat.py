@@ -44,13 +44,13 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from src.auth_middleware import get_current_user
-from src.constants.threshold_constants import CategoryDefaults, TimingConstants
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from constants.threshold_constants import CategoryDefaults, TimingConstants
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
-# from src.models.conversation import ConversationModel
-# from src.models.message import MessageModel
+# from models.conversation import ConversationModel
+# from models.message import MessageModel
 
 
 # Wrapper dependency to validate chat ownership using chat_id
@@ -81,16 +81,16 @@ def get_memory_interface(request: Request) -> Optional[Any]:
 
 def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
-    from src.llm_service import LLMService
-    from src.utils.lazy_singleton import lazy_init_singleton
+    from llm_service import LLMService
+    from utils.lazy_singleton import lazy_init_singleton
 
     return lazy_init_singleton(request.app.state, "llm_service", LLMService)
 
 
 async def get_chat_workflow_manager(request: Request) -> Any:
     """Get ChatWorkflowManager from app state, with async lazy initialization"""
-    from src.chat_workflow import ChatWorkflowManager
-    from src.utils.lazy_singleton import lazy_init_singleton_async
+    from chat_workflow import ChatWorkflowManager
+    from utils.lazy_singleton import lazy_init_singleton_async
 
     async def create_workflow_manager() -> Any:
         """

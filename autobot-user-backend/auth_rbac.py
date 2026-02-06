@@ -11,7 +11,7 @@ for permission checks and audit logging.
 Issue #744: Phase 6 - RBAC permission decorators for API endpoints.
 
 Usage:
-    from src.auth_rbac import require_permission, require_role, Permission
+    from auth_rbac import require_permission, require_role, Permission
 
     @router.get("/admin/users")
     async def list_users(
@@ -34,9 +34,9 @@ from typing import Callable, List, Union
 
 from fastapi import Request
 
-from src.auth_middleware import auth_middleware
-from src.security_layer import SecurityLayer
-from src.utils.catalog_http_exceptions import raise_auth_error
+from auth_middleware import auth_middleware
+from security_layer import SecurityLayer
+from utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +335,7 @@ def _check_single_user_bypass(permission: Union[Permission, str]) -> bool:
     Returns:
         True if bypass applies, False otherwise
     """
-    from src.user_management.config import DeploymentMode, get_deployment_config
+    from user_management.config import DeploymentMode, get_deployment_config
 
     deployment_config = get_deployment_config()
     if deployment_config.mode == DeploymentMode.SINGLE_USER:

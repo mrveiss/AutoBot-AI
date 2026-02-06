@@ -14,10 +14,10 @@ import logging
 from typing import Any, Dict, List
 
 from backend.dependencies import global_config_manager
-from src.async_chat_workflow import WorkflowMessage
-from src.constants.model_constants import ModelConstants
-from src.prompt_manager import get_prompt
-from src.utils.http_client import get_http_client
+from async_chat_workflow import WorkflowMessage
+from constants.model_constants import ModelConstants
+from prompt_manager import get_prompt
+from autobot_shared.http_client import get_http_client
 
 from .models import WorkflowSession
 
@@ -62,7 +62,7 @@ class LLMHandlerMixin:
 
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from UnifiedConfigManager as fallback."""
-        from src.config import UnifiedConfigManager
+        from config import UnifiedConfigManager
         config = UnifiedConfigManager()
         ollama_host = config.get_host("ollama")
         ollama_port = config.get_port("ollama")
@@ -363,7 +363,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             Exception: If save fails (logged, not propagated)
         """
         try:
-            from src.chat_history import ChatHistoryManager
+            from chat_history import ChatHistoryManager
 
             chat_mgr = ChatHistoryManager()
             await chat_mgr.add_message(

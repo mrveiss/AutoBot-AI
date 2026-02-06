@@ -13,7 +13,7 @@ Components:
 - types: Tool call data structures
 
 Usage:
-    from src.tools.parallel import ParallelToolExecutor, ToolCall
+    from tools.parallel import ParallelToolExecutor, ToolCall
 
     executor = ParallelToolExecutor(dispatch_func, event_stream)
 
@@ -25,9 +25,9 @@ Usage:
     results = await executor.execute_batch(calls, task_id="task-123")
 """
 
-from src.tools.parallel.types import ToolCall, DependencyType
-from src.tools.parallel.analyzer import DependencyAnalyzer
-from src.tools.parallel.executor import ParallelToolExecutor, ExecutionGraph
+from tools.parallel.types import ToolCall, DependencyType
+from tools.parallel.analyzer import DependencyAnalyzer
+from tools.parallel.executor import ParallelToolExecutor, ExecutionGraph
 
 __all__ = [
     "ToolCall",

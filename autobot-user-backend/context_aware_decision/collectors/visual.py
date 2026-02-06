@@ -29,7 +29,7 @@ class VisualContextCollector:
     async def collect(self) -> List[ContextElement]:
         """Collect visual context from screen analysis."""
         try:
-            from src.computer_vision_system import computer_vision_system
+            from computer_vision_system import computer_vision_system
 
             screen_analysis = (
                 await computer_vision_system.analyze_and_understand_screen()

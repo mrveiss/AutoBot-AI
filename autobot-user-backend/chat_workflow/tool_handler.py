@@ -15,8 +15,8 @@ import logging
 import re
 from typing import Any, Dict, List
 
-from src.async_chat_workflow import WorkflowMessage
-from src.utils.errors import RepairableException
+from async_chat_workflow import WorkflowMessage
+from utils.errors import RepairableException
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ def _match_repairable_error(
     Returns:
         RepairableException if a pattern matches, None otherwise
     """
-    from src.utils.errors import RepairableException
+    from utils.errors import RepairableException
 
     cmd_name = command.split()[0] if command else "command"
     format_vars = {"error": error, "cmd_name": cmd_name, "command": command}
@@ -136,7 +136,7 @@ class ToolHandlerMixin:
         """Initialize terminal tool for command execution."""
         try:
             import backend.api.agent_terminal as agent_terminal_api
-            from src.tools.terminal_tool import TerminalTool
+            from tools.terminal_tool import TerminalTool
 
             # CRITICAL: Access the global singleton instance directly
             # This ensures sessions created here are visible to the approval API
@@ -323,7 +323,7 @@ class ToolHandlerMixin:
     ) -> None:
         """Persist approval request to chat history (Issue #332 - extracted helper)."""
         try:
-            from src.chat_history import ChatHistoryManager
+            from chat_history import ChatHistoryManager
 
             chat_mgr = ChatHistoryManager()
             await chat_mgr.add_message(

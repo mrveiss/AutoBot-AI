@@ -29,10 +29,10 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from backend.models.task_context import EnhancedSearchContext
-from src.utils.error_boundaries import error_boundary
+from autobot_shared.error_boundaries import error_boundary
 
 # Import components from the search_components package
-from src.knowledge.search_components import (
+from knowledge.search_components import (
     KeywordSearcher,
     QueryProcessor,
     ResponseBuilder,
@@ -40,13 +40,13 @@ from src.knowledge.search_components import (
     get_analytics,
     get_reranker,
 )
-from src.knowledge.search_components.helpers import (
+from knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
     matches_category,
     score_fact_by_terms,
 )
-from src.knowledge.search_components.hybrid_search import HybridSearcher
+from knowledge.search_components.hybrid_search import HybridSearcher
 
 if TYPE_CHECKING:
     import aioredis
@@ -172,8 +172,8 @@ class SearchMixin:
         Issue #281: Extracted helper.
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
         """
-        from src.knowledge.embedding_cache import get_embedding_cache
-        from src.knowledge.facts import _generate_embedding_with_npu_fallback
+        from knowledge.embedding_cache import get_embedding_cache
+        from knowledge.facts import _generate_embedding_with_npu_fallback
 
         _embedding_cache = get_embedding_cache()
         query_embedding = await _embedding_cache.get(query)
@@ -749,7 +749,7 @@ class SearchMixin:
 
         from datetime import datetime as dt
 
-        from src.knowledge.search_quality import AdvancedFilter, SearchFilters
+        from knowledge.search_quality import AdvancedFilter, SearchFilters
 
         filters = SearchFilters(
             created_after=dt.fromisoformat(created_after) if created_after else None,
@@ -774,7 +774,7 @@ class SearchMixin:
         if not enable_scoring or not results:
             return results
 
-        from src.knowledge.search_quality import get_relevance_scorer
+        from knowledge.search_quality import get_relevance_scorer
 
         scorer = get_relevance_scorer()
         for result in results:

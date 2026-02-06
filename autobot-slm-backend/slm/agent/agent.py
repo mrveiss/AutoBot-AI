@@ -82,7 +82,7 @@ def _get_default_admin_url() -> str:
     if env_url:
         return env_url
     try:
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         return get_config().slm_url
     except Exception:

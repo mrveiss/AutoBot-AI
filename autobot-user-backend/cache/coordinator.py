@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional
 
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 
 from .protocols import CacheProtocol
 

@@ -30,7 +30,7 @@ from .types import DEFAULT_IGNORE_PATTERNS, Thresholds
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
-    from src.code_intelligence.analytics_infrastructure import (
+    from code_intelligence.analytics_infrastructure import (
         SIMILARITY_MEDIUM,
         SemanticAnalysisMixin,
     )
@@ -42,8 +42,8 @@ except ImportError:
 
 # Issue #607: Import shared caches for performance optimization
 try:
-    from src.code_intelligence.shared.ast_cache import get_ast_with_content
-    from src.code_intelligence.shared.file_cache import (
+    from code_intelligence.shared.ast_cache import get_ast_with_content
+    from code_intelligence.shared.file_cache import (
         get_python_files as get_cached_python_files,
     )
 

@@ -15,8 +15,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
-from src.constants.threshold_constants import TimingConstants
-from src.utils.http_client import get_http_client
+from constants.threshold_constants import TimingConstants
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

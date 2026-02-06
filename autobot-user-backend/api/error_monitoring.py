@@ -19,14 +19,14 @@ from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from src.config import UnifiedConfigManager
-from src.utils.error_boundaries import (
+from config import UnifiedConfigManager
+from autobot_shared.error_boundaries import (
     ErrorCategory,
     get_error_boundary_manager,
     get_error_statistics,
     with_error_handling,
 )
-from src.utils.error_metrics import get_metrics_collector
+from utils.error_metrics import get_metrics_collector
 
 # Create singleton config instance
 config = UnifiedConfigManager()

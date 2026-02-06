@@ -18,9 +18,9 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 
-from src.constants.network_constants import NetworkConstants
-from src.constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
-from src.utils.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class DistributedServiceDiscovery:
 
         Issue #281: Refactored from 141 lines to use extracted helper methods.
         """
-        from src.config import unified_config_manager
+        from config import unified_config_manager
 
         # Load configurations
         self._services_config = unified_config_manager.get_distributed_services_config()
@@ -292,7 +292,7 @@ class DistributedServiceDiscovery:
         NOTE: This method uses direct redis.Redis() instantiation intentionally
         for health check diagnostics. This is a monitoring/diagnostic function,
         NOT for production client creation. For production clients, use
-        get_redis_client() from src.utils.redis_client.
+        get_redis_client() from autobot_shared.redis_client.
 
         Direct instantiation is appropriate here because:
         - Tests arbitrary endpoints with strict 100ms timeouts
@@ -454,7 +454,7 @@ async def get_service_discovery() -> DistributedServiceDiscovery:
 
 async def get_service_url(service_name: str) -> str:
     """Quick service URL resolution without DNS delays"""
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     discovery = await get_service_discovery()
     endpoint = await discovery.get_service_endpoint(service_name)
@@ -488,7 +488,7 @@ def get_redis_connection_params_sync() -> Dict:
 
     Returns same dict structure as config-based approach for backward compatibility
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     # Get Redis configuration from unified config manager
     redis_config = unified_config_manager.get_redis_config()
@@ -702,7 +702,7 @@ def get_service_endpoint_sync(service_name: str) -> Optional[Dict]:
     Returns endpoint information as a dict with host, port, protocol.
     Gets values from unified configuration.
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     # Get configurations
     services_config = unified_config_manager.get_distributed_services_config()

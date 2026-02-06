@@ -18,11 +18,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from scripts.phase_validation_system import PhaseValidator
-from src.constants.path_constants import PATH
-from src.constants.threshold_constants import TimingConstants
-from src.phase_progression_manager import get_progression_manager
-from src.project_state_manager import ProjectStateManager
-from src.utils.redis_client import get_redis_client
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
+from phase_progression_manager import get_progression_manager
+from project_state_manager import ProjectStateManager
+from autobot_shared.redis_client import get_redis_client
 
 from .database import (
     init_database,
@@ -55,7 +55,7 @@ from .types import (
 )
 
 try:
-    from src.utils.error_boundaries import get_error_boundary_manager
+    from autobot_shared.error_boundaries import get_error_boundary_manager
 except ImportError:
 
     def get_error_boundary_manager():

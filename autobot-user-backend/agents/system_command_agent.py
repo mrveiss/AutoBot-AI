@@ -13,16 +13,16 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.agents.interactive_terminal_agent import InteractiveTerminalAgent
-from src.constants.threshold_constants import TimingConstants
-from src.event_manager import event_manager
-from src.security.command_patterns import (
+from agents.interactive_terminal_agent import InteractiveTerminalAgent
+from constants.threshold_constants import TimingConstants
+from event_manager import event_manager
+from security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
     UNRESTRICTED_ROOT_COMMANDS,
     is_dangerous_command,
     is_persistent_session_command,
 )
-from src.security_layer import SecurityLayer
+from security_layer import SecurityLayer
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class SystemCommandAgent:
     """Agent capable of running any system command with safety checks and
     terminal streaming.
 
-    Issue #765: Uses centralized command patterns from src.security.command_patterns
+    Issue #765: Uses centralized command patterns from security.command_patterns
     """
 
     # List of package managers and their install commands
@@ -375,7 +375,7 @@ class SystemCommandAgent:
     async def validate_command_safety(self, command: str) -> Dict[str, Any]:
         """Validate command safety before execution.
 
-        Issue #765: Uses centralized patterns from src.security.command_patterns.
+        Issue #765: Uses centralized patterns from security.command_patterns.
         """
         issues = []
         risk_level = "low"

@@ -23,7 +23,7 @@ from multiple focused mixins:
 - BulkOperationsMixin: Import, export, and bulk operations
 
 Usage:
-    from src.knowledge import get_knowledge_base
+    from knowledge import get_knowledge_base
 
     # Get initialized instance
     kb = await get_knowledge_base()
@@ -40,19 +40,19 @@ import logging
 import threading
 from typing import Optional
 
-from src.knowledge.base import KnowledgeBaseCore
-from src.knowledge.bulk import BulkOperationsMixin
-from src.knowledge.categories import CategoriesMixin
-from src.knowledge.collections import CollectionsMixin
-from src.knowledge.documents import DocumentsMixin
-from src.knowledge.suggestions import SuggestionsMixin
-from src.knowledge.metadata import MetadataMixin
-from src.knowledge.versioning import VersioningMixin
-from src.knowledge.facts import FactsMixin
-from src.knowledge.index import IndexMixin
-from src.knowledge.search import SearchMixin
-from src.knowledge.stats import StatsMixin
-from src.knowledge.tags import TagsMixin
+from knowledge.base import KnowledgeBaseCore
+from knowledge.bulk import BulkOperationsMixin
+from knowledge.categories import CategoriesMixin
+from knowledge.collections import CollectionsMixin
+from knowledge.documents import DocumentsMixin
+from knowledge.suggestions import SuggestionsMixin
+from knowledge.metadata import MetadataMixin
+from knowledge.versioning import VersioningMixin
+from knowledge.facts import FactsMixin
+from knowledge.index import IndexMixin
+from knowledge.search import SearchMixin
+from knowledge.stats import StatsMixin
+from knowledge.tags import TagsMixin
 
 logger = logging.getLogger(__name__)
 

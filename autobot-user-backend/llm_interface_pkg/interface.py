@@ -19,10 +19,10 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import xxhash
 
-from src.config import UnifiedConfigManager
-from src.constants.model_constants import ModelConstants
-from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
-from src.utils.http_client import get_http_client
+from config import UnifiedConfigManager
+from constants.model_constants import ModelConstants
+from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.http_client import get_http_client
 
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
@@ -59,12 +59,12 @@ except ImportError:
 
 # Optional imports
 try:
-    from src.prompt_manager import prompt_manager
+    from prompt_manager import prompt_manager
 except ImportError:
     prompt_manager = None
 
 try:
-    from src.utils.logging_manager import get_llm_logger
+    from autobot_shared.logging_manager import get_llm_logger
 
     logger = get_llm_logger(__name__)
 except ImportError:
@@ -586,7 +586,7 @@ class LLMInterface:
     async def _load_prompt_from_file(self, file_path: str) -> str:
         """Load prompt content from a file asynchronously."""
         try:
-            from src.utils.async_file_operations import read_file_async
+            from utils.async_file_operations import read_file_async
 
             content = await read_file_async(file_path)
             return content.strip()
@@ -644,7 +644,7 @@ class LLMInterface:
         self.ollama_host = f"http://{ollama_host}:{ollama_port}"
 
         try:
-            from src.retry_mechanism import retry_network_operation
+            from retry_mechanism import retry_network_operation
 
             async def make_request():
                 http_client = get_http_client()
@@ -1260,8 +1260,8 @@ class LLMInterface:
         **llm_params,
     ) -> LLMResponse:
         """Chat completion with vLLM-optimized prompts. Issue #620."""
-        from src.agent_tier_classifier import get_base_prompt_for_agent
-        from src.prompt_manager import get_optimized_prompt
+        from agent_tier_classifier import get_base_prompt_for_agent
+        from prompt_manager import get_optimized_prompt
 
         system_prompt = get_optimized_prompt(
             base_prompt_key=get_base_prompt_for_agent(agent_type),

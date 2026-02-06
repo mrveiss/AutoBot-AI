@@ -14,7 +14,7 @@ Package Structure:
 - connection_manager.py: RedisConnectionManager class
 
 Usage:
-    from src.utils.redis_management import (
+    from utils.redis_management import (
         # Enums
         RedisDatabase, ConnectionState,
         # Configuration
@@ -32,21 +32,21 @@ still exports all classes and functions directly.
 """
 
 # Types and constants
-from src.utils.redis_management.types import (
+from utils.redis_management.types import (
     ConnectionState,
     DATABASE_MAPPING,
     RedisDatabase,
 )
 
 # Configuration classes
-from src.utils.redis_management.config import (
+from utils.redis_management.config import (
     PoolConfig,
     RedisConfig,
     RedisConfigLoader,
 )
 
 # Statistics dataclasses
-from src.utils.redis_management.statistics import (
+from utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
@@ -54,7 +54,7 @@ from src.utils.redis_management.statistics import (
 )
 
 # Connection manager
-from src.utils.redis_management.connection_manager import (
+from utils.redis_management.connection_manager import (
     RedisConnectionManager,
 )
 

@@ -14,8 +14,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing monitoring functionality
 try:
@@ -99,7 +99,7 @@ def _build_default_services(redis_status_obj) -> list:
     Returns:
         List of default ServiceStatus objects
     """
-    from src.config import unified_config_manager
+    from config import unified_config_manager
 
     monitoring_config = unified_config_manager.get_config_section("monitoring") or {}
     default_response_time = monitoring_config.get("default_response_time_ms", 10.0)
@@ -296,7 +296,7 @@ def _build_vm_definitions() -> list:
 
     Returns list of (name, ip_attr, services) tuples.
     """
-    from src.constants.network_constants import NetworkConstants
+    from constants.network_constants import NetworkConstants
 
     return [
         (
@@ -383,7 +383,7 @@ async def get_version(admin_check: bool = Depends(check_admin_permission)):
     """
     try:
         # Get configuration
-        from src.config import unified_config_manager
+        from config import unified_config_manager
 
         backend_config = unified_config_manager.get_backend_config()
         system_config = unified_config_manager.get_config_section("system") or {}

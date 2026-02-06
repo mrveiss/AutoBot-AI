@@ -25,7 +25,7 @@ import numpy as np
 from performance_monitor import VMS
 
 from src.constants.model_constants import ModelConstants
-from src.constants.network_constants import NetworkConstants
+from autobot_shared.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +287,7 @@ class PerformanceBenchmark:
         This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
         Maps DB numbers to named databases for benchmarking.
         """
-        from src.utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         # Map DB numbers to database names for canonical utility
         db_name_map = {
@@ -370,7 +370,7 @@ class PerformanceBenchmark:
         This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
         Maps DB numbers to named databases for benchmarking.
         """
-        from src.utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         # Map DB numbers to database names for canonical utility
         db_name_map = {

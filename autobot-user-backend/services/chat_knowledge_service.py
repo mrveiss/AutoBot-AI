@@ -24,7 +24,7 @@ Features:
 
 # Issue #381: Re-export all public API from the knowledge package
 # This maintains backward compatibility with existing imports
-from src.services.knowledge import (
+from services.knowledge import (
     ChatKnowledgeService,
     ConversationContextEnhancer,
     DocumentationSearcher,

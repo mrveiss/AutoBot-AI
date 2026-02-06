@@ -14,8 +14,8 @@ import os
 from typing import Any, Dict, List, Optional
 
 # Import the centralized ConfigManager
-from src.config import config as global_config_manager
-from src.secure_command_executor import (
+from config import config as global_config_manager
+from secure_command_executor import (
     CommandRisk,
     SecureCommandExecutor,
     SecurityPolicy,
@@ -93,7 +93,7 @@ class EnhancedSecurityLayer:
         self.sandbox_executor = None
         if self.use_docker_sandbox:
             try:
-                from src.secure_sandbox_executor import secure_sandbox
+                from secure_sandbox_executor import secure_sandbox
 
                 self.sandbox_executor = secure_sandbox
                 logger.info("Enhanced Docker sandbox executor initialized")

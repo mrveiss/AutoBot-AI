@@ -15,12 +15,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
-from src.ai_hardware_accelerator import HardwareDevice
+from ai_hardware_accelerator import HardwareDevice
 
 # Import NPU semantic search components
-from src.npu_semantic_search import get_npu_search_engine
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.logging_manager import get_llm_logger
+from npu_semantic_search import get_npu_search_engine
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("enhanced_search_api")
 

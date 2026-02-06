@@ -14,10 +14,10 @@ from typing import Optional
 from backend.services.command_approval_manager import AgentRole, CommandApprovalManager
 from backend.services.command_execution_queue import get_command_queue
 from backend.type_defs.common import Metadata
-from src.chat_history import ChatHistoryManager
-from src.logging.terminal_logger import TerminalLogger
-from src.monitoring.prometheus_metrics import get_metrics_manager
-from src.secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from chat_history import ChatHistoryManager
+from logging.terminal_logger import TerminalLogger
+from monitoring.prometheus_metrics import get_metrics_manager
+from secure_command_executor import SecureCommandExecutor, SecurityPolicy
 
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
@@ -814,7 +814,7 @@ class AgentTerminalService:
                 ).strip()
                 if output_text:
                     # Strip ANSI escape codes
-                    from src.utils.encoding_utils import strip_ansi_codes
+                    from utils.encoding_utils import strip_ansi_codes
 
                     clean_output = strip_ansi_codes(output_text).strip()
                     if clean_output:

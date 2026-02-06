@@ -18,8 +18,8 @@ from redis.exceptions import RedisError
 from backend.background_vectorization import get_background_vectorizer
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.type_defs.common import Metadata
-from src.exceptions import InternalError
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from exceptions import InternalError
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Set up logging
 logger = logging.getLogger(__name__)

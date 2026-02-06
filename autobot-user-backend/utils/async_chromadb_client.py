@@ -12,7 +12,7 @@ and block the event loop when called from async contexts. This module wraps
 all blocking operations with asyncio.to_thread() for proper async handling.
 
 Usage:
-    from src.utils.async_chromadb_client import (
+    from utils.async_chromadb_client import (
         get_async_chromadb_client,
         AsyncChromaCollection
     )

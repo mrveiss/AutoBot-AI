@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from src.encryption_service import decrypt_data, encrypt_data, get_encryption_service
+from encryption_service import decrypt_data, encrypt_data, get_encryption_service
 
 logger = logging.getLogger(__name__)
 

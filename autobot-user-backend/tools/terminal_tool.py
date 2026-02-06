@@ -17,7 +17,7 @@ Security Integration:
 import logging
 from typing import Any, Dict, Optional
 
-from src.utils.http_client import get_http_client
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +272,7 @@ class TerminalTool:
     async def get_user_command_history(self, conversation_id: str) -> Dict[str, Any]:
         """Get command history from user's interactive terminal session (Issue #281 refactor)."""
         try:
-            from src.constants.network_constants import NetworkConstants
+            from constants.network_constants import NetworkConstants
 
             backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
@@ -357,7 +357,7 @@ class TerminalTool:
         """Query agent terminal API for sessions linked to conversation. Returns empty list on error."""
         import aiohttp
 
-        from src.constants.network_constants import NetworkConstants
+        from constants.network_constants import NetworkConstants
 
         # CRITICAL: Use /api/agent-terminal/sessions (not /api/terminal/sessions)
         backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
@@ -394,7 +394,7 @@ class TerminalTool:
         """Fetch command-related messages from chat history. Returns empty list on error."""
         import aiohttp
 
-        from src.constants.network_constants import NetworkConstants
+        from constants.network_constants import NetworkConstants
 
         backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 

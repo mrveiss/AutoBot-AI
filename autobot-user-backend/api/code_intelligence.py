@@ -23,23 +23,23 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
-from src.code_intelligence.anti_pattern_detector import (
+from auth_middleware import check_admin_permission
+from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
 )
-from src.code_intelligence.performance_analyzer import (
+from code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceSeverity,
     get_performance_issue_types,
 )
-from src.code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
-from src.code_intelligence.security_analyzer import (
+from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
+from code_intelligence.security_analyzer import (
     SecurityAnalyzer,
     SecuritySeverity,
     get_vulnerability_types,
 )
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +214,7 @@ REDIS_OPTIMIZATION_TYPES = {
         "name": "Connection Per Request",
         "category": "connection",
         "description": "Direct redis.Redis() instantiation - should use pool",
-        "recommendation": "Use get_redis_client() from src.utils.redis_client",
+        "recommendation": "Use get_redis_client() from autobot_shared.redis_client",
     },
     "blocking_in_async": {
         "name": "Blocking in Async",
@@ -351,7 +351,7 @@ def _calculate_health_score(anti_patterns: list) -> float:
     Returns:
         Health score from 1-100
     """
-    from src.code_intelligence.shared.scoring import calculate_exponential_score
+    from code_intelligence.shared.scoring import calculate_exponential_score
 
     # Calculate weighted deduction
     severity_penalties = {
@@ -384,7 +384,7 @@ def _calculate_redis_health_score(results: list) -> float:
     Returns:
         Health score from 1-100
     """
-    from src.code_intelligence.shared.scoring import calculate_exponential_score
+    from code_intelligence.shared.scoring import calculate_exponential_score
 
     # Calculate weighted deduction
     severity_penalties = {

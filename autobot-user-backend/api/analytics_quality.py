@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
     """
     # First try Redis cache for pre-calculated metrics
     try:
-        from src.utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         redis = get_redis_client(async_client=False, database="analytics")
         if redis:
@@ -193,7 +193,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
     if real_data:
         # Cache the calculated data
         try:
-            from src.utils.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_redis_client
 
             redis = get_redis_client(async_client=False, database="analytics")
             if redis:

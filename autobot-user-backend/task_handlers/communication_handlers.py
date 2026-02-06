@@ -11,7 +11,7 @@ import logging
 from typing import Any, Dict
 
 from backend.models.task_context import TaskExecutionContext
-from src.event_manager import event_manager
+from event_manager import event_manager
 
 from .base import TaskHandler
 

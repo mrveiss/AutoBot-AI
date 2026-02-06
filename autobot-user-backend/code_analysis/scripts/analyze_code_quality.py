@@ -14,7 +14,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.code_quality_dashboard import CodeQualityDashboard
+from code_quality_dashboard import CodeQualityDashboard
 
 
 def _print_executive_metrics(metrics: dict, issues: dict, report: dict) -> None:

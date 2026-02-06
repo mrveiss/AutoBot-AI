@@ -35,14 +35,14 @@ from backend.api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from backend.type_defs.common import Metadata
-from src.auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission
 
 # Issue #474: Import ServiceURLs for AlertManager integration
-from src.constants.network_constants import ServiceURLs
+from constants.network_constants import ServiceURLs
 
 # Import AutoBot monitoring system
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
-from src.utils.performance_monitor import (
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.performance_monitor import (
     add_alert_callback,
     collect_metrics,
     get_optimization_recommendations,
@@ -887,7 +887,7 @@ async def test_performance_monitoring(
 
 # ===== PROMETHEUS METRICS ENDPOINTS =====
 
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.prometheus_metrics import get_metrics_manager
 
 
 @with_error_handling(

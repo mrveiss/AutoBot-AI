@@ -26,8 +26,8 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from src.constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
-from src.utils.error_boundaries import error_boundary  # noqa: E402
+from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
+from autobot_shared.error_boundaries import error_boundary  # noqa: E402
 
 
 def _parse_message_type(msg_type: Any) -> "MessageType":
@@ -55,7 +55,7 @@ def _parse_priority(priority: Any) -> "MessagePriority":
 
 
 # noqa: E402
-from src.utils.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.redis_client import get_redis_client  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

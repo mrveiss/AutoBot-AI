@@ -10,12 +10,12 @@ delegating to the refactored voice_processing package.
 Refactored as part of Issue #381 god class refactoring.
 Original: 1,257 lines → Facade: ~80 lines (94% reduction)
 
-For new code, import directly from src.voice_processing:
-    from src.voice_processing import VoiceProcessingSystem, VoiceCommand, AudioInput
+For new code, import directly from voice_processing:
+    from voice_processing import VoiceProcessingSystem, VoiceCommand, AudioInput
 """
 
 # Re-export everything from the refactored package
-from src.voice_processing import (
+from voice_processing import (
     # Types
     VoiceCommand,
     SpeechQuality,

@@ -235,8 +235,8 @@ from backend.dependencies import get_redis_client
 from backend.services.agent_terminal import AgentSessionState, AgentTerminalService
 from backend.services.command_approval_manager import AgentRole
 from backend.services.command_execution_queue import get_command_queue
-from src.auth_middleware import get_current_user
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

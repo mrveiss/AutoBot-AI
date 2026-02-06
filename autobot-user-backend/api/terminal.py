@@ -133,8 +133,8 @@ from backend.services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
 from backend.services.terminal_secrets_service import get_terminal_secrets_service
-from src.auth_middleware import get_current_user
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,7 @@ from typing import Dict
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from src.utils.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis

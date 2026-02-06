@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from docker.errors import DockerException, ImageNotFound
 
 import docker
-from src.utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

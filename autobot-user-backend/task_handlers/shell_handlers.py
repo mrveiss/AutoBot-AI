@@ -12,7 +12,7 @@ import logging
 from typing import Any, Dict
 
 from backend.models.task_context import TaskExecutionContext
-from src.utils.command_validator import command_validator
+from utils.command_validator import command_validator
 
 from .base import TaskHandler
 

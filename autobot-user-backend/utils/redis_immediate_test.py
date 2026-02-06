@@ -14,8 +14,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import redis
 
-from src.constants.network_constants import NetworkConstants
-from src.utils.redis_client import get_redis_client
+from constants.network_constants import NetworkConstants
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ async def immediate_redis_test(host: str, port: int, db: int = 0):
     NOTE: This function uses direct redis.Redis() instantiation intentionally
     for testing connectivity to arbitrary Redis endpoints. This is a diagnostic
     tool, NOT for production client creation. For production clients, use
-    get_redis_client() from src.utils.redis_client.
+    get_redis_client() from autobot_shared.redis_client.
 
     The direct instantiation here bypasses the canonical pattern specifically
     to test raw Redis connectivity without circuit breakers or pooling overhead.

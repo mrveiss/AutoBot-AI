@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import redis
 
-from src.config_helper import cfg
+from config_helper import cfg
 
 logger = logging.getLogger(__name__)
 

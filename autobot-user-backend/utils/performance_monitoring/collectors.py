@@ -23,18 +23,18 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import psutil
 
-from src.config import UnifiedConfigManager
-from src.constants.network_constants import NetworkConstants
-from src.utils.http_client import get_http_client
-from src.utils.performance_monitoring.hardware import HardwareDetector
-from src.utils.performance_monitoring.metrics import (
+from config import UnifiedConfigManager
+from constants.network_constants import NetworkConstants
+from autobot_shared.http_client import get_http_client
+from utils.performance_monitoring.hardware import HardwareDetector
+from utils.performance_monitoring.metrics import (
     GPUMetrics,
     MultiModalMetrics,
     NPUMetrics,
     ServicePerformanceMetrics,
     SystemPerformanceMetrics,
 )
-from src.utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
+from utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
 
 logger = logging.getLogger(__name__)
 config = UnifiedConfigManager()

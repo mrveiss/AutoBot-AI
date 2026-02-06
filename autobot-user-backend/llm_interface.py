@@ -10,12 +10,12 @@ delegating to the refactored llm_interface_pkg package.
 Refactored as part of Issue #381 god class refactoring.
 Original: 1,449 lines → Facade: ~80 lines (94% reduction)
 
-For new code, import directly from src.llm_interface_pkg:
-    from src.llm_interface_pkg import LLMInterface, LLMSettings, ProviderType
+For new code, import directly from llm_interface_pkg:
+    from llm_interface_pkg import LLMInterface, LLMSettings, ProviderType
 """
 
 # Re-export everything from the refactored package
-from src.llm_interface_pkg import (
+from llm_interface_pkg import (
     # Types
     ProviderType,
     LLMType,
@@ -46,19 +46,19 @@ from src.llm_interface_pkg import (
 )
 
 # Import additional dependencies that may be expected by consumers
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 # Create singleton config instance for backward compatibility
 config = UnifiedConfigManager()
 
 # Optional imports for backward compatibility
 try:
-    from src.prompt_manager import prompt_manager
+    from prompt_manager import prompt_manager
 except ImportError:
     prompt_manager = None
 
 try:
-    from src.utils.logging_manager import get_llm_logger
+    from autobot_shared.logging_manager import get_llm_logger
 
     logger = get_llm_logger(__name__)
 except ImportError:
@@ -89,7 +89,7 @@ except ImportError:
     openai = None
 
 # Re-export get_llm_interface from resource_factory for backward compatibility
-from src.utils.resource_factory import ResourceFactory
+from utils.resource_factory import ResourceFactory
 
 get_llm_interface = ResourceFactory.get_llm_interface
 

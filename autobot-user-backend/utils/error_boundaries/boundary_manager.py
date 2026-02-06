@@ -18,10 +18,10 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.constants.threshold_constants import RetryConfig
+from constants.threshold_constants import RetryConfig
 
 try:
-    from src.utils.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 except ImportError:
 
     def get_redis_client():
@@ -30,7 +30,7 @@ except ImportError:
 
 
 try:
-    from src.utils.error_metrics import record_error_metric
+    from utils.error_metrics import record_error_metric
 except ImportError:
 
     async def record_error_metric(*args, **kwargs):

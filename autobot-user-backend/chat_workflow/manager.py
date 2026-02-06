@@ -17,10 +17,10 @@ import logging
 import re
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from src.async_chat_workflow import WorkflowMessage
-from src.slash_command_handler import get_slash_command_handler
-from src.utils.error_boundaries import error_boundary, get_error_boundary_manager
-from src.utils.redis_client import get_redis_client as get_redis_manager
+from async_chat_workflow import WorkflowMessage
+from slash_command_handler import get_slash_command_handler
+from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
 from .conversation import ConversationHandlerMixin
 from .llm_handler import LLMHandlerMixin
@@ -121,7 +121,7 @@ class ChatWorkflowManager(
         try:
             from backend.knowledge_factory import get_knowledge_base_async
             from backend.services.rag_service import RAGService
-            from src.services.chat_knowledge_service import ChatKnowledgeService
+            from services.chat_knowledge_service import ChatKnowledgeService
 
             kb = await get_knowledge_base_async()
             if kb:
@@ -148,7 +148,7 @@ class ChatWorkflowManager(
 
                 await self._init_redis_client()
 
-                from src.async_chat_workflow import AsyncChatWorkflow
+                from async_chat_workflow import AsyncChatWorkflow
 
                 self.default_workflow = AsyncChatWorkflow()
 
@@ -2452,7 +2452,7 @@ before summarizing.
         """
         import aiohttp
 
-        from src.utils.http_client import get_http_client
+        from autobot_shared.http_client import get_http_client
 
         try:
             http_client = get_http_client()
@@ -2476,7 +2476,7 @@ before summarizing.
         llm_response: str,
     ) -> None:
         """Persist WorkflowMessages and assistant response to chat history (Issue #332)."""
-        from src.chat_history import ChatHistoryManager
+        from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
@@ -2521,7 +2521,7 @@ before summarizing.
 
     async def _persist_user_message(self, session_id: str, message: str) -> None:
         """Persist user message immediately to prevent data loss on restart."""
-        from src.chat_history import ChatHistoryManager
+        from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
@@ -2541,7 +2541,7 @@ before summarizing.
         self, session_id: str, workflow_messages: List[WorkflowMessage]
     ):
         """Handle user exit intent. Yields exit message and persists."""
-        from src.chat_history import ChatHistoryManager
+        from chat_history import ChatHistoryManager
 
         logger.info(
             "[ChatWorkflowManager] User explicitly requested to exit conversation: %s",
@@ -2570,7 +2570,7 @@ before summarizing.
         self, session_id: str, message: str, workflow_messages: List[WorkflowMessage]
     ):
         """Handle slash command execution. Yields command response and persists."""
-        from src.chat_history import ChatHistoryManager
+        from chat_history import ChatHistoryManager
 
         slash_handler = get_slash_command_handler()
         logger.info("[ChatWorkflowManager] Processing slash command: %s", message[:50])
