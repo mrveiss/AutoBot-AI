@@ -1026,6 +1026,98 @@ async def pull_from_source(
     }
 
 
+async def _get_active_commit(db: AsyncSession) -> str:
+    """Get the active code source commit.
+
+    Helper for sync_role (Issue #665).
+
+    Args:
+        db: Database session
+
+    Returns:
+        The commit hash from the active code source
+
+    Raises:
+        HTTPException: If no active code source or commit is available
+    """
+    result = await db.execute(
+        select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
+    )
+    source = result.scalar_one_or_none()
+
+    if not source or not source.last_known_commit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No code version available. Pull from source first.",
+        )
+
+    return source.last_known_commit
+
+
+async def _get_role_nodes(
+    db: AsyncSession, role_name: str, node_ids: Optional[List[str]] = None
+) -> List[NodeRole]:
+    """Get NodeRole records, optionally filtered by node_ids.
+
+    Helper for sync_role (Issue #665).
+
+    Args:
+        db: Database session
+        role_name: Role to filter by
+        node_ids: Optional list of node IDs to filter by
+
+    Returns:
+        List of NodeRole records matching the criteria
+    """
+    if node_ids:
+        role_result = await db.execute(
+            select(NodeRole).where(
+                NodeRole.role_name == role_name,
+                NodeRole.node_id.in_(node_ids),
+            )
+        )
+    else:
+        role_result = await db.execute(
+            select(NodeRole).where(NodeRole.role_name == role_name)
+        )
+
+    return role_result.scalars().all()
+
+
+async def _sync_nodes_for_role(
+    orchestrator, node_roles: List[NodeRole], role_name: str, commit: str, restart: bool
+) -> tuple[List[dict], int]:
+    """Sync each node and return results with success count.
+
+    Helper for sync_role (Issue #665).
+
+    Args:
+        orchestrator: Sync orchestrator instance
+        node_roles: List of NodeRole records to sync
+        role_name: Role being synced
+        commit: Commit hash to sync
+        restart: Whether to restart services after sync
+
+    Returns:
+        Tuple of (results list, success count)
+    """
+    results = []
+    success_count = 0
+
+    for nr in node_roles:
+        ok, msg = await orchestrator.sync_node_role(
+            node_id=nr.node_id,
+            role_name=role_name,
+            commit=commit,
+            restart=restart,
+        )
+        results.append({"node_id": nr.node_id, "success": ok, "message": msg})
+        if ok:
+            success_count += 1
+
+    return results, success_count
+
+
 @router.post("/roles/{role_name}/sync")
 async def sync_role(
     role_name: str,
@@ -1043,33 +1135,10 @@ async def sync_role(
         restart: Whether to restart services after sync
     """
     # Get latest commit from code source
-    result = await db.execute(
-        select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
-    )
-    source = result.scalar_one_or_none()
-
-    if not source or not source.last_known_commit:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No code version available. Pull from source first.",
-        )
-
-    commit = source.last_known_commit
+    commit = await _get_active_commit(db)
 
     # Get nodes with this role detected or assigned
-    if node_ids:
-        role_result = await db.execute(
-            select(NodeRole).where(
-                NodeRole.role_name == role_name,
-                NodeRole.node_id.in_(node_ids),
-            )
-        )
-    else:
-        role_result = await db.execute(
-            select(NodeRole).where(NodeRole.role_name == role_name)
-        )
-
-    node_roles = role_result.scalars().all()
+    node_roles = await _get_role_nodes(db, role_name, node_ids)
 
     if not node_roles:
         return {
@@ -1080,19 +1149,9 @@ async def sync_role(
 
     # Sync each node
     orchestrator = get_sync_orchestrator()
-    results = []
-    success_count = 0
-
-    for nr in node_roles:
-        ok, msg = await orchestrator.sync_node_role(
-            node_id=nr.node_id,
-            role_name=role_name,
-            commit=commit,
-            restart=restart,
-        )
-        results.append({"node_id": nr.node_id, "success": ok, "message": msg})
-        if ok:
-            success_count += 1
+    results, success_count = await _sync_nodes_for_role(
+        orchestrator, node_roles, role_name, commit, restart
+    )
 
     logger.info(
         "Role sync complete: %s - %d/%d successful",
