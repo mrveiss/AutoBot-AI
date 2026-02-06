@@ -1,0 +1,1986 @@
+# Environment variables for AutoBot configuration
+
+# General settings
+# Configurable string value
+AUTOBOT_TASK_EXECUTION_TRACKER_STRING=agent_performance
+# Configurable string value
+AUTOBOT_VOICE_PROCESSING_SYSTEM_STRING=voice_processing
+# Configurable string value
+AUTOBOT_GUI_CONTROLLER_DUMMY_STRING=
+    A dummy GUIController for environments where actual GUI automation
+    is not supported or desired. All methods will return a success status
+    indicating the action was "skipped".
+
+# Configurable string value
+AUTOBOT_CODE_ANALYZER_STRING=estimated_lines_saved
+# Configurable string value
+AUTOBOT_CONTEXT_AWARE_DECISION_SYSTEM_STRING=requires_approval
+# Configurable string value
+AUTOBOT_AUTOMATION_ACTION=automation_action
+# Configurable string value
+AUTOBOT_NAVIGATION_CHOICE=navigation_choice
+# Configurable string value
+AUTOBOT_TASK_PRIORITIZATION=task_prioritization
+# Configurable string value
+AUTOBOT_CONTEXT_SWITCHING=context_switching
+# Configurable string value
+AUTOBOT_RESOURCE_ALLOCATION=resource_allocation
+# Configurable string value
+AUTOBOT_HUMAN_ESCALATION=human_escalation
+# Configurable string value
+AUTOBOT_WORKFLOW_OPTIMIZATION=workflow_optimization
+# Configurable string value
+AUTOBOT_WORKFLOW_TEMPLATES_STRING=knowledge_manager
+# Configurable string value
+AUTOBOT_RETRY_MECHANISM_STRING=operations_by_type
+# Configurable string value
+AUTOBOT_EXPONENTIAL_BACKOFF=exponential_backoff
+# Configurable string value
+AUTOBOT_JITTERED_BACKOFF=jittered_backoff
+# Configurable string value
+AUTOBOT_MARKDOWN_REFERENCE_SYSTEM_STRING=scanned_directories
+# Configurable string value
+AUTOBOT_SQL=
+                SELECT md.file_path, md.file_name, md.directory, md.word_count,
+                       md.last_modified, md.document_type, md.tags
+                FROM markdown_documents md
+                WHERE (md.file_name LIKE ? OR md.directory LIKE ?)
+
+# Configurable string value
+AUTOBOT_PROMPT_MANAGER_STRING=
+        Get all unique prompt categories (top-level directories).
+
+        Returns:
+            List of category names
+
+# Configurable string value
+AUTOBOT_CONFIG_STRING=dolphin-llama3:8b
+# Configurable string value
+AUTOBOT_VOICE_INTERFACE_STRING=continuous_listening
+# Configurable string value
+AUTOBOT_LLM_INTERFACE_EXTENDED_STRING=Using provider:
+# Configurable string value
+AUTOBOT_COMMAND_EXECUTOR_STRING=non_existent_command arg1 arg2
+# Configurable string value
+AUTOBOT_DIAGNOSTICS_STRING=suggested_strategies
+# Configurable string value
+AUTOBOT_SYSTEM_INFO_COLLECTOR_STRING=lsb_release not found
+# Configurable string value
+AUTOBOT_WORKFLOW_SCHEDULER_STRING=Calculate priority score for workflow
+# Configurable string value
+AUTOBOT_COMPUTER_VISION_SYSTEM_STRING=aspect_ratio_range
+# Configurable string value
+AUTOBOT_TYPES_STRING=
+Shared type definitions for AutoBot
+
+# Configurable string value
+AUTOBOT_SECURITY_LAYER_STRING=allow_goal_submission
+# Configurable string value
+AUTOBOT_LANGCHAIN_AGENT_ORCHESTRATOR_STRING=respond_conversationally
+# Configurable string value
+AUTOBOT_ENHANCED_SECURITY_LAYER_STRING=allow_shell_execute
+# Configurable string value
+AUTOBOT_ENHANCED_ORCHESTRATOR_STRING=knowledge_extracted
+# Configurable string value
+AUTOBOT_SYSTEM_OPERATIONS=system_operations
+# Configurable string value
+AUTOBOT_KNOWLEDGE_MANAGEMENT=knowledge_management
+# Configurable string value
+AUTOBOT_WORKFLOW_COORDINATION=workflow_coordination
+# Configurable string value
+AUTOBOT_WORKFLOW_SUMMARY=workflow_summary
+# Configurable string value
+AUTOBOT_AGENT_INTERACTION=agent_interaction
+# Configurable string value
+AUTOBOT_PERFORMANCE_REPORT=performance_report
+# Configurable string value
+AUTOBOT_KNOWLEDGE_EXTRACTION=knowledge_extraction
+# Configurable string value
+AUTOBOT_KNOWLEDGE_BASE_STRING=KnowledgeBase initialized successfully
+# Configurable string value
+AUTOBOT_SYSTEM_INTEGRATION_STRING=ed successfully.
+# Configurable string value
+AUTOBOT_MSG=Listening for worker capabilities on Redis channel
+# Configurable string value
+AUTOBOT_WORKER_CAPABILITIES_CHANNEL=worker_capabilities
+# Configurable string value
+AUTOBOT_ERROR_MESSAGE=Redis client not initialized. Cannot process command approval.
+# Configurable string value
+AUTOBOT_ORCHESTRATOR_STRING=knowledge_manager
+# Configurable string value
+AUTOBOT_CONTEXT_STR=
+
+Relevant Context from Knowledge Base:
+
+# Configurable string value
+AUTOBOT_RESPONSE_TEXT=Hello! How can I assist you today?
+# Configurable string value
+AUTOBOT_WORKER_NODE_STRING=execute_shell_command
+# Configurable string value
+AUTOBOT_CHANNEL=worker_capabilities
+# Configurable string value
+AUTOBOT_EVENT_MANAGER_STRING=. Using default debug_mode=False.
+# Configurable string value
+AUTOBOT_ELEVATION_WRAPPER_STRING=Direct sudo call intercepted:
+# Configurable string value
+AUTOBOT_MULTIMODAL_PROCESSOR_STRING=processing_timestamp
+# Configurable string value
+AUTOBOT_CONTENT_GENERATION=content_generation
+# Configurable string value
+AUTOBOT_TAKEOVER_MANAGER_STRING= autonomous tasks
+# Configurable string value
+AUTOBOT_SECURITY_CONCERN=security_concern
+# Configurable string value
+AUTOBOT_USER_INTERVENTION_REQUIRED=user_intervention_required
+# Configurable string value
+AUTOBOT_APPROVAL_REQUIRED=approval_required
+# Configurable string value
+AUTOBOT_TIMEOUT_EXCEEDED=timeout_exceeded
+# Configurable string value
+AUTOBOT_ENHANCED_MEMORY_MANAGER_STRING=Retrieve cached embedding vector
+# Configurable string value
+AUTOBOT_QUERY=SELECT id, category, content, metadata, timestamp, reference_path, embedding FROM memory_entries
+# Configurable string value
+AUTOBOT_DESKTOP_STREAMING_MANAGER_STRING=High-level desktop streaming manager with WebSocket integration
+# Configurable string value
+AUTOBOT_ERROR_MSG=VNC server not available on system
+# Configurable string value
+AUTOBOT_GUI_CONTROLLER_STRING=Drew visual feedback at (
+# Configurable string value
+AUTOBOT_ENV_ANALYZER_STRING=analysis_time_seconds
+# Configurable string value
+AUTOBOT_CHAT_HISTORY_MANAGER_STRING=%Y-%m-%d %H:%M:%S
+# Configurable string value
+AUTOBOT_PROJECT_STATE_MANAGER_STRING=AutoBot Project State Manager
+# Configurable string value
+AUTOBOT_PHASE_2_ORCHESTRATION=phase_2_orchestration
+# Configurable string value
+AUTOBOT_PHASE_3_SECURITY=phase_3_security
+# Configurable string value
+AUTOBOT_PHASE_4_INTEGRATION=phase_4_integration
+# Configurable string value
+AUTOBOT_PHASE_5_ORCHESTRATOR=phase_5_orchestrator
+# Configurable string value
+AUTOBOT_PHASE_6_SELF_AWARENESS=phase_6_self_awareness
+# Configurable string value
+AUTOBOT_PHASE_7_MEMORY_ENHANCEMENT=phase_7_memory_enhancement
+# Configurable string value
+AUTOBOT_PHASE_8_ENHANCED_INTERFACE=phase_8_enhanced_interface
+# Configurable string value
+AUTOBOT_PHASE_9_LOCAL_MODELS=phase_9_local_models
+# Configurable string value
+AUTOBOT_PHASE_10_OPENVINO=phase_10_openvino
+# Configurable string value
+AUTOBOT_MEMORY_MANAGER_STRING=Failed to get lastrowid after insert
+# Configurable string value
+AUTOBOT_BASE_QUERY=
+                SELECT id, category, content, metadata, timestamp,
+                       reference_path, embedding
+                FROM memory_entries
+                WHERE content LIKE ?
+
+# Configurable string value
+AUTOBOT_WORKFLOW_CLASSIFIER_STRING=total_categories
+# Configurable string value
+AUTOBOT_LLM_INTERFACE_STRING=Generic Request Error communicating with Ollama:
+# Configurable string value
+AUTOBOT_HARDWARE_ACCELERATION_STRING=device_assignments
+# Configurable string value
+AUTOBOT_CIRCUIT_BREAKER_STRING=Circuit breaker
+# Configurable string value
+AUTOBOT_PROMPT_KNOWLEDGE_SYNC_STRING=domain_expertise
+# Configurable string value
+AUTOBOT_SECURE_COMMAND_EXECUTOR_STRING=User denied execution
+# Configurable string value
+AUTOBOT_MODERN_AI_INTEGRATION_STRING=No images provided for analysis
+# Configurable string value
+AUTOBOT_ANTHROPIC_CLAUDE=anthropic_claude
+# Configurable string value
+AUTOBOT_FUNCTION_CALLING=function_calling
+# Configurable string value
+AUTOBOT_SYSTEM_MESSAGE=You are an expert at converting natural language commands into structured actions.
+        Convert user commands into a JSON structure that defines specific actions to take.
+# Configurable string value
+AUTOBOT_TOOL_SELECTOR_STRING=apt update && apt upgrade -y
+# Configurable string value
+AUTOBOT_OS_DETECTOR_STRING=Package manager
+# Configurable string value
+AUTOBOT_INTELLIGENT_AGENT_STRING=initialization_time
+# Configurable string value
+AUTOBOT_GOAL_PROCESSOR_STRING=scan.{0,10}ports?
+# Configurable string value
+AUTOBOT_STREAMING_EXECUTOR_STRING=Error killing process
+# Configurable string value
+AUTOBOT_SYSTEM_MONITOR_STRING=total_autobot_memory_mb
+# Configurable string value
+AUTOBOT_WORKFLOW_METRICS_STRING=performance_trends
+# Configurable string value
+AUTOBOT_COMMAND_VALIDATOR_STRING=--human-readable
+# Configurable string value
+AUTOBOT_COMMAND_UTILS_STRING=
+    Executes a shell command asynchronously and cleans the output.
+
+    Args:
+        command: The shell command to execute.
+
+    Returns:
+        A dictionary containing cleaned stdout, stderr, return code, and status.
+
+# Configurable string value
+AUTOBOT_TASK_QUEUE_STRING=Create from dictionary.
+# Configurable string value
+AUTOBOT_REDIS_CLIENT_STRING=
+    Test Redis connection without creating persistent client.
+
+    Returns:
+        bool: True if connection successful, False otherwise
+
+# Configurable string value
+AUTOBOT_TOOL_REGISTRY_STRING=Knowledge base is not available
+# Configurable string value
+AUTOBOT_RESULT_TEXT=No relevant information found in knowledge base
+# Configurable string value
+AUTOBOT_INIT_STRING=
+Unified Tools Package
+
+This package provides a centralized tool registry that eliminates duplication
+between the standard orchestrator and LangChain orchestrator implementations.
+
+# Configurable string value
+AUTOBOT_ENHANCED_KB_LIBRARIAN_STRING=
+- Last Updated:
+# Configurable string value
+AUTOBOT_INSTALL_PATTERN=(?:apt|apt-get|yum|dnf|pacman|brew|pip|npm)\s+install\s+(?:-[yS]\s+)?(\S+)
+# Configurable string value
+AUTOBOT_NETWORK_DISCOVERY_AGENT_STRING=ARP scan failed:
+# Configurable string value
+AUTOBOT_COMMON_PORTS=22,80,443,445,3389
+# Configurable string value
+AUTOBOT_INTERACTIVE_TERMINAL_AGENT_STRING=terminal_control
+# Configurable string value
+AUTOBOT_SYSTEM_COMMAND_AGENT_STRING=No active terminal session for chat
+# Configurable string value
+AUTOBOT_LIBRARIAN_ASSISTANT_AGENT_STRING=quality_assessment
+# Configurable string value
+AUTOBOT_RESEARCH_AGENT_STRING=network scanning tools
+# Configurable string value
+AUTOBOT_BASE_AGENT_STRING=Convert to dictionary for JSON serialization
+# Configurable string value
+AUTOBOT_ENHANCED_SYSTEM_COMMANDS_AGENT_STRING=security_warning
+# Configurable string value
+AUTOBOT_AGENT_CLIENT_STRING=successful_requests
+# Configurable string value
+AUTOBOT_ADVANCED_WEB_RESEARCH_STRING=CAPTCHA solving failed:
+# Configurable string value
+AUTOBOT_AGENT_ORCHESTRATOR_STRING=secondary_agents
+# Configurable string value
+AUTOBOT_KNOWLEDGE_RETRIEVAL=knowledge_retrieval
+# Configurable string value
+AUTOBOT_CLASSIFICATION_AGENT_STRING=requires_research
+# Configurable string value
+AUTOBOT_PATTERN=autobot:classification:log:*
+# Configurable string value
+AUTOBOT_KB_LIBRARIAN_AGENT_STRING=enhanced_response
+# Configurable string value
+AUTOBOT_KNOWLEDGE_RETRIEVAL_AGENT_STRING=knowledge_retrieval
+# Configurable string value
+AUTOBOT_SYSTEM_PROMPT=You are a fast fact retrieval assistant. Provide a brief, direct answer based on the provided context.
+
+Guidelines:
+- Be concise and factual
+- Answer directly without unnecessary elaboration
+- If the context doesn't contain the answer, say so clearly
+- Keep responses under 100 words
+# Configurable string value
+AUTOBOT_SYSTEM_KNOWLEDGE_MANAGER_STRING=system_knowledge
+# Configurable string value
+AUTOBOT_CHAT_AGENT_STRING=search knowledge
+# Configurable string value
+AUTOBOT_CONTAINERIZED_LIBRARIAN_ASSISTANT_STRING=quality_assessment
+# Configurable string value
+AUTOBOT_WEB_RESEARCH_ASSISTANT_STRING=search_engines_used
+# Configurable string value
+AUTOBOT_RAG_AGENT_STRING=reformulated_queries
+# Configurable string value
+AUTOBOT_SECURITY_SCANNER_AGENT_STRING=vulnerability_scan
+# Configurable string value
+AUTOBOT_VLLM_PROVIDER_STRING=gpu_memory_utilization
+# Configurable string value
+AUTOBOT_APP_FACTORY_STRING=Could not get Redis client from centralized utility
+# Configurable string value
+AUTOBOT_CHAT_API_STRING=freed_space_bytes
+# Configurable string value
+AUTOBOT_ADVANCED_WORKFLOW_ORCHESTRATOR_STRING=optimization_effectiveness
+# Configurable string value
+AUTOBOT_TEST_REQUEST=Set up a secure web server with SSL certificates and monitoring
+# Configurable string value
+AUTOBOT_KB_LIBRARIAN_STRING=similarity_threshold
+# Configurable string value
+AUTOBOT_FILES_STRING=Error getting file stats:
+# Configurable string value
+AUTOBOT_TEMPLATES_STRING=estimated_duration_minutes
+# Configurable string value
+AUTOBOT_SECURE_TERMINAL_WEBSOCKET_STRING=Secure WebSocket disconnected for session
+# Configurable string value
+AUTOBOT_METRICS_STRING=Failed to get resource summary:
+# Configurable string value
+AUTOBOT_WEBSOCKETS_STRING=: Completed successfully with
+# Configurable string value
+AUTOBOT_TEXT=Settings updated successfully.
+# Configurable string value
+AUTOBOT_PROMPTS_STRING=Error getting prompts:
+# Configurable string value
+AUTOBOT_LLM_STRING=backend.llm.embedding.providers.
+# Configurable string value
+AUTOBOT_MOCK_CONTEXT=
+System Prompt: You are an AI assistant.
+Conversation History:
+User: Hello, how are you?
+Agent: I am an AI assistant, functioning as expected. How can I help you today?
+Relevant Knowledge:
+- AutoBot is an autonomous agent.
+- It uses Ollama for local LLM interactions.
+
+# Configurable string value
+AUTOBOT_SYSTEM_STRING=Error getting system status:
+# Configurable string value
+AUTOBOT_CHAT_KNOWLEDGE_STRING=Apply user decision for temporary knowledge
+# Configurable string value
+AUTOBOT_KNOWLEDGE_STRING=Knowledge base not available
+# Configurable string value
+AUTOBOT_AGENT_STRING=permission_denied
+# Configurable string value
+AUTOBOT_RESPONSE_MESSAGE=An unexpected response format was received.
+# Configurable string value
+AUTOBOT_DEFAULT_TEXT=No response text provided.
+# Configurable string value
+AUTOBOT_BASE_TERMINAL_STRING=
+Base Terminal WebSocket Handler
+Provides common terminal functionality for websocket handlers
+
+# Configurable string value
+AUTOBOT_SETTINGS_STRING=Error getting settings:
+# Configurable string value
+AUTOBOT_WORKFLOW_AUTOMATION_STRING=Start executing automated workflow
+# Configurable string value
+AUTOBOT_WAITING_APPROVAL=waiting_approval
+# Configurable string value
+AUTOBOT_ENHANCED_MEMORY_STRING=Invalid status:
+# Configurable string value
+AUTOBOT_MONITORING_STRING=utilization_percent
+# Configurable string value
+AUTOBOT_TEST_PROMPT=Test performance with a simple question: What is 2+2?
+# Configurable string value
+AUTOBOT_CHAT_STRING=allow_chat_control
+# Configurable string value
+AUTOBOT_KB_UTILITY_MESSAGE=📚 **Knowledge Base Information:** None
+# Configurable string value
+AUTOBOT_TERMINAL_STRING=working_directory
+# Configurable string value
+AUTOBOT_DEVELOPER_STRING=developer.enabled
+# Configurable string value
+AUTOBOT_SIMPLE_TERMINAL_WEBSOCKET_STRING=step_confirmation_required
+# Configurable string value
+AUTOBOT_ADVANCED_CONTROL_STRING=advanced_control
+# Configurable string value
+AUTOBOT_REDIS_STRING=Error updating Redis config:
+# Configurable string value
+AUTOBOT_TERMINAL_WEBSOCKET_STRING=command_execution
+# Configurable string value
+AUTOBOT_SCHEDULER_STRING=estimated_duration_minutes
+# Configurable string value
+AUTOBOT_VOICE_STRING=permission_denied
+# Configurable string value
+AUTOBOT_WORKFLOW_STRING=Workflow not found
+# Configurable string value
+AUTOBOT_PROJECT_STATE_STRING=overall_completion
+# Configurable string value
+AUTOBOT_SECURITY_STRING=enhanced_security_layer
+# Configurable string value
+AUTOBOT_ELEVATION_STRING=pending_requests
+# Configurable string value
+AUTOBOT_CONNECTION_UTILS_STRING=redis_search_module_loaded
+# Configurable string value
+AUTOBOT_CACHE_MANAGER_STRING=Get cache statistics
+# Configurable string value
+AUTOBOT_CONFIG_SERVICE_STRING=update_frequency_days
+# Configurable string value
+AUTOBOT_ENV_PREFIX=AUTOBOT_SECURITY_
+# Configurable api_keys value
+AUTOBOT_TASK_EXECUTION_TRACKER_API_KEYS="analysis_period_days"
+# Configurable api_keys value
+AUTOBOT_VOICE_PROCESSING_SYSTEM_API_KEYS="request_manual_control"
+# Configurable api_keys value
+AUTOBOT_CODE_ANALYZER_API_KEYS="estimated_lines_saved"
+# Configurable api_keys value
+AUTOBOT_CONTEXT_AWARE_DECISION_SYSTEM_API_KEYS="automation_opportunities"
+# Configurable api_keys value
+AUTOBOT_WORKFLOW_TEMPLATES_API_KEYS="competitor_identification"
+# Configurable api_keys value
+AUTOBOT_MARKDOWN_REFERENCE_SYSTEM_API_KEYS="total_cross_references"
+# Configurable api_keys value
+AUTOBOT_CONFIG_API_KEYS="hardware_acceleration"
+# Configurable api_keys value
+AUTOBOT_VOICE_INTERFACE_API_KEYS="continuous_listening"
+# Configurable api_keys value
+AUTOBOT_LLM_INTERFACE_EXTENDED_API_KEYS='_extended_llm_instance'
+# Configurable api_keys value
+AUTOBOT_DIAGNOSTICS_API_KEYS="suggested_strategies"
+# Configurable api_keys value
+AUTOBOT_COMPUTER_VISION_SYSTEM_API_KEYS="automation_opportunities"
+# Configurable api_keys value
+AUTOBOT_SECURITY_LAYER_API_KEYS="allow_goal_submission"
+# Configurable api_keys value
+AUTOBOT_LANGCHAIN_AGENT_ORCHESTRATOR_API_KEYS="respond_conversationally"
+# Configurable api_keys value
+AUTOBOT_ENHANCED_SECURITY_LAYER_API_KEYS="allow_shell_execute_safe"
+# Configurable api_keys value
+AUTOBOT_ENHANCED_ORCHESTRATOR_API_KEYS="average_execution_time"
+# Configurable api_keys value
+AUTOBOT_KNOWLEDGE_BASE_API_KEYS="NETWORK_SHARE_USERNAME"
+# Configurable api_keys value
+AUTOBOT_ORCHESTRATOR_API_KEYS="respond_conversationally"
+# Configurable api_keys value
+AUTOBOT_WORKER_NODE_API_KEYS="execute_shell_command"
+# Configurable api_keys value
+AUTOBOT_MULTIMODAL_PROCESSOR_API_KEYS="processing_timestamp"
+# Configurable api_keys value
+AUTOBOT_TAKEOVER_MANAGER_API_KEYS="max_concurrent_sessions"
+# Configurable api_keys value
+AUTOBOT_ENHANCED_MEMORY_MANAGER_API_KEYS="success_rate_percent"
+# Configurable api_keys value
+AUTOBOT_DESKTOP_STREAMING_MANAGER_API_KEYS="max_concurrent_sessions"
+# Configurable api_keys value
+AUTOBOT_ENV_ANALYZER_API_KEYS="configuration_recommendations"
+# Configurable api_keys value
+AUTOBOT_CHAT_HISTORY_MANAGER_API_KEYS="AUTOBOT_CHAT_HISTORY_FILE"
+# Configurable api_keys value
+AUTOBOT_PROJECT_STATE_MANAGER_API_KEYS="check_phase_completion"
+# Configurable api_keys value
+AUTOBOT_MEMORY_MANAGER_API_KEYS="max_entries_per_category"
+# Configurable api_keys value
+AUTOBOT_LLM_INTERFACE_API_KEYS="onnxruntime_openvino"
+# Configurable api_keys value
+AUTOBOT_HARDWARE_ACCELERATION_API_KEYS="GPU_USE_SYNC_OBJECTS"
+# Configurable api_keys value
+AUTOBOT_CIRCUIT_BREAKER_API_KEYS="average_response_time"
+# Configurable api_keys value
+AUTOBOT_PROMPT_KNOWLEDGE_SYNC_API_KEYS="behavioral_intelligence"
+# Configurable api_keys value
+AUTOBOT_MODERN_AI_INTEGRATION_API_KEYS="claude-3-opus-20240229"
+# Configurable api_keys value
+AUTOBOT_INTELLIGENT_AGENT_API_KEYS="supported_categories"
+# Configurable api_keys value
+AUTOBOT_STREAMING_EXECUTOR_API_KEYS="process_limit_reached"
+# Configurable api_keys value
+AUTOBOT_SYSTEM_MONITOR_API_KEYS="total_autobot_memory_mb"
+# Configurable api_keys value
+AUTOBOT_WORKFLOW_METRICS_API_KEYS="workflow_total_duration_ms"
+# Configurable api_keys value
+AUTOBOT_TASK_QUEUE_API_KEYS="total_execution_time"
+# Configurable api_keys value
+AUTOBOT_TOOL_REGISTRY_API_KEYS="search_knowledge_base"
+# Configurable api_keys value
+AUTOBOT_ENHANCED_KB_LIBRARIAN_API_KEYS="workflow_documentation"
+# Configurable api_keys value
+AUTOBOT_SYSTEM_COMMAND_AGENT_API_KEYS="command_confirmation"
+# Configurable api_keys value
+AUTOBOT_INIT_API_KEYS="get_librarian_assistant"
+# Configurable api_keys value
+AUTOBOT_LIBRARIAN_ASSISTANT_AGENT_API_KEYS="--disable-dev-shm-usage"
+# Configurable api_keys value
+AUTOBOT_RESEARCH_AGENT_API_KEYS="verification_command"
+# Configurable api_keys value
+AUTOBOT_BASE_AGENT_API_KEYS="total_execution_time_seconds"
+# Configurable api_keys value
+AUTOBOT_ENHANCED_SYSTEM_COMMANDS_AGENT_API_KEYS="EnhancedSystemCommandsAgent"
+# Configurable api_keys value
+AUTOBOT_AGENT_CLIENT_API_KEYS="health_check_interval"
+# Configurable api_keys value
+AUTOBOT_ADVANCED_WEB_RESEARCH_API_KEYS="--disable-prompt-on-repost"
+# Configurable api_keys value
+AUTOBOT_AGENT_ORCHESTRATOR_API_KEYS="orchestrator_analysis"
+# Configurable api_keys value
+AUTOBOT_CLASSIFICATION_AGENT_API_KEYS="requires_installation"
+# Configurable api_keys value
+AUTOBOT_KNOWLEDGE_RETRIEVAL_AGENT_API_KEYS="similarity_threshold"
+# Configurable api_keys value
+AUTOBOT_CONTAINERIZED_LIBRARIAN_ASSISTANT_API_KEYS="containerized_librarian_assistant"
+# Configurable api_keys value
+AUTOBOT_WEB_RESEARCH_ASSISTANT_API_KEYS="enable_advanced_research"
+# Configurable api_keys value
+AUTOBOT_RAG_AGENT_API_KEYS="reformulated_queries"
+# Configurable api_keys value
+AUTOBOT_VLLM_PROVIDER_API_KEYS="gpu_memory_utilization"
+# Configurable api_keys value
+AUTOBOT_APP_FACTORY_API_KEYS="worker_capabilities_listener"
+# Configurable api_keys value
+AUTOBOT_ADVANCED_WORKFLOW_ORCHESTRATOR_API_KEYS="total_workflows_generated"
+# Configurable api_keys value
+AUTOBOT_KB_LIBRARIAN_API_KEYS="similarity_threshold"
+# Configurable api_keys value
+AUTOBOT_TEMPLATES_API_KEYS="estimated_duration_minutes"
+# Configurable api_keys value
+AUTOBOT_SECURE_TERMINAL_WEBSOCKET_API_KEYS="terminal_command_risk_assessment"
+# Configurable api_keys value
+AUTOBOT_METRICS_API_KEYS="workflow_performance"
+# Configurable api_keys value
+AUTOBOT_WEBSOCKETS_API_KEYS="command_execution_start"
+# Configurable api_keys value
+AUTOBOT_SYSTEM_API_KEYS="redis_search_module_loaded"
+# Configurable api_keys value
+AUTOBOT_CHAT_KNOWLEDGE_API_KEYS="temporary_knowledge_count"
+# Configurable api_keys value
+AUTOBOT_KNOWLEDGE_API_KEYS="implementation_status"
+# Configurable api_keys value
+AUTOBOT_AGENT_API_KEYS="command_execution_end"
+# Configurable api_keys value
+AUTOBOT_WORKFLOW_AUTOMATION_API_KEYS="requiresConfirmation"
+# Configurable api_keys value
+AUTOBOT_ENHANCED_MEMORY_API_KEYS="performance_insights"
+# Configurable api_keys value
+AUTOBOT_MONITORING_API_KEYS="memory_utilization_percent"
+# Configurable api_keys value
+AUTOBOT_CHAT_API_KEYS="chat_history_manager"
+# Configurable api_keys value
+AUTOBOT_TERMINAL_API_KEYS='enhanced_security_layer'
+# Configurable api_keys value
+AUTOBOT_DEVELOPER_API_KEYS="total_available_endpoints"
+# Configurable api_keys value
+AUTOBOT_SIMPLE_TERMINAL_WEBSOCKET_API_KEYS="step_confirmation_required"
+# Configurable api_keys value
+AUTOBOT_ADVANCED_CONTROL_API_KEYS="active_streaming_sessions"
+# Configurable api_keys value
+AUTOBOT_TERMINAL_WEBSOCKET_API_KEYS="command_confirmation"
+# Configurable api_keys value
+AUTOBOT_SCHEDULER_API_KEYS="estimated_duration_minutes"
+# Configurable api_keys value
+AUTOBOT_WORKFLOW_API_KEYS="message_classification"
+# Configurable api_keys value
+AUTOBOT_PROJECT_STATE_API_KEYS="completion_percentage"
+# Configurable api_keys value
+AUTOBOT_SECURITY_API_KEYS='enhanced_security_layer'
+# Configurable api_keys value
+AUTOBOT_CONNECTION_UTILS_API_KEYS="redis_search_module_loaded"
+# Configurable api_keys value
+AUTOBOT_CONFIG_SERVICE_API_KEYS="update_frequency_days"
+# Configurable api_keys value
+AUTOBOT_SETTINGS_API_KEYS="AUTOBOT_DIAGNOSTICS_"
+# Configurable api_keys value
+AUTOBOT_APP_API_KEYS="onElevationCancelled"
+# Configurable api_keys value
+AUTOBOT_CHATINTERFACE_API_KEYS="workflow-modal-overlay"
+# Configurable api_keys value
+AUTOBOT_PHASESTATUSINDICATOR_API_KEYS='capability-implemented'
+# Configurable api_keys value
+AUTOBOT_SETTINGSPANEL_API_KEYS="notifyBackendOfProviderChange"
+# Configurable api_keys value
+AUTOBOT_WORKFLOWNOTIFICATIONS_API_KEYS="notifications-header"
+# Configurable api_keys value
+AUTOBOT_VOICEINTERFACE_API_KEYS="voice-status-display"
+# Configurable api_keys value
+AUTOBOT_HISTORYVIEW_API_KEYS="history-list-container"
+# Configurable api_keys value
+AUTOBOT_ADVANCEDSTEPCONFIRMATIONMODAL_API_KEYS="confirmation-modal-overlay"
+# Configurable api_keys value
+AUTOBOT_KNOWLEDGEMANAGER_API_KEYS="refreshSystemKnowledge"
+# Configurable api_keys value
+AUTOBOT_WORKFLOWPROGRESSWIDGET_API_KEYS="workflow-progress-widget"
+# Configurable api_keys value
+AUTOBOT_TERMINALWINDOW_API_KEYS="confirmation-modal-overlay"
+# Configurable file_paths value
+AUTOBOT_VOICE_PROCESSING_SYSTEM_FILE_PATHS=: command_analysis.confidence,
+
+# Configurable file_paths value
+AUTOBOT_CODE_ANALYZER_FILE_PATHS=
+
+import ast
+import asyncio
+import hashlib
+import json
+import logging
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple, Any
+
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+from src.utils.redis_client import get_redis_client
+from src.config import config
+from src.multimodal_processor import MultiModalProcessor, ModalInput, ModalityType, ProcessingIntent
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CodeFunction:
+
+# Configurable file_paths value
+AUTOBOT_CONTEXT_AWARE_DECISION_SYSTEM_FILE_PATHS=: decision.confidence,
+
+# Configurable file_paths value
+AUTOBOT_RETRY_MECHANISM_FILE_PATHS=
+        operation_name = operation_name or func.__name__
+        last_exception = None
+
+        for attempt in range(1, self.config.max_attempts + 1):
+            self.stats[
+# Configurable file_paths value
+AUTOBOT_MARKDOWN_REFERENCE_SYSTEM_FILE_PATHS=, content))
+
+        # Extract tags from content (look for tags in frontmatter or special comments)
+        tags = self._extract_tags(content)
+
+        # Check if file exists in database
+        with sqlite3.connect(self.memory_manager.db_path) as conn:
+            cursor = conn.execute(
+# Configurable file_paths value
+AUTOBOT_CONFIG_FILE_PATHS=
+Centralized Configuration Management Module
+
+This module provides a unified configuration system that:
+- Loads base configuration from config/config.yaml
+- Allows overrides from config/settings.json
+- Supports environment variable overrides
+- Provides a single source of truth for all configuration
+
+# Configurable file_paths value
+AUTOBOT_VOICE_INTERFACE_FILE_PATHS=config/config.yaml.template
+# Configurable file_paths value
+AUTOBOT_COMPUTER_VISION_SYSTEM_FILE_PATHS=: element.confidence * 0.8,
+
+# Configurable file_paths value
+AUTOBOT_SECURITY_LAYER_FILE_PATHS=config/config.yaml.template
+# Configurable file_paths value
+AUTOBOT_LANGCHAIN_AGENT_ORCHESTRATOR_FILE_PATHS=
+            )
+
+from src.event_manager import event_manager
+from src.knowledge_base import KnowledgeBase
+from src.tools import ToolRegistry
+from src.worker_node import WorkerNode
+
+
+class LangChainAgentOrchestrator:
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        worker_node: Optional[WorkerNode],
+        knowledge_base: Optional[KnowledgeBase],
+    ):
+        self.config = config
+        self.worker_node = worker_node
+        self.knowledge_base = knowledge_base
+        self.available = worker_node is not None
+
+        if not self.available:
+            logging.warning(
+
+# Configurable file_paths value
+AUTOBOT_ENHANCED_SECURITY_LAYER_FILE_PATHS=
+
+import datetime
+import json
+import os
+from typing import Any, Dict, List, Optional, Callable
+import asyncio
+import yaml
+
+# Import the centralized ConfigManager
+from src.config import config as global_config_manager
+from src.secure_command_executor import SecureCommandExecutor, SecurityPolicy, CommandRisk
+
+
+class EnhancedSecurityLayer:
+
+# Configurable file_paths value
+AUTOBOT_ORCHESTRATOR_FILE_PATHS=Classification: {result.complexity.value} (confidence: {result.confidence:.2f})
+# Configurable file_paths value
+AUTOBOT_MULTIMODAL_PROCESSOR_FILE_PATHS=: result.confidence,
+
+# Configurable file_paths value
+AUTOBOT_ENHANCED_MEMORY_MANAGER_FILE_PATHS=
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+# Configurable file_paths value
+AUTOBOT_ENV_ANALYZER_FILE_PATHS=
+
+import ast
+import asyncio
+import json
+import logging
+import re
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple, Any, Union
+
+from src.utils.redis_client import get_redis_client
+from src.config import config
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class HardcodedValue:
+
+# Configurable file_paths value
+AUTOBOT_PROJECT_STATE_MANAGER_FILE_PATHS=
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                # Save current phase
+                cursor.execute(
+
+# Configurable file_paths value
+AUTOBOT_MEMORY_MANAGER_FILE_PATHS=
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+
+# Configurable file_paths value
+AUTOBOT_LLM_INTERFACE_FILE_PATHS=
+
+            # Use retry mechanism for network connection
+            async def make_request():
+                return await asyncio.to_thread(
+                    requests.get, health_check_url, timeout=5
+                )
+
+            response = await retry_network_operation(make_request)
+            response.raise_for_status()
+
+            models_info = response.json()
+            available_ollama_models = {
+                model[
+# Configurable file_paths value
+AUTOBOT_CIRCUIT_BREAKER_FILE_PATHS=
+        current_time = time.time()
+
+        if self.state == CircuitState.CLOSED:
+            return True
+
+        elif self.state == CircuitState.OPEN:
+            # Check if enough time has passed to try half-open
+            if current_time - self.last_failure_time >= self.config.recovery_timeout:
+                with self._lock:
+                    if self.state == CircuitState.OPEN:  # Double-check with lock
+                        logger.info(f
+# Configurable file_paths value
+AUTOBOT_MODERN_AI_INTEGRATION_FILE_PATHS=
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self.config.provider,
+            model_name=self.config.model_name,
+            content=
+# Configurable file_paths value
+AUTOBOT_INTELLIGENT_AGENT_FILE_PATHS=: True},
+                    )
+
+            elif processed_goal.confidence > 0.2:
+                # Partial understanding - offer alternatives
+                yield StreamChunk(
+                    timestamp=self._get_timestamp(),
+                    chunk_type=ChunkType.COMMENTARY,
+                    content=(
+
+# Configurable file_paths value
+AUTOBOT_GOAL_PROCESSOR_FILE_PATHS=(confidence: {suggestion.confidence:.2f})
+# Configurable file_paths value
+AUTOBOT_COMMAND_VALIDATOR_FILE_PATHS=
+        for pattern in self.dangerous_patterns:
+            if re.search(pattern, command, re.IGNORECASE):
+                self.logger.warning(
+                    f
+# Configurable file_paths value
+AUTOBOT_TASK_QUEUE_FILE_PATHS=
+
+        # Task registry for function execution
+        self.task_registry: Dict[str, Callable] = {}
+
+        # Worker management
+        self.workers: List[asyncio.Task] = []
+        self.is_running = False
+        self.logger = logging.getLogger(__name__)
+
+        # Statistics
+        self.stats = {
+
+# Configurable file_paths value
+AUTOBOT_REDIS_CLIENT_FILE_PATHS=
+
+import logging
+import os
+from typing import Optional, Union
+
+import redis
+import redis.asyncio as async_redis
+
+from src.config import config as global_config_manager
+
+logger = logging.getLogger(__name__)
+
+# Global Redis client instances
+_redis_client: Optional[redis.Redis] = None
+_async_redis_client: Optional[async_redis.Redis] = None
+
+
+def get_redis_client(
+    async_client: bool = False,
+) -> Union[redis.Redis, async_redis.Redis, None]:
+
+# Configurable file_paths value
+AUTOBOT_TOOL_REGISTRY_FILE_PATHS=,
+            }
+        except Exception as e:
+            self.logger.error(f
+# Configurable file_paths value
+AUTOBOT_LIBRARIAN_ASSISTANT_AGENT_FILE_PATHS=
+
+import json
+import logging
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+try:
+    from playwright.async_api import Browser, Page, async_playwright
+
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    async_playwright = None
+    Browser = None
+    Page = None
+    PLAYWRIGHT_AVAILABLE = False
+
+from src.config import config
+from src.knowledge_base import KnowledgeBase
+from src.llm_interface import LLMInterface
+
+logger = logging.getLogger(__name__)
+
+
+class LibrarianAssistantAgent:
+
+# Configurable file_paths value
+AUTOBOT_ENHANCED_SYSTEM_COMMANDS_AGENT_FILE_PATHS=
+
+import json
+import logging
+import re
+import shlex
+from typing import Any, Dict, List, Optional, Tuple
+
+from src.config import config as global_config_manager
+from src.llm_interface import LLMInterface
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+logger = logging.getLogger(__name__)
+
+
+class EnhancedSystemCommandsAgent(LocalAgent):
+
+# Configurable file_paths value
+AUTOBOT_AGENT_CLIENT_FILE_PATHS=
+        last_error = None
+
+        for attempt in range(self.config.retry_attempts):
+            try:
+                response = await agent.execute_with_tracking(request)
+
+                # Return immediately on success or non-retryable errors
+                if response.status ==
+# Configurable file_paths value
+AUTOBOT_ADVANCED_WEB_RESEARCH_FILE_PATHS=)
+
+        if not self.browser:
+            await self.initialize()
+
+        try:
+            # Use multiple search engines for better coverage
+            search_engines = [
+                (
+# Configurable file_paths value
+AUTOBOT_AGENT_ORCHESTRATOR_FILE_PATHS=
+
+import asyncio
+import logging
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+from src.config import config as global_config_manager
+from src.llm_interface import LLMInterface
+
+# Import specialized agents
+from .chat_agent import get_chat_agent
+from .containerized_librarian_assistant import get_containerized_librarian_assistant
+from .enhanced_system_commands_agent import get_enhanced_system_commands_agent
+from .kb_librarian_agent import get_kb_librarian
+from .rag_agent import get_rag_agent
+
+logger = logging.getLogger(__name__)
+
+
+class AgentType(Enum):
+
+# Configurable file_paths value
+AUTOBOT_CLASSIFICATION_AGENT_FILE_PATHS=Confidence: {result.confidence:.2f}
+# Configurable file_paths value
+AUTOBOT_KB_LIBRARIAN_AGENT_FILE_PATHS=, 0.7
+        )
+        self.max_results = self.config.get_nested(
+# Configurable file_paths value
+AUTOBOT_KNOWLEDGE_RETRIEVAL_AGENT_FILE_PATHS=
+
+import logging
+import time
+from typing import Any, Dict, List, Optional
+
+from src.config import config as global_config_manager
+from src.knowledge_base import KnowledgeBase
+from src.llm_interface import LLMInterface
+
+logger = logging.getLogger(__name__)
+
+
+class KnowledgeRetrievalAgent:
+
+# Configurable file_paths value
+AUTOBOT_CHAT_AGENT_FILE_PATHS=
+
+import json
+import logging
+from typing import Any, Dict, List, Optional
+
+from src.config import config as global_config_manager
+from src.llm_interface import LLMInterface
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+logger = logging.getLogger(__name__)
+
+
+class ChatAgent(LocalAgent):
+
+# Configurable file_paths value
+AUTOBOT_CONTAINERIZED_LIBRARIAN_ASSISTANT_FILE_PATHS=
+        )
+        self.max_search_results = self.config.get_nested(
+
+# Configurable file_paths value
+AUTOBOT_WEB_RESEARCH_ASSISTANT_FILE_PATHS=
+
+    def __init__(self, config: Dict[str, Any] = None):
+        self.config = config or {}
+        self.search_cache = {}  # Cache for recent searches
+        self.quality_threshold = 0.7  # Minimum quality score for KB storage
+        self.use_advanced_research = ADVANCED_RESEARCH_AVAILABLE and self.config.get(
+
+# Configurable file_paths value
+AUTOBOT_RAG_AGENT_FILE_PATHS=
+
+import json
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
+from src.config import config as global_config_manager
+from src.llm_interface import LLMInterface
+from .base_agent import LocalAgent, AgentRequest, AgentResponse
+
+logger = logging.getLogger(__name__)
+
+
+class RAGAgent(LocalAgent):
+
+# Configurable file_paths value
+AUTOBOT_VLLM_PROVIDER_FILE_PATHS=)
+
+        config = self.model_configs[model_id]
+        provider = VLLMProvider(config)
+        await provider.initialize()
+
+        self.models[model_id] = provider
+        logger.info(f
+# Configurable file_paths value
+AUTOBOT_APP_FACTORY_FILE_PATHS=
+        Handles the request for /.well-known/appspecific/com.chrome.devtools.json
+        to prevent 404 errors in Chrome/Edge developer console.
+
+# Configurable file_paths value
+AUTOBOT_ADVANCED_WORKFLOW_ORCHESTRATOR_FILE_PATHS=: intelligence.confidence_score,
+
+# Configurable file_paths value
+AUTOBOT_SECURE_TERMINAL_WEBSOCKET_FILE_PATHS=)
+
+                            # Log output if enabled
+                            if self.log_all_output and self.security_layer:
+                                self.security_layer.audit_log(
+                                    action=
+# Configurable file_paths value
+AUTOBOT_LLM_FILE_PATHS=
+        )
+
+        from src.config import global_config_manager
+
+        provider = embedding_data.get(
+# Configurable file_paths value
+AUTOBOT_SYSTEM_FILE_PATHS=src.config
+# Configurable file_paths value
+AUTOBOT_KNOWLEDGE_FILE_PATHS=)
+
+        # Initialize system knowledge (this will import documentation)
+        await system_knowledge_manager.initialize_system_knowledge(
+            force_reinstall=False
+        )
+
+        return {
+
+# Configurable file_paths value
+AUTOBOT_SETTINGS_FILE_PATHS=: self.redis.db,
+
+# Configurable file_paths value
+AUTOBOT_ENHANCED_MEMORY_FILE_PATHS=
+    try:
+        result = markdown_system.initialize_system_scan()
+        return {
+
+# Configurable file_paths value
+AUTOBOT_MONITORING_FILE_PATHS=, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                ollama_models = {
+
+# Configurable file_paths value
+AUTOBOT_DEVELOPER_FILE_PATHS=
+
+import logging
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from src.config import config as global_config_manager
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+class APIRegistry:
+
+# Configurable file_paths value
+AUTOBOT_CONNECTION_UTILS_FILE_PATHS=] for model in response.json().get(
+# Configurable file_paths value
+AUTOBOT_CONFIG_SERVICE_FILE_PATHS=
+
+import logging
+from typing import Any, Dict
+
+import yaml
+
+from src.config import global_config_manager
+
+logger = logging.getLogger(__name__)
+
+
+class ConfigService:
+
+# Configurable file_paths value
+AUTOBOT_USECHATHISTORY_FILE_PATHS=, error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Function to switch to a different chat
+  const switchToChat = (chatId) => {
+    if (chatId === currentChatId.value) return;
+
+    window.location.hash = `chatId=${chatId}`;
+    currentChatId.value = chatId;
+    console.log(
+# Configurable file_paths value
+AUTOBOT_CHATMANAGER_FILE_PATHS=
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.currentChatId = data.chatId;
+        return data;
+      } else {
+        throw new Error(`Failed to create new chat: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error(
+# Configurable file_paths value
+AUTOBOT_APICLIENT_FILE_PATHS=, { url, method });
+    return response.json();
+  }
+
+  async addFileToKnowledge(file) {
+    const formData = new FormData();
+    formData.append(
+# Configurable file_paths value
+AUTOBOT_SETTINGSSERVICE_FILE_PATHS=
+      }
+    };
+
+    this.settings = reactive({ ...this.defaultSettings });
+    this.initialized = false;
+    this.loadSettings();
+  }
+
+  /**
+   * Load settings from localStorage and backend with fallback to defaults
+   */
+  async loadSettings() {
+    try {
+      // First, try to load from localStorage for immediate UI update
+      const savedSettings = localStorage.getItem(
+# Configurable file_paths value
+AUTOBOT_CHATHISTORYSERVICE_FILE_PATHS=;
+  }
+
+  /**
+   * Load messages for a specific chat
+   */
+  async loadChatMessages(chatId) {
+    try {
+      const data = await apiClient.getChatMessages(chatId);
+      console.log(`Loaded chat messages from backend for chat ${chatId}`);
+
+      // Normalize message format - backend uses
+# Configurable file_paths value
+AUTOBOT_TERMINALSERVICE_FILE_PATHS=);
+      };
+
+      ws.onmessage = (event) => {
+        this.handleMessage(sessionId, event.data);
+      };
+
+      ws.onclose = (event) => {
+        console.log(`Terminal session ${sessionId} disconnected:`, event.code, event.reason);
+        this.connections.delete(sessionId);
+        this.callbacks.delete(sessionId);
+        this.triggerCallback(sessionId,
+# Configurable file_paths value
+AUTOBOT_CONFIGSERVICE_FILE_PATHS= }
+      });
+
+      if (response.ok) {
+        const externalConfig = await response.json();
+        this.config = this.mergeDeep(this.config, externalConfig);
+        console.log(
+# Configurable file_paths value
+AUTOBOT_API_FILE_PATHS=
+
+/**
+ * API Service - provides methods for interacting with AutoBot backend
+ */
+class ApiService {
+  constructor() {
+    this.client = apiClient
+  }
+
+  // Core HTTP methods with JSON parsing
+  async get(endpoint) {
+    const response = await this.client.get(endpoint)
+    return await response.json()
+  }
+
+  async post(endpoint, data) {
+    const response = await this.client.post(endpoint, data)
+    return await response.json()
+  }
+
+  async put(endpoint, data) {
+    const response = await this.client.put(endpoint, data)
+    return await response.json()
+  }
+
+  async delete(endpoint) {
+    const response = await this.client.delete(endpoint)
+    return await response.json()
+  }
+
+  // Chat API
+  async sendMessage(message, options = {}) {
+    return this.post(
+# Configurable file_paths value
+AUTOBOT_APP_FILE_PATHS=, data);
+    };
+
+    const onElevationCancelled = (requestId) => {
+      showElevationDialog.value = false;
+      console.log(
+# Configurable file_paths value
+AUTOBOT_CHATINTERFACE_FILE_PATHS=,
+            lastMessage: null,
+            timestamp: new Date()
+          }];
+          console.log(
+# Configurable file_paths value
+AUTOBOT_SETTINGSPANEL_FILE_PATHS=, providerData);
+        const result = await response.json();
+        console.log(
+# Configurable file_paths value
+AUTOBOT_SYSTEMMONITOR_FILE_PATHS=, monospace;
+  font-size: 11px;
+  color: var(--blue-gray-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.endpoint-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.response-time {
+  font-size: 10px;
+  color: var(--blue-gray-500);
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-indicator.healthy { background: #10b981; }
+.status-indicator.warning { background: #f59e0b; }
+.status-indicator.error { background: #ef4444; }
+
+.log-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.log-filter {
+  background: white;
+  border: 1px solid var(--blue-gray-300);
+  color: var(--blue-gray-700);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.log-filter option {
+  background: white;
+  color: var(--blue-gray-700);
+  padding: 4px 8px;
+}
+
+.log-filter:focus {
+  outline: none;
+  border-color: var(--indigo-500);
+  background: white;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.clear-logs {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--red-500);
+  color: var(--red-500);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.clear-logs:hover {
+  background: var(--red-500);
+  color: white;
+}
+
+.logs-content {
+  max-height: 300px;
+  overflow-y: auto;
+  font-family:
+# Configurable file_paths value
+AUTOBOT_VOICEINTERFACE_FILE_PATHS=>{{ Math.round(command.confidence * 100) }}%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Voice Status Display -->
+      <div class=
+# Configurable file_paths value
+AUTOBOT_HISTORYVIEW_FILE_PATHS=, error);
+      }
+    };
+
+    const viewHistoryEntry = (entry) => {
+      // Navigate to the chat in ChatInterface by updating the URL hash
+      window.location.hash = `chatId=${entry.id}`;
+      console.log(
+# Configurable file_paths value
+AUTOBOT_ADVANCEDSTEPCONFIRMATIONMODAL_FILE_PATHS=, steps);
+  }
+};
+
+const editStep = (index) => {
+  // TODO: Open edit dialog for specific step
+  console.log(
+# Configurable file_paths value
+AUTOBOT_KNOWLEDGEMANAGER_FILE_PATHS= },
+          body: JSON.stringify({
+            entry_id: entry.id,
+            url: url
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail ||
+# Configurable file_paths value
+AUTOBOT_FILEBROWSER_FILE_PATHS=);
+        link.href = previewFile.value.url;
+        link.download = previewFile.value.name;
+        link.click();
+      }
+    };
+
+    const deleteFile = async (file) => {
+      try {
+        console.log(
+# Configurable file_paths value
+AUTOBOT_TERMINALWINDOW_FILE_PATHS=, monospace;
+  overflow: hidden;
+}
+
+.window-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #2d2d2d;
+  padding: 8px 16px;
+  border-bottom: 1px solid #333;
+  user-select: none;
+}
+
+.window-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.terminal-icon {
+  font-size: 16px;
+}
+
+.window-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.control-button {
+  background-color: #444;
+  border: 1px solid #666;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.control-button:hover:not(:disabled) {
+  background-color: #555;
+  transform: translateY(-1px);
+}
+
+.control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-button.danger:hover:not(:disabled) {
+  background-color: #dc3545;
+}
+
+.terminal-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #1e1e1e;
+  padding: 4px 16px;
+  border-bottom: 1px solid #333;
+  font-size: 11px;
+  color: #888;
+}
+
+.status-left, .status-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #dc3545;
+}
+
+.connection-status.connected .status-dot {
+  background-color: #28a745;
+}
+
+.connection-status.connecting .status-dot {
+  background-color: #ffc107;
+  animation: pulse 1s infinite;
+}
+
+.connection-status.error .status-dot {
+  background-color: #dc3545;
+  animation: flash 0.5s infinite;
+}
+
+.terminal-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.terminal-output {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-line {
+  margin: 0;
+  padding: 0;
+  min-height: 1.4em;
+}
+
+.line-error {
+  color: #ff6b6b;
+}
+
+.line-warning {
+  color: #ffc107;
+}
+
+.line-success {
+  color: #28a745;
+}
+
+.line-command {
+  color: #87ceeb;
+}
+
+.line-system {
+  color: #9370db;
+}
+
+.terminal-input-line {
+  display: flex;
+  align-items: center;
+  padding: 0 16px 16px 16px;
+  background-color: #000;
+}
+
+.prompt {
+  color: #00ff00;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.terminal-input {
+  background: none;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.cursor {
+  color: #00ff00;
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+.cursor.blink {
+  animation: blink 1s infinite;
+}
+
+.terminal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #2d2d2d;
+  padding: 6px 16px;
+  border-top: 1px solid #333;
+  font-size: 11px;
+}
+
+.footer-info {
+  color: #888;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.footer-button {
+  background-color: #444;
+  border: 1px solid #666;
+  color: #ccc;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: background-color 0.2s;
+}
+
+.footer-button:hover {
+  background-color: #555;
+}
+
+.footer-button.workflow-test {
+  background-color: #17a2b8;
+  border-color: #138496;
+  color: white;
+  font-weight: 600;
+}
+
+.footer-button.workflow-test:hover {
+  background-color: #138496;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #2d2d2d;
+  color: #fff;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  color: #ffc107;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background-color: #007acc;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #005999;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+/* Emergency control button styles */
+.control-button.emergency-kill {
+  background-color: #dc3545;
+  color: white;
+  font-weight: bold;
+  border-color: #c82333;
+}
+
+.control-button.emergency-kill:hover:not(:disabled) {
+  background-color: #c82333;
+  border-color: #bd2130;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.control-button.interrupt {
+  background-color: #ffc107;
+  color: #212529;
+  border-color: #e0a800;
+}
+
+.control-button.interrupt:hover:not(:disabled) {
+  background-color: #e0a800;
+  border-color: #d39e00;
+}
+
+.control-button.takeover {
+  background-color: #17a2b8;
+  color: white;
+  border-color: #138496;
+  font-weight: 600;
+}
+
+.control-button.takeover:hover:not(:disabled) {
+  background-color: #138496;
+  border-color: #0c7084;
+}
+
+.control-button.takeover.active {
+  background-color: #28a745;
+  border-color: #1e7e34;
+  animation: pulse-success 2s infinite;
+}
+
+.control-button.takeover.active:hover {
+  background-color: #218838;
+}
+
+/* Command confirmation modal styles */
+.confirmation-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(2px);
+}
+
+.confirmation-modal {
+  background-color: #2d2d2d;
+  color: #fff;
+  padding: 0;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+}
+
+.confirmation-modal.emergency {
+  border-color: #dc3545;
+  box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
+}
+
+.modal-header {
+  padding: 20px 24px 16px 24px;
+  border-bottom: 1px solid #444;
+  background: linear-gradient(135deg, #333 0%, #2d2d2d 100%);
+  border-radius: 12px 12px 0 0;
+}
+
+.modal-title {
+  margin: 0;
+  color: #ffc107;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirmation-modal.emergency .modal-title {
+  color: #ff6b6b;
+}
+
+.modal-content {
+  padding: 24px;
+}
+
+.command-preview {
+  background-color: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.command-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.command-text {
+  font-family:
+# Configurable urls value
+AUTOBOT_CONFIG_URLS="http://localhost:11434"
+# Configurable urls value
+AUTOBOT_DIAGNOSTICS_URLS="http://example.com/fix"
+# Configurable urls value
+AUTOBOT_LANGCHAIN_AGENT_ORCHESTRATOR_URLS="http://localhost:11434"
+# Configurable urls value
+AUTOBOT_KNOWLEDGE_BASE_URLS="http://localhost:11434"
+# Configurable urls value
+AUTOBOT_DESKTOP_STREAMING_MANAGER_URLS="http://localhost:{novnc_port}"
+# Configurable urls value
+AUTOBOT_PROJECT_STATE_MANAGER_URLS="http://localhost:8001/api/terminal/sessions"
+# Configurable urls value
+AUTOBOT_LLM_INTERFACE_URLS="https://api.openai.com/v1/chat/completions"
+# Configurable urls value
+AUTOBOT_MODERN_AI_INTEGRATION_URLS="https://api.anthropic.com/v1/messages"
+# Configurable urls value
+AUTOBOT_LIBRARIAN_ASSISTANT_AGENT_URLS="https://www.bing.com/search?q={query}"
+# Configurable urls value
+AUTOBOT_RESEARCH_AGENT_URLS="https://github.com/robertdavidgraham/masscan"
+# Configurable urls value
+AUTOBOT_AGENT_CLIENT_URLS="http://localhost:8080"
+# Configurable urls value
+AUTOBOT_ADVANCED_WEB_RESEARCH_URLS="https://www.google.com/"
+# Configurable urls value
+AUTOBOT_CONTAINERIZED_LIBRARIAN_ASSISTANT_URLS="http://localhost:3000"
+# Configurable urls value
+AUTOBOT_WEB_RESEARCH_ASSISTANT_URLS="https://forensics.example.com/tools"
+# Configurable urls value
+AUTOBOT_APP_FACTORY_URLS="http://127.0.0.1:5173"
+# Configurable urls value
+AUTOBOT_MONITORING_URLS="http://localhost:11434/api/tags"
+# Configurable urls value
+AUTOBOT_CONNECTION_UTILS_URLS="http://localhost:11434/api/generate"
+# Configurable urls value
+AUTOBOT_CONFIG_SERVICE_URLS="http://localhost:8001"
+# Configurable urls value
+AUTOBOT_SETTINGS_URLS="http://localhost:11434"
+# Configurable urls value
+AUTOBOT_CHATMANAGER_URLS='http://localhost:8001'
+# Configurable urls value
+AUTOBOT_APICLIENT_URLS='http://localhost:8001'
+# Configurable urls value
+AUTOBOT_SETTINGSSERVICE_URLS='http://localhost:8001'
+# Configurable urls value
+AUTOBOT_TERMINALSERVICE_URLS='http://localhost:8001'
+# Configurable urls value
+AUTOBOT_CONFIGSERVICE_URLS='http://localhost:8001'
+# Configurable urls value
+AUTOBOT_APP_URLS='http://localhost:8001/api/system/health'
+# Configurable urls value
+AUTOBOT_CHATINTERFACE_URLS='http://localhost:8001/api/files/upload'
+# Configurable urls value
+AUTOBOT_SETTINGSPANEL_URLS='http://localhost:8001/api/system/health'
+# Configurable urls value
+AUTOBOT_HISTORYVIEW_URLS='http://localhost:8001'
+# Configurable urls value
+AUTOBOT_THEWELCOME_URLS="https://vuejs.org/sponsor/"
+# Configurable urls value
+AUTOBOT_KNOWLEDGEMANAGER_URLS='http://localhost:8001/api/knowledge/crawl_url'
+# Configurable urls value
+AUTOBOT_FILEBROWSER_URLS='http://localhost:8001/api/files/upload'
+# Configurable urls value
+AUTOBOT_BASEPANEL_URLS='http://www.w3.org/2000/svg'
+# Configurable urls value
+AUTOBOT_ICONSUPPORT_URLS="http://www.w3.org/2000/svg"
+# Configurable urls value
+AUTOBOT_ICONECOSYSTEM_URLS="http://www.w3.org/2000/svg"
+# Configurable urls value
+AUTOBOT_ICONCOMMUNITY_URLS="http://www.w3.org/2000/svg"
+# Configurable urls value
+AUTOBOT_ICONDOCUMENTATION_URLS="http://www.w3.org/2000/svg"
+# Configurable urls value
+AUTOBOT_ICONTOOLING_URLS="http://www.w3.org/2000/svg"
+# Configurable hostnames value
+AUTOBOT_CONFIG_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_SECURITY_LAYER_HOSTNAMES="127.0.0.1"
+# Configurable hostnames value
+AUTOBOT_KNOWLEDGE_BASE_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_ENV_ANALYZER_HOSTNAMES='0.0.0.0'
+# Configurable hostnames value
+AUTOBOT_CHAT_HISTORY_MANAGER_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_TOOL_SELECTOR_HOSTNAMES="127.0.0.1"
+# Configurable hostnames value
+AUTOBOT_REDIS_CLIENT_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_RESEARCH_AGENT_HOSTNAMES="0.0.0.0"
+# Configurable hostnames value
+AUTOBOT_SECURITY_SCANNER_AGENT_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_APP_FACTORY_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_CONNECTION_UTILS_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_CONFIG_SERVICE_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_SETTINGS_HOSTNAMES="localhost"
+# Configurable hostnames value
+AUTOBOT_TERMINALSERVICE_HOSTNAMES='localhost'
+# Configurable hostnames value
+AUTOBOT_SETTINGSPANEL_HOSTNAMES="localhost"
+# Configurable database_urls value
+AUTOBOT_KNOWLEDGE_BASE_DATABASE_URLS="redis://{self.redis_host}:{self.redis_port}"
+
+# Performance settings
+# Configurable timeout value
+TIMEOUT=1
+# Configurable numeric value
+AUTOBOT_VOICE_PROCESSING_SYSTEM_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_GUI_CONTROLLER_DUMMY_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_VOICE_INTERFACE_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_ENHANCED_ORCHESTRATOR_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_ORCHESTRATOR_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_LLM_INTERFACE_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_COMMAND_VALIDATOR_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_INTERACTIVE_TERMINAL_AGENT_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_RESEARCH_AGENT_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_BASE_AGENT_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_WEB_RESEARCH_ASSISTANT_NUMERIC=0
+# Configurable numeric value
+AUTOBOT_SECURE_TERMINAL_WEBSOCKET_NUMERIC=0
+
+# Network settings
+# Configurable port value
+PORT=1024
+# Configurable hostname value
+HOST=localhost
+
+# Security settings
+# Configurable security value
+SECRET_KEY=completion_tokens
+
+# Filesystem settings
+# Configurable path value
+DATA_PATH=/health
+# Configurable config_file value
+AUTOBOT_CONFIG_CONFIG_FILE=Save current configuration to settings.json
+# Configurable config_file value
+AUTOBOT_VOICE_INTERFACE_CONFIG_FILE=config/config.yaml
+# Configurable config_file value
+AUTOBOT_DIAGNOSTICS_CONFIG_FILE=data/reliability_stats.json
+# Configurable config_file value
+AUTOBOT_WORKFLOW_SCHEDULER_CONFIG_FILE=data/scheduled_workflows.json
+# Configurable config_file value
+AUTOBOT_SECURITY_LAYER_CONFIG_FILE=config/config.yaml
+# Configurable config_file value
+AUTOBOT_ENHANCED_SECURITY_LAYER_CONFIG_FILE=data/audit.log
+# Configurable config_file value
+AUTOBOT_CONFIG_PATH=config/config.yaml
+# Configurable config_file value
+AUTOBOT_EVENT_MANAGER_CONFIG_FILE=config/config.yaml
+# Configurable config_file value
+AUTOBOT_ENHANCED_MEMORY_MANAGER_CONFIG_FILE=data/enhanced_memory.db
+# Configurable config_file value
+AUTOBOT_ENV_ANALYZER_CONFIG_FILE=.cfg
+# Configurable config_file value
+AUTOBOT_TEST_FILE=data/test_chat_history.json
+# Configurable config_file value
+AUTOBOT_CHAT_HISTORY_MANAGER_CONFIG_FILE=.json
+# Configurable config_file value
+AUTOBOT_PROJECT_STATE_MANAGER_CONFIG_FILE=data/project_state.db
+# Configurable config_file value
+AUTOBOT_MEMORY_MANAGER_CONFIG_FILE=data/agent_memory.db
+# Configurable config_file value
+AUTOBOT_LLM_INTERFACE_CONFIG_FILE=logs/llm_usage.log
+# Configurable config_file value
+AUTOBOT_SECURE_COMMAND_EXECUTOR_CONFIG_FILE=.cfg
+# Configurable config_file value
+AUTOBOT_SYSTEM_KNOWLEDGE_MANAGER_CONFIG_FILE=*.yaml
+# Configurable config_file value
+AUTOBOT_APP_FACTORY_CONFIG_FILE=data/chat_history.json
+# Configurable config_file value
+AUTOBOT_CHAT_API_CONFIG_FILE=chat_*.json
+# Configurable config_file value
+AUTOBOT_FILES_CONFIG_FILE=.cfg
+# Configurable config_file value
+AUTOBOT_SETTINGS_CONFIG_FILE=data/audit.log
+# Configurable config_file value
+AUTOBOT_CHAT_CONFIG_FILE=*_planning*.json
+# Configurable config_file value
+AUTOBOT_CONFIG_SERVICE_CONFIG_FILE=Updated backend settings in config.yaml
+# Configurable config_file value
+AUTOBOT_CONFIG_FILE=config/config.yaml
+# Configurable config_file value
+AUTOBOT_CONFIGSERVICE_CONFIG_FILE=data/chat_history.json
+# Configurable config_file value
+AUTOBOT_SETTINGSPANEL_CONFIG_FILE=data/reliability_stats.json
+
+# Api settings
+# Configurable url value
+API_URL=http://localhost:11434
+
+# Database settings
+# Configurable database_url value
+DATABASE_URL=redis://

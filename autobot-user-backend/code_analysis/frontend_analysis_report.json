@@ -1,0 +1,50 @@
+{
+  "total_components": 0,
+  "total_issues": 0,
+  "frameworks_detected": [],
+  "analysis_time_seconds": 0.0014598369598388672,
+  "components": [],
+  "issues": [],
+  "framework_usage": {},
+  "performance_analysis": {
+    "total_performance_issues": 0,
+    "issues_by_type": {},
+    "components_with_issues": 0,
+    "recommendations": [
+      "Remove console.log statements from production code",
+      "Cache DOM queries outside of loops",
+      "Clean up event listeners and intervals",
+      "Optimize component re-rendering"
+    ]
+  },
+  "accessibility_analysis": {
+    "total_accessibility_issues": 0,
+    "issues_by_severity": {},
+    "wcag_compliance_score": 100,
+    "recommendations": [
+      "Add alt attributes to all images",
+      "Ensure keyboard navigation support",
+      "Use semantic HTML elements",
+      "Test with screen readers"
+    ]
+  },
+  "security_analysis": {
+    "total_security_issues": 0,
+    "critical_issues": 0,
+    "high_priority_issues": 0,
+    "security_score": 100,
+    "recommendations": [
+      "Sanitize all user inputs",
+      "Avoid dangerouslySetInnerHTML with user content",
+      "Use Content Security Policy (CSP)",
+      "Validate data on both client and server"
+    ]
+  },
+  "recommendations": [
+    "\ud83d\udcf1 Implement responsive design testing",
+    "\ud83e\uddea Add component unit tests for better reliability",
+    "\ud83d\udcca Set up frontend performance monitoring",
+    "\ud83d\udd0d Use ESLint and Prettier for code quality"
+  ],
+  "quality_score": 0.0
+}
