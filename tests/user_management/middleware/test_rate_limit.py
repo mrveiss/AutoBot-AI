@@ -67,3 +67,43 @@ async def test_check_rate_limit_blocks_exceeded(mock_redis):
             await limiter.check_rate_limit(user_id)
 
         assert "27 minutes" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_record_attempt_increments_on_failure(mock_redis):
+    """Recording failed attempt increments counter."""
+    from src.user_management.middleware.rate_limit import PasswordChangeRateLimiter
+
+    user_id = uuid.uuid4()
+    mock_redis.incr = AsyncMock(return_value=2)
+    mock_redis.expire = AsyncMock()
+
+    with patch(
+        "src.user_management.middleware.rate_limit.get_redis_client",
+        return_value=mock_redis,
+    ):
+        limiter = PasswordChangeRateLimiter()
+        await limiter.record_attempt(user_id, success=False)
+
+    key = f"password_change_attempts:{user_id}"
+    mock_redis.incr.assert_called_once_with(key)
+    mock_redis.expire.assert_called_once_with(key, 1800)
+
+
+@pytest.mark.asyncio
+async def test_record_attempt_clears_on_success(mock_redis):
+    """Recording successful attempt clears counter."""
+    from src.user_management.middleware.rate_limit import PasswordChangeRateLimiter
+
+    user_id = uuid.uuid4()
+    mock_redis.delete = AsyncMock(return_value=1)
+
+    with patch(
+        "src.user_management.middleware.rate_limit.get_redis_client",
+        return_value=mock_redis,
+    ):
+        limiter = PasswordChangeRateLimiter()
+        await limiter.record_attempt(user_id, success=True)
+
+    key = f"password_change_attempts:{user_id}"
+    mock_redis.delete.assert_called_once_with(key)

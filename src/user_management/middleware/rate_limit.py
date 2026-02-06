@@ -52,3 +52,24 @@ class PasswordChangeRateLimiter:
             )
 
         return True, self.MAX_ATTEMPTS - current
+
+    async def record_attempt(self, user_id: uuid.UUID, success: bool) -> None:
+        """
+        Record password change attempt.
+
+        Args:
+            user_id: User ID
+            success: Whether attempt was successful
+        """
+        redis_client = get_redis_client(async_client=True, database="main")
+        key = f"password_change_attempts:{user_id}"
+
+        if success:
+            # Clear attempts on success
+            await redis_client.delete(key)
+            logger.info("Cleared rate limit for user %s", user_id)
+        else:
+            # Increment failed attempts
+            await redis_client.incr(key)
+            await redis_client.expire(key, self.WINDOW_SECONDS)
+            logger.warning("Failed password change attempt for user %s", user_id)
