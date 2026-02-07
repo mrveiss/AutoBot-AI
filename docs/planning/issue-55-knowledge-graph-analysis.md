@@ -50,7 +50,7 @@ await memory_graph.delete_relation(from_entity, to_entity, relation_type)
 await memory_graph.search_entities(query, entity_type, tags, status, limit=50)
 ```
 
-### 2. REST API (`backend/api/memory.py`)
+### 2. REST API (`autobot-user-backend/api/memory.py`)
 
 **Status:** ✅ Fully Implemented
 
@@ -147,7 +147,7 @@ async def graph_rag_search(
 
 **Implementation Needed:**
 ```python
-# New agent: src/agents/entity_extraction_agent.py
+# New agent: autobot-user-backend/agents/entity_extraction_agent.py
 class EntityExtractionAgent:
     """
     Automatically extract entities from conversations:
@@ -165,7 +165,7 @@ class EntityExtractionAgent:
 
 **Implementation Needed:**
 ```vue
-<!-- autobot-vue/src/views/KnowledgeGraph.vue -->
+<!-- autobot-user-frontend/src/views/KnowledgeGraph.vue -->
 <template>
   <!-- D3.js or Cytoscape.js graph visualization -->
   <!-- Force-directed layout -->
@@ -276,10 +276,10 @@ class EntityExtractionAgent:
 
 ### New Files
 ```
-src/agents/entity_extraction_agent.py           # Auto entity extraction
-autobot-vue/src/views/KnowledgeGraph.vue        # Graph visualization
-autobot-vue/src/components/graph/GraphNode.vue  # Node component
-autobot-vue/src/components/graph/GraphEdge.vue  # Edge component
+autobot-user-backend/agents/entity_extraction_agent.py           # Auto entity extraction
+autobot-user-frontend/src/views/KnowledgeGraph.vue        # Graph visualization
+autobot-user-frontend/src/components/graph/GraphNode.vue  # Node component
+autobot-user-frontend/src/components/graph/GraphEdge.vue  # Edge component
 docs/features/KNOWLEDGE_GRAPH.md                # Feature documentation
 tests/unit/test_graph_rag_integration.py        # Graph-RAG tests
 ```
@@ -287,9 +287,9 @@ tests/unit/test_graph_rag_integration.py        # Graph-RAG tests
 ### Files to Modify
 ```
 src/autobot_memory_graph.py                     # Add graph_rag_search()
-backend/api/memory.py                           # Add /memory/graph-rag endpoint
+autobot-user-backend/api/memory.py                           # Add /memory/graph-rag endpoint
 backend/main.py                                 # Register new routes
-autobot-vue/src/router/index.ts                # Add graph route
+autobot-user-frontend/src/router/index.ts                # Add graph route
 ```
 
 ---
@@ -337,7 +337,7 @@ Consider dedicated graph database if:
 ## References
 
 - `src/autobot_memory_graph.py` - Core graph implementation
-- `backend/api/memory.py` - REST API endpoints
+- `autobot-user-backend/api/memory.py` - REST API endpoints
 - `scripts/utilities/init_memory_graph_redis.py` - Infrastructure setup
 - `docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md` - Design specification
 - Issue #55: https://github.com/mrveiss/AutoBot-AI/issues/55

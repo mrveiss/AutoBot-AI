@@ -226,9 +226,9 @@ content = b'some bytes'.decode('utf-8') + 'some string'
 
 ### High Priority (User-Facing)
 - [ ] `src/chat_history_manager.py` - 10+ aiofiles.open() calls
-- [ ] `backend/api/chat.py` - JSONResponse media_type
+- [ ] `autobot-user-backend/api/chat.py` - JSONResponse media_type
 - [ ] `backend/services/agent_terminal_service.py` - PTY output
-- [ ] `autobot-vue/src/components/chat/ChatMessages.vue` - Text rendering
+- [ ] `autobot-user-frontend/src/components/chat/ChatMessages.vue` - Text rendering
 
 ### Medium Priority (Internal)
 - [ ] All backend API endpoints - Explicit charset

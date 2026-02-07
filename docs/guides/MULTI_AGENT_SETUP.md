@@ -162,7 +162,7 @@ python3 -c "from src.config import global_config_manager; print(f'Chat model: {g
 
 For advanced users, see:
 - `docs/agents/multi-agent-architecture.md` - Complete architecture documentation
-- `src/agents/agent_orchestrator.py` - Routing logic
+- `autobot-user-backend/agents/agent_orchestrator.py` - Routing logic
 - `src/config.py` - Model assignments and configuration
 
 ---

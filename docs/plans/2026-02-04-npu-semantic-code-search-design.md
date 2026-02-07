@@ -14,7 +14,7 @@ Implement proper embedding-based semantic code search with NPU acceleration, rep
 ## Background
 
 From Issue #201 analysis:
-- Location: `src/agents/npu_code_search_agent.py`
+- Location: `autobot-user-backend/agents/npu_code_search_agent.py`
 - Current behavior: Falls back to word-matching fuzzy search when semantic search unavailable
 - Root cause: Code indexing stores metadata in Redis but doesn't generate embeddings
 - Impact: Reduced search quality and accuracy for code discovery
@@ -131,7 +131,7 @@ autobot_code_embeddings:
 
 ### Phase 3: Enhanced Code Indexing
 
-**Modify:** `src/agents/npu_code_search_agent.py`
+**Modify:** `autobot-user-backend/agents/npu_code_search_agent.py`
 
 Enhance `_index_file()` to generate and store embeddings:
 
@@ -284,7 +284,7 @@ async def _should_reindex_element(
 | File | Action | Lines Est. |
 |------|--------|------------|
 | `src/code_embedding_generator.py` | CREATE | ~200 |
-| `src/agents/npu_code_search_agent.py` | MODIFY | ~150 |
+| `autobot-user-backend/agents/npu_code_search_agent.py` | MODIFY | ~150 |
 | `src/npu_semantic_search.py` | MODIFY | ~80 |
 | `tests/test_code_semantic_search.py` | CREATE | ~150 |
 

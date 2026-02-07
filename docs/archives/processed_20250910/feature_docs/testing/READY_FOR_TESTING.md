@@ -68,8 +68,8 @@ AutoBot: "Port Scanner, Sniffing Software, Password Cracking Tools, Reconnaissan
 
 ### **Backend Components:**
 - ✅ **Enhanced Orchestrator** (`src/orchestrator.py`) - Request classification & workflow planning
-- ✅ **Workflow API** (`backend/api/workflow.py`) - 7 endpoints for workflow management
-- ✅ **Research Agent** (`src/agents/research_agent.py`) - Tool discovery & installation guides
+- ✅ **Workflow API** (`autobot-user-backend/api/workflow.py`) - 7 endpoints for workflow management
+- ✅ **Research Agent** (`autobot-user-backend/agents/research_agent.py`) - Tool discovery & installation guides
 - ✅ **Agent Registry** - Multi-agent coordination system
 
 ### **Frontend Components:**

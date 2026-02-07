@@ -293,8 +293,8 @@ GET /api/analytics/code/reuse-opportunities
 ## 🛠️ Integration Points
 
 ### Extends Existing Systems
-- `backend/api/codebase_analytics.py` - Adds vectorization triggers
-- `backend/api/analytics.py` - Adds new endpoints
+- `autobot-user-backend/api/codebase_analytics.py` - Adds vectorization triggers
+- `autobot-user-backend/api/analytics.py` - Adds new endpoints
 - Frontend router - Adds analytics views
 - Redis DB 11 - Continues static analysis
 

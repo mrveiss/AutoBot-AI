@@ -26,7 +26,7 @@ Integrate the Knowledge Manager's 14,000+ vector-indexed facts into the chat sys
 - **API**: `/api/knowledge_base/search` endpoint available
 
 ### Chat System
-- **Location**: `backend/api/chat.py`
+- **Location**: `autobot-user-backend/api/chat.py`
 - **LLM**: Ollama integration (llama3.2:3b)
 - **WebSocket**: Real-time streaming responses
 - **State**: Manages conversation history
@@ -79,9 +79,9 @@ User Query → Query Analysis → Knowledge Retrieval → Context Augmentation �
    - Include source citations
 
 **File Changes:**
-- **`backend/api/chat.py`**: Add RAG pipeline before LLM call
-- **`src/agents/chat_agent.py`**: Integrate knowledge retrieval
-- **`src/agents/rag_agent.py`**: Enhanced RAG orchestration
+- **`autobot-user-backend/api/chat.py`**: Add RAG pipeline before LLM call
+- **`autobot-user-backend/agents/chat_agent.py`**: Integrate knowledge retrieval
+- **`autobot-user-backend/agents/rag_agent.py`**: Enhanced RAG orchestration
 
 **Advantages:**
 - ✅ Most accurate - uses actual stored knowledge
@@ -108,7 +108,7 @@ User Query → Agent Router → Knowledge Agent (if needed) → Response Agent �
 
 1. **Create Knowledge-Aware Agent**
    ```python
-   # src/agents/knowledge_chat_agent.py
+   # autobot-user-backend/agents/knowledge_chat_agent.py
    class KnowledgeChatAgent:
        async def should_use_knowledge(self, query: str) -> bool:
            """Determine if query needs knowledge base"""
@@ -129,9 +129,9 @@ User Query → Agent Router → Knowledge Agent (if needed) → Response Agent �
    - Other agents handle non-knowledge queries
 
 **File Changes:**
-- **`src/agents/knowledge_chat_agent.py`**: New agent
-- **`src/agents/agent_orchestrator.py`**: Route to knowledge agent
-- **`backend/api/chat.py`**: Use orchestrator
+- **`autobot-user-backend/agents/knowledge_chat_agent.py`**: New agent
+- **`autobot-user-backend/agents/agent_orchestrator.py`**: Route to knowledge agent
+- **`autobot-user-backend/api/chat.py`**: Use orchestrator
 
 **Advantages:**
 - ✅ Flexible - can combine multiple agents
@@ -150,7 +150,7 @@ User Query → Agent Router → Knowledge Agent (if needed) → Response Agent �
 **Combine RAG + Agents for optimal flexibility:**
 
 ```python
-# backend/api/chat.py - Enhanced chat endpoint
+# autobot-user-backend/api/chat.py - Enhanced chat endpoint
 
 async def chat_with_knowledge(message: str, session_id: str):
     # 1. Check if knowledge might be helpful
@@ -190,7 +190,7 @@ async def chat_with_knowledge(message: str, session_id: str):
 
 1. **Add RAG to Chat Endpoint**
    ```python
-   # File: backend/api/chat.py
+   # File: autobot-user-backend/api/chat.py
 
    @router.post("/message")
    async def chat_message(request: ChatRequest):
@@ -545,9 +545,9 @@ logger.info(
 ## Related Documentation
 
 - **Knowledge Manager Fix**: [`docs/fixes/knowledge_manager_vector_indexing_fix.md`](../fixes/knowledge_manager_vector_indexing_fix.md)
-- **Chat API**: [`backend/api/chat.py`](../../backend/api/chat.py)
+- **Chat API**: [`autobot-user-backend/api/chat.py`](../../autobot-user-backend/api/chat.py)
 - **Knowledge Base V2**: [`src/knowledge_base_v2.py`](../../src/knowledge_base_v2.py)
-- **RAG Agent**: [`src/agents/rag_agent.py`](../../src/agents/rag_agent.py)
+- **RAG Agent**: [`autobot-user-backend/agents/rag_agent.py`](../../autobot-user-backend/agents/rag_agent.py)
 
 ---
 

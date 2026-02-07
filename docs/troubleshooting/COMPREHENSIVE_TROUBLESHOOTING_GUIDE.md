@@ -454,7 +454,7 @@ curl -X POST http://127.0.0.1:8001/api/terminal/execute \
   -d '{"command": "echo test", "timeout": 10}'
 
 # 2. Check command whitelist
-grep -A 20 "COMMAND_WHITELIST" src/utils/command_security.py
+grep -A 20 "COMMAND_WHITELIST" autobot-user-backend/utils/command_security.py
 
 # 3. Verify sandbox configuration
 ls -la /tmp/autobot/sandbox/
@@ -468,7 +468,7 @@ ls -la /tmp/autobot/sandbox/
 echo "your_command" >> config/allowed_commands.txt
 
 # Or update command security configuration
-# Edit src/utils/command_security.py and add to COMMAND_WHITELIST
+# Edit autobot-user-backend/utils/command_security.py and add to COMMAND_WHITELIST
 ```
 
 #### B. Sandbox Permission Issues
@@ -778,7 +778,7 @@ echo "Weekly maintenance completed"
    # Check what's running
    docker ps
    ps aux | grep -E "(python|node|redis)"
-   
+
    # Check logs for clues
    tail -100 logs/autobot.log
    dmesg | tail -20
@@ -789,7 +789,7 @@ echo "Weekly maintenance completed"
    # Stop AutoBot services
    pkill -f "autobot"
    docker stop $(docker ps -q)
-   
+
    # Kill any hanging processes
    sudo pkill -f "python.*backend"
    sudo pkill -f "node.*vite"
@@ -800,7 +800,7 @@ echo "Weekly maintenance completed"
    # Clean temporary files
    rm -rf /tmp/autobot/*
    rm -rf /var/run/autobot/*
-   
+
    # Clean Docker
    docker system prune -f
    ```
@@ -809,7 +809,7 @@ echo "Weekly maintenance completed"
    ```bash
    # Full restart with rebuild
    bash run_autobot.sh --dev --rebuild
-   
+
    # If that fails, try minimal startup
    bash run_autobot.sh --minimal --build
    ```
@@ -818,7 +818,7 @@ echo "Weekly maintenance completed"
    ```bash
    # Check all services
    bash run_autobot.sh --status
-   
+
    # Test basic functionality
    curl http://127.0.0.1:8001/api/health
    ```

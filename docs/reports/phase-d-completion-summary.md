@@ -22,9 +22,9 @@ This report summarizes the successful completion of all Phase D feature developm
 - **Robust error recovery** at all levels
 
 **Key Files**:
-- `src/agents/llm_failsafe_agent.py` - Multi-tier failsafe implementation
-- `src/agents/json_formatter_agent.py` - Robust JSON parsing
-- `backend/api/chat.py` - Integration into chat endpoints
+- `autobot-user-backend/agents/llm_failsafe_agent.py` - Multi-tier failsafe implementation
+- `autobot-user-backend/agents/json_formatter_agent.py` - Robust JSON parsing
+- `autobot-user-backend/api/chat.py` - Integration into chat endpoints
 
 **Impact**: 100% reliability for chat responses, system will never fail to respond
 
@@ -44,10 +44,10 @@ This report summarizes the successful completion of all Phase D feature developm
   - Refactoring opportunity identification
 
 **Key Files**:
-- `src/agents/npu_code_search_agent.py` - NPU-powered search
-- `src/agents/development_speedup_agent.py` - Code analysis
-- `backend/api/code_search.py` - Search API endpoints
-- `backend/api/development_speedup.py` - Analysis API endpoints
+- `autobot-user-backend/agents/npu_code_search_agent.py` - NPU-powered search
+- `autobot-user-backend/agents/development_speedup_agent.py` - Code analysis
+- `autobot-user-backend/api/code_search.py` - Search API endpoints
+- `autobot-user-backend/api/development_speedup.py` - Analysis API endpoints
 
 **API Endpoints**:
 - `/api/code_search/` - Code searching and indexing
@@ -74,7 +74,7 @@ This report summarizes the successful completion of all Phase D feature developm
 
 **Key Files**:
 - `src/enhanced_multi_agent_orchestrator.py` - Advanced orchestration system
-- `backend/api/orchestration.py` - Orchestration API endpoints
+- `autobot-user-backend/api/orchestration.py` - Orchestration API endpoints
 - Integration in `src/orchestrator.py`
 
 **API Endpoints**:
@@ -111,7 +111,7 @@ This report summarizes the successful completion of all Phase D feature developm
 - `docker/secure-sandbox.Dockerfile` - Enhanced security container
 - `docker/security/` - Security configurations and scripts
 - `src/secure_sandbox_executor.py` - Python integration
-- `backend/api/sandbox.py` - Sandbox API endpoints
+- `autobot-user-backend/api/sandbox.py` - Sandbox API endpoints
 
 **API Endpoints**:
 - `/api/sandbox/` - Secure command execution

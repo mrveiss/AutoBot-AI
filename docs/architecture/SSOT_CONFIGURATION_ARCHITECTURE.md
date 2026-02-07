@@ -47,13 +47,13 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 | | `backend/models/settings.py` | ~389 | Pydantic AutoBotSettings | Separate validation |
 | | `backend/services/config_service.py` | ~502 | API layer for config CRUD | Wrapper complexity |
 | **Frontend** | | | | |
-| | `autobot-vue/src/config/defaults.js` | ~200 | DEFAULT_CONFIG with fallbacks | Hardcoded IPs |
-| | `autobot-vue/src/config/ServiceDiscovery.js` | ~488 | Dynamic URL resolution | Complex fallback logic |
-| | `autobot-vue/src/constants/network.ts` | ~204 | TypeScript network constants | Mirrors Python |
+| | `autobot-user-frontend/src/config/defaults.js` | ~200 | DEFAULT_CONFIG with fallbacks | Hardcoded IPs |
+| | `autobot-user-frontend/src/config/ServiceDiscovery.js` | ~488 | Dynamic URL resolution | Complex fallback logic |
+| | `autobot-user-frontend/src/constants/network.ts` | ~204 | TypeScript network constants | Mirrors Python |
 | | `vite.config.ts` | ~280 | Vite configuration | Hardcoded NETWORK_DEFAULTS |
 | **Environment Files** | | | | |
 | | `.env` / `.env.example` | ~260 | Environment variables | Multiple sources |
-| | `autobot-vue/.env.example` | ~20 | Frontend env vars | Separate from backend |
+| | `autobot-user-frontend/.env.example` | ~20 | Frontend env vars | Separate from backend |
 | | `config/config.yaml` | ~652 | Runtime configuration | Deeply nested, duplicated |
 
 ### 1.2 Key Problems Identified
@@ -63,7 +63,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 3. **Cross-Language Duplication**: Python `NetworkConstants` duplicated in TypeScript
 4. **Complex Precedence**: `config.yaml` -> `settings.json` -> environment variables
 5. **Nested Duplication**: `config.yaml` has 5+ levels of nested `unified` blocks (bug)
-6. **Environment File Fragmentation**: `.env` and `autobot-vue/.env` not synchronized
+6. **Environment File Fragmentation**: `.env` and `autobot-user-frontend/.env` not synchronized
 7. **Type Safety Gap**: Frontend defaults.js lacks TypeScript types
 8. **Hot Reload Complexity**: Multiple file watchers, unclear which triggers updates
 
@@ -97,7 +97,7 @@ This document defines the Single Source of Truth (SSOT) configuration architectu
 master-config-schema.json
     |
     +-> generate-python.py -> src/config/generated/models.py
-    +-> generate-typescript.ts -> autobot-vue/src/config/generated/types.ts
+    +-> generate-typescript.ts -> autobot-user-frontend/src/config/generated/types.ts
     +-> generate-yaml.py -> config/config.yaml.template
     +-> generate-docs.py -> docs/configuration-reference.md
 ```
@@ -480,7 +480,7 @@ config = get_config()
 ### 3.4 TypeScript Loader Implementation
 
 ```typescript
-// autobot-vue/src/config/ssot-config.ts
+// autobot-user-frontend/src/config/ssot-config.ts
 /**
  * SSOT Configuration Loader for TypeScript
  * Single source of truth - reads from Vite environment
@@ -645,7 +645,7 @@ Create a shared `.env` generation script:
 # Generates both backend and frontend .env files from master
 
 MASTER_ENV=".env"
-FRONTEND_ENV="autobot-vue/.env"
+FRONTEND_ENV="autobot-user-frontend/.env"
 
 if [[ ! -f "$MASTER_ENV" ]]; then
     echo "Error: Master .env not found. Copy from .env.example"
@@ -748,7 +748,7 @@ All configuration-related documentation must be updated during SSOT migration:
 | `docs/developer/REDIS_CLIENT_USAGE.md` | Reference SSOT for connection strings |
 | `docs/developer/INFRASTRUCTURE_DEPLOYMENT.md` | Update VM IP references |
 | `.env.example` | Complete rewrite with SSOT structure |
-| `autobot-vue/.env.example` | Auto-generated from master |
+| `autobot-user-frontend/.env.example` | Auto-generated from master |
 | `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md` | Add /api/config endpoints |
 
 **New Documentation Required**:
@@ -766,14 +766,14 @@ All configuration-related documentation must be updated during SSOT migration:
 
 **Tasks**:
 1. Create `src/config/ssot_config.py` with Pydantic models
-2. Create `autobot-vue/src/config/ssot-config.ts` with TypeScript types
+2. Create `autobot-user-frontend/src/config/ssot-config.ts` with TypeScript types
 3. Create `scripts/sync-env.sh` for environment synchronization
 4. Update `.env.example` with new canonical structure
 5. Add validation tests for both loaders
 
 **Files to Create**:
 - `/home/kali/Desktop/AutoBot/src/config/ssot_config.py`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/config/ssot-config.ts`
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/config/ssot-config.ts`
 - `/home/kali/Desktop/AutoBot/scripts/sync-env.sh`
 
 **Backward Compatibility**: Old config modules remain functional.
@@ -834,7 +834,7 @@ const host = config.vm.main;
 5. Create migration guide
 
 **Files to Deprecate**:
-- `autobot-vue/src/config/defaults.js` (merge into ssot-config.ts)
+- `autobot-user-frontend/src/config/defaults.js` (merge into ssot-config.ts)
 - `vite.config.ts` NETWORK_DEFAULTS block
 
 ---
@@ -885,7 +885,7 @@ const host = config.vm.main;
 │   ├── model_constants.py                  # UPDATED: Reads from SSOT config
 │   └── ... (other constants - derive from SSOT)
 │
-├── autobot-vue/
+├── autobot-user-frontend/
 │   ├── .env                                # AUTO-GENERATED from master .env
 │   └── src/config/
 │       ├── ssot-config.ts                  # NEW: TypeScript SSOT loader

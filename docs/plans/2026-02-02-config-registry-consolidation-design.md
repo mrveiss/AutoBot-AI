@@ -125,11 +125,11 @@ def get(cls, key: str, default=None):
 
 | File | Change |
 |------|--------|
-| `backend/api/chat_improved.py` | Import from `src.utils.request_utils` |
-| `backend/api/entity_extraction.py` | Import from `src.utils.request_utils` |
-| `backend/api/memory.py` | Import from `src.utils.request_utils` |
-| `backend/api/graph_rag.py` | Import from `src.utils.request_utils` |
-| `backend/api/security_assessment.py` | Import from `src.utils.request_utils` |
+| `autobot-user-backend/api/chat_improved.py` | Import from `src.utils.request_utils` |
+| `autobot-user-backend/api/entity_extraction.py` | Import from `src.utils.request_utils` |
+| `autobot-user-backend/api/memory.py` | Import from `src.utils.request_utils` |
+| `autobot-user-backend/api/graph_rag.py` | Import from `src.utils.request_utils` |
+| `autobot-user-backend/api/security_assessment.py` | Import from `src.utils.request_utils` |
 | `backend/utils/chat_utils.py` | Import from `src.utils.request_utils` |
 
 ### Implementation Order

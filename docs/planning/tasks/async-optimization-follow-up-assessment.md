@@ -28,7 +28,7 @@ After completing the main async conversion of `knowledge_base.py`, three follow-
 **Actual:** Only **1 real issue** found
 
 **Location of Real Issue:**
-- File: `src/agents/advanced_rag_optimizer.py:434`
+- File: `autobot-user-backend/agents/advanced_rag_optimizer.py:434`
 - Issue: Single unnecessary thread wrapper
 
 **False Positives (6 of 7):**

@@ -9,7 +9,7 @@ The original timeout issues were caused by:
 ### 1. **LLM Interface Streaming Issues** ✅ FIXED
 - **Problem**: `sock_read=10` timeout was cutting off valid Ollama streaming responses
 - **Location**: `src/llm_interface.py` lines 553, 655
-- **Fix**: 
+- **Fix**:
   - Removed `sock_read` timeout (set to `None` for unlimited streaming)
   - Increased total timeout from 15s to 300s for complex responses
   - Removed `asyncio.wait_for(read_stream(), timeout=10.0)` wrapper
@@ -33,8 +33,8 @@ The original timeout issues were caused by:
 
 ### 4. **Chat API Endpoint Timeouts** ✅ FIXED
 - **Problem**: 20-second workflow timeout in chat API
-- **Location**: `backend/api/chat.py` line 1739
-- **Fix**: 
+- **Location**: `autobot-user-backend/api/chat.py` line 1739
+- **Fix**:
   - Removed `asyncio.wait_for(workflow_task, timeout=20.0)`
   - Let workflow complete naturally
   - Maintained proper error handling
@@ -84,7 +84,7 @@ await self.knowledge_base.ainit()  # No timeout
 response = await llm_task  # No timeout
 ```
 
-### ✅ Chat API (`backend/api/chat.py`)
+### ✅ Chat API (`autobot-user-backend/api/chat.py`)
 ```python
 # BEFORE: 20-second timeout workaround
 workflow_result = await asyncio.wait_for(workflow_task, timeout=20.0)
@@ -151,7 +151,7 @@ SIMPLE WORKFLOW:
 1. **`src/llm_interface.py`** - Complete rewrite with proper async patterns
 2. **`src/simple_chat_workflow.py`** - Removed timeout workarounds
 3. **`src/knowledge_base.py`** - Natural stats collection
-4. **`backend/api/chat.py`** - Removed API timeout wrapper
+4. **`autobot-user-backend/api/chat.py`** - Removed API timeout wrapper
 
 ## Implementation Notes
 

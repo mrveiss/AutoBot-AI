@@ -18,7 +18,7 @@ Previously, AutoBot had several issues with long-running operations:
 
 ### Core Components
 
-#### 1. Long-Running Operations Framework (`src/utils/long_running_operations_framework.py`)
+#### 1. Long-Running Operations Framework (`autobot-user-backend/utils/long_running_operations_framework.py`)
 
 **Key Features:**
 - **Dynamic Timeout Profiles**: Timeouts based on operation type and estimated complexity
@@ -119,7 +119,7 @@ class OperationProgress:
     detailed_status: Dict[str, Any]
 ```
 
-#### 4. FastAPI Integration (`backend/api/long_running_operations.py`)
+#### 4. FastAPI Integration (`autobot-user-backend/api/long_running_operations.py`)
 
 **API Endpoints:**
 - `POST /api/operations/codebase/index` - Start codebase indexing

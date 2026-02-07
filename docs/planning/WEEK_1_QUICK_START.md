@@ -52,13 +52,13 @@ File: /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-d
    - See guide for complete implementations
 
 3. **Task 1.3: Health Check Integration (3 hours)**
-   - Update health check endpoint in `backend/api/system.py`
+   - Update health check endpoint in `autobot-user-backend/api/system.py`
    - Report database status and schema version
    - See guide for complete code
 
 **Files to Modify:**
 - `src/conversation_file_manager.py` - Add all initialization methods
-- `backend/api/system.py` - Update health check endpoint
+- `autobot-user-backend/api/system.py` - Update health check endpoint
 
 **Success Criteria:**
 - All 5 required tables created automatically
@@ -326,7 +326,7 @@ curl -X POST http://172.16.168.20:8001/api/files/conversation/upload \
 **Files to Modify:**
 - `src/conversation_file_manager.py` - Database initialization
 - `backend/app_factory.py` - Startup integration
-- `backend/api/system.py` - Health check
+- `autobot-user-backend/api/system.py` - Health check
 - `tests/unit/test_conversation_file_manager.py` - Unit tests (NEW)
 - `tests/distributed/test_db_initialization.py` - Integration tests (NEW)
 

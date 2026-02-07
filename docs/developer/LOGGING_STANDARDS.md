@@ -55,7 +55,7 @@ logger.error('Error occurred', error)
 
 ### Location
 
-The `createLogger` utility is defined in `autobot-vue/src/utils/debugUtils.ts`.
+The `createLogger` utility is defined in `autobot-user-frontend/autobot-user-backend/utils/debugUtils.ts`.
 
 ### Configuration
 

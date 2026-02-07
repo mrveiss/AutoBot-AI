@@ -139,8 +139,8 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `frontend-engineer`
 - **Description:** Analyze existing sticky tabs implementation in Vue components
 - **Files to Analyze:**
-  - `/autobot-vue/src/components/SettingsPanel.vue`
-  - `/autobot-vue/src/stores/useChatStore.ts`
+  - `/autobot-user-frontend/src/components/SettingsPanel.vue`
+  - `/autobot-user-frontend/src/stores/useChatStore.ts`
   - Any localStorage usage in frontend
 - **Analysis Points:**
   - How tab state is currently stored
@@ -574,9 +574,9 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
   3. Handle edge cases gracefully
   4. Provide fallback mechanisms
 - **Files to Create/Modify:**
-  - `EDIT: /autobot-vue/src/components/SettingsPanel.vue`
-  - `EDIT: /autobot-vue/src/stores/useChatStore.ts`
-  - `NEW?: /autobot-vue/src/composables/useLocalStorage.ts` (if composable approach)
+  - `EDIT: /autobot-user-frontend/src/components/SettingsPanel.vue`
+  - `EDIT: /autobot-user-frontend/src/stores/useChatStore.ts`
+  - `NEW?: /autobot-user-frontend/src/composables/useLocalStorage.ts` (if composable approach)
 - **Dependencies:** P2.1, P2.3
 - **Exit Criteria:** Implementation complete and working
 
@@ -624,8 +624,8 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `testing-engineer`
 - **Description:** Create comprehensive unit tests for localStorage utilities
 - **Test Files to Create:**
-  - `NEW: /autobot-vue/tests/unit/composables/useLocalStorage.spec.ts` (if composable)
-  - `NEW: /autobot-vue/tests/unit/stores/useChatStore.spec.ts`
+  - `NEW: /autobot-user-frontend/tests/unit/composables/useLocalStorage.spec.ts` (if composable)
+  - `NEW: /autobot-user-frontend/tests/unit/stores/useChatStore.spec.ts`
 - **Test Cases:**
   1. localStorage save/load works correctly
   2. Edge case handling (disabled, quota, corrupted data)
@@ -639,7 +639,7 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `testing-engineer`
 - **Description:** Create component tests for SettingsPanel tab persistence
 - **Test Files to Create:**
-  - `NEW: /autobot-vue/tests/component/SettingsPanel.spec.ts`
+  - `NEW: /autobot-user-frontend/tests/component/SettingsPanel.spec.ts`
 - **Test Cases:**
   1. Tab selection saves to localStorage
   2. Tab selection loads from localStorage on mount
@@ -722,7 +722,7 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Description:** Update documentation for sticky tabs feature
 - **Documentation Updates:**
   1. `/docs/features/STICKY_TABS_IMPLEMENTATION.md` - Implementation guide
-  2. `/autobot-vue/README.md` - Feature documentation
+  2. `/autobot-user-frontend/README.md` - Feature documentation
   3. `/docs/system-state.md` - Mark issue as resolved
   4. Inline code documentation
 - **Documentation Sections:**
@@ -738,7 +738,7 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `devops-engineer`
 - **Description:** Sync all frontend changes to VM1 (Frontend VM)
 - **Sync Procedure:**
-  1. Edit all files locally in `/home/kali/Desktop/AutoBot/autobot-vue/`
+  1. Edit all files locally in `/home/kali/Desktop/AutoBot/autobot-user-frontend/`
   2. Test locally if possible (but NO local dev server)
   3. Sync to Frontend VM using sync script
   4. Verify on Frontend VM (172.16.168.21:5173)
@@ -748,8 +748,8 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
   ./scripts/utilities/sync-frontend.sh
 
   # OR sync specific files
-  ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
-  ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/tests/ /home/autobot/autobot-vue/tests/
+  ./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
+  ./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/tests/ /home/autobot/autobot-user-frontend/tests/
   ```
 - **Verification:**
   1. SSH to Frontend VM: `ssh -i ~/.ssh/autobot_key autobot@172.16.168.21`
@@ -1133,7 +1133,7 @@ npm run test:performance
    - Content: Feature overview, implementation details, edge case handling, testing
 
 2. **Frontend README:**
-   - File: `/autobot-vue/README.md`
+   - File: `/autobot-user-frontend/README.md`
    - Section: Add "Sticky Tabs Feature"
    - Content: User-facing feature description, behavior, limitations
 
@@ -1147,7 +1147,7 @@ npm run test:performance
    - Content: Inline JSDoc comments explaining localStorage usage, edge case handling
 
 5. **Testing Documentation:**
-   - File: `/autobot-vue/tests/README.md`
+   - File: `/autobot-user-frontend/tests/README.md`
    - Section: Add "Sticky Tabs Testing"
    - Content: Test strategy, test cases, how to run tests
 
@@ -1246,7 +1246,7 @@ mcp__memory__add_observations --observations '[
     "entityName": "Sticky Tabs Implementation Plan 2025-10-04",
     "contents": [
       "Implementation completed 2025-10-04",
-      "Composable created: autobot-vue/src/composables/useLocalStorage.ts",
+      "Composable created: autobot-user-frontend/src/composables/useLocalStorage.ts",
       "All tests passing: Unit + Component + E2E across browsers",
       "Code review passed: frontend-engineer + performance-engineer approved",
       "Documentation updated: Feature guide + Frontend README",
@@ -1672,9 +1672,9 @@ Task(subagent_type="frontend-engineer", description="I2.1: Implement Sticky Tabs
 
 ### Frontend References
 
-- `/autobot-vue/README.md` - Frontend documentation
-- `/autobot-vue/src/components/SettingsPanel.vue` - Current sticky tabs implementation
-- `/autobot-vue/src/stores/useChatStore.ts` - Chat store with potential tab state
+- `/autobot-user-frontend/README.md` - Frontend documentation
+- `/autobot-user-frontend/src/components/SettingsPanel.vue` - Current sticky tabs implementation
+- `/autobot-user-frontend/src/stores/useChatStore.ts` - Chat store with potential tab state
 
 ---
 

@@ -251,7 +251,7 @@ redis_service_management:
 
 **Purpose:** RESTful API endpoints for service management
 
-**Location:** `/home/kali/Desktop/AutoBot/backend/api/service_management.py`
+**Location:** `/home/kali/Desktop/AutoBot/autobot-user-backend/api/service_management.py`
 
 **Endpoints:**
 
@@ -940,7 +940,7 @@ async def auto_recover(self) -> RecoveryResult:
 **New Components:**
 
 ```
-autobot-vue/src/
+autobot-user-frontend/src/
 ├── components/
 │   └── services/
 │       ├── RedisServiceControl.vue      # Main service control component
@@ -956,7 +956,7 @@ autobot-vue/src/
 
 **Purpose:** Main UI for Redis service management
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/components/services/RedisServiceControl.vue`
+**Location:** `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/components/services/RedisServiceControl.vue`
 
 **Features:**
 - Real-time service status display
@@ -1358,7 +1358,7 @@ const formatUptime = (seconds) => {
 
 **Purpose:** Reusable service management logic
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/composables/useServiceManagement.js`
+**Location:** `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/composables/useServiceManagement.js`
 
 ```javascript
 import { ref, onMounted, onUnmounted } from 'vue';
@@ -2059,7 +2059,7 @@ class RedisDegradationHandler:
 
 **Deliverables:**
 1. `backend/services/redis_service_manager.py` - Core service implementation
-2. `backend/api/service_management.py` - API router with endpoints
+2. `autobot-user-backend/api/service_management.py` - API router with endpoints
 3. Health check integration with ConsolidatedHealthService
 4. Unit tests for service manager
 
@@ -2103,9 +2103,9 @@ class RedisDegradationHandler:
 - Create confirmation dialogs for destructive operations
 
 **Deliverables:**
-1. `autobot-vue/src/components/services/RedisServiceControl.vue`
-2. `autobot-vue/src/composables/useServiceManagement.js`
-3. `autobot-vue/src/services/RedisServiceAPI.js`
+1. `autobot-user-frontend/src/components/services/RedisServiceControl.vue`
+2. `autobot-user-frontend/src/composables/useServiceManagement.js`
+3. `autobot-user-frontend/src/services/RedisServiceAPI.js`
 4. WebSocket integration for real-time updates
 5. UI/UX testing and refinement
 

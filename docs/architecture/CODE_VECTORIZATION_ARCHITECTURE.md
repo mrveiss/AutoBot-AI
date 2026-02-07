@@ -67,9 +67,9 @@ This document outlines the architecture for a comprehensive code vectorization a
     "document": "code_snippet",  # The actual code
     "metadata": {
         # File Information
-        "file_path": "backend/api/analytics.py",
+        "file_path": "autobot-user-backend/api/analytics.py",
         "file_type": "python",  # python|javascript|vue
-        "project_relative_path": "backend/api/analytics.py",
+        "project_relative_path": "autobot-user-backend/api/analytics.py",
 
         # Code Location
         "line_start": 45,
@@ -207,14 +207,14 @@ This document outlines the architecture for a comprehensive code vectorization a
                 "pattern_type": "error_handling",
                 "instances": [
                     {
-                        "file": "backend/api/chat.py",
+                        "file": "autobot-user-backend/api/chat.py",
                         "function": "handle_error",
                         "lines": "45-67",
                         "snippet": "...",
                         "complexity": 5
                     },
                     {
-                        "file": "backend/api/files.py",
+                        "file": "autobot-user-backend/api/files.py",
                         "function": "process_error",
                         "lines": "123-145",
                         "snippet": "...",
@@ -233,7 +233,7 @@ This document outlines the architecture for a comprehensive code vectorization a
             "total_duplicate_groups": 23,
             "total_duplicate_lines": 1456,
             "potential_loc_reduction": 890,
-            "highest_duplication_file": "backend/api/chat.py"
+            "highest_duplication_file": "autobot-user-backend/api/chat.py"
         }
     }
 }
@@ -279,7 +279,7 @@ This document outlines the architecture for a comprehensive code vectorization a
             {
                 "pattern": "Redis connection initialization",
                 "occurrences": 12,
-                "files_affected": ["backend/api/chat.py", "backend/api/files.py", ...],
+                "files_affected": ["autobot-user-backend/api/chat.py", "autobot-user-backend/api/files.py", ...],
                 "current_loc": 340,
                 "potential_reduction": 280,
                 "suggested_utility": {
@@ -309,7 +309,7 @@ This document outlines the architecture for a comprehensive code vectorization a
         "insights": {
             "complexity_hotspots": [
                 {
-                    "file": "backend/api/chat.py",
+                    "file": "autobot-user-backend/api/chat.py",
                     "function": "process_complex_request",
                     "cyclomatic_complexity": 25,
                     "recommendation": "Consider breaking into smaller functions"
@@ -527,7 +527,7 @@ graph TD
 ## Implementation Phases
 
 ### Phase 1: Foundation (Week 1-2)
-1. Create `backend/api/code_vectorization.py`
+1. Create `autobot-user-backend/api/code_vectorization.py`
 2. Implement basic code parser for Python
 3. Set up ChromaDB collection for code
 4. Integrate with existing `codebase_analytics.py`

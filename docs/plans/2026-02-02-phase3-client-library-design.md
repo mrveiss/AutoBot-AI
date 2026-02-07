@@ -75,7 +75,7 @@ async def discover_service(service_name: str) -> str:
 
 ### 1.2 TypeScript Client (Frontend)
 
-Add to `autobot-vue/src/config/ssot-config.ts`:
+Add to `autobot-user-frontend/src/config/ssot-config.ts`:
 
 ```typescript
 interface DiscoveredService {
@@ -131,7 +131,7 @@ export async function discoverService(
 
 ### 2.1 Current System (Local)
 
-- 29 agents defined in `backend/api/agent_config.py`
+- 29 agents defined in `autobot-user-backend/api/agent_config.py`
 - Stored in `unified_config_manager` (local YAML)
 - Tiered models: TIER_1 through TIER_4
 
@@ -148,7 +148,7 @@ export async function discoverService(
    - Insert into SLM `agents` table
    - Map tiered models to LLM config
 
-2. **Update Backend API**: Modify `backend/api/agent_config.py`
+2. **Update Backend API**: Modify `autobot-user-backend/api/agent_config.py`
    - Replace `unified_config_manager` calls with SLM client
    - Use `get_agent_config(agent_id)` from `slm_client.py`
    - Keep local as temporary fallback
@@ -205,7 +205,7 @@ DEFAULT_AGENT_CONFIGS (seed data)
 - [x] Resolve merge conflicts in slm-server
 - [ ] Add service discovery to Python SLM client
 - [ ] Create agent seed migration script
-- [ ] Update `backend/api/agent_config.py` to use SLM
+- [ ] Update `autobot-user-backend/api/agent_config.py` to use SLM
 - [ ] Add TypeScript discovery functions
 - [ ] Create Vue composable for reactive discovery
 - [ ] Update GitHub issue with progress
@@ -223,9 +223,9 @@ DEFAULT_AGENT_CONFIGS (seed data)
 |------|---------|
 | `backend/services/slm_client.py` | Add `ServiceDiscoveryCache`, `discover_service()` |
 | `slm-server/migrations/seed_agents.py` | New: Seed agents from DEFAULT_AGENT_CONFIGS |
-| `backend/api/agent_config.py` | Use SLM client instead of unified_config_manager |
-| `autobot-vue/src/config/ssot-config.ts` | Add `discoverService()` |
-| `autobot-vue/src/composables/useServiceDiscovery.ts` | New: Vue composable |
+| `autobot-user-backend/api/agent_config.py` | Use SLM client instead of unified_config_manager |
+| `autobot-user-frontend/src/config/ssot-config.ts` | Add `discoverService()` |
+| `autobot-user-frontend/src/composables/useServiceDiscovery.ts` | New: Vue composable |
 
 ---
 

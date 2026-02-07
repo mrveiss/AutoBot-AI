@@ -63,7 +63,7 @@ subtask_relationships (
 **Usage Example**:
 ```python
 async with task_tracker.track_task(
-    "Agent Communication", 
+    "Agent Communication",
     "Process user query with chat agent"
 ) as task_context:
     result = await chat_agent.process(user_query)
@@ -105,7 +105,7 @@ markdown_sections (
 )
 ```
 
-### 4. Enhanced Memory API (`backend/api/enhanced_memory.py`)
+### 4. Enhanced Memory API (`autobot-user-backend/api/enhanced_memory.py`)
 
 **Purpose**: RESTful API endpoints for memory system interaction and management.
 
@@ -180,7 +180,7 @@ from src.task_execution_tracker import task_tracker
 class EnhancedOrchestrator(Orchestrator):
     async def execute_task(self, task_name: str, inputs: Dict):
         async with task_tracker.track_task(
-            task_name, 
+            task_name,
             f"Execute {task_name} with orchestrator",
             agent_type="orchestrator",
             inputs=inputs
@@ -206,13 +206,13 @@ class MemoryAwareAgent(BaseAgent):
             inputs={"request": request}
         ) as task_context:
             response = await self._internal_process(request)
-            
+
             # Add relevant documentation
             if "installation" in request.lower():
                 task_context.add_markdown_reference(
                     "docs/user_guide/01-installation.md"
                 )
-            
+
             task_context.set_outputs({"response": response})
             return response
 ```
@@ -227,18 +227,18 @@ class EnhancedKnowledgeBase(KnowledgeBase):
         super().__init__()
         self.memory_manager = EnhancedMemoryManager()
         self.markdown_system = MarkdownReferenceSystem(self.memory_manager)
-    
+
     async def add_document(self, content: str, metadata: Dict):
         # Store in existing ChromaDB
         doc_id = await super().add_document(content, metadata)
-        
+
         # Also create memory record
         if metadata.get("source_file"):
             self.markdown_system.add_markdown_reference(
                 task_id=metadata.get("task_id"),
                 markdown_file_path=metadata["source_file"]
             )
-        
+
         return doc_id
 ```
 
@@ -337,7 +337,7 @@ async def test_full_memory_workflow():
     async with task_tracker.track_task("Test Task", "Integration test") as task:
         task.add_markdown_reference("docs/testing/README.md")
         task.set_outputs({"result": "success"})
-    
+
     # Verify task was recorded
     history = task_tracker.get_task_history(limit=1)
     assert len(history) == 1

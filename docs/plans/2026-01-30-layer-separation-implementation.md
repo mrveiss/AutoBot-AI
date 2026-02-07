@@ -66,10 +66,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 1.2: Delete backend/api/slm/ folder
+### Task 1.2: Delete autobot-user-backend/api/slm/ folder
 
 **Files:**
-- Delete: `backend/api/slm/` (entire folder)
+- Delete: `autobot-user-backend/api/slm/` (entire folder)
 
 **Step 1: Check router registration**
 
@@ -87,7 +87,7 @@ Edit `backend/initialization/router_registry/core_routers.py` or similar - remov
 
 Run:
 ```bash
-rm -rf backend/api/slm/
+rm -rf autobot-user-backend/api/slm/
 ```
 
 **Step 4: Commit**
@@ -191,10 +191,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 3.1: Delete infrastructure API files
 
 **Files:**
-- Delete: `backend/api/infrastructure.py`
-- Delete: `backend/api/infrastructure_hosts.py`
-- Delete: `backend/api/infrastructure_nodes.py`
-- Delete: `backend/api/infrastructure_monitor.py`
+- Delete: `autobot-user-backend/api/infrastructure.py`
+- Delete: `autobot-user-backend/api/infrastructure_hosts.py`
+- Delete: `autobot-user-backend/api/infrastructure_nodes.py`
+- Delete: `autobot-user-backend/api/infrastructure_monitor.py`
 
 **Step 1: Check router registration**
 
@@ -211,10 +211,10 @@ Edit the router registry files to remove infrastructure router imports and regis
 
 Run:
 ```bash
-rm -f backend/api/infrastructure.py
-rm -f backend/api/infrastructure_hosts.py
-rm -f backend/api/infrastructure_nodes.py
-rm -f backend/api/infrastructure_monitor.py
+rm -f autobot-user-backend/api/infrastructure.py
+rm -f autobot-user-backend/api/infrastructure_hosts.py
+rm -f autobot-user-backend/api/infrastructure_nodes.py
+rm -f autobot-user-backend/api/infrastructure_monitor.py
 ```
 
 **Step 4: Commit**
@@ -281,10 +281,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 4.1: Delete infrastructure monitoring
 
 **Files:**
-- Delete: `backend/api/monitoring_hardware.py`
-- Delete: `backend/api/monitoring_alerts.py`
-- Delete: `backend/api/service_monitor.py`
-- Delete: `backend/api/phase9_monitoring.py`
+- Delete: `autobot-user-backend/api/monitoring_hardware.py`
+- Delete: `autobot-user-backend/api/monitoring_alerts.py`
+- Delete: `autobot-user-backend/api/service_monitor.py`
+- Delete: `autobot-user-backend/api/phase9_monitoring.py`
 - Delete: `backend/services/consolidated_health_service.py`
 
 **Step 1: Check router registrations**
@@ -300,10 +300,10 @@ grep -rn "monitoring_hardware\|monitoring_alerts\|service_monitor\|phase9_monito
 
 Run:
 ```bash
-rm -f backend/api/monitoring_hardware.py
-rm -f backend/api/monitoring_alerts.py
-rm -f backend/api/service_monitor.py
-rm -f backend/api/phase9_monitoring.py
+rm -f autobot-user-backend/api/monitoring_hardware.py
+rm -f autobot-user-backend/api/monitoring_alerts.py
+rm -f autobot-user-backend/api/service_monitor.py
+rm -f autobot-user-backend/api/phase9_monitoring.py
 rm -f backend/services/consolidated_health_service.py
 ```
 
@@ -321,10 +321,10 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 4.2: Review and clean backend/api/monitoring.py
+### Task 4.2: Review and clean autobot-user-backend/api/monitoring.py
 
 **Files:**
-- Modify: `backend/api/monitoring.py`
+- Modify: `autobot-user-backend/api/monitoring.py`
 
 **Step 1: Read the file**
 
@@ -339,7 +339,7 @@ Keep only application-level monitoring (chat performance, agent metrics, etc.)
 **Step 3: Commit**
 
 ```bash
-git add backend/api/monitoring.py
+git add autobot-user-backend/api/monitoring.py
 git commit -m "refactor(backend): clean monitoring.py - keep only app metrics
 
 Removed infrastructure monitoring endpoints. Application metrics remain.
@@ -355,7 +355,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 5.1: Delete VM services
 
 **Files:**
-- Delete: `backend/api/vm_services.py`
+- Delete: `autobot-user-backend/api/vm_services.py`
 - Delete: `backend/services/vm_service_registry.py`
 
 **Step 1: Check dependencies and remove**
@@ -369,7 +369,7 @@ grep -rn "vm_services\|vm_service_registry" backend/ --include="*.py"
 
 Run:
 ```bash
-rm -f backend/api/vm_services.py
+rm -f autobot-user-backend/api/vm_services.py
 rm -f backend/services/vm_service_registry.py
 ```
 
@@ -390,9 +390,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 5.2: Clean up terminal handlers
 
 **Files:**
-- Review: `backend/api/terminal.py`
-- Review: `backend/api/ssh_terminal_handlers.py`
-- Review: `backend/api/agent_terminal.py`
+- Review: `autobot-user-backend/api/terminal.py`
+- Review: `autobot-user-backend/api/ssh_terminal_handlers.py`
+- Review: `autobot-user-backend/api/agent_terminal.py`
 
 **Step 1: Analyze terminal code**
 
@@ -423,7 +423,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 6.1: Remove infrastructure routes from router
 
 **Files:**
-- Modify: `autobot-vue/src/router/index.ts`
+- Modify: `autobot-user-frontend/src/router/index.ts`
 
 **Step 1: Remove route imports**
 
@@ -456,7 +456,7 @@ Keep only:
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/router/index.ts
+git add autobot-user-frontend/src/router/index.ts
 git commit -m "refactor(frontend): remove infrastructure routes from autobot-vue
 
 Routes moved to slm-admin. autobot-vue now business-only.
@@ -470,42 +470,42 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 6.2: Remove infrastructure components
 
 **Files:**
-- Delete: `autobot-vue/src/views/ToolsView.vue`
-- Delete: `autobot-vue/src/views/MonitoringView.vue`
-- Delete: `autobot-vue/src/views/SettingsView.vue`
-- Delete: `autobot-vue/src/views/InfrastructureManager.vue`
-- Delete: `autobot-vue/src/views/SecretsView.vue`
-- Delete: `autobot-vue/src/views/TLSCertificatesView.vue`
-- Delete: `autobot-vue/src/components/settings/` (entire folder)
-- Delete: `autobot-vue/src/components/infrastructure/` (entire folder)
-- Delete: `autobot-vue/src/composables/useInfrastructure.ts`
+- Delete: `autobot-user-frontend/src/views/ToolsView.vue`
+- Delete: `autobot-user-frontend/src/views/MonitoringView.vue`
+- Delete: `autobot-user-frontend/src/views/SettingsView.vue`
+- Delete: `autobot-user-frontend/src/views/InfrastructureManager.vue`
+- Delete: `autobot-user-frontend/src/views/SecretsView.vue`
+- Delete: `autobot-user-frontend/src/views/TLSCertificatesView.vue`
+- Delete: `autobot-user-frontend/src/components/settings/` (entire folder)
+- Delete: `autobot-user-frontend/src/components/infrastructure/` (entire folder)
+- Delete: `autobot-user-frontend/src/composables/useInfrastructure.ts`
 
 **Step 1: Delete view files**
 
 Run:
 ```bash
-rm -f autobot-vue/src/views/ToolsView.vue
-rm -f autobot-vue/src/views/MonitoringView.vue
-rm -f autobot-vue/src/views/SettingsView.vue
-rm -f autobot-vue/src/views/InfrastructureManager.vue
-rm -f autobot-vue/src/views/SecretsView.vue
-rm -f autobot-vue/src/views/TLSCertificatesView.vue
+rm -f autobot-user-frontend/src/views/ToolsView.vue
+rm -f autobot-user-frontend/src/views/MonitoringView.vue
+rm -f autobot-user-frontend/src/views/SettingsView.vue
+rm -f autobot-user-frontend/src/views/InfrastructureManager.vue
+rm -f autobot-user-frontend/src/views/SecretsView.vue
+rm -f autobot-user-frontend/src/views/TLSCertificatesView.vue
 ```
 
 **Step 2: Delete component folders**
 
 Run:
 ```bash
-rm -rf autobot-vue/src/components/settings/
-rm -rf autobot-vue/src/components/infrastructure/
-rm -rf autobot-vue/src/components/monitoring/
+rm -rf autobot-user-frontend/src/components/settings/
+rm -rf autobot-user-frontend/src/components/infrastructure/
+rm -rf autobot-user-frontend/src/components/monitoring/
 ```
 
 **Step 3: Delete composables**
 
 Run:
 ```bash
-rm -f autobot-vue/src/composables/useInfrastructure.ts
+rm -f autobot-user-frontend/src/composables/useInfrastructure.ts
 ```
 
 **Step 4: Commit**
@@ -525,7 +525,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ### Task 6.3: Update App.vue navigation
 
 **Files:**
-- Modify: `autobot-vue/src/App.vue`
+- Modify: `autobot-user-frontend/src/App.vue`
 
 **Step 1: Remove infrastructure nav items**
 
@@ -542,7 +542,7 @@ Add a link/button to open slm-admin for infrastructure management.
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/App.vue
+git add autobot-user-frontend/src/App.vue
 git commit -m "refactor(frontend): update App.vue navigation
 
 Removed infrastructure nav items. Added link to SLM Admin.
@@ -698,8 +698,8 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 - [ ] `grep -r "ansible" backend/` returns nothing (except comments)
 - [ ] `grep -r "ssh_connection" backend/` returns nothing
 - [ ] `backend/services/slm/` folder does not exist
-- [ ] `backend/api/slm/` folder does not exist
-- [ ] `backend/api/infrastructure*.py` files do not exist
+- [ ] `autobot-user-backend/api/slm/` folder does not exist
+- [ ] `autobot-user-backend/api/infrastructure*.py` files do not exist
 - [ ] `autobot-vue` has only 4 main routes: chat, knowledge, automation, analytics
 - [ ] `slm-admin` has TLS and Secrets management
 - [ ] Backend starts without import errors

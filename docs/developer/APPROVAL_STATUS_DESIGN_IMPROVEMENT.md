@@ -126,8 +126,8 @@ After all reads are migrated, remove `pending_approval` field.
 Files that need updates:
 1. `backend/services/agent_terminal_service.py` - Main approval logic
 2. `src/chat_workflow_manager.py` - Approval polling
-3. `backend/api/agent.py` - API endpoints
-4. `autobot-vue/src/components/chat/ChatMessages.vue` - Frontend approval UI
+3. `autobot-user-backend/api/agent.py` - API endpoints
+4. `autobot-user-frontend/src/components/chat/ChatMessages.vue` - Frontend approval UI
 
 ## Related Issues
 

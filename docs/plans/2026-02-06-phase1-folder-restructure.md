@@ -98,10 +98,10 @@ Phase 1, Task 1: Create base directories for reorganization.
 
 **Files:**
 
-- Copy: `src/utils/redis_client.py` to `autobot-shared/redis_client.py`
-- Copy: `src/utils/http_client.py` to `autobot-shared/http_client.py`
-- Copy: `src/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
-- Copy: `src/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
+- Copy: `autobot-user-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
+- Copy: `autobot-user-backend/utils/http_client.py` to `autobot-shared/http_client.py`
+- Copy: `autobot-user-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
+- Copy: `autobot-user-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
 - Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
 - Create: `autobot-shared/__init__.py`
 - Create: `autobot-shared/requirements.txt`
@@ -110,10 +110,10 @@ Phase 1, Task 1: Create base directories for reorganization.
 **Step 1: Copy shared utility files**
 
 ```bash
-cp src/utils/redis_client.py autobot-shared/
-cp src/utils/http_client.py autobot-shared/
-cp src/utils/logging_manager.py autobot-shared/
-cp src/utils/error_boundaries.py autobot-shared/
+cp autobot-user-backend/utils/redis_client.py autobot-shared/
+cp autobot-user-backend/utils/http_client.py autobot-shared/
+cp autobot-user-backend/utils/logging_manager.py autobot-shared/
+cp autobot-user-backend/utils/error_boundaries.py autobot-shared/
 cp src/config/ssot_config.py autobot-shared/
 ```
 
@@ -279,12 +279,12 @@ Phase 1, Task 4: Populate autobot-slm-frontend.
 
 **Files:**
 
-- Copy: `autobot-vue/*` to `autobot-user-frontend/`
+- Copy: `autobot-user-frontend/*` to `autobot-user-frontend/`
 
 **Step 1: Copy autobot-vue contents**
 
 ```bash
-rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='logs/' --exclude='test-results/' autobot-vue/ autobot-user-frontend/
+rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='logs/' --exclude='test-results/' autobot-user-frontend/ autobot-user-frontend/
 ```
 
 **Step 2: Update README with deployment target**
@@ -317,7 +317,7 @@ git add autobot-user-frontend/
 git commit -m "chore(user-frontend): copy user frontend to autobot-user-frontend/ (#781)
 
 Phase 1, Task 5: Populate autobot-user-frontend.
-- Copied autobot-vue/ contents
+- Copied autobot-user-frontend/ contents
 - Updated README with deployment target"
 ```
 
@@ -345,7 +345,7 @@ rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='config/ssot_confi
 **Step 2: Copy backend/ contents (API layer)**
 
 ```bash
-rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='tests/' backend/api/ autobot-user-backend/api/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='tests/' autobot-user-backend/api/ autobot-user-autobot-user-backend/api/
 rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/services/ autobot-user-backend/services/
 rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/models/ autobot-user-backend/models/
 rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/middleware/ autobot-user-backend/middleware/
@@ -456,7 +456,7 @@ Phase 1, Task 6: Populate autobot-user-backend.
 **Files:**
 
 - Copy: `docker/` to `infrastructure/docker/`
-- Copy: `scripts/` to `infrastructure/scripts/`
+- Copy: `scripts/` to `infrastructure/shared/scripts/`
 - Copy: `config/` to `infrastructure/config/`
 - Copy: `certs/` to `infrastructure/certs/`
 - Copy: `tests/` to `infrastructure/tests/`
@@ -660,7 +660,7 @@ echo "infrastructure: $(find infrastructure -type f | wc -l) files"
 
 ```bash
 echo "=== Original directories still exist ==="
-ls -d src/ backend/ slm-server/ slm-admin/ autobot-vue/ scripts/ docker/ tests/ 2>/dev/null && echo "All original directories intact"
+ls -d src/ backend/ slm-server/ slm-admin/ autobot-user-frontend/ scripts/ docker/ tests/ 2>/dev/null && echo "All original directories intact"
 ```
 
 **Step 4: Update GitHub issue with progress**

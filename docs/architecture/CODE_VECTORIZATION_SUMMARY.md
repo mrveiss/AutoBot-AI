@@ -82,7 +82,7 @@ Frontend (Vue.js) ←→ Backend API (FastAPI) ←→ Storage Layer
     "embedding": [768-dimensional vector],
     "document": "code_snippet",
     "metadata": {
-        "file_path": "backend/api/chat.py",
+        "file_path": "autobot-user-backend/api/chat.py",
         "code_type": "function",
         "name": "handle_message",
         "cyclomatic_complexity": 8,

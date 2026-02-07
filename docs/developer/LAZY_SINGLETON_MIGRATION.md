@@ -18,7 +18,7 @@ We've created a standardized utility (`lazy_singleton.py`) that eliminates **10-
 
 All lazy initialization getters in API files follow this pattern:
 
-**Example from `backend/api/chat.py:66-79`:**
+**Example from `autobot-user-backend/api/chat.py:66-79`:**
 ```python
 def get_chat_history_manager(request):
     """Lazy-initialize chat history manager on app state"""
@@ -34,7 +34,7 @@ def get_chat_history_manager(request):
     return manager
 ```
 
-**Example from `backend/api/chat.py:92-105`:**
+**Example from `autobot-user-backend/api/chat.py:92-105`:**
 ```python
 def get_llm_service(request):
     """Lazy-initialize LLM service on app state"""
@@ -82,7 +82,7 @@ def get_llm_service(request):
 
 ### Example 1: Simple Pattern (ChatHistoryManager)
 
-**BEFORE** (`backend/api/chat.py:66-79` - 14 lines):
+**BEFORE** (`autobot-user-backend/api/chat.py:66-79` - 14 lines):
 ```python
 def get_chat_history_manager(request):
     """Lazy-initialize chat history manager on app state"""
@@ -414,18 +414,18 @@ For each file you migrate:
 
 | File | Function | Lines Saved |
 |------|----------|-------------|
-| `backend/api/chat.py:66` | `get_chat_history_manager()` | ~11 lines |
-| `backend/api/chat.py:92` | `get_llm_service()` | ~11 lines |
-| `backend/api/chat.py:120` | `get_knowledge_base()` | ~11 lines |
-| `backend/api/chat.py:145` | `get_rag_service()` | ~11 lines |
-| `backend/api/intelligence.py:45` | `get_intelligent_agent()` | ~11 lines |
-| `backend/api/tools.py:38` | `get_tool_manager()` | ~11 lines |
+| `autobot-user-backend/api/chat.py:66` | `get_chat_history_manager()` | ~11 lines |
+| `autobot-user-backend/api/chat.py:92` | `get_llm_service()` | ~11 lines |
+| `autobot-user-backend/api/chat.py:120` | `get_knowledge_base()` | ~11 lines |
+| `autobot-user-backend/api/chat.py:145` | `get_rag_service()` | ~11 lines |
+| `autobot-user-backend/api/intelligence.py:45` | `get_intelligent_agent()` | ~11 lines |
+| `autobot-user-backend/api/tools.py:38` | `get_tool_manager()` | ~11 lines |
 
 ### Priority 2 - Additional API Files
 
-- `backend/api/memory.py` - Memory-related getters
-- `backend/api/workflow.py` - Workflow getters
-- `backend/api/agents.py` - Agent management getters
+- `autobot-user-backend/api/memory.py` - Memory-related getters
+- `autobot-user-backend/api/workflow.py` - Workflow getters
+- `autobot-user-backend/api/agents.py` - Agent management getters
 - 5+ more API files with similar patterns
 
 **Total Estimated Savings**: 100-150 lines across 10+ files
@@ -605,7 +605,7 @@ def get_cli_service():
 ## Support
 
 **Questions?** See:
-- `src/utils/lazy_singleton.py` - Utility implementation
+- `autobot-user-backend/utils/lazy_singleton.py` - Utility implementation
 - `tests/test_lazy_singleton.py` - Comprehensive tests (25 tests)
 - `CLAUDE.md` - Initialization patterns section
 

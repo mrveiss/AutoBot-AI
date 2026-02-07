@@ -39,7 +39,7 @@
 
 ### ✅ Phase P1: Redis Managers (COMPLETE)
 
-**Consolidated**: 5 Redis managers → 1 canonical `src/utils/redis_client.py`
+**Consolidated**: 5 Redis managers → 1 canonical `autobot-user-backend/utils/redis_client.py`
 
 **Archived**:
 - `async_redis_manager.py`
@@ -164,11 +164,11 @@
 
 **Src Files (3/3)**:
 - `src/project_state_manager.py`
-- `src/agents/research_agent.py`
-- `src/utils/system_context.py`
+- `autobot-user-backend/agents/research_agent.py`
+- `autobot-user-backend/utils/system_context.py`
 
 **Benefits**:
-- Single configuration point (`src/utils/logging_manager.py`)
+- Single configuration point (`autobot-user-backend/utils/logging_manager.py`)
 - Category-based loggers (backend, frontend, llm, debug, audit)
 - Automatic log rotation (10MB max, 5 backups)
 - Environment-based config (AUTOBOT_LOG_LEVEL, AUTOBOT_LOGS_DIR)

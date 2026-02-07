@@ -28,12 +28,12 @@ AutoBot/
 │       │   └── session_service.py (NEW - session management)
 │       └── middleware/
 │           └── rate_limit.py (NEW - rate limiting)
-├── backend/api/
+├── autobot-user-backend/api/
 │   └── user_management/
 │       └── users.py (EXISTS - use /api/users/{user_id}/change-password)
 ├── shared-components/ (NEW DIRECTORY)
 │   └── PasswordChangeForm.vue (NEW - shared Vue component)
-├── autobot-vue/src/
+├── autobot-user-frontend/src/
 │   └── components/
 │       └── profile/
 │           └── ProfileModal.vue (NEW - profile settings with password change)
@@ -384,7 +384,7 @@ function resetForm() {
 
 ### AutoBot Vue Integration
 
-**ProfileModal.vue** (`autobot-vue/src/components/profile/ProfileModal.vue`):
+**ProfileModal.vue** (`autobot-user-frontend/src/components/profile/ProfileModal.vue`):
 
 ```vue
 <template>
@@ -501,7 +501,7 @@ Rate Limit Middleware
   │      Otherwise: Return 429 with retry_after
   │
   ▼
-Users API Endpoint (backend/api/user_management/users.py)
+Users API Endpoint (autobot-user-backend/api/user_management/users.py)
   │
   ├─► 6. Call UserService.change_password()
   │

@@ -29,7 +29,7 @@
 
 ### Backend API Layer (4 files - 132K)
 
-#### 1. `backend/api/chat.py` (55K) ⚠️ LARGE
+#### 1. `autobot-user-backend/api/chat.py` (55K) ⚠️ LARGE
 **Purpose**: Main chat API endpoints
 **Imports**:
 - chat_workflow_manager (conditional import)
@@ -38,7 +38,7 @@
 **Assessment**: Primary chat API, heavily used
 **Concerns**: 55K is very large for a single API file
 
-#### 2. `backend/api/chat_enhanced.py` (25K)
+#### 2. `autobot-user-backend/api/chat_enhanced.py` (25K)
 **Purpose**: Enhanced chat features API
 **Imports**:
 - FastAPI, AIStackClient
@@ -46,7 +46,7 @@
 **Assessment**: Separate endpoint for enhanced features
 **Question**: What's "enhanced" vs regular chat?
 
-#### 3. `backend/api/chat_knowledge.py` (27K)
+#### 3. `autobot-user-backend/api/chat_knowledge.py` (27K)
 **Purpose**: Chat with knowledge base integration
 **Imports**:
 - chat_history_manager
@@ -54,7 +54,7 @@
 **Assessment**: Specialized endpoint for KB-enhanced chat
 **Rationale**: May be legitimate API separation
 
-#### 4. `backend/api/conversation_files.py` (25K)
+#### 4. `autobot-user-backend/api/conversation_files.py` (25K)
 **Purpose**: Conversation file management API
 **Imports**: conversation_file_manager (likely)
 **Assessment**: File operations for conversations
@@ -64,7 +64,7 @@
 
 #### 1. `src/chat_workflow_manager.py` (68K) ⚠️ VERY LARGE
 **Imports**: 5 files import this
-- backend/api/chat.py
+- autobot-user-backend/api/chat.py
 - backend/app_factory_enhanced.py
 - backend/app_factory.py
 - backend/services/agent_terminal_service.py
@@ -222,7 +222,7 @@
 
 **Steps**:
 1. Review unified_chat_service.py implementation
-2. Migrate backend/api/chat*.py to use it
+2. Migrate autobot-user-backend/api/chat*.py to use it
 3. Migrate workflow managers to use it
 4. Update all 13+ files importing chat_history_manager
 5. Extensive testing (chat is critical functionality)
@@ -304,7 +304,7 @@
 
 **Method**:
 ```bash
-grep "@router\|@app" backend/api/chat*.py
+grep "@router\|@app" autobot-user-backend/api/chat*.py
 ```
 
 ### 2. Active vs Obsolete File Analysis
@@ -386,7 +386,7 @@ grep -r "from src.FILENAME import" backend/ src/
 **If analysis shows files are too large but not duplicative**:
 1. Split chat_workflow_manager.py (68K) into focused modules
 2. Split chat_history_manager.py (66K) into focused modules
-3. Split backend/api/chat.py (55K) into multiple routers
+3. Split autobot-user-backend/api/chat.py (55K) into multiple routers
 4. Update imports systematically
 5. Comprehensive testing
 
@@ -959,8 +959,8 @@ Data Managers (chat_history_manager) → Storage (Redis/SQLite)
 10. `log_chat_event()` - Event logging for monitoring
 
 **Files Modified**:
-- `backend/api/chat.py`: -82 lines (removed 7 duplicate functions)
-- `backend/api/chat_enhanced.py`: -70 lines (removed 7 duplicate functions)
+- `autobot-user-backend/api/chat.py`: -82 lines (removed 7 duplicate functions)
+- `autobot-user-backend/api/chat_enhanced.py`: -70 lines (removed 7 duplicate functions)
 
 **Consolidation Principle Applied**:
 - ✅ **ALL FEATURES PRESERVED**: UUID validation + legacy support + timestamps

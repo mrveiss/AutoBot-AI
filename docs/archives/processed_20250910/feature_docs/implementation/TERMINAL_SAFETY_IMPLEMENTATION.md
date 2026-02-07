@@ -18,7 +18,7 @@
 
 **3. Command Risk Assessment**
 - **Automatic Analysis**: Every command is analyzed for potential danger
-- **Risk Levels**: 
+- **Risk Levels**:
   - **Low**: Safe commands (ls, cd, cat, etc.)
   - **Moderate**: System operations requiring privileges (sudo apt install)
   - **High**: Dangerous operations (rm -rf, chmod 777 on root)
@@ -84,12 +84,12 @@ const hasActiveProcess = ref(false);
 const confirmEmergencyKill = async () => {
   // Send multiple Ctrl+C
   await sendInput(sessionId.value, '\u0003\u0003\u0003');
-  
+
   // Force kill tracked processes
   for (const process of runningProcesses.value) {
     await sendSignal(sessionId.value, 'SIGKILL', process.pid);
   }
-  
+
   // Clear tracking and notify user
   runningProcesses.value = [];
   hasActiveProcess.value = false;
@@ -215,8 +215,8 @@ const interruptProcess = () => {
 ### ✅ Implementation Complete
 
 **Files Modified:**
-- `/autobot-vue/src/components/TerminalWindow.vue` - Complete safety implementation
-- `/autobot-vue/src/components/ChatInterface.vue` - Terminal tab integration
+- `/autobot-user-frontend/src/components/TerminalWindow.vue` - Complete safety implementation
+- `/autobot-user-frontend/src/components/ChatInterface.vue` - Terminal tab integration
 
 **Features Delivered:**
 - ✅ Emergency kill button with confirmation

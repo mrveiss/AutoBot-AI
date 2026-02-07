@@ -115,7 +115,7 @@ The SLM backend runs independently with minimal dependencies, separate from the 
 ├── slm-admin/                   # Vue Admin UI
 ├── ansible/                     # Deployment playbooks
 ├── backend/                     # Full AutoBot backend (for distribution)
-├── autobot-vue/                 # Full AutoBot frontend (for distribution)
+├── autobot-user-frontend/                 # Full AutoBot frontend (for distribution)
 └── data/
     └── slm.db                   # SQLite state database
 ```

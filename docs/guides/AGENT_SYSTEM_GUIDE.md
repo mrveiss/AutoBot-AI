@@ -40,7 +40,7 @@ class YourAgent(BaseAgent):
 
 2. **Add to Agent Registry**:
 ```python
-# In src/agents/__init__.py
+# In autobot-user-backend/agents/__init__.py
 from .your_agent import YourAgent
 
 __all__ = [
@@ -446,8 +446,8 @@ class LearningAgent(BaseAgent):
 
 ## 📚 Additional Resources
 
-- [Base Agent Interface](src/agents/base_agent.py) - Core agent implementation
-- [Agent Orchestrator](src/agents/agent_orchestrator.py) - Multi-agent coordination
+- [Base Agent Interface](autobot-user-backend/agents/base_agent.py) - Core agent implementation
+- [Agent Orchestrator](autobot-user-backend/agents/agent_orchestrator.py) - Multi-agent coordination
 - [Security Guidelines](docs/security/) - Security best practices
 - [Performance Optimization](docs/features/) - Performance tuning guides
 - [Testing Framework](tests/) - Comprehensive test examples

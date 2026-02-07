@@ -26,7 +26,7 @@ Successfully consolidated **5 memory manager implementations** (2,831 total line
 | `src/enhanced_memory_manager_async.py` | 572 | Unknown | ✅ Eliminated (async-first design) |
 | `src/memory_manager.py` | 850 | 2 files | ✅ Integrated |
 | `src/memory_manager_async.py` | 517 | Unknown | ✅ Eliminated (async-first design) |
-| `src/utils/optimized_memory_manager.py` | 228 | 0 files | ✅ Integrated |
+| `autobot-user-backend/utils/optimized_memory_manager.py` | 228 | 0 files | ✅ Integrated |
 | **Total** | **2,831** | **9 files** | **→ 1,438 lines** |
 
 ---
@@ -296,7 +296,7 @@ cleanup_counts = await manager.adaptive_cleanup(memory_threshold=0.8)
 - `src/computer_vision_system.py`
 - `src/takeover_manager.py`
 - `src/modern_ai_integration.py`
-- `backend/api/enhanced_memory.py`
+- `autobot-user-backend/api/enhanced_memory.py`
 
 ```python
 # Old code (still works)

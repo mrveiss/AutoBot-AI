@@ -3,7 +3,7 @@
 ## Module Structure
 
 ```
-backend/api/codebase_analytics/
+autobot-user-backend/api/codebase_analytics/
 │
 ├── __init__.py                      # Package initialization
 ├── router.py                        # Main router (combines all sub-routers)
@@ -66,13 +66,13 @@ backend/api/codebase_analytics/
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│        backend/api/codebase_analytics/routes.py         │
+│        autobot-user-backend/api/codebase_analytics/routes.py         │
 │              (Backward Compatibility Layer)              │
 └─────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│        backend/api/codebase_analytics/router.py         │
+│        autobot-user-backend/api/codebase_analytics/router.py         │
 │                  (Main Router - 34 lines)                │
 │     Combines all sub-routers with /codebase prefix      │
 └─────────────────────────────────────────────────────────┘

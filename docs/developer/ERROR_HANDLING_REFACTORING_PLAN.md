@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-AutoBot's backend contains **1,070 exception handlers** across **141 files** with **2,123 error statements**, representing massive code duplication. Only 1 centralized utility (`src/utils/error_boundaries.py`) exists and is barely used (2 imports). This plan outlines a phased approach to centralize error handling, maximize code reuse, and improve maintainability.
+AutoBot's backend contains **1,070 exception handlers** across **141 files** with **2,123 error statements**, representing massive code duplication. Only 1 centralized utility (`autobot-user-backend/utils/error_boundaries.py`) exists and is barely used (2 imports). This plan outlines a phased approach to centralize error handling, maximize code reuse, and improve maintainability.
 
 ---
 
@@ -26,14 +26,14 @@ AutoBot's backend contains **1,070 exception handlers** across **141 files** wit
 
 ### Existing Infrastructure
 
-**src/utils/error_boundaries.py:**
+**autobot-user-backend/utils/error_boundaries.py:**
 - ✅ Centralized error handling utility
 - ✅ Structured error response format
 - ✅ HTTP exception wrapping
 - ❌ Minimal adoption (only 2 files use it)
 - ❌ Limited error categorization
 
-**backend/api/error_monitoring.py:**
+**autobot-user-backend/api/error_monitoring.py:**
 - ✅ Demonstrates intended pattern
 - ❌ Not widely adopted across API endpoints
 
@@ -169,16 +169,16 @@ AutoBot's backend contains **1,070 exception handlers** across **141 files** wit
 
 **Priority Order:**
 1. **High-Traffic Endpoints** (sprint 2):
-   - `backend/api/chat.py` - Chat API (highest traffic)
-   - `backend/api/knowledge.py` - Knowledge base API
-   - `backend/api/agents.py` - Agent orchestration
-   - `backend/api/web_research_api.py` - Research API
+   - `autobot-user-backend/api/chat.py` - Chat API (highest traffic)
+   - `autobot-user-backend/api/knowledge.py` - Knowledge base API
+   - `autobot-user-backend/api/agents.py` - Agent orchestration
+   - `autobot-user-backend/api/web_research_api.py` - Research API
 
 2. **Medium-Traffic Endpoints** (sprint 3):
-   - `backend/api/session_api.py` - Session management
-   - `backend/api/workflow_api.py` - Workflow execution
-   - `backend/api/file_browser.py` - File operations
-   - `backend/api/terminal_api.py` - Terminal commands
+   - `autobot-user-backend/api/session_api.py` - Session management
+   - `autobot-user-backend/api/workflow_api.py` - Workflow execution
+   - `autobot-user-backend/api/file_browser.py` - File operations
+   - `autobot-user-backend/api/terminal_api.py` - Terminal commands
 
 3. **Low-Traffic Endpoints** (sprint 3):
    - Configuration APIs
@@ -395,7 +395,7 @@ ERROR_CATALOG = load_error_catalog("config/error_messages.yaml")
 ## Dependencies
 
 ### Internal Dependencies
-- `src/utils/error_boundaries.py` - Base utility (exists)
+- `autobot-user-backend/utils/error_boundaries.py` - Base utility (exists)
 - `config/error_messages.yaml` - Error catalog (new)
 - Pre-commit hooks - Pattern enforcement (new)
 - Monitoring dashboard - Observability (new)
@@ -432,8 +432,8 @@ ERROR_CATALOG = load_error_catalog("config/error_messages.yaml")
 
 ## References
 
-- Current Implementation: `src/utils/error_boundaries.py`
-- Example Usage: `backend/api/error_monitoring.py`
+- Current Implementation: `autobot-user-backend/utils/error_boundaries.py`
+- Example Usage: `autobot-user-backend/api/error_monitoring.py`
 - Error Statistics: Analysis conducted 2025-10-27
 - Zero Hardcode Policy: `CLAUDE.md` Section 🚫
 

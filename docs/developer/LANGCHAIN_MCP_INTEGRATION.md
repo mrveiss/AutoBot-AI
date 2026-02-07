@@ -292,7 +292,7 @@ if __name__ == "__main__":
     # Example task
     result = agent.run(
         "Search the knowledge base for information about error handling patterns, "
-        "then list the backend/api/ directory to find related files."
+        "then list the autobot-user-backend/api/ directory to find related files."
     )
 
     print(f"Agent Result: {result}")

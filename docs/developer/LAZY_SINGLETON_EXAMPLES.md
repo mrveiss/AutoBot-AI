@@ -7,7 +7,7 @@ This document shows real code from actual API files and how to migrate them usin
 
 ---
 
-## Example 1: backend/api/chat.py (Lines 66-79)
+## Example 1: autobot-user-backend/api/chat.py (Lines 66-79)
 
 ### BEFORE - `get_chat_history_manager()`
 
@@ -47,7 +47,7 @@ def get_chat_history_manager(request):
 
 ---
 
-## Example 2: backend/api/chat.py (Lines 92-105)
+## Example 2: autobot-user-backend/api/chat.py (Lines 92-105)
 
 ### BEFORE - `get_llm_service()`
 
@@ -87,7 +87,7 @@ def get_llm_service(request):
 
 ---
 
-## Example 3: backend/api/chat.py (Lines 82-84)
+## Example 3: autobot-user-backend/api/chat.py (Lines 82-84)
 
 ### BEFORE - `get_system_state()`
 
@@ -112,7 +112,7 @@ This function does NOT need migration because:
 
 ---
 
-## Example 4: backend/api/chat.py (Lines 87-89)
+## Example 4: autobot-user-backend/api/chat.py (Lines 87-89)
 
 ### BEFORE - `get_memory_interface()`
 
@@ -159,7 +159,7 @@ Is the function using getattr(request.app.state, ...)?
 
 ## Complete File Migration Example
 
-### Full backend/api/chat.py Migration
+### Full autobot-user-backend/api/chat.py Migration
 
 **Step 1**: Add import at top of file
 ```python
@@ -330,11 +330,11 @@ After migration, verify:
 
 Based on pattern analysis, these files likely have similar lazy initialization patterns:
 
-1. `backend/api/intelligence.py` - Agent management
-2. `backend/api/workflow.py` - Workflow services
-3. `backend/api/memory.py` - Memory interfaces
-4. `backend/api/tools.py` - Tool managers
-5. `backend/api/agents.py` - Agent services
+1. `autobot-user-backend/api/intelligence.py` - Agent management
+2. `autobot-user-backend/api/workflow.py` - Workflow services
+3. `autobot-user-backend/api/memory.py` - Memory interfaces
+4. `autobot-user-backend/api/tools.py` - Tool managers
+5. `autobot-user-backend/api/agents.py` - Agent services
 
 Use the same pattern:
 1. Search for `getattr(request.app.state, ..., None)`

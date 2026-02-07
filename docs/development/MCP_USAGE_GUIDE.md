@@ -4,7 +4,7 @@ This guide demonstrates how to leverage all available MCP (Model Context Protoco
 
 ## 📋 Available MCP Servers
 
-### 1. **Filesystem MCP Server** 
+### 1. **Filesystem MCP Server**
 **Purpose:** Advanced file operations across the codebase
 **Key Tools:**
 - `read_file` - Read file contents with syntax highlighting
@@ -28,7 +28,7 @@ mcp.filesystem.search_files({
 mcp.filesystem.read_multiple_files({
   paths: [
     "src/components/ChatInterface.vue",
-    "src/utils/ApiClient.js",
+    "autobot-user-backend/utils/ApiClient.js",
     "src/services/ChatService.js"
   ]
 })
@@ -140,8 +140,8 @@ mcp.sqlite.create_record({
 // Query recent debugging sessions
 mcp.sqlite.query({
   sql: `
-    SELECT * FROM development_log 
-    WHERE log_level IN ('ERROR', 'DEBUG') 
+    SELECT * FROM development_log
+    WHERE log_level IN ('ERROR', 'DEBUG')
     AND timestamp > datetime('now', '-1 day')
     ORDER BY timestamp DESC
   `
@@ -233,7 +233,7 @@ const logs = await mcp.autobot.autobot_debug_logs_analysis({
 
 // Step 4: Use sequential thinking for root cause
 const analysis = await mcp.sequential.sequential_thinking({
-  query: `Given these symptoms: ${JSON.stringify({ health, memory, logs })}, 
+  query: `Given these symptoms: ${JSON.stringify({ health, memory, logs })},
           identify the root cause and suggest optimizations`
 });
 ```
@@ -247,8 +247,8 @@ const project = await mcp.autobot.autobot_analyze_project();
 const files = await mcp.filesystem.read_multiple_files({
   paths: [
     "src/components/NewFeature.vue",
-    "backend/api/new_feature.py",
-    "src/agents/feature_agent.py"
+    "autobot-user-backend/api/new_feature.py",
+    "autobot-user-backend/agents/feature_agent.py"
   ]
 });
 
@@ -371,7 +371,7 @@ setInterval(async () => {
 // Profile API endpoints
 const endpoints = ["/api/chat", "/api/workflow", "/api/knowledge"];
 const profiles = await Promise.all(
-  endpoints.map(endpoint => 
+  endpoints.map(endpoint =>
     mcp.autobot.autobot_debug_api_calls({
       endpoint,
       timeframe: "1h",
@@ -387,14 +387,14 @@ const profiles = await Promise.all(
 const pipeline = async () => {
   // 1. Run backend tests
   const backendTests = await mcp.autobot.autobot_run_tests({ pattern: "backend/**" });
-  
+
   // 2. Run frontend tests
   const frontendTests = await mcp.autobot.autobot_run_tests({ pattern: "frontend/**" });
-  
+
   // 3. Visual regression testing
   await mcp.puppeteer.puppeteer_navigate({ url: "http://127.0.0.1:5173" });
   const screenshots = await captureAllViews();
-  
+
   // 4. Log results
   await mcp.sqlite.create_record({
     table: "test_runs",

@@ -83,7 +83,7 @@ graph_rag = GraphRAGService(
 results = await graph_rag.search(query="knowledge graph features")
 ```
 
-### 3. Entity Extraction (`src/agents/graph_entity_extractor.py`)
+### 3. Entity Extraction (`autobot-user-backend/agents/graph_entity_extractor.py`)
 
 Automatically extracts entities from conversations and documents:
 
@@ -103,7 +103,7 @@ extractor = GraphEntityExtractor(
 entities = await extractor.extract_entities(text)
 ```
 
-### 4. REST API (`backend/api/memory.py`)
+### 4. REST API (`autobot-user-backend/api/memory.py`)
 
 Full REST API for memory graph operations:
 
@@ -121,7 +121,7 @@ Full REST API for memory graph operations:
 | `/api/memory/graph` | GET | Get graph structure |
 | `/api/memory/health` | GET | Health check |
 
-### 5. Visualization (`autobot-vue/src/components/knowledge/KnowledgeGraph.vue`)
+### 5. Visualization (`autobot-user-frontend/src/components/knowledge/KnowledgeGraph.vue`)
 
 Interactive graph visualization with:
 

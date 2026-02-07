@@ -8,7 +8,7 @@ AutoBot includes several specialized librarian agents that act as intelligent as
 
 ### 1. KB Librarian Agent (`KBLibrarianAgent`)
 
-**Location**: `src/agents/kb_librarian_agent.py`  
+**Location**: `autobot-user-backend/agents/kb_librarian_agent.py`  
 **API Endpoint**: `/api/kb-librarian/`
 
 The Knowledge Base Librarian Agent automatically searches the local knowledge base whenever users ask questions, acting like a helpful librarian that finds relevant documentation before providing answers.
@@ -64,7 +64,7 @@ curl -X PUT "http://localhost:8001/api/kb-librarian/configure" \
 
 ### 2. Containerized Librarian Assistant (`ContainerizedLibrarianAssistant`)
 
-**Location**: `src/agents/containerized_librarian_assistant.py`
+**Location**: `autobot-user-backend/agents/containerized_librarian_assistant.py`
 
 An advanced research agent that performs web research using a containerized Playwright service, finds high-quality information, and can store valuable findings in the knowledge base.
 
@@ -109,13 +109,13 @@ result = await assistant.research_query(
 
 ### 3. Enhanced KB Librarian (`enhanced_kb_librarian.py`)
 
-**Location**: `src/agents/enhanced_kb_librarian.py`
+**Location**: `autobot-user-backend/agents/enhanced_kb_librarian.py`
 
 An enhanced version of the basic KB Librarian with additional capabilities for knowledge management and organization.
 
 ### 4. System Knowledge Manager (`system_knowledge_manager.py`)
 
-**Location**: `src/agents/system_knowledge_manager.py`
+**Location**: `autobot-user-backend/agents/system_knowledge_manager.py`
 
 Manages system-wide knowledge operations, including monitoring, maintenance, and organization of the knowledge base.
 
@@ -126,7 +126,7 @@ Manages system-wide knowledge operations, including monitoring, maintenance, and
 Librarian agents are automatically integrated into the chat system:
 
 ```python
-# In backend/api/chat.py
+# In autobot-user-backend/api/chat.py
 from src.agents import get_kb_librarian, get_containerized_librarian_assistant
 
 @router.post("/chat")
@@ -134,7 +134,7 @@ async def chat_endpoint(request: ChatRequest):
     # KB Librarian automatically searches local knowledge
     kb_librarian = get_kb_librarian()
     kb_result = await kb_librarian.process_query(request.message)
-    
+
     # If no local results, use web research assistant
     if kb_result.get("documents_found", 0) == 0:
         web_assistant = get_containerized_librarian_assistant()
@@ -152,8 +152,8 @@ async def chat_endpoint(request: ChatRequest):
 
 Comprehensive test coverage exists for librarian functionality:
 
-- `autobot-vue/tests/e2e/kb-librarian-api.spec.ts`: API endpoint tests
-- `autobot-vue/tests/e2e/kb-librarian-chat.spec.ts`: Chat integration tests
+- `autobot-user-frontend/tests/e2e/kb-librarian-api.spec.ts`: API endpoint tests
+- `autobot-user-frontend/tests/e2e/kb-librarian-chat.spec.ts`: Chat integration tests
 
 Run tests:
 ```bash

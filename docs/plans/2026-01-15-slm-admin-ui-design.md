@@ -106,7 +106,7 @@ Maintenance window scheduling and node management.
 System configuration (migrated from main frontend).
 
 **Components:**
-- Migrated from `autobot-vue/src/views/SettingsView.vue`
+- Migrated from `autobot-user-frontend/src/views/SettingsView.vue`
 - Enhanced with SLM-specific settings
 
 **Settings Categories:**

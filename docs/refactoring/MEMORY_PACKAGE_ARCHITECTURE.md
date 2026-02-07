@@ -3,7 +3,7 @@
 **Date**: 2025-12-06  
 **Issue**: #286  
 **Original File**: `src/unified_memory_manager.py` (1,657 lines)  
-**New Structure**: `src/memory/` package (modularized)
+**New Structure**: `autobot-user-backend/memory/` package (modularized)
 
 ---
 
@@ -12,7 +12,7 @@
 The monolithic `unified_memory_manager.py` has been refactored into a clean package structure:
 
 ```
-src/memory/
+autobot-user-backend/memory/
 ├── __init__.py              # Re-exports for backward compatibility (79 lines)
 ├── enums.py                 # TaskStatus, TaskPriority, MemoryCategory, StorageStrategy (56 lines)
 ├── models.py                # TaskExecutionRecord, MemoryEntry dataclasses (74 lines)
@@ -121,7 +121,7 @@ from src.memory import (
 4. `src/computer_vision_system.py`
 5. `src/takeover_manager.py`
 6. `src/modern_ai_integration.py`
-7. `backend/api/enhanced_memory.py`
+7. `autobot-user-backend/api/enhanced_memory.py`
 8. `src/orchestrator.py`
 9. `analysis/refactoring/test_memory_path_utils.py`
 

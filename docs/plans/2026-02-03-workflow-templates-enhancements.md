@@ -34,7 +34,7 @@
 ## Task 1: Add Template TypeScript Interfaces
 
 **Files:**
-- Create: `autobot-vue/src/types/workflowTemplates.ts`
+- Create: `autobot-user-frontend/src/types/workflowTemplates.ts`
 
 **Step 1: Create type definitions**
 
@@ -163,12 +163,12 @@ export interface CreateWorkflowResponse {
 
 **Step 2: Verify file created**
 
-Run: `ls -la autobot-vue/src/types/workflowTemplates.ts`
+Run: `ls -la autobot-user-frontend/src/types/workflowTemplates.ts`
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/types/workflowTemplates.ts
+git add autobot-user-frontend/src/types/workflowTemplates.ts
 git commit -m "feat(#778): add TypeScript interfaces for workflow templates"
 ```
 
@@ -177,7 +177,7 @@ git commit -m "feat(#778): add TypeScript interfaces for workflow templates"
 ## Task 2: Create useWorkflowTemplates Composable
 
 **Files:**
-- Create: `autobot-vue/src/composables/useWorkflowTemplates.ts`
+- Create: `autobot-user-frontend/src/composables/useWorkflowTemplates.ts`
 
 **Step 1: Create the API composable**
 
@@ -436,12 +436,12 @@ export function useWorkflowTemplates() {
 
 **Step 2: Verify file created**
 
-Run: `ls -la autobot-vue/src/composables/useWorkflowTemplates.ts`
+Run: `ls -la autobot-user-frontend/src/composables/useWorkflowTemplates.ts`
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/composables/useWorkflowTemplates.ts
+git add autobot-user-frontend/src/composables/useWorkflowTemplates.ts
 git commit -m "feat(#778): add useWorkflowTemplates API composable"
 ```
 
@@ -450,7 +450,7 @@ git commit -m "feat(#778): add useWorkflowTemplates API composable"
 ## Task 3: Update WorkflowTemplateGallery to Use API
 
 **Files:**
-- Modify: `autobot-vue/src/components/workflow/WorkflowTemplateGallery.vue`
+- Modify: `autobot-user-frontend/src/components/workflow/WorkflowTemplateGallery.vue`
 
 **Step 1: Update the component to use the new composable**
 
@@ -468,7 +468,7 @@ Run: `cd autobot-vue && npm run build`
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/workflow/WorkflowTemplateGallery.vue
+git add autobot-user-frontend/src/components/workflow/WorkflowTemplateGallery.vue
 git commit -m "feat(#778): connect WorkflowTemplateGallery to backend API"
 ```
 
@@ -477,7 +477,7 @@ git commit -m "feat(#778): connect WorkflowTemplateGallery to backend API"
 ## Task 4: Update useWorkflowBuilder to Use API Templates
 
 **Files:**
-- Modify: `autobot-vue/src/composables/useWorkflowBuilder.ts`
+- Modify: `autobot-user-frontend/src/composables/useWorkflowBuilder.ts`
 
 **Step 1: Replace hardcoded templates with API call**
 
@@ -494,7 +494,7 @@ Run: `cd autobot-vue && npm run build`
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/composables/useWorkflowBuilder.ts
+git add autobot-user-frontend/src/composables/useWorkflowBuilder.ts
 git commit -m "feat(#778): integrate API templates into useWorkflowBuilder"
 ```
 

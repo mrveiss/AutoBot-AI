@@ -26,7 +26,7 @@ Complete the Code Intelligence Dashboard implementation to provide code analysis
 ### Component Structure
 
 ```
-autobot-vue/src/components/analytics/
+autobot-user-frontend/src/components/analytics/
 ├── CodeIntelligenceDashboard.vue    (MODIFY - main orchestrator)
 ├── code-intelligence/               (NEW folder)
 │   ├── FindingsTable.vue            (shared table component)

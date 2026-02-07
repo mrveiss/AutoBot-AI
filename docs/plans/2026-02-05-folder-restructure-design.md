@@ -119,7 +119,7 @@
 |---------|-----|--------|
 | `src/` | `autobot-user-backend/` | Rename + reorganize |
 | `backend/` | `autobot-user-backend/` | Merge into user-backend |
-| `autobot-vue/` | `autobot-user-frontend/` | Rename |
+| `autobot-user-frontend/` | `autobot-user-frontend/` | Rename |
 | `slm-server/` | `autobot-slm-backend/` | Rename |
 | `slm-admin/` | `autobot-slm-frontend/` | Rename |
 | `ansible/` | `autobot-slm-backend/ansible/` | Move into SLM |
@@ -130,10 +130,10 @@
 
 | Current | New |
 |---------|-----|
-| `src/utils/redis_client.py` | `autobot-shared/redis_client.py` |
-| `src/utils/http_client.py` | `autobot-shared/http_client.py` |
-| `src/utils/logging_manager.py` | `autobot-shared/logging_manager.py` |
-| `src/utils/error_boundaries.py` | `autobot-shared/error_boundaries.py` |
+| `autobot-user-backend/utils/redis_client.py` | `autobot-shared/redis_client.py` |
+| `autobot-user-backend/utils/http_client.py` | `autobot-shared/http_client.py` |
+| `autobot-user-backend/utils/logging_manager.py` | `autobot-shared/logging_manager.py` |
+| `autobot-user-backend/utils/error_boundaries.py` | `autobot-shared/error_boundaries.py` |
 | `src/config/ssot_config.py` | `autobot-shared/ssot_config.py` |
 
 ### Infrastructure (Current Per-Role Structure)

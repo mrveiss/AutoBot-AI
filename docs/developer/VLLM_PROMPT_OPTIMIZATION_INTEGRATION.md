@@ -107,7 +107,7 @@ def get_agent_system_prompt(
 
 ### Pattern 2: Chat API Endpoint
 
-**Location:** `backend/api/chat.py`
+**Location:** `autobot-user-backend/api/chat.py`
 
 **Before:**
 ```python

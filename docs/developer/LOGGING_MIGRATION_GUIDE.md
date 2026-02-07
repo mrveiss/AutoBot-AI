@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide documents the migration from scattered `logging.basicConfig()` calls to the centralized `LoggingManager` system in `src/utils/logging_manager.py`.
+This guide documents the migration from scattered `logging.basicConfig()` calls to the centralized `LoggingManager` system in `autobot-user-backend/utils/logging_manager.py`.
 
 **Issue**: [#42 - Logging Configuration Standardization](https://github.com/paradiselabs-ai/AutoBot/issues/42)
 
@@ -20,7 +20,7 @@ This guide documents the migration from scattered `logging.basicConfig()` calls 
 
 ### Benefits of Centralized Logging:
 
-1. ✅ **Single Configuration Point** - `src/utils/logging_manager.py`
+1. ✅ **Single Configuration Point** - `autobot-user-backend/utils/logging_manager.py`
 2. ✅ **Category-Based Loggers** - backend, frontend, llm, debug, audit
 3. ✅ **Automatic Log Rotation** - 10MB max size, 5 backups
 4. ✅ **Environment-Based Config** - `AUTOBOT_LOG_LEVEL`, `AUTOBOT_LOGS_DIR`
@@ -38,8 +38,8 @@ This guide documents the migration from scattered `logging.basicConfig()` calls 
 - ✅ `backend/app_factory_enhanced.py`
 - ✅ `backend/utils/redis_compatibility.py`
 - ✅ `src/project_state_manager.py`
-- ✅ `src/agents/research_agent.py`
-- ✅ `src/utils/system_context.py`
+- ✅ `autobot-user-backend/agents/research_agent.py`
+- ✅ `autobot-user-backend/utils/system_context.py`
 
 ### Before Migration:
 
@@ -123,7 +123,7 @@ Select the correct category for your logger:
 
 | Category | Use Case | Example Modules |
 |----------|----------|-----------------|
-| `backend` | Backend API, services, utilities | `backend/api/*.py`, `src/utils/*.py` |
+| `backend` | Backend API, services, utilities | `autobot-user-backend/api/*.py`, `autobot-user-backend/utils/*.py` |
 | `frontend` | Frontend-related backend code | Vue build scripts, frontend helpers |
 | `llm` | LLM interactions, prompts | `src/llm_interface.py`, LLM services |
 | `debug` | Debug/development logging | Test utilities, debug scripts |
@@ -433,8 +433,8 @@ For each file being migrated:
 - ✅ backend/app_factory_enhanced.py
 - ✅ backend/utils/redis_compatibility.py
 - ✅ src/project_state_manager.py
-- ✅ src/agents/research_agent.py
-- ✅ src/utils/system_context.py
+- ✅ autobot-user-backend/agents/research_agent.py
+- ✅ autobot-user-backend/utils/system_context.py
 
 ### Remaining (Low Priority):
 
@@ -448,7 +448,7 @@ For each file being migrated:
 
 ## References
 
-- **Centralized Logging Implementation:** `src/utils/logging_manager.py`
+- **Centralized Logging Implementation:** `autobot-user-backend/utils/logging_manager.py`
 - **GitHub Issue:** [#42 - Logging Configuration Standardization](https://github.com/paradiselabs-ai/AutoBot/issues/42)
 - **Python Logging Documentation:** https://docs.python.org/3/library/logging.html
 - **RotatingFileHandler:** https://docs.python.org/3/library/logging.handlers.html#rotatingfilehandler

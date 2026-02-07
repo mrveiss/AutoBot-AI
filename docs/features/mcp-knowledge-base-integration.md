@@ -184,7 +184,7 @@ The MCP tools work alongside the existing KB Librarian Agent, allowing for:
 Enable MCP knowledge base tools in the API registry:
 
 ```python
-# backend/api/registry.py
+# autobot-user-backend/api/registry.py
 "knowledge_mcp": RouterConfig(
     name="knowledge_mcp",
     module_path="backend.api.knowledge_mcp",

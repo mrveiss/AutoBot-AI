@@ -50,7 +50,7 @@ Successfully implemented **5 specialized fix agents** that worked autonomously t
 ### 5. **Testing Framework Agent** ✅
 - **Target**: 0% test coverage requiring comprehensive testing infrastructure
 - **Result**: Complete testing framework with Vitest, Testing Library, E2E tests
-- **Files**: Complete testing suite in `/autobot-vue/tests/`
+- **Files**: Complete testing suite in `/autobot-user-frontend/tests/`
 - **Coverage**: Ready to achieve 70%+ coverage with provided templates
 
 ## 🔧 Detailed Accomplishments
@@ -145,7 +145,7 @@ code-analysis-suite/fix-agents/
 
 ### **Testing Framework:**
 ```
-autobot-vue/
+autobot-user-frontend/
 ├── vitest.config.ts
 ├── vitest.integration.config.ts
 ├── playwright.config.ts

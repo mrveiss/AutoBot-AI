@@ -13,12 +13,12 @@ The Background Vectorization System automatically converts knowledge base facts 
    - Prevents duplicate processing
    - Tracks execution status
 
-2. **API Endpoints** (`backend/api/knowledge.py`)
+2. **API Endpoints** (`autobot-user-backend/api/knowledge.py`)
    - `/api/knowledge_base/vectorize_facts/background` - Start vectorization
    - `/api/knowledge_base/vectorize_facts/status` - Check status
    - `/api/knowledge_base/vectorize_facts` - Manual/legacy mode
 
-3. **Frontend Integration** (`autobot-vue/src/composables/useKnowledgeBase.ts`)
+3. **Frontend Integration** (`autobot-user-frontend/src/composables/useKnowledgeBase.ts`)
    - `startBackgroundVectorization()` - Non-blocking start
    - `getVectorizationStatus()` - Status monitoring
    - `vectorizeFacts()` - Legacy manual mode
@@ -37,7 +37,7 @@ batch_delay = 0.5     # Seconds between batches
 
 - **Model**: `nomic-embed-text:latest`
 - **Dimensions**: 768
-- **Configured in**: 
+- **Configured in**:
   - `config/agents.yaml`
   - `config/complete.yaml`
   - `config/settings.json`
@@ -111,11 +111,11 @@ Complete (Non-blocking)
 # Process facts in batches
 for batch_num in range(total_batches):
     batch = fact_keys[start_idx:end_idx]
-    
+
     for fact in batch:
         if not has_vector(fact):
             vectorize(fact)  # 768-dim embedding
-    
+
     await asyncio.sleep(batch_delay)  # Prevent overload
 ```
 
@@ -288,8 +288,8 @@ batch_delay = 1.0  # Increase from 0.5
 
 - **Vector Dimensions Fix**: `docs/system-state.md`
 - **Redis Multi-Threading**: `ansible/templates/redis/redis-stack.conf.j2`
-- **Knowledge Base API**: `backend/api/knowledge.py`
-- **Frontend Composable**: `autobot-vue/src/composables/useKnowledgeBase.ts`
+- **Knowledge Base API**: `autobot-user-backend/api/knowledge.py`
+- **Frontend Composable**: `autobot-user-frontend/src/composables/useKnowledgeBase.ts`
 
 ---
 

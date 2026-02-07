@@ -26,7 +26,7 @@ This document provides the standardized procedure for activating new MCP (Model 
 Before activating a new MCP bridge, ensure:
 
 1. **Implementation Complete**
-   - Bridge file created: `backend/api/{bridge_name}_mcp.py`
+   - Bridge file created: `autobot-user-backend/api/{bridge_name}_mcp.py`
    - Follows standard MCP bridge pattern (see template below)
    - Has `GET /mcp/tools` endpoint returning tool definitions
    - Has `POST /mcp/{tool_name}` endpoints for each tool
@@ -43,7 +43,7 @@ Before activating a new MCP bridge, ensure:
      ```
 
 3. **MCP Registry Entry**
-   - Bridge added to `MCP_BRIDGES` list in `backend/api/mcp_registry.py`
+   - Bridge added to `MCP_BRIDGES` list in `autobot-user-backend/api/mcp_registry.py`
    - Entry format:
      ```python
      (
@@ -65,7 +65,7 @@ Before activating a new MCP bridge, ensure:
 
 ```bash
 # Check bridge implementation file exists
-ls -la backend/api/{bridge_name}_mcp.py
+ls -la autobot-user-backend/api/{bridge_name}_mcp.py
 
 # Verify imports work
 python -c "from backend.api.{bridge_name}_mcp import router; print('✅ Import successful')"
@@ -74,7 +74,7 @@ python -c "from backend.api.{bridge_name}_mcp import router; print('✅ Import s
 grep -n "{bridge_name}_mcp" backend/app_factory.py
 
 # Check MCP Registry entry
-grep -n "{bridge_name}_mcp" backend/api/mcp_registry.py
+grep -n "{bridge_name}_mcp" autobot-user-backend/api/mcp_registry.py
 ```
 
 ### Step 2: Check Current Backend Status
@@ -247,7 +247,7 @@ curl -s http://localhost:8001/api/health | jq '.status'
 2. **Missing MCP Registry Entry**
    ```bash
    # Check mcp_registry.py
-   grep '"{bridge_name}_mcp"' backend/api/mcp_registry.py
+   grep '"{bridge_name}_mcp"' autobot-user-backend/api/mcp_registry.py
    ```
    **Solution:** Add entry to MCP_BRIDGES list
 
@@ -384,7 +384,7 @@ async def tool_name(...):
 ## Checklist for New MCP Bridge
 
 **Implementation:**
-- [ ] Bridge file created: `backend/api/{bridge_name}_mcp.py`
+- [ ] Bridge file created: `autobot-user-backend/api/{bridge_name}_mcp.py`
 - [ ] Follows standard MCP pattern
 - [ ] Has `GET /mcp/tools` endpoint
 - [ ] Has tool execution endpoints
@@ -450,7 +450,7 @@ curl -s http://localhost:8001/api/mcp/stats | jq '.available_features'
 
 ## Related Documentation
 
-- **MCP Registry API:** `backend/api/mcp_registry.py`
+- **MCP Registry API:** `autobot-user-backend/api/mcp_registry.py`
 - **App Factory:** `backend/app_factory.py`
 - **Security Testing:** `docs/security/MCP_SECURITY_TESTING.md`
 - **Comprehensive API Docs:** `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`

@@ -467,8 +467,8 @@ self.redis_host = redis_host or redis_config.get(
 **Estimated Time:** 8 hours
 
 **Affected Files:**
-- `src/utils/async_redis_manager.py:279`
-- `backend/api/knowledge_debug.py:105`
+- `autobot-user-backend/utils/async_redis_manager.py:279`
+- `autobot-user-backend/api/knowledge_debug.py:105`
 - `monitoring/performance_monitor.py:140`
 - (See audit report for complete list)
 
@@ -901,7 +901,7 @@ timeouts:
 ### Task Group 3.5: Fix API Hardcoded Ports
 
 **Priority:** MEDIUM - P3
-**File:** `/home/kali/Desktop/AutoBot/backend/api/playwright.py`
+**File:** `/home/kali/Desktop/AutoBot/autobot-user-backend/api/playwright.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -918,7 +918,7 @@ timeouts:
 - Manual test: Run browser automation task
 
 **Files Modified:**
-- `backend/api/playwright.py`
+- `autobot-user-backend/api/playwright.py`
 
 **Rollback Plan:**
 - Restore hardcoded port
@@ -1008,7 +1008,7 @@ timeouts:
 4. Ensure documentation is accurate
 
 **Affected Files:**
-- `backend/api/knowledge.py:1692-1696`
+- `autobot-user-backend/api/knowledge.py:1692-1696`
 - `backend/services/ai_stack_client.py:5`
 - `src/autobot_memory_graph.py:15`
 - Other files with doc comments

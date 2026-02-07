@@ -62,16 +62,16 @@ Refactor the Chat Terminal and VNC tabs to use user-configured external hosts vi
 ### 1.3 Current File Locations
 
 **Backend:**
-- VNC Manager: `backend/api/vnc_manager.py`
-- Terminal: `backend/api/terminal.py`, `backend/api/terminal_handlers.py`
+- VNC Manager: `autobot-user-backend/api/vnc_manager.py`
+- Terminal: `autobot-user-backend/api/terminal.py`, `autobot-user-backend/api/terminal_handlers.py`
 - Secrets: `backend/services/secrets_service.py`
 - Terminal Secrets: `backend/services/terminal_secrets_service.py`
 
 **Frontend:**
-- Chat Interface: `autobot-vue/src/components/chat/ChatInterface.vue`
-- Chat Tab Content: `autobot-vue/src/components/chat/ChatTabContent.vue`
-- Chat Terminal: `autobot-vue/src/components/ChatTerminal.vue`
-- NoVNC Viewer: `autobot-vue/src/components/NoVNCViewer.vue`
+- Chat Interface: `autobot-user-frontend/src/components/chat/ChatInterface.vue`
+- Chat Tab Content: `autobot-user-frontend/src/components/chat/ChatTabContent.vue`
+- Chat Terminal: `autobot-user-frontend/src/components/ChatTerminal.vue`
+- NoVNC Viewer: `autobot-user-frontend/src/components/NoVNCViewer.vue`
 
 ---
 
@@ -489,7 +489,7 @@ Entity: "ifconfig-app-server"  # ❌
 
 **Files**:
 - `backend/services/secrets_service.py`
-- `backend/api/infrastructure_hosts.py` (new)
+- `autobot-user-backend/api/infrastructure_hosts.py` (new)
 - `backend/routers/__init__.py` (register new router)
 
 ### Phase 2: SSH Connection Support
@@ -506,8 +506,8 @@ Entity: "ifconfig-app-server"  # ❌
 
 **Files**:
 - `backend/services/ssh_connection_service.py` (new)
-- `backend/api/terminal.py` (modify)
-- `backend/api/terminal_handlers.py` (modify)
+- `autobot-user-backend/api/terminal.py` (modify)
+- `autobot-user-backend/api/terminal_handlers.py` (modify)
 
 ### Phase 3: Command Knowledge Extraction
 
@@ -539,10 +539,10 @@ Entity: "ifconfig-app-server"  # ❌
 - [ ] Update terminal service for SSH connections
 
 **Files**:
-- `autobot-vue/src/components/HostSelector.vue` (new)
-- `autobot-vue/src/components/chat/ChatTabContent.vue`
-- `autobot-vue/src/components/ChatTerminal.vue`
-- `autobot-vue/src/services/TerminalService.js`
+- `autobot-user-frontend/src/components/HostSelector.vue` (new)
+- `autobot-user-frontend/src/components/chat/ChatTabContent.vue`
+- `autobot-user-frontend/src/components/ChatTerminal.vue`
+- `autobot-user-frontend/src/services/TerminalService.js`
 
 ### Phase 5: VNC Dynamic Host Support
 
@@ -555,8 +555,8 @@ Entity: "ifconfig-app-server"  # ❌
 - [ ] Filter host selector to VNC-capable hosts only
 
 **Files**:
-- `autobot-vue/src/components/NoVNCViewer.vue`
-- `backend/api/vnc_manager.py`
+- `autobot-user-frontend/src/components/NoVNCViewer.vue`
+- `autobot-user-backend/api/vnc_manager.py`
 
 ### Phase 6: Cleanup & Removal
 
@@ -570,7 +570,7 @@ Entity: "ifconfig-app-server"  # ❌
 - [ ] Clean up unused VNC endpoints
 
 **Files**:
-- `autobot-vue/src/components/chat/ChatInterface.vue`
+- `autobot-user-frontend/src/components/chat/ChatInterface.vue`
 - `backend/initialization/lifespan.py`
 - `backend/initialization/health_endpoints.py`
 
@@ -586,8 +586,8 @@ Entity: "ifconfig-app-server"  # ❌
 - [ ] Add tag input for knowledge categorization
 
 **Files**:
-- `autobot-vue/src/components/settings/SecretsManager.vue`
-- `autobot-vue/src/components/settings/InfrastructureHostForm.vue` (new)
+- `autobot-user-frontend/src/components/settings/SecretsManager.vue`
+- `autobot-user-frontend/src/components/settings/InfrastructureHostForm.vue` (new)
 
 ---
 
@@ -598,13 +598,13 @@ Entity: "ifconfig-app-server"  # ❌
 | File | Action | Description |
 |------|--------|-------------|
 | `backend/services/secrets_service.py` | Modify | Add infrastructure_host type handling |
-| `backend/api/infrastructure_hosts.py` | Create | Host listing and management endpoints |
+| `autobot-user-backend/api/infrastructure_hosts.py` | Create | Host listing and management endpoints |
 | `backend/services/ssh_connection_service.py` | Create | SSH connection management |
 | `backend/services/command_extraction_service.py` | Create | Command knowledge extraction |
 | `backend/services/infrastructure_knowledge_service.py` | Create | KB integration for hosts |
-| `backend/api/terminal.py` | Modify | Add SSH connection type support |
-| `backend/api/terminal_handlers.py` | Modify | SSH WebSocket bridging |
-| `backend/api/vnc_manager.py` | Modify | Dynamic VNC host support |
+| `autobot-user-backend/api/terminal.py` | Modify | Add SSH connection type support |
+| `autobot-user-backend/api/terminal_handlers.py` | Modify | SSH WebSocket bridging |
+| `autobot-user-backend/api/vnc_manager.py` | Modify | Dynamic VNC host support |
 | `backend/initialization/lifespan.py` | Modify | Remove VNC startup dependency |
 | `backend/initialization/health_endpoints.py` | Modify | Remove VNC from health checks |
 
@@ -612,14 +612,14 @@ Entity: "ifconfig-app-server"  # ❌
 
 | File | Action | Description |
 |------|--------|-------------|
-| `autobot-vue/src/components/HostSelector.vue` | Create | Reusable host dropdown |
-| `autobot-vue/src/components/chat/ChatTabContent.vue` | Modify | Add host selector to tabs |
-| `autobot-vue/src/components/chat/ChatInterface.vue` | Modify | Remove VNC startup check |
-| `autobot-vue/src/components/ChatTerminal.vue` | Modify | SSH connection support |
-| `autobot-vue/src/components/NoVNCViewer.vue` | Modify | Dynamic host/port |
-| `autobot-vue/src/services/TerminalService.js` | Modify | SSH session creation |
-| `autobot-vue/src/components/settings/SecretsManager.vue` | Modify | Infrastructure host type |
-| `autobot-vue/src/components/settings/InfrastructureHostForm.vue` | Create | Host configuration form |
+| `autobot-user-frontend/src/components/HostSelector.vue` | Create | Reusable host dropdown |
+| `autobot-user-frontend/src/components/chat/ChatTabContent.vue` | Modify | Add host selector to tabs |
+| `autobot-user-frontend/src/components/chat/ChatInterface.vue` | Modify | Remove VNC startup check |
+| `autobot-user-frontend/src/components/ChatTerminal.vue` | Modify | SSH connection support |
+| `autobot-user-frontend/src/components/NoVNCViewer.vue` | Modify | Dynamic host/port |
+| `autobot-user-frontend/src/services/TerminalService.js` | Modify | SSH session creation |
+| `autobot-user-frontend/src/components/settings/SecretsManager.vue` | Modify | Infrastructure host type |
+| `autobot-user-frontend/src/components/settings/InfrastructureHostForm.vue` | Create | Host configuration form |
 
 ---
 

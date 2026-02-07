@@ -9,7 +9,7 @@
 
 ## Overview
 
-Complete the Knowledge Manager frontend to restore critical administrative capabilities for the knowledge base. The implementation extends the existing modular architecture in `autobot-vue/src/components/knowledge/`.
+Complete the Knowledge Manager frontend to restore critical administrative capabilities for the knowledge base. The implementation extends the existing modular architecture in `autobot-user-frontend/src/components/knowledge/`.
 
 ## Component Architecture
 
@@ -29,7 +29,7 @@ Complete the Knowledge Manager frontend to restore critical administrative capab
 ### New Files to Create
 
 ```
-autobot-vue/src/components/knowledge/
+autobot-user-frontend/src/components/knowledge/
 ├── KnowledgeSystemDocs.vue        # System documentation viewer/exporter
 ├── KnowledgePromptEditor.vue      # System & agent prompt editor
 ├── modals/
@@ -300,15 +300,15 @@ Consistent patterns across all components:
 ## Related Files
 
 **Frontend:**
-- `autobot-vue/src/components/knowledge/KnowledgeManager.vue`
-- `autobot-vue/src/stores/useKnowledgeStore.ts`
-- `autobot-vue/src/components/ChatInterface.vue` (source attribution)
+- `autobot-user-frontend/src/components/knowledge/KnowledgeManager.vue`
+- `autobot-user-frontend/src/stores/useKnowledgeStore.ts`
+- `autobot-user-frontend/src/components/ChatInterface.vue` (source attribution)
 
 **Backend (existing, stable):**
-- `backend/api/knowledge_categories.py`
-- `backend/api/prompts.py`
-- `backend/api/knowledge_search.py`
-- `backend/api/chat_knowledge.py`
+- `autobot-user-backend/api/knowledge_categories.py`
+- `autobot-user-backend/api/prompts.py`
+- `autobot-user-backend/api/knowledge_search.py`
+- `autobot-user-backend/api/chat_knowledge.py`
 
 ---
 

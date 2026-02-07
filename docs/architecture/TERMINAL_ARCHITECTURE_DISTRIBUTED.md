@@ -14,7 +14,7 @@ Currently, the terminal functionality runs on the main machine (`172.16.168.20`)
 
 ### Key Components
 
-#### 1. Terminal API Router (`backend/api/terminal.py`)
+#### 1. Terminal API Router (`autobot-user-backend/api/terminal.py`)
 **22 REST API Endpoints**:
 - **Session Management**: CREATE, READ, LIST, DELETE operations
 - **Command Execution**: Single commands and interactive sessions
@@ -40,7 +40,7 @@ POST   /api/terminal/{id}/control/return # Return to agent
 - **Simple**: `/ws/simple/{session_id}` - Lightweight sessions
 - **Secure**: `/ws/secure/{session_id}` - Enhanced security with auditing
 
-#### 3. System Command Agent (`src/agents/system_command_agent.py`)
+#### 3. System Command Agent (`autobot-user-backend/agents/system_command_agent.py`)
 **Core Terminal Engine**:
 - PTY (pseudo-terminal) management
 - Command execution with security validation

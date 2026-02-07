@@ -79,7 +79,7 @@ Comprehensive task breakdown for fixing 6 CRITICAL backend vulnerabilities in Au
 - **Dependencies:** Task 1.1
 - **Files Affected:**
   - `src/conversation_file_manager.py` (add verification)
-  - `backend/api/system.py` (health check integration)
+  - `autobot-user-backend/api/system.py` (health check integration)
 - **Verification Criteria:**
   - All 5 required tables verified
   - Health check endpoint reports DB status
@@ -203,7 +203,7 @@ Day 5:   Task 1.6 (Integration tests)
 - **Files Affected:**
   - `src/chat_workflow_manager.py` line 449 (redis client init)
   - `src/chat_workflow_manager.py` line 175 (async get operations)
-  - `src/utils/async_redis_helpers.py` (new file)
+  - `autobot-user-backend/utils/async_redis_helpers.py` (new file)
 - **Verification Criteria:**
   - All `redis_client.get()` converted to `await redis_client.get()`
   - Connection pooling implemented (max 50 connections)
@@ -268,7 +268,7 @@ Day 5:   Task 1.6 (Integration tests)
 - **Agent:** backend-engineer
 - **Dependencies:** Task 2.1
 - **Files Affected:**
-  - `src/utils/async_redis_helpers.py` (new file)
+  - `autobot-user-backend/utils/async_redis_helpers.py` (new file)
 - **Verification Criteria:**
   - `get_async_redis_client()` function available
   - Connection pool manager implemented
@@ -371,7 +371,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 - **Agent:** security-auditor + backend-engineer (pair programming)
 - **Dependencies:** Issue #2 (async Redis required)
 - **Files Affected:**
-  - `backend/api/conversation_files.py` lines 151-167 (replace TODO)
+  - `autobot-user-backend/api/conversation_files.py` lines 151-167 (replace TODO)
 - **Verification Criteria:**
   - Query Redis sessions DB (DB 2) for ownership
   - Strict ownership validation (owner check)
@@ -408,7 +408,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 - **Dependencies:** None (parallel with 3.1)
 - **Files Affected:**
   - `backend/services/audit_logger.py` (new file)
-  - `backend/api/conversation_files.py` (integrate logging)
+  - `autobot-user-backend/api/conversation_files.py` (integrate logging)
 - **Verification Criteria:**
   - Unauthorized access attempts logged
   - Admin access logged with justification
@@ -450,7 +450,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
 - **Agent:** backend-engineer
 - **Dependencies:** Tasks 3.1, 3.2
 - **Files Affected:**
-  - `backend/api/conversation_files.py` (add feature flag)
+  - `autobot-user-backend/api/conversation_files.py` (add feature flag)
   - `.env` (add ENFORCE_SESSION_OWNERSHIP flag)
 - **Verification Criteria:**
   - Feature flag controls enforcement
@@ -657,7 +657,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 - **Agent:** backend-engineer
 - **Dependencies:** Task 4.3
 - **Files Affected:**
-  - `backend/api/chat_enhanced.py` (update context preparation)
+  - `autobot-user-backend/api/chat_enhanced.py` (update context preparation)
 - **Verification Criteria:**
   - Use smart_context_manager for all LLM requests
   - Add configuration parameter max_context_messages

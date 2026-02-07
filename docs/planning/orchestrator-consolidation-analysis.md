@@ -21,7 +21,7 @@
 **Current Usage**:
 - `backend/dependencies.py`: Dependency injection (get_orchestrator, get_cached_orchestrator)
 - `src/enhanced_orchestrator.py`: Used as base_orchestrator (line 107)
-- `backend/api/workflow_automation.py`: classify_request_complexity, plan_workflow_steps (line 133)
+- `autobot-user-backend/api/workflow_automation.py`: classify_request_complexity, plan_workflow_steps (line 133)
 - `debug/debug_workflow_issue.py`: Testing and debugging
 
 **Key Features**:
@@ -42,7 +42,7 @@ from src.orchestrator import Orchestrator, TaskComplexity, WorkflowStatus, Workf
 
 ---
 
-### 2. **backend/api/advanced_workflow_orchestrator.py** (52KB) - API ROUTER
+### 2. **autobot-user-backend/api/advanced_workflow_orchestrator.py** (52KB) - API ROUTER
 **Status**: ✅ ACTIVE - API Endpoint at /api/orchestrator
 
 **Current Usage**:
@@ -69,9 +69,9 @@ from src.enhanced_orchestrator import EnhancedOrchestrator
 **Status**: ✅ ACTIVE - Used by multiple components
 
 **Current Usage**:
-- `backend/api/workflow_automation.py`: Lines 20, 134
-- `backend/api/advanced_workflow_orchestrator.py`: Lines 25, 147
-- `src/utils/resource_factory.py`: Lines 90, 96, 100
+- `autobot-user-backend/api/workflow_automation.py`: Lines 20, 134
+- `autobot-user-backend/api/advanced_workflow_orchestrator.py`: Lines 25, 147
+- `autobot-user-backend/utils/resource_factory.py`: Lines 90, 96, 100
 
 **Key Features**:
 - Wraps base Orchestrator (line 107)
@@ -94,7 +94,7 @@ from src.orchestrator import Orchestrator, TaskComplexity, WorkflowStatus, Workf
 **Status**: ✅ ACTIVE - API Endpoint at /api/orchestration
 
 **Current Usage**:
-- `backend/api/orchestration.py`: Lines 15, 18, 195
+- `autobot-user-backend/api/orchestration.py`: Lines 15, 18, 195
 - Active API endpoint `/api/orchestration`
 
 **Key Features**:
@@ -136,7 +136,7 @@ from src.enhanced_multi_agent_orchestrator import (
 **Status**: ✅ ACTIVE - Knowledge Base MCP Integration
 
 **Current Usage**:
-- `backend/api/knowledge_mcp.py`: Lines 14, 34, 428
+- `autobot-user-backend/api/knowledge_mcp.py`: Lines 14, 34, 428
 
 **Key Features**:
 - LangChain integration
@@ -163,11 +163,11 @@ langchain_orchestrator = LangChainAgentOrchestrator(
 
 ---
 
-### 6. **src/agents/agent_orchestrator.py** (38KB) - AGENT COORDINATION
+### 6. **autobot-user-backend/agents/agent_orchestrator.py** (38KB) - AGENT COORDINATION
 **Status**: ✅ ACTIVE - Used by Knowledge API
 
 **Current Usage**:
-- `backend/api/knowledge.py`: Line 23 (`get_agent_orchestrator`)
+- `autobot-user-backend/api/knowledge.py`: Line 23 (`get_agent_orchestrator`)
 
 **Key Features**:
 - get_agent_orchestrator function (line 1064)
@@ -240,13 +240,13 @@ from src.lightweight_orchestrator import lightweight_orchestrator
 │ (Wraps base orchestrator)           │
 └──────────────┬──────────────────────┘
                │
-               ├─► backend/api/advanced_workflow_orchestrator.py (API Router)
+               ├─► autobot-user-backend/api/advanced_workflow_orchestrator.py (API Router)
                │   └─► /api/orchestrator endpoints
                │
-               ├─► backend/api/workflow_automation.py
+               ├─► autobot-user-backend/api/workflow_automation.py
                │   └─► Workflow automation & session takeover
                │
-               └─► src/utils/resource_factory.py
+               └─► autobot-user-backend/utils/resource_factory.py
                    └─► Resource management
 
 ┌─────────────────────────────────────┐
@@ -254,7 +254,7 @@ from src.lightweight_orchestrator import lightweight_orchestrator
 │ (Independent - Multi-agent system)  │
 └──────────────┬──────────────────────┘
                │
-               └─► backend/api/orchestration.py (API Router)
+               └─► autobot-user-backend/api/orchestration.py (API Router)
                    └─► /api/orchestration endpoints
 
 ┌─────────────────────────────────────┐
@@ -262,15 +262,15 @@ from src.lightweight_orchestrator import lightweight_orchestrator
 │ (Independent - LangChain bridge)    │
 └──────────────┬──────────────────────┘
                │
-               └─► backend/api/knowledge_mcp.py
+               └─► autobot-user-backend/api/knowledge_mcp.py
                    └─► MCP knowledge base tools
 
 ┌─────────────────────────────────────┐
-│ src/agents/agent_orchestrator.py    │
+│ autobot-user-backend/agents/agent_orchestrator.py    │
 │ (Independent - Agent coordination)  │
 └──────────────┬──────────────────────┘
                │
-               └─► backend/api/knowledge.py
+               └─► autobot-user-backend/api/knowledge.py
                    └─► RAG agent integration
 
 ┌─────────────────────────────────────┐
@@ -306,7 +306,7 @@ from src.lightweight_orchestrator import lightweight_orchestrator
    - LangChain integration
    - Knowledge base MCP bridge
 
-4. **backend/api/orchestrator_router.py** (API LAYER)
+4. **autobot-user-backend/api/orchestrator_router.py** (API LAYER)
    - Keep advanced_workflow_orchestrator.py as API router
    - Rename for clarity
    - Uses consolidated base orchestrator
@@ -315,7 +315,7 @@ from src.lightweight_orchestrator import lightweight_orchestrator
 **Archive**:
 - ✅ src/lightweight_orchestrator.py (no active usage)
 - ✅ src/enhanced_orchestrator.py (merge into base)
-- ✅ src/agents/agent_orchestrator.py (consolidate into base or multi_agent)
+- ✅ autobot-user-backend/agents/agent_orchestrator.py (consolidate into base or multi_agent)
 
 ---
 
@@ -373,14 +373,14 @@ from src.lightweight_orchestrator import lightweight_orchestrator
 4. Update all imports of EnhancedOrchestrator to use Orchestrator
 
 **Files to Update**:
-- `backend/api/workflow_automation.py` - Change import from EnhancedOrchestrator to Orchestrator
-- `backend/api/advanced_workflow_orchestrator.py` - Change import from EnhancedOrchestrator to Orchestrator
-- `src/utils/resource_factory.py` - Change import from EnhancedOrchestrator to Orchestrator
+- `autobot-user-backend/api/workflow_automation.py` - Change import from EnhancedOrchestrator to Orchestrator
+- `autobot-user-backend/api/advanced_workflow_orchestrator.py` - Change import from EnhancedOrchestrator to Orchestrator
+- `autobot-user-backend/utils/resource_factory.py` - Change import from EnhancedOrchestrator to Orchestrator
 
 **Archive**: `src/enhanced_orchestrator.py`
 
 ### Phase 3: Evaluate Agent Orchestrator
-**File**: `src/agents/agent_orchestrator.py`
+**File**: `autobot-user-backend/agents/agent_orchestrator.py`
 **Options**:
 A. Merge into base `orchestrator.py` if features are general-purpose
 B. Keep separate if agent-specific coordination is distinct

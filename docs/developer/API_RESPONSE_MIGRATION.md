@@ -17,7 +17,7 @@ We've created a standardized utility (`api_responses.py`) that eliminates **200+
 
 All API endpoints follow similar response patterns:
 
-**Example from `backend/api/metrics.py:28`:**
+**Example from `autobot-user-backend/api/metrics.py:28`:**
 ```python
 try:
     stats = workflow_metrics.get_workflow_stats(workflow_id)
@@ -63,7 +63,7 @@ except Exception as e:
 
 ### Example 1: Basic Success Response
 
-**BEFORE** (`backend/api/metrics.py:68-75` - 8 lines):
+**BEFORE** (`autobot-user-backend/api/metrics.py:68-75` - 8 lines):
 ```python
 try:
     metrics = system_monitor.get_current_metrics()
@@ -387,23 +387,23 @@ For each endpoint you migrate:
 
 | File | Endpoints | Est. Lines Saved |
 |------|-----------|------------------|
-| `backend/api/metrics.py` | 8 endpoints | ~40 lines |
-| `backend/api/workflow.py` | 10+ endpoints | ~50 lines |
-| `backend/api/feature_flags.py` | 5 endpoints | ~25 lines |
-| `backend/api/scheduler.py` | 5 endpoints | ~25 lines |
+| `autobot-user-backend/api/metrics.py` | 8 endpoints | ~40 lines |
+| `autobot-user-backend/api/workflow.py` | 10+ endpoints | ~50 lines |
+| `autobot-user-backend/api/feature_flags.py` | 5 endpoints | ~25 lines |
+| `autobot-user-backend/api/scheduler.py` | 5 endpoints | ~25 lines |
 
 ### Priority 2 - Medium Impact
 
-- `backend/api/multimodal.py` - 8 endpoints
-- `backend/api/knowledge_mcp.py` - 9 endpoints
-- `backend/api/templates.py` - 5 endpoints
+- `autobot-user-backend/api/multimodal.py` - 8 endpoints
+- `autobot-user-backend/api/knowledge_mcp.py` - 9 endpoints
+- `autobot-user-backend/api/templates.py` - 5 endpoints
 - 10+ more files
 
 ### Priority 3 - Complex Patterns
 
-- `backend/api/infrastructure.py` - 36 error patterns
-- `backend/api/conversation_files.py` - 36 error patterns
-- `backend/api/memory.py` - 40 error patterns
+- `autobot-user-backend/api/infrastructure.py` - 36 error patterns
+- `autobot-user-backend/api/conversation_files.py` - 36 error patterns
+- `autobot-user-backend/api/memory.py` - 40 error patterns
 - 50+ more files
 
 **Total Estimated Savings**: 200-300 lines across 76 files
@@ -608,7 +608,7 @@ return success_response(data=result)
 ## Support
 
 **Questions?** See:
-- `src/utils/api_responses.py` - Utility implementation
+- `autobot-user-backend/utils/api_responses.py` - Utility implementation
 - `tests/test_api_responses.py` - Comprehensive tests (37 tests)
 - `CLAUDE.md` - API development guidelines
 

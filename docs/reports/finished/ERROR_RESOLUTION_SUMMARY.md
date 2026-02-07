@@ -14,8 +14,8 @@ Browser Console Analysis: **6 Critical Issues Identified and Resolved**
 **Root Cause**: Backend monitoring.py was missing `/services/status` and `/services/health` endpoints  
 
 **Fix Applied**:
-- Added `/api/monitoring/services/status` endpoint to `backend/api/monitoring.py` (lines 366-398)
-- Added `/api/monitoring/services/health` endpoint to `backend/api/monitoring.py` (lines 401-491)
+- Added `/api/monitoring/services/status` endpoint to `autobot-user-backend/api/monitoring.py` (lines 366-398)
+- Added `/api/monitoring/services/health` endpoint to `autobot-user-backend/api/monitoring.py` (lines 401-491)
 - Both endpoints include comprehensive error handling and fallback responses
 - Integrated with existing service monitoring infrastructure
 
@@ -30,7 +30,7 @@ Browser Console Analysis: **6 Critical Issues Identified and Resolved**
 **Root Cause**: Incorrect import - importing class `{ ApiClient }` instead of instance `ApiClient`  
 
 **Fix Applied**:
-- Changed import in `autobot-vue/src/stores/useDashboardStore.js` from:
+- Changed import in `autobot-user-frontend/src/stores/useDashboardStore.js` from:
   ```javascript
   import { ApiClient } from '../utils/ApiClient.js'  // Wrong - imports class
   ```
@@ -38,7 +38,7 @@ Browser Console Analysis: **6 Critical Issues Identified and Resolved**
   ```javascript
   import ApiClient from '../utils/ApiClient.js'      // Correct - imports instance
   ```
-- Also fixed in `autobot-vue/src/components/chat/ChatInterface.vue`
+- Also fixed in `autobot-user-frontend/src/components/chat/ChatInterface.vue`
 
 **Impact**: Dashboard metrics loading now works correctly
 
@@ -53,7 +53,7 @@ Browser Console Analysis: **6 Critical Issues Identified and Resolved**
 **Fix Applied**:
 - Created backend restart script: `restart_backend_with_fixes.sh`
 - WebSocket proxy configuration in Vite is correct (vite.config.ts lines 62-78)
-- Backend WebSocket endpoint `/ws` exists in `backend/api/websockets.py`
+- Backend WebSocket endpoint `/ws` exists in `autobot-user-backend/api/websockets.py`
 - Issue resolved by restarting backend to reload endpoints
 
 **Impact**: Real-time WebSocket communication restored
@@ -92,7 +92,7 @@ python comprehensive_ui_test.py
   "services": [...],
   "summary": {
     "online": 5,
-    "warning": 0, 
+    "warning": 0,
     "error": 0,
     "offline": 0
   },
@@ -199,12 +199,12 @@ python comprehensive_ui_test.py
 ## 📝 **Files Modified**
 
 ### **Backend Changes**:
-- `backend/api/monitoring.py` - Added missing service endpoints (95 lines added)
+- `autobot-user-backend/api/monitoring.py` - Added missing service endpoints (95 lines added)
 - `restart_backend_with_fixes.sh` - Graceful restart script (new file)
 
 ### **Frontend Changes**:
-- `autobot-vue/src/stores/useDashboardStore.js` - Fixed ApiClient import
-- `autobot-vue/src/components/chat/ChatInterface.vue` - Fixed ApiClient import
+- `autobot-user-frontend/src/stores/useDashboardStore.js` - Fixed ApiClient import
+- `autobot-user-frontend/src/components/chat/ChatInterface.vue` - Fixed ApiClient import
 
 ### **Testing Infrastructure**:
 - `comprehensive_ui_test.py` - Complete UI testing framework (new file, 400+ lines)

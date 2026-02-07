@@ -152,8 +152,8 @@ Performance tuning and risk mitigation including:
 - `../system-state.md` - Current system status
 
 ### Existing Analytics
-- `../../backend/api/codebase_analytics.py` - Current static analysis
-- `../../backend/api/analytics.py` - Runtime analytics
+- `../../autobot-user-backend/api/codebase_analytics.py` - Current static analysis
+- `../../autobot-user-backend/api/analytics.py` - Runtime analytics
 - `../../analysis/CODE_DUPLICATION_ANALYSIS.md` - Existing duplication analysis
 
 ---

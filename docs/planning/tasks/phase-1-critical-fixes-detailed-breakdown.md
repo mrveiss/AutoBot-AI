@@ -67,7 +67,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 **Files to Modify**:
 - `src/chat_workflow_manager.py` (classification logic)
 - `src/chat_history_manager.py` (context handling)
-- `backend/api/chat.py` (conversation endpoint)
+- `autobot-user-backend/api/chat.py` (conversation endpoint)
 
 **Testing Requirements**:
 - **Unit Tests**: Test classification with short continuation phrases
@@ -119,7 +119,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 
 **Files to Modify**:
 - `src/chat_workflow_manager.py` (lines 150-250)
-- `src/agents/classification_agent.py` (if exists, otherwise in workflow manager)
+- `autobot-user-backend/agents/classification_agent.py` (if exists, otherwise in workflow manager)
 - `src/config.py` (add continuation phrase patterns)
 
 **Testing Requirements**:
@@ -177,7 +177,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 **Files to Modify**:
 - `src/chat_workflow_manager.py` (lines 300-400, response generation)
 - `src/conversation.py` (exit detection logic)
-- `backend/api/chat.py` (conversation state management)
+- `autobot-user-backend/api/chat.py` (conversation state management)
 
 **Testing Requirements**:
 - **Unit Tests**:
@@ -363,7 +363,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 
 **Files to Modify**:
 - `src/knowledge_base_v2.py` (lines 200-300, document ingestion)
-- `src/utils/semantic_chunker.py` (markdown-aware chunking)
+- `autobot-user-backend/utils/semantic_chunker.py` (markdown-aware chunking)
 - `scripts/populate_knowledge_base.py` (indexing script)
 
 **Testing Requirements**:
@@ -471,9 +471,9 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Delete doc file, verify removal from index
 
 **Files to Modify**:
-- `src/utils/doc_watcher.py` (create new file)
+- `autobot-user-backend/utils/doc_watcher.py` (create new file)
 - `src/knowledge_base_v2.py` (add incremental indexing)
-- `backend/api/knowledge.py` (add status endpoint)
+- `autobot-user-backend/api/knowledge.py` (add status endpoint)
 - `backend/app_factory.py` (start watcher on startup)
 
 **Testing Requirements**:
@@ -531,7 +531,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - `GET /api/docs/related/{doc_id}` - Get related documents
 
 2. **Implement documentation API** (8 hours)
-   - Create `backend/api/documentation.py`
+   - Create `autobot-user-backend/api/documentation.py`
    - Integrate with knowledge base for search
    - Format markdown for display in chat
    - Add syntax highlighting for code blocks
@@ -547,7 +547,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Create Postman collection for testing
 
 **Files to Create/Modify**:
-- `backend/api/documentation.py` (create new file)
+- `autobot-user-backend/api/documentation.py` (create new file)
 - `backend/app_factory.py` (register documentation router)
 - `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md` (update)
 
@@ -604,10 +604,10 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Display results as chat messages
 
 **Files to Create/Modify**:
-- `autobot-vue/src/components/chat/DocumentationCard.vue` (create)
-- `autobot-vue/src/components/chat/DocumentViewer.vue` (create)
-- `autobot-vue/src/components/chat/DocumentationQuickActions.vue` (create)
-- `autobot-vue/src/components/chat/DocumentationSearch.vue` (create)
+- `autobot-user-frontend/src/components/chat/DocumentationCard.vue` (create)
+- `autobot-user-frontend/src/components/chat/DocumentViewer.vue` (create)
+- `autobot-user-frontend/src/components/chat/DocumentationQuickActions.vue` (create)
+- `autobot-user-frontend/src/components/chat/DocumentationSearch.vue` (create)
 
 **Testing Requirements**:
 - **Component Tests**: Test each Vue component in isolation
@@ -661,8 +661,8 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 
 **Files to Modify**:
 - `src/chat_workflow_manager.py` (lines 300-400, response generation)
-- `backend/api/chat.py` (add documentation suggestion logic)
-- `autobot-vue/src/components/chat/ChatMessage.vue` (doc link rendering)
+- `autobot-user-backend/api/chat.py` (add documentation suggestion logic)
+- `autobot-user-frontend/src/components/chat/ChatMessage.vue` (doc link rendering)
 
 **Testing Requirements**:
 - **Logic Tests**: Documentation suggestion accuracy
@@ -716,10 +716,10 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Show "What's next" suggestions
 
 **Files to Create/Modify**:
-- `autobot-vue/src/components/onboarding/InstallationGuide.vue` (create)
-- `autobot-vue/src/components/onboarding/InstallationAssistant.vue` (create)
+- `autobot-user-frontend/src/components/onboarding/InstallationGuide.vue` (create)
+- `autobot-user-frontend/src/components/onboarding/InstallationAssistant.vue` (create)
 - `src/chat_workflow_manager.py` (add installation detection)
-- `backend/api/onboarding.py` (create new router)
+- `autobot-user-backend/api/onboarding.py` (create new router)
 
 **Testing Requirements**:
 - **Detection Tests**: Installation keyword recognition
@@ -857,7 +857,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 **Files to Create/Modify**:
 - `/etc/nginx/sites-available/autobot-backend` (nginx config)
 - `backend/fast_app_factory_fix.py` (proxy header handling)
-- `autobot-vue/src/config/environment.js` (HTTPS URLs)
+- `autobot-user-frontend/src/config/environment.js` (HTTPS URLs)
 - `.env` (update API_BASE_URL to HTTPS)
 
 **Testing Requirements**:
@@ -914,7 +914,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 **Files to Modify**:
 - `ansible/templates/redis/redis-stack.conf.j2` (TLS config)
 - `.env` (all service URLs to HTTPS)
-- `src/utils/redis_database_manager.py` (TLS connection)
+- `autobot-user-backend/utils/redis_database_manager.py` (TLS connection)
 - `compose.yml` (update service URLs)
 
 **Testing Requirements**:

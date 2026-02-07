@@ -19,7 +19,7 @@
 
 1. **Continue fixing remaining linting errors** ⚠️ *IN PROGRESS*
    - Current: ~800 errors remaining (down from 1,737)
-   - Focus: Line length violations in `backend/api/chat.py`, `src/orchestrator.py`
+   - Focus: Line length violations in `autobot-user-backend/api/chat.py`, `src/orchestrator.py`
    - Effort: 2-4 hours
    - Impact: Code readability and maintainability
 

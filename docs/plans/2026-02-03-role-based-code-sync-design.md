@@ -69,7 +69,7 @@
 |--------------|-------------|------------------------------|------------------------------|
 | code-source  | -           | (git origin)                 | -                            |
 | backend      | component   | backend/, src/               | /home/autobot/AutoBot        |
-| frontend     | component   | autobot-vue/                 | /home/autobot/autobot-vue    |
+| frontend     | component   | autobot-user-frontend/                 | /home/autobot/autobot-vue    |
 | slm-server   | component   | slm-server/, slm-admin/      | /home/autobot/AutoBot        |
 | slm-agent    | component   | src/slm/agent/               | /opt/slm-agent               |
 | npu-worker   | package     | resources/windows-npu-worker | C:\AutoBot\npu               |

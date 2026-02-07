@@ -15,7 +15,7 @@ AutoBot provides a comprehensive suite of advanced visualization components for 
 ### 1. Resource Heatmap
 
 **Component**: `ResourceHeatmap.vue`
-**Location**: `autobot-vue/src/components/visualizations/ResourceHeatmap.vue`
+**Location**: `autobot-user-frontend/src/components/visualizations/ResourceHeatmap.vue`
 
 Displays resource usage patterns over time using ApexCharts heatmap visualization.
 
@@ -56,7 +56,7 @@ import { ResourceHeatmap } from '@/components/visualizations'
 ### 2. Workflow Visualization
 
 **Component**: `WorkflowVisualization.vue`
-**Location**: `autobot-vue/src/components/visualizations/WorkflowVisualization.vue`
+**Location**: `autobot-user-frontend/src/components/visualizations/WorkflowVisualization.vue`
 
 Interactive workflow execution flowchart with custom SVG rendering.
 
@@ -107,7 +107,7 @@ import { WorkflowVisualization } from '@/components/visualizations'
 ### 3. Agent Activity Visualization
 
 **Component**: `AgentActivityVisualization.vue`
-**Location**: `autobot-vue/src/components/visualizations/AgentActivityVisualization.vue`
+**Location**: `autobot-user-frontend/src/components/visualizations/AgentActivityVisualization.vue`
 
 Real-time agent activity monitoring dashboard.
 
@@ -156,7 +156,7 @@ import { AgentActivityVisualization } from '@/components/visualizations'
 ### 4. System Architecture Diagram
 
 **Component**: `SystemArchitectureDiagram.vue`
-**Location**: `autobot-vue/src/components/visualizations/SystemArchitectureDiagram.vue`
+**Location**: `autobot-user-frontend/src/components/visualizations/SystemArchitectureDiagram.vue`
 
 Interactive system architecture visualization showing the distributed AutoBot infrastructure.
 
@@ -214,7 +214,7 @@ import { SystemArchitectureDiagram } from '@/components/visualizations'
 ### 5. Knowledge Graph (Existing)
 
 **Component**: `KnowledgeGraph.vue`
-**Location**: `autobot-vue/src/components/knowledge/KnowledgeGraph.vue`
+**Location**: `autobot-user-frontend/src/components/knowledge/KnowledgeGraph.vue`
 
 Interactive knowledge graph for entity relationships.
 
@@ -237,7 +237,7 @@ Interactive knowledge graph for entity relationships.
 ## Custom Dashboard Builder
 
 **View**: `CustomDashboard.vue`
-**Location**: `autobot-vue/src/views/CustomDashboard.vue`
+**Location**: `autobot-user-frontend/src/views/CustomDashboard.vue`
 
 Build personalized dashboards with drag-and-drop widgets.
 

@@ -15,7 +15,7 @@
 ## Task 1: Fix API URL Mismatch (Critical Bug)
 
 **Files:**
-- Modify: `autobot-vue/src/composables/useCodeIntelligence.ts`
+- Modify: `autobot-user-frontend/src/composables/useCodeIntelligence.ts`
 
 **Step 1: Fix all URL paths**
 
@@ -53,7 +53,7 @@ Replace all occurrences of `code_intelligence` with `code-intelligence`:
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/composables/useCodeIntelligence.ts
+git add autobot-user-frontend/src/composables/useCodeIntelligence.ts
 git commit -m "fix(frontend): correct API URLs from code_intelligence to code-intelligence (#566)"
 ```
 
@@ -62,8 +62,8 @@ git commit -m "fix(frontend): correct API URLs from code_intelligence to code-in
 ## Task 2: Add Findings Types and New API Methods
 
 **Files:**
-- Modify: `autobot-vue/src/types/codeIntelligence.ts`
-- Modify: `autobot-vue/src/composables/useCodeIntelligence.ts`
+- Modify: `autobot-user-frontend/src/types/codeIntelligence.ts`
+- Modify: `autobot-user-frontend/src/composables/useCodeIntelligence.ts`
 
 **Step 1: Add Redis finding type to types file**
 
@@ -321,7 +321,7 @@ return {
 **Step 8: Commit**
 
 ```bash
-git add autobot-vue/src/types/codeIntelligence.ts autobot-vue/src/composables/useCodeIntelligence.ts
+git add autobot-user-frontend/src/types/codeIntelligence.ts autobot-user-frontend/src/composables/useCodeIntelligence.ts
 git commit -m "feat(frontend): add findings fetch and file scan methods to composable (#566)"
 ```
 
@@ -330,12 +330,12 @@ git commit -m "feat(frontend): add findings fetch and file scan methods to compo
 ## Task 3: Create FindingsTable Component
 
 **Files:**
-- Create: `autobot-vue/src/components/analytics/code-intelligence/FindingsTable.vue`
+- Create: `autobot-user-frontend/src/components/analytics/code-intelligence/FindingsTable.vue`
 
 **Step 1: Create the directory**
 
 ```bash
-mkdir -p autobot-vue/src/components/analytics/code-intelligence
+mkdir -p autobot-user-frontend/src/components/analytics/code-intelligence
 ```
 
 **Step 2: Create FindingsTable.vue**
@@ -698,7 +698,7 @@ code {
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/code-intelligence/FindingsTable.vue
+git add autobot-user-frontend/src/components/analytics/code-intelligence/FindingsTable.vue
 git commit -m "feat(frontend): add shared FindingsTable component with hybrid display (#566)"
 ```
 
@@ -707,9 +707,9 @@ git commit -m "feat(frontend): add shared FindingsTable component with hybrid di
 ## Task 4: Create Panel Components
 
 **Files:**
-- Create: `autobot-vue/src/components/analytics/code-intelligence/SecurityFindingsPanel.vue`
-- Create: `autobot-vue/src/components/analytics/code-intelligence/PerformanceFindingsPanel.vue`
-- Create: `autobot-vue/src/components/analytics/code-intelligence/RedisFindingsPanel.vue`
+- Create: `autobot-user-frontend/src/components/analytics/code-intelligence/SecurityFindingsPanel.vue`
+- Create: `autobot-user-frontend/src/components/analytics/code-intelligence/PerformanceFindingsPanel.vue`
+- Create: `autobot-user-frontend/src/components/analytics/code-intelligence/RedisFindingsPanel.vue`
 
 **Step 1: Create SecurityFindingsPanel.vue**
 
@@ -912,7 +912,7 @@ defineProps<{
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/code-intelligence/
+git add autobot-user-frontend/src/components/analytics/code-intelligence/
 git commit -m "feat(frontend): add Security, Performance, and Redis findings panels (#566)"
 ```
 
@@ -921,7 +921,7 @@ git commit -m "feat(frontend): add Security, Performance, and Redis findings pan
 ## Task 5: Create FileScanModal Component
 
 **Files:**
-- Create: `autobot-vue/src/components/analytics/code-intelligence/FileScanModal.vue`
+- Create: `autobot-user-frontend/src/components/analytics/code-intelligence/FileScanModal.vue`
 
 **Step 1: Create FileScanModal.vue**
 
@@ -1185,7 +1185,7 @@ async function handleScan() {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/code-intelligence/FileScanModal.vue
+git add autobot-user-frontend/src/components/analytics/code-intelligence/FileScanModal.vue
 git commit -m "feat(frontend): add FileScanModal for single file scanning (#566)"
 ```
 
@@ -1194,7 +1194,7 @@ git commit -m "feat(frontend): add FileScanModal for single file scanning (#566)
 ## Task 6: Update Main Dashboard with Tabs
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/CodeIntelligenceDashboard.vue`
+- Modify: `autobot-user-frontend/src/components/analytics/CodeIntelligenceDashboard.vue`
 
 **Step 1: Replace entire file with updated version**
 
@@ -1722,7 +1722,7 @@ onMounted(async () => {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/CodeIntelligenceDashboard.vue
+git add autobot-user-frontend/src/components/analytics/CodeIntelligenceDashboard.vue
 git commit -m "feat(frontend): add tabbed interface and file scan to CodeIntelligenceDashboard (#566)"
 ```
 
@@ -1733,7 +1733,7 @@ git commit -m "feat(frontend): add tabbed interface and file scan to CodeIntelli
 **Step 1: Sync changes to frontend VM**
 
 ```bash
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
 ```
 
 **Step 2: Test in browser**

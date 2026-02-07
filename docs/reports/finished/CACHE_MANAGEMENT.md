@@ -18,13 +18,13 @@ This document describes the comprehensive cache management system implemented to
 
 ### 1. Frontend Cache Management
 
-#### **Cache Clearing Script** (`autobot-vue/clear-cache.sh`)
+#### **Cache Clearing Script** (`autobot-user-frontend/clear-cache.sh`)
 Comprehensive frontend cache clearing with timeout protection:
 
 ```bash
 # Usage
-./autobot-vue/clear-cache.sh          # Quick cache clear
-./autobot-vue/clear-cache.sh --full   # Full reinstall with package refresh
+./autobot-user-frontend/clear-cache.sh          # Quick cache clear
+./autobot-user-frontend/clear-cache.sh --full   # Full reinstall with package refresh
 ```
 
 **What it clears:**
@@ -61,7 +61,7 @@ Anti-cache headers and enhanced proxy configuration:
 server: {
   headers: {
     'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache', 
+    'Pragma': 'no-cache',
     'Expires': '0',
     'X-Cache-Bust': Date.now().toString(),
     'X-AutoBot-Build': process.env.npm_package_version || 'dev'
@@ -100,23 +100,23 @@ const freshRequest = new Request(event.request.url, {
 });
 ```
 
-#### **Cache Manager Utility** (`src/utils/CacheManager.ts`)
+#### **Cache Manager Utility** (`autobot-user-backend/utils/CacheManager.ts`)
 TypeScript class for comprehensive browser cache management:
 
 ```typescript
 export class CacheManager {
   // Clear all browser caches comprehensively
   public async clearAllCaches(): Promise<void>
-  
+
   // Clear localStorage with selective preservation
   public async clearLocalStorage(): Promise<void>
-  
+
   // Clear service worker caches
   public async clearServiceWorkerCaches(): Promise<void>
-  
+
   // Check if cache clearing is needed (version mismatch)  
   public needsCacheClearing(): boolean
-  
+
   // Force hard refresh of the page
   public forceHardRefresh(): void
 }
@@ -131,7 +131,7 @@ Enhanced API configuration with automatic cache invalidation:
 // Helper function to get full URL with cache-busting
 export function getApiUrl(endpoint = '', options = {}) {
   let fullUrl = `${API_CONFIG.BASE_URL}${endpoint}`;
-  
+
   // Add cache-busting parameters if not disabled
   if (!API_CONFIG.DISABLE_CACHE && (options.cacheBust !== false)) {
     const separator = fullUrl.includes('?') ? '&' : '?';
@@ -139,7 +139,7 @@ export function getApiUrl(endpoint = '', options = {}) {
     const timestampParam = `_t=${Date.now()}`;
     fullUrl = `${fullUrl}${separator}${cacheBustParam}&${timestampParam}`;
   }
-  
+
   return fullUrl;
 }
 
@@ -152,7 +152,7 @@ export async function fetchApi(endpoint, options = {}) {
     'X-Cache-Bust': API_CONFIG.CACHE_BUST_VERSION,
     'X-Request-Time': Date.now().toString(),
   };
-  
+
   const fetchOptions = {
     ...options,
     headers: { ...defaultHeaders, ...options.headers },
@@ -195,7 +195,7 @@ sudo ./clear-system-cache.sh --memory # Include memory caches
 
 **What it clears:**
 - DNS resolution caches (systemd-resolved, nscd)
-- Browser caches (Chrome, Firefox) 
+- Browser caches (Chrome, Firefox)
 - Container runtime caches (Docker)
 - Package manager caches (apt, npm, pip)
 - Font and thumbnail caches
@@ -209,7 +209,7 @@ Integrated into the main application header:
 
 ```vue
 <!-- Cache Clear Button -->
-<button 
+<button
   @click="clearAllCaches"
   :disabled="clearingCaches"
   class="px-3 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-400"
@@ -244,11 +244,11 @@ const handleGlobalError = (error, instance, info) => {
   const cacheRelatedErrors = [
     'Failed to fetch', 'NetworkError', 'Configuration error', 'API endpoint not found'
   ];
-  
-  const isCacheRelated = cacheRelatedErrors.some(errorType => 
+
+  const isCacheRelated = cacheRelatedErrors.some(errorType =>
     error.message?.includes(errorType)
   );
-  
+
   if (isCacheRelated) {
     appStore?.addNotification({
       type: 'error',

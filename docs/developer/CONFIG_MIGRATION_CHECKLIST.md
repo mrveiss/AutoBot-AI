@@ -69,9 +69,9 @@ config.redis.host
 
 ### Step 1: Identify Hardcoded Values
 
-- [ ] Search for hardcoded IPs: `grep -rn "172\.16\.168\." autobot-vue/src/`
-- [ ] Search for hardcoded ports: `grep -rn ":[0-9]\{4,5\}" autobot-vue/src/`
-- [ ] Search for hardcoded URLs: `grep -rn "http://" autobot-vue/src/`
+- [ ] Search for hardcoded IPs: `grep -rn "172\.16\.168\." autobot-user-frontend/src/`
+- [ ] Search for hardcoded ports: `grep -rn ":[0-9]\{4,5\}" autobot-user-frontend/src/`
+- [ ] Search for hardcoded URLs: `grep -rn "http://" autobot-user-frontend/src/`
 
 ### Step 2: Import SSOT Config
 

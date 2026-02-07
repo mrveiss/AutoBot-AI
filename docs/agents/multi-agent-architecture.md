@@ -48,7 +48,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
   - Synthesize responses from multiple agents
   - Handle complex multi-step reasoning
 
-**File**: `src/agents/agent_orchestrator.py`
+**File**: `autobot-user-backend/agents/agent_orchestrator.py`
 
 ### 2. Chat Agent
 - **Model**: Llama 3.2 1B Instruct (Q4_K_M)
@@ -70,7 +70,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 - Limited technical analysis capability
 - No multi-step task coordination
 
-**File**: `src/agents/chat_agent.py`
+**File**: `autobot-user-backend/agents/chat_agent.py`
 
 ### 3. Enhanced System Commands Agent
 - **Model**: Llama 3.2 1B Instruct (Q4_K_M)
@@ -98,7 +98,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 - Limited to single-system operations
 - No multi-server orchestration
 
-**File**: `src/agents/enhanced_system_commands_agent.py`
+**File**: `autobot-user-backend/agents/enhanced_system_commands_agent.py`
 
 ### 4. RAG Agent (Retrieval-Augmented Generation)
 - **Model**: Llama 3.2 3B Instruct (Q4_K_M)
@@ -120,10 +120,10 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 - No real-time data access
 - Higher resource usage
 
-**File**: `src/agents/rag_agent.py`
+**File**: `autobot-user-backend/agents/rag_agent.py`
 
 ### 5. Knowledge Retrieval Agent
-- **Model**: Llama 3.2 1B Instruct (Q4_K_M) 
+- **Model**: Llama 3.2 1B Instruct (Q4_K_M)
 - **Role**: Fast fact lookup and simple retrieval
 - **Responsibilities**:
   - Quick knowledge base searches
@@ -142,7 +142,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 - Cannot handle complex analysis
 - No cross-document reasoning
 
-**File**: `src/agents/kb_librarian_agent.py` (Enhanced)
+**File**: `autobot-user-backend/agents/kb_librarian_agent.py` (Enhanced)
 
 ### 6. Research Agent
 - **Model**: Llama 3.2 3B Instruct (Q4_K_M) + Playwright
@@ -164,7 +164,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 - Requires internet connectivity
 - Cannot access private/authenticated content
 
-**File**: `src/agents/containerized_librarian_assistant.py`
+**File**: `autobot-user-backend/agents/containerized_librarian_assistant.py`
 
 ## Request Routing Logic
 
@@ -207,7 +207,7 @@ The system uses the `get_task_specific_model()` function from `src/config.py`:
 ```python
 agent_models = {
     "orchestrator": "llama3.2:3b-instruct-q4_K_M",
-    "chat": "llama3.2:1b-instruct-q4_K_M", 
+    "chat": "llama3.2:1b-instruct-q4_K_M",
     "system_commands": "llama3.2:1b-instruct-q4_K_M",
     "rag": "llama3.2:3b-instruct-q4_K_M",
     "knowledge_retrieval": "llama3.2:1b-instruct-q4_K_M",
@@ -263,7 +263,7 @@ export AUTOBOT_MODEL_RAG="llama3.2:3b-instruct-q4_K_M"
 
 The multi-agent system integrates with the existing frontend through:
 
-1. **Chat Interface** (`backend/api/chat.py`)
+1. **Chat Interface** (`autobot-user-backend/api/chat.py`)
    - Routes requests to Agent Orchestrator
    - Handles agent-specific metadata
    - Displays agent attribution in responses
@@ -294,7 +294,7 @@ The multi-agent system integrates with the existing frontend through:
    class NewAgent:
        def __init__(self):
            self.model_name = global_config_manager.get_task_specific_model("new_agent")
-           
+
        async def process_request(self, request, context=None):
            # Implementation
    ```
@@ -310,7 +310,7 @@ The multi-agent system integrates with the existing frontend through:
    - Add capability mapping
 
 4. **Update Package Exports**
-   - Add to `src/agents/__init__.py`
+   - Add to `autobot-user-backend/agents/__init__.py`
    - Create singleton getter function
 
 ### Testing
@@ -388,7 +388,7 @@ agent.health_check()  # Returns status and capabilities
    ```bash
    # Check Ollama model availability
    ollama list
-   
+
    # Pull required models
    ollama pull llama3.2:1b-instruct-q4_K_M
    ollama pull llama3.2:3b-instruct-q4_K_M

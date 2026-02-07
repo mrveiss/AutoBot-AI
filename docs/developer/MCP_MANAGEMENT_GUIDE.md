@@ -40,7 +40,7 @@ The MCP Registry is a **centralized management system** for all AutoBot MCP tool
 
 ⚠️ **AutoBot's MCP vs Claude's MCP**
 
-- **AutoBot's MCP** (`backend/api/*_mcp.py`) - Tools for AutoBot's LLM agents
+- **AutoBot's MCP** (`autobot-user-backend/api/*_mcp.py`) - Tools for AutoBot's LLM agents
 - **Claude's MCP** (`.mcp/` folder) - Tools for Claude Code building AutoBot
 
 This guide covers **AutoBot's MCP** only.
@@ -85,10 +85,10 @@ This guide covers **AutoBot's MCP** only.
 
 | Component | File | Responsibility |
 |-----------|------|---------------|
-| **MCP Registry** | `backend/api/mcp_registry.py` | Aggregate all MCP bridges, provide unified API |
-| **Knowledge MCP** | `backend/api/knowledge_mcp.py` | Expose knowledge base operations (search, add, vectors) |
-| **VNC MCP** | `backend/api/vnc_mcp.py` | Expose VNC observation tools (status, activity, context) |
-| **MCP Manager UI** | `autobot-vue/src/components/developer/MCPManager.vue` | Visual management interface |
+| **MCP Registry** | `autobot-user-backend/api/mcp_registry.py` | Aggregate all MCP bridges, provide unified API |
+| **Knowledge MCP** | `autobot-user-backend/api/knowledge_mcp.py` | Expose knowledge base operations (search, add, vectors) |
+| **VNC MCP** | `autobot-user-backend/api/vnc_mcp.py` | Expose VNC observation tools (status, activity, context) |
+| **MCP Manager UI** | `autobot-user-frontend/src/components/developer/MCPManager.vue` | Visual management interface |
 
 ---
 
@@ -259,7 +259,7 @@ This guide covers **AutoBot's MCP** only.
 
 ### Location
 
-**Component**: `autobot-vue/src/components/developer/MCPManager.vue`
+**Component**: `autobot-user-frontend/src/components/developer/MCPManager.vue`
 
 ### Features
 
@@ -320,7 +320,7 @@ The component automatically refreshes data every **30 seconds** to keep informat
 
 ### Step 1: Create MCP Bridge Module
 
-**File**: `backend/api/your_feature_mcp.py`
+**File**: `autobot-user-backend/api/your_feature_mcp.py`
 
 ```python
 """
@@ -406,7 +406,7 @@ core_routers = [
 
 ### Step 3: Add to MCP Registry
 
-**File**: `backend/api/mcp_registry.py`
+**File**: `autobot-user-backend/api/mcp_registry.py`
 
 ```python
 # Add to MCP_BRIDGES list
@@ -586,7 +586,7 @@ async function checkBridgeHealth(bridgeName) {
 ## Related Documentation
 
 - **VNC MCP Architecture**: `docs/developer/VNC_MCP_ARCHITECTURE.md`
-- **Knowledge Base MCP**: `backend/api/knowledge_mcp.py` (inline docs)
+- **Knowledge Base MCP**: `autobot-user-backend/api/knowledge_mcp.py` (inline docs)
 - **AutoBot vs Claude MCP**: `CLAUDE.md` (MCP distinction)
 
 ---

@@ -15,7 +15,7 @@ Previously, the file upload functionality had limitations for automated testing:
 
 ### 1. Dual File Input Approach
 
-**File**: `autobot-vue/src/components/FileBrowser.vue`
+**File**: `autobot-user-frontend/src/components/FileBrowser.vue`
 
 #### Hidden File Input (Legacy)
 ```html
@@ -51,18 +51,18 @@ Previously, the file upload functionality had limitations for automated testing:
 const processFileUpload = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  
+
   try {
     const headers = {
       'X-User-Role': 'admin' // Proper permission handling
     };
-    
+
     const response = await fetch('http://localhost:8001/api/files/upload', {
       method: 'POST',
       headers: headers,
       body: formData
     });
-    
+
     if (response.ok) {
       const result = await response.json();
       alert(`File ${file.name} uploaded successfully.`);
@@ -148,9 +148,9 @@ if (response.status === 403) {
 #### Allowed File Types:
 ```javascript
 ALLOWED_EXTENSIONS = {
-  ".txt", ".md", ".json", ".yaml", ".yml", ".py", ".js", ".ts", 
-  ".html", ".css", ".xml", ".csv", ".log", ".cfg", ".ini", 
-  ".sh", ".bat", ".sql", ".pdf", ".png", ".jpg", ".jpeg", 
+  ".txt", ".md", ".json", ".yaml", ".yml", ".py", ".js", ".ts",
+  ".html", ".css", ".xml", ".csv", ".log", ".cfg", ".ini",
+  ".sh", ".bat", ".sql", ".pdf", ".png", ".jpg", ".jpeg",
   ".gif", ".svg", ".ico"
 }
 ```
@@ -209,7 +209,7 @@ page.on('dialog', async (dialog) => {
 
 ## Files Modified
 
-1. **autobot-vue/src/components/FileBrowser.vue**
+1. **autobot-user-frontend/src/components/FileBrowser.vue**
    - Added visible file input with drag & drop UI
    - Enhanced upload processing with centralized error handling
    - Improved accessibility with ARIA labels and keyboard navigation

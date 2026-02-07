@@ -471,14 +471,14 @@ git commit -m "feat(slm): add agent seed migration script (#760)"
 
 ---
 
-## Task 4: Update backend/api/agent_config.py to Use SLM Client
+## Task 4: Update autobot-user-backend/api/agent_config.py to Use SLM Client
 
 **Files:**
-- Modify: `backend/api/agent_config.py`
+- Modify: `autobot-user-backend/api/agent_config.py`
 
 **Step 1: Add SLM client import and helper function**
 
-Add to imports at top of `backend/api/agent_config.py`:
+Add to imports at top of `autobot-user-backend/api/agent_config.py`:
 
 ```python
 from backend.services.slm_client import get_slm_client
@@ -554,7 +554,7 @@ Expected: PASS
 **Step 4: Commit**
 
 ```bash
-git add backend/api/agent_config.py
+git add autobot-user-backend/api/agent_config.py
 git commit -m "feat(agent-config): use SLM client with local fallback (#760)"
 ```
 
@@ -563,7 +563,7 @@ git commit -m "feat(agent-config): use SLM client with local fallback (#760)"
 ## Task 5: Add discoverService() to TypeScript SSOT Config
 
 **Files:**
-- Modify: `autobot-vue/src/config/ssot-config.ts`
+- Modify: `autobot-user-frontend/src/config/ssot-config.ts`
 
 **Step 1: Add TypeScript interfaces and cache**
 
@@ -682,7 +682,7 @@ After syncing to frontend VM, test in browser console.
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/config/ssot-config.ts
+git add autobot-user-frontend/src/config/ssot-config.ts
 git commit -m "feat(frontend): add discoverService() to SSOT config (#760)"
 ```
 
@@ -691,11 +691,11 @@ git commit -m "feat(frontend): add discoverService() to SSOT config (#760)"
 ## Task 6: Create Vue Composable for Reactive Service Discovery
 
 **Files:**
-- Create: `autobot-vue/src/composables/useServiceDiscovery.ts`
+- Create: `autobot-user-frontend/src/composables/useServiceDiscovery.ts`
 
 **Step 1: Create the composable**
 
-Create `autobot-vue/src/composables/useServiceDiscovery.ts`:
+Create `autobot-user-frontend/src/composables/useServiceDiscovery.ts`:
 
 ```typescript
 // AutoBot - AI-Powered Automation Platform
@@ -831,7 +831,7 @@ export function useServiceDiscovery() {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/composables/useServiceDiscovery.ts
+git add autobot-user-frontend/src/composables/useServiceDiscovery.ts
 git commit -m "feat(frontend): add useServiceDiscovery Vue composable (#760)"
 ```
 
@@ -852,7 +852,7 @@ gh issue comment 760 --body "## Phase 3 Implementation Complete
 - [x] Added ServiceDiscoveryCache to Python SLM client
 - [x] Added discover_service() function with fallback chain
 - [x] Created agent seed migration script
-- [x] Updated backend/api/agent_config.py to use SLM client with local fallback
+- [x] Updated autobot-user-backend/api/agent_config.py to use SLM client with local fallback
 - [x] Added discoverService() to TypeScript SSOT config
 - [x] Created useServiceDiscovery Vue composable
 

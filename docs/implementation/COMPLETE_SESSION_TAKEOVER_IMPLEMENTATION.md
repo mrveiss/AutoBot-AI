@@ -10,7 +10,7 @@ The session takeover and workflow automation system is now fully implemented acr
 
 ## 🎯 **Frontend Implementation (Vue.js)**
 
-### **File: `/autobot-vue/src/components/TerminalWindow.vue`**
+### **File: `/autobot-user-frontend/src/components/TerminalWindow.vue`**
 
 **Key Features Implemented:**
 
@@ -61,7 +61,7 @@ const waitingForUserConfirmation = ref(false);
 
 ## 🔧 **Backend Implementation (FastAPI)**
 
-### **File: `/backend/api/workflow_automation.py`**
+### **File: `/autobot-user-backend/api/workflow_automation.py`**
 
 **Complete Workflow Management System:**
 
@@ -101,7 +101,7 @@ const waitingForUserConfirmation = ref(false);
    - `POST /create_from_chat` - Create workflow from natural language
    - `WebSocket /workflow_ws/{session_id}` - Real-time communication
 
-### **File: `/backend/api/simple_terminal_websocket.py`**
+### **File: `/autobot-user-backend/api/simple_terminal_websocket.py`**
 
 **Enhanced Terminal Integration:**
 
@@ -110,7 +110,7 @@ const waitingForUserConfirmation = ref(false);
    async def handle_workflow_control(self, data: Dict):
        """Handle workflow automation control messages"""
        # Process pause/resume/approve/skip actions
-       
+
    async def handle_workflow_message(self, data: Dict):
        """Handle workflow step execution messages"""
        # Forward workflow data to frontend terminal
@@ -121,7 +121,7 @@ const waitingForUserConfirmation = ref(false);
    - `workflow_message` - Step confirmation and execution
    - `step_confirmation_required` - User approval requests
 
-### **File: `/backend/api/chat.py`**
+### **File: `/autobot-user-backend/api/chat.py`**
 
 **Chat Integration for Workflow Triggering:**
 
@@ -149,7 +149,7 @@ const waitingForUserConfirmation = ref(false);
 # Workflow automation router integration
 if WORKFLOW_AUTOMATION_AVAILABLE:
     routers_config.append(
-        (workflow_automation_router, "/workflow_automation", 
+        (workflow_automation_router, "/workflow_automation",
          ["workflow_automation"], "workflow_automation")
     )
 ```

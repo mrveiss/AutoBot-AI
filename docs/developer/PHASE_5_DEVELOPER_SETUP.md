@@ -33,7 +33,7 @@ bash run_autobot.sh --dev --build
 ### System Requirements
 
 **Minimum Requirements**:
-- **OS**: Windows 11 with WSL2 (Ubuntu 22.04 LTS) 
+- **OS**: Windows 11 with WSL2 (Ubuntu 22.04 LTS)
 - **CPU**: Intel 8-core (Intel Core Ultra 9 185H recommended for NPU)
 - **RAM**: 16GB (32GB recommended)
 - **Storage**: 100GB free space (SSD recommended)
@@ -218,7 +218,7 @@ bash run_autobot.sh --status
 
 # Expected output:
 ✓ Main Backend API      (http://127.0.0.1:8001)
-✓ Frontend Service      (http://172.16.168.21:5173) 
+✓ Frontend Service      (http://172.16.168.21:5173)
 ✓ NPU Worker           (http://172.16.168.22:8081)
 ✓ Redis Stack          (tcp://172.16.168.23:6379)
 ✓ AI Orchestrator      (http://172.16.168.24:8080)
@@ -277,10 +277,10 @@ cd autobot-vue
 npm run dev  # Runs automatically with --dev flag
 
 # Files watched for changes:
-autobot-vue/src/**/*.vue     # Vue components
-autobot-vue/src/**/*.ts      # TypeScript files  
-autobot-vue/src/**/*.js      # JavaScript files
-autobot-vue/src/**/*.css     # Stylesheets
+autobot-user-frontend/src/**/*.vue     # Vue components
+autobot-user-frontend/src/**/*.ts      # TypeScript files  
+autobot-user-frontend/src/**/*.js      # JavaScript files
+autobot-user-frontend/src/**/*.css     # Stylesheets
 ```
 
 **Backend (FastAPI)**:
@@ -392,24 +392,24 @@ vms:
     host: "172.16.168.21"
     services: ["nginx", "vue-dev-server"]
     ports: [80, 443, 5173]
-    
+
   npu_worker:  
     host: "172.16.168.22"
     services: ["npu-service", "gpu-fallback"]
     ports: [8081, 8082]
     hardware: ["intel_npu", "nvidia_gpu"]
-    
+
   redis_stack:
-    host: "172.16.168.23" 
+    host: "172.16.168.23"
     services: ["redis-server", "redisinsight"]
     ports: [6379, 8002]
     databases: 11
-    
+
   ai_orchestrator:
     host: "172.16.168.24"
     services: ["model-orchestrator", "inference-cache"]
     ports: [8080, 8083, 8084]
-    
+
   browser_service:
     host: "172.16.168.25"
     services: ["playwright-api", "browser-pool"]  
@@ -444,7 +444,7 @@ docker restart autobot-redis
 curl http://127.0.0.1:8001/api/health
 
 # Check Vite proxy configuration
-cat autobot-vue/vite.config.ts | grep proxy -A 10
+cat autobot-user-frontend/vite.config.ts | grep proxy -A 10
 
 # Restart frontend with correct proxy
 cd autobot-vue && npm run dev
@@ -533,7 +533,7 @@ curl -X POST http://127.0.0.1:8001/api/multimodal/process \
 
 **1. Create API module**:
 ```python  
-# backend/api/your_feature.py
+# autobot-user-backend/api/your_feature.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -547,13 +547,13 @@ class YourRequest(BaseModel):
 async def your_endpoint(request: YourRequest):
     """
     Your endpoint description.
-    
+
     Args:
         request: Your request parameters
-        
+
     Returns:
         dict: Response data
-        
+
     Raises:
         HTTPException: If processing fails
     """
@@ -579,7 +579,7 @@ def create_app():
 
 **1. Create Vue component**:
 ```vue
-<!-- autobot-vue/src/components/YourComponent.vue -->
+<!-- autobot-user-frontend/src/components/YourComponent.vue -->
 <template>
   <div class="your-component">
     <h2>{{ title }}</h2>
@@ -628,14 +628,14 @@ const handleAction = async () => {
 
 **2. Add to router**:
 ```typescript
-// autobot-vue/src/router/index.ts
+// autobot-user-frontend/src/router/index.ts
 import YourComponent from '@/components/YourComponent.vue'
 
 const routes = [
   // ... existing routes
   {
     path: '/your-feature',
-    name: 'YourFeature', 
+    name: 'YourFeature',
     component: YourComponent,
     meta: { requiresAuth: true }
   }
@@ -652,11 +652,11 @@ from .base_processor import BaseModalityProcessor
 
 class YourModalityProcessor(BaseModalityProcessor):
     """Process your custom modality (e.g., 3D data, sensor readings)."""
-    
+
     def __init__(self):
         super().__init__()
         self.supported_formats = ['custom_format_1', 'custom_format_2']
-    
+
     async def process(
         self,
         input_data: bytes,
@@ -665,18 +665,18 @@ class YourModalityProcessor(BaseModalityProcessor):
     ) -> Dict[str, Any]:
         """
         Process your custom modality.
-        
+
         Args:
             input_data: Raw input bytes
             format_type: Input format identifier  
             options: Processing options
-            
+
         Returns:
             Dict containing analysis results
         """
         if format_type not in self.supported_formats:
             raise ValueError(f"Unsupported format: {format_type}")
-        
+
         # Your processing logic here
         result = {
             "modality": "your_modality",
@@ -687,7 +687,7 @@ class YourModalityProcessor(BaseModalityProcessor):
             },
             "processing_time": 0.5
         }
-        
+
         return result
 ```
 
@@ -698,7 +698,7 @@ from .your_processor import YourModalityProcessor
 
 MODALITY_PROCESSORS = {
     'text': TextProcessor(),
-    'image': ImageProcessor(), 
+    'image': ImageProcessor(),
     'audio': AudioProcessor(),
     'your_modality': YourModalityProcessor(),  # Add here
 }
@@ -788,7 +788,7 @@ bash run_autobot.sh --prod --build
 
 **Recommended Extensions**:
 - Python (ms-python.python)
-- Pylance (ms-python.vscode-pylance) 
+- Pylance (ms-python.vscode-pylance)
 - Vue Language Features (Vue.volar)
 - TypeScript Vue Plugin (Vue.vscode-typescript-vue-plugin)
 - Docker (ms-azuretools.vscode-docker)

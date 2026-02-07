@@ -21,8 +21,8 @@ The GUI displays conflicting status information because:
 - **Benefit:** Single source of truth, correct endpoints, maintainable code
 
 ### Files Affected
-- **Primary:** `/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue` (lines 467-702)
-- **Reference:** `/home/kali/Desktop/AutoBot/autobot-vue/src/composables/useSystemStatus.js` (already correct)
+- **Primary:** `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/App.vue` (lines 467-702)
+- **Reference:** `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/composables/useSystemStatus.js` (already correct)
 
 ### Correct Endpoints (from useSystemStatus)
 - `/api/service-monitor/vms/status` - Infrastructure VM status
@@ -89,7 +89,7 @@ Review and verify the useSystemStatus composable has all functionality needed by
 - API contract documented
 
 **Files to Review:**
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/composables/useSystemStatus.js`
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/composables/useSystemStatus.js`
 
 ---
 
@@ -118,10 +118,10 @@ Search codebase for any components that might depend on App.vue's status methods
 **Search Commands:**
 ```bash
 # Search for references to App.vue status methods
-grep -r "systemStatus\|systemServices\|refreshSystemStatus" autobot-vue/src/components/
+grep -r "systemStatus\|systemServices\|refreshSystemStatus" autobot-user-frontend/src/components/
 
 # Search for parent/root references
-grep -r "\$parent\|\$root" autobot-vue/src/components/ | grep -i status
+grep -r "\$parent\|\$root" autobot-user-frontend/src/components/ | grep -i status
 ```
 
 ---
@@ -211,7 +211,7 @@ setup() {
 ```
 
 **Files Modified:**
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue`
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/App.vue`
 
 ---
 
@@ -293,7 +293,7 @@ Ensure all template bindings work correctly with composable data.
 Create comprehensive unit tests for the useSystemStatus composable.
 
 **Action Items:**
-- [ ] Create test file: `autobot-vue/tests/unit/composables/useSystemStatus.spec.js`
+- [ ] Create test file: `autobot-user-frontend/tests/unit/composables/useSystemStatus.spec.js`
 - [ ] Test refreshSystemStatus with successful API responses
 - [ ] Test refreshSystemStatus with API failures and fallbacks
 - [ ] Test updateSystemStatus correctly calculates health status
@@ -312,7 +312,7 @@ Create comprehensive unit tests for the useSystemStatus composable.
 - Edge cases covered (network errors, empty responses, etc.)
 
 **Test File Location:**
-- `/home/kali/Desktop/AutoBot/autobot-vue/tests/unit/composables/useSystemStatus.spec.js`
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/tests/unit/composables/useSystemStatus.spec.js`
 
 **Test Framework:**
 - Vitest (already configured in project)
@@ -331,7 +331,7 @@ Create comprehensive unit tests for the useSystemStatus composable.
 Test App.vue integration with useSystemStatus composable.
 
 **Action Items:**
-- [ ] Create test file: `autobot-vue/tests/integration/AppStatusIntegration.spec.js`
+- [ ] Create test file: `autobot-user-frontend/tests/integration/AppStatusIntegration.spec.js`
 - [ ] Test App.vue mounts successfully with composable
 - [ ] Test status indicator dot displays correct colors
 - [ ] Test system status modal opens/closes correctly
@@ -348,7 +348,7 @@ Test App.vue integration with useSystemStatus composable.
 - Tests pass locally
 
 **Test File Location:**
-- `/home/kali/Desktop/AutoBot/autobot-vue/tests/integration/AppStatusIntegration.spec.js`
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/tests/integration/AppStatusIntegration.spec.js`
 
 ---
 
@@ -506,8 +506,8 @@ Add/update code comments in modified files.
 - Comments explain "why" not just "what"
 
 **Files to Update:**
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/composables/useSystemStatus.js` (if needed)
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/App.vue`
+- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/composables/useSystemStatus.js` (if needed)
 
 ---
 
@@ -594,13 +594,13 @@ Sync modified frontend files to VM1 (172.16.168.21).
 **Sync Commands:**
 ```bash
 # Sync App.vue to VM1
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/App.vue /home/autobot/autobot-vue/src/App.vue
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/App.vue /home/autobot/autobot-user-frontend/src/App.vue
 
 # Sync composable (if modified)
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/composables/useSystemStatus.js /home/autobot/autobot-vue/src/composables/useSystemStatus.js
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/composables/useSystemStatus.js /home/autobot/autobot-user-frontend/src/composables/useSystemStatus.js
 
 # Or sync entire src directory
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
 ```
 
 ---
@@ -722,10 +722,10 @@ Document rollback procedure in case deployment fails.
 **Rollback Procedure:**
 ```bash
 # On local machine - revert to previous commit
-git checkout <previous-commit-hash> autobot-vue/src/App.vue
+git checkout <previous-commit-hash> autobot-user-frontend/src/App.vue
 
 # Sync reverted file to VM1
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/App.vue /home/autobot/autobot-vue/src/App.vue
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/App.vue /home/autobot/autobot-user-frontend/src/App.vue
 
 # On VM1 - restart service
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21

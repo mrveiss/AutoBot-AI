@@ -15,7 +15,7 @@
 ## Task 1: Add State Variables for Polling
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:427-447`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:427-447`
 
 **Step 1: Add new reactive state variables**
 
@@ -35,7 +35,7 @@ Expected: No type errors
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "feat(analytics): add polling state variables (#637)
 
 Add reactive state for managing 30-second trends polling:
@@ -53,7 +53,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 2: Add Time Formatting Utility
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:627-665`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:627-665`
 
 **Step 1: Add timeAgo utility function**
 
@@ -81,7 +81,7 @@ Expected: No type errors
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "feat(analytics): add timeAgo utility for relative timestamps (#637)
 
 Formats Date objects into human-readable relative time strings
@@ -97,7 +97,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 3: Enhance loadTrends with Smart Update Detection
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:565-579`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:565-579`
 
 **Step 1: Update loadTrends function with smart detection**
 
@@ -136,7 +136,7 @@ Expected: No type errors
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "feat(analytics): add smart update detection to loadTrends (#637)
 
 Compares new trend data with current state before updating to avoid
@@ -153,7 +153,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 4: Implement Polling Functions
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:665-670`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:665-670`
 
 **Step 1: Add startPolling and stopPolling functions**
 
@@ -193,7 +193,7 @@ Expected: No type errors
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "feat(analytics): implement polling start/stop functions (#637)
 
 Adds 30-second interval for automatic trends refresh:
@@ -211,7 +211,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 5: Add Page Visibility API Integration
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:667-671`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:667-671`
 
 **Step 1: Add visibility change handler in onMounted**
 
@@ -270,7 +270,7 @@ Expected: No type errors
 **Step 6: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "feat(analytics): add Page Visibility API for smart polling (#637)
 
 Pauses polling when browser tab is hidden, resumes when visible:
@@ -288,7 +288,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 6: Add Live Indicator Badge UI
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:196-210`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:196-210`
 
 **Step 1: Update trends panel header with live indicators**
 
@@ -327,7 +327,7 @@ Expected: No errors
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "feat(analytics): add live indicator and last update UI (#637)
 
 Adds visual feedback for auto-refresh in trends panel:
@@ -345,7 +345,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 ## Task 7: Add CSS Styles for Live Indicators
 
 **Files:**
-- Modify: `autobot-vue/src/components/analytics/BugPredictionDashboard.vue:1167-1189`
+- Modify: `autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue:1167-1189`
 
 **Step 1: Add header-actions styles**
 
@@ -404,7 +404,7 @@ Expected: Build succeeds without CSS errors
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/BugPredictionDashboard.vue
+git add autobot-user-frontend/src/components/analytics/BugPredictionDashboard.vue
 git commit -m "style(analytics): add CSS for live indicators (#637)
 
 Styles for real-time update UI:
@@ -427,7 +427,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 **Step 1: Sync to frontend VM**
 
-Run: `./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/AutoBot/autobot-vue/src/`
+Run: `./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/AutoBot/autobot-user-frontend/src/`
 Expected: Files synced successfully
 
 **Step 2: Open dashboard in browser**

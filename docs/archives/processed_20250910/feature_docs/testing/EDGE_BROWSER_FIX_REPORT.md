@@ -23,7 +23,7 @@
 
 ## 🛠️ Implementation: Edge Compatibility Fix
 
-### Modified File: `autobot-vue/src/components/ChatInterface.vue`
+### Modified File: `autobot-user-frontend/src/components/ChatInterface.vue`
 
 **Key Changes Implemented**:
 

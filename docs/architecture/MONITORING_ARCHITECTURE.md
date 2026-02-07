@@ -125,7 +125,7 @@ scrape_configs:
 
 ### 4. Frontend Integration
 
-**Component**: `autobot-vue/src/components/monitoring/GrafanaDashboard.vue`
+**Component**: `autobot-user-frontend/src/components/monitoring/GrafanaDashboard.vue`
 
 **Features**:
 - Embeds Grafana dashboards in iframes

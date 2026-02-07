@@ -2,7 +2,7 @@
 
 ## Overview
 
-The SettingsPanel component (`autobot-vue/src/components/SettingsPanel.vue`) is the central configuration interface for AutoBot, providing comprehensive access to all system settings through a tabbed interface. This component handles both frontend UI settings and backend system configuration.
+The SettingsPanel component (`autobot-user-frontend/src/components/SettingsPanel.vue`) is the central configuration interface for AutoBot, providing comprehensive access to all system settings through a tabbed interface. This component handles both frontend UI settings and backend system configuration.
 
 ## Architecture
 

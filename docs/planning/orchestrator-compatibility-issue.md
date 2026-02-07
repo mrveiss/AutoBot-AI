@@ -24,7 +24,7 @@ The codebase has **incompatible orchestrator implementations**:
    - ✅ `plan_workflow_steps()` method (line 382)
    - Uses: `self.base_orchestrator = base_orchestrator or Orchestrator()` (line 107)
 
-3. **backend/api/workflow_automation.py** expects:
+3. **autobot-user-backend/api/workflow_automation.py** expects:
    - ✅ `Orchestrator` class (line 23: `from src.orchestrator import Orchestrator`)
    - ✅ `classify_request_complexity()` method (line 164)
    - ✅ `plan_workflow_steps()` method (line 165)
@@ -96,9 +96,9 @@ __all__ = ['Orchestrator', 'ConsolidatedOrchestrator', 'TaskComplexity', 'Workfl
 
 **Files to Update**:
 1. `src/enhanced_orchestrator.py` (line 22, 107)
-2. `backend/api/workflow_automation.py` (line 23, 133)
-3. `backend/api/advanced_workflow_orchestrator.py` (line 25)
-4. `src/utils/resource_factory.py` (line 90)
+2. `autobot-user-backend/api/workflow_automation.py` (line 23, 133)
+3. `autobot-user-backend/api/advanced_workflow_orchestrator.py` (line 25)
+4. `autobot-user-backend/utils/resource_factory.py` (line 90)
 5. Any other files importing `Orchestrator`
 
 ---

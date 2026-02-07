@@ -43,8 +43,8 @@ Backend: terminal_websocket_handler.py
 ## Files to Create
 - `src/services/terminal_completion_service.py`
 - `src/services/terminal_history_service.py`
-- `autobot-vue/src/components/terminal/TerminalSettings.vue`
-- `autobot-vue/src/composables/useTerminalHistory.ts`
+- `autobot-user-frontend/src/components/terminal/TerminalSettings.vue`
+- `autobot-user-frontend/src/composables/useTerminalHistory.ts`
 
 ## Success Criteria
 - Tab completion for commands and paths

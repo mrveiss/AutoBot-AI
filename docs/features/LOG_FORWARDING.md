@@ -331,8 +331,8 @@ Response:
 | File | Purpose |
 |------|---------|
 | `scripts/logging/log_forwarder.py` | Core forwarding service |
-| `backend/api/log_forwarding.py` | REST API endpoints |
-| `autobot-vue/src/components/settings/LogForwardingSettings.vue` | GUI component |
+| `autobot-user-backend/api/log_forwarding.py` | REST API endpoints |
+| `autobot-user-frontend/src/components/settings/LogForwardingSettings.vue` | GUI component |
 | `config/log_forwarding.json` | Persistent configuration (auto-generated) |
 
 ## Related

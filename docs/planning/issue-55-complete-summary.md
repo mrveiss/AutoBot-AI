@@ -29,7 +29,7 @@ Integrated graph-aware retrieval-augmented generation using composition pattern.
 - Automatic entity extraction during queries
 - Zero code duplication
 
-**API Endpoint**: `backend/api/graph_rag.py`
+**API Endpoint**: `autobot-user-backend/api/graph_rag.py`
 - POST `/api/graph-rag/search` - Graph-aware search with entity extraction
 
 ---
@@ -41,7 +41,7 @@ Automatic entity extraction and graph population from conversations.
 
 #### Core Implementation
 
-**File**: `src/agents/graph_entity_extractor.py` (600+ lines)
+**File**: `autobot-user-backend/agents/graph_entity_extractor.py` (600+ lines)
 
 ```python
 class GraphEntityExtractor:
@@ -86,7 +86,7 @@ class GraphEntityExtractor:
 
 #### REST API Endpoints
 
-**File**: `backend/api/entity_extraction.py` (350+ lines)
+**File**: `autobot-user-backend/api/entity_extraction.py` (350+ lines)
 
 **1. POST /api/entities/extract** - Single conversation extraction
 ```json
@@ -313,7 +313,7 @@ Create interactive graph visualization in Vue.js frontend.
 
 ### Components to Create
 
-1. **Main Canvas**: `autobot-vue/src/components/graph/GraphCanvas.vue`
+1. **Main Canvas**: `autobot-user-frontend/src/components/graph/GraphCanvas.vue`
    - D3.js or Cytoscape.js integration
    - Zoom, pan, node dragging
    - Real-time updates via WebSocket
@@ -325,7 +325,7 @@ Create interactive graph visualization in Vue.js frontend.
    - `GraphFilters.vue` - Filter controls (entity type, confidence, time range)
    - `GraphSearch.vue` - Entity search with autocomplete
 
-3. **State Management**: `autobot-vue/src/composables/useGraphState.ts`
+3. **State Management**: `autobot-user-frontend/src/composables/useGraphState.ts`
    - Graph data fetching
    - Node/edge selection
    - Filter state

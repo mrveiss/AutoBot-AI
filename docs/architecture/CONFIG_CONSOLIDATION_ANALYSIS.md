@@ -186,7 +186,7 @@ Migration order (safest to riskiest):
 
 ### Critical Path (Test First!)
 1. backend/app_factory.py - CORS configuration
-2. src/utils/knowledge_base_timeouts.py - Timeout access
+2. autobot-user-backend/utils/knowledge_base_timeouts.py - Timeout access
 3. src/llm_interface.py - LLM configuration
 4. src/knowledge_base.py - KB initialization
 
@@ -199,8 +199,8 @@ Migration order (safest to riskiest):
 10. src/knowledge_base_factory.py
 
 ### Backend APIs
-11. backend/api/llm.py
-12. backend/api/system.py
+11. autobot-user-backend/api/llm.py
+12. autobot-user-backend/api/system.py
 13. backend/celery_app.py
 
 ### Test Files
@@ -209,8 +209,8 @@ Migration order (safest to riskiest):
 
 ### Utilities
 16. src/conversation_file_manager.py
-17. src/utils/service_discovery.py
-18. src/utils/distributed_service_discovery.py
+17. autobot-user-backend/utils/service_discovery.py
+18. autobot-user-backend/utils/distributed_service_discovery.py
 19. backend/services/ai_stack_client.py
 20. backend/utils/paths_manager.py
 

@@ -70,25 +70,25 @@ class OSInfo:
     user: str = ""
     is_root: bool = False
     capabilities: List[str] = None
-    
+
     def __post_init__(self):
         if self.capabilities is None:
             self.capabilities = []
 
 class OSDetector:
     """Comprehensive OS detection and system awareness"""
-    
+
     def __init__(self):
         self._os_info = None
         self._tool_cache = {}
-    
+
     async def detect_system(self) -> OSInfo:
         """Detect comprehensive OS information"""
         if self._os_info:
             return self._os_info
-        
+
         system = platform.system().lower()
-        
+
         if system == "linux":
             self._os_info = await self._detect_linux()
         elif system == "windows":
@@ -101,15 +101,15 @@ class OSDetector:
                 version="unknown",
                 architecture=platform.machine()
             )
-        
+
         return self._os_info
-    
+
     async def _detect_linux(self) -> OSInfo:
         """Detect Linux distribution and capabilities"""
         distro = LinuxDistro.UNKNOWN
         version = ""
         package_manager = ""
-        
+
         # Detect WSL
         is_wsl = False
         try:
@@ -118,7 +118,7 @@ class OSDetector:
                     is_wsl = True
         except:
             pass
-        
+
         # Detect distribution
         try:
             # Try /etc/os-release first
@@ -146,37 +146,37 @@ class OSDetector:
                     elif 'kali' in content:
                         distro = LinuxDistro.KALI
                         package_manager = "apt"
-            
+
             # Get version
-            result = subprocess.run(['lsb_release', '-r'], 
+            result = subprocess.run(['lsb_release', '-r'],
                                   capture_output=True, text=True)
             if result.returncode == 0:
                 version = result.stdout.split('\t')[1].strip()
         except:
             pass
-        
+
         # Detect capabilities
         capabilities = []
-        
+
         # Check if running as root
         is_root = os.geteuid() == 0
-        
+
         # Check for sudo
         if shutil.which('sudo'):
             capabilities.append('sudo')
-        
+
         # Check for network tools
         network_tools = ['nmap', 'netstat', 'ss', 'arp', 'ping', 'traceroute']
         for tool in network_tools:
             if shutil.which(tool):
                 capabilities.append(f'network_{tool}')
-        
+
         # Check for system tools
         system_tools = ['systemctl', 'service', 'ps', 'top', 'htop']
         for tool in system_tools:
             if shutil.which(tool):
                 capabilities.append(f'system_{tool}')
-        
+
         return OSInfo(
             os_type=OSType.WSL if is_wsl else OSType.LINUX,
             distro=distro,
@@ -189,25 +189,25 @@ class OSDetector:
             is_root=is_root,
             capabilities=capabilities
         )
-    
+
     async def _detect_windows(self) -> OSInfo:
         """Detect Windows system information"""
         capabilities = []
-        
+
         # Check for PowerShell
         if shutil.which('powershell') or shutil.which('pwsh'):
             capabilities.append('powershell')
-        
+
         # Check for WSL
         if shutil.which('wsl'):
             capabilities.append('wsl')
-        
+
         # Check for common Windows tools
         windows_tools = ['netstat', 'ping', 'tracert', 'ipconfig', 'tasklist']
         for tool in windows_tools:
             if shutil.which(tool):
                 capabilities.append(f'windows_{tool}')
-        
+
         return OSInfo(
             os_type=OSType.WINDOWS,
             version=platform.release(),
@@ -218,21 +218,21 @@ class OSDetector:
             is_root='Administrator' in subprocess.getoutput('whoami'),
             capabilities=capabilities
         )
-    
+
     async def _detect_macos(self) -> OSInfo:
         """Detect macOS system information"""
         capabilities = []
-        
+
         # Check for Homebrew
         if shutil.which('brew'):
             capabilities.append('homebrew')
-        
+
         # Check for common macOS tools
         macos_tools = ['netstat', 'ping', 'traceroute', 'ifconfig', 'ps']
         for tool in macos_tools:
             if shutil.which(tool):
                 capabilities.append(f'macos_{tool}')
-        
+
         return OSInfo(
             os_type=OSType.MACOS,
             version=platform.mac_ver()[0],
@@ -243,20 +243,20 @@ class OSDetector:
             is_root=os.geteuid() == 0,
             capabilities=capabilities
         )
-    
+
     async def has_tool(self, tool_name: str) -> bool:
         """Check if a tool is available"""
         if tool_name in self._tool_cache:
             return self._tool_cache[tool_name]
-        
+
         result = shutil.which(tool_name) is not None
         self._tool_cache[tool_name] = result
         return result
-    
+
     async def get_install_command(self, tool_name: str) -> Optional[str]:
         """Get the command to install a tool on this OS"""
         os_info = await self.detect_system()
-        
+
         # Tool installation mappings
         install_commands = {
             OSType.LINUX: {
@@ -282,7 +282,7 @@ class OSDetector:
                 },
                 "dnf": {
                     "nmap": "dnf install -y nmap",
-                    "arp-scan": "dnf install -y arp-scan", 
+                    "arp-scan": "dnf install -y arp-scan",
                     "netstat": "dnf install -y net-tools",
                     "htop": "dnf install -y htop"
                 },
@@ -311,12 +311,12 @@ class OSDetector:
                 }
             }
         }
-        
+
         if os_info.os_type in install_commands:
             pkg_mgr = os_info.package_manager
             if pkg_mgr in install_commands[os_info.os_type]:
                 return install_commands[os_info.os_type][pkg_mgr].get(tool_name)
-        
+
         return None
 ```
 
@@ -353,7 +353,7 @@ class ProcessedGoal:
 
 class GoalProcessor:
     """Process natural language goals into actionable intents"""
-    
+
     def __init__(self):
         self.goal_patterns = {
             GoalCategory.NETWORK_DISCOVERY: [
@@ -393,15 +393,15 @@ class GoalProcessor:
                 (r"system.*load", "system_load", ["uptime", "w", "top"]),
             ]
         }
-    
+
     async def process_goal(self, goal: str) -> ProcessedGoal:
         """Process a natural language goal into structured intent"""
         goal_lower = goal.lower().strip()
-        
+
         # Find matching pattern
         best_match = None
         best_confidence = 0.0
-        
+
         for category, patterns in self.goal_patterns.items():
             for pattern, intent, tools in patterns:
                 if re.search(pattern, goal_lower):
@@ -410,11 +410,11 @@ class GoalProcessor:
                     if confidence > best_confidence:
                         best_confidence = confidence
                         best_match = (category, intent, tools)
-        
+
         if best_match:
             category, intent, tools = best_match
             parameters = self._extract_parameters(goal_lower, intent)
-            
+
             return ProcessedGoal(
                 original_goal=goal,
                 category=category,
@@ -425,7 +425,7 @@ class GoalProcessor:
                 requires_root=self._requires_root(intent),
                 risk_level=self._assess_risk(intent)
             )
-        
+
         # Unknown goal - let LLM handle it
         return ProcessedGoal(
             original_goal=goal,
@@ -437,48 +437,48 @@ class GoalProcessor:
             requires_root=False,
             risk_level="unknown"
         )
-    
+
     def _calculate_confidence(self, pattern: str, goal: str) -> float:
         """Calculate confidence score for pattern match"""
         # Simple confidence based on pattern specificity
         pattern_words = len(pattern.split())
         goal_words = len(goal.split())
-        
+
         base_confidence = 0.7
         specificity_bonus = min(pattern_words / goal_words, 0.3)
-        
+
         return base_confidence + specificity_bonus
-    
+
     def _extract_parameters(self, goal: str, intent: str) -> Dict[str, str]:
         """Extract parameters from goal text"""
         parameters = {}
-        
+
         # Extract IP addresses
         ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
         ips = re.findall(ip_pattern, goal)
         if ips:
             parameters['target_ip'] = ips[0]
-        
+
         # Extract hostnames
         hostname_pattern = r'\b[a-zA-Z0-9][-a-zA-Z0-9]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}\b'
         hostnames = re.findall(hostname_pattern, goal)
         if hostnames:
             parameters['target_host'] = hostnames[0]
-        
+
         # Extract port numbers
         port_pattern = r'\bport\s+(\d+)\b'
         ports = re.findall(port_pattern, goal)
         if ports:
             parameters['port'] = ports[0]
-        
+
         # Extract network ranges
         network_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}/\d{1,2}\b'
         networks = re.findall(network_pattern, goal)
         if networks:
             parameters['network'] = networks[0]
-        
+
         return parameters
-    
+
     def _requires_root(self, intent: str) -> bool:
         """Check if intent requires root privileges"""
         root_required = [
@@ -486,12 +486,12 @@ class GoalProcessor:
             'install_updates', 'port_scan', 'network_scan'
         ]
         return intent in root_required
-    
+
     def _assess_risk(self, intent: str) -> str:
         """Assess risk level of intent"""
         high_risk = ['vulnerability_scan', 'security_scan', 'kill_process']
         medium_risk = ['port_scan', 'network_scan', 'system_update']
-        
+
         if intent in high_risk:
             return "high"
         elif intent in medium_risk:
@@ -520,11 +520,11 @@ class ToolSelection:
 
 class OSAwareToolSelector:
     """Select the best tools based on OS and available capabilities"""
-    
+
     def __init__(self, os_detector: OSDetector):
         self.os_detector = os_detector
         self.tool_mappings = self._initialize_tool_mappings()
-    
+
     def _initialize_tool_mappings(self) -> Dict:
         """Initialize OS-specific tool mappings"""
         return {
@@ -573,21 +573,21 @@ class OSAwareToolSelector:
                 }
             }
         }
-    
+
     async def select_tool(self, goal: ProcessedGoal) -> ToolSelection:
         """Select the best tool for the given goal"""
         os_info = await self.os_detector.detect_system()
-        
+
         # Get tool mapping for this goal
         if goal.category in self.tool_mappings:
             category_tools = self.tool_mappings[goal.category]
             if goal.intent in category_tools:
                 intent_tools = category_tools[goal.intent]
-                
+
                 # Handle nested OS/distro mapping
                 if os_info.os_type in intent_tools:
                     tools = intent_tools[os_info.os_type]
-                    
+
                     # Handle Linux distro-specific tools
                     if isinstance(tools, dict) and os_info.distro:
                         if os_info.distro in tools:
@@ -595,15 +595,15 @@ class OSAwareToolSelector:
                         else:
                             # Fallback to common Linux tools
                             tools = tools.get(LinuxDistro.UBUNTU, list(tools.values())[0])
-                    
+
                     if isinstance(tools, list) and tools:
                         # Select best available tool
                         return await self._select_best_available_tool(tools, goal)
-        
+
         # Fallback to suggested tools from goal processing
         if goal.suggested_tools:
             return await self._select_best_available_tool(goal.suggested_tools, goal)
-        
+
         # No specific tools found - let LLM decide
         return ToolSelection(
             primary_command="",
@@ -612,29 +612,29 @@ class OSAwareToolSelector:
             requires_install=False,
             explanation=f"No specific tools mapped for: {goal.intent}"
         )
-    
+
     async def _select_best_available_tool(self, tools: List[str], goal: ProcessedGoal) -> ToolSelection:
         """Select the best available tool from a list"""
         available_tools = []
         unavailable_tools = []
-        
+
         for tool_cmd in tools:
             # Extract tool name from command
             tool_name = tool_cmd.split()[0]
-            
+
             if await self.os_detector.has_tool(tool_name):
                 available_tools.append(tool_cmd)
             else:
                 unavailable_tools.append((tool_cmd, tool_name))
-        
+
         if available_tools:
             # Use first available tool as primary
             primary = available_tools[0]
             fallbacks = available_tools[1:]
-            
+
             # Format command with parameters
             formatted_primary = self._format_command(primary, goal.parameters)
-            
+
             return ToolSelection(
                 primary_command=formatted_primary,
                 fallback_commands=[self._format_command(cmd, goal.parameters) for cmd in fallbacks],
@@ -642,14 +642,14 @@ class OSAwareToolSelector:
                 requires_install=False,
                 explanation=f"Using available tool: {primary.split()[0]}"
             )
-        
+
         elif unavailable_tools:
             # Need to install a tool
             tool_cmd, tool_name = unavailable_tools[0]
             install_cmd = await self.os_detector.get_install_command(tool_name)
-            
+
             formatted_cmd = self._format_command(tool_cmd, goal.parameters)
-            
+
             return ToolSelection(
                 primary_command=formatted_cmd,
                 fallback_commands=[],
@@ -657,7 +657,7 @@ class OSAwareToolSelector:
                 requires_install=True,
                 explanation=f"Tool '{tool_name}' needs to be installed"
             )
-        
+
         return ToolSelection(
             primary_command="",
             fallback_commands=[],
@@ -665,21 +665,21 @@ class OSAwareToolSelector:
             requires_install=False,
             explanation="No suitable tools found"
         )
-    
+
     def _format_command(self, command: str, parameters: Dict[str, str]) -> str:
         """Format command with parameters"""
         formatted = command
-        
+
         # Replace common placeholders
         replacements = {
             '{network}': parameters.get('network', '192.168.1.0/24'),
             '{target}': parameters.get('target_ip', parameters.get('target_host', '127.0.0.1')),
             '{port}': parameters.get('port', '80')
         }
-        
+
         for placeholder, value in replacements.items():
             formatted = formatted.replace(placeholder, value)
-        
+
         return formatted
 ```
 
@@ -701,7 +701,7 @@ class StreamChunk:
     chunk_type: str  # "stdout", "stderr", "status", "commentary"
     content: str
     metadata: Dict[str, Any] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self)
         if self.metadata is None:
@@ -710,20 +710,20 @@ class StreamChunk:
 
 class StreamingCommandExecutor:
     """Execute commands with real-time streaming output"""
-    
+
     def __init__(self, llm_interface=None):
         self.llm_interface = llm_interface
         self.active_processes = {}
-    
-    async def execute_with_streaming(self, 
+
+    async def execute_with_streaming(self,
                                    command: str,
                                    goal: str,
                                    working_dir: str = ".",
                                    timeout: int = 300) -> AsyncGenerator[StreamChunk, None]:
         """Execute command with real-time streaming output and commentary"""
-        
+
         process_id = f"cmd_{int(time.time())}"
-        
+
         # Send initial status
         yield StreamChunk(
             timestamp=datetime.now().isoformat(),
@@ -731,7 +731,7 @@ class StreamingCommandExecutor:
             content=f"🚀 Starting execution: {command}",
             metadata={"command": command, "goal": goal, "process_id": process_id}
         )
-        
+
         # Send initial commentary
         if self.llm_interface:
             initial_comment = await self._get_initial_commentary(command, goal)
@@ -741,7 +741,7 @@ class StreamingCommandExecutor:
                 content=f"💭 {initial_comment}",
                 metadata={"type": "initial_analysis"}
             )
-        
+
         try:
             # Start the process
             process = await asyncio.create_subprocess_exec(
@@ -750,30 +750,30 @@ class StreamingCommandExecutor:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=working_dir
             )
-            
+
             self.active_processes[process_id] = process
-            
+
             # Stream output in real-time
             output_buffer = []
             error_buffer = []
-            
+
             async def read_stdout():
                 while True:
                     try:
                         line = await process.stdout.readline()
                         if not line:
                             break
-                        
+
                         decoded_line = line.decode('utf-8', errors='replace').rstrip()
                         output_buffer.append(decoded_line)
-                        
+
                         yield StreamChunk(
                             timestamp=datetime.now().isoformat(),
                             chunk_type="stdout",
                             content=decoded_line,
                             metadata={"process_id": process_id}
                         )
-                        
+
                         # Provide periodic commentary on output
                         if len(output_buffer) % 10 == 0 and self.llm_interface:
                             recent_output = '\n'.join(output_buffer[-5:])
@@ -785,7 +785,7 @@ class StreamingCommandExecutor:
                                     content=f"🔍 {commentary}",
                                     metadata={"type": "progress_analysis"}
                                 )
-                        
+
                     except Exception as e:
                         yield StreamChunk(
                             timestamp=datetime.now().isoformat(),
@@ -794,24 +794,24 @@ class StreamingCommandExecutor:
                             metadata={"error": True}
                         )
                         break
-            
+
             async def read_stderr():
                 while True:
                     try:
                         line = await process.stderr.readline()
                         if not line:
                             break
-                        
+
                         decoded_line = line.decode('utf-8', errors='replace').rstrip()
                         error_buffer.append(decoded_line)
-                        
+
                         yield StreamChunk(
                             timestamp=datetime.now().isoformat(),
                             chunk_type="stderr",
                             content=decoded_line,
                             metadata={"process_id": process_id, "error": True}
                         )
-                        
+
                     except Exception as e:
                         yield StreamChunk(
                             timestamp=datetime.now().isoformat(),
@@ -820,11 +820,11 @@ class StreamingCommandExecutor:
                             metadata={"error": True}
                         )
                         break
-            
+
             # Stream both stdout and stderr concurrently
             async for chunk in self._merge_streams(read_stdout(), read_stderr()):
                 yield chunk
-            
+
             # Wait for process completion
             try:
                 return_code = await asyncio.wait_for(process.wait(), timeout=timeout)
@@ -837,7 +837,7 @@ class StreamingCommandExecutor:
                     metadata={"timeout": True, "process_id": process_id}
                 )
                 return_code = -1
-            
+
             # Send completion status
             success = return_code == 0
             status_emoji = "✅" if success else "❌"
@@ -847,23 +847,23 @@ class StreamingCommandExecutor:
                 content=f"{status_emoji} Command completed with exit code: {return_code}",
                 metadata={"exit_code": return_code, "success": success, "process_id": process_id}
             )
-            
+
             # Provide final commentary on results
             if self.llm_interface:
                 full_output = '\n'.join(output_buffer)
                 full_error = '\n'.join(error_buffer)
-                
+
                 final_commentary = await self._get_final_commentary(
                     command, goal, full_output, full_error, return_code
                 )
-                
+
                 yield StreamChunk(
                     timestamp=datetime.now().isoformat(),
                     chunk_type="commentary",
                     content=f"📊 {final_commentary}",
                     metadata={"type": "final_analysis", "success": success}
                 )
-            
+
         except Exception as e:
             yield StreamChunk(
                 timestamp=datetime.now().isoformat(),
@@ -871,19 +871,19 @@ class StreamingCommandExecutor:
                 content=f"❌ Error executing command: {str(e)}",
                 metadata={"error": True, "exception": str(e)}
             )
-        
+
         finally:
             # Cleanup
             if process_id in self.active_processes:
                 del self.active_processes[process_id]
-    
+
     async def _merge_streams(self, *streams) -> AsyncGenerator[StreamChunk, None]:
         """Merge multiple async streams into one"""
         pending = {asyncio.create_task(stream.__anext__()): stream for stream in streams}
-        
+
         while pending:
             done, _ = await asyncio.wait(pending.keys(), return_when=asyncio.FIRST_COMPLETED)
-            
+
             for task in done:
                 stream = pending.pop(task)
                 try:
@@ -902,53 +902,53 @@ class StreamingCommandExecutor:
                         content=f"Stream error: {str(e)}",
                         metadata={"error": True}
                     )
-    
+
     async def _get_initial_commentary(self, command: str, goal: str) -> str:
         """Get initial commentary about the command"""
         if not self.llm_interface:
             return f"Executing {command.split()[0]} to {goal}"
-        
+
         try:
             prompt = f"""
             I'm about to execute this command: {command}
             Goal: {goal}
-            
+
             Provide a brief, helpful comment about what this command will do and what to expect.
             Keep it under 50 words and be encouraging.
             """
-            
+
             response = await self.llm_interface.generate_response(prompt)
             return response.strip()
         except:
             return f"Running {command.split()[0]} to accomplish: {goal}"
-    
+
     async def _get_progress_commentary(self, recent_output: str, goal: str) -> Optional[str]:
         """Get commentary on command progress"""
         if not self.llm_interface or not recent_output.strip():
             return None
-        
+
         try:
             prompt = f"""
             Command output so far:
             {recent_output}
-            
+
             Goal: {goal}
-            
+
             Provide a brief progress update or observation about what's happening.
             Keep it under 30 words. Only respond if there's something meaningful to say.
             If the output is routine/boring, respond with "SKIP".
             """
-            
+
             response = await self.llm_interface.generate_response(prompt)
             return response.strip() if response.strip() != "SKIP" else None
         except:
             return None
-    
-    async def _get_final_commentary(self, 
-                                  command: str, 
-                                  goal: str, 
-                                  output: str, 
-                                  error: str, 
+
+    async def _get_final_commentary(self,
+                                  command: str,
+                                  goal: str,
+                                  output: str,
+                                  error: str,
                                   exit_code: int) -> str:
         """Get final commentary on command results"""
         if not self.llm_interface:
@@ -956,27 +956,27 @@ class StreamingCommandExecutor:
                 return f"Command completed successfully!"
             else:
                 return f"Command failed with exit code {exit_code}"
-        
+
         try:
             prompt = f"""
             Command: {command}
             Goal: {goal}
             Exit Code: {exit_code}
-            
+
             Output:
             {output[:1000]}  # Limit output length
-            
+
             Error:
             {error[:500]}
-            
+
             Provide intelligent analysis of these results:
             1. Did it accomplish the goal?
             2. What do the results mean?
             3. Any next steps or recommendations?
-            
+
             Keep response under 100 words and be helpful.
             """
-            
+
             response = await self.llm_interface.generate_response(prompt)
             return response.strip()
         except:
@@ -1002,8 +1002,8 @@ logger = logging.getLogger(__name__)
 
 class IntelligentAgent:
     """Main intelligent agent that orchestrates the entire workflow"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  llm_interface,
                  knowledge_base,
                  worker_node,
@@ -1012,7 +1012,7 @@ class IntelligentAgent:
         self.knowledge_base = knowledge_base
         self.worker_node = worker_node
         self.command_validator = command_validator
-        
+
         # Initialize components
         self.os_detector = OSDetector()
         self.goal_processor = GoalProcessor()
@@ -1021,49 +1021,49 @@ class IntelligentAgent:
         self.command_service = EnhancedCommandService(
             knowledge_base, worker_node, command_validator
         )
-        
+
         # System state
         self.os_info = None
         self.conversation_context = []
-    
+
     async def initialize(self):
         """Initialize the agent system"""
         logger.info("Initializing Intelligent Agent...")
-        
+
         # Detect OS and capabilities
         self.os_info = await self.os_detector.detect_system()
         logger.info(f"Detected OS: {self.os_info.os_type.value}")
-        
+
         if self.os_info.distro:
             logger.info(f"Distribution: {self.os_info.distro.value}")
-        
+
         logger.info(f"Capabilities: {', '.join(self.os_info.capabilities)}")
-        
+
         # Send system awareness to LLM
         await self._update_system_context()
-    
-    async def process_natural_language_goal(self, 
+
+    async def process_natural_language_goal(self,
                                           user_input: str,
                                           stream_output: bool = True) -> AsyncGenerator[StreamChunk, None]:
         """
         Process natural language input and execute appropriate commands
-        
+
         Examples:
         - "what is your ip?"
         - "what other devices are on our network?"
         - "find the open ports of those devices"
         - "do the os update"
         """
-        
+
         logger.info(f"Processing goal: {user_input}")
-        
+
         # Add to conversation context
         self.conversation_context.append({
             "type": "user_input",
             "content": user_input,
             "timestamp": asyncio.get_event_loop().time()
         })
-        
+
         try:
             # Step 1: Process the goal
             yield StreamChunk(
@@ -1072,9 +1072,9 @@ class IntelligentAgent:
                 content="🤔 Understanding your request...",
                 metadata={"step": "goal_processing"}
             )
-            
+
             processed_goal = await self.goal_processor.process_goal(user_input)
-            
+
             if processed_goal.confidence > 0.5:
                 # We understand the goal
                 yield StreamChunk(
@@ -1083,7 +1083,7 @@ class IntelligentAgent:
                     content=f"💡 I understand you want to: {processed_goal.intent}",
                     metadata={"intent": processed_goal.intent, "confidence": processed_goal.confidence}
                 )
-                
+
                 # Step 2: Select appropriate tools
                 yield StreamChunk(
                     timestamp=asyncio.get_running_loop().time(),
@@ -1091,9 +1091,9 @@ class IntelligentAgent:
                     content="🔧 Selecting the best tools for your OS...",
                     metadata={"step": "tool_selection"}
                 )
-                
+
                 tool_selection = await self.tool_selector.select_tool(processed_goal)
-                
+
                 if tool_selection.requires_install:
                     yield StreamChunk(
                         timestamp=asyncio.get_running_loop().time(),
@@ -1101,12 +1101,12 @@ class IntelligentAgent:
                         content=f"📦 Need to install tool first: {tool_selection.install_command}",
                         metadata={"install_required": True}
                     )
-                    
+
                     # Install the tool first
                     if tool_selection.install_command:
                         async for chunk in self._install_tool(tool_selection.install_command):
                             yield chunk
-                
+
                 # Step 3: Execute the command
                 if tool_selection.primary_command:
                     async for chunk in self.streaming_executor.execute_with_streaming(
@@ -1121,7 +1121,7 @@ class IntelligentAgent:
                         content="❌ No suitable command found for this goal",
                         metadata={"error": True}
                     )
-            
+
             else:
                 # Unknown goal - use LLM to figure it out
                 yield StreamChunk(
@@ -1130,10 +1130,10 @@ class IntelligentAgent:
                     content="🧠 This is a complex request. Let me think about the best approach...",
                     metadata={"llm_processing": True}
                 )
-                
+
                 async for chunk in self._handle_complex_goal(user_input):
                     yield chunk
-        
+
         except Exception as e:
             logger.error(f"Error processing goal: {e}")
             yield StreamChunk(
@@ -1142,49 +1142,49 @@ class IntelligentAgent:
                 content=f"❌ Error processing request: {str(e)}",
                 metadata={"error": True, "exception": str(e)}
             )
-    
+
     async def _handle_complex_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
         """Handle complex goals that require LLM reasoning"""
-        
+
         # Use LLM to break down the goal and suggest commands
         system_prompt = f"""
         You are an intelligent system administrator assistant. The user is running:
         - OS: {self.os_info.os_type.value}
         - Distribution: {self.os_info.distro.value if self.os_info.distro else 'N/A'}
         - Available tools: {', '.join(self.os_info.capabilities)}
-        
+
         The user asked: "{user_input}"
-        
+
         Break this down into specific, executable commands for this system.
         Consider the OS and available tools.
         Provide commands one at a time, with explanations.
-        
+
         Respond in this format:
         COMMAND: [specific command]
         EXPLANATION: [what this command does]
         NEXT: [what to do with the results, if anything]
         """
-        
+
         try:
             llm_response = await self.llm_interface.generate_response(
                 system_prompt,
                 temperature=0.3  # Lower temperature for more focused responses
             )
-            
+
             yield StreamChunk(
                 timestamp=asyncio.get_running_loop().time(),
                 chunk_type="commentary",
                 content=f"🎯 LLM Analysis: {llm_response}",
                 metadata={"llm_response": True}
             )
-            
+
             # Parse LLM response and extract commands
             commands = self._parse_llm_commands(llm_response)
-            
+
             for command_info in commands:
                 command = command_info.get('command')
                 explanation = command_info.get('explanation', '')
-                
+
                 if command:
                     yield StreamChunk(
                         timestamp=asyncio.get_running_loop().time(),
@@ -1192,14 +1192,14 @@ class IntelligentAgent:
                         content=f"➡️ {explanation}",
                         metadata={"explanation": True}
                     )
-                    
+
                     # Execute the command
                     async for chunk in self.streaming_executor.execute_with_streaming(
                         command,
                         user_input
                     ):
                         yield chunk
-        
+
         except Exception as e:
             yield StreamChunk(
                 timestamp=asyncio.get_running_loop().time(),
@@ -1207,27 +1207,27 @@ class IntelligentAgent:
                 content=f"❌ Error in LLM processing: {str(e)}",
                 metadata={"error": True}
             )
-    
+
     async def _install_tool(self, install_command: str) -> AsyncGenerator[StreamChunk, None]:
         """Install a required tool"""
-        
+
         yield StreamChunk(
             timestamp=asyncio.get_running_loop().time(),
             chunk_type="status",
             content="📦 Installing required tool...",
             metadata={"installing": True}
         )
-        
+
         # Check if we need sudo
         if not self.os_info.is_root and 'sudo' not in install_command:
             install_command = f"sudo {install_command}"
-        
+
         async for chunk in self.streaming_executor.execute_with_streaming(
             install_command,
             "Install required tool"
         ):
             yield chunk
-    
+
     async def _update_system_context(self):
         """Update LLM with current system context"""
         context = f"""
@@ -1240,11 +1240,11 @@ class IntelligentAgent:
         - Root Access: {self.os_info.is_root}
         - Package Manager: {self.os_info.package_manager}
         - Available Capabilities: {', '.join(self.os_info.capabilities)}
-        
+
         I am an intelligent system assistant running on this system.
         I can execute commands, install tools, and provide real-time analysis.
         """
-        
+
         # Store in knowledge base for future reference
         await self.knowledge_base.store_fact(
             content=context,
@@ -1254,13 +1254,13 @@ class IntelligentAgent:
                 "timestamp": asyncio.get_running_loop().time()
             }
         )
-    
+
     def _parse_llm_commands(self, llm_response: str) -> list:
         """Parse commands from LLM response"""
         commands = []
         lines = llm_response.split('\n')
         current_command = {}
-        
+
         for line in lines:
             line = line.strip()
             if line.startswith('COMMAND:'):
@@ -1271,17 +1271,17 @@ class IntelligentAgent:
                 current_command['explanation'] = line[12:].strip()
             elif line.startswith('NEXT:'):
                 current_command['next'] = line[5:].strip()
-        
+
         if current_command.get('command'):
             commands.append(current_command)
-        
+
         return commands
 ```
 
 ### Step 6: API Integration for Chat Interface
 
 ```python
-# backend/api/intelligent_agent.py
+# autobot-user-backend/api/intelligent_agent.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import StreamingResponse
 import json
@@ -1302,7 +1302,7 @@ async def get_agent() -> IntelligentAgent:
     if _agent_instance is None:
         from backend.app_factory import get_llm_interface, get_knowledge_base, get_worker_node
         from src.utils.command_validator import CommandValidator
-        
+
         _agent_instance = IntelligentAgent(
             get_llm_interface(),
             get_knowledge_base(),
@@ -1310,7 +1310,7 @@ async def get_agent() -> IntelligentAgent:
             CommandValidator()
         )
         await _agent_instance.initialize()
-    
+
     return _agent_instance
 
 @router.websocket("/stream")
@@ -1318,23 +1318,23 @@ async def agent_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time agent interaction"""
     await websocket.accept()
     agent = await get_agent()
-    
+
     try:
         while True:
             # Receive user input
             data = await websocket.receive_text()
             message = json.loads(data)
-            
+
             user_input = message.get("input", "").strip()
             if not user_input:
                 continue
-            
+
             logger.info(f"Processing user input: {user_input}")
-            
+
             # Process the goal and stream results
             async for chunk in agent.process_natural_language_goal(user_input):
                 await websocket.send_text(json.dumps(chunk.to_dict()))
-            
+
             # Send completion signal
             await websocket.send_text(json.dumps({
                 "timestamp": asyncio.get_running_loop().time(),
@@ -1342,7 +1342,7 @@ async def agent_websocket(websocket: WebSocket):
                 "content": "✅ Task completed",
                 "metadata": {"complete": True}
             }))
-    
+
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:
@@ -1360,13 +1360,13 @@ async def process_goal(request: dict):
     user_input = request.get("input", "").strip()
     if not user_input:
         return {"error": "No input provided"}
-    
+
     agent = await get_agent()
-    
+
     results = []
     async for chunk in agent.process_natural_language_goal(user_input):
         results.append(chunk.to_dict())
-    
+
     return {"results": results}
 
 @router.get("/system-info")
@@ -1389,14 +1389,14 @@ async def get_system_info():
 ### Step 7: Frontend Integration - Enhanced Chat Interface
 
 ```vue
-<!-- autobot-vue/src/components/IntelligentChat.vue -->
+<!-- autobot-user-frontend/src/components/IntelligentChat.vue -->
 <template>
   <div class="intelligent-chat">
     <div class="system-info-bar">
       <div class="os-info">
         <i class="icon-computer"></i>
         <span v-if="systemInfo">
-          {{ systemInfo.os_type }} {{ systemInfo.distro }} 
+          {{ systemInfo.os_type }} {{ systemInfo.distro }}
           ({{ systemInfo.user }}{{ systemInfo.is_root ? ' - ROOT' : '' }})
         </span>
         <span v-else>Loading system info...</span>
@@ -1418,36 +1418,36 @@ async def get_system_info():
             <strong>You:</strong>
             <span class="timestamp">{{ formatTime(message.timestamp) }}</span>
           </div>
-          
+
           <div class="message-content">
             <div v-if="message.type === 'user'">
               {{ message.content }}
             </div>
-            
+
             <div v-else-if="message.chunk_type === 'status'" class="status-message">
               <i class="icon-info"></i>
               {{ message.content }}
             </div>
-            
+
             <div v-else-if="message.chunk_type === 'commentary'" class="commentary-message">
               <i class="icon-brain"></i>
               {{ message.content }}
             </div>
-            
+
             <div v-else-if="message.chunk_type === 'stdout'" class="output-message">
               <pre>{{ message.content }}</pre>
             </div>
-            
+
             <div v-else-if="message.chunk_type === 'stderr'" class="error-message">
               <pre>{{ message.content }}</pre>
             </div>
-            
+
             <div v-else class="generic-message">
               {{ message.content }}
             </div>
           </div>
         </div>
-        
+
         <!-- Typing indicator -->
         <div v-if="isProcessing" class="typing-indicator">
           <div class="typing-dots">
@@ -1472,7 +1472,7 @@ async def get_system_info():
           {{ quickCmd.text }}
         </button>
       </div>
-      
+
       <div class="input-group">
         <input
           v-model="currentInput"
@@ -1518,77 +1518,77 @@ export default {
   methods: {
     async initializeWebSocket() {
       const wsUrl = `ws://localhost:8001/api/agent/stream`;
-      
+
       try {
         this.websocket = new WebSocket(wsUrl);
-        
+
         this.websocket.onopen = () => {
           this.wsConnected = true;
           console.log('WebSocket connected');
         };
-        
+
         this.websocket.onmessage = (event) => {
           const chunk = JSON.parse(event.data);
           this.handleStreamChunk(chunk);
         };
-        
+
         this.websocket.onclose = () => {
           this.wsConnected = false;
           console.log('WebSocket disconnected');
           // Reconnect after 3 seconds
           setTimeout(() => this.initializeWebSocket(), 3000);
         };
-        
+
         this.websocket.onerror = (error) => {
           console.error('WebSocket error:', error);
           this.wsConnected = false;
         };
-        
+
       } catch (error) {
         console.error('Failed to initialize WebSocket:', error);
       }
     },
-    
+
     handleStreamChunk(chunk) {
       if (chunk.chunk_type === 'complete') {
         this.isProcessing = false;
         return;
       }
-      
+
       // Add timestamp if not present
       if (!chunk.timestamp) {
         chunk.timestamp = new Date().toISOString();
       }
-      
+
       this.messages.push({
         type: 'agent',
         ...chunk
       });
-      
+
       // Auto-scroll to bottom
       this.$nextTick(() => {
         this.scrollToBottom();
       });
     },
-    
+
     async sendMessage(text = null) {
       const message = text || this.currentInput.trim();
       if (!message || !this.wsConnected) return;
-      
+
       // Add user message
       this.messages.push({
         type: 'user',
         content: message,
         timestamp: new Date().toISOString()
       });
-      
+
       // Clear input
       if (!text) {
         this.currentInput = '';
       }
-      
+
       this.isProcessing = true;
-      
+
       // Send to WebSocket
       try {
         this.websocket.send(JSON.stringify({
@@ -1598,10 +1598,10 @@ export default {
         console.error('Failed to send message:', error);
         this.isProcessing = false;
       }
-      
+
       this.scrollToBottom();
     },
-    
+
     async loadSystemInfo() {
       try {
         const response = await fetch('http://localhost:8001/api/agent/system-info');
@@ -1611,24 +1611,24 @@ export default {
         console.error('Failed to load system info:', error);
       }
     },
-    
+
     scrollToBottom() {
       const container = this.$refs.chatContainer;
       if (container) {
         container.scrollTop = container.scrollHeight;
       }
     },
-    
+
     formatTime(timestamp) {
       return new Date(timestamp).toLocaleTimeString();
     }
   },
-  
+
   mounted() {
     this.initializeWebSocket();
     this.loadSystemInfo();
   },
-  
+
   beforeUnmount() {
     if (this.websocket) {
       this.websocket.close();

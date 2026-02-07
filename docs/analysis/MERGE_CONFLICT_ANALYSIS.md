@@ -45,11 +45,11 @@ Merge of `Dev_new_gui` into `main` is blocked by extensive conflicts affecting 6
 | `CONFLICT (modify/delete)` | 3 | One branch deleted, other modified |
 
 ### Critical Conflicts
-1. **autobot-vue/src/App.vue** - Core app component
-2. **autobot-vue/src/router/index.ts** - Router configuration
-3. **autobot-vue/src/assets/styles/theme.css** - Design system tokens
+1. **autobot-user-frontend/src/App.vue** - Core app component
+2. **autobot-user-frontend/src/router/index.ts** - Router configuration
+3. **autobot-user-frontend/src/assets/styles/theme.css** - Design system tokens
 4. **backend/main.py** - Backend entry point
-5. **644 backend/api/*.py files** - All API modules
+5. **644 autobot-user-backend/api/*.py files** - All API modules
 
 ## Root Cause Analysis
 
@@ -126,11 +126,11 @@ git merge -X theirs Dev_new_gui
 
 ```bash
 git checkout main
-git checkout Dev_new_gui -- autobot-vue/src/components/ui/DarkModeToggle.vue
-git checkout Dev_new_gui -- autobot-vue/src/components/ui/PreferencesPanel.vue
-git checkout Dev_new_gui -- autobot-vue/src/views/SettingsView.vue
-git checkout Dev_new_gui -- autobot-vue/src/composables/usePreferences.ts
-git checkout Dev_new_gui -- autobot-vue/src/assets/styles/theme.css
+git checkout Dev_new_gui -- autobot-user-frontend/src/components/ui/DarkModeToggle.vue
+git checkout Dev_new_gui -- autobot-user-frontend/src/components/ui/PreferencesPanel.vue
+git checkout Dev_new_gui -- autobot-user-frontend/src/views/SettingsView.vue
+git checkout Dev_new_gui -- autobot-user-frontend/src/composables/usePreferences.ts
+git checkout Dev_new_gui -- autobot-user-frontend/src/assets/styles/theme.css
 git checkout Dev_new_gui -- docs/implementation/ISSUE_753_FINAL_REPORT.md
 git checkout Dev_new_gui -- docs/testing/PREFERENCES_TESTING_GUIDE.md
 git checkout Dev_new_gui -- docs/user/PREFERENCES_USER_GUIDE.md

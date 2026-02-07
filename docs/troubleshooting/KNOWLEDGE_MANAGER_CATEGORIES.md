@@ -31,11 +31,11 @@ To see categories in the Knowledge Manager:
 ### Technical Details
 
 **API Endpoint**: `/api/knowledge_base/categories`
-- Location: `backend/api/knowledge.py:806`
+- Location: `autobot-user-backend/api/knowledge.py:806`
 - Method: Scans all knowledge entries and groups by collection
 - Response time: Can be slow (2-3 seconds) with many entries
 
-**Frontend Component**: `autobot-vue/src/components/KnowledgeManager.vue`
+**Frontend Component**: `autobot-user-frontend/src/components/KnowledgeManager.vue`
 - Line 458: Empty state display when no categories exist
 - Categories loaded when tab is activated
 - Properly handles empty response

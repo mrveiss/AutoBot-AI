@@ -403,7 +403,7 @@ server {
 
     # Frontend static files
     location / {
-        root /opt/autobot/autobot-vue/dist;
+        root /opt/autobot/autobot-user-frontend/dist;
         try_files $uri $uri/ /index.html;
 
         # Caching for static assets

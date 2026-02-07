@@ -34,7 +34,7 @@ This is an absolute mandate with zero exceptions:
 
 ### Development Workflow
 
-1. **Edit locally** in `/home/kali/Desktop/AutoBot/autobot-vue/`
+1. **Edit locally** in `/home/kali/Desktop/AutoBot/autobot-user-frontend/`
 2. **Sync to VM1** using `./sync-frontend.sh` or sync scripts
 3. **VM1 serves** the frontend (dev or production mode)
 4. **Access** via `http://172.16.168.21:5173`
@@ -100,12 +100,12 @@ pnpm dev
 
 ```bash
 # 1. Edit code locally
-vim autobot-vue/src/components/MyComponent.vue
+vim autobot-user-frontend/src/components/MyComponent.vue
 
 # 2. Sync to VM1
 ./sync-frontend.sh
 # OR
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/ /home/autobot/autobot-user-frontend/
 
 # 3. Access in browser
 firefox http://172.16.168.21:5173

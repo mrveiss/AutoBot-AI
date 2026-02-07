@@ -17,9 +17,9 @@ AutoBot has evolved into a **comprehensive autonomous AI platform** through inte
 
 | Metric | Verified Count | Source |
 |--------|----------------|--------|
-| **Specialized Agents** | 31 agents | `src/agents/` directory |
-| **API Endpoints** | 1,092 routes | 145 modules in `backend/api/` |
-| **Vue Components** | 187 components | `autobot-vue/src/components/` |
+| **Specialized Agents** | 31 agents | `autobot-user-backend/agents/` directory |
+| **API Endpoints** | 1,092 routes | 145 modules in `autobot-user-backend/api/` |
+| **Vue Components** | 187 components | `autobot-user-frontend/src/components/` |
 | **MCP Bridges** | 6 bridges | `mcp-tools/` directory |
 | **Redis Databases** | 12 databases | `config/redis-databases.yaml` |
 | **LLM Providers** | 8 provider types | `src/llm_interface_pkg/` |

@@ -62,7 +62,7 @@ Run the detection script manually to audit the entire codebase:
 ./infrastructure/shared/scripts/detect-hardcoded-values.sh | less
 
 # Scan specific file or directory
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-backend/api/chat.py
+./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-user-backend/api/chat.py
 ./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-backend/
 ```
 
@@ -311,7 +311,7 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 ./infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # After making changes
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-backend/api/
+./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-user-backend/api/
 ```
 
 ### 3. Keep .env.example Updated

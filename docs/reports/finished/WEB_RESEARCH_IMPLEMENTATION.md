@@ -13,7 +13,7 @@ The web research agent has been completely re-enabled and enhanced with proper a
 
 ### 2. **Comprehensive Solution Implemented**
 
-#### A. **Web Research Integration Module** (`src/agents/web_research_integration.py`)
+#### A. **Web Research Integration Module** (`autobot-user-backend/agents/web_research_integration.py`)
 - **Unified Interface**: Single integration point for all research methods
 - **Circuit Breakers**: Automatic failure handling with recovery
 - **Rate Limiting**: Prevents API abuse (5 requests per 60 seconds by default)  
@@ -35,13 +35,13 @@ The web research agent has been completely re-enabled and enhanced with proper a
 - **Performance Tuning**: Configurable timeouts, result limits, cache settings
 - **Privacy Controls**: Anonymization, content filtering, rate limiting
 
-#### D. **API Management** (`backend/api/web_research_settings.py`)
+#### D. **API Management** (`autobot-user-backend/api/web_research_settings.py`)
 - **Real-time Control**: Enable/disable research via REST API
 - **Settings Management**: Update all research preferences dynamically
 - **Health Monitoring**: Circuit breaker status, cache statistics
 - **Testing Endpoints**: Built-in research testing and validation
 
-#### E. **Frontend Integration** (`autobot-vue/src/components/WebResearchSettings.vue`)
+#### E. **Frontend Integration** (`autobot-user-frontend/src/components/WebResearchSettings.vue`)
 - **Settings Panel**: Complete UI for managing web research preferences
 - **Real-time Status**: Live display of research availability and health
 - **User Controls**: Toggle research on/off, adjust preferences
@@ -96,15 +96,15 @@ auto_research_triggers = [
 ## 📁 Files Created/Modified
 
 ### New Files
-1. `src/agents/web_research_integration.py` - Main integration module
+1. `autobot-user-backend/agents/web_research_integration.py` - Main integration module
 2. `config/agents_config.yaml` - Agent configuration file
-3. `backend/api/web_research_settings.py` - API endpoints
-4. `autobot-vue/src/components/WebResearchSettings.vue` - Frontend UI
+3. `autobot-user-backend/api/web_research_settings.py` - API endpoints
+4. `autobot-user-frontend/src/components/WebResearchSettings.vue` - Frontend UI
 5. `test_web_research_fixed.py` - Testing and validation
 
 ### Modified Files
 1. `src/chat_workflow_manager.py` - Enhanced with web research integration
-2. `backend/api/registry.py` - Added web research API routes
+2. `autobot-user-backend/api/registry.py` - Added web research API routes
 3. Existing research agents enhanced for better async compatibility
 
 ## 🔧 Configuration
@@ -118,7 +118,7 @@ agents:
     preferred_method: "basic"
     timeout_seconds: 30
     max_results: 5
-    
+
 web_research:
   enabled: true  # ✅ NOW ENABLED BY DEFAULT
   require_user_confirmation: true  # Ask before researching
@@ -144,7 +144,7 @@ User: "What are the latest AI developments in 2024?"
 AutoBot: [Immediately conducts web research and provides current information]
 ```
 
-### 2. **Confirmation-Based Research** 
+### 2. **Confirmation-Based Research**
 ```
 User: "Tell me about quantum computing"
 AutoBot: "I don't have specific information about 'quantum computing' in my knowledge base. Would you like me to research this topic online? (yes/no)"

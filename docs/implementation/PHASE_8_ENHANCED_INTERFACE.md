@@ -76,7 +76,7 @@ sequenceDiagram
     participant TM as TakeoverManager
     participant H as Human Operator
     participant S as System
-    
+
     A->>TM: request_takeover(trigger, reason)
     TM->>TM: create_request(request_id)
     TM->>S: pause_affected_tasks()
@@ -89,7 +89,7 @@ sequenceDiagram
     TM->>S: resume_paused_tasks()
 ```
 
-### 3. Advanced Control API (`backend/api/advanced_control.py`)
+### 3. Advanced Control API (`autobot-user-backend/api/advanced_control.py`)
 
 **Purpose**: RESTful and WebSocket API endpoints for all Phase 8 functionality.
 
@@ -156,7 +156,7 @@ sequenceDiagram
 
 // Server -> Client
 {
-  "type": "screenshot", 
+  "type": "screenshot",
   "data": "base64_encoded_png_data"
 }
 ```
@@ -278,7 +278,7 @@ advanced_control:
     novnc_port_base: 6080
     default_resolution: "1024x768"
     cleanup_interval: 300  # seconds
-  
+
   takeover_system:
     enabled: true
     max_concurrent_sessions: 5
@@ -286,7 +286,7 @@ advanced_control:
     auto_approve_triggers:
       - "SYSTEM_OVERLOAD"
     safe_commands_only: true
-  
+
   monitoring:
     websocket_heartbeat: 5  # seconds
     health_check_interval: 10  # seconds
@@ -357,7 +357,7 @@ const ws = new WebSocket('ws://localhost:8001/api/control/ws/monitoring');
 
 ws.onmessage = function(event) {
     const data = JSON.parse(event.data);
-    
+
     if (data.type === 'system_health') {
         console.log('System Status:', data.data.status);
         console.log('Active Sessions:', data.data.active_streaming_sessions);
@@ -532,7 +532,7 @@ async def create_multiple_sessions(count=10):
                 json={"user_id": f"user_{i}", "resolution": "640x480"}
             )
             tasks.append(task)
-        
+
         responses = await asyncio.gather(*tasks)
         return len([r for r in responses if r.status == 200])
 ```

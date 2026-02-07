@@ -141,7 +141,7 @@ Environment="DISPLAY=:1"
 
 ### Service Discovery Configuration
 
-File: `autobot-vue/src/config/ServiceDiscovery.js`
+File: `autobot-user-frontend/src/config/ServiceDiscovery.js`
 
 ```javascript
 vnc_playwright: {
@@ -156,7 +156,7 @@ vnc_playwright: {
 
 ### Browser Component
 
-File: `autobot-vue/src/components/PopoutChromiumBrowser.vue`
+File: `autobot-user-frontend/src/components/PopoutChromiumBrowser.vue`
 
 ```javascript
 // Loads VNC URL on mount

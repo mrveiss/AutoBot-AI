@@ -330,7 +330,7 @@ All modified files have been backed up to: `.accessibility-fix-backups/`
 To restore original files:
 ```bash
 # Restore specific file
-cp .accessibility-fix-backups/ComponentName.vue.YYYYMMDD_HHMMSS.backup autobot-vue/src/components/ComponentName.vue
+cp .accessibility-fix-backups/ComponentName.vue.YYYYMMDD_HHMMSS.backup autobot-user-frontend/src/components/ComponentName.vue
 
 # Restore all files (if needed)
 python3 code-analysis-suite/fix-agents/restore_accessibility_backups.py

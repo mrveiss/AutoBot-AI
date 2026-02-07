@@ -13,7 +13,7 @@ Before creating ANY new API endpoint, you MUST:
    find backend/api -name "*.py" | xargs grep -h "@router\." | grep -i "keyword"
 
    # Check for similar functionality
-   grep -r "function_name\|endpoint_pattern" backend/api/
+   grep -r "function_name\|endpoint_pattern" autobot-user-backend/api/
 
    # Verify frontend usage patterns
    find autobot-vue -name "*.js" -o -name "*.vue" | xargs grep -l "api/"
@@ -166,7 +166,7 @@ export AUTOBOT_DEPLOYMENT_MODE=distributed           # Set deployment mode
 export AUTOBOT_DOMAIN=autobot.prod                  # Set production domain
 
 # SERVICE REGISTRY & DISCOVERY
-# Location: src/utils/service_registry.py
+# Location: autobot-user-backend/utils/service_registry.py
 # Modes: local, docker_local, distributed, kubernetes
 # Health checks: Circuit breakers, automatic failover
 # Config files: config/deployment/{mode}.yml
@@ -179,7 +179,7 @@ find backend/api -name "*.py" | xargs grep -h "@router\." | grep -i "keyword"  #
 find autobot-vue -name "*.js" -o -name "*.vue" | xargs grep -l "api/"         # Check frontend usage
 
 # CODE ANALYSIS & PROFILING
-python src/agents/npu_code_search_agent.py --query "search_term"    # NPU code search
+python autobot-user-backend/agents/npu_code_search_agent.py --query "search_term"    # NPU code search
 python scripts/comprehensive_code_profiler.py                       # Codebase analysis
 python scripts/profile_api_endpoints.py                            # API performance
 
@@ -192,7 +192,7 @@ python scripts/profile_api_endpoints.py                            # API perform
 **YOU ARE AUTHORIZED TO USE NPU WORKER AND REDIS FOR ADVANCED CODE ANALYSIS**
 
 ### Available Tools
-- `src/agents/npu_code_search_agent.py` - High-performance code searching
+- `autobot-user-backend/agents/npu_code_search_agent.py` - High-performance code searching
 - `/api/code_search/` endpoints - Code analysis tasks
 - NPU acceleration for semantic code similarity (when hardware supports)
 - Redis-based indexing for fast code element lookup

@@ -57,7 +57,7 @@ Document Input
 ### File Structure
 
 ```
-src/knowledge/pipeline/
+autobot-user-backend/knowledge/pipeline/
 ├── __init__.py
 ├── base.py              # Base classes: BaseExtractor, BaseCognifier, BaseLoader
 ├── registry.py          # TaskRegistry with plugin decorators
@@ -140,7 +140,7 @@ stages:
 ### Task Registry Pattern
 
 ```python
-# src/knowledge/pipeline/registry.py
+# autobot-user-backend/knowledge/pipeline/registry.py
 from typing import Type, Callable
 from functools import wraps
 
@@ -189,7 +189,7 @@ class TaskRegistry:
 ### Base Classes
 
 ```python
-# src/knowledge/pipeline/base.py
+# autobot-user-backend/knowledge/pipeline/base.py
 from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator
 from pydantic import BaseModel
@@ -242,7 +242,7 @@ class BaseLoader(ABC):
 ### Pipeline Runner
 
 ```python
-# src/knowledge/pipeline/runner.py
+# autobot-user-backend/knowledge/pipeline/runner.py
 import asyncio
 from typing import AsyncIterator
 import logging
@@ -318,7 +318,7 @@ class PipelineRunner:
 ### Entity Model
 
 ```python
-# src/knowledge/pipeline/models/entity.py
+# autobot-user-backend/knowledge/pipeline/models/entity.py
 from pydantic import BaseModel, Field
 from typing import Literal, Any
 from uuid import UUID, uuid4
@@ -358,7 +358,7 @@ class Entity(BaseModel):
 ### Relationship Model
 
 ```python
-# src/knowledge/pipeline/models/relationship.py
+# autobot-user-backend/knowledge/pipeline/models/relationship.py
 from pydantic import BaseModel, Field
 from typing import Literal
 from uuid import UUID, uuid4
@@ -404,7 +404,7 @@ class Relationship(BaseModel):
 ### Entity Extractor Implementation
 
 ```python
-# src/knowledge/pipeline/cognifiers/entity_extractor.py
+# autobot-user-backend/knowledge/pipeline/cognifiers/entity_extractor.py
 from typing import Type
 import json
 from pydantic import BaseModel
@@ -528,7 +528,7 @@ class EntityExtractor(BaseCognifier):
 ### Relationship Extractor Implementation
 
 ```python
-# src/knowledge/pipeline/cognifiers/relationship_extractor.py
+# autobot-user-backend/knowledge/pipeline/cognifiers/relationship_extractor.py
 
 RELATIONSHIP_EXTRACTION_PROMPT = """
 Given the following text and list of entities, identify relationships between them.
@@ -625,7 +625,7 @@ class RelationshipExtractor(BaseCognifier):
 ### Redis Graph Integration
 
 ```python
-# src/knowledge/pipeline/loaders/redis_graph_loader.py
+# autobot-user-backend/knowledge/pipeline/loaders/redis_graph_loader.py
 
 @TaskRegistry.register_loader("redis_graph")
 class RedisGraphLoader(BaseLoader):
@@ -692,7 +692,7 @@ class RedisGraphLoader(BaseLoader):
 ### Event Model
 
 ```python
-# src/knowledge/pipeline/models/event.py
+# autobot-user-backend/knowledge/pipeline/models/event.py
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from uuid import UUID, uuid4
@@ -739,7 +739,7 @@ class TemporalEvent(BaseModel):
 ### Event Extractor
 
 ```python
-# src/knowledge/pipeline/cognifiers/event_extractor.py
+# autobot-user-backend/knowledge/pipeline/cognifiers/event_extractor.py
 
 EVENT_EXTRACTION_PROMPT = """
 Extract all events and temporal information from this text.
@@ -856,7 +856,7 @@ class EventExtractor(BaseCognifier):
 ### Temporal Query Methods
 
 ```python
-# src/knowledge/temporal_search.py
+# autobot-user-backend/knowledge/temporal_search.py
 
 class TemporalSearchService:
     """Search service for temporal queries."""
@@ -969,7 +969,7 @@ class TemporalSearchService:
 ### Summary Model
 
 ```python
-# src/knowledge/pipeline/models/summary.py
+# autobot-user-backend/knowledge/pipeline/models/summary.py
 from pydantic import BaseModel, Field
 from typing import Literal
 from uuid import UUID, uuid4
@@ -1005,7 +1005,7 @@ class Summary(BaseModel):
 ### Summarizer Implementation
 
 ```python
-# src/knowledge/pipeline/cognifiers/summarizer.py
+# autobot-user-backend/knowledge/pipeline/cognifiers/summarizer.py
 
 SUMMARIZATION_PROMPT = """
 Create a concise summary of the following content.
@@ -1157,7 +1157,7 @@ class HierarchicalSummarizer(BaseCognifier):
 ### Summary Search
 
 ```python
-# src/knowledge/summary_search.py
+# autobot-user-backend/knowledge/summary_search.py
 
 class SummarySearchService:
     """Search service for summaries."""
@@ -1370,7 +1370,7 @@ async def drill_down_summary(
 ### New Vue Components
 
 ```
-autobot-vue/src/components/knowledge/
+autobot-user-frontend/src/components/knowledge/
 ├── pipeline/
 │   ├── PipelineRunner.vue       # Run and monitor pipelines
 │   └── PipelineConfig.vue       # Configure pipeline settings

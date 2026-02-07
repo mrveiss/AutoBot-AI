@@ -518,10 +518,10 @@ collector.set_alert_threshold("component", "code", 10)
 
 ## Related Documentation
 
-- **Error Boundaries:** `src/utils/error_boundaries.py`
+- **Error Boundaries:** `autobot-user-backend/utils/error_boundaries.py`
 - **Error Catalog:** `docs/developer/ERROR_CODE_CONVENTIONS.md`
-- **Error Metrics:** `src/utils/error_metrics.py`
-- **API Endpoints:** `backend/api/error_monitoring.py`
+- **Error Metrics:** `autobot-user-backend/utils/error_metrics.py`
+- **API Endpoints:** `autobot-user-backend/api/error_monitoring.py`
 - **Tests:** `tests/test_error_metrics.py`
 
 ---

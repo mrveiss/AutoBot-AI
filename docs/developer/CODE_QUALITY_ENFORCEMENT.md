@@ -79,7 +79,7 @@ Run pre-commit hooks manually anytime:
 pre-commit run --all-files
 
 # Run on specific files
-pre-commit run --files backend/api/files.py src/config.py
+pre-commit run --files autobot-user-backend/api/files.py src/config.py
 
 # Run specific hook
 pre-commit run black --all-files

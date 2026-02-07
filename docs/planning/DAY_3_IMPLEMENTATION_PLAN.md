@@ -218,7 +218,7 @@ EOF
 **Frontend** (172.16.168.21):
 ```bash
 # Frontend needs to send auth headers for server-side API calls
-cat >> /home/autobot/autobot-vue/.env << 'EOF'
+cat >> /home/autobot/autobot-user-frontend/.env << 'EOF'
 
 # Service Authentication (server-side only)
 VITE_SERVICE_ID=frontend

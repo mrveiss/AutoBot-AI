@@ -108,7 +108,7 @@ ssh autobot-redis
 ./infrastructure/shared/scripts/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
 
 # Sync directory to all VMs
-./infrastructure/shared/scripts/sync-to-vm.sh all src/utils/ /home/autobot/src/utils/
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-backend/utils/ /home/autobot/autobot-user-backend/utils/
 ```
 
 ### Common Sync Patterns
@@ -137,8 +137,8 @@ ssh autobot-redis
 ```bash
 # Single API file
 ./infrastructure/shared/scripts/sync-to-vm.sh all \
-    autobot-user-backend/api/chat.py \
-    /home/autobot/autobot-user-backend/api/chat.py
+    autobot-user-autobot-user-backend/api/chat.py \
+    /home/autobot/autobot-user-autobot-user-backend/api/chat.py
 
 # Entire backend directory
 ./infrastructure/shared/scripts/sync-to-vm.sh all \
@@ -201,13 +201,13 @@ ssh autobot-redis
 
 ```bash
 # Step 1: Edit locally
-vim /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-user-autobot-user-backend/api/chat.py
 
 # Step 2: Sync immediately
-./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-backend/api/chat.py /home/autobot/autobot-user-backend/api/chat.py
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-user-backend/api/chat.py /home/autobot/autobot-user-autobot-user-backend/api/chat.py
 
 # Step 3: Commit changes (version control)
-git add autobot-user-backend/api/chat.py
+git add autobot-user-autobot-user-backend/api/chat.py
 git commit -m "Update chat API"
 ```
 
@@ -216,7 +216,7 @@ git commit -m "Update chat API"
 ```bash
 # NEVER DO THIS - Direct editing on VM
 ssh autobot@172.16.168.21
-vim /home/autobot/autobot-user-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
+vim /home/autobot/autobot-user-autobot-user-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
 ```
 
 ### Enforcement
@@ -382,10 +382,10 @@ done
 bash run_autobot.sh --dev
 
 # 2. Make code changes locally
-vim /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-user-autobot-user-backend/api/chat.py
 
 # 3. Sync changes to VMs
-./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-backend/api/chat.py /home/autobot/autobot-user-backend/api/chat.py
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-user-backend/api/chat.py /home/autobot/autobot-user-autobot-user-backend/api/chat.py
 
 # 4. Restart affected services
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
@@ -556,8 +556,8 @@ ssh autobot@172.16.168.21 "curl http://172.16.168.20:8001/api/health"
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
 
 # Verify sync
-ssh autobot@172.16.168.21 "md5sum /home/autobot/autobot-user-backend/api/chat.py"
-md5sum /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
+ssh autobot@172.16.168.21 "md5sum /home/autobot/autobot-user-autobot-user-backend/api/chat.py"
+md5sum /home/kali/Desktop/AutoBot/autobot-user-autobot-user-backend/api/chat.py
 # Hashes should match
 ```
 

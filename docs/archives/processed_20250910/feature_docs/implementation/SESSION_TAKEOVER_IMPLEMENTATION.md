@@ -7,7 +7,7 @@
 **1. Automation Pause/Resume Button (⏸️ PAUSE / ▶️ RESUME)**
 - **Location**: Terminal header controls (between KILL and INT buttons)
 - **Function**: Pauses AI-driven automated workflows and allows manual intervention
-- **Visual States**: 
+- **Visual States**:
   - **Inactive**: Blue "⏸️ PAUSE" button when automation is running
   - **Active**: Green "▶️ RESUME" button with pulsing animation when paused
 - **Disabled State**: Only enabled when automated workflow is active
@@ -75,7 +75,7 @@ const waitingForUserConfirmation = ref(false); // Waiting for user decision?
 ```javascript
 const toggleAutomationPause = () => {
   automationPaused.value = !automationPaused.value;
-  
+
   if (automationPaused.value) {
     // Pause: User takes manual control
     addOutputLine('⏸️ AUTOMATION PAUSED - Manual control activated');
@@ -93,7 +93,7 @@ const toggleAutomationPause = () => {
 const requestManualStepConfirmation = (stepInfo) => {
   showManualStepModal.value = true;
   waitingForUserConfirmation.value = true;
-  
+
   addOutputLine(`🤖 AI WORKFLOW: About to execute "${stepInfo.command}"`);
   addOutputLine(`📋 Step ${stepInfo.stepNumber}/${stepInfo.totalSteps}: ${stepInfo.description}`);
 };
@@ -104,9 +104,9 @@ const requestManualStepConfirmation = (stepInfo) => {
 const takeManualControl = () => {
   automationPaused.value = true;
   showManualStepModal.value = false;
-  
+
   addOutputLine('👤 MANUAL CONTROL TAKEN - Complete manual steps, then RESUME');
-  
+
   // Preserve current step for later
   if (pendingWorkflowStep.value) {
     automationQueue.value.unshift(pendingWorkflowStep.value);
@@ -143,7 +143,7 @@ const exampleWorkflow = {
   steps: [
     {
       command: "sudo apt update",
-      description: "Update package repositories", 
+      description: "Update package repositories",
       explanation: "Updates the list of available packages from repositories.",
       requiresConfirmation: true
     },
@@ -211,7 +211,7 @@ User clicks "👤 Take Manual Control"
 **Control Messages:**
 ```json
 {
-  "type": "automation_control", 
+  "type": "automation_control",
   "action": "pause|resume",
   "sessionId": "session_id",
   "timestamp": "2024-01-01T12:00:00Z"
@@ -260,7 +260,7 @@ User clicks "👤 Take Manual Control"
 ### ✅ Implementation Complete
 
 **Files Modified:**
-- `/autobot-vue/src/components/TerminalWindow.vue` - Complete session takeover implementation
+- `/autobot-user-frontend/src/components/TerminalWindow.vue` - Complete session takeover implementation
 
 **Features Delivered:**
 - ✅ Automation pause/resume button with visual states

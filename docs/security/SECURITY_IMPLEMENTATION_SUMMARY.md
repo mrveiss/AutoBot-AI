@@ -35,14 +35,14 @@ Successfully implemented comprehensive security sandboxing and command execution
 - **Resource Limits**: Memory and CPU constraints
 - **Read-only Filesystem**: Prevents system modification
 
-### 4. Security API Endpoints (`backend/api/security.py`)
+### 4. Security API Endpoints (`autobot-user-backend/api/security.py`)
 - `GET /api/security/status` - Get security configuration and status
 - `POST /api/security/approve-command` - Approve/deny pending commands
 - `GET /api/security/pending-approvals` - List commands awaiting approval
 - `GET /api/security/command-history` - Get command execution history
 - `GET /api/security/audit-log` - Get audit log entries
 
-### 5. Secure Terminal WebSocket (`backend/api/secure_terminal_websocket.py`)
+### 5. Secure Terminal WebSocket (`autobot-user-backend/api/secure_terminal_websocket.py`)
 - **PTY Terminal with Auditing**: Full terminal functionality with command logging
 - **Risk Assessment**: Real-time risk assessment of terminal commands
 - **Security Warnings**: User notifications for high-risk commands

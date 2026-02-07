@@ -18,7 +18,7 @@ This document outlines a detailed implementation plan for the Code Vectorization
 
 #### Tasks
 1. **Create base module structure**
-   - [ ] Create `backend/api/code_vectorization.py`
+   - [ ] Create `autobot-user-backend/api/code_vectorization.py`
    - [ ] Create `backend/services/code_embedding_service.py`
    - [ ] Create `backend/utils/code_parser.py`
    - [ ] Create configuration file `config/code_vectorization.yaml`

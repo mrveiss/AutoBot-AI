@@ -115,7 +115,7 @@ class GraphRAGOptimizer(AdvancedRAGOptimizer):
     """
 ```
 
-### 3. Knowledge Extraction ✅ (src/agents/knowledge_extraction_agent.py)
+### 3. Knowledge Extraction ✅ (autobot-user-backend/agents/knowledge_extraction_agent.py)
 
 **Reusable Features:**
 - Atomic fact extraction from text
@@ -172,7 +172,7 @@ stats = cache.get_stats()
 - Already optimized for RTX 4070 GPU
 - Thread-safe, async-ready
 
-### 5. Redis Infrastructure ✅ (src/utils/redis_client.py)
+### 5. Redis Infrastructure ✅ (autobot-user-backend/utils/redis_client.py)
 
 **Reusable Pattern:**
 ```python
@@ -251,7 +251,7 @@ class GraphRAGService:
 ### 2. Entity Auto-Extractor (NEW - Reusable)
 
 **Purpose:** Automatically populate graph from conversations
-**Location:** `src/agents/graph_entity_extractor.py`
+**Location:** `autobot-user-backend/agents/graph_entity_extractor.py`
 
 **Design:**
 ```python
@@ -300,11 +300,11 @@ class GraphEntityExtractor:
 ### 3. Graph Visualization Component (NEW - Reusable)
 
 **Purpose:** Interactive graph UI
-**Location:** `autobot-vue/src/components/graph/`
+**Location:** `autobot-user-frontend/src/components/graph/`
 
 **Modular Design:**
 ```
-autobot-vue/src/components/graph/
+autobot-user-frontend/src/components/graph/
 ├── GraphCanvas.vue           # Main canvas (D3.js/Cytoscape.js)
 ├── GraphNode.vue            # Reusable node component
 ├── GraphEdge.vue            # Reusable edge component
@@ -430,7 +430,7 @@ const {
 - ✅ AtomicFact models - Data structures
 
 **New Code (10%):**
-- `src/agents/graph_entity_extractor.py` - Mapping layer (200 lines)
+- `autobot-user-backend/agents/graph_entity_extractor.py` - Mapping layer (200 lines)
 - Fact→Entity classification logic
 - Relationship inference from co-occurrence
 
@@ -444,7 +444,7 @@ const {
 - ✅ Pinia store patterns
 
 **New Code (100% but modular):**
-- `autobot-vue/src/components/graph/` - 6 components (~800 lines total)
+- `autobot-user-frontend/src/components/graph/` - 6 components (~800 lines total)
 - Each component is independently reusable
 - Composition API for state management
 
@@ -609,11 +609,11 @@ async def test_full_graph_rag_pipeline():
 ```
 # New Modular Files (Built from existing components)
 src/services/graph_rag_service.py               # Reusable graph-RAG bridge
-src/agents/graph_entity_extractor.py            # Reusable entity extractor
-backend/api/graph_rag.py                        # Reusable API endpoints
+autobot-user-backend/agents/graph_entity_extractor.py            # Reusable entity extractor
+autobot-user-backend/api/graph_rag.py                        # Reusable API endpoints
 
 # New Vue Components (All independently reusable)
-autobot-vue/src/components/graph/
+autobot-user-frontend/src/components/graph/
 ├── GraphCanvas.vue                             # Reusable canvas
 ├── GraphNode.vue                               # Reusable node
 ├── GraphEdge.vue                               # Reusable edge

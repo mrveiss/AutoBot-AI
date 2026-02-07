@@ -247,7 +247,7 @@ from typing import Optional
 ## Task 1.3: Schema Integrity Verification Integration (3 hours)
 
 **Agent:** database-engineer
-**File:** `backend/api/system.py` or create new health check endpoint
+**File:** `autobot-user-backend/api/system.py` or create new health check endpoint
 
 ### Implementation - Health Check Endpoint
 
@@ -514,7 +514,7 @@ pytest tests/distributed/test_db_initialization.py -v -m integration
 
 1. `src/conversation_file_manager.py` - Database initialization methods
 2. `backend/app_factory.py` - Startup integration
-3. `backend/api/system.py` - Health check endpoint
+3. `autobot-user-backend/api/system.py` - Health check endpoint
 4. `tests/unit/test_conversation_file_manager.py` - Unit tests (NEW)
 5. `tests/distributed/test_db_initialization.py` - Integration tests (NEW)
 

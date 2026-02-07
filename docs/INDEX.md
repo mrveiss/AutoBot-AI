@@ -1,199 +1,223 @@
 # AutoBot Documentation Index
 
-> **🚀 AutoBot: Revolutionary Autonomous AI Platform**
-> **Production Ready** | **Multi-Modal Intelligence** | **$850K+ Annual Savings**
+> **AutoBot: Autonomous AI-Powered Linux Administration Platform**
 >
-> AutoBot represents a paradigm shift toward artificial general intelligence (AGI), featuring 20+ specialized agents, NPU hardware acceleration, and enterprise-grade security. The first AI platform to achieve true multi-modal processing with vision, voice, text, and context-aware decision making.
-
-This is the comprehensive documentation index for AutoBot - the definitive autonomous AI platform that saves enterprises 70% vs commercial RPA solutions while delivering revolutionary capabilities unavailable anywhere else.
-
-## 📚 Documentation Categories
-
-### 🌟 Revolutionary Overview
-- **[The AutoBot Revolution](AUTOBOT_REVOLUTION.md)** - Complete platform overview and market positioning
-- **[Executive Summary](../EXECUTIVE_SUMMARY.md)** - C-Suite briefing with ROI analysis
-
-### 🚀 Getting Started
-- **[Complete Getting Started Guide](GETTING_STARTED_COMPLETE.md)** - Role-based learning paths for all users
-- [Installation Guide](user_guide/01-installation.md) - Complete setup instructions
-- [Quick Start Guide](user_guide/02-quickstart.md) - Get running in 5 minutes
-- [Configuration Guide](user_guide/03-configuration.md) - System configuration
-- [Troubleshooting Guide](user_guide/04-troubleshooting.md) - Common issues and solutions
-
-### 🏗️ Architecture & Development
-- **[Visual Architecture](architecture/VISUAL_ARCHITECTURE.md)** - Complete system diagrams and flow charts
-- **[Architecture Decision Records](adr/)** - Historical architectural decisions (ADRs)
-- **[Data Flow Diagrams](architecture/data-flows.md)** - System data flow visualizations
-- **[Redis Schema](architecture/redis-schema.md)** - Database structure documentation
-- [System Architecture](architecture/NPU_WORKER_ARCHITECTURE.json) - NPU worker and system design
-- [GPU Recommendations](architecture/gpu_model_recommendations.json) - Hardware optimization
-- [Architecture Guide](developer/01-architecture.md) - System design principles
-- [Process Flow](developer/02-process-flow.md) - Request handling flow
-- [API Reference](developer/03-api-reference.md) - Complete API documentation
-- [Configuration Reference](developer/04-configuration.md) - Configuration options
-
-### 🤖 Revolutionary Agent System
-- **[Agent System Architecture](architecture/AGENT_SYSTEM_ARCHITECTURE.md)** - Complete agent system overview
-- **[Agent System Guide](AGENT_SYSTEM_GUIDE.md)** - Development and deployment guide
-- [Multi-Agent Architecture](agents/multi-agent-architecture.md) - Agent coordination system
-- [Helper Agents Guide](agents/helper-agents-guide.md) - Specialized agent development
-- [Librarian Agents Guide](agents/librarian-agents-guide.md) - Knowledge management agents
-- [Multi-Agent Setup](guides/MULTI_AGENT_SETUP.md) - Deployment configuration
-
-### 🧠 Multi-Modal AI
-
-- **[Multi-Modal Processing](features/multimodal-processing.md)** - Vision + Voice + Text integration
-- **[Computer Vision System](features/computer-vision.md)** - Screenshot analysis & UI understanding
-- **[Voice Processing System](features/voice-processing.md)** - Speech recognition & commands
-- **[Context-Aware Decisions](features/context-aware-decisions.md)** - Intelligent decision making
-- **[Modern AI Integration](features/modern-ai-integration.md)** - GPT-4V, Claude-3, Gemini
-
-### 🛠️ Deployment & Operations
-- **[Enterprise Deployment Strategy](deployment/ENTERPRISE_DEPLOYMENT_STRATEGY.md)** - Complete enterprise rollout guide
-- **[Scaling Strategy](operations/scaling-strategy.md)** - Vertical and horizontal scaling playbooks
-- **[Disaster Recovery](operations/disaster-recovery.md)** - Recovery procedures for all failure scenarios
-- [Hybrid Deployment Guide](deployment/HYBRID_DEPLOYMENT_GUIDE.md) - Multi-container deployment
-- [Docker Architecture](deployment/DOCKER_ARCHITECTURE.md) - Container orchestration
-- [Docker Migration Notes](deployment/DOCKER_MIGRATION_NOTES.md) - Migration strategies
-- [CI Pipeline Setup](deployment/CI_PIPELINE_SETUP.md) - Continuous integration
-
-### 🔄 Workflow Management
-- [Workflow API Documentation](workflow/WORKFLOW_API_DOCUMENTATION.md) - API reference
-- [Advanced Workflow Features](workflow/ADVANCED_WORKFLOW_FEATURES.md) - Advanced capabilities
-- [Workflow Orchestration Summary](workflow/WORKFLOW_ORCHESTRATION_SUMMARY.md) - System overview
-- [Workflow Success Demo](workflow/WORKFLOW_SUCCESS_DEMO.md) - Success metrics
-- [Redis Classification Demo](workflow/REDIS_CLASSIFICATION_DEMO.md) - Classification system
-
-### 🛡️ Security
-- [Security Implementation Summary](security/SECURITY_IMPLEMENTATION_SUMMARY.md) - Core security features
-- [Security Agents Summary](security/SECURITY_AGENTS_SUMMARY.md) - Automated security monitoring
-- [Session Takeover Demo](security/SESSION_TAKEOVER_DEMO.md) - Security capabilities demo
-- [Session Takeover User Guide](security/SESSION_TAKEOVER_USER_GUIDE.md) - User instructions
-
-### 🧪 Testing & Quality Assurance
-- [Testing Framework Summary](testing/TESTING_FRAMEWORK_SUMMARY.md) - Test infrastructure
-- [Frontend Test Report](testing/FRONTEND_TEST_REPORT.md) - UI/UX validation
-- [GUI Test Summary](testing/GUI_TEST_SUMMARY.md) - End-to-end testing
-- [Test Results Summary](testing/TEST_RESULTS_SUMMARY.md) - Comprehensive test results
-- [Edge Browser Fix Report](testing/EDGE_BROWSER_FIX_REPORT.md) - Browser compatibility
-
-### 📊 Monitoring & Features
-- **[Codebase Analytics System](features/CODEBASE_ANALYTICS.md)** - Redis-based code analysis with NPU acceleration
-- [Metrics Monitoring Summary](features/METRICS_MONITORING_SUMMARY.md) - Performance tracking
-- [System Status](features/SYSTEM_STATUS.md) - Health monitoring
-- [System Optimization Report](features/SYSTEM_OPTIMIZATION_REPORT.md) - Performance tuning
-
-### 🔄 Migration & Procedures
-- [Error Handling Migration Guide](migration/ERROR_HANDLING_MIGRATION_GUIDE.md) - Error handling updates
-
-### 🗂️ Configuration & Templates
-- [Environment Template](guides/env_template.txt) - Environment configuration template
-- [Port Mappings](guides/PORT_MAPPINGS.md) - Network port assignments
-- [Requirements (Local)](guides/requirements-local.txt) - Local development dependencies
-
-### 📈 Analysis & Reports (Legacy)
-- [Frontend Fixes Completion Summary](reports/legacy/FRONTEND_FIXES_COMPLETION_SUMMARY.md)
-- [Security Audit Report](reports/legacy/SECURITY_AUDIT_REPORT.md)
-- [Testing Framework Summary](reports/legacy/TESTING_FRAMEWORK_SUMMARY.md)
-- [Test Results Summary](reports/legacy/TEST_RESULTS_SUMMARY.md)
-- [Accessibility Fix Report](reports/legacy/accessibility-fix-report.md)
-- [Console Cleanup Report](reports/legacy/console-cleanup-report.md)
-- [Error Handling Analysis Report](reports/legacy/error_handling_analysis_report.md)
-
-### 🗃️ Legacy Logs
-- [Legacy Log Files](logs/legacy/) - Historical system logs
-
-## 🔍 Quick Reference
-
-### 📋 **Essential Documents for New Users**
-
-**🏢 For Executives & Decision Makers:**
-1. **[Executive Summary](../EXECUTIVE_SUMMARY.md)** - Start here for ROI analysis ($850K+ savings)
-2. **[AutoBot Revolution](AUTOBOT_REVOLUTION.md)** - Complete platform overview and competitive positioning
-
-**💻 For Developers & Technical Teams:**
-3. **[Quick Reference Card](../QUICK_REFERENCE.md)** - Developer essentials and commands
-4. **[Agent System Guide](AGENT_SYSTEM_GUIDE.md)** - Complete agent development handbook
-5. **[Visual Architecture](architecture/VISUAL_ARCHITECTURE.md)** - System diagrams and flow charts
-
-**🏗️ For IT Operations & DevOps:**
-6. **[Complete Getting Started Guide](GETTING_STARTED_COMPLETE.md)** - Role-based learning paths
-7. **[Installation Guide](user_guide/01-installation.md)** - Production-ready setup
-8. **[Enterprise Deployment Strategy](deployment/ENTERPRISE_DEPLOYMENT_STRATEGY.md)** - Full rollout guide
-
-### Essential Commands
-```bash
-# Setup and start
-./scripts/setup/setup_agent.sh
-./run_agent.sh
-
-# Development
-./scripts/deployment/start_all_containers.sh
-./scripts/testing/run-playwright-tests.sh
-
-# Report management
-python scripts/utilities/report_manager.py --list
-```
-
-### Key Configuration Files
-- `config/config.yaml` - Main system configuration
-- `docker-compose.hybrid.yml` - Hybrid deployment configuration
-- `requirements.txt` - Python dependencies
-- `autobot-vue/package.json` - Frontend dependencies
-
-### Important Directories
-- `src/` - Core Python source code
-- `backend/api/` - FastAPI endpoints
-- `autobot-vue/src/` - Vue 3 frontend
-- `scripts/` - Organized shell scripts
-- `tests/` - Test suites and validation
-- `reports/` - Organized report storage
-
-## 📝 Documentation Standards
-
-1. **Linking**: All documents must link to related documentation
-2. **Organization**: Files organized by purpose in appropriate subdirectories
-3. **Consistency**: Follow established naming conventions
-4. **Maintenance**: Keep documentation up-to-date with code changes
-5. **Accessibility**: Clear navigation and cross-references
-
-### 🎯 **Quality Assurance**
-- **[Documentation Validation Report](DOCUMENTATION_VALIDATION.md)** - Complete coverage and quality verification
-
-## 🔄 Regular Updates
-
-This documentation index is automatically maintained and should reflect the current state of the AutoBot platform. For the most recent updates, see:
-
-- [Documentation Changelog](CHANGELOG.md) - Documentation version history
-- [Documentation Improvement Roadmap](DOCUMENTATION_IMPROVEMENT_ROADMAP.md) - Documentation gaps and resolutions
-- [Project Status](status.md) - Current development status
-- [Changes Log](CHANGES.md) - Recent modifications
-- [Task Tracking](tasks.md) - Ongoing development tasks
+> Multi-modal AI with 20+ specialized agents, NPU hardware acceleration, and enterprise-grade security.
 
 ---
 
-## 🎯 **Quick Navigation by Goal**
+## Quick Start
 
-### **I want to understand AutoBot's business value**
-→ Start with [Executive Summary](../EXECUTIVE_SUMMARY.md) then [AutoBot Revolution](AUTOBOT_REVOLUTION.md)
-
-### **I want to deploy AutoBot in production**
-→ Follow [Installation Guide](user_guide/01-installation.md) → [Hybrid Deployment](deployment/HYBRID_DEPLOYMENT_GUIDE.md) → [Enterprise Strategy](deployment/ENTERPRISE_DEPLOYMENT_STRATEGY.md)
-
-### **I want to develop custom agents**
-→ Read [Agent System Guide](AGENT_SYSTEM_GUIDE.md) then [Agent Architecture](architecture/AGENT_SYSTEM_ARCHITECTURE.md)
-
-### **I want to integrate AutoBot with my systems**
-→ Check [API Reference](developer/03-api-reference.md) and [Configuration Guide](user_guide/03-configuration.md)
-
-### **I want to see AutoBot's technical capabilities**
-→ Explore [Visual Architecture](architecture/VISUAL_ARCHITECTURE.md) and [Multi-Modal AI](features/multimodal-processing.md)
+| Document | Description |
+|----------|-------------|
+| [Getting Started](GETTING_STARTED_COMPLETE.md) | Complete setup guide |
+| [Browser VNC Quick Start](QUICK_START_BROWSER_VNC.md) | VNC desktop access |
+| [System State](system-state.md) | Current system status |
+| [Glossary](GLOSSARY.md) | Terminology reference |
 
 ---
 
-**📊 Documentation Status**: ✅ Complete and Production-Ready
-**🎯 Coverage**: 100% across all user personas and use cases
-**🔄 Last Updated**: $(date)
-**👥 Maintained By**: AutoBot Development Team
+## User Guides
 
-**🚀 AutoBot: Revolutionary Autonomous AI Platform - Production Ready**
+| Guide | Description |
+|-------|-------------|
+| [01 - Installation](user-guide/01-installation.md) | Complete setup instructions |
+| [02 - Quick Start](user-guide/02-quickstart.md) | Get running in 5 minutes |
+| [03 - Configuration](user-guide/03-configuration.md) | System configuration |
+| [04 - Troubleshooting](user-guide/04-troubleshooting.md) | Common issues and solutions |
+| [05 - Preferences](user-guide/05-preferences.md) | User preferences guide |
+| [06 - Redis Management](user-guide/06-redis-management.md) | Redis service management |
+
+---
+
+## Developer Documentation
+
+### Core Development
+| Document | Description |
+|----------|-------------|
+| [Developer Setup](developer/PHASE_5_DEVELOPER_SETUP.md) | Complete developer onboarding |
+| [Architecture Guide](developer/01-architecture.md) | System design principles |
+| [Process Flow](developer/02-process-flow.md) | Request handling flow |
+| [API Reference](developer/03-api-reference.md) | Complete API documentation |
+| [Configuration Reference](developer/04-configuration.md) | Configuration options |
+
+### API Documentation
+| Document | Description |
+|----------|-------------|
+| [Comprehensive API](api/COMPREHENSIVE_API_DOCUMENTATION.md) | Full API reference |
+| [API Endpoint Mapping](api/API_ENDPOINT_MAPPING.md) | Endpoint overview |
+| [WebSocket Integration](api/WEBSOCKET_INTEGRATION_GUIDE.md) | Real-time communication |
+| [Terminal API](api/Terminal_API_Consolidated.md) | Terminal endpoints |
+| [Redis Service API](api/REDIS_SERVICE_MANAGEMENT_API.md) | Redis management |
+
+---
+
+## Architecture
+
+| Document | Description |
+|----------|-------------|
+| [Architecture Overview](architecture/README.md) | System architecture |
+| [Agent System Architecture](architecture/AGENT_SYSTEM_ARCHITECTURE.md) | Agent design |
+| [Phase Validation System](architecture/PHASE_VALIDATION_SYSTEM.md) | Validation architecture |
+| [Memory Graph Architecture](architecture/AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md) | Knowledge graph |
+| [Distributed Architecture](architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md) | Multi-VM design |
+| [Communication Architecture](architecture/COMMUNICATION_ARCHITECTURE.md) | Service communication |
+| [Monitoring Architecture](architecture/MONITORING_ARCHITECTURE.md) | System monitoring |
+| [SSOT Configuration](architecture/SSOT_CONFIGURATION_ARCHITECTURE.md) | Single source of truth |
+
+### Architecture Decision Records
+- [ADR Index](adr/) - Historical architectural decisions
+
+---
+
+## Agent System
+
+| Document | Description |
+|----------|-------------|
+| [Agent System Guide](guides/AGENT_SYSTEM_GUIDE.md) | Complete agent guide |
+| [Multi-Agent Architecture](agents/multi-agent-architecture.md) | Agent coordination |
+| [Helper Agents Guide](agents/helper-agents-guide.md) | Specialized agents |
+| [Librarian Agents Guide](agents/librarian-agents-guide.md) | Knowledge agents |
+| [Multi-Agent Setup](guides/MULTI_AGENT_SETUP.md) | Deployment config |
+| [Intelligent Agent System](guides/intelligent_agent_system.md) | Agent intelligence |
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| [Knowledge Graph](features/KNOWLEDGE_GRAPH.md) | Knowledge management |
+| [Advanced Analytics](features/ADVANCED_ANALYTICS.md) | Codebase analytics |
+| [Advanced Visualizations](features/ADVANCED_VISUALIZATIONS.md) | Data visualization |
+| [Log Forwarding](features/LOG_FORWARDING.md) | Centralized logging |
+| [MCP Integration](features/mcp-knowledge-base-integration.md) | MCP tools |
+| [Metrics Monitoring](features/METRICS_MONITORING_SUMMARY.md) | Performance tracking |
+
+---
+
+## Security
+
+| Document | Description |
+|----------|-------------|
+| [Security Implementation](security/SECURITY_IMPLEMENTATION_SUMMARY.md) | Core security |
+| [Security Agents](security/SECURITY_AGENTS_SUMMARY.md) | Automated monitoring |
+| [MCP Security Testing](security/MCP_SECURITY_TESTING.md) | Security testing |
+| [Service Auth Enforcement](security/SERVICE_AUTH_ENFORCEMENT_ROLLOUT_PLAN.md) | Authentication |
+| [Access Control Guide](security/ACCESS_CONTROL_SAFE_ROLLOUT_GUIDE.md) | Authorization |
+| [File Permissions](security/FILE_PERMISSIONS_SECURITY_ARCHITECTURE.md) | File security |
+
+---
+
+## Infrastructure & Deployment
+
+### Infrastructure
+| Document | Description |
+|----------|-------------|
+| [Infrastructure Deployment](developer/INFRASTRUCTURE_DEPLOYMENT.md) | VM deployment |
+| [Browser VNC Setup](infrastructure/BROWSER_VNC_SETUP.md) | VNC configuration |
+| [Hardware Acceleration](infrastructure/hardware-acceleration.md) | NPU/GPU setup |
+
+### Deployment
+| Document | Description |
+|----------|-------------|
+| [CI Pipeline Setup](deployment/CI_PIPELINE_SETUP.md) | Continuous integration |
+| [MCP Bridge Activation](deployment/MCP_BRIDGE_ACTIVATION.md) | MCP deployment |
+| [Deployment Guide](deployment/comprehensive_deployment_guide.md) | Full deployment |
+
+### Operations
+| Document | Description |
+|----------|-------------|
+| [Disaster Recovery](operations/disaster-recovery.md) | Recovery procedures |
+
+---
+
+## Workflow Management
+
+| Document | Description |
+|----------|-------------|
+| [Workflow API](workflow/WORKFLOW_API_DOCUMENTATION.md) | API reference |
+| [Advanced Features](workflow/ADVANCED_WORKFLOW_FEATURES.md) | Advanced capabilities |
+| [Workflow Orchestration](workflow/WORKFLOW_ORCHESTRATION_SUMMARY.md) | System overview |
+
+---
+
+## Testing & Quality
+
+| Document | Description |
+|----------|-------------|
+| [Testing Framework](testing/TESTING_FRAMEWORK_SUMMARY.md) | Test infrastructure |
+| [Frontend Tests](testing/FRONTEND_TEST_REPORT.md) | UI/UX validation |
+| [Ready for Testing](testing/READY_FOR_TESTING.md) | Test readiness |
+
+---
+
+## Troubleshooting
+
+| Document | Description |
+|----------|-------------|
+| [Comprehensive Guide](troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md) | All issues |
+| [Knowledge Manager](troubleshooting/KNOWLEDGE_MANAGER_CATEGORIES.md) | KB troubleshooting |
+
+---
+
+## Migration Guides
+
+| Document | Description |
+|----------|-------------|
+| [Error Handling Migration](migration/ERROR_HANDLING_MIGRATION_GUIDE.md) | Error handling |
+| [Async System Migration](migration/Async_System_Migration.md) | Async updates |
+| [LLM Interface Migration](migration/LLM_Interface_Migration_Guide.md) | LLM changes |
+
+---
+
+## Planning & Roadmap
+
+| Document | Description |
+|----------|-------------|
+| [Roadmap 2025](ROADMAP_2025.md) | Main roadmap |
+| [Documentation Roadmap](planning/documentation-roadmap.md) | Docs improvement |
+| [Plans Directory](plans/) | Implementation plans |
+
+---
+
+## Reports & Analysis
+
+| Category | Location |
+|----------|----------|
+| Current Reports | [reports/](reports/) |
+| Phase Validation | [reports/phase-validation-report.md](reports/phase-validation-report.md) |
+| Legacy Reports | [reports/legacy/](reports/legacy/) |
+| Archived Reports | [archives/](archives/) |
+
+---
+
+## Configuration
+
+| Document | Description |
+|----------|-------------|
+| [Environment Variables](configuration/environment-variables.md) | Env config |
+| [Database Documentation](database/) | Database setup |
+
+---
+
+## Key Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `autobot-user-backend/` | Main backend API |
+| `autobot-user-frontend/` | User chat interface |
+| `autobot-slm-backend/` | SLM backend |
+| `autobot-slm-frontend/` | SLM dashboard |
+| `autobot-shared/` | Shared utilities |
+| `infrastructure/` | Deployment infrastructure |
+
+---
+
+## Version History
+
+- [Changelog](CHANGELOG.md) - Documentation version history
+
+---
+
+**Last Updated:** 2026-02-07

@@ -50,7 +50,7 @@ AutoBot now provides complete VNC observation capabilities through the **Model C
 
 ## Component Breakdown
 
-### 1. VNC WebSocket Proxy (`backend/api/vnc_proxy.py`)
+### 1. VNC WebSocket Proxy (`autobot-user-backend/api/vnc_proxy.py`)
 
 **Purpose**: Routes all VNC traffic through backend for observation
 
@@ -71,7 +71,7 @@ await record_observation(vnc_type, "connection", {"endpoint": ws_url})
 await record_observation(vnc_type, "disconnection", {"status": "closed"})
 ```
 
-### 2. VNC MCP Bridge (`backend/api/vnc_mcp.py`)
+### 2. VNC MCP Bridge (`autobot-user-backend/api/vnc_mcp.py`)
 
 **Purpose**: Expose VNC observations as MCP tools for AutoBot's LLM agents
 
@@ -97,7 +97,7 @@ await record_observation(vnc_type, "disconnection", {"status": "closed"})
 - `POST /api/vnc/mcp/get_browser_vnc_context` - Tool execution
 - `POST /api/vnc/observations/{type}` - Record observations (internal)
 
-### 3. Frontend Integration (`autobot-vue/src/config/AppConfig.js`)
+### 3. Frontend Integration (`autobot-user-frontend/src/config/AppConfig.js`)
 
 **Changes**:
 - Fixed duplicate `/vnc.html` path bug
@@ -121,7 +121,7 @@ http://172.16.168.20:8001/api/vnc-proxy/browser/vnc.html  // ✅ via backend
 **Two MCP Systems** (don't confuse them):
 
 1. **Claude's MCP** (`.mcp/`) - Tools that Claude Code (building AutoBot) uses
-2. **AutoBot's MCP** (`backend/api/*_mcp.py`) - Tools that AutoBot's LLM agents use
+2. **AutoBot's MCP** (`autobot-user-backend/api/*_mcp.py`) - Tools that AutoBot's LLM agents use
 
 ### Existing AutoBot MCP Tools
 
@@ -405,13 +405,13 @@ This architecture provides:
 **Related Documentation**:
 - `docs/QUICK_START_BROWSER_VNC.md` - VNC setup guide
 - `docs/infrastructure/BROWSER_VNC_SETUP.md` - Detailed VNC infrastructure
-- `backend/api/knowledge_mcp.py` - Similar MCP bridge example
+- `autobot-user-backend/api/knowledge_mcp.py` - Similar MCP bridge example
 - `src/langchain_agent_orchestrator.py` - Where to integrate VNC MCP tools
 
 **Files Modified**:
-- `backend/api/vnc_proxy.py` - WebSocket proxy with observation recording
-- `backend/api/vnc_mcp.py` - MCP bridge for agent access (NEW)
+- `autobot-user-backend/api/vnc_proxy.py` - WebSocket proxy with observation recording
+- `autobot-user-backend/api/vnc_mcp.py` - MCP bridge for agent access (NEW)
 - `backend/app_factory.py` - Router registration
-- `autobot-vue/src/config/AppConfig.js` - Fixed duplicate path, routes via backend
+- `autobot-user-frontend/src/config/AppConfig.js` - Fixed duplicate path, routes via backend
 
 **Commit**: TBD (pending backend restart and testing)

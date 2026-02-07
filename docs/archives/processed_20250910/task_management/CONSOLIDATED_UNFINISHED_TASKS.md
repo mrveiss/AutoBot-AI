@@ -31,15 +31,15 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
 *Must be completed for system stability and core functionality*
 
 ### Authentication & Security
-1. **Re-enable strict file permissions** 
-   - **Location**: `backend/api/files.py:317`
+1. **Re-enable strict file permissions**
+   - **Location**: `autobot-user-backend/api/files.py:317`
    - **Issue**: `# TODO: Re-enable strict permissions after frontend auth integration`
    - **Impact**: Security vulnerability - unrestricted file access
    - **Dependencies**: Frontend authentication system completion
    - **Effort**: 3-5 days
 
 2. **Implement proper provider availability checking**
-   - **Location**: `backend/api/agent_config.py:372`
+   - **Location**: `autobot-user-backend/api/agent_config.py:372`
    - **Issue**: `"provider_available": True,  # TODO: Actually check provider availability`
    - **Impact**: System may attempt to use unavailable LLM providers
    - **Effort**: 2-3 days
@@ -53,7 +53,7 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
    - **Effort**: 5-7 days
 
 4. **Fix LLM response caching compatibility**
-   - **Location**: `backend/api/llm.py:57`
+   - **Location**: `autobot-user-backend/api/llm.py:57`
    - **Issue**: `# TODO: Re-enable caching after fixing compatibility with FastAPI 0.115.9`
    - **Impact**: Performance degradation, increased API costs
    - **Dependencies**: FastAPI version compatibility
@@ -67,14 +67,14 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
    - **Effort**: 4-6 days
 
 6. **Complete knowledge base suggestion logic**
-   - **Location**: `backend/api/knowledge.py:655`
+   - **Location**: `autobot-user-backend/api/knowledge.py:655`
    - **Issue**: `# TODO: Implement proper suggestion logic based on existing documents`
    - **Impact**: Poor user experience in knowledge discovery
    - **Effort**: 3-4 days
 
 ### Advanced Features
 7. **Implement NPU acceleration for semantic search**
-   - **Location**: `src/agents/npu_code_search_agent.py:741`
+   - **Location**: `autobot-user-backend/agents/npu_code_search_agent.py:741`
    - **Issue**: `# TODO: Implement proper semantic search with embeddings and NPU acceleration`
    - **Impact**: Missed hardware optimization opportunities
    - **Dependencies**: NPU driver setup
@@ -95,7 +95,7 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
 ### Frontend Core Features (15 tasks)
 
 #### Knowledge Manager (10 tasks)
-**Location**: `autobot-vue/src/components/KnowledgeManager.vue`
+**Location**: `autobot-user-frontend/src/components/KnowledgeManager.vue`
 
 9. **Implement category editing** (lines 2260)
 10. **Implement system doc viewer** (lines 2319)
@@ -112,28 +112,28 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
 **Estimated Effort**: 15-20 days for complete Knowledge Manager
 
 #### Terminal Integration (3 tasks)
-19. **Implement tab completion** 
-    - **Locations**: 
-      - `autobot-vue/src/components/TerminalWindow.vue:1058`
-      - `autobot-vue/src/components/TerminalSidebar.vue:324`
+19. **Implement tab completion**
+    - **Locations**:
+      - `autobot-user-frontend/src/components/TerminalWindow.vue:1058`
+      - `autobot-user-frontend/src/components/TerminalSidebar.vue:324`
     - **Impact**: Poor terminal user experience
     - **Effort**: 3-4 days
 
 20. **Implement hardware priority updates endpoint**
-    - **Location**: `autobot-vue/src/components/SettingsPanel.vue:1902`
+    - **Location**: `autobot-user-frontend/src/components/SettingsPanel.vue:1902`
     - **Issue**: `# TODO: Implement priority update endpoint`
     - **Impact**: Hardware management non-functional
     - **Effort**: 2-3 days
 
 #### UI/UX Enhancements (2 tasks)
 21. **Implement toast notification system**
-    - **Location**: `autobot-vue/src/utils/ErrorHandler.js:238`
+    - **Location**: `autobot-user-frontend/autobot-user-backend/utils/ErrorHandler.js:238`
     - **Issue**: `# TODO: Integrate with actual notification system`
     - **Impact**: Poor error feedback to users
     - **Effort**: 2-3 days
 
 22. **Complete step confirmation modal editing**
-    - **Location**: `autobot-vue/src/components/AdvancedStepConfirmationModal.vue:361`
+    - **Location**: `autobot-user-frontend/src/components/AdvancedStepConfirmationModal.vue:361`
     - **Issue**: `# TODO: Open edit dialog for specific step`
     - **Impact**: Workflow approval process incomplete
     - **Effort**: 2-3 days
@@ -141,13 +141,13 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
 ### Backend Integration (9 tasks)
 
 23. **Implement actual usage tracking for agents**
-    - **Location**: `backend/api/agent_config.py:144`
+    - **Location**: `autobot-user-backend/api/agent_config.py:144`
     - **Issue**: `"last_used": "N/A",  # TODO: Track actual usage`
     - **Impact**: No agent performance metrics
     - **Effort**: 3-4 days
 
 24. **Integrate with model manager for available models**
-    - **Location**: `backend/api/agent_config.py:203`
+    - **Location**: `autobot-user-backend/api/agent_config.py:203`
     - **Issue**: `"available_models": [],  # TODO: Get from model manager`
     - **Impact**: Model selection interface non-functional
     - **Effort**: 4-5 days
@@ -160,7 +160,7 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
     - **Effort**: 5-7 days
 
 26. **Implement human-in-the-loop for web research**
-    - **Location**: `src/agents/advanced_web_research.py:608`
+    - **Location**: `autobot-user-backend/agents/advanced_web_research.py:608`
     - **Issue**: `# TODO: Implement human-in-the-loop mechanism`
     - **Impact**: Web research lacks user oversight
     - **Effort**: 4-6 days
@@ -184,13 +184,13 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
     - **Effort**: 1-2 days
 
 30. **Implement knowledge base-chat integration**
-    - **Location**: `autobot-vue/src/components/KnowledgeManager.vue:1348`
+    - **Location**: `autobot-user-frontend/src/components/KnowledgeManager.vue:1348`
     - **Issue**: `# TODO: Implement chat integration`
     - **Impact**: Knowledge base isolated from chat workflow
     - **Effort**: 3-5 days
 
 31. **Complete knowledge base result display**
-    - **Location**: `autobot-vue/src/components/KnowledgeManager.vue:1354`
+    - **Location**: `autobot-user-frontend/src/components/KnowledgeManager.vue:1354`
     - **Issue**: `# TODO: Show toast notification`
     - **Impact**: Poor user feedback for search operations
     - **Effort**: 1-2 days
@@ -214,7 +214,7 @@ Based on comprehensive analysis of the AutoBot codebase and documentation, this 
 **Location**: `mcp-task-manager-server/`
 
 37. **Implement config manager path resolution** (`src/db/DatabaseManager.ts:15`)
-38. **Add specific error mapping** (`src/tools/createProjectTool.ts:39`)
+38. **Add specific error mapping** (`autobot-user-backend/tools/createProjectTool.ts:39`)
 39. **Implement rigorous schema validation** (`src/services/ProjectService.ts:148`)
 40. **Validate task dependency existence** (`src/services/TaskService.ts:85`)
 
@@ -714,7 +714,7 @@ AutoBot has achieved a solid **PRE-ALPHA FUNCTIONAL** foundation with core infra
 4. **Establish testing framework early** - Prevent regression as features are added
 5. **Consider hiring additional developers** - 165 days is a significant timeline for current team
 
-**Timeline Reality Check**: 
+**Timeline Reality Check**:
 With the current scope of unfinished tasks, reaching production-ready status will require approximately **5.5 months of focused development effort**. This assumes dedicated resources and parallel development streams for different priority levels.
 
 The good news is that the architectural foundation is sound, and many tasks are implementation rather than design challenges. With proper prioritization and resource allocation, AutoBot can reach Alpha status within 2-3 months by focusing on P0 and P1 tasks.

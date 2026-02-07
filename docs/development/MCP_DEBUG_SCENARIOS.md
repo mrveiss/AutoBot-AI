@@ -92,7 +92,7 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "au
 echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "read_multiple_files", "arguments": {"paths": ["tsconfig.json", "vite.config.ts", "package.json"]}}}' | mcp-server-filesystem /home/kali/Desktop/AutoBot
 
 # Step 4: Search for problematic imports
-echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "autobot-vue/src", "pattern": "*.vue", "searchTerm": "import.*from.*undefined"}}}' | mcp-server-filesystem /home/kali/Desktop/AutoBot
+echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "autobot-user-frontend/src", "pattern": "*.vue", "searchTerm": "import.*from.*undefined"}}}' | mcp-server-filesystem /home/kali/Desktop/AutoBot
 ```
 
 ## Scenario 5: Database or State Issues

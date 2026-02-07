@@ -58,7 +58,7 @@ class EnhancedKnowledgeBase(KnowledgeBase):
 
 **Integration Potential:** ⭐⭐⭐⭐ **HIGH**
 ```python
-# Implementation in src/agents/knowledge_extraction_agent.py
+# Implementation in autobot-user-backend/agents/knowledge_extraction_agent.py
 class AtomicFactsAgent(BaseAgent):
     async def extract_facts(self, content: str, source: str) -> List[AtomicFact]:
         """Extract temporal atomic facts from content"""
@@ -167,7 +167,7 @@ class TemporalKnowledgeGraph:
    - Maintain backward compatibility with existing ChromaDB
 
 2. **Atomic Facts Extraction**
-   - Create new agent: `src/agents/knowledge_extraction_agent.py`
+   - Create new agent: `autobot-user-backend/agents/knowledge_extraction_agent.py`
    - Integrate with existing LLM interfaces
    - Add fact categorization and temporal labeling
 

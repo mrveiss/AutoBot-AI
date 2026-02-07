@@ -251,7 +251,7 @@ DEFAULT_ROLES = [
         "name": "frontend",
         "display_name": "Frontend UI",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-vue/"],
+        "source_paths": ["autobot-user-frontend/"],
         "target_path": "/home/autobot/autobot-vue",
         "systemd_service": "autobot-frontend",
         "auto_restart": True,

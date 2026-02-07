@@ -26,7 +26,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ## Core API Categories
 
 ### 1. Chat & Communication (15 endpoints)
-**Module**: `backend/api/chat.py`
+**Module**: `autobot-user-backend/api/chat.py`
 
 #### POST /api/chats/{chat_id}/message
 **Purpose**: Process chat messages through AutoBot's multi-modal AI workflow
@@ -122,7 +122,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ```
 
 ### 2. Knowledge Management (23 endpoints)
-**Module**: `backend/api/knowledge.py`
+**Module**: `autobot-user-backend/api/knowledge.py`
 
 #### POST /api/knowledge_base/search
 **Purpose**: Semantic search across 13,383+ indexed knowledge vectors
@@ -219,7 +219,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ```
 
 ### 3. System Monitoring (31 endpoints)
-**Module**: `backend/api/system.py`, `backend/api/monitoring.py`
+**Module**: `autobot-user-backend/api/system.py`, `autobot-user-backend/api/monitoring.py`
 
 #### GET /api/system/health/comprehensive
 **Purpose**: Complete system health status across all distributed components
@@ -290,7 +290,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ```
 
 ### 4. Multi-Modal AI Processing (19 endpoints)
-**Module**: `backend/api/llm.py`, `backend/api/llm_awareness.py`
+**Module**: `autobot-user-backend/api/llm.py`, `autobot-user-backend/api/llm_awareness.py`
 
 #### POST /api/multimodal/process
 **Purpose**: Process combined text, image, and audio through Phase 5 multi-modal AI
@@ -412,7 +412,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ```
 
 ### 5. Workflow Automation (27 endpoints)
-**Module**: `backend/api/workflow_automation.py`
+**Module**: `autobot-user-backend/api/workflow_automation.py`
 
 #### POST /api/workflows/create
 **Purpose**: Create automated workflows from natural language descriptions
@@ -483,7 +483,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ```
 
 ### 6. Terminal & System Control (43 endpoints)
-**Module**: `backend/api/terminal.py`, `backend/api/terminal_websocket.py`
+**Module**: `autobot-user-backend/api/terminal.py`, `autobot-user-backend/api/terminal_websocket.py`
 
 #### POST /api/terminal/execute
 **Purpose**: Execute system commands with safety controls and session management
@@ -534,7 +534,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 ```
 
 ### 7. File Management (18 endpoints)
-**Module**: `backend/api/files.py`
+**Module**: `autobot-user-backend/api/files.py`
 
 #### POST /api/files/upload
 **Purpose**: Upload files with metadata processing and security scanning
@@ -597,7 +597,7 @@ Content-Type: application/json
 ```
 
 ### 8. Security & Authentication (25 endpoints)
-**Module**: `backend/api/security.py`, `backend/api/secrets.py`
+**Module**: `autobot-user-backend/api/security.py`, `autobot-user-backend/api/secrets.py`
 
 #### POST /api/security/authenticate
 **Purpose**: Authenticate users and generate access tokens
@@ -653,7 +653,7 @@ Content-Type: application/json
 
 ### 9. User Management (10+ endpoints)
 
-**Module**: `backend/api/user_management/users.py`
+**Module**: `autobot-user-backend/api/user_management/users.py`
 
 #### POST /api/users/{user_id}/change-password
 

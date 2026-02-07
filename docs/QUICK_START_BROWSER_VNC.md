@@ -144,8 +144,8 @@ ssh autobot@172.16.168.25 'sudo journalctl -xe'
 - `scripts/infrastructure/deploy_browser_vnc_services.sh`
 
 **Frontend Integration:**
-- `autobot-vue/src/config/ServiceDiscovery.js` (updated)
-- `autobot-vue/src/components/PopoutChromiumBrowser.vue` (updated)
+- `autobot-user-frontend/src/config/ServiceDiscovery.js` (updated)
+- `autobot-user-frontend/src/components/PopoutChromiumBrowser.vue` (updated)
 
 **Documentation:**
 - `docs/infrastructure/BROWSER_VNC_SETUP.md` (full guide)

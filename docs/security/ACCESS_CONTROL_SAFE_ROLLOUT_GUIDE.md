@@ -27,31 +27,31 @@ All chat endpoints now include `ownership: Dict = Depends(validate_session_owner
 1. **GET `/api/chat/sessions/{session_id}`** - Get session messages
    - **Before:** ❌ No ownership check - any user could access any conversation
    - **After:** ✅ Returns 403 Forbidden if user doesn't own session
-   - **File:** `backend/api/chat.py:603`
+   - **File:** `autobot-user-backend/api/chat.py:603`
 
 2. **PUT `/api/chat/sessions/{session_id}`** - Update session
    - **Before:** ❌ No ownership check - any user could modify any session
    - **After:** ✅ Returns 403 Forbidden if user doesn't own session
-   - **File:** `backend/api/chat.py:745`
+   - **File:** `autobot-user-backend/api/chat.py:745`
 
 3. **DELETE `/api/chat/sessions/{session_id}`** - Delete session
    - **Before:** ❌ No ownership check - any user could delete any session
    - **After:** ✅ Returns 403 Forbidden if user doesn't own session
-   - **File:** `backend/api/chat.py:796`
+   - **File:** `autobot-user-backend/api/chat.py:796`
 
 4. **POST `/api/chats/{chat_id}/message`** - Send message to chat
    - **Before:** ❌ No ownership check - any user could send messages to any chat
    - **After:** ✅ Returns 403 Forbidden if user doesn't own session
-   - **File:** `backend/api/chat.py:1075`
+   - **File:** `autobot-user-backend/api/chat.py:1075`
 
 5. **DELETE `/api/chats/{chat_id}`** - Delete chat by ID
    - **Before:** ❌ No ownership check - any user could delete any chat
    - **After:** ✅ Returns 403 Forbidden if user doesn't own session
-   - **File:** `backend/api/chat.py:1242`
+   - **File:** `autobot-user-backend/api/chat.py:1242`
 
 ### Code Changes Summary
 
-**File Modified:** `/home/kali/Desktop/AutoBot/backend/api/chat.py`
+**File Modified:** `/home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py`
 
 **Lines Changed:** 7 lines (5 endpoint signatures + 1 import + 1 comment)
 
@@ -212,7 +212,7 @@ Before restarting backend, ensure:
 - [ ] ✅ Audit logging system operational (`backend/services/audit_logger.py`)
 - [ ] ✅ Redis DB 10 configured for audit logs (`config/redis-databases.yaml`)
 - [ ] ✅ All 5 chat endpoints have ownership validation added
-- [ ] ✅ Import added to `backend/api/chat.py`
+- [ ] ✅ Import added to `autobot-user-backend/api/chat.py`
 - [ ] ⏳ **Backend restarted to load new code** (REQUIRED - DO THIS NOW)
 - [ ] ⏳ Penetration tests run and PASSING (after backend restart)
 - [ ] ⏳ Audit logs verified in Redis DB 10
@@ -254,7 +254,7 @@ If validation fails or issues discovered:
 cd /home/kali/Desktop/AutoBot
 
 # 1. Revert chat.py changes
-git checkout backend/api/chat.py
+git checkout autobot-user-backend/api/chat.py
 
 # 2. Restart backend
 pkill -f "uvicorn.*backend"
@@ -317,7 +317,7 @@ Once validation complete and all tests passing:
 ### Common Issues
 
 **Issue:** Tests still failing after backend restart
-**Solution:** Verify import is present: `grep "from backend.security.session_ownership" backend/api/chat.py`
+**Solution:** Verify import is present: `grep "from backend.security.session_ownership" autobot-user-backend/api/chat.py`
 
 **Issue:** 500 Internal Server Error instead of 403
 **Solution:** Check backend logs for missing dependencies or Redis connection issues

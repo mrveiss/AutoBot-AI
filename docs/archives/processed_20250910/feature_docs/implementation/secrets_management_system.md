@@ -130,11 +130,11 @@ CREATE TABLE secret_permissions (
 ```python
 class SecretsService:
     """Core secrets management service with encryption/decryption"""
-    
-    async def create_secret(self, name: str, value: str, secret_type: str, 
+
+    async def create_secret(self, name: str, value: str, secret_type: str,
                           scope: str, chat_id: Optional[str] = None) -> Secret
     async def get_secret(self, secret_id: str, user_id: str, chat_id: Optional[str] = None) -> Secret
-    async def list_secrets(self, user_id: str, scope: Optional[str] = None, 
+    async def list_secrets(self, user_id: str, scope: Optional[str] = None,
                          chat_id: Optional[str] = None) -> List[Secret]
     async def update_secret(self, secret_id: str, **updates) -> Secret
     async def delete_secret(self, secret_id: str, user_id: str) -> bool
@@ -146,14 +146,14 @@ class SecretsService:
 ```python
 class EncryptionService:
     """Handles encryption/decryption of sensitive data"""
-    
+
     def encrypt_secret(self, plaintext: str, key_id: str) -> bytes
     def decrypt_secret(self, ciphertext: bytes, key_id: str) -> str
     def generate_key(self) -> str
     def rotate_keys(self) -> None
 ```
 
-#### 3. API Endpoints (`backend/api/secrets.py`)
+#### 3. API Endpoints (`autobot-user-backend/api/secrets.py`)
 ```python
 @router.post("/secrets")
 async def create_secret(request: CreateSecretRequest) -> SecretResponse
@@ -179,20 +179,20 @@ async def get_secret_audit_log(secret_id: str) -> List[AuditLogEntry]
 
 ### Frontend Components
 
-#### 1. Secrets Management Tab (`autobot-vue/src/components/SecretsManager.vue`)
+#### 1. Secrets Management Tab (`autobot-user-frontend/src/components/SecretsManager.vue`)
 ```vue
 <template>
   <div class="secrets-manager">
     <!-- Secret list with search/filter -->
     <div class="secrets-list">
-      <SecretsList 
+      <SecretsList
         :secrets="filteredSecrets"
         @edit="editSecret"
         @delete="deleteSecret"
         @transfer="transferSecret"
       />
     </div>
-    
+
     <!-- Add/Edit secret form -->
     <SecretForm
       v-if="showForm"
@@ -200,7 +200,7 @@ async def get_secret_audit_log(secret_id: str) -> List[AuditLogEntry]
       @save="saveSecret"
       @cancel="closeForm"
     />
-    
+
     <!-- Bulk operations -->
     <BulkSecretsOperations
       :selected-secrets="selectedSecrets"
@@ -233,15 +233,15 @@ async function handleAddSecretCommand(command, args) {
 }
 ```
 
-#### 3. Secret Picker Component (`autobot-vue/src/components/SecretPicker.vue`)
+#### 3. Secret Picker Component (`autobot-user-frontend/src/components/SecretPicker.vue`)
 ```vue
 <template>
   <div class="secret-picker">
     <select v-model="selectedSecret" @change="onSecretSelected">
       <option value="">Select a secret...</option>
-      <option 
-        v-for="secret in availableSecrets" 
-        :key="secret.id" 
+      <option
+        v-for="secret in availableSecrets"
+        :key="secret.id"
         :value="secret.id"
       >
         {{ secret.name }} ({{ secret.type }})
@@ -268,24 +268,24 @@ class SecretAccessControl:
         # General secrets available to owner
         if secret.scope == 'general' and secret.user_id == user_id:
             return True
-        
+
         # Chat secrets only available in originating chat
         if secret.scope == 'chat' and secret.chat_id == chat_id and secret.user_id == user_id:
             return True
-            
+
         # Check shared permissions (future)
         return self.has_shared_permission(user_id, secret.id)
 ```
 
 #### 3. Audit Logging
 ```python
-async def log_secret_access(secret_id: str, user_id: str, action: str, 
+async def log_secret_access(secret_id: str, user_id: str, action: str,
                           chat_id: Optional[str] = None, **metadata):
     await db.execute("""
-        INSERT INTO secret_access_log 
+        INSERT INTO secret_access_log
         (secret_id, user_id, chat_id, action, ip_address, user_agent, additional_data)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-    """, secret_id, user_id, chat_id, action, 
+    """, secret_id, user_id, chat_id, action,
         request.client.host, request.headers.get('user-agent'), metadata)
 ```
 
@@ -300,14 +300,14 @@ class AgentSecretsIntegration:
             user_id=current_user.id,
             chat_id=chat_id
         )
-        
+
         # Filter secrets by agent requirements
         agent_secrets = {}
         for secret in secrets:
             if self.is_secret_relevant_for_agent(secret, agent_type):
                 decrypted_value = await secrets_service.decrypt_secret(secret.id)
                 agent_secrets[secret.name] = decrypted_value
-                
+
         return agent_secrets
 ```
 
@@ -316,7 +316,7 @@ class AgentSecretsIntegration:
 // Auto-inject SSH keys for terminal sessions
 async function setupTerminalSecrets(sessionId, chatId) {
   const sshSecrets = await secretsService.getSecretsByType('ssh_key', chatId);
-  
+
   for (const secret of sshSecrets) {
     await terminalService.injectSSHKey(sessionId, secret.name, secret.value);
   }
@@ -327,10 +327,10 @@ async function setupTerminalSecrets(sessionId, chatId) {
 ```javascript
 async function handleChatDeletion(chatId) {
   const chatSecrets = await secretsService.getSecretsByScope('chat', chatId);
-  
+
   if (chatSecrets.length > 0) {
     const result = await showSecretsCleanupDialog(chatSecrets);
-    
+
     if (result.action === 'transfer') {
       for (const secretId of result.selectedSecrets) {
         await secretsService.transferSecret(secretId, 'chat', 'general');

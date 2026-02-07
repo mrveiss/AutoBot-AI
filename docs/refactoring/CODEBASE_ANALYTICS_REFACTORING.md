@@ -7,7 +7,7 @@ Refactored `routes.py` from 1,602 lines into modular endpoint files, improving m
 
 ### Before
 ```
-backend/api/codebase_analytics/
+autobot-user-backend/api/codebase_analytics/
 ├── routes.py (1,602 lines - MONOLITH)
 ├── storage.py
 ├── scanner.py
@@ -17,7 +17,7 @@ backend/api/codebase_analytics/
 
 ### After
 ```
-backend/api/codebase_analytics/
+autobot-user-backend/api/codebase_analytics/
 ├── router.py (34 lines - Main router combining sub-routers)
 ├── routes.py (20 lines - Backward compatibility wrapper)
 ├── endpoints/

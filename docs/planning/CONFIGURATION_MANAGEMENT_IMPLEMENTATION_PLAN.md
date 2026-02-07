@@ -371,7 +371,7 @@ logger.info(f"✅ [ 12%] Config: Validation complete ({validation_report.total_i
 
 #### 2.5 Validation API Endpoint
 
-**New File:** `backend/api/config_validation.py`
+**New File:** `autobot-user-backend/api/config_validation.py`
 
 ```python
 from fastapi import APIRouter, Depends
@@ -436,7 +436,7 @@ async def validate_configuration(config: UnifiedConfigManager = Depends(get_conf
 4. Test startup with various config states
 
 **Phase 2.4: API Endpoint (2 hours)**
-1. Create `backend/api/config_validation.py`
+1. Create `autobot-user-backend/api/config_validation.py`
 2. Add router to `app_factory.py`
 3. Add frontend integration docs
 4. Test API endpoint
@@ -595,7 +595,7 @@ def sync_settings_to_base(self) -> Dict[str, Any]:
 
 #### 3.3 API Endpoint with Rate Limiting
 
-**File:** `backend/api/settings_sync.py`
+**File:** `autobot-user-backend/api/settings_sync.py`
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -697,7 +697,7 @@ async def get_sync_status(config: UnifiedConfigManager = Depends(get_config)):
 5. Unit tests for sync logic
 
 **Phase 3.3: API Endpoint (2 hours)**
-1. Create `backend/api/settings_sync.py`
+1. Create `autobot-user-backend/api/settings_sync.py`
 2. Implement rate limiting
 3. Add sync status endpoint
 4. Add router to `app_factory.py`

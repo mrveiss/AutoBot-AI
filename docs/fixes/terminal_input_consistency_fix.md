@@ -110,12 +110,12 @@ setTimeout(() => {
 
 ## Files Modified
 
-1. **`/autobot-vue/src/components/TerminalWindow.vue`**
+1. **`/autobot-user-frontend/src/components/TerminalWindow.vue`**
    - Enhanced `canInput` computed property
    - Improved `handleStatusChange` with better timing
    - Added comprehensive debugging utilities for testing
 
-2. **`/autobot-vue/src/services/TerminalService.js`**
+2. **`/autobot-user-frontend/src/services/TerminalService.js`**
    - Improved state transition timing
    - Enhanced logging for debugging
 

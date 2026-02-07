@@ -15,7 +15,7 @@ Generated: 2025-08-12T18:51:27.589125
 
 ## Files Modified
 
-### autobot-vue/src/components/ChatInterface.vue
+### autobot-user-frontend/src/components/ChatInterface.vue
 - Removed 21 console.log statements
 - Locations:
   - Line 1071: `'WebSocket disconnected, attempting to reconnect.....`
@@ -25,7 +25,7 @@ Generated: 2025-08-12T18:51:27.589125
   - Line 988: `'Reload results:', reloadResults`
   - ... and 16 more
 
-### autobot-vue/src/components/KnowledgeManager.vue
+### autobot-user-frontend/src/components/KnowledgeManager.vue
 - Removed 10 console.log statements
 - Locations:
   - Line 1751: `'Create new system prompt'`
@@ -35,7 +35,7 @@ Generated: 2025-08-12T18:51:27.589125
   - Line 1727: `'Use system prompt:', prompt`
   - ... and 5 more
 
-### autobot-vue/src/components/HistoryView.vue
+### autobot-user-frontend/src/components/HistoryView.vue
 - Removed 4 console.log statements
 - Locations:
   - Line 140: `'Deleted history entry:', entry.id`
@@ -43,18 +43,18 @@ Generated: 2025-08-12T18:51:27.589125
   - Line 115: `'Chat history cleared (local only)'`
   - Line 67: `'Chat history refreshed from backend:', history.va...`
 
-### autobot-vue/src/components/FileBrowser.vue
+### autobot-user-frontend/src/components/FileBrowser.vue
 - Removed 2 console.log statements
 - Locations:
   - Line 285: `'Deleting file:', file.name`
   - Line 163: `'Viewing file:', file.name`
 
-### autobot-vue/src/services/SettingsService.js
+### autobot-user-frontend/src/services/SettingsService.js
 - Removed 1 console.log statements
 - Locations:
   - Line 240: `'Developer config updated successfully'`
 
-### autobot-vue/src/components/SettingsPanel.vue
+### autobot-user-frontend/src/components/SettingsPanel.vue
 - Removed 1 console.log statements
 - Locations:
   - Line 806: `'Settings saved successfully to config.yaml:', res...`

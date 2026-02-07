@@ -153,7 +153,7 @@ embeddings = OpenVINOEmbeddings(model_name_or_path="all-MiniLM-L6-v2")
 
 ### 2. RAG Query Processing
 
-Located in: `backend/api/knowledge.py`
+Located in: `autobot-user-backend/api/knowledge.py`
 
 Use OpenVINO for reranking retrieved documents.
 

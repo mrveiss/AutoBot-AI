@@ -192,7 +192,7 @@ transcript = await asyncio.to_thread(
 
 #### Task 2.6: Update All Callers (10 min)
 **Agent**: senior-backend-engineer
-**Files**: `backend/api/chat_enhanced.py`, other chat endpoints
+**Files**: `autobot-user-backend/api/chat_enhanced.py`, other chat endpoints
 **Dependencies**: Tasks 2.1-2.5
 
 **Changes**: Ensure `await manager.initialize()` called before use.
@@ -521,7 +521,7 @@ Model-specific configuration system with centralized ContextWindowManager.
 
 **Task 4.4: Update chat_enhanced.py (2 hours)**
 **Agent**: backend-engineer
-**File**: `backend/api/chat_enhanced.py`
+**File**: `autobot-user-backend/api/chat_enhanced.py`
 **Dependencies**: Task 4.2
 
 **Changes**: Replace hardcoded `limit=500` and `[-200:]` with ContextWindowManager.

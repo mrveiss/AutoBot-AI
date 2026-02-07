@@ -43,7 +43,7 @@ The backend API on VM0 serves as the central orchestrator coordinating all servi
 
 ### Issue Description
 
-Session ownership validation in `backend/api/conversation_files.py` (lines 151-167) always returns `True`, allowing any authenticated user to access any other user's files.
+Session ownership validation in `autobot-user-backend/api/conversation_files.py` (lines 151-167) always returns `True`, allowing any authenticated user to access any other user's files.
 
 ### Distributed System Impact
 
@@ -392,7 +392,7 @@ async def _append_to_transcript(self, session_id: str, user_message: str, assist
 
 ### Issue Description
 
-Context window in `backend/api/chat_enhanced.py` increased 50x (10→500 messages) and LLM context increased 40x (5→200 messages) without analysis, causing model context overflow.
+Context window in `autobot-user-backend/api/chat_enhanced.py` increased 50x (10→500 messages) and LLM context increased 40x (5→200 messages) without analysis, causing model context overflow.
 
 ### Distributed System Impact
 
@@ -540,7 +540,7 @@ def _is_important_message(self, msg: dict) -> bool:
 
 ### Issue Description
 
-1,406 lines of file management code (`backend/api/conversation_files.py` + `src/conversation_file_manager.py`) deployed without a single test.
+1,406 lines of file management code (`autobot-user-backend/api/conversation_files.py` + `src/conversation_file_manager.py`) deployed without a single test.
 
 ### Distributed Testing Gaps
 
@@ -1687,7 +1687,7 @@ await manager.initialize()  # NEW: explicitly initialize schema
 **Impact:** Previously accessible files may become inaccessible to unauthorized users
 
 **Affected Components:**
-- All file API endpoints in `backend/api/conversation_files.py`
+- All file API endpoints in `autobot-user-backend/api/conversation_files.py`
 - Frontend file management UI
 - Any code accessing conversation files
 
@@ -1739,7 +1739,7 @@ if not is_valid:
 **Impact:** API behavior changes - less context sent to LLM
 
 **Affected Components:**
-- `backend/api/chat_enhanced.py`
+- `autobot-user-backend/api/chat_enhanced.py`
 - Any code calling chat endpoints
 - LLM responses may differ
 

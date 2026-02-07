@@ -273,7 +273,7 @@ Tests run automatically on:
 ## File Structure Summary
 
 ```
-autobot-vue/
+autobot-user-frontend/
 ├── .github/workflows/
 │   └── frontend-test.yml           # CI/CD pipeline
 ├── src/

@@ -763,7 +763,7 @@ class AsyncRedisDatabase:
 
 #### **4. Add Metrics Endpoint to FastAPI**
 
-**File:** `/home/kali/Desktop/AutoBot/backend/api/monitoring.py`
+**File:** `/home/kali/Desktop/AutoBot/autobot-user-backend/api/monitoring.py`
 
 ```python
 """
@@ -1298,7 +1298,7 @@ prom/alertmanager:latest  (optional)
 2. `/home/kali/Desktop/AutoBot/config/prometheus/alert_rules.yml`
 3. `/home/kali/Desktop/AutoBot/config/grafana/dashboards/autobot-timeouts.json`
 4. `/home/kali/Desktop/AutoBot/src/monitoring/prometheus_metrics.py`
-5. `/home/kali/Desktop/AutoBot/backend/api/monitoring.py`
+5. `/home/kali/Desktop/AutoBot/autobot-user-backend/api/monitoring.py`
 6. `/home/kali/Desktop/AutoBot/scripts/validate_timeout_config.py`
 
 **Modified Files:**

@@ -128,7 +128,7 @@ redis = get_redis_client()
 ### Creating New API Endpoints
 
 ```python
-# backend/api/new_feature.py
+# autobot-user-backend/api/new_feature.py
 from fastapi import APIRouter, Depends
 from backend.dependencies import get_current_user
 
@@ -167,7 +167,7 @@ class NewComponent:
 ### Frontend API Integration
 
 ```javascript
-// autobot-vue/src/services/api.js
+// autobot-user-frontend/src/services/api.js
 export const newFeatureAPI = {
   async performAction(data) {
     const response = await apiClient.post('/api/new_feature/action', data);

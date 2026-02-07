@@ -52,10 +52,10 @@ infrastructure/
 - Create: `autobot-shared/__init__.py`
 - Create: `autobot-shared/README.md`
 - Create: `autobot-shared/requirements.txt`
-- Copy: `src/utils/redis_client.py` to `autobot-shared/redis_client.py`
-- Copy: `src/utils/http_client.py` to `autobot-shared/http_client.py`
-- Copy: `src/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
-- Copy: `src/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
+- Copy: `autobot-user-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
+- Copy: `autobot-user-backend/utils/http_client.py` to `autobot-shared/http_client.py`
+- Copy: `autobot-user-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
+- Copy: `autobot-user-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
 - Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
 
 ### Task 2: Create infrastructure directory
@@ -64,7 +64,7 @@ infrastructure/
 
 - Create: `infrastructure/README.md`
 - Move: `docker/` to `infrastructure/docker/`
-- Move: `scripts/` to `infrastructure/scripts/`
+- Move: `scripts/` to `infrastructure/shared/scripts/`
 - Move: `config/` to `infrastructure/config/`
 - Move: `certs/` to `infrastructure/certs/`
 - Move: `mcp-servers/` to `infrastructure/mcp/servers/`
@@ -86,7 +86,7 @@ See `infrastructure/README.md` for current layout.
 
 **Files:**
 
-- Move: `autobot-vue/` to `autobot-user-frontend/`
+- Move: `autobot-user-frontend/` to `autobot-user-frontend/`
 - Create: `autobot-user-backend/` (placeholder for Phase 2)
 
 ### Task 5: Create worker directories

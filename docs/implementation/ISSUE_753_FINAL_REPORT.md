@@ -34,9 +34,9 @@ Issue #753 has been **fully implemented** with a **perfect 10/10 quality score**
 - Dark mode support for all accent colors
 
 **Files:**
-- `autobot-vue/src/components/ui/DarkModeToggle.vue` (NEW)
-- `autobot-vue/src/assets/styles/theme.css` (ENHANCED)
-- `autobot-vue/src/assets/base.css` (ENHANCED)
+- `autobot-user-frontend/src/components/ui/DarkModeToggle.vue` (NEW)
+- `autobot-user-frontend/src/assets/styles/theme.css` (ENHANCED)
+- `autobot-user-frontend/src/assets/base.css` (ENHANCED)
 - Multiple view files updated for design token coverage
 
 **Quality Score**: 10/10
@@ -65,8 +65,8 @@ Issue #753 has been **fully implemented** with a **perfect 10/10 quality score**
 - Spacious (generous spacing)
 
 **Files:**
-- `autobot-vue/src/composables/usePreferences.ts` (NEW)
-- `autobot-vue/src/assets/styles/theme.css` (ENHANCED)
+- `autobot-user-frontend/src/composables/usePreferences.ts` (NEW)
+- `autobot-user-frontend/src/assets/styles/theme.css` (ENHANCED)
 
 **Quality Score**: 10/10
 
@@ -90,10 +90,10 @@ Issue #753 has been **fully implemented** with a **perfect 10/10 quality score**
 - ✅ Focus indicators (:focus-visible)
 
 **Files:**
-- `autobot-vue/src/views/SettingsView.vue` (NEW)
-- `autobot-vue/src/components/ui/PreferencesPanel.vue` (NEW)
-- `autobot-vue/src/router/index.ts` (ENHANCED)
-- `autobot-vue/src/App.vue` (ENHANCED)
+- `autobot-user-frontend/src/views/SettingsView.vue` (NEW)
+- `autobot-user-frontend/src/components/ui/PreferencesPanel.vue` (NEW)
+- `autobot-user-frontend/src/router/index.ts` (ENHANCED)
+- `autobot-user-frontend/src/App.vue` (ENHANCED)
 
 **Quality Score**: 10/10
 
@@ -166,19 +166,19 @@ Screen Reader (announce change)
 
 ### New Files (6)
 
-1. **autobot-vue/src/composables/usePreferences.ts** (181 lines)
+1. **autobot-user-frontend/src/composables/usePreferences.ts** (181 lines)
    - Purpose: Reactive preference state management
    - Features: LocalStorage persistence, theme application, watchers
 
-2. **autobot-vue/src/components/ui/DarkModeToggle.vue** (122 lines)
+2. **autobot-user-frontend/src/components/ui/DarkModeToggle.vue** (122 lines)
    - Purpose: Dark/light mode toggle button
    - Features: System preference detection, localStorage persistence
 
-3. **autobot-vue/src/components/ui/PreferencesPanel.vue** (433 lines)
+3. **autobot-user-frontend/src/components/ui/PreferencesPanel.vue** (433 lines)
    - Purpose: Main preferences UI component
    - Features: Full accessibility, keyboard navigation, screen reader support
 
-4. **autobot-vue/src/views/SettingsView.vue** (198 lines)
+4. **autobot-user-frontend/src/views/SettingsView.vue** (198 lines)
    - Purpose: Preferences page container
    - Features: Responsive layout, extensible for future settings
 
@@ -192,22 +192,22 @@ Screen Reader (announce change)
 
 ### Modified Files (6)
 
-7. **autobot-vue/src/assets/styles/theme.css**
+7. **autobot-user-frontend/src/assets/styles/theme.css**
    - Added: Font size scaling (lines 184-202)
    - Added: Accent color variants (lines 204-282)
    - Added: Layout density system (lines 284-317)
    - Enhanced: Dark mode support
 
-8. **autobot-vue/src/assets/base.css**
+8. **autobot-user-frontend/src/assets/base.css**
    - Enhanced: Global scrollbar styling
    - Enhanced: Design token usage
    - Enhanced: Accessibility features
 
-9. **autobot-vue/src/router/index.ts**
+9. **autobot-user-frontend/src/router/index.ts**
    - Added: `/preferences` route (lines 277-288)
    - Integration: Proper metadata and navigation
 
-10. **autobot-vue/src/App.vue**
+10. **autobot-user-frontend/src/App.vue**
     - Added: Preference initialization (lines 523-527)
     - Added: Preferences navigation links (desktop + mobile)
     - Integrated: DarkModeToggle component
@@ -361,13 +361,13 @@ Screen Reader (announce change)
 
 ```bash
 # All files synced to frontend VM
-autobot-vue/src/App.vue
-autobot-vue/src/assets/styles/theme.css
-autobot-vue/src/components/ui/DarkModeToggle.vue
-autobot-vue/src/components/ui/PreferencesPanel.vue
-autobot-vue/src/composables/usePreferences.ts
-autobot-vue/src/router/index.ts
-autobot-vue/src/views/SettingsView.vue
+autobot-user-frontend/src/App.vue
+autobot-user-frontend/src/assets/styles/theme.css
+autobot-user-frontend/src/components/ui/DarkModeToggle.vue
+autobot-user-frontend/src/components/ui/PreferencesPanel.vue
+autobot-user-frontend/src/composables/usePreferences.ts
+autobot-user-frontend/src/router/index.ts
+autobot-user-frontend/src/views/SettingsView.vue
 ```
 
 ---
@@ -496,13 +496,13 @@ d306c6d4 - Preferences UI + accessibility
 ### B. File Locations
 
 **Source Code**:
-- `autobot-vue/src/composables/usePreferences.ts`
-- `autobot-vue/src/components/ui/PreferencesPanel.vue`
-- `autobot-vue/src/components/ui/DarkModeToggle.vue`
-- `autobot-vue/src/views/SettingsView.vue`
-- `autobot-vue/src/assets/styles/theme.css`
-- `autobot-vue/src/router/index.ts`
-- `autobot-vue/src/App.vue`
+- `autobot-user-frontend/src/composables/usePreferences.ts`
+- `autobot-user-frontend/src/components/ui/PreferencesPanel.vue`
+- `autobot-user-frontend/src/components/ui/DarkModeToggle.vue`
+- `autobot-user-frontend/src/views/SettingsView.vue`
+- `autobot-user-frontend/src/assets/styles/theme.css`
+- `autobot-user-frontend/src/router/index.ts`
+- `autobot-user-frontend/src/App.vue`
 
 **Documentation**:
 - `docs/testing/PREFERENCES_TESTING_GUIDE.md`

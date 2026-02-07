@@ -266,14 +266,14 @@ Implement API Key + HMAC signing with phased deployment: Logging → Enforcement
 
 #### T3.10: Update Chat API Client (30 min)
 - **Agent:** `senior-backend-engineer`
-- **Files:** `backend/api/chat_enhanced.py`
+- **Files:** `autobot-user-backend/api/chat_enhanced.py`
 - **Action:** Add auth headers to internal service calls
 - **Dependencies:** T3.5
 - **Verification:** Chat service sends valid auth headers
 
 #### T3.11: Update WebSocket Service (30 min)
 - **Agent:** `senior-backend-engineer`
-- **Files:** `backend/api/websockets.py`
+- **Files:** `autobot-user-backend/api/websockets.py`
 - **Action:** Add auth headers to WebSocket service calls
 - **Dependencies:** T3.5
 - **Verification:** WebSocket service sends valid auth headers
@@ -301,7 +301,7 @@ Implement API Key + HMAC signing with phased deployment: Logging → Enforcement
 
 #### T3.15: Update File Upload Service (20 min)
 - **Agent:** `senior-backend-engineer`
-- **Files:** `backend/api/file_upload.py`
+- **Files:** `autobot-user-backend/api/file_upload.py`
 - **Action:** Add auth headers to file service calls
 - **Dependencies:** T3.5
 - **Verification:** File service sends valid auth headers
@@ -515,7 +515,7 @@ Implement model-specific configuration system with centralized ContextWindowMana
 
 #### T4.11: Update chat_enhanced.py (45 min)
 - **Agent:** `senior-backend-engineer`
-- **Files:** `backend/api/chat_enhanced.py`
+- **Files:** `autobot-user-backend/api/chat_enhanced.py`
 - **Action:** Replace hardcoded 128k with ContextWindowManager.get_limit()
 - **Dependencies:** T4.3
 - **Verification:** Context window dynamically loaded from config
@@ -763,7 +763,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-service-auth.yml 
 # Sync config and code
 ./scripts/utilities/sync-to-vm.sh main config/llm_models.yaml /home/autobot/config/
 ./scripts/utilities/sync-to-vm.sh main src/context_window_manager.py /home/autobot/src/
-./scripts/utilities/sync-to-vm.sh main backend/api/chat_enhanced.py /home/autobot/backend/api/
+./scripts/utilities/sync-to-vm.sh main autobot-user-backend/api/chat_enhanced.py /home/autobot/autobot-user-backend/api/
 ./scripts/utilities/sync-to-vm.sh main src/chat_workflow_manager.py /home/autobot/src/
 
 # Restart services
@@ -1048,8 +1048,8 @@ mcp__memory__add_observations --observations '[{"entityName": "Root Cause Fix Im
 **Services:**
 - `src/conversation_file_manager.py` - Already has initialize() method
 - `src/chat_workflow_manager.py` - Async Redis operations, context window
-- `backend/api/chat_enhanced.py` - Auth headers, context window
-- `backend/api/websockets.py` - Auth headers
+- `autobot-user-backend/api/chat_enhanced.py` - Auth headers, context window
+- `autobot-user-backend/api/websockets.py` - Auth headers
 - `backend/services/agent_terminal_service.py` - Auth headers
 - `backend/services/npu_worker_manager.py` - Auth headers
 - `backend/services/load_balancer.py` - Auth headers
@@ -1139,4 +1139,3 @@ ansible-playbook ansible/playbooks/restart-all-services.yml
 **Timeline:** 5 days with parallel execution
 **Risk Level:** Medium (managed with phased deployment and rollback plans)
 **Approval Required:** Yes - Security team and user sign-off needed
-

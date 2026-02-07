@@ -9,7 +9,7 @@ The AutoBot workflow orchestration system is now fully functional after comprehe
 ### 1. **Classification Agent JSON Parsing** ✅
 - **Problem**: LLM response parsing failed due to incorrect JSON path
 - **Root Cause**: Expected `response['content']` but actual structure was `response['message']['content']`
-- **Fix**: Updated `_llm_classify()` method in `src/agents/classification_agent.py`
+- **Fix**: Updated `_llm_classify()` method in `autobot-user-backend/agents/classification_agent.py`
 - **Result**: Classification agent now correctly parses LLM responses
 
 ### 2. **Enum Definition Conflicts** ✅

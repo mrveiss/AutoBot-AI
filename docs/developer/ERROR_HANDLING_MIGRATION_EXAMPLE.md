@@ -449,8 +449,8 @@ assert "code" in response.json()["error"]
 ## Next Steps
 
 1. **Phase 2a** (Sprint 2): Migrate high-traffic endpoints
-   - `backend/api/chat.py` (32 try blocks)
-   - `backend/api/knowledge.py` (76 try blocks)
+   - `autobot-user-backend/api/chat.py` (32 try blocks)
+   - `autobot-user-backend/api/knowledge.py` (76 try blocks)
 
 2. **Phase 2b** (Sprint 3): Migrate remaining API endpoints
    - Session, workflow, file browser, terminal APIs

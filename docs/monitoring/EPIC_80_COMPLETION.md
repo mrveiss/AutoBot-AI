@@ -112,7 +112,7 @@ All dashboards are accessible via: **Monitoring → Dashboards** in AutoBot UI
 
 ### Phase 2: Backend Integration (Completed)
 
-**File**: `backend/api/prometheus_endpoint.py`
+**File**: `autobot-user-backend/api/prometheus_endpoint.py`
 
 ```python
 @router.get("")
@@ -175,7 +175,7 @@ allow_origins = http://172.16.168.21:5173
 
 ### Phase 5: Frontend Integration (Completed)
 
-**New Component**: `autobot-vue/src/views/GrafanaDashboardsView.vue`
+**New Component**: `autobot-user-frontend/src/views/GrafanaDashboardsView.vue`
 
 Features:
 - Tab-based dashboard selector
@@ -183,7 +183,7 @@ Features:
 - Seamless integration with AutoBot UI theme
 - No login required (anonymous access)
 
-**Router Configuration**: `autobot-vue/src/router/index.ts`
+**Router Configuration**: `autobot-user-frontend/src/router/index.ts`
 
 ```typescript
 {
@@ -204,7 +204,7 @@ Features:
 
 ### Phase 6: Compatibility Layer (Completed)
 
-**File**: `backend/api/monitoring_compat.py`
+**File**: `autobot-user-backend/api/monitoring_compat.py`
 
 - Provides deprecated REST API endpoints
 - Queries Prometheus for backward compatibility

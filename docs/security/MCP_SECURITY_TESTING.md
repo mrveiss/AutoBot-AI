@@ -34,7 +34,7 @@ Comprehensive security penetration testing suite for AutoBot's Model Context Pro
 
 ### 1. Path Traversal Attacks
 
-**Target:** Filesystem MCP (`backend/api/filesystem_mcp.py`)
+**Target:** Filesystem MCP (`autobot-user-backend/api/filesystem_mcp.py`)
 
 **Test Coverage:**
 - ✅ Basic path traversal (`../../../etc/passwd`)
@@ -103,7 +103,7 @@ Comprehensive security penetration testing suite for AutoBot's Model Context Pro
 
 ### 6. MCP Registry Security
 
-**Target:** MCP Registry (`backend/api/mcp_registry.py`)
+**Target:** MCP Registry (`autobot-user-backend/api/mcp_registry.py`)
 
 **Test Coverage:**
 - Registry tools endpoint security
@@ -116,7 +116,7 @@ Comprehensive security penetration testing suite for AutoBot's Model Context Pro
 
 ### 7. Structured Thinking Security
 
-**Target:** Structured Thinking MCP (`backend/api/structured_thinking_mcp.py`)
+**Target:** Structured Thinking MCP (`autobot-user-backend/api/structured_thinking_mcp.py`)
 
 **Test Coverage:**
 - Invalid stage name validation
@@ -242,7 +242,7 @@ pytest tests/security/ -v --strict-markers
 **Filesystem MCP Security:**
 
 ```python
-# File: backend/api/filesystem_mcp.py
+# File: autobot-user-backend/api/filesystem_mcp.py
 
 # Allowed directories whitelist
 ALLOWED_DIRECTORIES = [
@@ -379,8 +379,8 @@ def temp_forbidden_dir(tmp_path):
 
 ## Related Documentation
 
-- **Filesystem MCP Implementation:** `backend/api/filesystem_mcp.py`
-- **MCP Registry:** `backend/api/mcp_registry.py`
+- **Filesystem MCP Implementation:** `autobot-user-backend/api/filesystem_mcp.py`
+- **MCP Registry:** `autobot-user-backend/api/mcp_registry.py`
 - **Security Best Practices:** `docs/security/SECURITY_BEST_PRACTICES.md` (to be created)
 - **API Documentation:** `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
 

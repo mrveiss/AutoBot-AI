@@ -754,7 +754,7 @@ async def migrate_existing_conversations():
 
 **Integration Points**:
 ```python
-# In backend/api/chat.py
+# In autobot-user-backend/api/chat.py
 
 async def process_chat_message(message, ...):
     # Existing message processing
@@ -915,7 +915,7 @@ Total:                      = 33 MB
 
 ### 8.1 REST API Endpoints
 
-Add to `backend/api/memory.py`:
+Add to `autobot-user-backend/api/memory.py`:
 
 ```python
 @router.post("/api/memory/entities")

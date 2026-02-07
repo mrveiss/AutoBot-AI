@@ -7,7 +7,7 @@
 
 ## Summary
 
-Refactored `backend/api/infrastructure_monitor.py` to eliminate Feature Envy code smells by applying object-oriented design principles. Data classes now own their behavior, and specialized collectors handle data gathering.
+Refactored `autobot-user-backend/api/infrastructure_monitor.py` to eliminate Feature Envy code smells by applying object-oriented design principles. Data classes now own their behavior, and specialized collectors handle data gathering.
 
 ## Changes Made
 

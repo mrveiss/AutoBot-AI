@@ -9,7 +9,7 @@ Successfully implemented comprehensive security scanning agents that integrate w
 
 ## 🚀 **New Security Agent Implementations**
 
-### 1. **Security Scanner Agent** (`src/agents/security_scanner_agent.py`)
+### 1. **Security Scanner Agent** (`autobot-user-backend/agents/security_scanner_agent.py`)
 **Capabilities:**
 - ✅ **Port Scanning**: Comprehensive port discovery with nmap integration
 - ✅ **Service Detection**: Identify services and versions on open ports
@@ -31,7 +31,7 @@ tool_research = await self._research_scanning_tools("port scanning")
 install_guide = await self.get_tool_installation_guide("nmap")
 ```
 
-### 2. **Network Discovery Agent** (`src/agents/network_discovery_agent.py`)
+### 2. **Network Discovery Agent** (`autobot-user-backend/agents/network_discovery_agent.py`)
 **Capabilities:**
 - ✅ **Host Discovery**: Multi-method host detection (ping, ARP, TCP)
 - ✅ **Network Mapping**: Complete network topology analysis

@@ -206,7 +206,7 @@ from src.auth_middleware import get_current_user
 
 **Step 2: Update All 11 File Endpoints**:
 
-Endpoints requiring updates (all in `/home/kali/Desktop/AutoBot/backend/api/files.py`):
+Endpoints requiring updates (all in `/home/kali/Desktop/AutoBot/autobot-user-backend/api/files.py`):
 
 1. **GET /view** (line 616) - View file content
 2. **DELETE /delete** (line 658) - Delete single file
@@ -364,7 +364,7 @@ interface AuthTokens {
 }
 ```
 
-**Token Storage Service** (Create: `/home/kali/Desktop/AutoBot/autobot-vue/src/services/AuthTokenService.ts`):
+**Token Storage Service** (Create: `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/services/AuthTokenService.ts`):
 ```typescript
 export class AuthTokenService {
   private static readonly TOKEN_KEY = 'autobot_auth_tokens';
@@ -414,7 +414,7 @@ export class AuthTokenService {
 
 ### 3.3 ApiClient Enhancement
 
-**Update ApiClient.ts** (`/home/kali/Desktop/AutoBot/autobot-vue/src/utils/ApiClient.ts`):
+**Update ApiClient.ts** (`/home/kali/Desktop/AutoBot/autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts`):
 
 ```typescript
 import { AuthTokenService } from '@/services/AuthTokenService';
@@ -510,7 +510,7 @@ export default new ApiClient();
 **Update Login Component** (or create if missing):
 
 ```typescript
-// File: /home/kali/Desktop/AutoBot/autobot-vue/src/components/auth/LoginForm.vue
+// File: /home/kali/Desktop/AutoBot/autobot-user-frontend/src/components/auth/LoginForm.vue
 
 <script setup lang="ts">
 import { ref } from 'vue';
@@ -584,7 +584,7 @@ async function handleLogin() {
 
 ### 3.5 Router Navigation Guards
 
-**Update Router** (`/home/kali/Desktop/AutoBot/autobot-vue/src/router/index.ts`):
+**Update Router** (`/home/kali/Desktop/AutoBot/autobot-user-frontend/src/router/index.ts`):
 
 ```typescript
 import { createRouter, createWebHistory } from 'vue-router';
@@ -649,7 +649,7 @@ export default router;
 
 ### 3.6 Global Authentication Event Handling
 
-**App-wide Auth State** (`/home/kali/Desktop/AutoBot/autobot-vue/src/main.ts`):
+**App-wide Auth State** (`/home/kali/Desktop/AutoBot/autobot-user-frontend/src/main.ts`):
 
 ```typescript
 // Add global event listeners for auth state changes
@@ -685,7 +685,7 @@ window.addEventListener('auth:login', (event: CustomEvent) => {
 **Example: Update File List Component**:
 
 ```typescript
-// File: /home/kali/Desktop/AutoBot/autobot-vue/src/components/files/FileList.vue
+// File: /home/kali/Desktop/AutoBot/autobot-user-frontend/src/components/files/FileList.vue
 
 async function loadFiles(path: string) {
   try {
@@ -1195,7 +1195,7 @@ pytest tests/security/test_file_auth_security.py -v
 pytest tests/e2e/test_file_auth_e2e.py -v
 
 # 5. Full test suite
-pytest tests/ -v --cov=backend/api/files --cov=src/auth_middleware
+pytest tests/ -v --cov=autobot-user-backend/api/files --cov=src/auth_middleware
 ```
 
 **Coverage Requirements**:
@@ -1236,8 +1236,8 @@ curl http://172.16.168.21:5173
 **Backup Critical Files**:
 ```bash
 # Backup before modifications
-cp backend/api/files.py backend/api/files.py.backup.$(date +%Y%m%d)
-cp autobot-vue/src/utils/ApiClient.ts autobot-vue/src/utils/ApiClient.ts.backup.$(date +%Y%m%d)
+cp autobot-user-backend/api/files.py autobot-user-backend/api/files.py.backup.$(date +%Y%m%d)
+cp autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts.backup.$(date +%Y%m%d)
 cp config/config.yaml config/config.yaml.backup.$(date +%Y%m%d)
 ```
 
@@ -1270,7 +1270,7 @@ cat config/config.yaml | grep -A 10 "security_config:"
 # Delete check_file_permissions() function (lines 123-180)
 
 # Step 2.4: Sync to VM4 (AI Stack - Backend)
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/files.py /home/autobot/backend/api/
+./scripts/utilities/sync-to-vm.sh ai-stack autobot-user-backend/api/files.py /home/autobot/autobot-user-backend/api/
 
 # Step 2.5: Restart backend
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-backend"
@@ -1300,23 +1300,23 @@ curl http://172.16.168.20:8001/api/files/view?path=test.txt \
 **Phase 4: Frontend Updates** (60 minutes)
 ```bash
 # Step 4.1: Create AuthTokenService
-# Create file: autobot-vue/src/services/AuthTokenService.ts
+# Create file: autobot-user-frontend/src/services/AuthTokenService.ts
 # (Use code from section 3.2)
 
 # Step 4.2: Update ApiClient
-# Modify: autobot-vue/src/utils/ApiClient.ts
+# Modify: autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts
 # (Use code from section 3.3)
 
 # Step 4.3: Create/Update Login component
-# Create: autobot-vue/src/components/auth/LoginForm.vue
+# Create: autobot-user-frontend/src/components/auth/LoginForm.vue
 # (Use code from section 3.4)
 
 # Step 4.4: Update router with guards
-# Modify: autobot-vue/src/router/index.ts
+# Modify: autobot-user-frontend/src/router/index.ts
 # (Use code from section 3.5)
 
 # Step 4.5: Sync to VM1 (Frontend)
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
 
 # Step 4.6: Rebuild frontend
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cd /home/autobot/autobot-vue && npm run build"
@@ -1364,13 +1364,13 @@ tail -f logs/backend.log | grep ERROR
 # Emergency rollback procedure
 
 # Step 1: Restore backend files
-cp backend/api/files.py.backup.* backend/api/files.py
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/files.py /home/autobot/backend/api/
+cp autobot-user-backend/api/files.py.backup.* autobot-user-backend/api/files.py
+./scripts/utilities/sync-to-vm.sh ai-stack autobot-user-backend/api/files.py /home/autobot/autobot-user-backend/api/
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-backend"
 
 # Step 2: Restore frontend files
-cp autobot-vue/src/utils/ApiClient.ts.backup.* autobot-vue/src/utils/ApiClient.ts
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
+cp autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts.backup.* autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cd /home/autobot/autobot-vue && npm run build"
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "supervisorctl restart autobot-frontend"
 
@@ -1422,7 +1422,7 @@ tail -20 logs/audit.log | jq '.action' | grep file_
 # Manual browser test required
 
 # 5. No deprecated function calls remain
-grep -r "check_file_permissions" backend/api/files.py
+grep -r "check_file_permissions" autobot-user-backend/api/files.py
 # Should return no results
 ```
 
@@ -1613,22 +1613,22 @@ Security Team
 ## Appendix A: Code Diff Summary
 
 **Files Modified**:
-1. `/home/kali/Desktop/AutoBot/backend/api/files.py`
+1. `/home/kali/Desktop/AutoBot/autobot-user-backend/api/files.py`
    - Lines added: ~150 (auth checks, audit logging)
    - Lines removed: ~60 (deprecated function)
    - Net change: +90 lines
 
-2. `/home/kali/Desktop/AutoBot/autobot-vue/src/utils/ApiClient.ts`
+2. `/home/kali/Desktop/AutoBot/autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts`
    - Lines added: ~40 (auth header injection, error handling)
    - Lines removed: 0
    - Net change: +40 lines
 
-3. `/home/kali/Desktop/AutoBot/autobot-vue/src/services/AuthTokenService.ts`
+3. `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/services/AuthTokenService.ts`
    - New file
    - Lines added: ~80
    - Net change: +80 lines
 
-4. `/home/kali/Desktop/AutoBot/autobot-vue/src/router/index.ts`
+4. `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/router/index.ts`
    - Lines added: ~30 (navigation guards)
    - Lines removed: 0
    - Net change: +30 lines
@@ -1647,10 +1647,10 @@ Security Team
 **Backend Deployment**:
 ```bash
 # Update files.py
-vim backend/api/files.py
+vim autobot-user-backend/api/files.py
 
 # Sync to VM4
-./scripts/utilities/sync-to-vm.sh ai-stack backend/api/files.py /home/autobot/backend/api/
+./scripts/utilities/sync-to-vm.sh ai-stack autobot-user-backend/api/files.py /home/autobot/autobot-user-backend/api/
 
 # Restart backend
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-backend"
@@ -1659,10 +1659,10 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-b
 **Frontend Deployment**:
 ```bash
 # Update ApiClient
-vim autobot-vue/src/utils/ApiClient.ts
+vim autobot-user-frontend/autobot-user-backend/utils/ApiClient.ts
 
 # Sync to VM1
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
 
 # Rebuild and restart
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cd /home/autobot/autobot-vue && npm run build && supervisorctl restart autobot-frontend"

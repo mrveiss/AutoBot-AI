@@ -175,7 +175,7 @@ redis_client.setex(
 
 #### Add Redis Metrics to Backend
 ```python
-# backend/api/system.py - Add metrics endpoint
+# autobot-user-backend/api/system.py - Add metrics endpoint
 @router.get("/redis/metrics")
 async def redis_metrics(req: Request):
     info = redis_client.info()

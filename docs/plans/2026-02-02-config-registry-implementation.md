@@ -802,7 +802,7 @@ git commit -m "refactor(config): migrate defaults.py to ConfigRegistry (#751)"
 ## Task 12: Migrate generate_request_id in chat_improved.py
 
 **Files:**
-- Modify: `backend/api/chat_improved.py`
+- Modify: `autobot-user-backend/api/chat_improved.py`
 
 ### Step 1: Replace local function with import
 
@@ -828,7 +828,7 @@ Expected: PASS
 ### Step 3: Commit
 
 ```bash
-git add backend/api/chat_improved.py
+git add autobot-user-backend/api/chat_improved.py
 git commit -m "refactor(api): migrate chat_improved to use request_utils (#751)"
 ```
 
@@ -837,7 +837,7 @@ git commit -m "refactor(api): migrate chat_improved to use request_utils (#751)"
 ## Task 13: Migrate generate_request_id in entity_extraction.py
 
 **Files:**
-- Modify: `backend/api/entity_extraction.py`
+- Modify: `autobot-user-backend/api/entity_extraction.py`
 
 ### Step 1: Replace local function with import
 
@@ -851,7 +851,7 @@ Expected: PASS
 ### Step 3: Commit
 
 ```bash
-git add backend/api/entity_extraction.py
+git add autobot-user-backend/api/entity_extraction.py
 git commit -m "refactor(api): migrate entity_extraction to use request_utils (#751)"
 ```
 
@@ -860,7 +860,7 @@ git commit -m "refactor(api): migrate entity_extraction to use request_utils (#7
 ## Task 14: Migrate generate_request_id in memory.py
 
 **Files:**
-- Modify: `backend/api/memory.py`
+- Modify: `autobot-user-backend/api/memory.py`
 
 ### Step 1: Replace local function with import
 
@@ -869,7 +869,7 @@ Same pattern as Task 12.
 ### Step 2: Commit
 
 ```bash
-git add backend/api/memory.py
+git add autobot-user-backend/api/memory.py
 git commit -m "refactor(api): migrate memory.py to use request_utils (#751)"
 ```
 
@@ -878,7 +878,7 @@ git commit -m "refactor(api): migrate memory.py to use request_utils (#751)"
 ## Task 15: Migrate generate_request_id in graph_rag.py
 
 **Files:**
-- Modify: `backend/api/graph_rag.py`
+- Modify: `autobot-user-backend/api/graph_rag.py`
 
 ### Step 1: Replace local function with import
 
@@ -887,7 +887,7 @@ Same pattern as Task 12.
 ### Step 2: Commit
 
 ```bash
-git add backend/api/graph_rag.py
+git add autobot-user-backend/api/graph_rag.py
 git commit -m "refactor(api): migrate graph_rag to use request_utils (#751)"
 ```
 
@@ -896,7 +896,7 @@ git commit -m "refactor(api): migrate graph_rag to use request_utils (#751)"
 ## Task 16: Migrate generate_request_id in security_assessment.py
 
 **Files:**
-- Modify: `backend/api/security_assessment.py`
+- Modify: `autobot-user-backend/api/security_assessment.py`
 
 ### Step 1: Replace local function with import
 
@@ -905,7 +905,7 @@ Same pattern as Task 12.
 ### Step 2: Commit
 
 ```bash
-git add backend/api/security_assessment.py
+git add autobot-user-backend/api/security_assessment.py
 git commit -m "refactor(api): migrate security_assessment to use request_utils (#751)"
 ```
 

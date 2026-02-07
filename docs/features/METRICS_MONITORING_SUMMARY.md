@@ -55,7 +55,7 @@ Successfully implemented comprehensive metrics and monitoring system for AutoBot
 - process_count: Number of active AutoBot processes
 ```
 
-### 3. **Metrics API Endpoints** (`backend/api/metrics.py`)
+### 3. **Metrics API Endpoints** (`autobot-user-backend/api/metrics.py`)
 **Comprehensive API Access:**
 - ✅ **Workflow Metrics**: `/api/metrics/workflow/{id}` - Individual workflow statistics
 - ✅ **Performance Summary**: `/api/metrics/performance/summary` - Overall performance analysis

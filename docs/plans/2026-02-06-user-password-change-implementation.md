@@ -803,7 +803,7 @@ git commit -m "feat(user): integrate session invalidation on password change (#6
 ### Task 3.2: Integrate Rate Limiter with API Endpoint
 
 **Files:**
-- Modify: `backend/api/user_management/users.py:360-394`
+- Modify: `autobot-user-backend/api/user_management/users.py:360-394`
 - Create: `tests/api/user_management/test_users_password_change.py`
 
 **Step 1: Write the failing test**
@@ -846,7 +846,7 @@ Expected: `ImportError: cannot import name 'PasswordChangeRateLimiter'`
 **Step 3: Update API endpoint**
 
 ```python
-# Modify backend/api/user_management/users.py
+# Modify autobot-user-backend/api/user_management/users.py
 from src.user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
     RateLimitExceeded,
@@ -922,7 +922,7 @@ Expected: `PASSED`
 **Step 5: Commit**
 
 ```bash
-git add backend/api/user_management/users.py tests/api/user_management/test_users_password_change.py
+git add autobot-user-backend/api/user_management/users.py tests/api/user_management/test_users_password_change.py
 git commit -m "feat(api): add rate limiting to password change endpoint (#635)"
 ```
 
@@ -1334,12 +1334,12 @@ git commit -m "feat(shared): create PasswordChangeForm component (#635)"
 ### Task 5.1: Create ProfileModal Component
 
 **Files:**
-- Create: `autobot-vue/src/components/profile/ProfileModal.vue`
+- Create: `autobot-user-frontend/src/components/profile/ProfileModal.vue`
 
 **Step 1: Create component**
 
 ```vue
-<!-- autobot-vue/src/components/profile/ProfileModal.vue -->
+<!-- autobot-user-frontend/src/components/profile/ProfileModal.vue -->
 <template>
   <div v-if="isOpen" class="modal-overlay" @click="handleClose">
     <div class="modal-content" @click.stop>
@@ -1570,7 +1570,7 @@ function formatDate(dateString) {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/profile/ProfileModal.vue
+git add autobot-user-frontend/src/components/profile/ProfileModal.vue
 git commit -m "feat(autobot-vue): create ProfileModal with password change (#635)"
 ```
 

@@ -153,7 +153,7 @@ curl http://172.16.168.24:8080/api/tags
 | `run_autobot.sh` | Main startup script |
 | `.env` | Environment variables |
 | `backend/core/config.py` | Backend configuration |
-| `autobot-vue/vite.config.ts` | Frontend configuration |
+| `autobot-user-frontend/vite.config.ts` | Frontend configuration |
 
 ### Critical Rules
 

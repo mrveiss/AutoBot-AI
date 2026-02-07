@@ -176,7 +176,7 @@ mcp__memory__create_relations(relations=[
 
 ### Good Observations:
 
-✅ **Include dates**: "Implemented: 2025-10-25 in backend/api/terminal.py:595-660"
+✅ **Include dates**: "Implemented: 2025-10-25 in autobot-user-backend/api/terminal.py:595-660"
 ✅ **Be specific**: "Root Cause: VectorStoreIndex.from_vector_store() loading 545,255 vectors synchronously"
 ✅ **Include file locations**: "Files Modified: src/knowledge_base_v2.py (lines 225-230, 385-428)"
 ✅ **Add context**: "Key Insight: PTY sessions already handle terminal WebSocket output automatically"
@@ -328,7 +328,7 @@ mcp__memory__add_observations(observations=[{
     "entityName": "Vectorization Status Check Fix - UNFINISHED",
     "contents": [
         "2025-10-27: Started Phase 1 implementation",
-        "Modified backend/api/knowledge.py check_vectorization_status_batch()",
+        "Modified autobot-user-backend/api/knowledge.py check_vectorization_status_batch()",
         "Replaced Redis pipeline with ChromaDB collection query"
     ]
 }])

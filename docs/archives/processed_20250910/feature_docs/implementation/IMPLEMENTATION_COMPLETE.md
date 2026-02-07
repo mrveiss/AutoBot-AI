@@ -47,7 +47,7 @@ create_workflow_response()       # Comprehensive workflow generation
 should_use_workflow_orchestration()  # Decision logic
 ```
 
-### 2. **Research Agent API** (`src/agents/research_agent.py`)
+### 2. **Research Agent API** (`autobot-user-backend/agents/research_agent.py`)
 - **FastAPI Service**: Complete web research capabilities
 - **Tool Discovery**: Specialized network scanning tool research
 - **Installation Guides**: Detailed setup instructions with prerequisites
@@ -58,7 +58,7 @@ should_use_workflow_orchestration()  # Decision logic
 - `POST /research/tools` - Tool-specific research
 - `GET /research/installation/{tool}` - Installation guides
 
-### 3. **Workflow API Backend** (`backend/api/workflow.py`)
+### 3. **Workflow API Backend** (`autobot-user-backend/api/workflow.py`)
 - **Workflow Management**: Create, execute, monitor workflows
 - **Approval System**: User confirmation for critical steps
 - **Progress Tracking**: Real-time workflow status
@@ -70,7 +70,7 @@ should_use_workflow_orchestration()  # Decision logic
 - `POST /api/workflow/{id}/approve` - Approve workflow steps
 - `GET /api/workflow/{id}/status` - Get workflow progress
 
-### 4. **Frontend UI Components** (`autobot-vue/src/components/WorkflowApproval.vue`)
+### 4. **Frontend UI Components** (`autobot-user-frontend/src/components/WorkflowApproval.vue`)
 - **Workflow Dashboard**: Visual workflow management interface
 - **Real-time Updates**: Live progress tracking with auto-refresh
 - **Approval Interface**: User-friendly step approval system
@@ -82,7 +82,7 @@ should_use_workflow_orchestration()  # Decision logic
 - One-click approve/deny functionality
 - Real-time progress bars and status updates
 
-### 5. **Service Layer** (`autobot-vue/src/services/api.js`)
+### 5. **Service Layer** (`autobot-user-frontend/src/services/api.js`)
 - **API Abstraction**: Clean interface to backend services
 - **Workflow Methods**: Complete workflow API coverage
 - **Error Handling**: Robust error management

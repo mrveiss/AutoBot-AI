@@ -56,7 +56,7 @@ import '@/styles/document-feed-wrapper.css'
 
 ## 📦 JavaScript/TypeScript Utilities
 
-### **Format Helpers** (`src/utils/formatHelpers.ts`)
+### **Format Helpers** (`autobot-user-backend/utils/formatHelpers.ts`)
 
 Comprehensive formatting utilities eliminating 33+ duplicate implementations.
 
@@ -578,16 +578,16 @@ import DataTable from '@/components/ui/DataTable.vue'
 Search for common patterns:
 ```bash
 # Find empty states
-grep -r "empty-state" autobot-vue/src/components/
+grep -r "empty-state" autobot-user-frontend/src/components/
 
 # Find modals
-grep -r "dialog-overlay" autobot-vue/src/components/
+grep -r "dialog-overlay" autobot-user-frontend/src/components/
 
 # Find status badges
-grep -r "badge badge-" autobot-vue/src/components/
+grep -r "badge badge-" autobot-user-frontend/src/components/
 
 # Find tables
-grep -r "<table" autobot-vue/src/components/
+grep -r "<table" autobot-user-frontend/src/components/
 ```
 
 ### Step 2: Replace with Reusable Component
@@ -787,7 +787,7 @@ Final sweep for duplicate utility functions - concrete savings found:
 - **Action**: Replaced with shared formatHelpers utilities (formatDateTime, formatTime)
 - **After**: 2-line wrappers using shared utilities + 1 import
 - **Lines Saved**: ~18 lines
-- **Location**: `autobot-vue/src/components/infrastructure/DeploymentProgressModal.vue`
+- **Location**: `autobot-user-frontend/src/components/infrastructure/DeploymentProgressModal.vue`
 
 **Other Duration Formatting**: ⚠️ **Not Duplicate**
 - **AsyncComponentWrapper.vue**: `formatLoadingTime()` - unique to loading metrics (ms/s display)
@@ -807,19 +807,19 @@ Migrated 3 components to use existing StatusBadge component:
 - **Before**: Inline "Connected" badge with custom Tailwind classes
 - **After**: `<StatusBadge variant="success" size="small">Connected</StatusBadge>`
 - **Lines Saved**: ~1 line (improved consistency)
-- **Location**: `autobot-vue/src/components/PopoutChromiumBrowser.vue:205`
+- **Location**: `autobot-user-frontend/src/components/PopoutChromiumBrowser.vue:205`
 
 **2. HostCard.vue** ✅
 - **Before**: Inline status badge with 4 conditional color classes (active/pending/error/deploying)
 - **After**: `<StatusBadge :variant="statusVariant" size="small">{{ host.status }}</StatusBadge>` + computed variant mapping
 - **Lines Saved**: ~11 lines (12 lines inline badge → 1 StatusBadge component)
-- **Location**: `autobot-vue/src/components/infrastructure/HostCard.vue:18-20`
+- **Location**: `autobot-user-frontend/src/components/infrastructure/HostCard.vue:18-20`
 
 **3. ChatFilePanel.vue** ✅
 - **Before**: Inline "AI Generated" badge with purple styling
 - **After**: `<StatusBadge variant="primary" size="small">AI Generated</StatusBadge>`
 - **Lines Saved**: ~2 lines
-- **Location**: `autobot-vue/src/components/chat/ChatFilePanel.vue:123-130`
+- **Location**: `autobot-user-frontend/src/components/chat/ChatFilePanel.vue:123-130`
 
 **Batch 15 Summary**:
 - ✅ 3 components migrated to StatusBadge
@@ -838,7 +838,7 @@ Continued migration to StatusBadge component with more complex components:
   - `getHealthIndicatorClass()` (~14 lines)
   - `getHealthCheckBadgeClass()` (~14 lines)
 - **Lines Saved**: ~42 lines (3 functions removed, replaced with 3 compact variant maps)
-- **Location**: `autobot-vue/src/components/services/RedisServiceControl.vue`
+- **Location**: `autobot-user-frontend/src/components/services/RedisServiceControl.vue`
 - **Note**: Kept `getStatusDotClass()` and `getHealthCheckCardClass()` - still needed for dot animation and card styling
 
 **2. ResearchBrowser.vue** ✅
@@ -849,7 +849,7 @@ Continued migration to StatusBadge component with more complex components:
   - `getResultStatusClass` function (9 lines) → `getResultStatusVariant` function (7 lines)
 - **CSS Removed**: `.status-badge` class (3 lines)
 - **Lines Saved**: ~7 lines
-- **Location**: `autobot-vue/src/components/ResearchBrowser.vue`
+- **Location**: `autobot-user-frontend/src/components/ResearchBrowser.vue`
 
 **Batch 16 Summary**:
 - ✅ 2 components migrated to StatusBadge
@@ -873,7 +873,7 @@ Migrated MonitoringDashboard.vue with 2 badge patterns:
   - Line 286: Replaced `<span :class="['priority-badge', rec.priority]">` with StatusBadge
   - Line 321: Replaced `<span :class="['severity-badge', alert.severity]">` with StatusBadge
 - **Lines Saved**: ~15 lines (CSS removed)
-- **Location**: `autobot-vue/src/components/monitoring/MonitoringDashboard.vue`
+- **Location**: `autobot-user-frontend/src/components/monitoring/MonitoringDashboard.vue`
 
 **Batch 17 Summary**:
 - ✅ 1 component migrated (2 badge patterns)
@@ -892,7 +892,7 @@ Migrated 4 components with 5 badge patterns total:
   - `.badge-ssh_key`, `.badge-password`, `.badge-api_key` type variants - 9 lines CSS
 - **Template Updates**: Lines 87-90 replaced inline badges with StatusBadge
 - **Lines Saved**: ~17 lines
-- **Location**: `autobot-vue/src/components/SecretsManager.vue`
+- **Location**: `autobot-user-frontend/src/components/SecretsManager.vue`
 
 **2. CommandPermissionDialog.vue** ✅
 - **Before**: Risk level badge with 4 variants (low/medium/high/critical)
@@ -901,7 +901,7 @@ Migrated 4 components with 5 badge patterns total:
 - **Function Added**: `getRiskVariant()` maps LOW/MEDIUM/HIGH/CRITICAL to success/warning/danger/danger
 - **Template Updates**: Line 28 replaced risk-badge with StatusBadge
 - **Lines Saved**: ~28 lines
-- **Location**: `autobot-vue/src/components/CommandPermissionDialog.vue`
+- **Location**: `autobot-user-frontend/src/components/CommandPermissionDialog.vue`
 
 **3. ElevationDialog.vue** ✅
 - **Before**: Risk level badge with 4 variants (identical pattern to CommandPermissionDialog)
@@ -910,7 +910,7 @@ Migrated 4 components with 5 badge patterns total:
 - **Function Added**: Same getRiskVariant() pattern for consistency
 - **Template Updates**: Line 28 replaced risk-badge with StatusBadge
 - **Lines Saved**: ~28 lines
-- **Location**: `autobot-vue/src/components/ElevationDialog.vue`
+- **Location**: `autobot-user-frontend/src/components/ElevationDialog.vue`
 
 **4. KnowledgeStats.vue** ✅
 - **Before**: Status badge with 2 variants (online/offline)
@@ -919,7 +919,7 @@ Migrated 4 components with 5 badge patterns total:
 - **Function Added**: `getStatusVariant()` maps online/offline/unknown to success/danger/secondary
 - **Template Updates**: Line 68 replaced status-badge with StatusBadge
 - **Lines Saved**: ~17 lines
-- **Location**: `autobot-vue/src/components/knowledge/KnowledgeStats.vue`
+- **Location**: `autobot-user-frontend/src/components/knowledge/KnowledgeStats.vue`
 
 **Batch 18 Summary**:
 - ✅ 4 components migrated (5 badge patterns total)
@@ -938,7 +938,7 @@ Final StatusBadge migration completing the enforcement wave:
 - **Function Added**: `getStatusVariant()` maps online/offline/busy/error to success/secondary/warning/danger
 - **Template Updates**: Line 116 replaced status-badge with StatusBadge (retained status-dot for visual indicator)
 - **Lines Saved**: ~29 lines
-- **Location**: `autobot-vue/src/components/settings/NPUWorkersSettings.vue`
+- **Location**: `autobot-user-frontend/src/components/settings/NPUWorkersSettings.vue`
 
 **Batch 19 Summary**:
 - ✅ 1 component migrated (final candidate)
@@ -967,7 +967,7 @@ Final StatusBadge migration completing the enforcement wave:
   - Preserved conditional text rendering (`retrying ? 'Retrying...' : 'Try Again'`)
   - Maintained disabled state binding (`:disabled="retrying"`)
   - All click handlers and component logic unchanged
-- **Location**: `autobot-vue/src/components/ErrorBoundary.vue`
+- **Location**: `autobot-user-frontend/src/components/ErrorBoundary.vue`
 - **Commit**: abd34a6 (lines 54, 25-43, 274-320 removed)
 
 **2. async/AsyncErrorFallback.vue** - Async component error fallback
@@ -978,7 +978,7 @@ Final StatusBadge migration completing the enforcement wave:
   - Maintained icon animations (`:class="{ 'fa-spin': retrying }"`)
   - Preserved retry count display (`Retry (${retryCount}/${maxRetries})`)
   - Kept service worker cache clearing on reload
-- **Location**: `autobot-vue/src/components/async/AsyncErrorFallback.vue`
+- **Location**: `autobot-user-frontend/src/components/async/AsyncErrorFallback.vue`
 - **Commit**: abd34a6 (lines 65-67, 27-57, 340-405 removed)
 
 **3. PhaseStatusIndicator.vue** - Project phase status display
@@ -988,7 +988,7 @@ Final StatusBadge migration completing the enforcement wave:
   - Preserved loading state animations (fa-sync spinning)
   - Maintained disabled states during operations
   - Options API component (required components registration)
-- **Location**: `autobot-vue/src/components/PhaseStatusIndicator.vue`
+- **Location**: `autobot-user-frontend/src/components/PhaseStatusIndicator.vue`
 - **Commit**: abd34a6 (lines 124-130, 88-99, 557-600 removed)
 
 **Batch 20 Summary**:
@@ -1050,7 +1050,7 @@ Final StatusBadge migration completing the enforcement wave:
   - Preserved disabled states during approval operations
   - Composition API with TypeScript (<script setup lang="ts">)
   - All click handlers and conditional visibility maintained
-- **Location**: `autobot-vue/src/components/WorkflowApproval.vue`
+- **Location**: `autobot-user-frontend/src/components/WorkflowApproval.vue`
 - **Commit**: bc2d72f (lines 200, 143-158, 173-188, 677-720 removed)
 
 **2. ManPageManager.vue** - Man page integration management
@@ -1062,7 +1062,7 @@ Final StatusBadge migration completing the enforcement wave:
   - Options API with setup() + components registration
   - Multiple refresh buttons, integration actions, search functionality
   - Preserved all icon animations and disabled states
-- **Location**: `autobot-vue/src/components/ManPageManager.vue`
+- **Location**: `autobot-user-frontend/src/components/ManPageManager.vue`
 - **Commit**: bc2d72f (lines 323-329, multiple button replacements, 936-978 removed)
 
 **Batch 21 Summary**:
@@ -1253,7 +1253,7 @@ const createRipple = (event: TouchEvent) => {
 - **No duplicate code** - Single button component serves both desktop and mobile
 
 **Files Modified**:
-- `autobot-vue/src/components/base/BaseButton.vue` (extended with touch features)
+- `autobot-user-frontend/src/components/base/BaseButton.vue` (extended with touch features)
 
 **TouchFriendlyButton.vue Status**: Recommend deprecation or conversion to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility.
 
@@ -2405,7 +2405,7 @@ const createRipple = (event: TouchEvent) => {
 
 **Goal**: Create reusable BaseAlert component to consolidate inline alert patterns and migrate first component.
 
-**New Component**: BaseAlert.vue (`autobot-vue/src/components/ui/BaseAlert.vue`)
+**New Component**: BaseAlert.vue (`autobot-user-frontend/src/components/ui/BaseAlert.vue`)
 
 **Features**:
 - 5 variants: success, info, warning, error, critical
@@ -3844,7 +3844,7 @@ const createRipple = (event: TouchEvent) => {
 
 During batch 14 final sweep, discovered several well-designed reusable components that exist but are **significantly underutilized**:
 
-**1. BaseButton.vue** (`autobot-vue/src/components/base/`)
+**1. BaseButton.vue** (`autobot-user-frontend/src/components/base/`)
 - **Current Usage**: ✅ **MIGRATION ONGOING** - 31 components using BaseButton (batches 20-40, 66-67+)
   - First batches (20-24): ErrorBoundary, AsyncErrorFallback, PhaseStatusIndicator, dialogs, settings, research browser
   - Middle batches (25-40): Terminal, chat, knowledge, monitoring, phase progression
@@ -3856,7 +3856,7 @@ During batch 14 final sweep, discovered several well-designed reusable component
 - **Achievement**: Successfully established BaseButton as the standard button pattern across entire frontend codebase
 - **Remaining**: ~12 more buttons identified across 3 components (ErrorNotifications: 3, HistoryView: 3, LogViewer: 5, plus misc)
 
-**2. TouchFriendlyButton.vue** (`autobot-vue/src/components/ui/`)
+**2. TouchFriendlyButton.vue** (`autobot-user-frontend/src/components/ui/`)
 - **Current Usage**: 0 components (no imports found)
 - **Features**: Size variants (xs-xl), style variants (primary/secondary/outline/ghost/danger), loading states, touch feedback, haptic feedback, accessibility (dark mode, high contrast, reduced motion)
 - **Status**: ✅ **OVERLAP RESOLVED** - All touch features integrated into BaseButton
@@ -3864,7 +3864,7 @@ During batch 14 final sweep, discovered several well-designed reusable component
 - **Alternative**: Convert to lightweight wrapper around `<BaseButton touchOptimized>` for backward compatibility
 - **Analysis**: BaseButton now has all TouchFriendlyButton features (11 variants + touch optimization) making this component redundant
 
-**3. StatusBadge.vue** (`autobot-vue/src/components/ui/`)
+**3. StatusBadge.vue** (`autobot-user-frontend/src/components/ui/`)
 - **Current Usage**: ✅ **SUBSTANTIALLY COMPLETE** - 15 instances across 11 components (batches 15-19 migrations)
   - Original: VectorizationProgressModal, TreeNodeComponent
   - Batches 15-19: KnowledgePersistenceDialog, HostsManager, ResearchBrowser, MonitoringDashboard, SecretsManager, CommandPermissionDialog, ElevationDialog, KnowledgeStats, NPUWorkersSettings
@@ -3873,7 +3873,7 @@ During batch 14 final sweep, discovered several well-designed reusable component
 - **Results**: ~197 lines saved (batches 15-19), 650% usage increase (2 → 15 instances)
 - **Achievement**: Successfully established as standard badge pattern across diverse contexts
 
-**3. useToast Composable** (`autobot-vue/src/composables/useToast.js`)
+**3. useToast Composable** (`autobot-user-frontend/src/composables/useToast.js`)
 - **Current Usage**: 2 components (KnowledgePersistenceDialog + examples)
 - **Features**: Global toast state, type variants (info/success/warning/error), auto-dismiss, toast management
 - **Recommendation**: ✅ **Good pattern but needs Toast UI component** - Many components implement inline alert/notification patterns
@@ -3922,7 +3922,7 @@ These components represent **prior investment in reusability infrastructure** th
 
 ### Example 1: Using TouchFriendlyButton Component
 
-**Location**: `autobot-vue/src/components/ui/TouchFriendlyButton.vue`
+**Location**: `autobot-user-frontend/src/components/ui/TouchFriendlyButton.vue`
 
 **Before** (Inline button with custom styling):
 ```vue
@@ -3991,7 +3991,7 @@ import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 
 ### Example 2: Using StatusBadge Component
 
-**Location**: `autobot-vue/src/components/ui/StatusBadge.vue`
+**Location**: `autobot-user-frontend/src/components/ui/StatusBadge.vue`
 
 **Before** (Inline badge):
 ```vue
@@ -4047,7 +4047,7 @@ import StatusBadge from '@/components/ui/StatusBadge.vue'
 
 ### Example 3: Using useToast Composable
 
-**Location**: `autobot-vue/src/composables/useToast.js`
+**Location**: `autobot-user-frontend/src/composables/useToast.js`
 
 **Before** (Inline alert/notification):
 ```vue
@@ -4358,7 +4358,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 5. **Test the component** to ensure all functionality works
 6. **Sync to frontend VM**:
    ```bash
-   ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/YourComponent.vue /home/autobot/autobot-vue/src/components/YourComponent.vue
+   ./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/components/YourComponent.vue /home/autobot/autobot-user-frontend/src/components/YourComponent.vue
    ```
 7. **Update GitHub issue #10894** to track completion
 
@@ -4382,11 +4382,11 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 
 ## 🔗 Related Documentation
 
-- [Format Helpers Source](../../autobot-vue/src/utils/formatHelpers.ts)
-- [UI Components Directory](../../autobot-vue/src/components/ui/)
-- [Base Components Directory](../../autobot-vue/src/components/base/)
-- [Composables Directory](../../autobot-vue/src/composables/)
-- [Shared Styles Directory](../../autobot-vue/src/styles/)
+- [Format Helpers Source](../../autobot-user-frontend/autobot-user-backend/utils/formatHelpers.ts)
+- [UI Components Directory](../../autobot-user-frontend/src/components/ui/)
+- [Base Components Directory](../../autobot-user-frontend/src/components/base/)
+- [Composables Directory](../../autobot-user-frontend/src/composables/)
+- [Shared Styles Directory](../../autobot-user-frontend/src/styles/)
 
 ---
 

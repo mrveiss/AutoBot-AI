@@ -21,7 +21,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
 
 ### **Tier 1: Core Agents (Always Available)**
 
-#### **Chat Agent (`src/agents/chat_agent.py`)**
+#### **Chat Agent (`autobot-user-backend/agents/chat_agent.py`)**
 - **Model**: Llama 3.2 1B (optimized for speed)
 - **Purpose**: Conversational interactions and simple queries
 - **Capabilities**:
@@ -30,7 +30,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
   - Pattern-based routing to specialized agents
 - **Resource Usage**: Low (2-4GB RAM)
 
-#### **KB Librarian Agent (`src/agents/kb_librarian_agent.py`)**
+#### **KB Librarian Agent (`autobot-user-backend/agents/kb_librarian_agent.py`)**
 - **Model**: ChromaDB integration with semantic search
 - **Purpose**: Always-on knowledge base search and retrieval
 - **Capabilities**:
@@ -39,7 +39,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
   - Response enhancement with relevant context
 - **Resource Usage**: Low (database queries)
 
-#### **Enhanced System Commands Agent (`src/agents/enhanced_system_commands_agent.py`)**
+#### **Enhanced System Commands Agent (`autobot-user-backend/agents/enhanced_system_commands_agent.py`)**
 - **Model**: Llama 3.2 1B with security validation
 - **Purpose**: Safe system command generation and execution
 - **Capabilities**:
@@ -51,7 +51,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
 
 ### **Tier 2: Processing Agents (On-Demand)**
 
-#### **RAG Agent (`src/agents/rag_agent.py`)**
+#### **RAG Agent (`autobot-user-backend/agents/rag_agent.py`)**
 - **Model**: Llama 3.2 3B (complex reasoning)
 - **Purpose**: Document synthesis and knowledge integration
 - **Capabilities**:
@@ -61,7 +61,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
   - Context ranking and relevance analysis
 - **Resource Usage**: Medium-High (8-12GB RAM)
 
-#### **Research Agent (`src/agents/research_agent.py`)**
+#### **Research Agent (`autobot-user-backend/agents/research_agent.py`)**
 - **Model**: Container-based with FastAPI server
 - **Purpose**: Web research coordination and tool discovery
 - **Capabilities**:
@@ -71,7 +71,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
   - Integration with security scanning workflows
 - **Resource Usage**: Medium (containerized)
 
-#### **Containerized Librarian Assistant (`src/agents/containerized_librarian_assistant.py`)**
+#### **Containerized Librarian Assistant (`autobot-user-backend/agents/containerized_librarian_assistant.py`)**
 - **Model**: Playwright + LLM integration
 - **Purpose**: Advanced web research with quality assessment
 - **Capabilities**:
@@ -83,7 +83,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
 
 ### **Tier 3: Specialized Agents (Task-Specific)**
 
-#### **Security Scanner Agent (`src/agents/security_scanner_agent.py`)**
+#### **Security Scanner Agent (`autobot-user-backend/agents/security_scanner_agent.py`)**
 - **Model**: Tool orchestration (nmap, dig, aiohttp)
 - **Purpose**: Defensive security scanning and assessment
 - **Capabilities**:
@@ -93,7 +93,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
   - Result parsing and security analysis
 - **Resource Usage**: Variable (depends on scan type)
 
-#### **Network Discovery Agent (`src/agents/network_discovery_agent.py`)**
+#### **Network Discovery Agent (`autobot-user-backend/agents/network_discovery_agent.py`)**
 - **Model**: Network tool integration
 - **Purpose**: Network mapping and asset discovery
 - **Capabilities**:
@@ -103,7 +103,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
   - Comprehensive scanning with timeout controls
 - **Resource Usage**: Medium (network operations)
 
-#### **Interactive Terminal Agent (`src/agents/interactive_terminal_agent.py`)**
+#### **Interactive Terminal Agent (`autobot-user-backend/agents/interactive_terminal_agent.py`)**
 - **Model**: PTY-based terminal emulation
 - **Purpose**: Full terminal access with human oversight
 - **Capabilities**:
@@ -115,7 +115,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
 - **Resource Usage**: Low (terminal operations)
 - **Risk Level**: EXTREMELY HIGH (requires strict access controls)
 
-#### **Classification Agent (`src/agents/classification_agent.py`)**
+#### **Classification Agent (`autobot-user-backend/agents/classification_agent.py`)**
 - **Model**: LLM + keyword-based fallback
 - **Purpose**: Request complexity analysis and routing decisions
 - **Capabilities**:
@@ -127,7 +127,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
 
 ### **Tier 4: Advanced Multi-Modal Agents**
 
-#### **Advanced Web Research (`src/agents/advanced_web_research.py`)**
+#### **Advanced Web Research (`autobot-user-backend/agents/advanced_web_research.py`)**
 - **Model**: Playwright + Anti-detection + CAPTCHA solving
 - **Purpose**: Sophisticated web automation with advanced capabilities
 - **Capabilities**:
@@ -140,7 +140,7 @@ Central Orchestrator → Agent Classification → Intelligent Routing → Multi-
 
 ## 🎯 Agent Orchestration System
 
-### **Agent Orchestrator (`src/agents/agent_orchestrator.py`)**
+### **Agent Orchestrator (`autobot-user-backend/agents/agent_orchestrator.py`)**
 - **Model**: Llama 3.2 3B for routing decisions
 - **Purpose**: Intelligent agent selection and workflow coordination
 - **Capabilities**:
@@ -171,7 +171,7 @@ Step 6: Security Scanner Agent → Verification
 
 ### **Agent Communication Architecture**
 
-#### **Base Agent Interface (`src/agents/base_agent.py`)**
+#### **Base Agent Interface (`autobot-user-backend/agents/base_agent.py`)**
 ```python
 class BaseAgent:
     - process_request(AgentRequest) → AgentResponse

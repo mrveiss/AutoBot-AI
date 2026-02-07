@@ -103,7 +103,7 @@ User Message
 ### Key Files
 
 - `src/llm_interface.py` - Unified LLM abstraction layer
-- `backend/api/chat.py` - Chat API endpoints
+- `autobot-user-backend/api/chat.py` - Chat API endpoints
 - `backend/services/chat_service.py` - Chat business logic
 - `backend/services/session_manager.py` - Session state management
 - `src/enhanced_orchestrator.py` - Workflow orchestration

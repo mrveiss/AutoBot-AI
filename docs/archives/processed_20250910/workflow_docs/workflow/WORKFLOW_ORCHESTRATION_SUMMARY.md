@@ -48,7 +48,7 @@ if should_orchestrate:
     # Convert to proper response format with detailed planning
 ```
 
-### 2. Research Agent (`src/agents/research_agent.py`)
+### 2. Research Agent (`autobot-user-backend/agents/research_agent.py`)
 
 **Full FastAPI-based Research Service:**
 - Web research simulation (ready for Playwright integration)

@@ -1911,9 +1911,9 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 ## Task 6: Create Basic API Endpoints
 
 **Files:**
-- Create: `backend/api/slm/__init__.py`
-- Create: `backend/api/slm/nodes.py`
-- Create: `backend/api/slm/heartbeats.py`
+- Create: `autobot-user-backend/api/slm/__init__.py`
+- Create: `autobot-user-backend/api/slm/nodes.py`
+- Create: `autobot-user-backend/api/slm/heartbeats.py`
 - Test: `tests/api/slm/test_nodes_api.py`
 
 **Step 1: Write failing test for nodes API**
@@ -2001,7 +2001,7 @@ Expected: FAIL with 404 (endpoint doesn't exist)
 **Step 3: Create API package**
 
 ```python
-# backend/api/slm/__init__.py
+# autobot-user-backend/api/slm/__init__.py
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -2020,7 +2020,7 @@ __all__ = ["nodes_router", "heartbeats_router"]
 **Step 4: Implement nodes API**
 
 ```python
-# backend/api/slm/nodes.py
+# autobot-user-backend/api/slm/nodes.py
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -2271,7 +2271,7 @@ async def delete_node(node_id: str):
 **Step 5: Implement heartbeats API**
 
 ```python
-# backend/api/slm/heartbeats.py
+# autobot-user-backend/api/slm/heartbeats.py
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -2410,7 +2410,7 @@ Expected: PASS
 **Step 8: Commit**
 
 ```bash
-git add backend/api/slm/ tests/api/slm/ backend/main.py
+git add autobot-user-backend/api/slm/ tests/api/slm/ backend/main.py
 git commit -m "feat(slm): Add REST API for nodes and heartbeats (#726)
 
 - Add /api/v1/slm/nodes CRUD endpoints
@@ -2626,7 +2626,7 @@ Phase 1 Foundation includes:
 | DB Service | `backend/services/slm/db_service.py` | CRUD with audit logging |
 | Node Agent | `src/slm/agent/` | Health collection, heartbeats |
 | Ansible Role | `ansible/roles/slm_agent/` | Agent deployment |
-| REST API | `backend/api/slm/` | Nodes and heartbeats endpoints |
+| REST API | `autobot-user-backend/api/slm/` | Nodes and heartbeats endpoints |
 
 **Next Phase (Phase 2):** Health & Reconciliation
 - Heartbeat collection service

@@ -115,7 +115,7 @@ git log --since="2025-01-01" --name-only --pretty=format: -- "*.md" "docs/" | so
 python scripts/direct_kb_populate.py
 
 # Or use API approach
-python scripts/search_corrector.py
+python scripts/fix_search.py
 ```
 
 #### Automated Update Workflow
@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
 ### 2. Add KB Status Endpoint
 ```python
-# backend/api/knowledge_base.py - add new endpoint
+# autobot-user-backend/api/knowledge_base.py - add new endpoint
 @router.get("/sync-status")
 async def get_kb_sync_status():
     """Get knowledge base synchronization status"""

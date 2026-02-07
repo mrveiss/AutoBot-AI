@@ -19,7 +19,7 @@ This report analyzes error handling patterns across the AutoBot codebase to iden
    - Multiple generic `except Exception` blocks
    - Errors often just logged without proper recovery
 
-2. **backend/api/workflow.py** - Workflow orchestration
+2. **autobot-user-backend/api/workflow.py** - Workflow orchestration
    - Generic HTTPException with minimal context
    - No specific error types for different failure scenarios
 
@@ -27,13 +27,13 @@ This report analyzes error handling patterns across the AutoBot codebase to iden
    - Mix of specific and generic exceptions
    - Some error paths return None without proper error propagation
 
-4. **backend/api/chat.py** - Chat endpoints
+4. **autobot-user-backend/api/chat.py** - Chat endpoints
    - All errors returned as generic 500 status codes
    - Error messages expose internal details (`str(e)`)
 
 #### Medium Priority:
-- **src/agents/** - Multiple agents with generic error handling
-- **backend/api/advanced_control.py** - WebSocket errors silently caught
+- **autobot-user-backend/agents/** - Multiple agents with generic error handling
+- **autobot-user-backend/api/advanced_control.py** - WebSocket errors silently caught
 - **src/knowledge_base.py** - Database errors not distinguished from logic errors
 
 ### 3. Common Anti-Patterns Found
@@ -47,9 +47,9 @@ except:
 
 **Locations**:
 - scripts/utilities/system_monitor.py (lines 81, 90, 119, 136)
-- src/agents/network_discovery_agent.py (lines 302, 434)
-- backend/api/monitoring.py (lines 97, 131, 143, 172)
-- src/agents/security_scanner_agent.py (lines 315, 332)
+- autobot-user-backend/agents/network_discovery_agent.py (lines 302, 434)
+- autobot-user-backend/api/monitoring.py (lines 97, 131, 143, 172)
+- autobot-user-backend/agents/security_scanner_agent.py (lines 315, 332)
 
 #### B. Generic Exception with Minimal Context
 ```python
@@ -72,9 +72,9 @@ except Exception as e:
 ```
 
 **Found in**:
-- backend/api/chat.py (multiple endpoints)
-- backend/api/workflow.py
-- backend/api/system.py
+- autobot-user-backend/api/chat.py (multiple endpoints)
+- autobot-user-backend/api/workflow.py
+- autobot-user-backend/api/system.py
 
 ### 4. Good Patterns Found (To Be Expanded)
 
@@ -181,13 +181,13 @@ except Exception as e:
 ### 6. Priority Order for Updates
 
 1. **Critical** (Security/Stability):
-   - backend/api/*.py - API error responses exposing internals
+   - autobot-user-backend/api/*.py - API error responses exposing internals
    - src/orchestrator.py - Core task planning failures
-   - backend/api/advanced_control.py - Silent WebSocket failures
+   - autobot-user-backend/api/advanced_control.py - Silent WebSocket failures
 
 2. **High** (Functionality):
    - src/llm_interface.py - Improve error differentiation
-   - src/agents/base_agent.py - Propagate errors properly
+   - autobot-user-backend/agents/base_agent.py - Propagate errors properly
    - src/knowledge_base.py - Distinguish DB errors from logic errors
 
 3. **Medium** (Maintainability):

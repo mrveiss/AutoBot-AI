@@ -18,7 +18,7 @@ During intensive AutoBot development sessions, Claude conversations would freque
 
 The suite implements a multi-layered optimization approach:
 
-### 1. **Conversation Rate Limiting** (`src/utils/conversation_rate_limiter.py`)
+### 1. **Conversation Rate Limiting** (`autobot-user-backend/utils/conversation_rate_limiter.py`)
 - **Sliding window rate limiting** with configurable limits (50/min, 2000/hour default)
 - **Payload size tracking** to prevent 413 errors
 - **Request queuing** with priority management
@@ -38,7 +38,7 @@ if await rate_limiter.can_make_request(payload_size=len(request)):
     await rate_limiter.record_request(request)
 ```
 
-### 2. **Request Payload Optimization** (`src/utils/payload_optimizer.py`)
+### 2. **Request Payload Optimization** (`autobot-user-backend/utils/payload_optimizer.py`)
 - **Intelligent text compression** using multiple algorithms
 - **Smart chunking** for large requests
 - **TodoWrite consolidation** to reduce redundancy
@@ -55,7 +55,7 @@ if result.optimized:
     optimized_request = result.optimized_payload
 ```
 
-### 3. **Intelligent Request Batching** (`src/utils/request_batcher.py`)
+### 3. **Intelligent Request Batching** (`autobot-user-backend/utils/request_batcher.py`)
 - **Similarity-based batching** using semantic analysis
 - **Multiple batching strategies**: TIME_WINDOW, SIZE_THRESHOLD, SIMILARITY_BASED, ADAPTIVE
 - **Machine learning optimization** with adaptive algorithms
@@ -68,7 +68,7 @@ batcher = IntelligentRequestBatcher(max_batch_size=5, time_window=2.0)
 batch_result = await batcher.add_request(batchable_request)
 ```
 
-### 4. **Graceful Degradation** (`src/utils/graceful_degradation.py`)
+### 4. **Graceful Degradation** (`autobot-user-backend/utils/graceful_degradation.py`)
 - **5-level degradation system**: NORMAL → REDUCED → MINIMAL → EMERGENCY → OFFLINE
 - **Cached response fallbacks** for previous successful requests
 - **Template-based responses** for common scenarios
@@ -86,7 +86,7 @@ if fallback.success:
     response = fallback.response
 ```
 
-### 5. **TodoWrite Optimization** (`src/utils/todowrite_optimizer.py`)
+### 5. **TodoWrite Optimization** (`autobot-user-backend/utils/todowrite_optimizer.py`)
 - **Intelligent todo consolidation** with similarity detection
 - **Batch processing** of multiple todos into single operations
 - **Deduplication** of similar or identical todos
@@ -109,7 +109,7 @@ optimizer.add_todo_for_optimization(
 batch = await optimizer.force_optimization()
 ```
 
-### 6. **Tool Pattern Analysis** (`src/utils/tool_pattern_analyzer.py`)
+### 6. **Tool Pattern Analysis** (`autobot-user-backend/utils/tool_pattern_analyzer.py`)
 - **Real-time pattern detection** for tool usage efficiency
 - **Sequence pattern analysis** to identify inefficient workflows
 - **Performance benchmarking** with efficiency scoring
@@ -135,7 +135,7 @@ recommendations = analyzer.get_optimization_recommendations()
 - **Alert system** for approaching limits
 - **Optimization recommendations** based on usage patterns
 
-### 8. **Unified Integration Suite** (`src/utils/claude_api_optimization_suite.py`)
+### 8. **Unified Integration Suite** (`autobot-user-backend/utils/claude_api_optimization_suite.py`)
 - **Single entry point** for all optimization features
 - **Automatic mode adjustment** based on API conditions
 - **Background monitoring** and pattern analysis
@@ -252,7 +252,7 @@ The optimization suite integrates seamlessly with AutoBot's existing infrastruct
 
 ### **Backend Integration**
 ```python
-# In backend/api/routes.py
+# In autobot-user-backend/api/routes.py
 from src.utils.claude_api_optimization_suite import optimize_claude_request
 
 @router.post("/api/optimized-request")
@@ -263,7 +263,7 @@ async def handle_optimized_request(request_data: dict):
 
 ### **Frontend Integration**
 ```javascript
-// In autobot-vue/src/services/api.js
+// In autobot-user-frontend/src/services/api.js
 import { optimizeRequest } from '@/utils/claude-optimization'
 
 async function makeOptimizedAPICall(data) {

@@ -26,28 +26,28 @@ graph TB
         OllamaLocal[Ollama LLM Server<br/>127.0.0.1:11434<br/>Local AI Processing]
         VNC[VNC Desktop<br/>127.0.0.1:6080<br/>noVNC + kex]
     end
-    
+
     subgraph "VM1 - Frontend (172.16.168.21)"
         Vue3[Vue 3 + TypeScript<br/>Port 5173<br/>Nginx + Hot Reload]
         Vite[Vite Dev Server<br/>HMR + Proxy Config]
     end
-    
+
     subgraph "VM2 - NPU Worker (172.16.168.22)"
         NPUService[Intel NPU Service<br/>Port 8081<br/>OpenVINO + NPU Acceleration]
         GPUProcess[GPU Acceleration<br/>CUDA/OpenCL<br/>Computer Vision Tasks]
     end
-    
+
     subgraph "VM3 - Redis Stack (172.16.168.23)"
         RedisStack[Redis Stack 7.4.0<br/>Port 6379<br/>11 Specialized Databases]
         RedisInsight[RedisInsight<br/>Port 8002<br/>Visual Management]
         VectorDB[Vector Storage<br/>13,383 Embeddings<br/>Knowledge Vectors]
     end
-    
+
     subgraph "VM4 - AI Stack (172.16.168.24)"
         AIOrchestrator[AI Model Orchestrator<br/>Port 8080<br/>Multi-Provider Support]
         ModelCache[Model Cache<br/>GPU Memory Management<br/>Inference Optimization]
     end
-    
+
     subgraph "VM5 - Browser Service (172.16.168.25)"
         Playwright[Playwright Automation<br/>Port 3000<br/>Multi-Browser Support]
         WebDrivers[Chrome + Firefox<br/>Headless/Headed Modes<br/>Screenshot + Interaction]
@@ -58,12 +58,12 @@ graph TB
     MainHost --> RedisStack
     MainHost --> AIOrchestrator  
     MainHost --> Playwright
-    
+
     Vue3 --> MainHost
     NPUService --> RedisStack
     AIOrchestrator --> RedisStack
     Playwright --> RedisStack
-    
+
     MainHost --> OllamaLocal
     AIOrchestrator --> OllamaLocal
 ```
@@ -125,7 +125,7 @@ DISPLAY=:99
 **Key Features**:
 ```javascript
 // Vue 3 Composition API with TypeScript
-autobot-vue/
+autobot-user-frontend/
 ├── src/
 │   ├── components/
 │   │   ├── chat/           # Chat interface with multi-modal support
@@ -147,13 +147,13 @@ autobot-vue/
 server {
     listen 80;
     server_name 172.16.168.21;
-    
+
     # Frontend static files
     location / {
         root /app/dist;
         try_files $uri $uri/ /index.html;
     }
-    
+
     # API proxy to main host
     location /api/ {
         proxy_pass http://172.16.168.20:8001/api/;
@@ -163,7 +163,7 @@ server {
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
     }
-    
+
     # WebSocket proxy
     location /ws/ {
         proxy_pass http://172.16.168.20:8001/ws/;
@@ -208,7 +208,7 @@ npu:
   threads: 4
   precision: "FP16"
   cache_dir: "/opt/intel/openvino/cache"
-  
+
 gpu_fallback:
   device: "GPU.0"  # RTX 4070
   memory_fraction: 0.8
@@ -239,31 +239,31 @@ redis_databases:
   main:           # DB 0 - Core application data
     db: 0
     description: "Chat sessions, user data, system state"
-    
+
   knowledge:      # DB 1 - Knowledge base metadata
     db: 1  
     description: "Document metadata, categories, facts"
-    
+
   sessions:       # DB 2 - Session management
     db: 2
     description: "User sessions, authentication tokens"
-    
+
   cache:          # DB 3 - Application cache
     db: 3
     description: "API responses, computed results"
-    
+
   workflows:      # DB 7 - Workflow definitions
     db: 7
     description: "Workflow templates, execution state"
-    
+
   vectors:        # DB 8 - Vector embeddings (13,383 vectors)
     db: 8
     description: "Knowledge base embeddings, semantic search"
-    
+
   monitoring:     # DB 9 - System monitoring
     db: 9
     description: "Health metrics, performance data"
-    
+
   logs:          # DB 10 - Application logs  
     db: 10
     description: "Structured logs, audit trails"
@@ -331,22 +331,22 @@ providers:
     rate_limits:
       requests_per_minute: 1000
       tokens_per_minute: 150000
-      
+
   anthropic:
     enabled: true
-    api_key_env: "ANTHROPIC_API_KEY" 
+    api_key_env: "ANTHROPIC_API_KEY"
     base_url: "https://api.anthropic.com/v1"
     models: ["claude-3-opus-20240229", "claude-3-sonnet-20240229"]
     rate_limits:
       requests_per_minute: 1000
       tokens_per_minute: 200000
-      
+
   ollama:
     enabled: true
     base_url: "http://172.16.168.20:11434"
     models: ["tinyllama", "phi", "llama2", "codellama"]
     health_check_interval: 30
-    
+
 routing_rules:
   - condition: "task_type == 'code_generation'"
     preferred_provider: "ollama"
@@ -489,7 +489,7 @@ sequenceDiagram
 
     User->>API: Submit multi-modal request
     API->>Redis: Cache request + generate task ID
-    
+
     par Text Processing
         API->>AI: Route text to optimal LLM
         AI-->>API: Return text analysis
@@ -500,7 +500,7 @@ sequenceDiagram
         API->>NPU: Send audio for transcription
         NPU-->>API: Return audio transcript
     end
-    
+
     API->>AI: Fuse multi-modal results
     AI-->>API: Return combined analysis
     API->>Redis: Cache final results
@@ -595,19 +595,19 @@ metrics:
     - request_rate_per_second
     - error_rate_percentage
     - concurrent_requests
-    
+
   system_resources:
     - cpu_usage_percent
     - memory_usage_bytes  
     - disk_usage_bytes
     - network_throughput_bytes
-    
+
   ai_processing:
     - inference_duration_seconds
     - model_loading_time_seconds
     - gpu_utilization_percent
     - npu_utilization_percent
-    
+
   knowledge_base:
     - search_duration_seconds
     - embedding_generation_time_seconds
@@ -624,17 +624,17 @@ scaling_strategies:
     - load_balancer: "nginx + multiple Vue.js instances"
     - cdn: "CloudFlare for static assets"
     - caching: "Redis + browser caching"
-    
+
   compute_tier:  
     - npu_workers: "Multiple NPU worker VMs"
     - gpu_cluster: "CUDA compute cluster"
     - model_sharding: "Distributed model inference"
-    
+
   data_tier:
     - redis_cluster: "Redis Cluster mode"
     - vector_sharding: "Distributed vector database"
     - knowledge_partitioning: "Topic-based KB sharding"
-    
+
   ai_tier:
     - model_routing: "Intelligent model selection"
     - provider_failover: "Multi-provider redundancy"
@@ -651,7 +651,7 @@ kubernetes_migration:
     - autobot-data
     - autobot-ai
     - autobot-automation
-    
+
   deployments:
     - frontend: "Vue.js + Nginx ingress"
     - backend: "FastAPI with HPA"
@@ -659,7 +659,7 @@ kubernetes_migration:
     - redis: "Redis Operator"
     - ai-orchestrator: "GPU node pools"
     - browser-service: "Playwright cluster"
-    
+
   storage:
     - persistent_volumes: "Knowledge base, Redis data"  
     - object_storage: "Files, screenshots, recordings"
@@ -676,23 +676,23 @@ performance_benchmarks:
     knowledge_search: "0.15s avg (10 results)"
     system_health: "0.05s avg"
     file_upload: "2.1s avg (10MB file)"
-    
+
   throughput:
     concurrent_users: 500
     requests_per_second: 1000
     websocket_connections: 250
-    
+
   resource_utilization:
     main_host_cpu: "35% average load"
     main_host_memory: "12GB / 32GB used"
     redis_memory: "6GB / 8GB allocated"
     gpu_utilization: "45% during AI processing"
-    
+
   reliability:
     uptime_percentage: 99.8
     mtbf_hours: 720  
     mttr_minutes: 5
-    
+
   scalability_limits:
     max_concurrent_chats: 200
     max_knowledge_vectors: "50,000 (current: 13,383)"
@@ -710,29 +710,29 @@ troubleshooting:
       symptoms: "Backend API unresponsive after 30s"
       cause: "Redis connection blocking in app_factory.py"  
       solution: "Use fast_app_factory_fix.py with 2s timeout"
-      
+
     frontend_404:
       symptoms: "Frontend API calls return 404"
       cause: "Vite proxy misconfiguration"
       solution: "Check vite.config.ts proxy settings"
-      
+
   performance_issues:
     slow_ai_processing:
       symptoms: "Multi-modal requests timeout after 45s"
       cause: "NPU worker overloaded or GPU memory full"
       solution: "Restart NPU service or clear GPU cache"
-      
+
     knowledge_search_slow:
       symptoms: "KB search takes >5s"
       cause: "Vector database not optimized"
       solution: "Rebuild FAISS index or increase Redis memory"
-      
+
   connectivity_issues:
     vm_communication_failure:
       symptoms: "Services can't reach other VMs"
       cause: "Network configuration or firewall rules"
       solution: "Check SSH connectivity and firewall status"
-      
+
     websocket_disconnects:
       symptoms: "Real-time features not working"
       cause: "WebSocket proxy misconfiguration"

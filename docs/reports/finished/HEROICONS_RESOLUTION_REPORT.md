@@ -11,7 +11,7 @@ The AutoBot Vue.js frontend was experiencing persistent import failures for `@he
 Failed to resolve import "@heroicons/vue/24/outline/XMarkIcon" from "src/components/SystemStatusNotification.vue"
 ```
 
-**Impact**: 
+**Impact**:
 - SystemStatusNotification.vue and SystemStatusIndicator.vue components failing to load
 - User interface missing critical icons
 - Development workflow disrupted
@@ -193,10 +193,10 @@ Vite Dev Server → Import resolution → SUCCESS: Package available
 - `HEROICONS_FIX_REPORT.md` - This comprehensive report
 
 ### Files Analyzed (No Changes Required)
-- `autobot-vue/package.json` - ✅ Already contained correct dependency
-- `autobot-vue/package-lock.json` - ✅ Already had proper package resolution  
+- `autobot-user-frontend/package.json` - ✅ Already contained correct dependency
+- `autobot-user-frontend/package-lock.json` - ✅ Already had proper package resolution  
 - `docker-compose.yml` - ✅ Volume configuration appropriate for fix
-- `autobot-vue/vite.config.ts` - ✅ Optimization config correct
+- `autobot-user-frontend/vite.config.ts` - ✅ Optimization config correct
 
 ## Success Metrics
 

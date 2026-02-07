@@ -43,14 +43,14 @@
 - **No consolidation needed**
 
 **Key Files**:
-- `backend/api/service_monitor.py` (4 imports)
-- `backend/api/infrastructure_monitor.py`
-- `backend/api/playwright.py`
+- `autobot-user-backend/api/service_monitor.py` (4 imports)
+- `autobot-user-backend/api/infrastructure_monitor.py`
+- `autobot-user-backend/api/playwright.py`
 - `backend/services/playwright_service.py`
 - `backend/services/provider_health/providers.py`
 - `backend/services/ai_stack_client.py`
 - `src/npu_integration.py`
-- `src/utils/service_discovery.py`
+- `autobot-user-backend/utils/service_discovery.py`
 
 ### 2. Httpx - Specialized Authenticated Client (15%)
 
@@ -58,7 +58,7 @@
 
 **Usage Pattern**: Service-to-service authentication with HMAC-SHA256 signing
 - `backend/utils/service_client.py` - ServiceHTTPClient class (core implementation)
-- `src/tools/terminal_tool.py` (3 imports for authenticated calls)
+- `autobot-user-backend/tools/terminal_tool.py` (3 imports for authenticated calls)
 - `src/chat_workflow_manager.py` (3 imports for authenticated calls)
 
 **Assessment**: ✅ **CORRECT SPECIALIZATION**
@@ -80,7 +80,7 @@
 **Usage Pattern**: Simple synchronous HTTP calls where async is overkill
 
 **Files and Use Cases**:
-1. **`backend/api/analytics.py`**
+1. **`autobot-user-backend/api/analytics.py`**
    - Simple health check: `requests.get(f"{service_url}/health", timeout=5)`
    - Use case: Sync service connectivity checks
 

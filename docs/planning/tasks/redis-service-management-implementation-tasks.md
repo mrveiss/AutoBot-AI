@@ -151,7 +151,7 @@ result = await self.ssh_manager.execute_command(
 **Description:** Create FastAPI router with service control endpoints
 
 **Affected Files:**
-- **CREATE:** `backend/api/service_management.py`
+- **CREATE:** `autobot-user-backend/api/service_management.py`
 - **MODIFY:** `backend/app_factory_enhanced.py` (register router)
 
 **Dependencies:** REDIS-1.1.1, REDIS-1.1.2, REDIS-1.1.3
@@ -869,7 +869,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 **Affected Files:**
 - **MODIFY:** `backend/services/redis_service_manager.py`
-- **MODIFY:** `backend/api/websockets.py` (WebSocket notifications)
+- **MODIFY:** `autobot-user-backend/api/websockets.py` (WebSocket notifications)
 
 **Dependencies:** REDIS-2.2.4
 
@@ -1012,7 +1012,7 @@ async def auto_recover(self) -> RecoveryResult:
 **Description:** Main Vue component for Redis service management
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/src/components/services/RedisServiceControl.vue`
+- **CREATE:** `autobot-user-frontend/src/components/services/RedisServiceControl.vue`
 
 **Dependencies:** REDIS-1.2.1
 
@@ -1065,7 +1065,7 @@ async def auto_recover(self) -> RecoveryResult:
 **Description:** Reusable status badge component
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/src/components/services/ServiceStatusBadge.vue`
+- **CREATE:** `autobot-user-frontend/src/components/services/ServiceStatusBadge.vue`
 
 **Dependencies:** None
 
@@ -1086,7 +1086,7 @@ async def auto_recover(self) -> RecoveryResult:
 **Description:** Component to view Redis service logs
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/src/components/services/ServiceLogsViewer.vue`
+- **CREATE:** `autobot-user-frontend/src/components/services/ServiceLogsViewer.vue`
 
 **Dependencies:** REDIS-1.2.1 (logs endpoint)
 
@@ -1108,7 +1108,7 @@ async def auto_recover(self) -> RecoveryResult:
 **Description:** Reusable confirmation dialog for destructive operations
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/src/components/common/ConfirmDialog.vue` (or use existing)
+- **CREATE:** `autobot-user-frontend/src/components/common/ConfirmDialog.vue` (or use existing)
 
 **Dependencies:** None
 
@@ -1131,7 +1131,7 @@ async def auto_recover(self) -> RecoveryResult:
 **Description:** Vue composable for service management logic
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/src/composables/useServiceManagement.js`
+- **CREATE:** `autobot-user-frontend/src/composables/useServiceManagement.js`
 
 **Dependencies:** REDIS-1.2.1
 
@@ -1195,7 +1195,7 @@ export function useServiceManagement(serviceName) {
 **Description:** API client for Redis service management
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/src/services/RedisServiceAPI.js`
+- **CREATE:** `autobot-user-frontend/src/services/RedisServiceAPI.js`
 
 **Dependencies:** REDIS-1.2.1
 
@@ -1259,7 +1259,7 @@ export default {
 **Description:** WebSocket endpoint for real-time status updates
 
 **Affected Files:**
-- **MODIFY:** `backend/api/websockets.py`
+- **MODIFY:** `autobot-user-backend/api/websockets.py`
 - **MODIFY:** `backend/services/redis_service_manager.py` (emit events)
 
 **Dependencies:** REDIS-1.1.1, REDIS-2.1.5
@@ -1314,8 +1314,8 @@ export default {
 **Description:** Subscribe to WebSocket updates in useServiceManagement
 
 **Affected Files:**
-- **MODIFY:** `autobot-vue/src/composables/useServiceManagement.js`
-- **MODIFY:** `autobot-vue/src/composables/useWebSocket.js` (or use existing)
+- **MODIFY:** `autobot-user-frontend/src/composables/useServiceManagement.js`
+- **MODIFY:** `autobot-user-frontend/src/composables/useWebSocket.js` (or use existing)
 
 **Dependencies:** REDIS-3.2.1, REDIS-3.3.1
 
@@ -1374,8 +1374,8 @@ const subscribeToStatusUpdates = (callback) => {
 **Description:** Add link to service management page in navigation menu
 
 **Affected Files:**
-- **MODIFY:** `autobot-vue/src/components/NavigationMenu.vue` (or similar)
-- **MODIFY:** `autobot-vue/src/router/index.js`
+- **MODIFY:** `autobot-user-frontend/src/components/NavigationMenu.vue` (or similar)
+- **MODIFY:** `autobot-user-frontend/src/router/index.js`
 
 **Dependencies:** REDIS-3.1.1
 
@@ -1396,7 +1396,7 @@ const subscribeToStatusUpdates = (callback) => {
 **Description:** Display Redis service status on main dashboard
 
 **Affected Files:**
-- **MODIFY:** `autobot-vue/src/views/Dashboard.vue` (or similar)
+- **MODIFY:** `autobot-user-frontend/src/views/Dashboard.vue` (or similar)
 
 **Dependencies:** REDIS-3.1.2, REDIS-3.2.2
 
@@ -1419,7 +1419,7 @@ const subscribeToStatusUpdates = (callback) => {
 **Description:** Vue component tests for service control UI
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/tests/components/RedisServiceControl.spec.js`
+- **CREATE:** `autobot-user-frontend/tests/components/RedisServiceControl.spec.js`
 
 **Dependencies:** REDIS-3.1.1
 
@@ -1443,7 +1443,7 @@ const subscribeToStatusUpdates = (callback) => {
 **Description:** End-to-end tests for complete user workflow
 
 **Affected Files:**
-- **CREATE:** `autobot-vue/tests/e2e/service-management.spec.js`
+- **CREATE:** `autobot-user-frontend/tests/e2e/service-management.spec.js`
 
 **Dependencies:** REDIS-3.1.1, REDIS-3.2.1, REDIS-3.2.2
 
@@ -1503,7 +1503,7 @@ test('Admin can restart Redis service from UI', async ({ page }) => {
 **Description:** RBAC for service management operations
 
 **Affected Files:**
-- **MODIFY:** `backend/api/service_management.py`
+- **MODIFY:** `autobot-user-backend/api/service_management.py`
 - **CREATE:** `backend/security/service_permissions.py` (or extend existing)
 
 **Dependencies:** REDIS-1.2.1
@@ -1743,7 +1743,7 @@ ansible redis -i ansible/inventory -m shell -a "sudo systemctl status redis-serv
 **Description:** Prevent abuse via rate limiting
 
 **Affected Files:**
-- **MODIFY:** `backend/api/service_management.py`
+- **MODIFY:** `autobot-user-backend/api/service_management.py`
 
 **Dependencies:** REDIS-1.2.1
 
@@ -2088,8 +2088,8 @@ async def load_test_status_endpoint(duration_seconds: int = 60):
 
     - name: Sync frontend to VM1
       synchronize:
-        src: /home/kali/Desktop/AutoBot/autobot-vue/
-        dest: /home/autobot/autobot-vue/
+        src: /home/kali/Desktop/AutoBot/autobot-user-frontend/
+        dest: /home/autobot/autobot-user-frontend/
       when: inventory_hostname == 'frontend'
 
     - name: Validate deployment
@@ -2380,14 +2380,14 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 
 **Backend Files:**
 - `backend/services/redis_service_manager.py` - Core service manager
-- `backend/api/service_management.py` - API router
+- `autobot-user-backend/api/service_management.py` - API router
 - `backend/models/service_management.py` - Response models
 - `config/services/redis_service_management.yaml` - Configuration
 
 **Frontend Files:**
-- `autobot-vue/src/components/services/RedisServiceControl.vue` - Main UI
-- `autobot-vue/src/composables/useServiceManagement.js` - Logic composable
-- `autobot-vue/src/services/RedisServiceAPI.js` - API client
+- `autobot-user-frontend/src/components/services/RedisServiceControl.vue` - Main UI
+- `autobot-user-frontend/src/composables/useServiceManagement.js` - Logic composable
+- `autobot-user-frontend/src/services/RedisServiceAPI.js` - API client
 
 **Testing Files:**
 - `tests/unit/services/test_redis_service_manager.py`

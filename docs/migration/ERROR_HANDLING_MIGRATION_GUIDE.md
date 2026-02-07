@@ -157,17 +157,17 @@ with error_context("user_registration_flow"):
 
 ### Critical (Security/Stability) - Week 1
 
-1. **backend/api/chat.py**
+1. **autobot-user-backend/api/chat.py**
    - Replace all `str(e)` in responses
    - Add request IDs for tracking
    - Implement specific error types
 
-2. **backend/api/workflow.py**
+2. **autobot-user-backend/api/workflow.py**
    - Add workflow-specific exceptions
    - Implement proper error propagation
    - Add timeout handling
 
-3. **backend/api/system.py**
+3. **autobot-user-backend/api/system.py**
    - Secure error responses
    - Add health check error handling
 
@@ -190,7 +190,7 @@ with error_context("user_registration_flow"):
 
 ### Medium Priority (Agents) - Week 3
 
-1. **src/agents/base_agent.py**
+1. **autobot-user-backend/agents/base_agent.py**
    - Create AgentError hierarchy
    - Propagate errors properly
    - Add execution timeouts
@@ -299,5 +299,5 @@ When reviewing migrated code:
 
 - Exception hierarchy: `/src/exceptions.py`
 - Error utilities: `/src/error_handler.py`
-- Example implementation: `/backend/api/chat_improved.py`
+- Example implementation: `/autobot-user-backend/api/chat_improved.py`
 - Original analysis: `/error_handling_analysis_report.md`

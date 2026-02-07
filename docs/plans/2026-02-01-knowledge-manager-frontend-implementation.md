@@ -4,7 +4,7 @@
 
 **Goal:** Complete the Knowledge Manager frontend with category CRUD, system docs viewer, prompt editor, and source attribution.
 
-**Architecture:** Extend the existing modular architecture in `autobot-vue/src/components/knowledge/`. Add new Vue 3 Composition API components with TypeScript. Use the existing `useKnowledgeStore` for state management. Backend APIs are stable and ready.
+**Architecture:** Extend the existing modular architecture in `autobot-user-frontend/src/components/knowledge/`. Add new Vue 3 Composition API components with TypeScript. Use the existing `useKnowledgeStore` for state management. Backend APIs are stable and ready.
 
 **Tech Stack:** Vue 3, TypeScript, Pinia store, Monaco Editor (for prompt editing), Vue Router (deep-links)
 
@@ -17,8 +17,8 @@
 ## Task 1: Store Updates - Add New State and Actions
 
 **Files:**
-- Modify: `autobot-vue/src/stores/useKnowledgeStore.ts`
-- Reference: `backend/api/knowledge_categories.py`, `backend/api/prompts.py`
+- Modify: `autobot-user-frontend/src/stores/useKnowledgeStore.ts`
+- Reference: `autobot-user-backend/api/knowledge_categories.py`, `autobot-user-backend/api/prompts.py`
 
 **Step 1: Read current store structure**
 
@@ -193,7 +193,7 @@ closeSourcePanel() {
 **Step 8: Commit**
 
 ```bash
-git add autobot-vue/src/stores/useKnowledgeStore.ts
+git add autobot-user-frontend/src/stores/useKnowledgeStore.ts
 git commit -m "feat(knowledge): add store state for system docs, prompts, and modals (#747)"
 ```
 
@@ -202,13 +202,13 @@ git commit -m "feat(knowledge): add store state for system docs, prompts, and mo
 ## Task 2: Create CategoryEditModal Component
 
 **Files:**
-- Create: `autobot-vue/src/components/knowledge/modals/CategoryEditModal.vue`
-- Reference: `autobot-vue/src/components/ui/BaseModal.vue`
+- Create: `autobot-user-frontend/src/components/knowledge/modals/CategoryEditModal.vue`
+- Reference: `autobot-user-frontend/src/components/ui/BaseModal.vue`
 
 **Step 1: Create modals directory**
 
 ```bash
-mkdir -p autobot-vue/src/components/knowledge/modals
+mkdir -p autobot-user-frontend/src/components/knowledge/modals
 ```
 
 **Step 2: Create CategoryEditModal.vue**
@@ -432,7 +432,7 @@ async function handleDelete() {
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/modals/CategoryEditModal.vue
+git add autobot-user-frontend/src/components/knowledge/modals/CategoryEditModal.vue
 git commit -m "feat(knowledge): add CategoryEditModal for edit/delete (#747)"
 ```
 
@@ -441,7 +441,7 @@ git commit -m "feat(knowledge): add CategoryEditModal for edit/delete (#747)"
 ## Task 3: Enhance KnowledgeCategories with Edit/Delete Actions
 
 **Files:**
-- Modify: `autobot-vue/src/components/knowledge/KnowledgeCategories.vue`
+- Modify: `autobot-user-frontend/src/components/knowledge/KnowledgeCategories.vue`
 
 **Step 1: Import CategoryEditModal and add to template**
 
@@ -512,7 +512,7 @@ Find the category card in the template and add action buttons:
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/KnowledgeCategories.vue
+git add autobot-user-frontend/src/components/knowledge/KnowledgeCategories.vue
 git commit -m "feat(knowledge): add edit/delete actions to category cards (#747)"
 ```
 
@@ -521,7 +521,7 @@ git commit -m "feat(knowledge): add edit/delete actions to category cards (#747)
 ## Task 4: Create KnowledgeSystemDocs Component
 
 **Files:**
-- Create: `autobot-vue/src/components/knowledge/KnowledgeSystemDocs.vue`
+- Create: `autobot-user-frontend/src/components/knowledge/KnowledgeSystemDocs.vue`
 
 **Step 1: Create the component**
 
@@ -862,7 +862,7 @@ onMounted(async () => {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/KnowledgeSystemDocs.vue
+git add autobot-user-frontend/src/components/knowledge/KnowledgeSystemDocs.vue
 git commit -m "feat(knowledge): add KnowledgeSystemDocs viewer component (#747)"
 ```
 
@@ -871,7 +871,7 @@ git commit -m "feat(knowledge): add KnowledgeSystemDocs viewer component (#747)"
 ## Task 5: Create DocumentExportModal Component
 
 **Files:**
-- Create: `autobot-vue/src/components/knowledge/modals/DocumentExportModal.vue`
+- Create: `autobot-user-frontend/src/components/knowledge/modals/DocumentExportModal.vue`
 
 **Step 1: Create the component**
 
@@ -1041,7 +1041,7 @@ function handleExport() {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/modals/DocumentExportModal.vue
+git add autobot-user-frontend/src/components/knowledge/modals/DocumentExportModal.vue
 git commit -m "feat(knowledge): add DocumentExportModal for export options (#747)"
 ```
 
@@ -1050,7 +1050,7 @@ git commit -m "feat(knowledge): add DocumentExportModal for export options (#747
 ## Task 6: Create KnowledgePromptEditor Component
 
 **Files:**
-- Create: `autobot-vue/src/components/knowledge/KnowledgePromptEditor.vue`
+- Create: `autobot-user-frontend/src/components/knowledge/KnowledgePromptEditor.vue`
 
 **Step 1: Create the component**
 
@@ -1488,7 +1488,7 @@ onMounted(() => {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/KnowledgePromptEditor.vue
+git add autobot-user-frontend/src/components/knowledge/KnowledgePromptEditor.vue
 git commit -m "feat(knowledge): add KnowledgePromptEditor with save/revert (#747)"
 ```
 
@@ -1497,7 +1497,7 @@ git commit -m "feat(knowledge): add KnowledgePromptEditor with save/revert (#747
 ## Task 7: Create PromptHistoryModal Component
 
 **Files:**
-- Create: `autobot-vue/src/components/knowledge/modals/PromptHistoryModal.vue`
+- Create: `autobot-user-frontend/src/components/knowledge/modals/PromptHistoryModal.vue`
 
 **Step 1: Create the component**
 
@@ -1701,7 +1701,7 @@ watch(() => props.modelValue, async (open) => {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/modals/PromptHistoryModal.vue
+git add autobot-user-frontend/src/components/knowledge/modals/PromptHistoryModal.vue
 git commit -m "feat(knowledge): add PromptHistoryModal for version history (#747)"
 ```
 
@@ -1710,12 +1710,12 @@ git commit -m "feat(knowledge): add PromptHistoryModal for version history (#747
 ## Task 8: Create SourcePreviewPanel Component
 
 **Files:**
-- Create: `autobot-vue/src/components/knowledge/panels/SourcePreviewPanel.vue`
+- Create: `autobot-user-frontend/src/components/knowledge/panels/SourcePreviewPanel.vue`
 
 **Step 1: Create panels directory and component**
 
 ```bash
-mkdir -p autobot-vue/src/components/knowledge/panels
+mkdir -p autobot-user-frontend/src/components/knowledge/panels
 ```
 
 ```vue
@@ -1895,7 +1895,7 @@ async function copyContent() {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/panels/SourcePreviewPanel.vue
+git add autobot-user-frontend/src/components/knowledge/panels/SourcePreviewPanel.vue
 git commit -m "feat(knowledge): add SourcePreviewPanel for chat source preview (#747)"
 ```
 
@@ -1904,7 +1904,7 @@ git commit -m "feat(knowledge): add SourcePreviewPanel for chat source preview (
 ## Task 9: Update KnowledgeManager to Include New Tabs
 
 **Files:**
-- Modify: `autobot-vue/src/components/knowledge/KnowledgeManager.vue`
+- Modify: `autobot-user-frontend/src/components/knowledge/KnowledgeManager.vue`
 
 **Step 1: Add new tab imports and configuration**
 
@@ -1986,7 +1986,7 @@ const activeComponent = computed(() => {
 **Step 2: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/KnowledgeManager.vue
+git add autobot-user-frontend/src/components/knowledge/KnowledgeManager.vue
 git commit -m "feat(knowledge): add System Docs and Prompts tabs to manager (#747)"
 ```
 
@@ -1995,7 +1995,7 @@ git commit -m "feat(knowledge): add System Docs and Prompts tabs to manager (#74
 ## Task 10: Add Source Attribution to Chat Messages
 
 **Files:**
-- Modify: `autobot-vue/src/components/ChatInterface.vue` or relevant chat message component
+- Modify: `autobot-user-frontend/src/components/ChatInterface.vue` or relevant chat message component
 
 **Step 1: Find the chat message rendering component**
 
@@ -2103,7 +2103,7 @@ import SourcePreviewPanel from '@/components/knowledge/panels/SourcePreviewPanel
 **Step 6: Commit**
 
 ```bash
-git add autobot-vue/src/components/ChatInterface.vue
+git add autobot-user-frontend/src/components/ChatInterface.vue
 git commit -m "feat(knowledge): add source attribution to chat messages (#747)"
 ```
 
@@ -2112,7 +2112,7 @@ git commit -m "feat(knowledge): add source attribution to chat messages (#747)"
 ## Task 11: Enhance KnowledgeUpload with Drag-Drop
 
 **Files:**
-- Modify: `autobot-vue/src/components/knowledge/KnowledgeUpload.vue`
+- Modify: `autobot-user-frontend/src/components/knowledge/KnowledgeUpload.vue`
 
 **Step 1: Add drag-drop zone**
 
@@ -2264,7 +2264,7 @@ async function uploadAll() {
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/KnowledgeUpload.vue
+git add autobot-user-frontend/src/components/knowledge/KnowledgeUpload.vue
 git commit -m "feat(knowledge): add drag-drop and batch upload support (#747)"
 ```
 
@@ -2273,7 +2273,7 @@ git commit -m "feat(knowledge): add drag-drop and batch upload support (#747)"
 ## Task 12: Add Bulk Operations to KnowledgeEntries
 
 **Files:**
-- Modify: `autobot-vue/src/components/knowledge/KnowledgeEntries.vue`
+- Modify: `autobot-user-frontend/src/components/knowledge/KnowledgeEntries.vue`
 
 **Step 1: Add selection state and toolbar**
 
@@ -2380,7 +2380,7 @@ function bulkMove() {
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/components/knowledge/KnowledgeEntries.vue
+git add autobot-user-frontend/src/components/knowledge/KnowledgeEntries.vue
 git commit -m "feat(knowledge): add bulk operations to entries (#747)"
 ```
 
@@ -2393,7 +2393,7 @@ git commit -m "feat(knowledge): add bulk operations to entries (#747)"
 
 **Step 1: Add useToast composable if missing**
 
-Create `autobot-vue/src/composables/useToast.ts` if it doesn't exist.
+Create `autobot-user-frontend/src/composables/useToast.ts` if it doesn't exist.
 
 **Step 2: Add route handling for deep-links**
 

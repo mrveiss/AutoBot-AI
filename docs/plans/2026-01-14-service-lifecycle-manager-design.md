@@ -523,17 +523,17 @@ Phase 5: SWITCHBACK + CLEANUP
 - [x] Implement SQLite schema and models (`backend/models/infrastructure.py`)
 - [x] Build core state machine logic (`backend/services/slm/state_machine.py`)
 - [x] Database service with CRUD operations (`backend/services/slm/db_service.py`)
-- [x] REST API for nodes and heartbeats (`backend/api/slm/`)
+- [x] REST API for nodes and heartbeats (`autobot-user-backend/api/slm/`)
 - [x] Lightweight node agent (`src/slm/agent/`)
 - [x] Ansible role for agent deployment (`ansible/roles/slm_agent/`)
 - [x] Default roles initialization (frontend, redis, npu-worker, ai-stack, browser)
 
 ### Phase 2: Health & Reconciliation ✅ COMPLETE
 
-- [x] Heartbeat collection API (`backend/api/slm/heartbeats.py`)
+- [x] Heartbeat collection API (`autobot-user-backend/api/slm/heartbeats.py`)
 - [x] Reconciliation loop service (`backend/services/slm/reconciler.py`)
 - [x] Conservative remediation via SSH (`backend/services/slm/remediator.py`)
-- [x] WebSocket real-time updates (`backend/api/slm/websockets.py`)
+- [x] WebSocket real-time updates (`autobot-user-backend/api/slm/websockets.py`)
 - [x] Auto-start reconciler on backend startup (`backend/initialization/lifespan.py`)
 
 ### Phase 3: Deployments ✅ COMPLETE
@@ -542,7 +542,7 @@ Phase 5: SWITCHBACK + CLEANUP
 - [x] Blue-green with role borrowing (`BlueGreenStrategy`)
 - [x] Automatic rollback on health failure (configurable threshold)
 - [x] Maintenance window scheduling (`MaintenanceWindowStrategy`)
-- [x] Deployment REST API (`backend/api/slm/deployments.py`)
+- [x] Deployment REST API (`autobot-user-backend/api/slm/deployments.py`)
 - [x] Comprehensive test coverage (72 tests)
 
 ### Phase 4: Stateful Services ✅ COMPLETE
@@ -558,7 +558,7 @@ Phase 5: SWITCHBACK + CLEANUP
 - [x] Data sync verification
   - Keyspace analysis, memory stats, persistence status
   - Error detection and health reporting
-- [x] Stateful services REST API (`backend/api/slm/stateful.py`)
+- [x] Stateful services REST API (`autobot-user-backend/api/slm/stateful.py`)
 - [x] Comprehensive test coverage (46 tests)
 
 ### Phase 5: Admin UI ✅ COMPLETE (2026-01-15)

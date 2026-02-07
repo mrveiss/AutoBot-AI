@@ -47,7 +47,7 @@ Update `RedisServiceAPI.js` base endpoint from `/api/services/redis` to `/api/re
 
 **Changes Required:**
 ```javascript
-// File: autobot-vue/src/services/RedisServiceAPI.js
+// File: autobot-user-frontend/src/services/RedisServiceAPI.js
 // Line 16 - ONE LINE CHANGE:
 
 // BEFORE:
@@ -141,7 +141,7 @@ Modify frontend to parse general service monitor response at `/api/service-monit
 ### Implementation Steps
 
 #### Step 1: Update Frontend API Client ⏱️ 5 minutes
-**File**: `/home/kali/Desktop/AutoBot/autobot-vue/src/services/RedisServiceAPI.js`
+**File**: `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/services/RedisServiceAPI.js`
 
 **Action**: Change line 16
 ```javascript
@@ -157,7 +157,7 @@ this.baseEndpoint = '/api/redis-service'
 ---
 
 #### Step 2: Verify Backend Endpoints ⏱️ 5 minutes
-**File**: `/home/kali/Desktop/AutoBot/backend/api/redis_service.py`
+**File**: `/home/kali/Desktop/AutoBot/autobot-user-backend/api/redis_service.py`
 
 **Backend Endpoints (ALREADY IMPLEMENTED):**
 ```python
@@ -214,8 +214,8 @@ curl http://172.16.168.20:8001/api/redis-service/health
 # Sync updated file to Frontend VM
 cd /home/kali/Desktop/AutoBot
 ./scripts/utilities/sync-to-vm.sh frontend \
-  autobot-vue/src/services/RedisServiceAPI.js \
-  /home/autobot/autobot-vue/src/services/RedisServiceAPI.js
+  autobot-user-frontend/src/services/RedisServiceAPI.js \
+  /home/autobot/autobot-user-frontend/src/services/RedisServiceAPI.js
 ```
 
 ---
@@ -300,7 +300,7 @@ healthStatus: null  // Will be populated with above structure
 - Comprehensive error handling
 - Audit logging for all operations
 
-**API Router** (`backend/api/redis_service.py`):
+**API Router** (`autobot-user-backend/api/redis_service.py`):
 - FastAPI router registered at `/redis-service`
 - RBAC enforcement via auth middleware
 - Pydantic models for request/response validation
@@ -315,12 +315,12 @@ healthStatus: null  // Will be populated with above structure
 
 ### Frontend Components (NEEDS 1-LINE FIX)
 
-**RedisServiceAPI.js** (`autobot-vue/src/services/RedisServiceAPI.js`):
+**RedisServiceAPI.js** (`autobot-user-frontend/src/services/RedisServiceAPI.js`):
 - API client for Redis service operations
 - Base endpoint: `/api/services/redis` ❌ WRONG - needs to be `/api/redis-service`
 - Methods: start, stop, restart, getStatus, getHealth, getLogs
 
-**useServiceManagement.js** (`autobot-vue/src/composables/useServiceManagement.js`):
+**useServiceManagement.js** (`autobot-user-frontend/src/composables/useServiceManagement.js`):
 - Vue 3 composable for service lifecycle management
 - Reactive state management
 - WebSocket integration for real-time updates
@@ -378,12 +378,12 @@ healthStatus: null  // Will be populated with above structure
 **Rollback Commands:**
 ```bash
 # Revert local change
-git checkout HEAD autobot-vue/src/services/RedisServiceAPI.js
+git checkout HEAD autobot-user-frontend/src/services/RedisServiceAPI.js
 
 # Sync reverted file
 ./scripts/utilities/sync-to-vm.sh frontend \
-  autobot-vue/src/services/RedisServiceAPI.js \
-  /home/autobot/autobot-vue/src/services/RedisServiceAPI.js
+  autobot-user-frontend/src/services/RedisServiceAPI.js \
+  /home/autobot/autobot-user-frontend/src/services/RedisServiceAPI.js
 ```
 
 ---

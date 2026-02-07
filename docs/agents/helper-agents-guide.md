@@ -8,7 +8,7 @@ AutoBot includes various helper agents that provide specialized assistance for d
 
 ### 1. Web Research Assistant (`WebResearchAssistant`)
 
-**Location**: `src/agents/web_research_assistant.py`
+**Location**: `autobot-user-backend/agents/web_research_assistant.py`
 
 A specialized agent for conducting web research, gathering information from online sources, and presenting structured results.
 
@@ -27,7 +27,7 @@ A specialized agent for conducting web research, gathering information from onli
 
 ### 2. Advanced Web Research Agent (`advanced_web_research.py`)
 
-**Location**: `src/agents/advanced_web_research.py`
+**Location**: `autobot-user-backend/agents/advanced_web_research.py`
 
 An enhanced version of the web research assistant with advanced capabilities for complex research tasks.
 
@@ -39,7 +39,7 @@ An enhanced version of the web research assistant with advanced capabilities for
 
 ### 3. Interactive Terminal Agent (`InteractiveTerminalAgent`)
 
-**Location**: `src/agents/interactive_terminal_agent.py`
+**Location**: `autobot-user-backend/agents/interactive_terminal_agent.py`
 
 Provides intelligent command-line assistance and system interaction capabilities.
 
@@ -57,7 +57,7 @@ Provides intelligent command-line assistance and system interaction capabilities
 
 ### 4. System Command Agent (`system_command_agent.py`)
 
-**Location**: `src/agents/system_command_agent.py`
+**Location**: `autobot-user-backend/agents/system_command_agent.py`
 
 Handles system-level commands and operations with safety checks and intelligent execution.
 
@@ -79,7 +79,7 @@ async def chat_endpoint(request: ChatRequest):
     if requires_web_research(request.message):
         web_assistant = WebResearchAssistant()
         research_results = await web_assistant.research(request.message)
-        
+
     # Detect if query needs system commands
     elif requires_system_action(request.message):
         system_agent = SystemCommandAgent()

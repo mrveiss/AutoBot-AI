@@ -451,7 +451,7 @@ class RedisEventStreamManager(EventStreamManager):
 ### 5.1 Agent Orchestrator Integration
 
 ```python
-# In src/agents/agent_orchestrator.py
+# In autobot-user-backend/agents/agent_orchestrator.py
 
 class AgentOrchestrator:
     def __init__(self):
@@ -489,7 +489,7 @@ class AgentOrchestrator:
 ### 5.2 Tool Registry Integration
 
 ```python
-# In src/tools/tool_registry.py
+# In autobot-user-backend/tools/tool_registry.py
 
 class ToolRegistry:
     def __init__(self, event_stream: EventStreamManager):
@@ -555,7 +555,7 @@ class ToolRegistry:
 ### 6.1 Real-time Event Streaming to Frontend
 
 ```python
-# In backend/api/websocket.py
+# In autobot-user-backend/api/websocket.py
 
 from fastapi import WebSocket
 from src.events.event_stream import RedisEventStreamManager, EventType
@@ -691,4 +691,4 @@ src/events/
 - Manus Agent Loop: `docs/external_apps/.../Manus Agent Tools & Prompt/Agent loop.txt`
 - Redis Streams: https://redis.io/docs/data-types/streams/
 - Current event manager: `src/event_manager.py`
-- Current Redis integration: `src/utils/redis_management/`
+- Current Redis integration: `autobot-user-backend/utils/redis_management/`

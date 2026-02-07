@@ -1104,7 +1104,7 @@ ParserRegistry.register(NmapParser())
 ### Router Configuration
 
 ```python
-# File: backend/api/security_assessment.py
+# File: autobot-user-backend/api/security_assessment.py
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Body, WebSocket
 from fastapi.responses import JSONResponse
@@ -1871,7 +1871,7 @@ src/security/
     ├── nmap_parser.py           # NmapParser implementation
     └── registry.py              # ParserRegistry
 
-backend/api/
+autobot-user-backend/api/
 └── security_assessment.py       # REST API endpoints
 ```
 
@@ -1932,7 +1932,7 @@ src/security/
     ├── report_html.jinja2
     └── executive_summary.jinja2
 
-backend/api/
+autobot-user-backend/api/
 └── security_assessment.py       # Add WebSocket, reporting endpoints
 ```
 

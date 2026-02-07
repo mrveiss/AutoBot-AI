@@ -361,10 +361,10 @@ mcp__memory__create_entities --entities '[{"name": "Research 2025", "entityType"
 #### Sync Files to Remote VMs:
 ```bash
 # Sync specific file to specific VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/App.vue /home/autobot/autobot-vue/src/components/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/components/App.vue /home/autobot/autobot-user-frontend/src/components/
 
 # Sync directory to specific VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/components/ /home/autobot/autobot-user-frontend/src/components/
 
 # Sync to ALL VMs
 ./scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/

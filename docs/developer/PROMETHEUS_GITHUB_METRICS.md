@@ -166,19 +166,19 @@ except Exception as e:
 ### Recommended Integration Points
 
 1. **Backend API Endpoints** - When GitHub operations are triggered via API
-   - Example: `backend/api/github_integration.py` (if exists)
+   - Example: `autobot-user-backend/api/github_integration.py` (if exists)
    - Pattern: Wrap MCP tool calls with metrics
 
 2. **Agent Code** - When agents perform GitHub operations
-   - Example: `src/agents/github_agent.py` (if exists)
+   - Example: `autobot-user-backend/agents/github_agent.py` (if exists)
    - Pattern: Record metrics in agent execution methods
 
 3. **Workflow Automation** - When workflows include GitHub steps
-   - Example: Already integrated in `backend/api/workflow_automation.py`
+   - Example: Already integrated in `autobot-user-backend/api/workflow_automation.py`
    - Pattern: Add GitHub-specific metrics for GitHub workflow steps
 
 4. **Chat Handlers** - When chat commands trigger GitHub operations
-   - Example: `backend/api/chat.py` (if exists)
+   - Example: `autobot-user-backend/api/chat.py` (if exists)
    - Pattern: Record metrics after MCP tool calls
 
 ---

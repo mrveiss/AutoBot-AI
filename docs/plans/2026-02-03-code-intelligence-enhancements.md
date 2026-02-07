@@ -15,7 +15,7 @@
 ## Task 1: Add TypeScript Interfaces for Code Intelligence
 
 **Files:**
-- Create: `autobot-vue/src/types/codeIntelligence.ts`
+- Create: `autobot-user-frontend/src/types/codeIntelligence.ts`
 
 **Step 1: Create the type definitions file**
 
@@ -172,13 +172,13 @@ export interface ReportResponse {
 
 **Step 2: Verify file created**
 
-Run: `ls -la autobot-vue/src/types/codeIntelligence.ts`
+Run: `ls -la autobot-user-frontend/src/types/codeIntelligence.ts`
 Expected: File exists with correct permissions
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/types/codeIntelligence.ts
+git add autobot-user-frontend/src/types/codeIntelligence.ts
 git commit -m "feat(#772): add TypeScript interfaces for code intelligence"
 ```
 
@@ -187,7 +187,7 @@ git commit -m "feat(#772): add TypeScript interfaces for code intelligence"
 ## Task 2: Create Code Intelligence Composable
 
 **Files:**
-- Create: `autobot-vue/src/composables/useCodeIntelligence.ts`
+- Create: `autobot-user-frontend/src/composables/useCodeIntelligence.ts`
 
 **Step 1: Create the composable**
 
@@ -438,13 +438,13 @@ export function useCodeIntelligence() {
 
 **Step 2: Verify file created**
 
-Run: `ls -la autobot-vue/src/composables/useCodeIntelligence.ts`
+Run: `ls -la autobot-user-frontend/src/composables/useCodeIntelligence.ts`
 Expected: File exists
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/composables/useCodeIntelligence.ts
+git add autobot-user-frontend/src/composables/useCodeIntelligence.ts
 git commit -m "feat(#772): add useCodeIntelligence composable for API calls"
 ```
 
@@ -453,7 +453,7 @@ git commit -m "feat(#772): add useCodeIntelligence composable for API calls"
 ## Task 3: Create Health Score Gauge Component
 
 **Files:**
-- Create: `autobot-vue/src/components/analytics/HealthScoreGauge.vue`
+- Create: `autobot-user-frontend/src/components/analytics/HealthScoreGauge.vue`
 
 **Step 1: Create the gauge component**
 
@@ -603,13 +603,13 @@ const scoreArc = computed(() => {
 
 **Step 2: Verify file created**
 
-Run: `ls -la autobot-vue/src/components/analytics/HealthScoreGauge.vue`
+Run: `ls -la autobot-user-frontend/src/components/analytics/HealthScoreGauge.vue`
 Expected: File exists
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/HealthScoreGauge.vue
+git add autobot-user-frontend/src/components/analytics/HealthScoreGauge.vue
 git commit -m "feat(#772): add HealthScoreGauge component for code intelligence"
 ```
 
@@ -618,7 +618,7 @@ git commit -m "feat(#772): add HealthScoreGauge component for code intelligence"
 ## Task 4: Create Code Intelligence Dashboard Component
 
 **Files:**
-- Create: `autobot-vue/src/components/analytics/CodeIntelligenceDashboard.vue`
+- Create: `autobot-user-frontend/src/components/analytics/CodeIntelligenceDashboard.vue`
 
 **Step 1: Create the dashboard component**
 
@@ -926,13 +926,13 @@ onMounted(async () => {
 
 **Step 2: Verify file created**
 
-Run: `ls -la autobot-vue/src/components/analytics/CodeIntelligenceDashboard.vue`
+Run: `ls -la autobot-user-frontend/src/components/analytics/CodeIntelligenceDashboard.vue`
 Expected: File exists
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-vue/src/components/analytics/CodeIntelligenceDashboard.vue
+git add autobot-user-frontend/src/components/analytics/CodeIntelligenceDashboard.vue
 git commit -m "feat(#772): add CodeIntelligenceDashboard component"
 ```
 
@@ -941,8 +941,8 @@ git commit -m "feat(#772): add CodeIntelligenceDashboard component"
 ## Task 5: Add Code Intelligence Route to Analytics
 
 **Files:**
-- Modify: `autobot-vue/src/router/index.ts`
-- Modify: `autobot-vue/src/views/AnalyticsView.vue`
+- Modify: `autobot-user-frontend/src/router/index.ts`
+- Modify: `autobot-user-frontend/src/views/AnalyticsView.vue`
 
 **Step 1: Add route to router/index.ts**
 
@@ -982,7 +982,7 @@ Expected: Build succeeds without errors
 **Step 4: Commit**
 
 ```bash
-git add autobot-vue/src/router/index.ts autobot-vue/src/views/AnalyticsView.vue
+git add autobot-user-frontend/src/router/index.ts autobot-user-frontend/src/views/AnalyticsView.vue
 git commit -m "feat(#772): add Code Intelligence route and navigation tab"
 ```
 
@@ -992,7 +992,7 @@ git commit -m "feat(#772): add Code Intelligence route and navigation tab"
 
 **Step 1: Sync frontend changes**
 
-Run: `./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/`
+Run: `./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/`
 Expected: Files synced successfully
 
 **Step 2: Verify in browser**

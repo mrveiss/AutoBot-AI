@@ -8,7 +8,7 @@ This implementation replaces the annoying blocking system down overlay with a us
 ### 1. Components Created
 
 #### `SystemStatusNotification.vue`
-- **Location**: `/autobot-vue/src/components/SystemStatusNotification.vue`
+- **Location**: `/autobot-user-frontend/src/components/SystemStatusNotification.vue`
 - **Purpose**: Displays notifications in three modes:
   - **Toast**: Small notification in top-right corner
   - **Banner**: Full-width bar at top of page  
@@ -21,7 +21,7 @@ This implementation replaces the annoying blocking system down overlay with a us
   - Teleport to body for proper z-index handling
 
 #### `SystemStatusIndicator.vue`
-- **Location**: `/autobot-vue/src/components/SystemStatusIndicator.vue`
+- **Location**: `/autobot-user-frontend/src/components/SystemStatusIndicator.vue`
 - **Purpose**: Non-blocking status indicator in the header
 - **Features**:
   - Color-coded status (green=healthy, yellow=warning, red=error)
@@ -31,7 +31,7 @@ This implementation replaces the annoying blocking system down overlay with a us
   - Real-time status updates
 
 #### `NotificationSettings.vue`
-- **Location**: `/autobot-vue/src/components/NotificationSettings.vue`
+- **Location**: `/autobot-user-frontend/src/components/NotificationSettings.vue`
 - **Purpose**: User preferences for notification behavior
 - **Features**:
   - Enable/disable notifications
@@ -44,7 +44,7 @@ This implementation replaces the annoying blocking system down overlay with a us
 ### 2. Store Updates
 
 #### `useAppStore.ts`
-- **Location**: `/autobot-vue/src/stores/useAppStore.ts`
+- **Location**: `/autobot-user-frontend/src/stores/useAppStore.ts`
 - **New State**:
   - `systemNotifications`: Array of active notifications
   - `notificationSettings`: User preferences (persisted to localStorage)

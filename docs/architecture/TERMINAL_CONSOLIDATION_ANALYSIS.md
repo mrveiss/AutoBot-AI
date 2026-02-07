@@ -51,7 +51,7 @@
 
 ### **Archived Files:**
 
-#### Backend API Archive (backend/api/archive/)
+#### Backend API Archive (autobot-user-backend/api/archive/)
 1. ✅ `base_terminal.py.unused` (17KB)
    - Reason: Features migrated to terminal.py
    - Endpoints now in terminal.py: /health, /status, /capabilities, /security, /features, /stats
@@ -75,7 +75,7 @@
 - ✅ Test file updated with archive notes and skip reasons
 
 ### **Documentation Created:**
-- ✅ `backend/api/archive/README.md` - API archive documentation
+- ✅ `autobot-user-backend/api/archive/README.md` - API archive documentation
   - base_terminal.py migration details
   - remote_terminal.py re-enablement steps
 - ✅ `backend/services/archive/README.md` - Services archive documentation
@@ -114,7 +114,7 @@
 **Queue-Based Output Delivery** - Prevents WebSocket blocking for better responsiveness
 
 **Files Modified:**
-- `backend/api/terminal.py` (ConsolidatedTerminalWebSocket class)
+- `autobot-user-backend/api/terminal.py` (ConsolidatedTerminalWebSocket class)
 
 **Implementation Details:**
 
@@ -203,19 +203,19 @@ AutoBot has **7 terminal implementations** with significant overlap. Analysis sh
 ### **Active Terminals (Working in Production)**
 
 #### 1. **Tools Terminal** (Standalone System Terminal)
-- **Frontend**: `autobot-vue/src/components/ToolsTerminal.vue`
-- **Backend API**: `backend/api/terminal.py` - Lines 937-1430
+- **Frontend**: `autobot-user-frontend/src/components/ToolsTerminal.vue`
+- **Backend API**: `autobot-user-backend/api/terminal.py` - Lines 937-1430
   - REST: `POST /api/terminal/sessions` - Create session
   - WebSocket: `/api/terminal/ws/{session_id}` - Terminal I/O
 - **PTY Layer**: Uses `backend/services/simple_pty.py` (SimplePTY)
 - **Use Case**: General system administration, not linked to chat
 
 #### 2. **Chat Terminal** ⭐ (Mission-Critical)
-- **Frontend**: `autobot-vue/src/components/ChatTerminal.vue`
+- **Frontend**: `autobot-user-frontend/src/components/ChatTerminal.vue`
 - **Backend API**:
-  - Session: `backend/api/agent_terminal.py` - Lines 122-296
+  - Session: `autobot-user-backend/api/agent_terminal.py` - Lines 122-296
     - REST: `POST /api/agent-terminal/sessions` - Create with approval workflow
-  - I/O: `backend/api/terminal.py` WebSocket (shared with Tools Terminal)
+  - I/O: `autobot-user-backend/api/terminal.py` WebSocket (shared with Tools Terminal)
 - **Service Layer**: `backend/services/agent_terminal_service.py`
   - Command approval workflow
   - Agent/user control state management
@@ -273,7 +273,7 @@ AutoBot has **7 terminal implementations** with significant overlap. Analysis sh
 
 **Recommendation**:
 - **Keep for future**: Remote terminal is a complete feature, just not exposed in UI yet
-- **Move to**: `backend/api/archive/remote_terminal.py.unused`
+- **Move to**: `autobot-user-backend/api/archive/remote_terminal.py.unused`
 - **Document**: How to re-enable if needed (add to router, create Vue component)
 
 ---
@@ -325,7 +325,7 @@ AutoBot has **7 terminal implementations** with significant overlap. Analysis sh
 
 ### **Phase 1: Enhance Active Files** ✅
 
-**File: `backend/api/terminal.py`**
+**File: `autobot-user-backend/api/terminal.py`**
 
 Add missing features from `base_terminal.py`:
 
@@ -377,15 +377,15 @@ Add from `pty_terminal.py`:
 
 ### **Phase 2: Archive Redundant Files** 🗄️
 
-**Create archive directory**: `backend/api/archive/`
+**Create archive directory**: `autobot-user-backend/api/archive/`
 
 **Files to archive**:
 
-1. **base_terminal.py** → `backend/api/archive/base_terminal.py.unused`
+1. **base_terminal.py** → `autobot-user-backend/api/archive/base_terminal.py.unused`
    - **Reason**: Abstract base class - logic migrated to `terminal.py`
    - **Features migrated**: Health endpoints, stats, queue-based output
 
-2. **remote_terminal.py** → `backend/api/archive/remote_terminal.py.feature`
+2. **remote_terminal.py** → `autobot-user-backend/api/archive/remote_terminal.py.feature`
    - **Reason**: Complete feature, just not exposed in UI
    - **Keep for**: Future multi-host SSH terminal UI
    - **Documentation**: Add README with re-enablement steps
@@ -410,7 +410,7 @@ Document:
 - Approval workflow
 - Security integration
 
-**File: `backend/api/terminal.py`** (Add docstrings)
+**File: `autobot-user-backend/api/terminal.py`** (Add docstrings)
 
 Enhance documentation:
 - Module-level overview
@@ -454,10 +454,10 @@ Document:
 
 ### **Archive**
 
-- [x] Create `backend/api/archive/` directory ✅ **COMPLETED**
-- [x] Move `base_terminal.py` → `backend/api/archive/base_terminal.py.unused` ✅ **COMPLETED**
-- [x] Move `remote_terminal.py` → `backend/api/archive/remote_terminal.py.feature` ✅ **COMPLETED**
-- [x] Create `backend/api/archive/README.md` with re-enablement instructions ✅ **COMPLETED**
+- [x] Create `autobot-user-backend/api/archive/` directory ✅ **COMPLETED**
+- [x] Move `base_terminal.py` → `autobot-user-backend/api/archive/base_terminal.py.unused` ✅ **COMPLETED**
+- [x] Move `remote_terminal.py` → `autobot-user-backend/api/archive/remote_terminal.py.feature` ✅ **COMPLETED**
+- [x] Create `autobot-user-backend/api/archive/README.md` with re-enablement instructions ✅ **COMPLETED**
 - [x] Create `backend/services/archive/` directory ✅ **COMPLETED**
 - [x] Move `pty_terminal.py` → `backend/services/archive/pty_terminal.py.unused` ✅ **COMPLETED**
 - [x] Update imports in any files that reference archived files ✅ **COMPLETED** (tests updated)

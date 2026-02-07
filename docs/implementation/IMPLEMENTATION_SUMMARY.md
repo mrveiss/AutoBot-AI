@@ -89,7 +89,7 @@ src/
 ├── circuit_breaker.py              # Service failure protection
 └── [existing files with security integration]
 
-backend/api/
+autobot-user-backend/api/
 ├── security.py                     # Security API endpoints
 ├── secure_terminal_websocket.py    # Secure WebSocket terminal
 └── [existing files with enhancements]
