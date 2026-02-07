@@ -1,5 +1,9 @@
 # Phase 1: Create Folder Structure - Implementation Plan
 
+> **HISTORICAL NOTE**: This document describes the initial flat infrastructure structure.
+> The infrastructure has since been reorganized to a per-role structure.
+> See the current structure in `infrastructure/README.md`.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Create the new folder structure and copy all files to their new locations without deleting anything.
@@ -12,9 +16,35 @@
 
 ---
 
+## Current Infrastructure Structure
+
+**Note:** The infrastructure folder has been reorganized from the flat structure described below to a per-role structure:
+
+```text
+infrastructure/
+├── autobot-user-backend/       # User backend: docker, tests, config, scripts, templates
+├── autobot-user-frontend/      # User frontend infra
+├── autobot-slm-backend/        # SLM backend infra
+├── autobot-slm-frontend/       # SLM frontend infra
+├── autobot-npu-worker/         # NPU worker infra
+├── autobot-browser-worker/     # Browser worker infra
+└── shared/                     # Shared infrastructure
+    ├── scripts/                # Common utilities, sync scripts
+    ├── certs/                  # Certificate management
+    ├── config/                 # Shared configurations
+    ├── docker/                 # Shared docker resources
+    ├── mcp/                    # MCP server configs
+    ├── tools/                  # Development tools
+    ├── tests/                  # Shared test utilities
+    └── analysis/               # Analysis tools
+```
+
+---
+
 ## Task 1: Create Base Directory Structure
 
 **Files:**
+
 - Create: `autobot-user-backend/`
 - Create: `autobot-user-frontend/`
 - Create: `autobot-slm-backend/`
@@ -67,11 +97,12 @@ Phase 1, Task 1: Create base directories for reorganization.
 ## Task 2: Copy Shared Utilities to autobot-shared/
 
 **Files:**
-- Copy: `src/utils/redis_client.py` → `autobot-shared/redis_client.py`
-- Copy: `src/utils/http_client.py` → `autobot-shared/http_client.py`
-- Copy: `src/utils/logging_manager.py` → `autobot-shared/logging_manager.py`
-- Copy: `src/utils/error_boundaries.py` → `autobot-shared/error_boundaries.py`
-- Copy: `src/config/ssot_config.py` → `autobot-shared/ssot_config.py`
+
+- Copy: `src/utils/redis_client.py` to `autobot-shared/redis_client.py`
+- Copy: `src/utils/http_client.py` to `autobot-shared/http_client.py`
+- Copy: `src/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
+- Copy: `src/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
+- Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
 - Create: `autobot-shared/__init__.py`
 - Create: `autobot-shared/requirements.txt`
 - Create: `autobot-shared/README.md`
@@ -89,6 +120,7 @@ cp src/config/ssot_config.py autobot-shared/
 **Step 2: Create __init__.py**
 
 Create `autobot-shared/__init__.py`:
+
 ```python
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -104,7 +136,8 @@ __all__ = ["get_redis_client", "config"]
 **Step 3: Create requirements.txt**
 
 Create `autobot-shared/requirements.txt`:
-```
+
+```text
 redis>=4.0.0
 pyyaml>=6.0
 pydantic>=2.0
@@ -114,6 +147,7 @@ python-dotenv>=1.0.0
 **Step 4: Create README.md**
 
 Create `autobot-shared/README.md`:
+
 ```markdown
 # AutoBot Shared Utilities
 
@@ -122,6 +156,7 @@ Shared utilities deployed with each backend component.
 ## Deployment
 
 This module is included in each backend's deployment:
+
 - autobot-user-backend
 - autobot-slm-backend
 - autobot-npu-worker
@@ -129,10 +164,8 @@ This module is included in each backend's deployment:
 
 ## Usage
 
-```python
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
-```
 
 ## Contents
 
@@ -162,8 +195,9 @@ Phase 1, Task 2: Populate autobot-shared with common utilities.
 ## Task 3: Copy SLM Backend to autobot-slm-backend/
 
 **Files:**
-- Copy: `slm-server/*` → `autobot-slm-backend/`
-- Copy: `ansible/*` → `autobot-slm-backend/ansible/`
+
+- Copy: `slm-server/*` to `autobot-slm-backend/`
+- Copy: `ansible/*` to `autobot-slm-backend/ansible/`
 
 **Step 1: Copy slm-server contents**
 
@@ -181,6 +215,7 @@ rsync -av ansible/ autobot-slm-backend/ansible/
 **Step 3: Update README with deployment target**
 
 Update `autobot-slm-backend/README.md` to add deployment info at the top:
+
 ```markdown
 # AutoBot SLM Backend
 
@@ -206,7 +241,8 @@ Phase 1, Task 3: Populate autobot-slm-backend.
 ## Task 4: Copy SLM Frontend to autobot-slm-frontend/
 
 **Files:**
-- Copy: `slm-admin/*` → `autobot-slm-frontend/`
+
+- Copy: `slm-admin/*` to `autobot-slm-frontend/`
 
 **Step 1: Copy slm-admin contents**
 
@@ -217,6 +253,7 @@ rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' slm-admin/ 
 **Step 2: Update README with deployment target**
 
 Update `autobot-slm-frontend/README.md`:
+
 ```markdown
 # AutoBot SLM Frontend
 
@@ -241,7 +278,8 @@ Phase 1, Task 4: Populate autobot-slm-frontend.
 ## Task 5: Copy User Frontend to autobot-user-frontend/
 
 **Files:**
-- Copy: `autobot-vue/*` → `autobot-user-frontend/`
+
+- Copy: `autobot-vue/*` to `autobot-user-frontend/`
 
 **Step 1: Copy autobot-vue contents**
 
@@ -252,6 +290,7 @@ rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='
 **Step 2: Update README with deployment target**
 
 Create/update `autobot-user-frontend/README.md`:
+
 ```markdown
 # AutoBot User Frontend
 
@@ -261,17 +300,14 @@ Vue 3 + TypeScript chat interface for AutoBot.
 
 ## Development
 
-```bash
 npm install
 npm run dev
-```
 
 ## Deployment
 
 Synced to main server via:
-```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-frontend/
-```
+
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-frontend/
 ```
 
 **Step 3: Commit**
@@ -290,14 +326,15 @@ Phase 1, Task 5: Populate autobot-user-frontend.
 ## Task 6: Copy User Backend to autobot-user-backend/
 
 **Files:**
-- Copy: `src/*` → `autobot-user-backend/` (reorganized)
-- Copy: `backend/*` → `autobot-user-backend/` (merged)
-- Copy: `prompts/` → `autobot-user-backend/resources/prompts/`
-- Copy: `templates/` → `autobot-user-backend/resources/templates/`
-- Copy: `content/` → `autobot-user-backend/resources/content/`
-- Copy: `system_knowledge/` → `autobot-user-backend/resources/knowledge/`
-- Copy: `migrations/` → `autobot-user-backend/migrations/`
-- Copy: `monitoring/` → `autobot-user-backend/monitoring/`
+
+- Copy: `src/*` to `autobot-user-backend/` (reorganized)
+- Copy: `backend/*` to `autobot-user-backend/` (merged)
+- Copy: `prompts/` to `autobot-user-backend/resources/prompts/`
+- Copy: `templates/` to `autobot-user-backend/resources/templates/`
+- Copy: `content/` to `autobot-user-backend/resources/content/`
+- Copy: `system_knowledge/` to `autobot-user-backend/resources/knowledge/`
+- Copy: `migrations/` to `autobot-user-backend/migrations/`
+- Copy: `monitoring/` to `autobot-user-backend/monitoring/`
 
 **Step 1: Copy src/ contents (main code)**
 
@@ -340,7 +377,8 @@ rsync -av monitoring/ autobot-user-backend/monitoring/
 **Step 5: Create requirements.txt**
 
 Create `autobot-user-backend/requirements.txt`:
-```
+
+```text
 -e ../autobot-shared
 
 # Core
@@ -366,6 +404,7 @@ sentence-transformers>=2.2.0
 **Step 6: Create README.md**
 
 Create `autobot-user-backend/README.md`:
+
 ```markdown
 # AutoBot User Backend
 
@@ -387,16 +426,12 @@ Core AutoBot backend - AI agents, chat workflows, and API endpoints.
 
 ## Development
 
-```bash
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
-```
 
 ## Deployment
 
-```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-backend/
-```
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
 ```
 
 **Step 7: Commit**
@@ -415,100 +450,41 @@ Phase 1, Task 6: Populate autobot-user-backend.
 
 ## Task 7: Copy Infrastructure Files
 
+> **NOTE:** This task described the original flat structure. Infrastructure has since been
+> reorganized to a per-role structure under `infrastructure/<component>/`.
+
 **Files:**
-- Copy: `docker/` → `infrastructure/docker/`
-- Copy: `scripts/` → `infrastructure/scripts/`
-- Copy: `config/` → `infrastructure/config/`
-- Copy: `certs/` → `infrastructure/certs/`
-- Copy: `tests/` → `infrastructure/tests/`
-- Copy: `mcp-servers/` → `infrastructure/mcp/servers/`
-- Copy: `mcp-tools/` → `infrastructure/mcp/tools/`
-- Copy: `novnc/` → `infrastructure/novnc/`
-- Copy: `analysis/`, `code-analysis-suite/`, `reports/` → `infrastructure/analysis/`
-- Move: `Dockerfile`, `docker-compose.yml` → `infrastructure/docker/`
 
-**Step 1: Copy docker files**
+- Copy: `docker/` to `infrastructure/docker/`
+- Copy: `scripts/` to `infrastructure/scripts/`
+- Copy: `config/` to `infrastructure/config/`
+- Copy: `certs/` to `infrastructure/certs/`
+- Copy: `tests/` to `infrastructure/tests/`
+- Copy: `mcp-servers/` to `infrastructure/mcp/servers/`
+- Copy: `mcp-tools/` to `infrastructure/mcp/tools/`
+- Copy: `novnc/` to `infrastructure/novnc/`
+- Copy: `analysis/`, `code-analysis-suite/`, `reports/` to `infrastructure/analysis/`
+- Move: `Dockerfile`, `docker-compose.yml` to `infrastructure/docker/`
 
-```bash
-rsync -av docker/ infrastructure/docker/
-cp Dockerfile infrastructure/docker/
-cp docker-compose.yml infrastructure/docker/
-```
+**Current structure** (per-role):
 
-**Step 2: Copy scripts**
-
-```bash
-rsync -av scripts/ infrastructure/scripts/
-```
-
-**Step 3: Copy config and certs**
-
-```bash
-rsync -av --exclude='*.pyc' --exclude='__pycache__' config/ infrastructure/config/
-rsync -av certs/ infrastructure/certs/
-```
-
-**Step 4: Copy tests**
-
-```bash
-rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='.pytest_cache' tests/ infrastructure/tests/
-```
-
-**Step 5: Copy MCP servers and tools**
-
-```bash
-mkdir -p infrastructure/mcp/servers infrastructure/mcp/tools
-rsync -av mcp-servers/ infrastructure/mcp/servers/
-rsync -av mcp-tools/ infrastructure/mcp/tools/
-```
-
-**Step 6: Copy novnc and analysis**
-
-```bash
-rsync -av novnc/ infrastructure/novnc/
-rsync -av analysis/ infrastructure/analysis/
-rsync -av code-analysis-suite/ infrastructure/analysis/code-analysis-suite/
-rsync -av reports/ infrastructure/analysis/reports/
-```
-
-**Step 7: Create infrastructure README**
-
-Create `infrastructure/README.md`:
-```markdown
-# AutoBot Infrastructure
-
-Development and operations tooling - not deployed as application code.
-
-## Contents
-
-| Directory | Purpose |
-|-----------|---------|
-| `docker/` | Dockerfiles and compose files |
-| `scripts/` | Utility and deployment scripts |
-| `config/` | Environment configurations |
-| `certs/` | SSL certificates |
-| `tests/` | Test suites |
-| `mcp/` | MCP servers and tools |
-| `novnc/` | VNC server |
-| `analysis/` | Code analysis tools and reports |
-
-## Key Scripts
-
-- `scripts/utilities/sync-to-vm.sh` - Sync code to VMs
-- `scripts/startup/` - Service startup scripts
-- `scripts/deployment/` - Deployment automation
-```
-
-**Step 8: Commit**
-
-```bash
-git add infrastructure/
-git commit -m "chore(infra): copy infrastructure files (#781)
-
-Phase 1, Task 7: Populate infrastructure directory.
-- docker/, scripts/, config/, certs/, tests/
-- mcp-servers/ and mcp-tools/ → mcp/
-- novnc/, analysis/, code-analysis-suite/, reports/"
+```text
+infrastructure/
+├── autobot-user-backend/
+├── autobot-user-frontend/
+├── autobot-slm-backend/
+├── autobot-slm-frontend/
+├── autobot-npu-worker/
+├── autobot-browser-worker/
+└── shared/
+    ├── scripts/
+    ├── certs/
+    ├── config/
+    ├── docker/
+    ├── mcp/
+    ├── tools/
+    ├── tests/
+    └── analysis/
 ```
 
 ---
@@ -516,6 +492,7 @@ Phase 1, Task 7: Populate infrastructure directory.
 ## Task 8: Create NPU and Browser Worker Stubs
 
 **Files:**
+
 - Create: `autobot-npu-worker/main.py`
 - Create: `autobot-npu-worker/requirements.txt`
 - Create: `autobot-npu-worker/README.md`
@@ -526,6 +503,7 @@ Phase 1, Task 7: Populate infrastructure directory.
 **Step 1: Create NPU worker stub**
 
 Create `autobot-npu-worker/main.py`:
+
 ```python
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -554,7 +532,8 @@ if __name__ == "__main__":
 ```
 
 Create `autobot-npu-worker/requirements.txt`:
-```
+
+```text
 -e ../autobot-shared
 
 # NPU/AI
@@ -564,6 +543,7 @@ numpy>=1.24.0
 ```
 
 Create `autobot-npu-worker/README.md`:
+
 ```markdown
 # AutoBot NPU Worker
 
@@ -577,14 +557,13 @@ Hardware AI acceleration worker using Intel NPU/OpenVINO.
 
 ## Deployment
 
-```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh npu autobot-npu-worker/
-```
+./infrastructure/shared/scripts/sync-to-vm.sh npu autobot-npu-worker/
 ```
 
 **Step 2: Create Browser worker stub**
 
 Create `autobot-browser-worker/main.py`:
+
 ```python
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -613,7 +592,8 @@ if __name__ == "__main__":
 ```
 
 Create `autobot-browser-worker/requirements.txt`:
-```
+
+```text
 -e ../autobot-shared
 
 # Browser automation
@@ -621,6 +601,7 @@ playwright>=1.40.0
 ```
 
 Create `autobot-browser-worker/README.md`:
+
 ```markdown
 # AutoBot Browser Worker
 
@@ -634,9 +615,7 @@ Playwright-based browser automation worker.
 
 ## Deployment
 
-```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh browser autobot-browser-worker/
-```
+./infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
 ```
 
 **Step 3: Commit**
@@ -687,10 +666,12 @@ ls -d src/ backend/ slm-server/ slm-admin/ autobot-vue/ scripts/ docker/ tests/ 
 **Step 4: Update GitHub issue with progress**
 
 Add comment to issue #781:
-```
-## Phase 1 Complete ✓
+
+```text
+## Phase 1 Complete
 
 Created new folder structure:
+
 - [x] `autobot-user-backend/` - Main backend code
 - [x] `autobot-user-frontend/` - Main Vue frontend
 - [x] `autobot-slm-backend/` - SLM backend + ansible
