@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 LOG_FILE="$PROJECT_ROOT/logs/backend.log"
 REPORT_DIR="$PROJECT_ROOT/reports/service-auth"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

@@ -6,7 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 LOGS_DIR="$PROJECT_ROOT/logs"
 CENTRALIZED_DIR="$LOGS_DIR/autobot-centralized"
 SSH_KEY="$HOME/.ssh/autobot_key"
@@ -230,7 +230,7 @@ create_log_collection_scripts() {
 # Collects service-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 SSH_KEY="$HOME/.ssh/autobot_key"
 
@@ -295,7 +295,7 @@ EOF
 # Collects application-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 SSH_KEY="$HOME/.ssh/autobot_key"
 
@@ -360,7 +360,7 @@ create_log_viewer() {
 # Interactive log viewing interface for centralized logs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 
 # Color codes

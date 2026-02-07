@@ -25,7 +25,7 @@ warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 # SSOT Configuration - Load from .env file
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a

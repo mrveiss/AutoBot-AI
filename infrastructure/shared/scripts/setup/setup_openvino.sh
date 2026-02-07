@@ -4,7 +4,7 @@
 # This script sets up a dedicated OpenVINO environment for NPU acceleration
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 VENVS_DIR="$PROJECT_ROOT/venvs"
 OPENVINO_VENV="$VENVS_DIR/openvino_env"
 
