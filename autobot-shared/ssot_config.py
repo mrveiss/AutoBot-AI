@@ -13,7 +13,7 @@ All configuration values are defined in the master .env file and accessed
 through Pydantic models for type safety and validation.
 
 Usage:
-    from src.config.ssot_config import get_config, config
+    from autobot_shared.ssot_config import get_config, config
 
     # Access VM IPs
     redis_ip = config.vm.redis

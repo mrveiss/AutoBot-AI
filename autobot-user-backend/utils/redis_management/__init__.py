@@ -31,32 +31,17 @@ For backward compatibility, the original redis_client.py module
 still exports all classes and functions directly.
 """
 
-# Types and constants
-from utils.redis_management.types import (
-    ConnectionState,
-    DATABASE_MAPPING,
-    RedisDatabase,
-)
-
 # Configuration classes
-from utils.redis_management.config import (
-    PoolConfig,
-    RedisConfig,
-    RedisConfigLoader,
-)
-
-# Statistics dataclasses
-from utils.redis_management.statistics import (
-    ConnectionMetrics,
-    ManagerStats,
-    PoolStatistics,
-    RedisStats,
-)
+from .config import PoolConfig, RedisConfig, RedisConfigLoader
 
 # Connection manager
-from utils.redis_management.connection_manager import (
-    RedisConnectionManager,
-)
+from .connection_manager import RedisConnectionManager
+
+# Statistics dataclasses
+from .statistics import ConnectionMetrics, ManagerStats, PoolStatistics, RedisStats
+
+# Types and constants
+from .types import DATABASE_MAPPING, ConnectionState, RedisDatabase
 
 # Re-export for convenience
 __all__ = [

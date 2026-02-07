@@ -11,13 +11,14 @@ import logging
 import time
 from typing import Optional
 
+from autobot_logging.terminal_logger import TerminalLogger
+from chat_history import ChatHistoryManager
+from monitoring.prometheus_metrics import get_metrics_manager
+from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+
 from backend.services.command_approval_manager import AgentRole, CommandApprovalManager
 from backend.services.command_execution_queue import get_command_queue
 from backend.type_defs.common import Metadata
-from chat_history import ChatHistoryManager
-from logging.terminal_logger import TerminalLogger
-from monitoring.prometheus_metrics import get_metrics_manager
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
 
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
@@ -172,9 +173,7 @@ class AgentTerminalService:
 
         return None
 
-    def _assess_command(
-        self, command: str
-    ) -> tuple:
+    def _assess_command(self, command: str) -> tuple:
         """Assess command risk and interactivity (Issue #281: extracted)."""
         executor = SecureCommandExecutor(
             policy=self.security_policy,
@@ -354,13 +353,15 @@ class AgentTerminalService:
             risk: Risk level
             result: Execution result (modified in place)
         """
-        session.command_history.append({
-            "command": command,
-            "risk": risk.value,
-            "timestamp": time.time(),
-            "auto_approved": True,
-            "result": result,
-        })
+        session.command_history.append(
+            {
+                "command": command,
+                "risk": risk.value,
+                "timestamp": time.time(),
+                "auto_approved": True,
+                "result": result,
+            }
+        )
         session.last_activity = time.time()
 
         await self.approval_handler.broadcast_approval_status(
@@ -542,7 +543,13 @@ class AgentTerminalService:
 
             await self._log_command_result(session, command, result, user_id)
             await self._post_execution_updates(
-                session, command, result, risk_level, user_id, comment, auto_approve_future
+                session,
+                command,
+                result,
+                risk_level,
+                user_id,
+                comment,
+                auto_approve_future,
             )
 
             return {
@@ -766,7 +773,9 @@ class AgentTerminalService:
             return validation_error
 
         # Assess command risk and interactivity
-        _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(command)
+        _, risk, reasons, is_interactive, interactive_reasons = self._assess_command(
+            command
+        )
 
         # Check agent permissions (Issue #665: extracted helper)
         permission_error = self._check_agent_permission(session, command, risk)
@@ -775,7 +784,13 @@ class AgentTerminalService:
 
         # Check auto-approve or queue for approval (Issue #665: extracted helper)
         is_auto_approved, queue_response = await self._check_auto_approval_or_queue(
-            session, command, description, risk, reasons, is_interactive, interactive_reasons
+            session,
+            command,
+            description,
+            risk,
+            reasons,
+            is_interactive,
+            interactive_reasons,
         )
         if not is_auto_approved:
             return queue_response
@@ -850,8 +865,13 @@ class AgentTerminalService:
         approval_lock = await self.approval_handler._get_approval_lock(session_id)
         async with approval_lock:
             return await self._approve_command_internal(
-                session_id, approved, user_id, comment, auto_approve_future,
-                remember_for_project, project_path
+                session_id,
+                approved,
+                user_id,
+                comment,
+                auto_approve_future,
+                remember_for_project,
+                project_path,
             )
 
     async def _approve_command_internal(

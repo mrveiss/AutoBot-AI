@@ -22,7 +22,7 @@ error messages to users.
 import json
 
 # Re-export all public API from the package for backward compatibility
-from src.utils.error_boundaries import (
+from backend.utils.error_boundaries import (
     CRITICAL_ERROR_TYPES,
     FALLBACK_ERROR_TYPES,
     HIGH_SEVERITY_ERROR_TYPES,

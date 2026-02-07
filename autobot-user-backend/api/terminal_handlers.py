@@ -28,6 +28,9 @@ import time
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
+from chat_history import ChatHistoryManager
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 from fastapi import WebSocket
 
 # Import models from dedicated module (Issue #185)
@@ -45,9 +48,6 @@ from backend.services.terminal_websocket import (
     LOGGING_SECURITY_LEVELS,
     SHELL_OPERATORS,
 )
-from chat_history import ChatHistoryManager
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -181,7 +181,7 @@ class ConsolidatedTerminalWebSocket:
 
         # Initialize TerminalLogger for persistent command logging
         if conversation_id:
-            from logging.terminal_logger import TerminalLogger
+            from autobot_logging.terminal_logger import TerminalLogger
 
             self.terminal_logger = TerminalLogger(
                 redis_client=redis_client, data_dir="data/chats"
@@ -639,7 +639,6 @@ class ConsolidatedTerminalWebSocket:
             from pathlib import Path
 
             import aiofiles
-
             from utils.encoding_utils import strip_ansi_codes
 
             # Strip ANSI escape codes before writing to transcript
@@ -1181,7 +1180,6 @@ class ConsolidatedTerminalWebSocket:
         from pathlib import Path
 
         import aiofiles
-
         from utils.encoding_utils import strip_ansi_codes
 
         try:

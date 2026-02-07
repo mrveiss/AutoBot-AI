@@ -46,7 +46,7 @@ FEATURES (Consolidated from 8 implementations):
 
 MANDATORY USAGE PATTERN:
 ========================
-from src.utils.redis_client import get_redis_client
+from backend.utils.redis_client import get_redis_client
 
 # Synchronous client
 redis_client = get_redis_client(database="main")
@@ -86,9 +86,13 @@ from typing import Any, AsyncGenerator, Dict, Optional, Union
 import redis
 import redis.asyncio as async_redis
 
-from src.utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
-from src.utils.redis_management.connection_manager import RedisConnectionManager
-from src.utils.redis_management.statistics import (
+from backend.utils.redis_management.config import (
+    PoolConfig,
+    RedisConfig,
+    RedisConfigLoader,
+)
+from backend.utils.redis_management.connection_manager import RedisConnectionManager
+from backend.utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
@@ -96,7 +100,7 @@ from src.utils.redis_management.statistics import (
 )
 
 # Import all types, data models, and classes from the package (Issue #381 refactoring)
-from src.utils.redis_management.types import (
+from backend.utils.redis_management.types import (
     DATABASE_MAPPING,
     ConnectionState,
     RedisDatabase,
@@ -500,7 +504,7 @@ class RedisDatabaseManager:
         """Initialize deprecated manager with deprecation warning."""
         logger.warning(
             "DEPRECATED: RedisDatabaseManager is deprecated. "
-            "Use get_redis_client() from src.utils.redis_client instead."
+            "Use get_redis_client() from backend.utils.redis_client instead."
         )
 
     def get_connection(
