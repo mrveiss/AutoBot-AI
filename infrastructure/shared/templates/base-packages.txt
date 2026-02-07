@@ -6,12 +6,15 @@
 netcat-openbsd
 iputils-ping
 dnsutils
+iftop
 
 # Core utilities
 curl
 wget
 rsync
 jq
+nano
+mc
 
 # Python base
 python3
