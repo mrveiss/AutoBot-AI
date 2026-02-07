@@ -1,0 +1,62 @@
+# AutoBot AI Stack - Systemd Service Unit
+# Deploys to: 172.16.168.24 (AI Stack VM)
+# Runs LlamaIndex, RAG pipelines, and AI processing services
+#
+# Installation:
+#   sudo cp autobot-ai-stack.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-ai-stack
+#   sudo systemctl start autobot-ai-stack
+
+[Unit]
+Description=AutoBot AI Stack - LlamaIndex & RAG Services
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/autobot-ai-stack
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+EnvironmentFile=-/opt/autobot/autobot-ai-stack/.env
+
+# Start uvicorn server
+ExecStart=/opt/autobot/autobot-ai-stack/venv/bin/uvicorn \
+    main:app \
+    --host 0.0.0.0 \
+    --port 8080 \
+    --workers 2 \
+    --loop uvloop \
+    --http httptools \
+    --log-level info
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Resource limits
+MemoryMax=8G
+CPUQuota=200%
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/autobot-ai-stack/data
+ReadWritePaths=/opt/autobot/autobot-ai-stack/cache
+ReadWritePaths=/opt/autobot/autobot-ai-stack/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-ai-stack
+
+[Install]
+WantedBy=multi-user.target

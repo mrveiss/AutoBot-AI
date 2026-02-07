@@ -1,0 +1,63 @@
+# AutoBot Browser Worker - Systemd Service Unit
+# Deploys to: 172.16.168.25 (Browser VM)
+# Runs Playwright browser automation service
+#
+# Installation:
+#   sudo cp autobot-browser-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-browser-worker
+#   sudo systemctl start autobot-browser-worker
+
+[Unit]
+Description=AutoBot Browser Worker - Playwright Automation Service
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/autobot-browser-worker
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PLAYWRIGHT_BROWSERS_PATH=/opt/autobot/autobot-browser-worker/browsers"
+EnvironmentFile=-/opt/autobot/autobot-browser-worker/.env
+
+# Start uvicorn server
+ExecStart=/opt/autobot/autobot-browser-worker/venv/bin/uvicorn \
+    main:app \
+    --host 0.0.0.0 \
+    --port 3000 \
+    --workers 1 \
+    --loop uvloop \
+    --log-level info
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Resource limits (browser automation needs memory)
+MemoryMax=4G
+CPUQuota=150%
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/autobot-browser-worker/data
+ReadWritePaths=/opt/autobot/autobot-browser-worker/screenshots
+ReadWritePaths=/opt/autobot/autobot-browser-worker/logs
+ReadWritePaths=/opt/autobot/autobot-browser-worker/browsers
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-browser-worker
+
+[Install]
+WantedBy=multi-user.target

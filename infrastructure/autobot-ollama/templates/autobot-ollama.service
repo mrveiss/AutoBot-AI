@@ -1,0 +1,54 @@
+# AutoBot Ollama - Systemd Service Unit
+# Deploys to: 172.16.168.20 (Main VM with GPU access)
+# Runs local Ollama LLM service
+#
+# Note: Ollama is an OPTIONAL assignable role - only deploy if GPU is available
+#
+# Installation:
+#   sudo cp autobot-ollama.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-ollama
+#   sudo systemctl start autobot-ollama
+
+[Unit]
+Description=AutoBot Ollama - Local LLM Service
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/ollama
+
+# Ollama environment
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_MODELS=/opt/autobot/ollama/models"
+Environment="OLLAMA_KEEP_ALIVE=5m"
+EnvironmentFile=-/opt/autobot/ollama/.env
+
+# Start Ollama server
+ExecStart=/usr/local/bin/ollama serve
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+# Resource limits (GPU workloads)
+MemoryMax=16G
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/ollama
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-ollama
+
+[Install]
+WantedBy=multi-user.target

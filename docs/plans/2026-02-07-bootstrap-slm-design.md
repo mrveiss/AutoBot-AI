@@ -238,3 +238,72 @@ Re-run behavior:
 - [ ] Services survive reboot (systemd enabled)
 - [ ] Re-run is safe and updates deployment
 - [ ] `autobot_admin` password displayed and user can save it
+
+---
+
+## Phase B: Per-Role Templates (Completed)
+
+**Status:** Complete (2026-02-07)
+
+Extended the per-role infrastructure pattern to all AutoBot components. Each component now has its own templates directory with start/stop/status scripts and service definitions.
+
+### Components Created
+
+| Component              | VM   | Port           | Service Type            | Files   |
+| ---------------------- | ---- | -------------- | ----------------------- | ------- |
+| autobot-user-backend   | .20  | 8001           | systemd + uvicorn       | 4 files |
+| autobot-user-frontend  | .21  | 443            | nginx                   | 4 files |
+| autobot-npu-worker     | .22  | 8081           | docker                  | 4 files |
+| autobot-db-stack       | .23  | 6379/5432/8000 | docker-compose          | 5 files |
+| autobot-ai-stack       | .24  | 8080           | systemd + uvicorn       | 4 files |
+| autobot-browser-worker | .25  | 3000           | systemd + uvicorn       | 4 files |
+| autobot-ollama         | .20  | 11434          | systemd (optional role) | 4 files |
+
+### Directory Structure
+
+```text
+infrastructure/
+├── autobot-user-backend/templates/
+│   ├── autobot-user-backend.service
+│   ├── backend-start.sh
+│   ├── backend-stop.sh
+│   └── backend-status.sh
+├── autobot-user-frontend/templates/
+│   ├── autobot-user.conf (nginx)
+│   ├── frontend-start.sh
+│   ├── frontend-stop.sh
+│   └── frontend-status.sh
+├── autobot-npu-worker/templates/
+│   ├── autobot-npu-worker.service
+│   ├── npu-start.sh
+│   ├── npu-stop.sh
+│   └── npu-status.sh
+├── autobot-db-stack/templates/
+│   ├── docker-compose.yml
+│   ├── redis.conf
+│   ├── db-start.sh
+│   ├── db-stop.sh
+│   └── db-status.sh
+├── autobot-ai-stack/templates/
+│   ├── autobot-ai-stack.service
+│   ├── ai-start.sh
+│   ├── ai-stop.sh
+│   └── ai-status.sh
+├── autobot-browser-worker/templates/
+│   ├── autobot-browser-worker.service
+│   ├── browser-start.sh
+│   ├── browser-stop.sh
+│   └── browser-status.sh
+└── autobot-ollama/templates/
+    ├── autobot-ollama.service
+    ├── ollama-start.sh
+    ├── ollama-stop.sh
+    └── ollama-status.sh
+```
+
+### Notes
+
+- **autobot-ollama** is an optional role assignable to .20 (has GPU access)
+- **autobot-db-stack** uses docker-compose for Redis, PostgreSQL, and ChromaDB
+- **autobot-npu-worker** uses Docker with Intel NPU device passthrough
+- All templates follow consistent naming: `{component}-start.sh`, `{component}-stop.sh`, `{component}-status.sh`

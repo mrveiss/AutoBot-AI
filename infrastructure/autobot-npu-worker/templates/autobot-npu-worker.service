@@ -1,0 +1,57 @@
+# AutoBot NPU Worker - Systemd Service Unit
+# Deploys to: 172.16.168.22 (NPU VM)
+# Manages Intel NPU acceleration container
+#
+# Installation:
+#   sudo cp autobot-npu-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-npu-worker
+#   sudo systemctl start autobot-npu-worker
+
+[Unit]
+Description=AutoBot NPU Worker - Intel NPU Acceleration Service
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=autobot
+Group=docker
+WorkingDirectory=/opt/autobot/autobot-npu-worker
+
+# Container management
+ExecStartPre=/usr/bin/docker pull autobot-npu-worker:latest || true
+ExecStart=/usr/bin/docker run --rm \
+    --name autobot-npu-worker \
+    --device /dev/dri:/dev/dri \
+    --group-add video \
+    -p 8081:8081 \
+    -v /opt/autobot/autobot-npu-worker/models:/app/models \
+    -v /opt/autobot/autobot-npu-worker/cache:/app/cache \
+    -e NPU_DEVICE=AUTO \
+    -e NPU_LOG_LEVEL=INFO \
+    -e REDIS_HOST=172.16.168.23 \
+    -e REDIS_PORT=6379 \
+    autobot-npu-worker:latest
+
+ExecStop=/usr/bin/docker stop autobot-npu-worker
+ExecStopPost=/usr/bin/docker rm -f autobot-npu-worker || true
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-npu-worker
+
+[Install]
+WantedBy=multi-user.target

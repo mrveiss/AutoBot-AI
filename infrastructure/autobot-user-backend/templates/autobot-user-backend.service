@@ -1,0 +1,38 @@
+[Unit]
+Description=AutoBot User Backend API
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory=/opt/autobot/autobot-user-backend
+Environment="PATH=/opt/autobot/autobot-user-backend/venv/bin:/usr/local/bin:/usr/bin"
+Environment="PYTHONPATH=/opt/autobot/autobot-user-backend"
+EnvironmentFile=-/opt/autobot/autobot-user-backend/.env
+
+ExecStart=/opt/autobot/autobot-user-backend/venv/bin/uvicorn \
+    main:app \
+    --host 0.0.0.0 \
+    --port 8001 \
+    --workers 4 \
+    --log-level info
+
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/autobot/user-backend.log
+StandardError=append:/var/log/autobot/user-backend-error.log
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/autobot/autobot-user-backend/data
+ReadWritePaths=/var/log/autobot
+
+[Install]
+WantedBy=multi-user.target
