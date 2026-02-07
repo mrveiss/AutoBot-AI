@@ -1,0 +1,26 @@
+# AutoBot Base Packages
+# Install on ALL hosts during bootstrap
+# Usage: xargs -a base-packages.txt sudo apt-get install -y
+
+# Network diagnostics (#703)
+netcat-openbsd
+iputils-ping
+dnsutils
+
+# Core utilities
+curl
+wget
+rsync
+jq
+
+# Python base
+python3
+python3-venv
+python3-pip
+
+# Process management
+htop
+
+# SSL/TLS
+ca-certificates
+openssl

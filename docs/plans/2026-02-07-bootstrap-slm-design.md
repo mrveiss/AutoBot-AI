@@ -105,6 +105,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
   - `nodejs`, `npm`
   - `nginx`
   - `rsync`, `curl`
+  - `netcat-openbsd`, `iputils-ping`, `dnsutils` (network diagnostics, #703)
 - Create `/opt/autobot/` directory structure
 - Create `autobot` service user (no login shell, owns /opt/autobot/)
 - Create `autobot_admin` reserve user:
