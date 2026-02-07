@@ -11,5 +11,18 @@ Playwright-based browser automation worker.
 ## Deployment
 
 ```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh browser autobot-browser-worker/
+./infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
+```
+
+## Infrastructure
+
+Component-specific infrastructure is located at:
+
+```text
+infrastructure/autobot-browser-worker/
+├── docker/      # Docker configurations
+├── tests/       # Component-specific tests
+├── config/      # Configuration files
+├── scripts/     # Deployment scripts
+└── templates/   # Service templates
 ```

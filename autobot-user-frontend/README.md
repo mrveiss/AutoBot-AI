@@ -60,6 +60,20 @@ npm run lint
 ## Deployment
 
 Synced to main server via:
+
 ```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-frontend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-frontend/
+```
+
+## Infrastructure
+
+Component-specific infrastructure is located at:
+
+```text
+infrastructure/autobot-user-frontend/
+├── docker/      # Docker configurations
+├── tests/       # Component-specific tests
+├── config/      # Configuration files
+├── scripts/     # Deployment scripts
+└── templates/   # Service templates
 ```

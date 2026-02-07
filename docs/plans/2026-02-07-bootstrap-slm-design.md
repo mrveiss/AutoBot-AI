@@ -6,13 +6,14 @@
 
 ## Overview
 
-**Script:** `infrastructure/scripts/bootstrap-slm.sh`
+**Script:** `infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh`
 
 **Purpose:** Deploy complete SLM stack (backend + frontend) to a target node from the dev machine.
 
 **Usage:**
+
 ```bash
-./infrastructure/scripts/bootstrap-slm.sh [OPTIONS]
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh [OPTIONS]
 
 Options:
   -h, --host HOST       Target host (default: 172.16.168.19)
@@ -25,15 +26,16 @@ Options:
 ```
 
 **Example:**
+
 ```bash
 # With SSH key
-./infrastructure/scripts/bootstrap-slm.sh -u root -h 172.16.168.19
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h 172.16.168.19
 
 # With password prompt
-./infrastructure/scripts/bootstrap-slm.sh -u root -h 172.16.168.19 -p
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h 172.16.168.19 -p
 
 # Custom admin password
-./infrastructure/scripts/bootstrap-slm.sh -u root -h 172.16.168.19 --admin-password
+./infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh -u root -h 172.16.168.19 --admin-password
 ```
 
 ## Target Architecture
@@ -86,6 +88,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 ## Execution Phases
 
 ### Phase 1: Pre-flight Checks (local)
+
 - Verify script run from git repo root
 - Check required directories exist:
   - `autobot-slm-backend/`
@@ -95,6 +98,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 - Verify sudo access on target
 
 ### Phase 2: System Preparation (remote)
+
 - Update package lists
 - Install base packages:
   - `python3`, `python3-venv`, `python3-pip`
@@ -109,14 +113,16 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
   - Display password once (user must save)
   - Lock account (unlock only when needed)
 
-### Phase 3: Code Deployment (local → remote)
+### Phase 3: Code Deployment (local to remote)
+
 - Backup existing `/opt/autobot/` to `/opt/autobot.bak.TIMESTAMP/` if exists
-- Rsync `autobot-slm-backend/` → `/opt/autobot/autobot-slm-backend/`
-- Rsync `autobot-slm-frontend/` → `/opt/autobot/autobot-slm-frontend/`
-- Rsync `autobot-shared/` → `/opt/autobot/autobot-shared/`
+- Rsync `autobot-slm-backend/` to `/opt/autobot/autobot-slm-backend/`
+- Rsync `autobot-slm-frontend/` to `/opt/autobot/autobot-slm-frontend/`
+- Rsync `autobot-shared/` to `/opt/autobot/autobot-shared/`
 - Set ownership: `chown -R autobot:autobot /opt/autobot/`
 
 ### Phase 4: Backend Setup (remote)
+
 - Create Python venv: `/opt/autobot/autobot-slm-backend/venv/`
 - Install requirements: `pip install -r requirements.txt`
 - Generate `.env` config:
@@ -130,7 +136,8 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
   - Password: random or prompted (based on --admin-password flag)
 - Install helper scripts (start.sh, stop.sh, status.sh)
 
-### Phase 5: Frontend & Nginx Setup (remote)
+### Phase 5: Frontend and Nginx Setup (remote)
+
 - Run `npm install` in frontend directory
 - Build production assets: `npm run build`
 - Generate self-signed TLS certificate:
@@ -147,6 +154,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 - Install helper scripts (start.sh, stop.sh, status.sh)
 
 ### Phase 6: Service Installation (remote)
+
 - Install systemd unit: `autobot-slm-backend.service`
   - User: autobot
   - WorkingDirectory: /opt/autobot/autobot-slm-backend
@@ -159,7 +167,9 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
   - `curl -k https://localhost/api/health`
 
 ### Phase 7: Summary (local)
+
 Display:
+
 - SLM URL: `https://172.16.168.19`
 - Admin username: `admin`
 - Admin password: `<generated or provided>`
@@ -178,6 +188,7 @@ Display:
 ## Idempotency
 
 Safe to re-run:
+
 - Skip package install if already present
 - Skip user creation if `autobot`/`autobot_admin` exist
 - Rsync with `--delete` ensures clean sync
@@ -186,6 +197,7 @@ Safe to re-run:
 - Skip cert generation if valid certs exist
 
 Re-run behavior:
+
 - Normal re-run: backs up, re-syncs code, restarts services
 - With `--fresh`: ignores existing, full fresh install
 
@@ -196,25 +208,29 @@ Re-run behavior:
 ## Files to Create
 
 ### Main script
-- `infrastructure/scripts/bootstrap-slm.sh`
+
+- `infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh`
 
 ### Systemd templates
-- `infrastructure/templates/systemd/autobot-slm-backend.service`
+
+- `infrastructure/autobot-slm-backend/templates/autobot-slm-backend.service`
 
 ### Nginx template
-- `infrastructure/templates/nginx/autobot-slm.conf`
+
+- `infrastructure/autobot-slm-frontend/templates/autobot-slm.conf`
 
 ### Helper script templates
-- `infrastructure/templates/scripts/backend-start.sh`
-- `infrastructure/templates/scripts/backend-stop.sh`
-- `infrastructure/templates/scripts/backend-status.sh`
-- `infrastructure/templates/scripts/frontend-start.sh`
-- `infrastructure/templates/scripts/frontend-stop.sh`
-- `infrastructure/templates/scripts/frontend-status.sh`
+
+- `infrastructure/autobot-slm-backend/templates/backend-start.sh`
+- `infrastructure/autobot-slm-backend/templates/backend-stop.sh`
+- `infrastructure/autobot-slm-backend/templates/backend-status.sh`
+- `infrastructure/autobot-slm-frontend/templates/frontend-start.sh`
+- `infrastructure/autobot-slm-frontend/templates/frontend-stop.sh`
+- `infrastructure/autobot-slm-frontend/templates/frontend-status.sh`
 
 ## Success Criteria
 
-- [ ] Fresh machine with SSH → fully deployed SLM via single command
+- [ ] Fresh machine with SSH leads to fully deployed SLM via single command
 - [ ] HTTPS working with self-signed cert
 - [ ] HTTP redirects to HTTPS
 - [ ] SLM web GUI accessible and login works

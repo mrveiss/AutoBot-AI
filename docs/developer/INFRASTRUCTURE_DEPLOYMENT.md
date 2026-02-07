@@ -1,20 +1,21 @@
 # Infrastructure & Deployment Guide
 
-**Status**: 🚨 MANDATORY - Local-only development with immediate sync
+**Status**: MANDATORY - Local-only development with immediate sync
 
 This guide provides detailed instructions for AutoBot's distributed VM infrastructure and deployment workflows.
 
-> **⚠️ MANDATORY RULE**: NEVER edit code directly on remote VMs - Edit locally, sync immediately
+> **MANDATORY RULE**: NEVER edit code directly on remote VMs - Edit locally, sync immediately
 
 ---
 
-## 🔑 SSH Authentication
+## SSH Authentication
 
 ### SSH Key Setup
 
 **Key Location**: `~/.ssh/autobot_key` (4096-bit RSA)
 
 **Configured for all 5 VMs**:
+
 - `frontend` (172.16.168.21)
 - `npu-worker` (172.16.168.22)
 - `redis` (172.16.168.23)
@@ -72,6 +73,7 @@ Host autobot-browser
 ```
 
 **Usage**:
+
 ```bash
 # Now you can use short names
 ssh autobot-frontend
@@ -80,94 +82,99 @@ ssh autobot-redis
 
 ---
 
-## 🔄 File Synchronization
+## File Synchronization
 
 ### Sync Script
 
-**Script Location**: `./infrastructure/scripts/utilities/sync-to-vm.sh`
+**Script Location**: `./infrastructure/shared/scripts/sync-to-vm.sh`
 
 **Basic Usage**:
+
 ```bash
 # Syntax
-./infrastructure/scripts/utilities/sync-to-vm.sh <vm-name> <local-path> <remote-path>
+./infrastructure/shared/scripts/sync-to-vm.sh <vm-name> <local-path> <remote-path>
 
 # Example: Sync frontend component to Frontend VM
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/Chat.vue /home/autobot/autobot-vue/src/components/Chat.vue
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/src/components/Chat.vue /home/autobot/autobot-slm-frontend/src/components/Chat.vue
 
 # Example: Sync entire directory
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/src/components/ /home/autobot/autobot-slm-frontend/src/components/
 ```
 
 ### Sync to All VMs
 
 ```bash
 # Sync to ALL VMs at once
-./infrastructure/scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
+./infrastructure/shared/scripts/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
 
 # Sync directory to all VMs
-./infrastructure/scripts/utilities/sync-to-vm.sh all src/utils/ /home/autobot/src/utils/
+./infrastructure/shared/scripts/sync-to-vm.sh all src/utils/ /home/autobot/src/utils/
 ```
 
 ### Common Sync Patterns
 
 **Sync frontend changes**:
+
 ```bash
 # Single component
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend \
-    autobot-vue/src/components/ChatMessages.vue \
-    /home/autobot/autobot-vue/src/components/ChatMessages.vue
+./infrastructure/shared/scripts/sync-to-vm.sh frontend \
+    autobot-slm-frontend/src/components/ChatMessages.vue \
+    /home/autobot/autobot-slm-frontend/src/components/ChatMessages.vue
 
 # Entire components directory
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend \
-    autobot-vue/src/components/ \
-    /home/autobot/autobot-vue/src/components/
+./infrastructure/shared/scripts/sync-to-vm.sh frontend \
+    autobot-slm-frontend/src/components/ \
+    /home/autobot/autobot-slm-frontend/src/components/
 
 # Full frontend rebuild
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend \
-    autobot-vue/ \
-    /home/autobot/autobot-vue/
+./infrastructure/shared/scripts/sync-to-vm.sh frontend \
+    autobot-slm-frontend/ \
+    /home/autobot/autobot-slm-frontend/
 ```
 
 **Sync backend changes**:
+
 ```bash
 # Single API file
-./infrastructure/scripts/utilities/sync-to-vm.sh all \
-    backend/api/chat.py \
-    /home/autobot/backend/api/chat.py
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    autobot-user-backend/api/chat.py \
+    /home/autobot/autobot-user-backend/api/chat.py
 
 # Entire backend directory
-./infrastructure/scripts/utilities/sync-to-vm.sh all \
-    backend/ \
-    /home/autobot/backend/
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    autobot-user-backend/ \
+    /home/autobot/autobot-user-backend/
 ```
 
 **Sync configuration**:
+
 ```bash
 # Environment file (be careful with secrets!)
-./infrastructure/scripts/utilities/sync-to-vm.sh all \
+./infrastructure/shared/scripts/sync-to-vm.sh all \
     .env.example \
     /home/autobot/.env.example
 
 # Config file
-./infrastructure/scripts/utilities/sync-to-vm.sh all \
-    config/config.yaml \
+./infrastructure/shared/scripts/sync-to-vm.sh all \
+    infrastructure/shared/config/config.yaml \
     /home/autobot/config/config.yaml
 ```
 
 ### Sync Shortcuts
 
 **Use the convenience script**:
+
 ```bash
 # Frontend sync (uses sync-to-vm.sh internally)
 ./sync-frontend.sh
 
 # Equivalent to:
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /home/autobot/autobot-slm-frontend/
 ```
 
 ---
 
-## 🚨 MANDATORY: Local-Only Development
+## MANDATORY: Local-Only Development
 
 ### The Rule
 
@@ -185,29 +192,31 @@ ssh autobot-redis
 |---------|--------|
 | **No version control on VMs** | Changes completely untracked |
 | **No backup system** | Remote edits never saved or recorded |
-| **VMs are ephemeral** | Can be reinstalled anytime → **PERMANENT WORK LOSS** |
+| **VMs are ephemeral** | Can be reinstalled anytime leading to PERMANENT WORK LOSS |
 | **No recovery mechanism** | Cannot track or recover remote changes |
 
 ### What This Means
 
-**✅ CORRECT workflow**:
+**CORRECT workflow**:
+
 ```bash
 # Step 1: Edit locally
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
 
 # Step 2: Sync immediately
-./infrastructure/scripts/utilities/sync-to-vm.sh all backend/api/chat.py /home/autobot/backend/api/chat.py
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-backend/api/chat.py /home/autobot/autobot-user-backend/api/chat.py
 
 # Step 3: Commit changes (version control)
-git add backend/api/chat.py
+git add autobot-user-backend/api/chat.py
 git commit -m "Update chat API"
 ```
 
-**❌ FORBIDDEN workflow**:
+**FORBIDDEN workflow**:
+
 ```bash
 # NEVER DO THIS - Direct editing on VM
 ssh autobot@172.16.168.21
-vim /home/autobot/backend/api/chat.py  # ❌ PERMANENT WORK LOSS RISK!
+vim /home/autobot/autobot-user-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
 ```
 
 ### Enforcement
@@ -218,11 +227,12 @@ vim /home/autobot/backend/api/chat.py  # ❌ PERMANENT WORK LOSS RISK!
 
 ---
 
-## 🌐 Network Configuration
+## Network Configuration
 
 ### Service Binding Rules
 
-**✅ CORRECT - Bind to all interfaces**:
+**CORRECT - Bind to all interfaces**:
+
 ```python
 # Backend service
 app.run(host="0.0.0.0", port=8001)  # Accessible from network
@@ -231,19 +241,21 @@ app.run(host="0.0.0.0", port=8001)  # Accessible from network
 vite --host 0.0.0.0 --port 5173  # Accessible from network
 ```
 
-**❌ FORBIDDEN - Localhost binding**:
+**FORBIDDEN - Localhost binding**:
+
 ```python
-# ❌ NOT accessible from remote VMs
+# NOT accessible from remote VMs
 app.run(host="localhost", port=8001)
 app.run(host="127.0.0.1", port=8001)
 
-# ❌ NOT accessible from remote VMs
+# NOT accessible from remote VMs
 vite --host localhost --port 5173
 ```
 
 ### Service Access Patterns
 
 **Backend on Main Machine** (172.16.168.20):
+
 ```python
 # Binds to all interfaces
 uvicorn main:app --host 0.0.0.0 --port 8001
@@ -253,6 +265,7 @@ uvicorn main:app --host 0.0.0.0 --port 8001
 ```
 
 **Frontend on VM1** (172.16.168.21):
+
 ```bash
 # Binds to all interfaces
 npm run dev -- --host 0.0.0.0 --port 5173
@@ -262,6 +275,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 **Redis on VM3** (172.16.168.23):
+
 ```bash
 # Configure Redis to bind to all interfaces
 # In /etc/redis/redis.conf:
@@ -276,7 +290,7 @@ bind 0.0.0.0
 **Use actual IPs** for communication between VMs:
 
 ```python
-# ✅ CORRECT - Use NetworkConstants
+# CORRECT - Use NetworkConstants
 from autobot_shared.network_constants import NetworkConstants
 
 backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
@@ -285,7 +299,7 @@ backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACK
 redis_host = NetworkConstants.REDIS_VM_IP
 # Result: 172.16.168.23
 
-# ❌ WRONG - Using localhost (won't work from remote VMs)
+# WRONG - Using localhost (won't work from remote VMs)
 backend_url = "http://localhost:8001/api/chat"
 redis_host = "localhost"
 ```
@@ -293,6 +307,7 @@ redis_host = "localhost"
 ### Network Testing
 
 **Test connectivity between VMs**:
+
 ```bash
 # From main machine, test backend accessibility
 curl http://172.16.168.20:8001/api/health
@@ -313,7 +328,7 @@ done
 
 ---
 
-## 🏗️ VM Infrastructure Overview
+## VM Infrastructure Overview
 
 ### Service Layout
 
@@ -329,7 +344,7 @@ done
 
 ### Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Main Machine (WSL)                       │
 │                    172.16.168.20                             │
@@ -356,20 +371,21 @@ done
 
 ---
 
-## 🚀 Deployment Workflows
+## Deployment Workflows
 
 ### Development Deployment
 
 **Daily development workflow**:
+
 ```bash
 # 1. Start AutoBot services (main machine)
 bash run_autobot.sh --dev
 
 # 2. Make code changes locally
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
 
 # 3. Sync changes to VMs
-./infrastructure/scripts/utilities/sync-to-vm.sh all backend/api/chat.py /home/autobot/backend/api/chat.py
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-backend/api/chat.py /home/autobot/autobot-user-backend/api/chat.py
 
 # 4. Restart affected services
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
@@ -378,6 +394,7 @@ ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
 ### Production Deployment
 
 **Production deployment workflow**:
+
 ```bash
 # 1. Test locally first
 bash run_autobot.sh --dev
@@ -388,7 +405,7 @@ git add .
 git commit -m "Production-ready changes"
 
 # 3. Sync to all VMs
-./infrastructure/scripts/utilities/sync-to-vm.sh all ./ /home/autobot/
+./infrastructure/shared/scripts/sync-to-vm.sh all ./ /home/autobot/
 
 # 4. Start in production mode
 bash run_autobot.sh --prod
@@ -401,16 +418,17 @@ curl http://172.16.168.21:5173
 ### Rolling Updates
 
 **Update one VM at a time**:
+
 ```bash
 # Update Frontend VM
-./infrastructure/scripts/utilities/sync-to-vm.sh frontend autobot-vue/ /home/autobot/autobot-vue/
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /home/autobot/autobot-slm-frontend/
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
 
 # Wait for health check
 curl http://172.16.168.21:5173
 
 # Update NPU Worker VM
-./infrastructure/scripts/utilities/sync-to-vm.sh npu-worker src/ /home/autobot/src/
+./infrastructure/shared/scripts/sync-to-vm.sh npu-worker autobot-npu-worker/ /home/autobot/autobot-npu-worker/
 ssh autobot@172.16.168.22 "cd /home/autobot && bash run_autobot.sh --restart"
 
 # Continue for other VMs...
@@ -418,7 +436,7 @@ ssh autobot@172.16.168.22 "cd /home/autobot && bash run_autobot.sh --restart"
 
 ---
 
-## 🔧 VM Management
+## VM Management
 
 ### Check VM Status
 
@@ -426,7 +444,7 @@ ssh autobot@172.16.168.22 "cd /home/autobot && bash run_autobot.sh --restart"
 # Check all VMs are reachable
 for ip in 20 21 22 23 24 25; do
     echo "Checking 172.16.168.$ip..."
-    ping -c 1 172.16.168.$ip && echo "✅ UP" || echo "❌ DOWN"
+    ping -c 1 172.16.168.$ip && echo "UP" || echo "DOWN"
 done
 
 # Check services on each VM
@@ -462,16 +480,42 @@ ssh autobot@172.16.168.23 "sudo tail -f /var/log/redis/redis-server.log"
 
 ---
 
-## 🐛 Troubleshooting
+## Infrastructure Directory Structure
+
+The infrastructure folder uses a per-role organization:
+
+```text
+infrastructure/
+├── autobot-user-backend/       # User backend infra (docker, tests, config, scripts, templates)
+├── autobot-user-frontend/      # User frontend infra
+├── autobot-slm-backend/        # SLM backend infra
+├── autobot-slm-frontend/       # SLM frontend infra
+├── autobot-npu-worker/         # NPU worker infra
+├── autobot-browser-worker/     # Browser worker infra
+└── shared/                     # Shared infrastructure
+    ├── scripts/                # Common utilities, sync scripts
+    ├── certs/                  # Certificate management
+    ├── config/                 # Shared configurations
+    ├── docker/                 # Shared docker resources
+    ├── mcp/                    # MCP server configs
+    ├── tools/                  # Development tools
+    ├── tests/                  # Shared test utilities
+    └── analysis/               # Analysis tools
+```
+
+---
+
+## Troubleshooting
 
 ### Sync Script Not Working
 
 **Issue**: `sync-to-vm.sh` fails with permission denied
 
 **Solution**:
+
 ```bash
 # Make script executable
-chmod +x infrastructure/scripts/utilities/sync-to-vm.sh
+chmod +x infrastructure/shared/scripts/sync-to-vm.sh
 
 # Verify SSH key permissions
 chmod 600 ~/.ssh/autobot_key
@@ -485,6 +529,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo 'Connected'"
 **Issue**: Can't reach service from remote VM
 
 **Solution**:
+
 ```bash
 # 1. Verify service is running
 ssh autobot@172.16.168.21 "ps aux | grep node"  # Frontend
@@ -502,22 +547,23 @@ ssh autobot@172.16.168.21 "curl http://172.16.168.20:8001/api/health"
 **Issue**: Code changes not reflected on VM
 
 **Solution**:
+
 ```bash
 # Full re-sync of entire project
-./infrastructure/scripts/utilities/sync-to-vm.sh all ./ /home/autobot/
+./infrastructure/shared/scripts/sync-to-vm.sh all ./ /home/autobot/
 
 # Restart services
 ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
 
 # Verify sync
-ssh autobot@172.16.168.21 "md5sum /home/autobot/backend/api/chat.py"
-md5sum /home/kali/Desktop/AutoBot/backend/api/chat.py
+ssh autobot@172.16.168.21 "md5sum /home/autobot/autobot-user-backend/api/chat.py"
+md5sum /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
 # Hashes should match
 ```
 
 ---
 
-## 📚 Related Documentation
+## Related Documentation
 
 - **Network Constants**: `autobot-shared/network_constants.py`
 - **Setup Guide**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
@@ -526,17 +572,19 @@ md5sum /home/kali/Desktop/AutoBot/backend/api/chat.py
 
 ---
 
-## 🎯 Summary Checklist
+## Summary Checklist
 
 **Before deploying**:
+
 - [ ] All changes committed to git (local version control)
 - [ ] Services bind to `0.0.0.0` (not localhost)
 - [ ] Using `NetworkConstants` for IPs/ports (not hardcoded)
 - [ ] Tested locally first (`bash run_autobot.sh --dev`)
-- [ ] Synced to VMs (`./infrastructure/scripts/utilities/sync-to-vm.sh`)
+- [ ] Synced to VMs (`./infrastructure/shared/scripts/sync-to-vm.sh`)
 - [ ] Health checks pass on all services
 
 **Development workflow**:
+
 - [ ] Edit locally in `/home/kali/Desktop/AutoBot/`
 - [ ] Sync immediately after changes
 - [ ] NEVER edit directly on VMs
@@ -544,6 +592,7 @@ md5sum /home/kali/Desktop/AutoBot/backend/api/chat.py
 - [ ] Commit to git
 
 **Avoid**:
+
 - [ ] No direct edits on remote VMs (172.16.168.21-25)
 - [ ] No binding to localhost/127.0.0.1
 - [ ] No hardcoded IPs/ports in code

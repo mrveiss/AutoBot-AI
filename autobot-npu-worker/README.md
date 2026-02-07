@@ -11,5 +11,18 @@ Hardware AI acceleration worker using Intel NPU/OpenVINO.
 ## Deployment
 
 ```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh npu autobot-npu-worker/
+./infrastructure/shared/scripts/sync-to-vm.sh npu autobot-npu-worker/
+```
+
+## Infrastructure
+
+Component-specific infrastructure is located at:
+
+```text
+infrastructure/autobot-npu-worker/
+├── docker/      # Docker configurations
+├── tests/       # Component-specific tests
+├── config/      # Configuration files
+├── scripts/     # Deployment scripts
+└── templates/   # Service templates
 ```

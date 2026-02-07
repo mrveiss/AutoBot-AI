@@ -26,5 +26,18 @@ uvicorn main:app --reload --port 8001
 ## Deployment
 
 ```bash
-./infrastructure/scripts/utilities/sync-to-vm.sh main autobot-user-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
+```
+
+## Infrastructure
+
+Component-specific infrastructure is located at:
+
+```text
+infrastructure/autobot-user-backend/
+├── docker/      # Docker configurations
+├── tests/       # Component-specific tests
+├── config/      # Configuration files
+├── scripts/     # Deployment scripts
+└── templates/   # Service templates
 ```

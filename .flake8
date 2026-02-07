@@ -46,7 +46,9 @@ exclude =
     analysis,
     # Separate deployable components with own standards
     slm-server,
-    slm-admin
+    slm-admin,
+    # Infrastructure contains tests, analysis, tools (not production code)
+    infrastructure
 
 # Per-file ignores for intentional patterns
 per-file-ignores =
