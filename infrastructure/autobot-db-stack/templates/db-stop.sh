@@ -4,29 +4,26 @@
 
 set -e
 
-STACK_DIR="/opt/autobot/autobot-db-stack"
-cd "${STACK_DIR}"
-
 echo "Stopping AutoBot DB Stack..."
 
-# Check if Docker is running
-if ! systemctl is-active --quiet docker; then
-    echo "Docker is not running, nothing to stop"
-    exit 0
+# Stop ChromaDB
+echo "Stopping ChromaDB..."
+if systemctl is-active --quiet autobot-chromadb 2>/dev/null; then
+    sudo systemctl stop autobot-chromadb
 fi
 
-# Stop the stack gracefully
-echo "Stopping database containers..."
-docker compose stop
+# Stop PostgreSQL
+echo "Stopping PostgreSQL..."
+if systemctl is-active --quiet postgresql 2>/dev/null; then
+    sudo systemctl stop postgresql
+fi
 
-# Optionally remove containers (keep volumes)
-read -p "Remove containers? (volumes will be preserved) [y/N]: " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    docker compose down
-    echo "Containers removed (volumes preserved)"
-else
-    echo "Containers stopped (can restart quickly)"
+# Stop Redis Stack
+echo "Stopping Redis Stack..."
+if systemctl is-active --quiet autobot-redis 2>/dev/null; then
+    sudo systemctl stop autobot-redis
+elif systemctl is-active --quiet redis-stack-server 2>/dev/null; then
+    sudo systemctl stop redis-stack-server
 fi
 
 echo "AutoBot DB Stack stopped"

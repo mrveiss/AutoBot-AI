@@ -2,63 +2,64 @@
 # AutoBot DB Stack - Status Script
 # Manual intervention script for checking database services status
 
-STACK_DIR="/opt/autobot/autobot-db-stack"
-
 echo "=== AutoBot DB Stack Status ==="
 echo ""
 
-# Check Docker
-if ! systemctl is-active --quiet docker; then
-    echo "Docker is NOT running"
-    exit 1
-fi
-
-# Container status
-echo "Container Status:"
-docker compose -f "${STACK_DIR}/docker-compose.yml" ps 2>/dev/null || echo "Stack not deployed"
-echo ""
-
-# Redis health
-echo "Redis (6379):"
-if docker exec autobot-redis redis-cli ping 2>/dev/null | grep -q "PONG"; then
-    echo "  Status: HEALTHY"
-    echo "  Info:"
-    docker exec autobot-redis redis-cli info server 2>/dev/null | grep -E "redis_version|uptime|connected_clients" | head -5 || true
+# Redis status
+echo "Redis Stack (6379):"
+if systemctl is-active --quiet autobot-redis 2>/dev/null || systemctl is-active --quiet redis-stack-server 2>/dev/null; then
+    echo "  Service: RUNNING"
+    if redis-cli ping 2>/dev/null | grep -q "PONG"; then
+        echo "  Health: HEALTHY"
+        redis-cli info server 2>/dev/null | grep -E "redis_version|uptime_in_seconds" | head -3 || true
+    else
+        echo "  Health: NOT RESPONDING"
+    fi
 else
-    echo "  Status: NOT RESPONDING"
+    echo "  Service: STOPPED"
 fi
 echo ""
 
-# PostgreSQL health
+# PostgreSQL status
 echo "PostgreSQL (5432):"
-if docker exec autobot-postgres pg_isready -U autobot 2>/dev/null | grep -q "accepting"; then
-    echo "  Status: HEALTHY"
-    docker exec autobot-postgres psql -U autobot -c "SELECT version();" 2>/dev/null | head -3 || true
+if systemctl is-active --quiet postgresql 2>/dev/null; then
+    echo "  Service: RUNNING"
+    if pg_isready -h 127.0.0.1 -U autobot 2>/dev/null | grep -q "accepting"; then
+        echo "  Health: HEALTHY"
+    else
+        echo "  Health: NOT RESPONDING"
+    fi
 else
-    echo "  Status: NOT RESPONDING"
+    echo "  Service: STOPPED"
 fi
 echo ""
 
-# ChromaDB health
+# ChromaDB status
 echo "ChromaDB (8000):"
-if curl -s "http://127.0.0.1:8000/api/v1/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
-    echo "  Status: HEALTHY"
-    curl -s "http://127.0.0.1:8000/api/v1/collections" 2>/dev/null | head -1 || true
+if systemctl is-active --quiet autobot-chromadb 2>/dev/null; then
+    echo "  Service: RUNNING"
+    if curl -s "http://127.0.0.1:8000/api/v1/heartbeat" 2>/dev/null | grep -q "nanosecond"; then
+        echo "  Health: HEALTHY"
+    else
+        echo "  Health: NOT RESPONDING"
+    fi
 else
-    echo "  Status: NOT RESPONDING"
+    echo "  Service: STOPPED"
 fi
 echo ""
 
 # Disk usage
-echo "Volume Disk Usage:"
-docker system df -v 2>/dev/null | grep -E "autobot-(redis|postgres|chroma)" || echo "No volumes found"
+echo "Data Directory Sizes:"
+du -sh /var/lib/redis 2>/dev/null | awk '{print "  Redis: " $1}' || echo "  Redis: N/A"
+du -sh /var/lib/postgresql 2>/dev/null | awk '{print "  PostgreSQL: " $1}' || echo "  PostgreSQL: N/A"
+du -sh /opt/autobot/autobot-db-stack/chromadb/data 2>/dev/null | awk '{print "  ChromaDB: " $1}' || echo "  ChromaDB: N/A"
 echo ""
 
-# Recent logs
-echo "Recent Errors (last 5 per service):"
+# Recent errors
+echo "Recent Service Errors:"
 echo "--- Redis ---"
-docker logs --tail 5 autobot-redis 2>&1 | grep -i error || echo "No recent errors"
+sudo journalctl -u autobot-redis -u redis-stack-server -n 3 --no-pager -p err 2>/dev/null || echo "No recent errors"
 echo "--- PostgreSQL ---"
-docker logs --tail 5 autobot-postgres 2>&1 | grep -i error || echo "No recent errors"
+sudo journalctl -u postgresql -n 3 --no-pager -p err 2>/dev/null || echo "No recent errors"
 echo "--- ChromaDB ---"
-docker logs --tail 5 autobot-chromadb 2>&1 | grep -i error || echo "No recent errors"
+sudo journalctl -u autobot-chromadb -n 3 --no-pager -p err 2>/dev/null || echo "No recent errors"

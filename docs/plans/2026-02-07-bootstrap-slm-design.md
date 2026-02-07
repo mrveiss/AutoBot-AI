@@ -253,8 +253,8 @@ Extended the per-role infrastructure pattern to all AutoBot components. Each com
 | ---------------------- | ---- | -------------- | ----------------------- | ------- |
 | autobot-user-backend   | .20  | 8001           | systemd + uvicorn       | 4 files |
 | autobot-user-frontend  | .21  | 443            | nginx                   | 4 files |
-| autobot-npu-worker     | .22  | 8081           | docker                  | 4 files |
-| autobot-db-stack       | .23  | 6379/5432/8000 | docker-compose          | 5 files |
+| autobot-npu-worker     | .22  | 8081           | systemd + uvicorn       | 4 files |
+| autobot-db-stack       | .23  | 6379/5432/8000 | native systemd          | 6 files |
 | autobot-ai-stack       | .24  | 8080           | systemd + uvicorn       | 4 files |
 | autobot-browser-worker | .25  | 3000           | systemd + uvicorn       | 4 files |
 | autobot-ollama         | .20  | 11434          | systemd (optional role) | 4 files |
@@ -279,7 +279,8 @@ infrastructure/
 │   ├── npu-stop.sh
 │   └── npu-status.sh
 ├── autobot-db-stack/templates/
-│   ├── docker-compose.yml
+│   ├── autobot-redis.service
+│   ├── autobot-chromadb.service
 │   ├── redis.conf
 │   ├── db-start.sh
 │   ├── db-stop.sh
@@ -304,6 +305,6 @@ infrastructure/
 ### Notes
 
 - **autobot-ollama** is an optional role assignable to .20 (has GPU access)
-- **autobot-db-stack** uses docker-compose for Redis, PostgreSQL, and ChromaDB
-- **autobot-npu-worker** uses Docker with Intel NPU device passthrough
+- **autobot-db-stack** uses native systemd services: Redis Stack, PostgreSQL (apt), ChromaDB (Python)
+- **autobot-npu-worker** runs natively with uvicorn (requires Intel NPU drivers and video group access)
 - All templates follow consistent naming: `{component}-start.sh`, `{component}-stop.sh`, `{component}-status.sh`

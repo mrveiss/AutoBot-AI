@@ -1,0 +1,41 @@
+# AutoBot Redis Stack - Systemd Service Unit
+# Deploys to: 172.16.168.23 (DB Stack VM)
+# Runs Redis Stack with modules (RediSearch, RedisJSON, etc.)
+#
+# Prerequisites:
+#   curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+#   echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+#   sudo apt-get update && sudo apt-get install redis-stack-server
+#
+# Installation:
+#   sudo cp autobot-redis.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable autobot-redis
+#   sudo systemctl start autobot-redis
+
+[Unit]
+Description=AutoBot Redis Stack - Primary Data Layer
+Documentation=https://github.com/mrveiss/AutoBot-AI
+After=network.target
+
+[Service]
+Type=notify
+User=redis
+Group=redis
+ExecStart=/opt/redis-stack/bin/redis-server /opt/autobot/autobot-db-stack/redis.conf
+ExecStop=/opt/redis-stack/bin/redis-cli shutdown
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+
+# Resource limits
+LimitNOFILE=65535
+MemoryMax=4G
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-redis
+
+[Install]
+WantedBy=multi-user.target

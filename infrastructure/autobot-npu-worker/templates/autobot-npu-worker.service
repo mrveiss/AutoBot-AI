@@ -1,6 +1,6 @@
 # AutoBot NPU Worker - Systemd Service Unit
 # Deploys to: 172.16.168.22 (NPU VM)
-# Manages Intel NPU acceleration container
+# Runs Intel NPU acceleration service natively
 #
 # Installation:
 #   sudo cp autobot-npu-worker.service /etc/systemd/system/
@@ -11,42 +11,49 @@
 [Unit]
 Description=AutoBot NPU Worker - Intel NPU Acceleration Service
 Documentation=https://github.com/mrveiss/AutoBot-AI
-After=network.target docker.service
-Requires=docker.service
+After=network.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=autobot
-Group=docker
+Group=video
 WorkingDirectory=/opt/autobot/autobot-npu-worker
 
-# Container management
-ExecStartPre=/usr/bin/docker pull autobot-npu-worker:latest || true
-ExecStart=/usr/bin/docker run --rm \
-    --name autobot-npu-worker \
-    --device /dev/dri:/dev/dri \
-    --group-add video \
-    -p 8081:8081 \
-    -v /opt/autobot/autobot-npu-worker/models:/app/models \
-    -v /opt/autobot/autobot-npu-worker/cache:/app/cache \
-    -e NPU_DEVICE=AUTO \
-    -e NPU_LOG_LEVEL=INFO \
-    -e REDIS_HOST=172.16.168.23 \
-    -e REDIS_PORT=6379 \
-    autobot-npu-worker:latest
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="NPU_DEVICE=AUTO"
+Environment="NPU_LOG_LEVEL=INFO"
+Environment="REDIS_HOST=172.16.168.23"
+Environment="REDIS_PORT=6379"
+EnvironmentFile=-/opt/autobot/autobot-npu-worker/.env
 
-ExecStop=/usr/bin/docker stop autobot-npu-worker
-ExecStopPost=/usr/bin/docker rm -f autobot-npu-worker || true
+# Start uvicorn server
+ExecStart=/opt/autobot/autobot-npu-worker/venv/bin/uvicorn \
+    npu_inference_server:app \
+    --host 0.0.0.0 \
+    --port 8081 \
+    --workers 1 \
+    --log-level info
 
 # Restart policy
 Restart=on-failure
 RestartSec=10
-TimeoutStartSec=120
+TimeoutStartSec=60
 TimeoutStopSec=30
+
+# Resource limits
+MemoryMax=8G
+CPUQuota=200%
 
 # Security
 PrivateTmp=true
 NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/autobot/autobot-npu-worker/models
+ReadWritePaths=/opt/autobot/autobot-npu-worker/cache
+ReadWritePaths=/opt/autobot/autobot-npu-worker/logs
 
 # Logging
 StandardOutput=journal
