@@ -79,7 +79,7 @@
       ansible.builtin.lineinfile:
         path: /opt/autobot/autobot-vue/.env.local
         regexp: '^VITE_API_BASE_URL='
-        line: "VITE_API_BASE_URL=https://{{ backend_host }}:8443"
+        line: "VITE_API_BASE_URL=https://{{ backend_host }}:{{ backend_tls_port }}"
         create: true
         mode: "0644"
         owner: autobot

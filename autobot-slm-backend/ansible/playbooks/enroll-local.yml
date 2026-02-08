@@ -18,7 +18,7 @@
     slm_agent_dir: /opt/slm-agent
     slm_data_dir: /var/lib/slm-agent
     slm_node_id: "{{ lookup('env', 'SLM_NODE_ID') | default('01-Code-Source', true) }}"
-    slm_admin_url: "{{ lookup('env', 'SLM_ADMIN_URL') | default('http://' ~ (slm_host | default('127.0.0.1')) ~ ':' ~ (slm_port | default(8000)), true) }}"
+    slm_admin_url: "{{ lookup('env', 'SLM_ADMIN_URL') | default('http://' + (slm_host | default('127.0.0.1')) + ':' + (slm_port | default(8000) | string), true) }}"
     # SLM server's public key - will be fetched dynamically
     slm_server_pubkey: "{{ lookup('env', 'SLM_PUBKEY') | default('', true) }}"
     # Emergency admin user - fallback access when SSH keys fail

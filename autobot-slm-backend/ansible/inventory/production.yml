@@ -27,19 +27,21 @@ all:
     autobot_environment: "production"
     autobot_version: "2.0.0"
 
-    # Service discovery endpoints - derived from inventory hosts (Issue #799)
+    # Service discovery endpoints - derived from inventory host definitions (#799)
+    # Each host IP is defined ONCE in ansible_host; these vars look it up dynamically.
+    # Backend uses network_address since ansible_host is 127.0.0.1 (local connection).
     slm_host: "{{ hostvars['autobot-slm']['ansible_host'] }}"
     slm_port: 8000
     backend_host: "{{ hostvars['autobot-host']['network_address'] }}"
     backend_port: 8001
     frontend_host: "{{ hostvars['autobot-frontend']['ansible_host'] }}"
     frontend_port: 5173
+    npu_worker_host: "{{ hostvars['autobot-npu']['ansible_host'] }}"
+    npu_worker_port: 8081
     redis_host: "{{ hostvars['autobot-database']['ansible_host'] }}"
     redis_port: 6379
     ai_stack_host: "{{ hostvars['autobot-aiml']['ansible_host'] }}"
     ai_stack_port: 8080
-    npu_worker_host: "{{ hostvars['autobot-npu']['ansible_host'] }}"
-    npu_worker_port: 8081
     browser_host: "{{ hostvars['autobot-browser']['ansible_host'] }}"
     browser_port: 3000
 
@@ -48,16 +50,12 @@ all:
       hosts:
         autobot-slm:
           ansible_host: 172.16.168.19  # SLM Server
-          vm_id: "autobot-slm-vm"
+          vm_id: "autobot-slm-server"
           vm_role: "slm"
           vm_hostname: "autobot-slm"
-          vm_resources:
-            ram_mb: 4096
-            cpu_cores: 2
-            disk_gb: 50
           services:
-            - slm-server
-            - slm-api
+            - slm-backend
+            - postgresql
       vars:
         slm_port: 8000
 
@@ -90,10 +88,10 @@ all:
         autobot-host:
           ansible_connection: local    # This is the local WSL machine
           ansible_host: 127.0.0.1      # Local connection
+          network_address: 172.16.168.20  # IP used by other VMs to reach this host
           ansible_become: no           # Issue #700: Disable become for local host by default
           # Enable become when needed with: --extra-vars "ansible_become=yes"
           # Or use: --ask-become-pass for operations requiring sudo
-          network_address: 172.16.168.20  # Reachable from other VMs (ansible_host is 127.0.0.1 for local)
           vm_id: "autobot-wsl-machine"
           vm_role: "wsl-host"
           vm_hostname: "autobot-host"
@@ -221,40 +219,14 @@ all:
         browser_timeout: 30
         headless_mode: false
 
-    reserved:
-      hosts:
-        autobot-node-26:
-          ansible_host: 172.16.168.26  # Reserved node (pending role)
-          vm_id: "autobot-node-26-vm"
-          vm_role: "reserved"
-          vm_hostname: "05-Node-26"
-          vm_resources:
-            ram_mb: 4096
-            cpu_cores: 2
-            disk_gb: 50
-          services: []
-
-        autobot-node-27:
-          ansible_host: 172.16.168.27  # Reserved node (pending role)
-          vm_id: "autobot-node-27-vm"
-          vm_role: "reserved"
-          vm_hostname: "06-Node-27"
-          vm_resources:
-            ram_mb: 4096
-            cpu_cores: 2
-            disk_gb: 50
-          services: []
-
 # Environment-specific groups
 production_vms:
   children:
-    slm:
     frontend:
     npu:
     database:
     aiml:
     browser:
-    reserved:
   vars:
     environment_type: "production"
     monitoring_enabled: true

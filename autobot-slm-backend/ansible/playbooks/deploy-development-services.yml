@@ -162,20 +162,22 @@
         marker: "# {mark} DEVELOPMENT MODE FRONTEND MANAGEMENT"
         block: |
           start_frontend_dev() {
-              echo "🌐 Starting Frontend Development Server on VM {{ frontend_host }}..."
+              FRONTEND_IP=$(ansible-inventory -i ansible/inventory/production.yml --host autobot-frontend 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('ansible_host',''))" 2>/dev/null)
+              FRONTEND_IP=${FRONTEND_IP:-{{ frontend_host }}}
+              echo "Starting Frontend Development Server on VM ${FRONTEND_IP}..."
 
               # Start development frontend service via Ansible
               ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=restarted enabled=yes" -b
 
               # Wait for frontend to be ready
-              echo "⏳ Waiting for frontend development server to start..."
+              echo "Waiting for frontend development server to start..."
               sleep 10
 
               # Test frontend availability
-              if curl -s -o /dev/null -w "%{http_code}" http://{{ frontend_host }}:{{ frontend_port }} | grep -q "200"; then
-                  echo "✅ Frontend development server ready at http://{{ frontend_host }}:{{ frontend_port }}"
+              if curl -s -o /dev/null -w "%{http_code}" http://${FRONTEND_IP}:{{ frontend_port }} | grep -q "200"; then
+                  echo "Frontend development server ready at http://${FRONTEND_IP}:{{ frontend_port }}"
               else
-                  echo "⚠️  Frontend development server may not be fully ready yet"
+                  echo "Frontend development server may not be fully ready yet"
                   echo "   Check status with: ansible frontend -i ansible/inventory/production.yml -m shell -a 'systemctl status autobot-frontend-dev'"
               fi
           }

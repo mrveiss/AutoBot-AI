@@ -573,7 +573,7 @@
           Environment="AI_SERVER_HOST=0.0.0.0"
           Environment="AI_SERVER_PORT=8080"
           Environment="REDIS_HOST={{ redis_host }}"
-          Environment="REDIS_PORT=6379"
+          Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
           Environment="OLLAMA_HOST=http://localhost:11434"
           Restart=always
@@ -598,7 +598,7 @@
           Environment="NPU_SERVER_HOST=0.0.0.0"
           Environment="NPU_SERVER_PORT=8081"
           Environment="REDIS_HOST={{ redis_host }}"
-          Environment="REDIS_PORT=6379"
+          Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
           Environment="DEVICE=CPU"
           Restart=always
@@ -688,7 +688,7 @@
           Environment="DISPLAY=:99"
           Environment="PLAYWRIGHT_SERVER_PORT=3000"
           Environment="REDIS_HOST={{ redis_host }}"
-          Environment="REDIS_PORT=6379"
+          Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
           Restart=always
           RestartSec=3

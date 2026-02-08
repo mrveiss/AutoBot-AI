@@ -307,7 +307,7 @@
                 content: |
                   SLM_CODE_SOURCE=true
                   SLM_NOTIFY_PORT=8000
-                  SLM_ADMIN_URL={{ slm_admin_url | default('http://' ~ (slm_host | default('127.0.0.1')) ~ ':' ~ (slm_port | default(8000))) }}
+                  SLM_ADMIN_URL={{ slm_admin_url | default('http://' + slm_host + ':' + (slm_port | string)) }}
                 dest: /etc/slm-agent/environment
                 mode: '0644'
               notify: restart slm-agent
