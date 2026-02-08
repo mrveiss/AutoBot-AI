@@ -56,14 +56,14 @@
         content: |
           # Development Environment Variables
           NODE_ENV=development
-          VITE_BACKEND_HOST=172.16.168.20
-          VITE_BACKEND_PORT=8001
-          VITE_WS_HOST=172.16.168.20
-          VITE_WS_PORT=8001
-          VITE_REDIS_HOST=172.16.168.23
-          VITE_AI_STACK_HOST=172.16.168.24
-          VITE_BROWSER_HOST=172.16.168.25
-          VITE_NPU_WORKER_HOST=172.16.168.22
+          VITE_BACKEND_HOST={{ backend_host }}
+          VITE_BACKEND_PORT={{ backend_port }}
+          VITE_WS_HOST={{ backend_host }}
+          VITE_WS_PORT={{ backend_port }}
+          VITE_REDIS_HOST={{ redis_host }}
+          VITE_AI_STACK_HOST={{ ai_stack_host }}
+          VITE_BROWSER_HOST={{ browser_host }}
+          VITE_NPU_WORKER_HOST={{ npu_worker_host }}
           DEBUG_PROXY=false
           LOG_LEVEL=info
         dest: /opt/autobot/config/frontend-dev.env
@@ -121,14 +121,14 @@
 
     - name: Wait for frontend to be ready
       wait_for:
-        host: 172.16.168.21
-        port: 5173
+        host: "{{ frontend_host }}"
+        port: "{{ frontend_port }}"
         delay: 10
         timeout: 60
 
     - name: Test frontend development server
       uri:
-        url: "http://172.16.168.21:5173"
+        url: "http://{{ frontend_host }}:{{ frontend_port }}"
         method: GET
         status_code: 200
         timeout: 30
@@ -138,7 +138,7 @@
       debug:
         msg: |
           Frontend Development Server Status:
-          - URL: http://172.16.168.21:5173
+          - URL: http://{{ frontend_host }}:{{ frontend_port }}
           - Status: {{ frontend_test.status }}
           - Service: autobot-frontend-dev
           - Mode: Development (hot reload enabled)
@@ -162,7 +162,7 @@
         marker: "# {mark} DEVELOPMENT MODE FRONTEND MANAGEMENT"
         block: |
           start_frontend_dev() {
-              echo "🌐 Starting Frontend Development Server on VM 172.16.168.21..."
+              echo "🌐 Starting Frontend Development Server on VM {{ frontend_host }}..."
 
               # Start development frontend service via Ansible
               ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=restarted enabled=yes" -b
@@ -172,8 +172,8 @@
               sleep 10
 
               # Test frontend availability
-              if curl -s -o /dev/null -w "%{http_code}" http://172.16.168.21:5173 | grep -q "200"; then
-                  echo "✅ Frontend development server ready at http://172.16.168.21:5173"
+              if curl -s -o /dev/null -w "%{http_code}" http://{{ frontend_host }}:{{ frontend_port }} | grep -q "200"; then
+                  echo "✅ Frontend development server ready at http://{{ frontend_host }}:{{ frontend_port }}"
               else
                   echo "⚠️  Frontend development server may not be fully ready yet"
                   echo "   Check status with: ansible frontend -i ansible/inventory/production.yml -m shell -a 'systemctl status autobot-frontend-dev'"
@@ -202,13 +202,13 @@
           🚀 Development Environment Ready!
 
           Frontend Development Server:
-          - URL: http://172.16.168.21:5173
+          - URL: http://{{ frontend_host }}:{{ frontend_port }}
           - Service: autobot-frontend-dev (systemd)
           - Hot reload: Enabled
           - Source: /opt/autobot/src/autobot-vue
 
           Backend:
-          - URL: http://172.16.168.20:8001
+          - URL: http://{{ backend_host }}:{{ backend_port }}
           - Service: Runs via run_autobot.sh --dev
 
           Usage:

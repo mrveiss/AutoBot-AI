@@ -43,8 +43,9 @@ grafana_data_dir: "/var/lib/grafana"
 
 # Targets to scrape (can be populated dynamically)
 prometheus_targets: []
-#  - "172.16.168.20:9100"
-#  - "172.16.168.21:9100"
+# Populate dynamically from inventory, e.g.:
+#  - "{{ hostvars['autobot-host']['network_address'] }}:9100"
+#  - "{{ hostvars['autobot-frontend']['ansible_host'] }}:9100"
 
 # SLM integration
 slm_api_url: "http://localhost:8000"

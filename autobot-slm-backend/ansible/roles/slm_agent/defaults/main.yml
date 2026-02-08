@@ -6,7 +6,7 @@
 # Override these in inventory or playbook variables
 
 # Admin connectivity
-slm_admin_url: "http://172.16.168.19:8000"
+slm_admin_url: "http://{{ slm_host | default('127.0.0.1') }}:{{ slm_port | default(8000) }}"
 slm_heartbeat_interval: 30
 
 # Agent user/group (should match common role's autobot user)

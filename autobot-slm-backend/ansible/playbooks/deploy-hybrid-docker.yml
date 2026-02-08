@@ -200,7 +200,7 @@
                 - frontend_logs:/var/log/nginx
               environment:
                 - NODE_ENV=production
-                - VITE_BACKEND_HOST={{ hostvars['autobot-backend']['ansible_host'] | default('172.16.168.1') }}
+                - VITE_BACKEND_HOST={{ backend_host }}
                 - VITE_BACKEND_PORT=8001
                 - VITE_REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
                 - VITE_AI_STACK_HOST={{ hostvars['autobot-aiml']['ansible_host'] }}

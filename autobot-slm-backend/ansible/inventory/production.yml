@@ -27,15 +27,21 @@ all:
     autobot_environment: "production"
     autobot_version: "2.0.0"
 
-    # Service discovery endpoints - UPDATED FOR PROVIDED VMs
-    redis_host: "172.16.168.23"      # Database VM
-    redis_port: 6379
-    backend_host: "172.16.168.20"    # Backend WSL
+    # Service discovery endpoints - derived from inventory hosts (Issue #799)
+    slm_host: "{{ hostvars['autobot-slm']['ansible_host'] }}"
+    slm_port: 8000
+    backend_host: "{{ hostvars['autobot-host']['network_address'] }}"
     backend_port: 8001
-    ai_stack_host: "172.16.168.24"   # AI Stack VM
+    frontend_host: "{{ hostvars['autobot-frontend']['ansible_host'] }}"
+    frontend_port: 5173
+    redis_host: "{{ hostvars['autobot-database']['ansible_host'] }}"
+    redis_port: 6379
+    ai_stack_host: "{{ hostvars['autobot-aiml']['ansible_host'] }}"
     ai_stack_port: 8080
-    npu_worker_host: "172.16.168.22" # NPU Worker VM (dedicated)
+    npu_worker_host: "{{ hostvars['autobot-npu']['ansible_host'] }}"
     npu_worker_port: 8081
+    browser_host: "{{ hostvars['autobot-browser']['ansible_host'] }}"
+    browser_port: 3000
 
   children:
     frontend:
@@ -70,6 +76,7 @@ all:
           ansible_become: no           # Issue #700: Disable become for local host by default
           # Enable become when needed with: --extra-vars "ansible_become=yes"
           # Or use: --ask-become-pass for operations requiring sudo
+          network_address: 172.16.168.20  # Reachable from other VMs (ansible_host is 127.0.0.1 for local)
           vm_id: "autobot-wsl-machine"
           vm_role: "wsl-host"
           vm_hostname: "autobot-host"

@@ -6,8 +6,8 @@
 # Issue: #786 - Ansible playbooks for user management database setup
 #
 # This playbook sets up PostgreSQL databases for user management:
-# - SLM Server (172.16.168.19): slm, slm_users databases
-# - Redis VM (172.16.168.23): autobot_users database
+# - SLM Server: slm, slm_users databases
+# - Database VM: autobot_users database
 #
 # Usage:
 #   ansible-playbook -i slm-server/ansible/inventory.yml ansible/playbooks/deploy-user-management-db.yml
@@ -18,7 +18,7 @@
 # =============================================================================
 # Phase 1: SLM Server PostgreSQL Setup
 # =============================================================================
-- name: "Deploy PostgreSQL on SLM Server (172.16.168.19)"
+- name: "Deploy PostgreSQL on SLM Server"
   hosts: slm
   become: true
   gather_facts: true
@@ -68,7 +68,7 @@
 # =============================================================================
 # Phase 2: Redis VM PostgreSQL Setup
 # =============================================================================
-- name: "Deploy PostgreSQL on Redis VM (172.16.168.23)"
+- name: "Deploy PostgreSQL on Database VM"
   hosts: redis
   become: true
   gather_facts: true
@@ -83,10 +83,10 @@
     pg_hba_remote_access:
       - database: autobot_users
         user: autobot_app
-        address: "172.16.168.19/32"
+        address: "{{ slm_host }}/32"
       - database: autobot_users
         user: autobot_app
-        address: "172.16.168.20/32"
+        address: "{{ backend_host }}/32"
 
   pre_tasks:
     - name: Display Redis VM database deployment info
@@ -98,7 +98,7 @@
           - "Host: {{ inventory_hostname }} ({{ ansible_host }})"
           - "User: {{ db_user }}"
           - "Databases: {{ databases | join(', ') }}"
-          - "Remote access from: SLM (172.16.168.19), Main (172.16.168.20)"
+          - "Remote access from: SLM ({{ slm_host }}), Main ({{ backend_host }})"
 
   roles:
     - role: postgresql
@@ -114,8 +114,8 @@
         src: "{{ item }}"
         proto: tcp
       loop:
-        - "172.16.168.19"
-        - "172.16.168.20"
+        - "{{ slm_host }}"
+        - "{{ backend_host }}"
 
     - name: Verify autobot_users database is accessible
       community.postgresql.postgresql_ping:
@@ -141,7 +141,7 @@
   gather_facts: false
 
   vars:
-    autobot_db_host: "172.16.168.23"
+    autobot_db_host: "{{ redis_host }}"
     autobot_db_user: "autobot_app"
 
   tasks:
@@ -178,12 +178,12 @@
           - "User Management Database Setup Complete"
           - "======================================"
           - ""
-          - "SLM Server (172.16.168.19):"
+          - "SLM Server ({{ slm_host }}):"
           - "  - Database: slm (operational data)"
           - "  - Database: slm_users (admin accounts)"
           - "  - Credentials: /etc/autobot/db-credentials.env"
           - ""
-          - "Redis VM (172.16.168.23):"
+          - "Database VM ({{ redis_host }}):"
           - "  - Database: autobot_users (app users)"
           - "  - Credentials: /etc/autobot/db-credentials.env"
           - "  - Remote access: SLM, Main Backend"
