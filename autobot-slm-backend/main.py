@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 
 from api import (
     agents_router,
+    api_keys_router,
     auth_router,
     autobot_teams_router,
     autobot_users_router,
@@ -27,6 +28,7 @@ from api import (
     health_router,
     infrastructure_router,
     maintenance_router,
+    mfa_router,
     monitoring_router,
     node_config_router,
     node_tls_router,
@@ -210,6 +212,9 @@ app.include_router(autobot_teams_router, prefix="/api")
 # SSO Integration (Issue #576 Phase 4)
 app.include_router(sso_router, prefix="/api")
 app.include_router(sso_auth_router, prefix="/api")
+# MFA and API Keys (Issue #576 Phase 5)
+app.include_router(mfa_router, prefix="/api")
+app.include_router(api_keys_router, prefix="/api")
 
 
 @app.get("/")

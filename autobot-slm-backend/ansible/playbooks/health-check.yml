@@ -437,7 +437,7 @@
   tasks:
     - name: Test frontend to backend connectivity
       uri:
-        url: "http://192.168.100.10/api/health"
+        url: "http://172.16.168.21/api/health"
         method: GET
         timeout: 15
       register: frontend_backend_test
@@ -446,7 +446,7 @@
 
     - name: Test backend to database connectivity
       uri:
-        url: "http://192.168.100.20:8001/api/system/redis"
+        url: "http://172.16.168.20:8001/api/system/redis"
         method: GET
         timeout: 15
       register: backend_database_test
@@ -455,7 +455,7 @@
 
     - name: Test backend to AI/ML connectivity
       uri:
-        url: "http://192.168.100.20:8001/api/ai/status"
+        url: "http://172.16.168.20:8001/api/ai/status"
         method: GET
         timeout: 30
       register: backend_ai_test
@@ -504,11 +504,11 @@
           - "🌐 Browser VM: {{ overall_health.browser_vm.services_status }}"
           - ""
           - "📊 Service Endpoints:"
-          - "  Frontend: http://192.168.100.10"
-          - "  Backend: http://192.168.100.20:8001/api"
-          - "  Database: redis://192.168.100.50:6379"
-          - "  AI Stack: http://192.168.100.30:8080"
-          - "  Browser: http://192.168.100.40:3000"
+          - "  Frontend: http://172.16.168.21"
+          - "  Backend: http://172.16.168.20:8001/api"
+          - "  Database: redis://172.16.168.23:6379"
+          - "  AI Stack: http://172.16.168.24:8080"
+          - "  Browser: http://172.16.168.25:3000"
           - ""
           - "🔍 For detailed analysis, check individual VM logs:"
           - "  sudo journalctl -u autobot-* --since '1 hour ago'"

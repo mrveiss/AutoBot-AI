@@ -208,21 +208,21 @@
           - "📅 Completed: {{ ansible_date_time.iso8601 }}"
           - ""
           - "🌐 Service Endpoints:"
-          - "   Frontend:     http://192.168.100.10"
-          - "   Backend API:  http://192.168.100.20:8001/api"
-          - "   Redis Stack:  redis://192.168.100.50:6379"
-          - "   RedisInsight:  http://192.168.100.50:8002"
-          - "   AI Stack:     http://192.168.100.30:8080"
-          - "   NPU Worker:   http://192.168.100.40:8081"
-          - "   Browser API:  http://192.168.100.40:3000"
-          - "   VNC Access:   vnc://192.168.100.40:5901"
+          - "   Frontend:     http://172.16.168.21"
+          - "   Backend API:  http://172.16.168.20:8001/api"
+          - "   Redis Stack:  redis://172.16.168.23:6379"
+          - "   RedisInsight:  http://172.16.168.23:8002"
+          - "   AI Stack:     http://172.16.168.24:8080"
+          - "   NPU Worker:   http://172.16.168.22:8081"
+          - "   Browser API:  http://172.16.168.25:3000"
+          - "   VNC Access:   vnc://172.16.168.25:5901"
           - ""
           - "🖥️  SSH Access:"
-          - "   Frontend:     ssh autobot@192.168.100.10"
-          - "   Backend:      ssh autobot@192.168.100.20"
-          - "   Database:     ssh autobot@192.168.100.50"
-          - "   AI/ML:        ssh autobot@192.168.100.30"
-          - "   Browser:      ssh autobot@192.168.100.40"
+          - "   Frontend:     ssh autobot@172.16.168.21"
+          - "   Backend:      ssh autobot@172.16.168.20"
+          - "   Database:     ssh autobot@172.16.168.23"
+          - "   AI/ML:        ssh autobot@172.16.168.24"
+          - "   Browser:      ssh autobot@172.16.168.25"
           - ""
           - "✅ Migration Status: Docker Containers → Hyper-V VMs Complete"
           - "📊 Performance: Dedicated resources, native VM performance"
@@ -230,7 +230,7 @@
           - "📈 Scalability: Independent VM scaling and resource allocation"
           - ""
           - "🔧 Next Steps:"
-          - "   1. Access AutoBot UI at http://192.168.100.10"
+          - "   1. Access AutoBot UI at http://172.16.168.21"
           - "   2. Verify all services: ./deploy.sh --health-check"
           - "   3. Setup monitoring dashboards"
           - "   4. Configure automated backups"
@@ -246,13 +246,13 @@
           Status: SUCCESS
 
           Service Endpoints:
-          - Frontend: http://192.168.100.10
-          - Backend: http://192.168.100.20:8001
-          - Redis: redis://192.168.100.50:6379
-          - AI Stack: http://192.168.100.30:8080
-          - NPU Worker: http://192.168.100.40:8081
-          - Browser: http://192.168.100.40:3000
-          - VNC: vnc://192.168.100.40:5901
+          - Frontend: http://172.16.168.21
+          - Backend: http://172.16.168.20:8001
+          - Redis: redis://172.16.168.23:6379
+          - AI Stack: http://172.16.168.24:8080
+          - NPU Worker: http://172.16.168.22:8081
+          - Browser: http://172.16.168.25:3000
+          - VNC: vnc://172.16.168.25:5901
 
           Migration: Docker Containers → 5 Hyper-V VMs
           Infrastructure: Production-ready with monitoring and backups
@@ -281,7 +281,7 @@
           - "============================================"
           - ""
           - "1. 🌐 Web Access:"
-          - "   - Open http://192.168.100.10 in your browser"
+          - "   - Open http://172.16.168.21 in your browser"
           - "   - Verify frontend loads correctly"
           - "   - Test API connectivity through UI"
           - ""
@@ -291,7 +291,7 @@
           - "   - Check system resources: htop on each VM"
           - ""
           - "3. 💾 Data Verification:"
-          - "   - Verify Redis data: redis-cli -h 192.168.100.50"
+          - "   - Verify Redis data: redis-cli -h 172.16.168.23"
           - "   - Check model files: ls -la /var/lib/autobot/models"
           - "   - Validate knowledge base: API call to /api/knowledge"
           - ""
@@ -301,8 +301,8 @@
           - "   - Review service permissions and file ownership"
           - ""
           - "5. 📊 Performance Testing:"
-          - "   - Load test frontend: ab -n 100 -c 10 http://192.168.100.10/"
-          - "   - Test AI inference: curl http://192.168.100.30:8080/health"
+          - "   - Load test frontend: ab -n 100 -c 10 http://172.16.168.21/"
+          - "   - Test AI inference: curl http://172.16.168.24:8080/health"
           - "   - Monitor resource usage during load"
           - ""
           - "6. 🚨 Backup Configuration:"

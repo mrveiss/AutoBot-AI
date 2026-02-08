@@ -6,6 +6,10 @@ Initializes Intel NPU acceleration with enhanced semantic search capabilities
 
 set -e
 
+# Source SSOT configuration (#808)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -16,11 +20,11 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
-NPU_WORKER_VM="172.16.168.22"
-NPU_WORKER_PORT="8081"
-REDIS_VM="172.16.168.23"
-REDIS_PORT="6379"
-AUTOBOT_ROOT="/home/kali/Desktop/AutoBot"
+NPU_WORKER_VM="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+NPU_WORKER_PORT="${AUTOBOT_NPU_WORKER_PORT:-8081}"
+REDIS_VM="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
+AUTOBOT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
 
 # Functions
 log_info() {

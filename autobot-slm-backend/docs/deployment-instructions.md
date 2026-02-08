@@ -22,23 +22,23 @@ docker-compose.yml:
 ### To Hyper-V VMs (5 VMs)
 ```
 VM Architecture:
-├── VM1 (192.168.100.10) - Frontend
+├── VM1 (172.16.168.21) - Frontend
 │   ├── nginx (reverse proxy)
 │   ├── Vue.js frontend
 │   └── DNS cache (unbound)
-├── VM2 (192.168.100.20) - Backend  
+├── VM2 (172.16.168.20) - Backend  
 │   ├── FastAPI server
 │   ├── Python services
 │   └── Log aggregation
-├── VM3 (192.168.100.50) - Database
+├── VM3 (172.16.168.23) - Database
 │   ├── Redis Stack 7.4
 │   ├── Model storage
 │   └── Data persistence
-├── VM4 (192.168.100.30) - AI/ML
+├── VM4 (172.16.168.24) - AI/ML
 │   ├── AI Stack server
 │   ├── NPU Worker
 │   └── Intel OpenVINO
-└── VM5 (192.168.100.40) - Browser
+└── VM5 (172.16.168.25) - Browser
     ├── Playwright automation
     ├── VNC server
     └── Desktop environment
@@ -65,7 +65,7 @@ VM Architecture:
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/autobot_key -N ""
 
 # Copy to all VMs
-for ip in 192.168.100.10 192.168.100.20 192.168.100.50 192.168.100.30 192.168.100.40; do
+for ip in 172.16.168.21 172.16.168.20 172.16.168.23 172.16.168.24 172.16.168.25; do
     ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$ip
 done
 ```
@@ -84,11 +84,11 @@ Edit `ansible/inventory/production.yml` with your actual VM IP addresses:
 frontend:
   hosts:
     autobot-frontend:
-      ansible_host: 192.168.100.10  # YOUR_FRONTEND_IP
+      ansible_host: 172.16.168.21  # YOUR_FRONTEND_IP
 backend:
   hosts:
     autobot-backend:
-      ansible_host: 192.168.100.20  # YOUR_BACKEND_IP
+      ansible_host: 172.16.168.20  # YOUR_BACKEND_IP
 # ... update all VM IPs
 ```
 
@@ -159,14 +159,14 @@ This will:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| **Web Interface** | http://192.168.100.10 | Main AutoBot UI |
-| **API Backend** | http://192.168.100.20:8001/api | REST API |
-| **Database** | redis://192.168.100.50:6379 | Redis Stack |
-| **RedisInsight** | http://192.168.100.50:8002 | Database management |
-| **AI Stack** | http://192.168.100.30:8080 | AI inference server |
-| **NPU Worker** | http://192.168.100.40:8081 | NPU acceleration |
-| **Browser API** | http://192.168.100.40:3000 | Playwright automation |
-| **VNC Desktop** | vnc://192.168.100.40:5901 | Remote desktop |
+| **Web Interface** | http://172.16.168.21 | Main AutoBot UI |
+| **API Backend** | http://172.16.168.20:8001/api | REST API |
+| **Database** | redis://172.16.168.23:6379 | Redis Stack |
+| **RedisInsight** | http://172.16.168.23:8002 | Database management |
+| **AI Stack** | http://172.16.168.24:8080 | AI inference server |
+| **NPU Worker** | http://172.16.168.22:8081 | NPU acceleration |
+| **Browser API** | http://172.16.168.25:3000 | Playwright automation |
+| **VNC Desktop** | vnc://172.16.168.25:5901 | Remote desktop |
 
 ## Management Commands
 
@@ -199,8 +199,8 @@ This will:
 sudo journalctl -u autobot-* -f
 
 # Service-specific logs
-ssh autobot@192.168.100.20 "sudo journalctl -u autobot-backend -f"
-ssh autobot@192.168.100.30 "sudo journalctl -u autobot-ai-stack -f"
+ssh autobot@172.16.168.20 "sudo journalctl -u autobot-backend -f"
+ssh autobot@172.16.168.24 "sudo journalctl -u autobot-ai-stack -f"
 
 # Health check logs
 tail -f /var/log/autobot/health-check*.log
@@ -228,23 +228,23 @@ ansible all -m setup -a "filter=ansible_default_ipv4"
 ansible all -m systemd -a "name=autobot-backend" --become
 
 # View service logs
-ssh autobot@192.168.100.20 "sudo journalctl -u autobot-backend --since '10 minutes ago'"
+ssh autobot@172.16.168.20 "sudo journalctl -u autobot-backend --since '10 minutes ago'"
 
 # Manual service restart
-ssh autobot@192.168.100.20 "sudo systemctl restart autobot-backend"
+ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
 ```
 
 #### 3. Data Migration Issues
 ```bash
 # Verify Redis data
-redis-cli -h 192.168.100.50 -p 6379 dbsize
-redis-cli -h 192.168.100.50 -p 6379 info keyspace
+redis-cli -h 172.16.168.23 -p 6379 dbsize
+redis-cli -h 172.16.168.23 -p 6379 info keyspace
 
 # Check model files
-ssh autobot@192.168.100.30 "find /var/lib/autobot/models -type f | wc -l"
+ssh autobot@172.16.168.24 "find /var/lib/autobot/models -type f | wc -l"
 
 # Validate configurations
-ssh autobot@192.168.100.20 "ls -la /etc/autobot/"
+ssh autobot@172.16.168.20 "ls -la /etc/autobot/"
 ```
 
 #### 4. Performance Issues
@@ -336,7 +336,7 @@ watch -n 5 './utils/health-check.sh --quick'
 ## Security
 
 ### Network Security
-- Internal network isolation (192.168.100.0/24)
+- Internal network isolation (172.16.168.0/24)
 - UFW firewall on each VM
 - SSH key-only authentication
 - Service-specific port restrictions
@@ -426,8 +426,8 @@ ansible-playbook -i inventory/production.yml playbooks/optimize-system.yml
 ```bash
 # Post-deployment validation
 ./deploy.sh --health-check
-curl http://192.168.100.10/health
-redis-cli -h 192.168.100.50 ping
+curl http://172.16.168.21/health
+redis-cli -h 172.16.168.23 ping
 ```
 
 ### Emergency Contacts

@@ -4,6 +4,10 @@
 
 set -e
 
+# Source SSOT configuration (#808)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,10 +16,10 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
-NPU_WORKER_IP="172.16.168.22"
-NPU_WORKER_PORT="8081"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
+NPU_WORKER_IP="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+NPU_WORKER_PORT="${AUTOBOT_NPU_WORKER_PORT:-8081}"
 
 log() {
     echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"

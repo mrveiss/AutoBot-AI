@@ -4,6 +4,10 @@
 
 set -e
 
+# Source SSOT configuration (#808)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,9 +16,9 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
-FRONTEND_IP="172.16.168.21"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
+FRONTEND_IP="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
 
 log() {
     echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
@@ -55,7 +59,7 @@ main() {
         sleep 2
 
         # Set environment variables for backend connection
-        export VITE_BACKEND_HOST=172.16.168.20
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
         export VITE_BACKEND_PORT=8001
 
         echo "Starting frontend service..."

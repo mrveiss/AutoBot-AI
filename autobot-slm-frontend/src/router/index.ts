@@ -138,6 +138,13 @@ const router = createRouter({
           component: () => import('@/views/settings/BackendSettings.vue'),
           meta: { title: 'Backend Settings', parent: 'settings' }
         },
+        {
+          // Issue #576: Security settings for MFA and API Keys
+          path: 'security',
+          name: 'settings-security',
+          component: () => import('@/views/settings/SecuritySettings.vue'),
+          meta: { title: 'Security', parent: 'settings' }
+        },
         // Admin settings (migrated from main AutoBot frontend - Issue #729)
         {
           path: 'admin/users',

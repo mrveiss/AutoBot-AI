@@ -8,12 +8,14 @@ Handles login/logout for SLM admin users using the local database.
 """
 
 import logging
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from services.auth import auth_service, get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.database import get_slm_session
+from user_management.models.user import User
 from user_management.schemas.user import UserLogin
 from user_management.services import TenantContext, UserService
 
@@ -48,9 +50,11 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    logger.info("SLM admin logged in: %s", user.username)
+    # Check if MFA is enabled for this user
+    if user.mfa_enabled:
+        return _create_mfa_challenge(user)
 
-    # Use existing auth service to create token
+    logger.info("SLM admin logged in: %s", user.username)
     return await auth_service.create_token_response(user)
 
 
@@ -72,3 +76,29 @@ async def logout(
 ) -> None:
     """Logout (client-side token invalidation)."""
     logger.info("SLM admin logged out: %s", current_user.get("sub"))
+
+
+def _create_mfa_challenge(user: User) -> dict:
+    """Create MFA challenge response with temporary token.
+
+    Helper for login endpoint (Issue #576 Phase 5).
+
+    Args:
+        user: User requiring MFA verification
+
+    Returns:
+        Dict with requires_mfa flag and temporary token
+    """
+    temp_token_data = {
+        "sub": user.username,
+        "mfa_pending": True,
+        "user_id": str(user.id),
+        "admin": user.is_platform_admin,
+    }
+    temp_token = auth_service.create_access_token(
+        data=temp_token_data,
+        expires_delta=timedelta(minutes=5),
+    )
+
+    logger.info("MFA challenge issued for user: %s", user.username)
+    return {"requires_mfa": True, "temp_token": temp_token}

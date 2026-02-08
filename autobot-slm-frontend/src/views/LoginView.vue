@@ -19,6 +19,7 @@ const showPassword = ref(false)
 const ssoProviders = ref<ActiveProvider[]>([])
 const ssoLoading = ref(false)
 const ssoError = ref<string | null>(null)
+const mfaCode = ref('')
 
 async function handleLogin(): Promise<void> {
   const success = await authStore.login(username.value, password.value)
@@ -27,18 +28,28 @@ async function handleLogin(): Promise<void> {
   }
 }
 
+async function handleMFAVerify(): Promise<void> {
+  const success = await authStore.completeMFALogin(mfaCode.value)
+  if (success) {
+    router.push('/')
+  }
+}
+
+function cancelMFA(): void {
+  authStore.resetMFA()
+  mfaCode.value = ''
+}
+
 async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
   ssoLoading.value = true
   ssoError.value = null
   try {
     if (provider.provider_type === 'ldap' || provider.provider_type === 'active_directory') {
-      // LDAP uses same form fields
       const response = await ssoApi.loginWithLDAP(provider.id, username.value, password.value)
       localStorage.setItem('slm_access_token', response.access_token)
       await authStore.checkAuth()
       router.push('/')
     } else {
-      // OAuth2/SAML: redirect to provider
       const response = await ssoApi.initiateSSOLogin(provider.id)
       window.location.href = response.redirect_url
     }
@@ -53,7 +64,7 @@ onMounted(async () => {
   try {
     ssoProviders.value = await ssoApi.getActiveProviders()
   } catch {
-    // SSO providers not available - that's fine
+    // SSO providers not available
   }
 })
 </script>
@@ -74,7 +85,8 @@ onMounted(async () => {
 
       <!-- Login Form -->
       <div class="bg-white rounded-2xl shadow-xl p-8">
-        <form @submit.prevent="handleLogin" class="space-y-6">
+        <!-- Standard Login Form -->
+        <form v-if="!authStore.mfaPending" @submit.prevent="handleLogin" class="space-y-6">
           <!-- Username -->
           <div>
             <label for="username" class="block text-sm font-medium text-gray-700 mb-1">
@@ -158,8 +170,38 @@ onMounted(async () => {
           </button>
         </form>
 
+        <!-- MFA Verification Form -->
+        <div v-else class="space-y-6">
+          <div class="text-center mb-4">
+            <svg class="w-12 h-12 text-primary-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h2 class="text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
+            <p class="text-sm text-gray-500">Enter the code from your authenticator app</p>
+          </div>
+
+          <div>
+            <input v-model="mfaCode" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code"
+              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="000000" @keyup.enter="handleMFAVerify" />
+          </div>
+
+          <div v-if="authStore.error" class="bg-red-50 border border-red-200 rounded-lg p-3">
+            <span class="text-sm text-red-700">{{ authStore.error }}</span>
+          </div>
+
+          <button @click="handleMFAVerify" :disabled="authStore.loading || mfaCode.length < 6"
+            class="w-full py-2.5 px-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50">
+            {{ authStore.loading ? 'Verifying...' : 'Verify' }}
+          </button>
+
+          <button @click="cancelMFA" type="button" class="w-full py-2 text-sm text-gray-500 hover:text-gray-700">
+            Back to login
+          </button>
+        </div>
+
         <!-- SSO Login Options -->
-        <div v-if="ssoProviders.length > 0" class="mt-6">
+        <div v-if="ssoProviders.length > 0 && !authStore.mfaPending" class="mt-6">
           <div class="relative my-6">
             <div class="absolute inset-0 flex items-center">
               <div class="w-full border-t border-gray-300"></div>

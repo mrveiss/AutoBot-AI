@@ -463,7 +463,7 @@
           - "🔧 Next Steps:"
           - "  1. Start services: ./deploy.sh --start"
           - "  2. Health check: ./deploy.sh --health-check"
-          - "  3. Access AutoBot: http://192.168.100.10"
+          - "  3. Access AutoBot: http://172.16.168.21"
           - ""
           - "⚠️  Keep backup data until system is validated!"
           - "   Backup location: {{ migration_backup_dir }}"

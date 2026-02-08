@@ -14,12 +14,12 @@ BACKUP_BASE_DIR="/opt/autobot/backups"
 LOG_DIR="/var/log/autobot/backup"
 LOG_FILE="$LOG_DIR/backup-$(date +%Y%m%d-%H%M%S).log"
 
-# VM endpoints
-DATABASE_HOST="192.168.100.50"
-BACKEND_HOST="192.168.100.20"
-AIML_HOST="192.168.100.30"
-FRONTEND_HOST="192.168.100.10"
-BROWSER_HOST="192.168.100.40"
+# VM endpoints (#808: use production IPs)
+DATABASE_HOST="172.16.168.23"
+BACKEND_HOST="172.16.168.20"
+AIML_HOST="172.16.168.24"
+FRONTEND_HOST="172.16.168.21"
+BROWSER_HOST="172.16.168.25"
 
 # Colors for output
 RED='\033[0;31m'

@@ -79,11 +79,11 @@ all:
     frontend:
       hosts:
         autobot-frontend:
-          ansible_host: 192.168.100.10  # Update with your IP
+          ansible_host: 172.16.168.21  # Update with your IP
     backend:
       hosts:
         autobot-backend:
-          ansible_host: 192.168.100.20  # Update with your IP
+          ansible_host: 172.16.168.20  # Update with your IP
     # ... etc for all VMs
 ```
 
@@ -196,8 +196,8 @@ ansible/
 ### Network Settings
 
 The system uses the internal network configuration:
-- **Network**: 192.168.100.0/24
-- **Gateway**: 192.168.100.1 (Windows host)
+- **Network**: 172.16.168.0/24
+- **Gateway**: 172.16.168.1 (Windows host)
 - **DNS**: 8.8.8.8, 1.1.1.1
 
 ### Service Ports
@@ -239,11 +239,11 @@ The system uses the internal network configuration:
 3. **Import to VMs**:
    ```bash
    # Redis data import
-   scp backup/dump.rdb autobot@192.168.100.50:/var/lib/redis/
-   ssh autobot@192.168.100.50 sudo systemctl restart redis-stack-server
+   scp backup/dump.rdb autobot@172.16.168.23:/var/lib/redis/
+   ssh autobot@172.16.168.23 sudo systemctl restart redis-stack-server
 
    # Model files sync
-   rsync -av backup/models/ autobot@192.168.100.30:/opt/autobot/models/
+   rsync -av backup/models/ autobot@172.16.168.24:/opt/autobot/models/
    ```
 
 ## Service Management
@@ -282,11 +282,11 @@ Redis (VM3) → Backend (VM2) → AI/ML (VM4) → Frontend (VM1) → Browser (VM
 ./utils/health-check.sh
 
 # Individual service health
-curl http://192.168.100.10/health  # Frontend
-curl http://192.168.100.20:8001/api/health  # Backend
-curl http://192.168.100.30:8080/health  # AI Stack
-curl http://192.168.100.40:8081/health  # NPU Worker
-redis-cli -h 192.168.100.50 ping  # Redis
+curl http://172.16.168.21/health  # Frontend
+curl http://172.16.168.20:8001/api/health  # Backend
+curl http://172.16.168.24:8080/health  # AI Stack
+curl http://172.16.168.22:8081/health  # NPU Worker
+redis-cli -h 172.16.168.23 ping  # Redis
 ```
 
 ### Log Aggregation
@@ -359,7 +359,7 @@ All logs are centralized on the Backend VM (VM2):
 ## Security
 
 ### Network Security
-- Internal network isolation (192.168.100.0/24)
+- Internal network isolation (172.16.168.0/24)
 - Windows Firewall protection
 - No direct internet exposure
 

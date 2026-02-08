@@ -6,6 +6,7 @@
  * Authentication Store
  *
  * Manages user authentication state and JWT tokens.
+ * Issue #576 - Added MFA support in Phase 5.
  */
 
 import { defineStore } from 'pinia'
@@ -23,6 +24,14 @@ interface TokenResponse {
   expires_in: number
 }
 
+interface MFALoginResponse {
+  requires_mfa?: boolean
+  temp_token?: string
+  access_token?: string
+  token_type?: string
+  expires_in?: number
+}
+
 const TOKEN_KEY = 'slm_access_token'
 const USER_KEY = 'slm_user'
 
@@ -38,12 +47,13 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  const mfaPending = ref(false)
+  const mfaTempToken = ref('')
+
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.isAdmin ?? false)
 
   function getApiUrl(): string {
-    // Use relative URLs in development (Vite proxy handles /api)
-    // Use env variable in production builds
     if (import.meta.env.DEV) {
       return ''
     }
@@ -68,9 +78,16 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error(data.detail || 'Login failed')
       }
 
-      const data: TokenResponse = await response.json()
-      token.value = data.access_token
-      localStorage.setItem(TOKEN_KEY, data.access_token)
+      const data: MFALoginResponse = await response.json()
+
+      if (data.requires_mfa && data.temp_token) {
+        mfaPending.value = true
+        mfaTempToken.value = data.temp_token
+        return false
+      }
+
+      token.value = data.access_token!
+      localStorage.setItem(TOKEN_KEY, data.access_token!)
 
       await fetchCurrentUser()
       return true
@@ -80,6 +97,40 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function completeMFALogin(code: string): Promise<boolean> {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await fetch(`${getApiUrl()}/api/mfa/verify-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, temp_token: mfaTempToken.value }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.detail || 'MFA verification failed')
+      }
+      const data: TokenResponse = await response.json()
+      token.value = data.access_token
+      localStorage.setItem(TOKEN_KEY, data.access_token)
+      mfaPending.value = false
+      mfaTempToken.value = ''
+      await fetchCurrentUser()
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'MFA verification failed'
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function resetMFA(): void {
+    mfaPending.value = false
+    mfaTempToken.value = ''
+    error.value = null
   }
 
   async function fetchCurrentUser(): Promise<void> {
@@ -163,9 +214,13 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     loading,
     error,
+    mfaPending,
+    mfaTempToken,
     isAuthenticated,
     isAdmin,
     login,
+    completeMFALogin,
+    resetMFA,
     logout,
     refreshToken,
     fetchCurrentUser,

@@ -175,41 +175,41 @@ validate_deployment() {
     log "INFO" "Checking individual services..."
 
     # Frontend check
-    if curl -s -f "http://192.168.100.10/health" > /dev/null; then
+    if curl -s -f "http://172.16.168.21/health" > /dev/null; then
         success "Frontend service is healthy"
     else
         warn "Frontend service health check failed"
     fi
 
     # Backend check
-    if curl -s -f "http://192.168.100.20:8001/api/health" > /dev/null; then
+    if curl -s -f "http://172.16.168.20:8001/api/health" > /dev/null; then
         success "Backend service is healthy"
     else
         warn "Backend service health check failed"
     fi
 
     # Database check
-    if redis-cli -h 192.168.100.50 ping | grep -q PONG; then
+    if redis-cli -h 172.16.168.23 ping | grep -q PONG; then
         success "Database service is healthy"
     else
         warn "Database service health check failed"
     fi
 
     # AI/ML services check
-    if curl -s -f "http://192.168.100.30:8080/health" > /dev/null; then
+    if curl -s -f "http://172.16.168.24:8080/health" > /dev/null; then
         success "AI Stack service is healthy"
     else
         warn "AI Stack service health check failed"
     fi
 
-    if curl -s -f "http://192.168.100.40:8081/health" > /dev/null; then
+    if curl -s -f "http://172.16.168.22:8081/health" > /dev/null; then
         success "NPU Worker service is healthy"
     else
         warn "NPU Worker service health check failed"
     fi
 
     # Browser service check
-    if curl -s -f "http://192.168.100.40:3000/health" > /dev/null; then
+    if curl -s -f "http://172.16.168.25:3000/health" > /dev/null; then
         success "Browser service is healthy"
     else
         warn "Browser service health check failed"
@@ -222,24 +222,24 @@ show_summary() {
     log "INFO" "=============================="
     log "INFO" ""
     log "INFO" "Service Endpoints:"
-    log "INFO" "  Frontend:    http://192.168.100.10"
-    log "INFO" "  Backend API: http://192.168.100.20:8001"
-    log "INFO" "  Redis:       redis://192.168.100.50:6379"
-    log "INFO" "  RedisInsight: http://192.168.100.50:8002"
-    log "INFO" "  AI Stack:    http://192.168.100.30:8080"
-    log "INFO" "  NPU Worker:  http://192.168.100.40:8081"
-    log "INFO" "  Browser:     http://192.168.100.40:3000"
-    log "INFO" "  VNC Server:  vnc://192.168.100.40:5901"
+    log "INFO" "  Frontend:    http://172.16.168.21"
+    log "INFO" "  Backend API: http://172.16.168.20:8001"
+    log "INFO" "  Redis:       redis://172.16.168.23:6379"
+    log "INFO" "  RedisInsight: http://172.16.168.23:8002"
+    log "INFO" "  AI Stack:    http://172.16.168.24:8080"
+    log "INFO" "  NPU Worker:  http://172.16.168.22:8081"
+    log "INFO" "  Browser:     http://172.16.168.25:3000"
+    log "INFO" "  VNC Server:  vnc://172.16.168.25:5901"
     log "INFO" ""
     log "INFO" "Management:"
-    log "INFO" "  SSH Frontend: ssh autobot@192.168.100.10"
-    log "INFO" "  SSH Backend:  ssh autobot@192.168.100.20"
-    log "INFO" "  SSH Database: ssh autobot@192.168.100.50"
-    log "INFO" "  SSH AI/ML:    ssh autobot@192.168.100.30"
-    log "INFO" "  SSH Browser:  ssh autobot@192.168.100.40"
+    log "INFO" "  SSH Frontend: ssh autobot@172.16.168.21"
+    log "INFO" "  SSH Backend:  ssh autobot@172.16.168.20"
+    log "INFO" "  SSH Database: ssh autobot@172.16.168.23"
+    log "INFO" "  SSH AI/ML:    ssh autobot@172.16.168.24"
+    log "INFO" "  SSH Browser:  ssh autobot@172.16.168.25"
     log "INFO" ""
     log "INFO" "Next Steps:"
-    log "INFO" "  1. Access AutoBot at http://192.168.100.10"
+    log "INFO" "  1. Access AutoBot at http://172.16.168.21"
     log "INFO" "  2. Monitor services with: ./deploy.sh --health-check"
     log "INFO" "  3. View logs: ./utils/view-logs.sh"
     log "INFO" "  4. Create backups: ./utils/backup.sh --full"

@@ -2,7 +2,7 @@
 # AutoBot VM Discovery Script (Linux/WSL version)
 # Discovers AutoBot VMs and updates Ansible inventory
 
-NETWORK_RANGE="192.168.100.0/24"
+NETWORK_RANGE="172.16.168.0/24"
 INVENTORY_PATH="../../ansible/inventory/hosts.yml"
 UPDATE_INVENTORY=false
 SHOW_ALL=false
@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
             echo "AutoBot VM Discovery Tool (Linux/WSL)"
             echo "Usage: $0 [options]"
             echo "Options:"
-            echo "  --network-range CIDR    Network to scan (default: 192.168.100.0/24)"
+            echo "  --network-range CIDR    Network to scan (default: 172.16.168.0/24)"
             echo "  --inventory-path PATH   Ansible inventory file (default: ../../ansible/inventory/hosts.yml)"
             echo "  --update-inventory      Update Ansible inventory with discovered IPs"
             echo "  --show-all             Show detailed information"
@@ -155,7 +155,7 @@ scan_network() {
     echo -e "${CYAN}🔍 Scanning AutoBot internal network: $network${NC}"
     echo -e "${YELLOW}This may take 30-60 seconds...${NC}"
 
-    # Extract network base (e.g., 192.168.100 from 192.168.100.0/24)
+    # Extract network base (e.g., 172.16.168 from 172.16.168.0/24)
     local network_base=$(echo $network | cut -d'.' -f1-3)
 
     # Use nmap to quickly find live hosts

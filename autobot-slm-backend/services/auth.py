@@ -11,16 +11,16 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from models.database import User
+from models.schemas import TokenResponse, UserCreate, UserResponse
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from models.database import User
-from models.schemas import TokenResponse, UserCreate, UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class AuthService:
         )
         return TokenResponse(
             access_token=access_token,
-            token_type="bearer",
+            token_type="bearer",  # nosec B106 - standard OAuth2 token type
             expires_in=settings.access_token_expire_minutes * 60,
         )
 
@@ -157,3 +157,80 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
             detail="Admin privileges required",
         )
     return current_user
+
+
+async def get_slm_db():
+    """Local dependency for SLM database session."""
+    from user_management.database import get_slm_session
+
+    async with get_slm_session() as session:
+        yield session
+
+
+async def get_api_key_user(
+    x_api_key: str = Header(None, alias="X-API-Key"),
+    db: AsyncSession = Depends(get_slm_db),
+) -> dict:
+    """FastAPI dependency to authenticate via API key.
+
+    Args:
+        x_api_key: API key from X-API-Key header
+        db: Database session
+
+    Returns:
+        User payload dict (similar to JWT payload)
+
+    Raises:
+        HTTPException: If API key is invalid or missing
+    """
+    from user_management.services.api_key_service import APIKeyService
+    from user_management.services.base_service import TenantContext
+
+    if not x_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key required",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+    context = TenantContext(is_platform_admin=True)
+    api_key_service = APIKeyService(db, context)
+
+    api_key = await api_key_service.validate_key(x_api_key)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired API key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+    user = await _get_user_for_api_key(db, api_key.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found for API key",
+        )
+
+    return {
+        "sub": user.username,
+        "admin": user.is_platform_admin,
+        "api_key_id": str(api_key.id),
+    }
+
+
+async def _get_user_for_api_key(db: AsyncSession, user_id):
+    """Get user by ID for API key authentication.
+
+    Helper for get_api_key_user dependency (Issue #576 Phase 5).
+
+    Args:
+        db: Database session
+        user_id: User UUID
+
+    Returns:
+        User instance or None
+    """
+    from user_management.models.user import User
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()

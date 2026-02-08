@@ -4,6 +4,11 @@
 
 set -e  # Exit on any error
 
+# Source SSOT configuration (#808)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=infrastructure/shared/scripts/lib/ssot-config.sh
+source "${SCRIPT_DIR}/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -65,7 +70,7 @@ if [[ "$DEV_MODE" == "true" ]]; then
     # Development mode: Sync source files
     echo -e "${YELLOW}📁 Syncing source files to frontend VM...${NC}"
     start_time=$(date +%s)
-    
+
     if ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/; then
         end_time=$(date +%s)
         sync_time=$((end_time - start_time))
@@ -77,7 +82,7 @@ if [[ "$DEV_MODE" == "true" ]]; then
 
     # Check if dependencies need repopulation
     echo -e "${YELLOW}🔍 Checking dependencies status...${NC}"
-    if ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "test -f /home/autobot/autobot-vue/node_modules/.vite/deps/vue.js" 2>/dev/null; then
+    if ssh -i ~/.ssh/autobot_key autobot@"${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "test -f /home/autobot/autobot-vue/node_modules/.vite/deps/vue.js" 2>/dev/null; then
         echo -e "${GREEN}✅ Dependencies are current, skipping sync${NC}"
     else
         echo -e "${YELLOW}📦 Dependencies missing or outdated, syncing...${NC}"
@@ -88,18 +93,18 @@ if [[ "$DEV_MODE" == "true" ]]; then
             exit 1
         fi
     fi
-    
+
     # Skip production deployment in dev mode
     echo -e "${GREEN}🎉 Development sync completed!${NC}"
     echo "=================================="
     echo -e "${BLUE}Summary:${NC}"
     echo "  • Mode: 🧪 Development source sync"
-    echo "  • Target: Frontend VM (172.16.168.21)"
+    echo "  • Target: Frontend VM (${AUTOBOT_FRONTEND_HOST:-172.16.168.21})"
     echo "  • Status: ✅ Source files synced"
     echo ""
     echo -e "${BLUE}Next steps:${NC}"
     echo "  • Frontend dev server will auto-reload changes"
-    echo "  • Open browser: http://172.16.168.21:5173"
+    echo "  • Open browser: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}"
     echo "  • Check console for any errors"
     exit 0
 else
@@ -180,11 +185,11 @@ frontend_ip=$(ansible frontend -i ansible/inventory/production.yml -m shell -a "
 
 if [[ "$frontend_ip" != "unknown" ]]; then
     echo -e "${BLUE}  🌐 Frontend URL: http://${frontend_ip}:5173${NC}"
-    
+
     # Test if frontend is serving files
     if curl -s -o /dev/null -w '%{http_code}' "http://${frontend_ip}:5173" | grep -q "200"; then
         echo -e "${GREEN}  ✅ Frontend is serving files${NC}"
-        
+
         # Check if new bundle is being served
         if curl -s "http://${frontend_ip}:5173" | grep -q "$bundle_name"; then
             echo -e "${GREEN}  ✅ New bundle is active: ${bundle_name}${NC}"
