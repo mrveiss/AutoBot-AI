@@ -17,8 +17,8 @@ class PathConstants:
     # Project root - dynamically determined
     PROJECT_ROOT: Path = Path(__file__).parent.parent.parent
 
-    # Backend resources (#793)
-    PROMPTS_DIR: Path = PROJECT_ROOT / "autobot-user-backend" / "resources" / "prompts"
+    # Prompt templates (#793)
+    PROMPTS_DIR: Path = PROJECT_ROOT / "prompts"
 
     # Core directories (updated for #781 reorganization)
     CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
