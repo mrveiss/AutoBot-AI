@@ -7,9 +7,9 @@
 import sys
 from pathlib import Path
 
-# Add slm-server to path for imports (absolute path)
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "slm-server"))
+# Add autobot-slm-backend to path for imports
+slm_backend_root = Path(__file__).parent.parent
+sys.path.insert(0, str(slm_backend_root))
 
 import pytest  # noqa: E402
 from models.database import Base as SLMBase  # noqa: E402

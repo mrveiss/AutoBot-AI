@@ -11,12 +11,12 @@ from typing import Any, Dict
 
 import pytest
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# Add project root and user backend to path
+project_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(project_root / "autobot-user-backend"))
 
 # Import configuration manager
-from src.config import unified_config_manager
+from config import unified_config_manager
 
 
 @pytest.fixture(scope="session")

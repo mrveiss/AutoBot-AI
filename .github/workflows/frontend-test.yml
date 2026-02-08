@@ -10,12 +10,12 @@ on:
   push:
     branches: [main, develop, 'Dev_*']
     paths:
-      - 'autobot-vue/**'
+      - 'autobot-user-frontend/**'
       - '.github/workflows/frontend-test.yml'
   pull_request:
     branches: [main, develop]
     paths:
-      - 'autobot-vue/**'
+      - 'autobot-user-frontend/**'
       - '.github/workflows/frontend-test.yml'
 
 env:
@@ -37,11 +37,11 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm ci
 
       - name: Run type checking
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         continue-on-error: true
         run: |
           npm run type-check || {
@@ -49,7 +49,7 @@ jobs:
           }
 
       - name: Run linting
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         continue-on-error: true
         run: |
           npm run lint || {
@@ -57,24 +57,24 @@ jobs:
           }
 
       - name: Run unit tests
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm run test:unit || echo "⚠️ Unit tests failed - continuing"
 
       - name: Run integration tests
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm run test:integration || echo "⚠️ Integration tests failed - continuing"
 
       - name: Generate coverage report
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm run test:coverage || echo "⚠️ Coverage generation failed - continuing"
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
-          file: ./autobot-vue/coverage/lcov.info
-          directory: ./autobot-vue/coverage
+          file: ./autobot-user-frontend/coverage/lcov.info
+          directory: ./autobot-user-frontend/coverage
           flags: frontend
-          name: autobot-vue-coverage
+          name: autobot-user-frontend-coverage
           fail_ci_if_error: false
 
       - name: Upload test results
@@ -83,14 +83,14 @@ jobs:
         with:
           name: test-results-unit
           path: |
-            autobot-vue/test-results/
-            autobot-vue/coverage/
+            autobot-user-frontend/test-results/
+            autobot-user-frontend/coverage/
           retention-days: 30
 
       - name: Cleanup node_modules
         if: always()
         run: |
-          rm -rf autobot-vue/node_modules || true
+          rm -rf autobot-user-frontend/node_modules || true
 
   # Job 2: Security Scanning
   security-scan:
@@ -107,17 +107,17 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm ci
 
       - name: Run npm audit
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: |
           npm audit --audit-level=high || true
           npm audit --json > audit-results.json || true
 
       - name: Run dependency vulnerability scan
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: |
           npx auditjs ossi || true
 
@@ -126,13 +126,13 @@ jobs:
         if: always()
         with:
           name: security-scan-results
-          path: autobot-vue/audit-results.json
+          path: autobot-user-frontend/audit-results.json
           retention-days: 30
 
       - name: Cleanup
         if: always()
         run: |
-          rm -rf autobot-vue/node_modules || true
+          rm -rf autobot-user-frontend/node_modules || true
 
   # Job 3: Build Test
   build-test:
@@ -150,15 +150,15 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm ci
 
       - name: Build application
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: npm run build
 
       - name: Analyze bundle size
-        working-directory: autobot-vue
+        working-directory: autobot-user-frontend
         run: |
           du -sh dist/
           find dist/ -name "*.js" -exec du -h {} \; | sort -hr
@@ -166,7 +166,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -rf autobot-vue/node_modules autobot-vue/dist || true
+          rm -rf autobot-user-frontend/node_modules autobot-user-frontend/dist || true
 
   # Job 4: Test Summary and Reporting
   test-summary:
