@@ -41,12 +41,12 @@
       blockinfile:
         path: /etc/hosts
         block: |
-          # AutoBot VM Infrastructure
-          172.16.168.21  autobot-frontend.autobot.internal  autobot-frontend
-          172.16.168.22  autobot-backend.autobot.internal   autobot-backend
-          172.16.168.23  autobot-database.autobot.internal  autobot-database
-          172.16.168.24  autobot-aiml.autobot.internal      autobot-aiml
-          172.16.168.25  autobot-browser.autobot.internal   autobot-browser
+          # AutoBot VM Infrastructure (generated from inventory)
+          {% for host in groups['all'] %}
+          {% if hostvars[host]['ansible_host'] is defined and hostvars[host]['ansible_host'] != '127.0.0.1' %}
+          {{ hostvars[host].get('network_address', hostvars[host]['ansible_host']) }}  {{ hostvars[host].get('vm_hostname', host) }}.{{ autobot_domain | default('autobot.internal') }}  {{ hostvars[host].get('vm_hostname', host) }}
+          {% endif %}
+          {% endfor %}
         marker: "# {mark} AUTOBOT VM BLOCK"
         backup: yes
 

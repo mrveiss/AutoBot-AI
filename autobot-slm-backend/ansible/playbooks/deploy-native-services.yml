@@ -223,12 +223,12 @@
         npm run build
       become_user: autobot-service
       environment:
-        VITE_BACKEND_HOST: "172.16.168.20"  # WSL Host IP
-        VITE_BACKEND_PORT: "8001"
-        VITE_REDIS_HOST: "172.16.168.23"
-        VITE_AI_STACK_HOST: "172.16.168.24"
-        VITE_BROWSER_HOST: "172.16.168.25"
-        VITE_NPU_WORKER_HOST: "172.16.168.22"
+        VITE_BACKEND_HOST: "{{ backend_host }}"
+        VITE_BACKEND_PORT: "{{ backend_port }}"
+        VITE_REDIS_HOST: "{{ redis_host }}"
+        VITE_AI_STACK_HOST: "{{ ai_stack_host }}"
+        VITE_BROWSER_HOST: "{{ browser_host }}"
+        VITE_NPU_WORKER_HOST: "{{ npu_worker_host }}"
 
     - name: Configure Nginx for frontend
       copy:
@@ -248,7 +248,7 @@
 
               # Proxy API requests to backend VM
               location /api/ {
-                  proxy_pass http://172.16.168.20:8001/api/;
+                  proxy_pass http://{{ backend_host }}:{{ backend_port }}/api/;
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection 'upgrade';
@@ -262,7 +262,7 @@
 
               # WebSocket proxy for real-time features
               location /ws/ {
-                  proxy_pass http://172.16.168.20:8001/ws/;
+                  proxy_pass http://{{ backend_host }}:{{ backend_port }}/ws/;
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection "Upgrade";
@@ -572,7 +572,7 @@
           ExecStart=/opt/autobot/venv/bin/python -m docker.ai-stack.ai_server
           Environment="AI_SERVER_HOST=0.0.0.0"
           Environment="AI_SERVER_PORT=8080"
-          Environment="REDIS_HOST=172.16.168.23"
+          Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT=6379"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
           Environment="OLLAMA_HOST=http://localhost:11434"
@@ -597,7 +597,7 @@
           ExecStart=/opt/autobot/venv/bin/python -m docker.npu-worker.npu_worker
           Environment="NPU_SERVER_HOST=0.0.0.0"
           Environment="NPU_SERVER_PORT=8081"
-          Environment="REDIS_HOST=172.16.168.23"
+          Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT=6379"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
           Environment="DEVICE=CPU"
@@ -687,7 +687,7 @@
           ExecStart=/usr/bin/node playwright-server.js
           Environment="DISPLAY=:99"
           Environment="PLAYWRIGHT_SERVER_PORT=3000"
-          Environment="REDIS_HOST=172.16.168.23"
+          Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT=6379"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
           Restart=always

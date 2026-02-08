@@ -28,7 +28,7 @@ redis_tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('
 redis_tls_source: "{{ lookup('env', 'AUTOBOT_TLS_SOURCE') | default('local', true) }}"
 
 # SLM API configuration (for redis_tls_source='slm-api')
-slm_api_url: "{{ lookup('env', 'SLM_API_URL') | default('http://172.16.168.19:8000', true) }}"
+slm_api_url: "{{ lookup('env', 'SLM_API_URL') | default('http://' ~ (slm_host | default('127.0.0.1')) ~ ':' ~ (slm_port | default(8000)), true) }}"
 slm_api_token: "{{ lookup('env', 'SLM_API_TOKEN') | default('', true) }}"
 redis_tls_credential_id: "{{ lookup('env', 'REDIS_TLS_CREDENTIAL_ID') | default('', true) }}"
 

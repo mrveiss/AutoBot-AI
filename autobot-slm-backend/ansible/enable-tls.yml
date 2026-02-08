@@ -79,7 +79,7 @@
       ansible.builtin.lineinfile:
         path: /opt/autobot/autobot-vue/.env.local
         regexp: '^VITE_API_BASE_URL='
-        line: "VITE_API_BASE_URL=https://172.16.168.20:8443"
+        line: "VITE_API_BASE_URL=https://{{ backend_host }}:8443"
         create: true
         mode: "0644"
         owner: autobot
@@ -225,9 +225,9 @@
           ============================================
 
           Services configured for TLS:
-            - Frontend: https://172.16.168.21:443
-            - Backend:  https://172.16.168.20:8443
-            - Redis:    redis://172.16.168.23:6380 (TLS)
+            - Frontend: https://{{ frontend_host }}:443
+            - Backend:  https://{{ backend_host }}:8443
+            - Redis:    redis://{{ redis_host }}:6380 (TLS)
 
           Update your SSOT config (.env) with:
             AUTOBOT_FRONTEND_TLS_ENABLED=true
@@ -235,7 +235,7 @@
             AUTOBOT_REDIS_TLS_ENABLED=true
 
           Verify with:
-            curl -k https://172.16.168.21:443
-            curl -k https://172.16.168.20:8443/api/health
-            redis-cli -h 172.16.168.23 -p 6380 --tls ping
+            curl -k https://{{ frontend_host }}:443
+            curl -k https://{{ backend_host }}:8443/api/health
+            redis-cli -h {{ redis_host }} -p 6380 --tls ping
           ============================================

@@ -11,10 +11,10 @@
 
   vars:
     # TLS settings from environment
+    # redis_host and redis_port come from inventory (production.yml all.vars)
+    # Override via: ansible-playbook health-check.yml -e "redis_host=x.x.x.x"
     redis_tls_enabled: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_ENABLED') | default('false', true) | lower == 'true' }}"
     redis_tls_port: "{{ lookup('env', 'AUTOBOT_REDIS_TLS_PORT') | default(6380, true) }}"
-    redis_port: "{{ lookup('env', 'AUTOBOT_REDIS_PORT') | default(6379, true) }}"
-    redis_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('172.16.168.23', true) }}"
     tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
 
     # Services to check
