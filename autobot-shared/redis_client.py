@@ -150,10 +150,24 @@ __all__ = [
 
 
 # =============================================================================
-# Global Connection Manager Instance
+# Global Connection Manager Instance (Lazy - Issue #803)
 # =============================================================================
+# Lazy initialization prevents Redis connection errors during module imports
+# on dev machines where Redis VM (172.16.168.23) is unreachable.
 
-_connection_manager = RedisConnectionManager()
+_connection_manager: Optional[RedisConnectionManager] = None
+
+
+def _get_connection_manager() -> RedisConnectionManager:
+    """Get the singleton RedisConnectionManager, creating it on first use.
+
+    Issue #803: Lazy initialization avoids Redis connection errors during
+    module imports on dev machines where the Redis VM is unreachable.
+    """
+    global _connection_manager
+    if _connection_manager is None:
+        _connection_manager = RedisConnectionManager()
+    return _connection_manager
 
 
 # =============================================================================
@@ -229,10 +243,10 @@ def get_redis_client(
     """
     if async_client:
         # Return coroutine for async client
-        return _connection_manager.get_async_client(database)
+        return _get_connection_manager().get_async_client(database)
     else:
         # Return sync client directly
-        return _connection_manager.get_sync_client(database)
+        return _get_connection_manager().get_sync_client(database)
 
 
 # =============================================================================
@@ -272,12 +286,12 @@ def get_main_redis(**kwargs) -> Optional[redis.Redis]:
 
 def get_redis_health() -> Dict[str, Any]:
     """Get Redis health status."""
-    return _connection_manager.get_health_status()
+    return _get_connection_manager().get_health_status()
 
 
 def get_redis_metrics(database: Optional[str] = None) -> Dict[str, Any]:
     """Get Redis connection metrics."""
-    return _connection_manager.get_metrics(database)
+    return _get_connection_manager().get_metrics(database)
 
 
 def get_connection_info(database: str = "main") -> Dict[str, Any]:
@@ -370,7 +384,7 @@ def test_redis_connection(database: str = "main") -> bool:
 
 async def close_all_redis_connections():
     """Close all Redis connections."""
-    await _connection_manager.close_all()
+    await _get_connection_manager().close_all()
 
 
 # =============================================================================

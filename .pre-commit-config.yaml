@@ -80,6 +80,7 @@ repos:
       - id: bandit
         args: [-c, .bandit]
         files: ^(autobot-user-backend/|autobot-slm-backend/|autobot-shared/)
+        exclude: (_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
   # Hardcoded value detection (Issue #694)

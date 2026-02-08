@@ -29,16 +29,14 @@ from typing import Any, Dict, List, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import RetryConfig, TimingConstants
+from monitoring.prometheus_metrics import get_metrics_manager
 from redis.asyncio.connection import SSLConnection as AsyncSSLConnection
 from redis.backoff import ExponentialBackoff
 from redis.connection import ConnectionPool, SSLConnection
 from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
-
-from config import config as config_manager
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import RetryConfig, TimingConstants
-from monitoring.prometheus_metrics import get_metrics_manager
 from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
 from utils.redis_management.statistics import (
     ConnectionMetrics,
@@ -47,6 +45,8 @@ from utils.redis_management.statistics import (
     RedisStats,
 )
 from utils.redis_management.types import DATABASE_MAPPING, ConnectionState
+
+from config import config as config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -758,7 +758,7 @@ class RedisConnectionManager:
         Records failure metrics and updates connection state.
         Issue #620.
         """
-        logger.error(
+        logger.warning(
             f"Failed to get sync Redis client for database '{database_name}': {error}"
         )
         self._record_failure(database_name, error)
@@ -857,7 +857,7 @@ class RedisConnectionManager:
             return client
 
         except Exception as e:
-            logger.error(
+            logger.warning(
                 f"Failed to get async Redis client for database '{database_name}': {e}"
             )
             self._record_failure(database_name, e)
