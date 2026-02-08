@@ -38,6 +38,23 @@ all:
     npu_worker_port: 8081
 
   children:
+    slm:
+      hosts:
+        autobot-slm:
+          ansible_host: 172.16.168.19  # SLM Server
+          vm_id: "autobot-slm-vm"
+          vm_role: "slm"
+          vm_hostname: "autobot-slm"
+          vm_resources:
+            ram_mb: 4096
+            cpu_cores: 2
+            disk_gb: 50
+          services:
+            - slm-server
+            - slm-api
+      vars:
+        slm_port: 8000
+
     frontend:
       hosts:
         autobot-frontend:
@@ -197,14 +214,40 @@ all:
         browser_timeout: 30
         headless_mode: false
 
+    reserved:
+      hosts:
+        autobot-node-26:
+          ansible_host: 172.16.168.26  # Reserved node (pending role)
+          vm_id: "autobot-node-26-vm"
+          vm_role: "reserved"
+          vm_hostname: "05-Node-26"
+          vm_resources:
+            ram_mb: 4096
+            cpu_cores: 2
+            disk_gb: 50
+          services: []
+
+        autobot-node-27:
+          ansible_host: 172.16.168.27  # Reserved node (pending role)
+          vm_id: "autobot-node-27-vm"
+          vm_role: "reserved"
+          vm_hostname: "06-Node-27"
+          vm_resources:
+            ram_mb: 4096
+            cpu_cores: 2
+            disk_gb: 50
+          services: []
+
 # Environment-specific groups
 production_vms:
   children:
+    slm:
     frontend:
     npu:
     database:
     aiml:
     browser:
+    reserved:
   vars:
     environment_type: "production"
     monitoring_enabled: true
