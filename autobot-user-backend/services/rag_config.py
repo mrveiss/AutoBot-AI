@@ -12,9 +12,9 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from autobot_shared.logging_manager import get_llm_logger
 from backend.type_defs.common import Metadata
 from constants.model_constants import model_config
-from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_config")
 
@@ -67,12 +67,9 @@ class RAGConfig:
         # Validate weights sum to 1.0 (or close to it)
         weight_sum = self.hybrid_weight_semantic + self.hybrid_weight_keyword
         if not (0.99 <= weight_sum <= 1.01):
-            logger.warning(
-                f"Hybrid weights sum to {weight_sum:.2f}, normalizing to 1.0"
-            ),
-            total = weight_sum
-            self.hybrid_weight_semantic /= total
-            self.hybrid_weight_keyword /= total
+            logger.warning("Hybrid weights sum to %.2f, normalizing to 1.0", weight_sum)
+            self.hybrid_weight_semantic /= weight_sum
+            self.hybrid_weight_keyword /= weight_sum
 
         # Validate ranges
         if not 0 <= self.hybrid_weight_semantic <= 1:

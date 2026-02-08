@@ -11,9 +11,9 @@ Contains the main ChatKnowledgeService class that coordinates knowledge retrieva
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.services.rag_service import RAGService
 from advanced_rag_optimizer import SearchResult
 from autobot_shared.logging_manager import get_llm_logger
+from backend.services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher
@@ -210,6 +210,10 @@ class ChatKnowledgeService:
         """
         filtered = []
         for result in results:
+            # Issue #788: Defensive check for non-SearchResult items
+            if not hasattr(result, "rerank_score"):
+                logger.warning("Skipping non-SearchResult item: %s", type(result))
+                continue
             # Prefer rerank_score if available (cross-encoder is more accurate)
             score = (
                 result.rerank_score

@@ -14,7 +14,6 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
@@ -82,7 +81,7 @@ class ToolRegistry:
             result = await self.worker_node.execute_task(task)
             return result
         except Exception as e:
-            self.logger.error("Error executing task %s: %s", task.get('task_id'), e)
+            self.logger.error("Error executing task %s: %s", task.get("task_id"), e)
             return {"status": "error", "message": str(e)}
 
     # System Integration Tools
@@ -329,14 +328,21 @@ class ToolRegistry:
             }
 
         try:
-            results = await self.knowledge_base.get_fact(fact_id=fact_id, query=query)
+            # Issue #788: get_fact() only accepts fact_id, use search() for queries
+            if fact_id is not None:
+                result = self.knowledge_base.get_fact(str(fact_id))
+                results = [result] if result else []
+            elif query:
+                results = await self.knowledge_base.search(query, top_k=5)
+            else:
+                results = []
 
             if results:
                 formatted_results = []
                 for result in results:
-                    fact_id = result.get("id", "N/A")
+                    rid = result.get("id", "N/A")
                     content = result.get("content", "No content")
-                    formatted_results.append(f"Fact {fact_id}: {content}")
+                    formatted_results.append(f"Fact {rid}: {content}")
 
                 result_text = "\n".join(formatted_results)
             else:
