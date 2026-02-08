@@ -56,6 +56,29 @@
 
 ---
 
+## MULTI-AGENT SAFETY (MANDATORY)
+
+### Git Operations
+
+- Do NOT create/apply/drop `git stash` entries unless explicitly requested
+- Do NOT switch branches unless explicitly requested
+- Do NOT modify `git worktree` checkouts unless explicitly requested
+- When pushing, use `git pull --rebase` to integrate changes (never discard others' work)
+
+### Scoped Commits
+
+- When user says "commit", scope to YOUR changes only
+- When user says "commit all", commit everything in grouped chunks
+- Focus reports on your edits; avoid guard-rail disclaimers unless blocked
+
+### File Handling
+
+- When you see unrecognized files, keep going
+- Focus on your changes and commit only those
+- End with brief "other files present" note only if relevant
+
+---
+
 ## CODE OWNERSHIP (MANDATORY - UNBREAKABLE)
 
 **mrveiss** is the **SOLE OWNER and AUTHOR** of ALL AutoBot code. No exceptions.
@@ -129,6 +152,32 @@ When merging duplicate code: **Preserve ALL features** + **Choose BEST implement
 - Always verify the issue number matches the work being done
 - Before committing, double-check: "Is this commit for issue #X?"
 - Example: `git commit -m "feat: Add feature (#123)"` not `(#456)`
+
+### PR Workflow
+
+**Review Mode** (PR link only):
+
+- Read `gh pr view/diff`
+- Do NOT switch branches
+- Do NOT change code
+
+**Landing Mode:**
+
+1. Create integration branch from `main`
+2. Bring in PR commits (prefer rebase for linear history)
+3. Apply fixes, add changelog
+4. Run full gate locally BEFORE committing
+5. Commit with contributor attribution
+6. Merge back to `main`
+7. Switch to `main` (never stay on topic branch)
+
+---
+
+## RELEASE CHANNELS
+
+- **stable**: Tagged releases only (e.g., `vYYYY.M.D`)
+- **beta**: Prerelease tags `vYYYY.M.D-beta.N`
+- **dev**: Moving head on `main` (no tag)
 
 ---
 
