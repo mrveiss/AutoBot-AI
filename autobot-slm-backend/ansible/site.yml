@@ -22,6 +22,10 @@
           - vim
           - unzip
           - software-properties-common
+          # Network diagnostics (#703)
+          - netcat-openbsd
+          - iputils-ping
+          - dnsutils
         state: present
       tags: ['system', 'packages']
 
