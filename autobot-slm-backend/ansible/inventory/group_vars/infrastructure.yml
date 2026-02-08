@@ -1,0 +1,66 @@
+---
+# AutoBot Infrastructure - Single Source of Truth for Network Configuration
+# Issue #808: Centralize all hardcoded IPs
+#
+# This file is the canonical Ansible source for network topology.
+# All group_vars and templates MUST reference these variables instead of
+# hardcoding IP addresses or subnet ranges.
+#
+# Host IPs are defined once in the inventory files:
+#   - production.yml    (primary: ansible_host per VM)
+#   - slm-nodes.yml     (SLM node registry)
+#
+# Service discovery variables (backend_host, frontend_host, redis_host, etc.)
+# are derived from inventory ansible_host values in production.yml.
+#
+# Shell scripts use: infrastructure/shared/scripts/lib/ssot-config.sh
+# Python code uses:  config/complete.yaml via autobot_shared.ssot_config
+# Environment vars:  .env.network (generated from config/complete.yaml)
+
+# ==========================================
+# NETWORK TOPOLOGY
+# ==========================================
+
+# Canonical network configuration - referenced by all group_vars
+# Override these in inventory vars for different environments
+network_subnet: "172.16.168.0/24"
+network_gateway: "172.16.168.1"
+
+# ==========================================
+# INFRASTRUCTURE HOST MAP
+# ==========================================
+# Convenience dict for templates and documentation.
+# For Ansible plays, prefer the flat variables (backend_host, redis_host, etc.)
+# defined in production.yml which use hostvars lookups.
+
+infrastructure:
+  hosts:
+    slm: "172.16.168.19"
+    backend: "172.16.168.20"
+    frontend: "172.16.168.21"
+    npu: "172.16.168.22"
+    database: "172.16.168.23"
+    aiml: "172.16.168.24"
+    browser: "172.16.168.25"
+    reserved_1: "172.16.168.26"
+    reserved_2: "172.16.168.27"
+
+  ports:
+    slm: 8000
+    backend: 8001
+    frontend: 5173
+    npu_worker: 8081
+    redis: 6379
+    ai_stack: 8080
+    browser: 3000
+    vnc: 6080
+    ollama: 11434
+
+  # Service URLs (derived from hosts and ports above)
+  urls:
+    backend: "http://{{ infrastructure.hosts.backend }}:{{ infrastructure.ports.backend }}"
+    frontend: "http://{{ infrastructure.hosts.frontend }}:{{ infrastructure.ports.frontend }}"
+    redis: "redis://{{ infrastructure.hosts.database }}:{{ infrastructure.ports.redis }}"
+    ai_stack: "http://{{ infrastructure.hosts.aiml }}:{{ infrastructure.ports.ai_stack }}"
+    npu_worker: "http://{{ infrastructure.hosts.npu }}:{{ infrastructure.ports.npu_worker }}"
+    browser: "http://{{ infrastructure.hosts.browser }}:{{ infrastructure.ports.browser }}"

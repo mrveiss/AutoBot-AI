@@ -14,14 +14,14 @@ autobot:
   group: "autobot"
   home_dir: "/home/autobot"
 
-  # Service URLs (internal network)
+  # Service URLs - derived from infrastructure.yml SSOT (#808)
   services:
-    frontend: "http://192.168.100.10"
-    backend: "http://192.168.100.20:8001"
-    database: "redis://192.168.100.50:6379"
-    ai_stack: "http://192.168.100.30:8080"
-    npu_worker: "http://192.168.100.40:8081"
-    browser: "http://192.168.100.40:3000"
+    frontend: "http://{{ frontend_host }}:{{ frontend_port }}"
+    backend: "http://{{ backend_host }}:{{ backend_port }}"
+    database: "redis://{{ redis_host }}:{{ redis_port }}"
+    ai_stack: "http://{{ ai_stack_host }}:{{ ai_stack_port }}"
+    npu_worker: "http://{{ npu_worker_host }}:{{ npu_worker_port }}"
+    browser: "http://{{ browser_host }}:{{ browser_port }}"
 
 # ==========================================
 # NETWORK CONFIGURATION
