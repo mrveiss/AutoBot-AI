@@ -1,125 +1,12 @@
+# Infrastructure config (IPs, ports, hosts, LLM endpoints) comes from SSOT/.env
+# See: docs/developer/SSOT_CONFIG_GUIDE.md
 backend:
-  api_endpoint: http://172.16.168.20:8001
   audit_log_file: logs/audit.log
   chat_data_dir: data/chats
   chat_history_file: data/chat_history.json
-  cors_origins: []
   knowledge_base_db: data/knowledge_base.db
-  llm:
-    ollama:
-      endpoint: http://127.0.0.1:11434
-      models: []
-      selected_model: mistral:7b-instruct
-    unified:
-      local:
-        providers:
-          ollama:
-            host: 127.0.0.1
-            selected_model: mistral:7b-instruct
-      ollama:
-        endpoint: http://127.0.0.1:11434
-        models: []
-        selected_model: mistral:7b-instruct
-      unified:
-        local:
-          providers:
-            ollama:
-              host: 127.0.0.1
-              selected_model: mistral:7b-instruct
-        ollama:
-          endpoint: http://127.0.0.1:11434
-          models: []
-          selected_model: mistral:7b-instruct
-        unified:
-          local:
-            providers:
-              ollama:
-                host: 127.0.0.1
-                selected_model: mistral:7b-instruct
-          ollama:
-            endpoint: http://127.0.0.1:11434
-            models: []
-            selected_model: mistral:7b-instruct
-          unified:
-            local:
-              providers:
-                ollama:
-                  host: 127.0.0.1
-                  selected_model: mistral:7b-instruct
-            ollama:
-              endpoint: http://127.0.0.1:11434
-              models: []
-              selected_model: mistral:7b-instruct
-            unified:
-              local:
-                providers:
-                  ollama:
-                    host: 127.0.0.1
-                    selected_model: mistral:7b-instruct
-              ollama:
-                endpoint: http://127.0.0.1:11434
-                models: []
-                selected_model: mistral:7b-instruct
-              unified:
-                local:
-                  providers:
-                    ollama:
-                      host: 127.0.0.1
-                      selected_model: mistral:7b-instruct
-                ollama:
-                  endpoint: http://127.0.0.1:11434
-                  models: []
-                  selected_model: mistral:7b-instruct
-                unified:
-                  local:
-                    providers:
-                      ollama:
-                        host: 127.0.0.1
-                        selected_model: mistral:7b-instruct
-                  ollama:
-                    endpoint: http://127.0.0.1:11434
-                    models: []
-                    selected_model: mistral:7b-instruct
-                  unified:
-                    local:
-                      providers:
-                        ollama:
-                          host: 127.0.0.1
-                          selected_model: mistral:7b-instruct
-                    ollama:
-                      endpoint: http://127.0.0.1:11434
-                      models: []
-                      selected_model: mistral:7b-instruct
-                    unified:
-                      local:
-                        providers:
-                          ollama:
-                            host: 127.0.0.1
-                            selected_model: mistral:7b-instruct
-                      ollama:
-                        endpoint: http://127.0.0.1:11434
-                        models: []
-                        selected_model: mistral:7b-instruct
-                      unified:
-                        local:
-                          providers:
-                            ollama:
-                              host: 127.0.0.1
-                              selected_model: mistral:7b-instruct
-                        ollama:
-                          endpoint: http://127.0.0.1:11434
-                          models: []
-                          selected_model: mistral:7b-instruct
-                        unified:
-                          local:
-                            providers:
-                              ollama:
-                                host: 127.0.0.1
-                                selected_model: mistral:7b-instruct
-  max_retries: 3
   reliability_stats_file: data/reliability_stats.json
-  server_host: 172.16.168.20
-  server_port: 8001
+  max_retries: 3
   streaming: true
   timeout: 60
 chat:
@@ -150,10 +37,6 @@ memory:
   long_term:
     enabled: true
     retention_days: 30
-  redis:
-    enabled: false
-    host: 172.16.168.23
-    port: 6379
   short_term:
     duration_minutes: 30
     enabled: true

@@ -8,6 +8,7 @@ Provides agents with access to Prometheus metrics data
 """
 
 import asyncio
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -16,92 +17,79 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Resource, TextContent, Tool
 
-# Prometheus configuration
-PROMETHEUS_URL = "http://172.16.168.23:9090"
+# Prometheus configuration - uses SSOT env var with fallback (#639)
+PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "http://172.16.168.23:9090")
 
 app = Server("prometheus-mcp")
+
+# Tool definitions extracted as module-level constant (#639)
+_PROMQL_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": (
+                "PromQL query expression "
+                "(e.g., 'autobot_cpu_usage_percent', 'node_load1')"
+            ),
+        }
+    },
+    "required": ["query"],
+}
+
+_RANGE_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string", "description": "PromQL query expression"},
+        "duration": {
+            "type": "string",
+            "description": "Time duration (e.g., '1h', '6h', '1d')",
+            "default": "1h",
+        },
+        "step": {
+            "type": "string",
+            "description": "Query resolution step (e.g., '15s', '1m')",
+            "default": "15s",
+        },
+    },
+    "required": ["query"],
+}
+
+_VM_METRICS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "vm_ip": {
+            "type": "string",
+            "description": "VM IP address (e.g., '172.16.168.21')",
+        }
+    },
+    "required": ["vm_ip"],
+}
+
+_FILTER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "filter": {
+            "type": "string",
+            "description": "Optional filter pattern (e.g., 'autobot_', 'node_')",
+            "default": "",
+        }
+    },
+}
+
+_EMPTY_SCHEMA = {"type": "object", "properties": {}}
 
 
 @app.list_tools()
 async def list_tools() -> List[Tool]:
     """List available Prometheus query tools."""
     return [
-        Tool(
-            name="query_metric",
-            description="Query current value of a Prometheus metric",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "PromQL query expression (e.g., 'autobot_cpu_usage_percent', 'node_load1')",
-                    }
-                },
-                "required": ["query"],
-            },
-        ),
-        Tool(
-            name="query_range",
-            description="Query metric values over a time range",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "PromQL query expression",
-                    },
-                    "duration": {
-                        "type": "string",
-                        "description": "Time duration (e.g., '1h', '6h', '1d')",
-                        "default": "1h",
-                    },
-                    "step": {
-                        "type": "string",
-                        "description": "Query resolution step (e.g., '15s', '1m')",
-                        "default": "15s",
-                    },
-                },
-                "required": ["query"],
-            },
-        ),
-        Tool(
-            name="get_system_metrics",
-            description="Get current system metrics for all machines (CPU, memory, load)",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="get_service_health",
-            description="Get health status of all AutoBot services",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="get_vm_metrics",
-            description="Get detailed metrics for a specific VM",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "vm_ip": {
-                        "type": "string",
-                        "description": "VM IP address (e.g., '172.16.168.21')",
-                    }
-                },
-                "required": ["vm_ip"],
-            },
-        ),
-        Tool(
-            name="list_available_metrics",
-            description="List all available Prometheus metrics with descriptions",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "filter": {
-                        "type": "string",
-                        "description": "Optional filter pattern (e.g., 'autobot_', 'node_')",
-                        "default": "",
-                    }
-                },
-            },
-        ),
+        Tool(name="query_metric", description="Query current value of a Prometheus metric", inputSchema=_PROMQL_QUERY_SCHEMA),
+        Tool(name="query_range", description="Query metric values over a time range", inputSchema=_RANGE_QUERY_SCHEMA),
+        Tool(name="get_system_metrics", description="Get current system metrics for all machines (CPU, memory, load)", inputSchema=_EMPTY_SCHEMA),
+        Tool(name="get_service_health", description="Get health status of all AutoBot services", inputSchema=_EMPTY_SCHEMA),
+        Tool(name="get_vm_metrics", description="Get detailed metrics for a specific VM", inputSchema=_VM_METRICS_SCHEMA),
+        Tool(name="list_available_metrics", description="List all available Prometheus metrics with descriptions", inputSchema=_FILTER_SCHEMA),
     ]
 
 

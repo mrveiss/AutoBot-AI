@@ -18,21 +18,19 @@ from typing import Optional
 
 
 def _get_default_postgres_host() -> str:
-    """
-    Get default PostgreSQL host from SSOT config.
+    """Get default PostgreSQL host from SSOT config.
 
-    PostgreSQL runs on the Redis VM (172.16.168.23) in AutoBot architecture.
-    Issue #694: Config consolidation - uses SSOT with proper fallback.
+    PostgreSQL runs on the Redis VM in AutoBot architecture.
+    Uses ConfigRegistry for consistent fallback chain (#639).
     """
     try:
+        from config.registry import ConfigRegistry
+
+        return ConfigRegistry.get("vm.redis", "172.16.168.23")
+    except Exception:
         from autobot_shared.ssot_config import get_config
 
         return get_config().vm.redis
-    except Exception:
-        # Fallback only if SSOT config completely unavailable
-        import os
-
-        return os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
 
 
 class DeploymentMode(str, Enum):
