@@ -12,10 +12,9 @@ import logging
 import time
 from typing import Optional
 
+from circuit_breaker import circuit_breaker_async
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
-
-from circuit_breaker import circuit_breaker_async
 
 from ..models import LLMRequest, LLMResponse
 
@@ -37,9 +36,14 @@ class OpenAIProvider:
         Initialize OpenAI provider.
 
         Args:
-            api_key: OpenAI API key
+            api_key: OpenAI API key (falls back to unified config #536)
         """
-        self.api_key = api_key
+        if api_key:
+            self.api_key = api_key
+        else:
+            from config import UnifiedConfigManager
+
+            self.api_key = UnifiedConfigManager().get_api_key("openai")
 
     def _record_success_span_attributes(
         self, span, response, processing_time: float

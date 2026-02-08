@@ -22,6 +22,14 @@ hardware_acceleration:
   - cpu
 llm_config:
   default_provider: ollama
+  active_provider: ollama
+  fallback_chain:
+    - ollama
+    - openai
+    - vllm
+    - transformers
+    - mock
+  fallback_enabled: true
   ollama:
     context_length: 4096
     gpu_enabled: true
