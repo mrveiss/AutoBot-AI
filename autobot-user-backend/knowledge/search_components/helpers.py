@@ -22,15 +22,24 @@ def decode_redis_hash(fact_data: Dict) -> Dict[str, str]:
     return decoded
 
 
+def _parse_metadata(raw_metadata: Any) -> Dict[str, Any]:
+    """Parse metadata that may be a JSON string or already a dict (#788)."""
+    if isinstance(raw_metadata, dict):
+        return raw_metadata
+    if not raw_metadata:
+        return {}
+    try:
+        return json.loads(raw_metadata)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
 def matches_category(decoded: Dict[str, str], category: Optional[str]) -> bool:
     """Check if fact matches category filter (Issue #315)."""
     if not category:
         return True
-    try:
-        metadata = json.loads(decoded.get("metadata", "{}"))
-        return metadata.get("category") == category
-    except json.JSONDecodeError:
-        return False
+    metadata = _parse_metadata(decoded.get("metadata", "{}"))
+    return metadata.get("category") == category
 
 
 def score_fact_by_terms(decoded: Dict[str, str], query_terms: Set[str]) -> float:
@@ -49,10 +58,7 @@ def build_search_result(
         if isinstance(key, bytes)
         else key.replace("fact:", "")
     )
-    try:
-        metadata = json.loads(decoded.get("metadata", "{}"))
-    except json.JSONDecodeError:
-        metadata = {}
+    metadata = _parse_metadata(decoded.get("metadata", "{}"))
 
     return {
         "content": decoded.get("content", ""),
