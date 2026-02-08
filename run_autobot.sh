@@ -124,9 +124,9 @@ ${BLUE}Examples:${NC}
   $0 --restart                # Smart restart - backend only if VMs healthy, full if needed
 
 ${BLUE}VM Management:${NC}
-  Use: bash scripts/vm-management/start-all-vms.sh    # Start all VM services
+  Use: bash infrastructure/shared/scripts/vm-management/start-all-vms.sh    # Start all VM services
   Note: --stop now includes VM services automatically
-  Use: bash scripts/vm-management/status-all-vms.sh   # Check all VM statuses
+  Use: bash infrastructure/shared/scripts/vm-management/status-all-vms.sh   # Check all VM statuses
 
 EOF
 }
@@ -310,7 +310,7 @@ check_vm_services() {
     else
         echo -e "${RED}❌ Not running${NC}"
         if [ "$DEV_MODE" = true ]; then
-            echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["frontend"]} 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
+            echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["frontend"]} 'cd autobot-slm-frontend && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
         else
             echo -e "${YELLOW}    Start with: ssh $SSH_USER@${VMS["frontend"]} 'sudo systemctl start nginx'${NC}"
         fi
@@ -322,21 +322,21 @@ check_vm_services() {
         echo -e "${GREEN}✅ Running${NC}"
     else
         echo -e "${RED}❌ Not running${NC}"
-        echo -e "${YELLOW}    Start with: bash scripts/vm-management/start-redis.sh${NC}"
+        echo -e "${YELLOW}    Start with: bash infrastructure/shared/scripts/vm-management/start-redis.sh${NC}"
     fi
 
     # Check Grafana dashboards sync (Issue #697) - Auto-sync if out of sync
     echo -n "  Grafana Dashboards (${VMS["redis"]})... "
-    if [ -f "scripts/utilities/sync-grafana-dashboards.sh" ]; then
-        if ./scripts/utilities/sync-grafana-dashboards.sh --check --quiet 2>/dev/null; then
+    if [ -f "infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh" ]; then
+        if ./infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh --check --quiet 2>/dev/null; then
             echo -e "${GREEN}✅ Synced${NC}"
         else
             echo -e "${YELLOW}⚠️ Out of sync - auto-syncing...${NC}"
-            if ./scripts/utilities/sync-grafana-dashboards.sh --quiet 2>/dev/null; then
+            if ./infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh --quiet 2>/dev/null; then
                 echo -e "${GREEN}    ✅ Auto-synced successfully${NC}"
             else
                 echo -e "${RED}    ❌ Auto-sync failed${NC}"
-                echo -e "${YELLOW}    Manual sync: ./scripts/utilities/sync-grafana-dashboards.sh${NC}"
+                echo -e "${YELLOW}    Manual sync: ./infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh${NC}"
             fi
         fi
     else
@@ -432,7 +432,7 @@ start_vnc_desktop() {
         fi
 
         # Check if VNC installation exists
-        if [ ! -f "scripts/setup/install-vnc-headless.sh" ]; then
+        if [ ! -f "infrastructure/shared/scripts/setup/install-vnc-headless.sh" ]; then
             echo -e "${YELLOW}⚠️  VNC not configured. Run: ${BLUE}bash setup.sh desktop${NC}"
             echo -e "${CYAN}ℹ️  Continuing without VNC desktop...${NC}"
             DESKTOP_ACCESS=false
@@ -492,9 +492,9 @@ smart_restart() {
 
     # Stop VMs if needed (parallel execution for speed)
     if [ "$vm_restart_needed" = true ]; then
-        if [ -f "scripts/vm-management/stop-all-vms.sh" ]; then
+        if [ -f "infrastructure/shared/scripts/vm-management/stop-all-vms.sh" ]; then
             log "Stopping VM services (optimized timeout)..."
-            timeout 30 bash scripts/vm-management/stop-all-vms.sh || warning "VM stop took longer than expected"
+            timeout 30 bash infrastructure/shared/scripts/vm-management/stop-all-vms.sh || warning "VM stop took longer than expected"
             sleep 1  # Minimal wait
         else
             warning "VM stop script not found. Manual VM restart may be required."
@@ -506,9 +506,9 @@ smart_restart() {
 
     # Start VMs first if needed
     if [ "$vm_restart_needed" = true ]; then
-        if [ -f "scripts/vm-management/start-all-vms.sh" ]; then
+        if [ -f "infrastructure/shared/scripts/vm-management/start-all-vms.sh" ]; then
             log "Starting VM services (optimized timeout)..."
-            timeout 60 bash scripts/vm-management/start-all-vms.sh || warning "VM start took longer than expected"
+            timeout 60 bash infrastructure/shared/scripts/vm-management/start-all-vms.sh || warning "VM start took longer than expected"
             sleep 2  # Reduced wait time
         else
             warning "VM start script not found. Please start VM services manually."
@@ -544,8 +544,8 @@ smart_restart() {
 start_backend_optimized() {
     log "Starting AutoBot backend (172.16.168.20:8001)..."
 
-    # Set up Python environment
-    export PYTHONPATH="$PWD"
+    # Set up Python environment (project root + backend dir for module resolution)
+    export PYTHONPATH="$PWD:$PWD/backend"
 
     # Activate virtual environment if it exists (from setup.sh)
     if [ -d "venv" ]; then
@@ -641,16 +641,16 @@ stop_backend() {
 
     # Stop all remote VM services
     log "Stopping remote VM services..."
-    if [ -f "scripts/vm-management/stop-all-vms.sh" ]; then
-        bash scripts/vm-management/stop-all-vms.sh
+    if [ -f "infrastructure/shared/scripts/vm-management/stop-all-vms.sh" ]; then
+        bash infrastructure/shared/scripts/vm-management/stop-all-vms.sh
     else
-        warning "VM stop script not found at scripts/vm-management/stop-all-vms.sh"
+        warning "VM stop script not found at infrastructure/shared/scripts/vm-management/stop-all-vms.sh"
     fi
 
     success "All AutoBot services stopped (backend + VMs)"
     echo ""
     echo -e "${YELLOW}💡 Tip: For smoother service management, configure passwordless sudo:${NC}"
-    echo -e "${CYAN}  bash scripts/utilities/batch-configure-vms.sh sudo${NC}"
+    echo -e "${CYAN}  bash infrastructure/shared/scripts/utilities/batch-configure-vms.sh sudo${NC}"
 }
 
 # Parse command line arguments
@@ -729,7 +729,7 @@ cleanup() {
     kill_autobot_processes 5
 
     success "AutoBot backend and Celery worker stopped"
-    echo -e "${CYAN}VM services continue running. Use scripts/vm-management/stop-all-vms.sh to stop them.${NC}"
+    echo -e "${CYAN}VM services continue running. Use infrastructure/shared/scripts/vm-management/stop-all-vms.sh to stop them.${NC}"
     exit 0
 }
 
@@ -898,7 +898,7 @@ start_redis_stack() {
         # Check if service exists
         if ! systemctl list-unit-files redis-stack-server.service >/dev/null 2>&1; then
             echo "⚠️  WARNING: redis-stack-server.service not found"
-            echo "Run: bash scripts/vm-management/start-redis.sh"
+            echo "Run: bash infrastructure/shared/scripts/vm-management/start-redis.sh"
             exit 1
         fi
 
@@ -965,7 +965,7 @@ EOF
         exit 1
     else
         error "Redis Stack auto-start failed"
-        echo -e "${YELLOW}Manual start: bash scripts/vm-management/start-redis.sh${NC}"
+        echo -e "${YELLOW}Manual start: bash infrastructure/shared/scripts/vm-management/start-redis.sh${NC}"
         exit 1
     fi
 }
@@ -979,8 +979,8 @@ start_frontend_dev() {
         echo "  🔄 Process: Stop Vite → Clear cache → Sync files → Start Vite"
 
         # Check if sync script exists and run it
-        if [ -f "scripts/utilities/sync-frontend.sh" ]; then
-            ./scripts/utilities/sync-frontend.sh all
+        if [ -f "infrastructure/shared/scripts/utilities/sync-frontend.sh" ]; then
+            ./infrastructure/shared/scripts/utilities/sync-frontend.sh all
         elif [ -f "sync-frontend.sh" ]; then
             ./sync-frontend.sh all
         else
@@ -990,7 +990,7 @@ start_frontend_dev() {
             # Fallback: manual startup if sync script missing
             timeout 3 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "pkill -f 'npm.*dev' 2>/dev/null || true; pkill -f 'vite.*5173' 2>/dev/null || true" 2>/dev/null
             sleep 1
-            timeout 5 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-vue && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null &"
+            timeout 5 ssh -T -i "$SSH_KEY" "$SSH_USER@${VMS["frontend"]}" "cd autobot-slm-frontend && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null &"
         fi
 
         # Wait for Vite to start
@@ -1006,7 +1006,7 @@ start_frontend_dev() {
         else
             echo -e "${RED}  ❌ Frontend failed to start${NC}"
             echo -e "${YELLOW}  💡 Check logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
-            echo -e "${YELLOW}  💡 Manual start: ssh autobot@172.16.168.21 'cd autobot-vue && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
+            echo -e "${YELLOW}  💡 Manual start: ssh autobot@172.16.168.21 'cd autobot-slm-frontend && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
         fi
     else
         log "Frontend managed by Docker Compose"
@@ -1015,20 +1015,20 @@ start_frontend_dev() {
 
 start_redis() {
     log "Starting Redis service..."
-    
+
     if [ "$ENV_TYPE" = "native-vm" ]; then
         local redis_ip=${VMS["redis"]}
         log "Connecting to Redis VM ($redis_ip)..."
-        
+
         ssh -i "$SSH_KEY" "$SSH_USER@$redis_ip" << 'EOF'
             # Stop existing Redis if running
             sudo systemctl stop redis-server || true
             pkill redis-server || true
-            
+
             # Start Redis Stack
             docker stop autobot-redis-stack 2>/dev/null || true
             docker rm autobot-redis-stack 2>/dev/null || true
-            
+
             docker run -d \
                 --name autobot-redis-stack \
                 --restart unless-stopped \
@@ -1037,7 +1037,7 @@ start_redis() {
                 -v redis-data:/data \
                 redis/redis-stack:latest
 EOF
-        
+
         # Verify Redis is accessible
         local redis_ready=false
         for i in {1..20}; do
@@ -1047,7 +1047,7 @@ EOF
             fi
             sleep 1
         done
-        
+
         if [ "$redis_ready" = true ]; then
             success "Redis started successfully"
         else
@@ -1060,21 +1060,21 @@ EOF
 
 start_browser_service() {
     log "Starting Browser automation service..."
-    
+
     if [ "$ENV_TYPE" = "native-vm" ]; then
         local browser_ip=${VMS["browser"]}
         log "Connecting to Browser VM ($browser_ip)..."
-        
+
         ssh -i "$SSH_KEY" "$SSH_USER@$browser_ip" << 'EOF'
             cd /home/kali/AutoBot
-            
+
             # Stop existing browser service
             pkill -f "browser.*service" || true
-            
+
             # Start browser service
             nohup python -m browser.service --host 0.0.0.0 --port 3000 > logs/browser.log 2>&1 &
 EOF
-        
+
         success "Browser service deployment initiated"
     else
         log "Browser service managed by Docker Compose"
@@ -1083,21 +1083,21 @@ EOF
 
 start_ai_stack() {
     log "Starting AI Stack service..."
-    
+
     if [ "$ENV_TYPE" = "native-vm" ]; then
         local ai_ip=${VMS["ai-stack"]}
         log "Connecting to AI Stack VM ($ai_ip)..."
-        
+
         ssh -i "$SSH_KEY" "$SSH_USER@$ai_ip" << 'EOF'
             cd /home/kali/AutoBot
-            
+
             # Stop existing AI stack
             pkill -f "ai.*stack" || true
-            
+
             # Start AI stack
             nohup python -m ai_stack.service --host 0.0.0.0 --port 8080 > logs/ai-stack.log 2>&1 &
 EOF
-        
+
         success "AI Stack deployment initiated"
     else
         log "AI Stack managed by Docker Compose"
@@ -1106,21 +1106,21 @@ EOF
 
 start_npu_worker() {
     log "Starting NPU Worker service..."
-    
+
     if [ "$ENV_TYPE" = "native-vm" ]; then
         local npu_ip=${VMS["npu-worker"]}
         log "Connecting to NPU Worker VM ($npu_ip)..."
-        
+
         ssh -i "$SSH_KEY" "$SSH_USER@$npu_ip" << 'EOF'
             cd /home/kali/AutoBot
-            
+
             # Stop existing NPU worker
             pkill -f "npu.*worker" || true
-            
+
             # Start NPU worker
             nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 > logs/npu-worker.log 2>&1 &
 EOF
-        
+
         success "NPU Worker deployment initiated"
     else
         log "NPU Worker managed by Docker Compose"
@@ -1205,9 +1205,9 @@ main() {
     fi
 
     # Sync Grafana dashboards (Issue #697)
-    if [ -f "scripts/utilities/sync-grafana-dashboards.sh" ]; then
+    if [ -f "infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh" ]; then
         log "Syncing Grafana dashboards..."
-        ./scripts/utilities/sync-grafana-dashboards.sh --quiet || true
+        ./infrastructure/shared/scripts/utilities/sync-grafana-dashboards.sh --quiet || true
     fi
 
     # Wait for backend to be fully ready (reduced time)
@@ -1235,9 +1235,9 @@ main() {
     fi
 
     echo -e "${YELLOW}📋 VM Management Commands:${NC}"
-    echo -e "${CYAN}  Start all VMs:    bash scripts/vm-management/start-all-vms.sh${NC}"
-    echo -e "${CYAN}  Stop all VMs:     bash scripts/vm-management/stop-all-vms.sh${NC}"
-    echo -e "${CYAN}  Check status:     bash scripts/vm-management/status-all-vms.sh${NC}"
+    echo -e "${CYAN}  Start all VMs:    bash infrastructure/shared/scripts/vm-management/start-all-vms.sh${NC}"
+    echo -e "${CYAN}  Stop all VMs:     bash infrastructure/shared/scripts/vm-management/stop-all-vms.sh${NC}"
+    echo -e "${CYAN}  Check status:     bash infrastructure/shared/scripts/vm-management/status-all-vms.sh${NC}"
     echo -e "${CYAN}  Smart restart:    bash run_autobot.sh --restart${NC}"
     echo ""
 

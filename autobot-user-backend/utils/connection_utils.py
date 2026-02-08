@@ -15,8 +15,8 @@ from datetime import datetime
 import aiohttp
 from constants.model_constants import ModelConstants
 from constants.network_constants import NetworkConstants
-from utils.redis_client import get_redis_client
 
+from autobot_shared.redis_client import get_redis_client
 from backend.type_defs.common import Metadata
 from config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
 from config import config as global_config_manager

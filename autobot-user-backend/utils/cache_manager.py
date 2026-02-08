@@ -26,8 +26,7 @@ from typing import Any, Optional
 from fastapi import Request
 
 # Import centralized Redis client utility
-from utils.redis_client import get_redis_client
-
+from autobot_shared.redis_client import get_redis_client
 from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
