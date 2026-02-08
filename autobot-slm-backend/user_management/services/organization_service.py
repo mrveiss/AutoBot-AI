@@ -479,21 +479,9 @@ class OrganizationService(BaseService):
         subscription_tier: Optional[str],
         max_users: Optional[int],
     ) -> dict:
-        """
-        Apply field updates to organization and track changes.
+        """Apply field updates to organization and track changes.
 
-        Args:
-            org: Organization instance to update
-            name: New name (optional)
-            description: New description (optional)
-            settings: New settings (optional)
-            subscription_tier: New subscription tier (optional)
-            max_users: New max users (optional)
-
-        Returns:
-            Dictionary of tracked changes for audit logging
-
-        Issue #620.
+        Returns dict of changes for audit logging. Issue #620.
         """
         changes = {}
 

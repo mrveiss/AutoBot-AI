@@ -280,24 +280,12 @@ class UserService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def list_users(
-        self,
-        limit: int = 50,
-        offset: int = 0,
-        include_inactive: bool = False,
-        search: Optional[str] = None,
-    ) -> tuple[List[User], int]:
-        """
-        List users with pagination.
+    def _build_user_list_base_query(
+        self, include_inactive: bool, search: Optional[str]
+    ):
+        """Build filtered base query for user listing.
 
-        Args:
-            limit: Maximum number of users to return
-            offset: Number of users to skip
-            include_inactive: Include deactivated users
-            search: Search term for email, username, or display_name
-
-        Returns:
-            Tuple of (users list, total count)
+        Helper for list_users (Issue #576).
         """
         base_query = select(User).where(User.deleted_at.is_(None))
 
@@ -315,6 +303,17 @@ class UserService(BaseService):
                     User.display_name.ilike(search_pattern),
                 )
             )
+        return base_query
+
+    async def list_users(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        include_inactive: bool = False,
+        search: Optional[str] = None,
+    ) -> tuple[List[User], int]:
+        """List users with pagination and optional search filtering."""
+        base_query = self._build_user_list_base_query(include_inactive, search)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
