@@ -16,6 +16,10 @@ common_packages:
   - ca-certificates
   - gnupg
   - lsb-release
+  # Network diagnostics (#703)
+  - netcat-openbsd
+  - iputils-ping
+  - dnsutils
 
 autobot_user: autobot
 autobot_home: /home/autobot

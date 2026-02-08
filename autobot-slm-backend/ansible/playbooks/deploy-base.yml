@@ -68,7 +68,8 @@
 
           # Network tools
           - net-tools
-          - netcat
+          - netcat-openbsd
+          - iputils-ping
           - dnsutils
           - traceroute
           - nmap

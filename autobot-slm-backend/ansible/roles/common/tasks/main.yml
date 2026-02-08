@@ -26,6 +26,10 @@
       - ca-certificates
       - gnupg
       - lsb-release
+      # Network diagnostics (#703)
+      - netcat-openbsd
+      - iputils-ping
+      - dnsutils
     state: present
   become: yes
   tags: ['common', 'packages']
