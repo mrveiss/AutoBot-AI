@@ -18,8 +18,6 @@ from typing import Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
 
-from constants.path_constants import PATH
-
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level constant for supported prompt file extensions
@@ -45,8 +43,8 @@ class PromptManager:
         if Path(prompts_dir).is_absolute():
             self.prompts_dir = Path(prompts_dir)
         else:
-            # Use centralized PathConstants (Issue #380)
-            self.prompts_dir = PATH.PROJECT_ROOT / prompts_dir
+            # Resolve relative to backend root (#793)
+            self.prompts_dir = Path(__file__).parent / "resources" / "prompts"
         self.prompts: Dict[str, str] = {}
         self.templates: Dict[str, Template] = {}
         self.jinja_env = Environment(

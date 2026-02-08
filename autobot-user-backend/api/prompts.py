@@ -8,9 +8,9 @@ import time
 from typing import Dict, Optional
 
 import aiofiles
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 
-from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -239,7 +239,7 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
         # Issue #358 - avoid blocking
         prompts_dir = await asyncio.to_thread(
             os.path.abspath,
-            os.path.join(os.path.dirname(__file__), "..", "..", "prompts"),
+            os.path.join(os.path.dirname(__file__), "..", "resources", "prompts"),
         )
         prompts = []
         defaults = {}
@@ -312,7 +312,7 @@ async def save_prompt(
         # Issue #358 - avoid blocking
         prompts_dir = await asyncio.to_thread(
             os.path.abspath,
-            os.path.join(os.path.dirname(__file__), "..", "..", "prompts"),
+            os.path.join(os.path.dirname(__file__), "..", "resources", "prompts"),
         )
 
         # Sanitize prompt_id to prevent path traversal
@@ -389,7 +389,7 @@ async def revert_prompt(
         # Issue #358 - avoid blocking
         prompts_dir = await asyncio.to_thread(
             os.path.abspath,
-            os.path.join(os.path.dirname(__file__), "..", "..", "prompts"),
+            os.path.join(os.path.dirname(__file__), "..", "resources", "prompts"),
         )
         # Check if there is a default version of this prompt
         default_file_path = os.path.join(
