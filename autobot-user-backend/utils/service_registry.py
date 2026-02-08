@@ -236,15 +236,15 @@ class ServiceRegistry:
 
     def _load_default_services(self):
         """Load default service configurations from unified config"""
-        for service_name, config in self.get_default_services().items():
+        for service_name, svc_def in self.get_default_services().items():
             host = self._resolve_host(service_name)
 
             service_config = ServiceConfig(
                 name=service_name,
                 host=host,
-                port=config["port"],
-                health_endpoint=config["health_endpoint"],
-                scheme=config["schemes"].get(
+                port=svc_def["port"],
+                health_endpoint=svc_def["health_endpoint"],
+                scheme=svc_def["schemes"].get(
                     self.deployment_mode.value.split("_")[0], "http"
                 ),
                 timeout=config.get_timeout("service_registry", "default"),
