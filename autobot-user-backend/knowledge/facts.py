@@ -363,8 +363,11 @@ def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
     # Parse metadata JSON if present
     if "metadata" in decoded:
         try:
-            decoded["_parsed_metadata"] = json.loads(decoded["metadata"])
-        except json.JSONDecodeError:
+            raw = decoded["metadata"]
+            decoded["_parsed_metadata"] = (
+                raw if isinstance(raw, dict) else json.loads(raw)
+            )
+        except (json.JSONDecodeError, TypeError):
             decoded["_parsed_metadata"] = {}
     else:
         decoded["_parsed_metadata"] = {}
@@ -721,8 +724,9 @@ class FactsMixin:
             metadata = {}
             if "metadata" in decoded:
                 try:
-                    metadata = json.loads(decoded["metadata"])
-                except json.JSONDecodeError:
+                    raw = decoded["metadata"]
+                    metadata = raw if isinstance(raw, dict) else json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
                     pass
 
             return {
@@ -875,8 +879,9 @@ class FactsMixin:
             current_metadata = {}
             if "metadata" in decoded:
                 try:
-                    current_metadata = json.loads(decoded["metadata"])
-                except json.JSONDecodeError:
+                    raw = decoded["metadata"]
+                    current_metadata = raw if isinstance(raw, dict) else json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
                     pass
 
             if content is not None:

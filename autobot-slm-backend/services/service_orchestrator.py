@@ -19,10 +19,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from models.database import Node, Service, ServiceStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.database import Node, Service, ServiceStatus
 
 logger = logging.getLogger(__name__)
 
@@ -269,10 +268,14 @@ class ServiceOrchestrator:
     started/stopped/migrated on any enrolled node.
     """
 
+    # Limit concurrent SSH connections to prevent pool exhaustion (#788)
+    _SSH_MAX_CONCURRENT = 10
+
     def __init__(self):
         self.registry = ServiceRegistry()
         self.ssh_key = Path.home() / ".ssh" / "id_rsa"
         self.ssh_user = "autobot"
+        self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)
 
     async def start_service(
         self,
@@ -697,6 +700,13 @@ class ServiceOrchestrator:
         self, host: str, command: str, requires_sudo: bool = False
     ) -> Tuple[bool, str]:
         """Run a command on a remote host via SSH."""
+        async with self._ssh_semaphore:
+            return await self._execute_ssh(host, command, requires_sudo)
+
+    async def _execute_ssh(
+        self, host: str, command: str, requires_sudo: bool = False
+    ) -> Tuple[bool, str]:
+        """Execute SSH subprocess (#788: split from _run_ssh_command)."""
         ssh_cmd = [
             "/usr/bin/ssh",
             "-o",

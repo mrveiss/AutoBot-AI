@@ -124,7 +124,9 @@ class StatsMixin:
                 "initialized_at": datetime.now().isoformat(),
             },
         )
-        logger.info("Stats counters initialized: facts=%d, vectors=%d", fact_count, vector_count)
+        logger.info(
+            "Stats counters initialized: facts=%d, vectors=%d", fact_count, vector_count
+        )
 
     async def _initialize_stats_counters(self) -> None:
         """Initialize stats counters from existing data (Issue #398: refactored)."""
@@ -172,7 +174,9 @@ class StatsMixin:
             logger.debug("Could not get actual vector count: %s", e)
             return 0
 
-    async def _correct_stats_drift(self, actual_facts: int, actual_vectors: int) -> None:
+    async def _correct_stats_drift(
+        self, actual_facts: int, actual_vectors: int
+    ) -> None:
         """Correct stats counters to actual values (Issue #398: extracted)."""
         await self.aioredis_client.hset(
             self._stats_key,
@@ -187,13 +191,19 @@ class StatsMixin:
         logger.info("Stats counters corrected to actual values")
 
     def _build_consistency_result(
-        self, stored_facts: int, actual_facts: int, stored_vectors: int, actual_vectors: int
+        self,
+        stored_facts: int,
+        actual_facts: int,
+        stored_vectors: int,
+        actual_vectors: int,
     ) -> dict:
         """Build consistency check result dict (Issue #398: extracted)."""
         fact_drift = actual_facts - stored_facts
         vector_drift = actual_vectors - stored_vectors
         return {
-            "status": "consistent" if fact_drift == 0 and vector_drift == 0 else "drift_detected",
+            "status": "consistent"
+            if fact_drift == 0 and vector_drift == 0
+            else "drift_detected",
             "stored_facts": stored_facts,
             "actual_facts": actual_facts,
             "fact_drift": fact_drift,
@@ -225,7 +235,8 @@ class StatsMixin:
             if not is_consistent:
                 logger.warning(
                     "Stats counter drift detected: facts=%+d, vectors=%+d",
-                    result["fact_drift"], result["vector_drift"]
+                    result["fact_drift"],
+                    result["vector_drift"],
                 )
                 if auto_correct:
                     await self._correct_stats_drift(actual_facts, actual_vectors)
@@ -279,7 +290,8 @@ class StatsMixin:
             stats["chromadb_path"] = self.chromadb_path
             logger.debug(
                 "ChromaDB stats: %d vectors in collection '%s'",
-                vector_count, self.chromadb_collection
+                vector_count,
+                self.chromadb_collection,
             )
         except Exception as e:
             logger.warning("Could not get ChromaDB stats: %s", e)
@@ -290,7 +302,9 @@ class StatsMixin:
         try:
             stat_counters = await self._get_all_stats()
             if stat_counters:
-                return stat_counters.get("total_facts", 0), stat_counters.get("total_vectors", 0)
+                return stat_counters.get("total_facts", 0), stat_counters.get(
+                    "total_vectors", 0
+                )
         except Exception as e:
             logger.warning("Error getting stats counters: %s", e)
 
@@ -310,7 +324,9 @@ class StatsMixin:
         """Sample fact keys for category extraction (Issue #315)."""
         fact_keys = []
         try:
-            async for key in self.aioredis_client.scan_iter(match="fact:*", count=limit):
+            async for key in self.aioredis_client.scan_iter(
+                match="fact:*", count=limit
+            ):
                 fact_keys.append(key)
                 if len(fact_keys) >= limit:
                     break
@@ -330,11 +346,19 @@ class StatsMixin:
     def _build_base_stats(self) -> Dict[str, Any]:
         """Build base stats dictionary with defaults (Issue #398: extracted)."""
         return {
-            "total_documents": 0, "total_chunks": 0, "total_facts": 0, "total_vectors": 0,
-            "categories": [], "db_size": 0, "status": "online",
-            "last_updated": datetime.now().isoformat(), "redis_db": self.redis_db,
-            "vector_store": "chromadb", "chromadb_collection": self.chromadb_collection,
-            "initialized": self.initialized, "llama_index_configured": self.llama_index_configured,
+            "total_documents": 0,
+            "total_chunks": 0,
+            "total_facts": 0,
+            "total_vectors": 0,
+            "categories": [],
+            "db_size": 0,
+            "status": "online",
+            "last_updated": datetime.now().isoformat(),
+            "redis_db": self.redis_db,
+            "vector_store": "chromadb",
+            "chromadb_collection": self.chromadb_collection,
+            "initialized": self.initialized,
+            "llama_index_configured": self.llama_index_configured,
             "embedding_model": self.embedding_model_name,
             "embedding_dimensions": self.embedding_dimensions,
         }
@@ -342,7 +366,9 @@ class StatsMixin:
     async def _populate_redis_stats(self, stats: Dict[str, Any]) -> None:
         """Populate stats from Redis data (Issue #398: extracted)."""
         fact_count, vector_count = await self._get_counts_with_fallback()
-        logger.debug("O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count)
+        logger.debug(
+            "O(1) stats lookup: facts=%d, vectors=%d", fact_count, vector_count
+        )
 
         stats["total_facts"] = fact_count
         stats["total_documents"] = vector_count
@@ -372,9 +398,15 @@ class StatsMixin:
         except Exception as e:
             logger.error("Error getting knowledge base stats: %s", e)
             return {
-                "total_documents": 0, "total_chunks": 0, "total_facts": 0, "total_vectors": 0,
-                "categories": [], "db_size": 0, "status": "error",
-                "error": str(e), "last_updated": datetime.now().isoformat(),
+                "total_documents": 0,
+                "total_chunks": 0,
+                "total_facts": 0,
+                "total_vectors": 0,
+                "categories": [],
+                "db_size": 0,
+                "status": "error",
+                "error": str(e),
+                "last_updated": datetime.now().isoformat(),
             }
 
     async def _get_memory_stats(self) -> Dict[str, float]:
@@ -387,7 +419,9 @@ class StatsMixin:
             info = await asyncio.to_thread(self.redis_client.info, "memory")
             return {
                 "memory_usage_mb": round(info.get("used_memory", 0) / (1024 * 1024), 2),
-                "peak_memory_mb": round(info.get("used_memory_peak", 0) / (1024 * 1024), 2),
+                "peak_memory_mb": round(
+                    info.get("used_memory_peak", 0) / (1024 * 1024), 2
+                ),
             }
         except Exception as e:
             logger.warning("Could not get memory stats: %s", e)
@@ -430,7 +464,7 @@ class StatsMixin:
                 fact_data = await self.aioredis_client.hgetall(fact_key)
                 if fact_data and "timestamp" in fact_data:
                     timestamps.append(fact_data["timestamp"])
-            except Exception:
+            except Exception:  # nosec B112
                 continue
         return timestamps
 
@@ -501,10 +535,12 @@ class StatsMixin:
         """Build quality metrics summary (Issue #398: extracted helper)."""
         return {
             "total_facts": len(facts),
-            "facts_with_issues": len(set(
-                i.get("fact_id") for i in issues if i.get("fact_id")
-            )),
-            "critical_issues": len([i for i in issues if i.get("severity") == "critical"]),
+            "facts_with_issues": len(
+                set(i.get("fact_id") for i in issues if i.get("fact_id"))
+            ),
+            "critical_issues": len(
+                [i for i in issues if i.get("severity") == "critical"]
+            ),
             "warnings": len([i for i in issues if i.get("severity") == "warning"]),
         }
 
@@ -527,7 +563,9 @@ class StatsMixin:
                 return metrics
 
             metrics["dimensions"] = await self._calc_all_quality_dimensions(facts)
-            metrics["overall_score"] = self._calc_overall_quality_score(metrics["dimensions"])
+            metrics["overall_score"] = self._calc_overall_quality_score(
+                metrics["dimensions"]
+            )
 
             for dim_data in metrics["dimensions"].values():
                 metrics["issues"].extend(dim_data.get("issues", []))
@@ -545,9 +583,7 @@ class StatsMixin:
                 "generated_at": datetime.now().isoformat(),
             }
 
-    def _check_fact_completeness(
-        self, fact: Dict[str, Any], issues: List[Dict]
-    ) -> str:
+    def _check_fact_completeness(self, fact: Dict[str, Any], issues: List[Dict]) -> str:
         """Check completeness of a single fact (Issue #398: extracted).
 
         Returns: 'complete', 'partial', or 'incomplete'
@@ -564,21 +600,33 @@ class StatsMixin:
         elif has_required:
             fact_id = fact.get("fact_id")
             if not metadata.get("category"):
-                issues.append({
-                    "fact_id": fact_id, "type": "missing_category",
-                    "severity": "warning", "message": "Fact missing category",
-                })
+                issues.append(
+                    {
+                        "fact_id": fact_id,
+                        "type": "missing_category",
+                        "severity": "warning",
+                        "message": "Fact missing category",
+                    }
+                )
             if not metadata.get("tags"):
-                issues.append({
-                    "fact_id": fact_id, "type": "missing_tags",
-                    "severity": "info", "message": "Fact has no tags",
-                })
+                issues.append(
+                    {
+                        "fact_id": fact_id,
+                        "type": "missing_tags",
+                        "severity": "info",
+                        "message": "Fact has no tags",
+                    }
+                )
             return "partial"
         else:
-            issues.append({
-                "fact_id": fact.get("fact_id"), "type": "incomplete_data",
-                "severity": "critical", "message": "Fact missing required fields",
-            })
+            issues.append(
+                {
+                    "fact_id": fact.get("fact_id"),
+                    "type": "incomplete_data",
+                    "severity": "critical",
+                    "message": "Fact missing required fields",
+                }
+            )
             return "incomplete"
 
     async def _calc_completeness_score(
@@ -600,11 +648,13 @@ class StatsMixin:
 
         recommendations = []
         if score < 80:
-            recommendations.append({
-                "action": "add_metadata",
-                "description": "Add categories and tags to improve completeness",
-                "priority": "high" if score < 60 else "medium",
-            })
+            recommendations.append(
+                {
+                    "action": "add_metadata",
+                    "description": "Add categories and tags to improve completeness",
+                    "priority": "high" if score < 60 else "medium",
+                }
+            )
 
         return {
             "score": round(score, 1),
@@ -625,17 +675,27 @@ class StatsMixin:
             categories[cat] = categories.get(cat, 0) + 1
 
         if len(categories) > 50:
-            issues.append({
-                "type": "category_fragmentation", "severity": "warning",
-                "message": "Too many categories (%d), consider consolidating" % len(categories),
-            })
+            issues.append(
+                {
+                    "type": "category_fragmentation",
+                    "severity": "warning",
+                    "message": "Too many categories (%d), consider consolidating"
+                    % len(categories),
+                }
+            )
 
-        small_categories = [c for c, n in categories.items() if n < 3 and c != "uncategorized"]
+        small_categories = [
+            c for c, n in categories.items() if n < 3 and c != "uncategorized"
+        ]
         if small_categories:
-            issues.append({
-                "type": "sparse_categories", "severity": "info",
-                "message": "%d categories have fewer than 3 facts" % len(small_categories),
-            })
+            issues.append(
+                {
+                    "type": "sparse_categories",
+                    "severity": "info",
+                    "message": "%d categories have fewer than 3 facts"
+                    % len(small_categories),
+                }
+            )
         return categories
 
     def _analyze_tag_consistency(
@@ -652,10 +712,13 @@ class StatsMixin:
             all_tags.extend(tags)
 
         if inconsistent_tags > 0:
-            issues.append({
-                "type": "tag_format_inconsistency", "severity": "warning",
-                "message": "%d tags have inconsistent format" % inconsistent_tags,
-            })
+            issues.append(
+                {
+                    "type": "tag_format_inconsistency",
+                    "severity": "warning",
+                    "message": "%d tags have inconsistent format" % inconsistent_tags,
+                }
+            )
         return all_tags
 
     async def _calc_consistency_score(
@@ -668,15 +731,17 @@ class StatsMixin:
         all_tags = self._analyze_tag_consistency(facts, issues)
 
         total_checks = 3
-        score = ((total_checks - len(issues)) / total_checks * 100)
+        score = (total_checks - len(issues)) / total_checks * 100
 
         recommendations = []
         if len(categories) > 30:
-            recommendations.append({
-                "action": "consolidate_categories",
-                "description": "Merge similar categories to improve organization",
-                "priority": "medium",
-            })
+            recommendations.append(
+                {
+                    "action": "consolidate_categories",
+                    "description": "Merge similar categories to improve organization",
+                    "priority": "medium",
+                }
+            )
 
         return {
             "score": round(score, 1),
@@ -700,7 +765,9 @@ class StatsMixin:
 
     def _parse_fact_timestamp(self, fact: Dict[str, Any]) -> Optional[datetime]:
         """Parse timestamp from a fact (Issue #398: extracted)."""
-        timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get("created_at")
+        timestamp_str = fact.get("timestamp") or fact.get("metadata", {}).get(
+            "created_at"
+        )
         if not timestamp_str or not isinstance(timestamp_str, str):
             return None
         try:
@@ -716,8 +783,12 @@ class StatsMixin:
         """Compute age distribution buckets (Issue #398: extracted)."""
         now = datetime.now()
         buckets = {
-            "last_day": 0, "last_week": 0, "last_month": 0,
-            "last_year": 0, "older": 0, "unknown": 0
+            "last_day": 0,
+            "last_week": 0,
+            "last_month": 0,
+            "last_year": 0,
+            "older": 0,
+            "unknown": 0,
         }
 
         for fact in facts:
@@ -738,32 +809,46 @@ class StatsMixin:
 
         if total == 0:
             return {
-                "score": 100.0, "age_distribution": age_buckets,
-                "issues": [], "recommendations": []
+                "score": 100.0,
+                "age_distribution": age_buckets,
+                "issues": [],
+                "recommendations": [],
             }
 
-        recent = age_buckets["last_day"] + age_buckets["last_week"] + age_buckets["last_month"]
+        recent = (
+            age_buckets["last_day"]
+            + age_buckets["last_week"]
+            + age_buckets["last_month"]
+        )
         score = (recent / total * 80) + ((total - age_buckets["older"]) / total * 20)
 
         issues = []
         if age_buckets["older"] > total * 0.3:
-            issues.append({
-                "type": "stale_data", "severity": "warning",
-                "message": "%d facts are over 1 year old" % age_buckets["older"],
-            })
+            issues.append(
+                {
+                    "type": "stale_data",
+                    "severity": "warning",
+                    "message": "%d facts are over 1 year old" % age_buckets["older"],
+                }
+            )
         if age_buckets["unknown"] > total * 0.2:
-            issues.append({
-                "type": "missing_timestamps", "severity": "warning",
-                "message": "%d facts have no timestamp" % age_buckets["unknown"],
-            })
+            issues.append(
+                {
+                    "type": "missing_timestamps",
+                    "severity": "warning",
+                    "message": "%d facts have no timestamp" % age_buckets["unknown"],
+                }
+            )
 
         recommendations = []
         if age_buckets["older"] > total * 0.3:
-            recommendations.append({
-                "action": "review_old_facts",
-                "description": "Review and update facts older than 1 year",
-                "priority": "low",
-            })
+            recommendations.append(
+                {
+                    "action": "review_old_facts",
+                    "description": "Review and update facts older than 1 year",
+                    "priority": "low",
+                }
+            )
 
         return {
             "score": round(min(score, 100), 1),
@@ -789,13 +874,15 @@ class StatsMixin:
             if content_hash in content_hashes:
                 duplicate_count += 1
                 if duplicate_count <= 10:  # Limit issues reported
-                    issues.append({
-                        "fact_id": fact.get("fact_id"),
-                        "duplicate_of": content_hashes[content_hash],
-                        "type": "exact_duplicate",
-                        "severity": "warning",
-                        "message": "Exact duplicate content found",
-                    })
+                    issues.append(
+                        {
+                            "fact_id": fact.get("fact_id"),
+                            "duplicate_of": content_hashes[content_hash],
+                            "type": "exact_duplicate",
+                            "severity": "warning",
+                            "message": "Exact duplicate content found",
+                        }
+                    )
             else:
                 content_hashes[content_hash] = fact.get("fact_id")
 
@@ -805,11 +892,13 @@ class StatsMixin:
 
         recommendations = []
         if duplicate_count > 0:
-            recommendations.append({
-                "action": "remove_duplicates",
-                "description": "Remove %d duplicate facts" % duplicate_count,
-                "priority": "high" if duplicate_count > 10 else "medium",
-            })
+            recommendations.append(
+                {
+                    "action": "remove_duplicates",
+                    "description": "Remove %d duplicate facts" % duplicate_count,
+                    "priority": "high" if duplicate_count > 10 else "medium",
+                }
+            )
 
         return {
             "score": round(score, 1),
@@ -828,39 +917,53 @@ class StatsMixin:
         # Check content validity
         content = fact.get("content", "")
         if not content or len(content) < 10:
-            issues.append({
-                "fact_id": fact_id, "type": "short_content",
-                "severity": "warning", "message": "Content is too short (< 10 chars)",
-            })
+            issues.append(
+                {
+                    "fact_id": fact_id,
+                    "type": "short_content",
+                    "severity": "warning",
+                    "message": "Content is too short (< 10 chars)",
+                }
+            )
             fact_valid = False
         elif len(content) > 100000:
-            issues.append({
-                "fact_id": fact_id, "type": "long_content",
-                "severity": "info", "message": "Content is very long (> 100k chars)",
-            })
+            issues.append(
+                {
+                    "fact_id": fact_id,
+                    "type": "long_content",
+                    "severity": "info",
+                    "message": "Content is very long (> 100k chars)",
+                }
+            )
 
         # Check metadata validity
         metadata = fact.get("metadata")
         if metadata is not None and not isinstance(metadata, dict):
-            issues.append({
-                "fact_id": fact_id, "type": "invalid_metadata",
-                "severity": "critical", "message": "Metadata is not a valid dictionary",
-            })
+            issues.append(
+                {
+                    "fact_id": fact_id,
+                    "type": "invalid_metadata",
+                    "severity": "critical",
+                    "message": "Metadata is not a valid dictionary",
+                }
+            )
             fact_valid = False
 
         # Check fact_id validity
         if not fact_id or not isinstance(fact_id, str):
-            issues.append({
-                "fact_id": fact_id, "type": "invalid_fact_id",
-                "severity": "critical", "message": "Invalid or missing fact_id",
-            })
+            issues.append(
+                {
+                    "fact_id": fact_id,
+                    "type": "invalid_fact_id",
+                    "severity": "critical",
+                    "message": "Invalid or missing fact_id",
+                }
+            )
             fact_valid = False
 
         return fact_valid
 
-    async def _calc_validity_score(
-        self, facts: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def _calc_validity_score(self, facts: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate validity score (Issue #398: refactored)."""
         issues: List[Dict] = []
         valid_count = sum(1 for f in facts if self._validate_single_fact(f, issues))
@@ -871,11 +974,14 @@ class StatsMixin:
 
         recommendations = []
         if invalid_count > 0:
-            recommendations.append({
-                "action": "fix_invalid_facts",
-                "description": "Fix %d facts with validation issues" % invalid_count,
-                "priority": "critical" if invalid_count > 10 else "high",
-            })
+            recommendations.append(
+                {
+                    "action": "fix_invalid_facts",
+                    "description": "Fix %d facts with validation issues"
+                    % invalid_count,
+                    "priority": "critical" if invalid_count > 10 else "high",
+                }
+            )
 
         return {
             "score": round(score, 1),
@@ -884,10 +990,6 @@ class StatsMixin:
             "issues": issues[:20],
             "recommendations": recommendations,
         }
-
-    async def get_all_facts(self):
-        """Get all facts - implemented in facts mixin."""
-        raise NotImplementedError("Should be implemented in composed class")
 
     # Method reference needed by get_detailed_stats
     async def _scan_redis_keys_async(self, pattern: str):
