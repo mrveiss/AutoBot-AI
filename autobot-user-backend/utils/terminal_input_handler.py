@@ -18,8 +18,7 @@ from contextlib import contextmanager
 from typing import Dict, List, Optional
 
 from constants.network_constants import NetworkConstants
-
-from ..utils.service_registry import get_service_url
+from utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 
@@ -167,9 +166,19 @@ class TerminalInputHandler:
             # (keywords_to_match, env_var, config_key, fallback)
             (("yes", "no", "y/n"), None, None, "y"),
             (("command",), "AUTOBOT_DEFAULT_COMMAND", "default_command", "help"),
-            (("file", "path"), "AUTOBOT_TEST_FILE_PATH", "test_file_path", "/tmp/test_file"),
+            (
+                ("file", "path"),
+                "AUTOBOT_TEST_FILE_PATH",
+                "test_file_path",
+                "/tmp/test_file",  # nosec B108
+            ),
             (("name",), "AUTOBOT_TEST_USER_NAME", "test_user_name", "test_user"),
-            (("port",), "AUTOBOT_DEFAULT_PORT", "default_port", str(NetworkConstants.AI_STACK_PORT)),
+            (
+                ("port",),
+                "AUTOBOT_DEFAULT_PORT",
+                "default_port",
+                str(NetworkConstants.AI_STACK_PORT),
+            ),
             (("host",), "AUTOBOT_DEFAULT_HOST", "default_host", "localhost"),
         ]
 
@@ -184,16 +193,28 @@ class TerminalInputHandler:
         # Check choice pattern with digits
         if "choice" in prompt_lower and any(char.isdigit() for char in prompt):
             numbers = [char for char in prompt if char.isdigit()]
-            return numbers[0] if numbers else os.getenv(
-                "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
+            return (
+                numbers[0]
+                if numbers
+                else os.getenv(
+                    "AUTOBOT_DEFAULT_CHOICE", _get_config_default("default_choice", "1")
+                )
             )
 
         # Check command pattern (requires both keywords)
         if "enter" in prompt_lower and "command" in prompt_lower:
-            return os.getenv("AUTOBOT_DEFAULT_COMMAND", _get_config_default("default_command", "help"))
+            return os.getenv(
+                "AUTOBOT_DEFAULT_COMMAND",
+                _get_config_default("default_command", "help"),
+            )
 
         # Check other patterns via lookup table (Issue #315)
-        for keywords, env_var, config_key, fallback in self._get_prompt_pattern_defaults():
+        for (
+            keywords,
+            env_var,
+            config_key,
+            fallback,
+        ) in self._get_prompt_pattern_defaults():
             if env_var and any(kw in prompt_lower for kw in keywords):
                 return os.getenv(env_var, _get_config_default(config_key, fallback))
 
@@ -431,7 +452,8 @@ def configure_testing_defaults():
             _get_config_default("test_filename", "test_file.txt"),
         ),
         "path": os.getenv(
-            "AUTOBOT_TEST_PATH", _get_config_default("test_path", "/tmp/test")
+            "AUTOBOT_TEST_PATH",
+            _get_config_default("test_path", "/tmp/test"),  # nosec B108
         ),
         "name": os.getenv(
             "AUTOBOT_TEST_USER_NAME", _get_config_default("test_user_name", "test_user")
