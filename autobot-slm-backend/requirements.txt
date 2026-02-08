@@ -44,3 +44,8 @@ paramiko>=3.4.0
 
 # Cron expression parsing (Issue #741 - Scheduled updates)
 croniter>=2.0.0
+
+# SSO Integration (Issue #576 Phase 4)
+authlib>=1.3.0  # OAuth2/OIDC client
+ldap3>=2.9.0  # LDAP/Active Directory
+pysaml2>=7.4.0  # SAML 2.0 Service Provider

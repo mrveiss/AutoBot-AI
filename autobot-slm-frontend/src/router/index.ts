@@ -21,6 +21,13 @@ const router = createRouter({
       meta: { title: 'Login', public: true }
     },
     {
+      // Issue #576: SSO callback handler for OAuth2/SAML redirects
+      path: '/sso-callback',
+      name: 'sso-callback',
+      component: () => import('@/views/SSOCallbackView.vue'),
+      meta: { title: 'SSO Login', public: true },
+    },
+    {
       path: '/',
       name: 'fleet',
       component: () => import('@/views/FleetOverview.vue'),

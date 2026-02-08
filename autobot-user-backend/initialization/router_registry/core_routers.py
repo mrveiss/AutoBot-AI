@@ -33,6 +33,7 @@ from backend.api.knowledge_search import router as knowledge_search_router
 from backend.api.knowledge_suggestions import router as knowledge_suggestions_router
 from backend.api.knowledge_tags import router as knowledge_tags_router
 from backend.api.llm import router as llm_router
+from backend.api.llm_providers import router as llm_providers_router
 from backend.api.mcp_registry import router as mcp_registry_router
 from backend.api.memory import router as memory_router
 from backend.api.overseer_handlers import router as overseer_router
@@ -117,6 +118,7 @@ def _get_service_routers() -> list:
     """Get LLM, Redis, voice, and VNC routers (Issue #560: extracted, Issue #729: infrastructure removed)."""
     routers = [
         (llm_router, "/llm", ["llm"], "llm"),
+        (llm_providers_router, "/llm", ["llm", "providers"], "llm_providers"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),

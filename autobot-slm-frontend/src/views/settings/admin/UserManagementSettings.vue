@@ -19,11 +19,17 @@ import {
   type SlmUserResponse,
   type TeamResponse,
 } from '@/composables/useSlmUserApi'
+import {
+  useSsoApi,
+  type SSOProviderResponse,
+  type SSOProviderCreate,
+} from '@/composables/useSsoApi'
 import PasswordChangeForm from '@shared/components/PasswordChangeForm.vue'
 
 const authStore = useAuthStore()
 const autobotApi = useAutobotApi()
 const slmApi = useSlmUserApi()
+const ssoApi = useSsoApi()
 
 // State
 const loading = ref(false)
@@ -32,16 +38,18 @@ const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 
 // Tab state for user management section
-const activeTab = ref<'slm-admins' | 'autobot-users' | 'teams'>('slm-admins')
+const activeTab = ref<'slm-admins' | 'autobot-users' | 'teams' | 'sso'>('slm-admins')
 
 // User list state
 const legacyUsers = ref<UserResponse[]>([])
 const slmUsers = ref<SlmUserResponse[]>([])
 const autobotUsers = ref<SlmUserResponse[]>([])
 const teams = ref<TeamResponse[]>([])
+const ssoProviders = ref<SSOProviderResponse[]>([])
 const selectedUser = ref<UserResponse | null>(null)
 const showCreateUserModal = ref(false)
 const showCreateTeamModal = ref(false)
+const showCreateProviderModal = ref(false)
 const showChangePasswordModal = ref(false)
 const showRbacModal = ref(false)
 
@@ -65,6 +73,16 @@ const newUserForm = reactive({
 const newTeamForm = reactive({
   name: '',
   description: '',
+})
+
+// New SSO provider form
+const newProviderForm = reactive({
+  provider_type: 'google',
+  name: '',
+  config: {} as Record<string, unknown>,
+  is_active: true,
+  allow_user_creation: true,
+  default_role: 'user',
 })
 
 // Preferences
@@ -138,6 +156,15 @@ async function loadTeams(): Promise<void> {
   }
 }
 
+async function loadSsoProviders(): Promise<void> {
+  try {
+    const response = await ssoApi.listProviders()
+    ssoProviders.value = response.providers
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to load SSO providers'
+  }
+}
+
 async function loadLegacyUsers(): Promise<void> {
   try {
     legacyUsers.value = await autobotApi.getUsers()
@@ -157,6 +184,7 @@ async function loadAllData(): Promise<void> {
       loadSlmUsers(),
       loadAutobotUsers(),
       loadTeams(),
+      loadSsoProviders(),
       loadLegacyUsers(),
     ])
   } finally {
@@ -394,9 +422,73 @@ function resetNewUserForm(): void {
   newUserForm.roles = ['user']
 }
 
+async function createSsoProvider(): Promise<void> {
+  saving.value = true
+  error.value = null
+
+  try {
+    const payload: SSOProviderCreate = {
+      provider_type: newProviderForm.provider_type,
+      name: newProviderForm.name,
+      config: newProviderForm.config,
+      is_active: newProviderForm.is_active,
+      allow_user_creation: newProviderForm.allow_user_creation,
+      default_role: newProviderForm.default_role,
+    }
+
+    await ssoApi.createProvider(payload)
+    showSuccess('SSO provider created successfully')
+    showCreateProviderModal.value = false
+    resetNewProviderForm()
+    await loadSsoProviders()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to create SSO provider'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function deleteSsoProvider(providerId: string): Promise<void> {
+  if (!confirm('Are you sure you want to delete this SSO provider?')) return
+
+  saving.value = true
+  try {
+    await ssoApi.deleteProvider(providerId)
+    showSuccess('SSO provider deleted successfully')
+    await loadSsoProviders()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to delete SSO provider'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function testSsoProvider(providerId: string): Promise<void> {
+  try {
+    const result = await ssoApi.testProvider(providerId)
+    if (result.success) {
+      showSuccess(result.message || 'SSO provider connection successful')
+    } else {
+      error.value = result.message || 'SSO provider connection test failed'
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to test SSO provider'
+  }
+}
+
+function resetNewProviderForm(): void {
+  newProviderForm.provider_type = 'google'
+  newProviderForm.name = ''
+  newProviderForm.config = {}
+  newProviderForm.is_active = true
+  newProviderForm.allow_user_creation = true
+  newProviderForm.default_role = 'user'
+}
+
 async function refreshActiveTab(): Promise<void> {
   if (activeTab.value === 'slm-admins') await loadSlmUsers()
   else if (activeTab.value === 'autobot-users') await loadAutobotUsers()
+  else if (activeTab.value === 'sso') await loadSsoProviders()
   else await loadTeams()
 }
 
@@ -639,6 +731,17 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           >
             Teams
           </button>
+          <button
+            @click="activeTab = 'sso'"
+            :class="[
+              'px-4 py-2.5 font-medium text-sm border-b-2 transition-colors',
+              activeTab === 'sso'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            ]"
+          >
+            SSO Providers
+          </button>
         </nav>
       </div>
 
@@ -810,6 +913,69 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               </tr>
               <tr v-if="teams.length === 0">
                 <td colspan="4" class="py-8 text-center text-gray-500">No teams found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SSO Providers Tab -->
+      <div v-else-if="activeTab === 'sso'">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">SSO Providers</h2>
+            <p class="text-sm text-gray-500">Configure OAuth2, LDAP, and SAML authentication providers</p>
+          </div>
+          <button @click="showCreateProviderModal = true" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Provider
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Name</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Type</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Status</th>
+                <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">Last Sync</th>
+                <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="provider in ssoProviders" :key="provider.id" class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="py-3 px-4 text-sm font-medium text-gray-900">{{ provider.name }}</td>
+                <td class="py-3 px-4">
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                    {{ provider.provider_type }}
+                  </span>
+                </td>
+                <td class="py-3 px-4">
+                  <span :class="['px-2 py-0.5 rounded-full text-xs font-medium', provider.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700']">
+                    {{ provider.is_active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ provider.last_sync_at ? new Date(provider.last_sync_at).toLocaleString() : 'Never' }}</td>
+                <td class="py-3 px-4 text-right">
+                  <div class="flex justify-end gap-2">
+                    <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" title="Test connection">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </button>
+                    <button @click="deleteSsoProvider(provider.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete provider">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="ssoProviders.length === 0">
+                <td colspan="5" class="py-8 text-center text-gray-500">No SSO providers configured</td>
               </tr>
             </tbody>
           </table>
@@ -1003,6 +1169,52 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             </svg>
             Initialize RBAC
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create SSO Provider Modal -->
+    <div v-if="showCreateProviderModal" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" @click="showCreateProviderModal = false"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Add SSO Provider</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Provider Type</label>
+            <select v-model="newProviderForm.provider_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+              <option value="google">Google OAuth</option>
+              <option value="github">GitHub</option>
+              <option value="microsoft_entra">Microsoft Entra ID</option>
+              <option value="ldap">LDAP</option>
+              <option value="active_directory">Active Directory</option>
+              <option value="saml">SAML 2.0</option>
+              <option value="google_workspace">Google Workspace</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <input v-model="newProviderForm.name" type="text" placeholder="e.g., Company Google SSO" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+            <input v-model="(newProviderForm.config as Record<string, string>).client_id" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+            <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
+          </div>
+          <div class="flex items-center gap-3">
+            <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+            <label for="sso-active" class="text-sm text-gray-700">Active</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+            <label for="sso-provision" class="text-sm text-gray-700">Allow automatic user creation (JIT provisioning)</label>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button @click="showCreateProviderModal = false" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Cancel</button>
+          <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50">Create Provider</button>
         </div>
       </div>
     </div>

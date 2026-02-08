@@ -31,6 +31,8 @@ from .services import router as services_router
 from .settings import router as settings_router
 from .slm_auth import router as slm_auth_router
 from .slm_users import router as slm_users_router
+from .sso import router as sso_router
+from .sso_auth import router as sso_auth_router
 from .stateful import router as stateful_router
 from .tls import node_tls_router, tls_router
 from .updates import router as updates_router
@@ -69,4 +71,6 @@ __all__ = [
     "slm_auth_router",
     "autobot_users_router",
     "autobot_teams_router",
+    "sso_router",
+    "sso_auth_router",
 ]

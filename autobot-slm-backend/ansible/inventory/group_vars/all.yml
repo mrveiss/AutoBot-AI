@@ -28,8 +28,8 @@ autobot:
 # ==========================================
 
 network:
-  subnet: "192.168.100.0/24"
-  gateway: "192.168.100.1"
+  subnet: "172.16.168.0/24"
+  gateway: "172.16.168.1"
   dns_servers:
     - "8.8.8.8"
     - "1.1.1.1"
@@ -109,15 +109,15 @@ security:
     # SSH access from gateway
     - rule: allow
       port: 22
-      src: "192.168.100.1"
+      src: "172.16.168.1"
     # Internal network communication
     - rule: allow
-      src: "192.168.100.0/24"
+      src: "172.16.168.0/24"
     # Health check endpoints
     # TODO Issue #725: Replace broad range with specific ports via SLM config
     - rule: allow
       port: "8000:8099"
-      src: "192.168.100.0/24"
+      src: "172.16.168.0/24"
 
 # ==========================================
 # LOGGING CONFIGURATION
@@ -127,7 +127,7 @@ logging:
   # Log aggregation (centralized on backend VM)
   aggregation:
     enabled: true
-    server: "192.168.100.20"
+    server: "172.16.168.20"
     port: 514
     protocol: "tcp"
 

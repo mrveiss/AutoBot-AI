@@ -3,16 +3,22 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useSsoApi, type ActiveProvider } from '@/composables/useSsoApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
+const ssoApi = useSsoApi()
+
 const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
+const ssoProviders = ref<ActiveProvider[]>([])
+const ssoLoading = ref(false)
+const ssoError = ref<string | null>(null)
 
 async function handleLogin(): Promise<void> {
   const success = await authStore.login(username.value, password.value)
@@ -20,6 +26,36 @@ async function handleLogin(): Promise<void> {
     router.push('/')
   }
 }
+
+async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
+  ssoLoading.value = true
+  ssoError.value = null
+  try {
+    if (provider.provider_type === 'ldap' || provider.provider_type === 'active_directory') {
+      // LDAP uses same form fields
+      const response = await ssoApi.loginWithLDAP(provider.id, username.value, password.value)
+      localStorage.setItem('slm_access_token', response.access_token)
+      await authStore.checkAuth()
+      router.push('/')
+    } else {
+      // OAuth2/SAML: redirect to provider
+      const response = await ssoApi.initiateSSOLogin(provider.id)
+      window.location.href = response.redirect_url
+    }
+  } catch {
+    ssoError.value = 'SSO login failed. Please try again.'
+  } finally {
+    ssoLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    ssoProviders.value = await ssoApi.getActiveProviders()
+  } catch {
+    // SSO providers not available - that's fine
+  }
+})
 </script>
 
 <template>
@@ -121,6 +157,36 @@ async function handleLogin(): Promise<void> {
             <span>{{ authStore.loading ? 'Signing in...' : 'Sign in' }}</span>
           </button>
         </form>
+
+        <!-- SSO Login Options -->
+        <div v-if="ssoProviders.length > 0" class="mt-6">
+          <div class="relative my-6">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-gray-300"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+              <span class="px-3 bg-white text-gray-400">Or continue with</span>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <button
+              v-for="provider in ssoProviders"
+              :key="provider.id"
+              @click="handleSSOLogin(provider)"
+              :disabled="ssoLoading"
+              type="button"
+              class="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 transition-colors disabled:opacity-50"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              <span class="text-sm font-medium">{{ provider.name }}</span>
+            </button>
+          </div>
+
+          <p v-if="ssoError" class="mt-3 text-sm text-red-500 text-center">{{ ssoError }}</p>
+        </div>
 
         <!-- Footer -->
         <div class="mt-6 pt-6 border-t border-gray-200">
