@@ -137,11 +137,17 @@ class TestRAGConfig:
         )
 
     def test_invalid_weights(self):
-        """Test invalid weight values raise errors."""
-        with pytest.raises(ValueError, match="hybrid_weight_semantic must be 0-1"):
-            RAGConfig(hybrid_weight_semantic=1.5)
+        """Test invalid weight values raise errors or get normalized."""
+        # Positive out-of-range values get normalized (#788)
+        config = RAGConfig(hybrid_weight_semantic=1.5)
+        assert (
+            abs(config.hybrid_weight_semantic + config.hybrid_weight_keyword - 1.0)
+            < 0.01
+        )
 
-        with pytest.raises(ValueError, match="hybrid_weight_keyword must be 0-1"):
+        # Negative values cause ValueError after normalization pushes
+        # the other weight out of range
+        with pytest.raises(ValueError, match="must be 0-1"):
             RAGConfig(hybrid_weight_keyword=-0.1)
 
     def test_from_dict(self):

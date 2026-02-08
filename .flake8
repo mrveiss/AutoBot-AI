@@ -52,6 +52,12 @@ exclude =
 
 # Per-file ignores for intentional patterns
 per-file-ignores =
+    # Colocated test files (#734) - non-production code
+    *_test.py:E501,E303,W291,W293,E741,F841
+    *.e2e_test.py:E501,E303,W291,W293,E741,F841
+    *.integration_test.py:E501,E303,W291,W293,E741,F841
+    *.performance_test.py:E501,E303,W291,W293,E741,F841
+    *_benchmarks.py:E501,E303,W291,W293,E741,F841
     # Agent config contains long documentation strings for each agent
     backend/api/agent_config.py:E501
     # Agent files with LLM prompt templates (intentionally long strings)

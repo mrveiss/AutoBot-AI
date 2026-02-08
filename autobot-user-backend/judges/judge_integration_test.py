@@ -7,8 +7,9 @@ Tests integration with workflow automation, validation dashboard, and other syst
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.api.validation_dashboard import router as validation_router
 from fastapi.testclient import TestClient
+
+from backend.api.validation_dashboard import router as validation_router
 
 
 class TestJudgeIntegration:

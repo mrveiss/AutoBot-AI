@@ -20,11 +20,11 @@ Issue: #47 - Security Penetration Testing for MCP Bridges
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 # Import MCP bridges
 from backend.api.filesystem_mcp import ALLOWED_DIRECTORIES, is_path_allowed
 from backend.app_factory import create_app
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture
