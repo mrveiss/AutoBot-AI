@@ -1,5 +1,6 @@
 # AutoBot Distributed Architecture Configuration
 # Main WSL Coordinator (172.16.168.20) configuration for distributed 6-VM setup
+# SSOT: IPs derived from complete.yaml → .env.network → ssot-config.sh (#808)
 
 # Deployment Architecture
 deployment:

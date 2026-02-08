@@ -1,5 +1,6 @@
 # Infrastructure Configuration
 # Contains all infrastructure-related settings (Redis, databases, networking)
+# SSOT: IPs derived from complete.yaml → .env.network → ssot-config.sh (#808)
 
 redis:
   enabled: true

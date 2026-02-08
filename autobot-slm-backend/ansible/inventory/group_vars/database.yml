@@ -299,21 +299,21 @@ ufw_rules:
   - rule: allow
     port: 6379
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Redis Stack database"
 
   # RedisInsight web interface
   - rule: allow
     port: 8002
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "RedisInsight web interface"
 
   # Model storage HTTP API (if enabled)
   - rule: allow
     port: 8003
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Model storage API"
 
 # ==========================================

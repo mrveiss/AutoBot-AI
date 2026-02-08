@@ -256,28 +256,28 @@ ufw_rules:
   - rule: allow
     port: 8001
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "FastAPI backend API"
 
   # Log aggregation
   - rule: allow
     port: 514
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Rsyslog aggregation"
 
   # Prometheus metrics (if enabled)
   - rule: allow
     port: 9090
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Prometheus metrics"
 
   # WebSocket connections
   - rule: allow
     port: 8001
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "WebSocket connections"
 
 # ==========================================
@@ -290,7 +290,7 @@ security:
     rate_limiting: true
     cors_enabled: true
     cors_origins:
-      - "http://192.168.100.10"  # Frontend VM
+      - "http://172.16.168.21"  # Frontend VM
       - "http://autobot.internal"
 
   # File permissions

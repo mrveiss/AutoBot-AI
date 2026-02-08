@@ -348,14 +348,14 @@ ufw_rules:
   - rule: allow
     port: 8080
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "AI Stack API"
 
   # NPU Worker API
   - rule: allow
     port: 8081
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "NPU Worker API"
 
   # Model serving endpoints
@@ -363,7 +363,7 @@ ufw_rules:
   - rule: allow
     port: "8090:8099"
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Model serving endpoints"
 
 # ==========================================
@@ -508,8 +508,8 @@ security:
 
     # CORS configuration
     cors_origins:
-      - "http://192.168.100.10"  # Frontend VM
-      - "http://192.168.100.20:8001"  # Backend VM
+      - "http://172.16.168.21"  # Frontend VM
+      - "http://172.16.168.20:8001"  # Backend VM
 
 # ==========================================
 # TROUBLESHOOTING CONFIGURATION

@@ -113,7 +113,7 @@ dns_cache:
     port: 53
     access_control:
       - "127.0.0.0/8 allow"
-      - "192.168.100.0/24 allow"
+      - "172.16.168.0/24 allow"
       - "0.0.0.0/0 refuse"
 
     # Cache settings
@@ -181,14 +181,14 @@ ufw_rules:
   - rule: allow
     port: 5173
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Vue.js dev server (internal)"
 
   # DNS cache (internal only)
   - rule: allow
     port: 53
     protocol: udp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "DNS cache service"
 
 # ==========================================

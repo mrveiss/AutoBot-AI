@@ -310,28 +310,28 @@ ufw_rules:
   - rule: allow
     port: 5901
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "VNC server"
 
   # Web VNC (if enabled)
   - rule: allow
     port: 6080
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Web VNC interface"
 
   # Playwright API
   - rule: allow
     port: 3000
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Playwright automation API"
 
   # Browser debugging ports (development)
   - rule: allow
     port: "9222:9223"
     protocol: tcp
-    src: "192.168.100.0/24"
+    src: "172.16.168.0/24"
     comment: "Browser debugging ports"
 
 # ==========================================
@@ -393,7 +393,7 @@ security:
 
     # Access control
     allowed_hosts:
-      - "192.168.100.0/24"
+      - "172.16.168.0/24"
 
     # Encryption (if supported)
     encryption_enabled: false  # TightVNC doesn't support encryption
