@@ -18,11 +18,11 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
-
-from config import UnifiedConfigManager
 from constants.model_constants import ModelConstants
+
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
+from config import UnifiedConfigManager
 
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
@@ -118,8 +118,12 @@ class LLMInterface:
 
         # Initialize metrics and fallback chain
         self._metrics = self._init_metrics()
-        self._provider_priority = ["ollama", "openai", "vllm", "transformers", "mock"]
+        self._provider_priority = config.get(
+            "backend.llm.fallback_chain",
+            ["ollama", "openai", "vllm", "transformers", "mock"],
+        )
         self._fallback_enabled = config.get("llm.fallback.enabled", True)
+        self._active_provider = config.get_active_provider()
 
         # Initialize streaming and providers
         self._streaming_manager = StreamingManager()
@@ -420,6 +424,55 @@ class LLMInterface:
         except Exception as e:
             logger.warning("Tiered routing failed, using default model: %s", e)
             return current_model
+
+    async def switch_provider(
+        self, provider: str, model: str = "", validate: bool = False
+    ) -> Dict[str, Any]:
+        """Switch the active LLM provider at runtime (#536).
+
+        Args:
+            provider: Provider name (ollama, openai, anthropic, vllm, etc.)
+            model: Model to use with the provider
+            validate: If True, run a health check before switching
+
+        Returns:
+            Dict with success status, provider, model, and optional error
+        """
+        if provider not in self.provider_routing:
+            return {
+                "success": False,
+                "error": f"Unknown provider: {provider}",
+                "available": list(self.provider_routing.keys()),
+            }
+
+        if validate:
+            is_healthy, health_error = await self._is_provider_healthy(provider)
+            if not is_healthy:
+                return {"success": False, "error": health_error}
+
+        self._active_provider = provider
+        if model:
+            config.set("backend.llm.active_provider", provider)
+            config.set("backend.llm.active_model", model)
+
+        logger.info("Switched LLM provider to %s (model=%s)", provider, model)
+        return {"success": True, "provider": provider, "model": model}
+
+    async def get_all_provider_status(self) -> Dict[str, Any]:
+        """Get status of all configured providers (#536).
+
+        Returns:
+            Dict mapping provider names to their status info
+        """
+        statuses = {}
+        for name in self.provider_routing:
+            is_healthy, error = await self._is_provider_healthy(name)
+            statuses[name] = {
+                "available": is_healthy,
+                "active": name == self._active_provider,
+                "error": error,
+            }
+        return statuses
 
     def _get_provider_type_enum(self, provider: str) -> ProviderType:
         """Convert provider string to ProviderType enum."""

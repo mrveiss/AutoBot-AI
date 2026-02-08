@@ -25,6 +25,10 @@ _HOST_SERVICE_MAP = {
     "browser": NetworkConstants.BROWSER_VM_IP,
     "ollama": NetworkConstants.AI_STACK_HOST,
     "browser_service": NetworkConstants.BROWSER_VM_IP,
+    "openai": "api.openai.com",
+    "anthropic": "api.anthropic.com",
+    "vllm": "localhost",
+    "lmstudio": "localhost",
 }
 
 _PORT_SERVICE_MAP = {
@@ -36,6 +40,10 @@ _PORT_SERVICE_MAP = {
     "browser": NetworkConstants.BROWSER_SERVICE_PORT,
     "ollama": NetworkConstants.OLLAMA_PORT,
     "browser_service": NetworkConstants.BROWSER_SERVICE_PORT,
+    "openai": 443,
+    "anthropic": 443,
+    "vllm": 8000,
+    "lmstudio": 1234,
 }
 
 
@@ -305,3 +313,23 @@ class ServiceConfigMixin:
             "reports": str(PATH.REPORTS_DIR),
         }
         return defaults.get(category, str(PATH.PROJECT_ROOT))
+
+    def get_api_key(self, provider: str) -> str:
+        """Get API key for a cloud LLM provider (#536).
+
+        Priority: env AUTOBOT_{PROVIDER}_API_KEY > config > empty string.
+        """
+        env_val = os.getenv(f"AUTOBOT_{provider.upper()}_API_KEY")
+        if env_val:
+            return env_val
+        return self.get_nested(f"backend.llm.cloud.providers.{provider}.api_key", "")
+
+    def get_active_provider(self) -> str:
+        """Get the currently active LLM provider (#536).
+
+        Priority: env AUTOBOT_LLM_PROVIDER > config > 'ollama'.
+        """
+        env_provider = os.getenv("AUTOBOT_LLM_PROVIDER")
+        if env_provider:
+            return env_provider
+        return self.get_nested("backend.llm.active_provider", "ollama")

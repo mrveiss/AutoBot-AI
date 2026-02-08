@@ -4,20 +4,20 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
-
-from backend.services.config_service import ConfigService
-from backend.utils.connection_utils import ConnectionTester, ModelManager
 from auth_middleware import check_admin_permission, get_current_user
-from config import UnifiedConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
 from constants.model_constants import ModelConstants
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_response
+
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.services.config_service import ConfigService
+from backend.utils.connection_utils import ConnectionTester, ModelManager
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -29,6 +29,13 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for embedding model detection (Issue #326)
 EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}
 TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
+
+
+def _get_llm_interface():
+    """Get LLMInterface instance (#536)."""
+    from llm_interface_pkg.interface import LLMInterface
+
+    return LLMInterface()
 
 
 @with_error_handling(
