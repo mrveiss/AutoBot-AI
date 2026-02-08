@@ -61,10 +61,10 @@
       when: "'llm' in role_list"
 
     # Automation Roles
-    - name: Deploy browser-automation role
+    - name: Deploy browser role
       ansible.builtin.include_role:
-        name: browser-automation
-      when: "'browser-automation' in role_list"
+        name: browser
+      when: "'browser' in role_list"
 
     # Remote Access Roles
     - name: Deploy vnc role

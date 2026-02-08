@@ -51,15 +51,15 @@
 
     - name: "Apply NPU Worker Role"
       include_role:
-        name: npu_worker
-      when: deploy_role == 'npu_worker'
-      tags: ['npu_worker']
+        name: npu-worker
+      when: deploy_role == 'npu-worker'
+      tags: ['npu-worker']
 
     - name: "Apply AI Stack Role"
       include_role:
-        name: ai_stack
-      when: deploy_role == 'ai_stack'
-      tags: ['ai_stack']
+        name: ai-stack
+      when: deploy_role == 'ai-stack'
+      tags: ['ai-stack']
 
     - name: "Apply Browser Role"
       include_role:

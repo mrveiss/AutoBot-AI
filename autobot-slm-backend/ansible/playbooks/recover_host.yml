@@ -108,13 +108,13 @@
       when: "'database' in group_names"
       tags: ['redis', 'recovery']
 
-    - role: npu_worker
+    - role: npu-worker
       when: "'npu' in group_names"
-      tags: ['npu_worker', 'recovery']
+      tags: ['npu-worker', 'recovery']
 
-    - role: ai_stack
+    - role: ai-stack
       when: "'aiml' in group_names"
-      tags: ['ai_stack', 'recovery']
+      tags: ['ai-stack', 'recovery']
 
     - role: browser
       when: "'browser' in group_names"

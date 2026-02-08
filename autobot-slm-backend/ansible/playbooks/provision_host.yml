@@ -35,13 +35,13 @@
       when: "'database' in group_names"
       tags: ['redis', 'database']
 
-    - role: npu_worker
+    - role: npu-worker
       when: "'npu' in group_names"
-      tags: ['npu_worker', 'npu']
+      tags: ['npu-worker', 'npu']
 
-    - role: ai_stack
+    - role: ai-stack
       when: "'aiml' in group_names"
-      tags: ['ai_stack', 'aiml']
+      tags: ['ai-stack', 'aiml']
 
     - role: browser
       when: "'browser' in group_names"

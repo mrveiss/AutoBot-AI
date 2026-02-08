@@ -1,0 +1,24 @@
+---
+# Browser role defaults
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+browser_user: autobot
+browser_group: autobot
+browser_install_dir: /opt/autobot/autobot-browser-worker
+
+# VNC configuration
+vnc_port: 5901
+vnc_display: ":1"
+
+# Playwright configuration
+playwright_port: 3000
+browser_timeout: 30
+
+# Desktop environment
+desktop_environment: "xfce4"
+headless_mode: false
+
+# Network
+network_subnet: "172.16.168.0/24"
