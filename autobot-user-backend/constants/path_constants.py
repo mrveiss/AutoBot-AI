@@ -17,25 +17,28 @@ class PathConstants:
     # Project root - dynamically determined
     PROJECT_ROOT: Path = Path(__file__).parent.parent.parent
 
-    # Core directories
-    CONFIG_DIR: Path = PROJECT_ROOT / "config"
+    # Prompt templates (#793)
+    PROMPTS_DIR: Path = PROJECT_ROOT / "prompts"
+
+    # Core directories (updated for #781 reorganization)
+    CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
     DATA_DIR: Path = PROJECT_ROOT / "data"
     LOGS_DIR: Path = PROJECT_ROOT / "logs"
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
-    SRC_DIR: Path = PROJECT_ROOT / "src"
-    TESTS_DIR: Path = PROJECT_ROOT / "tests"
-    BACKEND_DIR: Path = PROJECT_ROOT / "backend"
-    DATABASE_DIR: Path = PROJECT_ROOT / "database"
-    FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-vue"
+    SRC_DIR: Path = PROJECT_ROOT / "autobot-user-backend"
+    TESTS_DIR: Path = PROJECT_ROOT / "autobot-user-backend"
+    BACKEND_DIR: Path = PROJECT_ROOT / "autobot-user-backend"
+    DATABASE_DIR: Path = PROJECT_ROOT / "autobot-user-backend" / "database"
+    FRONTEND_DIR: Path = PROJECT_ROOT / "autobot-user-frontend"
     SCRIPTS_DIR: Path = PROJECT_ROOT / "scripts"
     UTILITIES_DIR: Path = SCRIPTS_DIR / "utilities"
-    ANALYSIS_DIR: Path = PROJECT_ROOT / "analysis"
-    REPORTS_DIR: Path = PROJECT_ROOT / "reports"
+    ANALYSIS_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "analysis"
+    REPORTS_DIR: Path = PROJECT_ROOT / "data" / "reports"
     REFACTORING_REPORTS_DIR: Path = REPORTS_DIR / "refactoring"
-    MCP_TOOLS_DIR: Path = PROJECT_ROOT / "mcp-tools"
+    MCP_TOOLS_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "mcp"
     TEMP_DIR: Path = PROJECT_ROOT / "temp"
-    ARCHIVE_DIR: Path = PROJECT_ROOT / "archive"
-    ANSIBLE_DIR: Path = PROJECT_ROOT / "ansible"
+    ARCHIVE_DIR: Path = PROJECT_ROOT / "docs" / "archives"
+    ANSIBLE_DIR: Path = PROJECT_ROOT / "autobot-slm-backend" / "ansible"
     ANSIBLE_PLAYBOOKS_DIR: Path = ANSIBLE_DIR / "playbooks"
 
     # Configuration subdirectories
