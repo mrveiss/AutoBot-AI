@@ -15,6 +15,8 @@ from contextlib import asynccontextmanager
 from api import (
     agents_router,
     auth_router,
+    autobot_teams_router,
+    autobot_users_router,
     blue_green_router,
     code_sync_router,
     config_router,
@@ -35,6 +37,8 @@ from api import (
     security_router,
     services_router,
     settings_router,
+    slm_auth_router,
+    slm_users_router,
     stateful_router,
     tls_router,
     updates_router,
@@ -45,12 +49,12 @@ from api.code_source import router as code_source_router
 from api.roles import router as roles_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from config import settings
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
+
+from config import settings
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -119,10 +123,9 @@ async def lifespan(app: FastAPI):
 
 async def _ensure_admin_user():
     """Create default admin user if none exists."""
-    from sqlalchemy import select
-
     from models.database import User
     from services.auth import auth_service
+    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(select(User).where(User.is_admin.is_(True)))
@@ -197,6 +200,11 @@ app.include_router(node_config_router, prefix="/api/nodes")
 app.include_router(npu_router, prefix="/api")
 # Issue #786: Infrastructure setup playbooks
 app.include_router(infrastructure_router, prefix="/api")
+# User Management routers (Issue #576)
+app.include_router(slm_users_router, prefix="/api")
+app.include_router(slm_auth_router, prefix="/api")
+app.include_router(autobot_users_router, prefix="/api")
+app.include_router(autobot_teams_router, prefix="/api")
 
 
 @app.get("/")

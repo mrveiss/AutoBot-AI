@@ -9,6 +9,8 @@ FastAPI routers for the SLM backend.
 
 from .agents import router as agents_router
 from .auth import router as auth_router
+from .autobot_teams import router as autobot_teams_router
+from .autobot_users import router as autobot_users_router
 from .blue_green import router as blue_green_router
 from .code_sync import router as code_sync_router
 from .config import node_config_router
@@ -27,6 +29,8 @@ from .security import router as security_router
 from .services import fleet_router as fleet_services_router
 from .services import router as services_router
 from .settings import router as settings_router
+from .slm_auth import router as slm_auth_router
+from .slm_users import router as slm_users_router
 from .stateful import router as stateful_router
 from .tls import node_tls_router, tls_router
 from .updates import router as updates_router
@@ -61,4 +65,8 @@ __all__ = [
     "discovery_router",
     "npu_router",
     "infrastructure_router",
+    "slm_users_router",
+    "slm_auth_router",
+    "autobot_users_router",
+    "autobot_teams_router",
 ]
