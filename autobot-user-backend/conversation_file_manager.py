@@ -29,7 +29,6 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
-
 from constants.threshold_constants import TimingConstants
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
@@ -91,8 +90,8 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
-from config import unified_config_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from config import unified_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +115,7 @@ class ConversationFileManager:
     CACHE_KEY_PREFIX = "conv_files:"
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB max file size
     CLEANUP_DAYS = 30  # Schedule cleanup 30 days after session end
+    SESSION_DIR_PREFIX = "sessions"  # Issue #70: Session-isolated file storage
 
     @staticmethod
     def _get_default_paths() -> tuple:
@@ -173,6 +173,317 @@ class ConversationFileManager:
             self.storage_dir,
             self.db_path,
         )
+
+    def get_session_dir(self, session_id: str) -> Path:
+        """Get or create session-specific file storage directory.
+
+        Issue #70: Session-isolated file storage. Files are stored in
+        {storage_dir}/sessions/{session_id}/ for physical isolation.
+
+        Args:
+            session_id: Chat session identifier
+
+        Returns:
+            Path to session-specific file directory
+        """
+        session_dir = self.storage_dir / self.SESSION_DIR_PREFIX / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        return session_dir
+
+    def validate_session_path(self, session_id: str, relative_path: str) -> Path:
+        """Validate a path stays within session directory boundaries.
+
+        Issue #70: Prevents path traversal attacks by resolving the full path
+        and verifying it remains within the session directory.
+
+        Args:
+            session_id: Chat session identifier
+            relative_path: Relative path within session directory
+
+        Returns:
+            Resolved absolute path within session directory
+
+        Raises:
+            ValueError: If path traversal attempt detected
+        """
+        session_dir = self.get_session_dir(session_id)
+        full_path = (session_dir / relative_path).resolve()
+        if not full_path.is_relative_to(session_dir.resolve()):
+            raise ValueError(
+                "Path traversal attempt blocked: path escapes session directory"
+            )
+        return full_path
+
+    async def cleanup_session(
+        self, session_id: str, hard_delete: bool = True
+    ) -> Dict[str, Any]:
+        """Clean up all files for a session (Issue #70).
+
+        Args:
+            session_id: Chat session identifier
+            hard_delete: If True, remove files from disk and database
+
+        Returns:
+            Dict with cleanup statistics
+        """
+        deleted_count = await self.delete_session_files(
+            session_id, hard_delete=hard_delete
+        )
+        # Remove session directory if empty
+        session_dir = self.storage_dir / self.SESSION_DIR_PREFIX / session_id
+        if await asyncio.to_thread(session_dir.exists):
+            remaining = list(await asyncio.to_thread(list, session_dir.iterdir()))
+            if not remaining:
+                await asyncio.to_thread(session_dir.rmdir)
+                logger.info("Removed empty session directory: %s", session_dir)
+        return {"session_id": session_id, "files_deleted": deleted_count}
+
+    async def create_file(
+        self,
+        session_id: str,
+        filename: str,
+        content: str,
+        mime_type: str = "text/plain",
+        created_by: Optional[str] = None,
+        file_type: str = "generated",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Create a file programmatically in a session (Issue #70).
+
+        Used by agents and the file editor to create files directly
+        rather than through file upload.
+
+        Args:
+            session_id: Chat session identifier
+            filename: Name for the new file
+            content: Text content for the file
+            mime_type: MIME type of the file
+            created_by: Username of creator (agent name or user)
+            file_type: Type tag ('generated', 'created', 'edited')
+            metadata: Optional additional metadata
+
+        Returns:
+            Dict with file information
+        """
+        file_content = content.encode("utf-8")
+        combined_metadata = {"file_type": file_type}
+        if metadata:
+            combined_metadata.update(metadata)
+        return await self.add_file(
+            session_id=session_id,
+            file_content=file_content,
+            original_filename=filename,
+            mime_type=mime_type,
+            uploaded_by=created_by,
+            metadata=combined_metadata,
+        )
+
+    async def _lookup_session_file(self, connection, session_id: str, file_id: str):
+        """Lookup a file row by session and file ID.
+
+        Helper for rename_file, update_file_content (Issue #70).
+        """
+        async with connection.execute(
+            """
+            SELECT cf.file_id, cf.original_filename, cf.file_path, cf.mime_type
+            FROM conversation_files cf
+            JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+            WHERE cf.file_id = ? AND sfa.session_id = ? AND cf.is_deleted = 0
+            """,
+            (file_id, session_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if not row:
+            raise RuntimeError("File not found")
+        return row
+
+    async def rename_file(
+        self, session_id: str, file_id: str, new_filename: str
+    ) -> Dict[str, Any]:
+        """Rename a file in a session (Issue #70)."""
+        async with self._lock:
+            connection = await self._get_async_db_connection()
+            try:
+                row = await self._lookup_session_file(connection, session_id, file_id)
+                await connection.execute(
+                    "UPDATE conversation_files SET original_filename = ? WHERE file_id = ?",
+                    (new_filename, file_id),
+                )
+                await connection.commit()
+                await self._invalidate_session_cache(session_id)
+                logger.info(
+                    "Renamed file %s from '%s' to '%s'",
+                    file_id,
+                    row["original_filename"],
+                    new_filename,
+                )
+                return {
+                    "file_id": file_id,
+                    "filename": new_filename,
+                    "previous_filename": row["original_filename"],
+                }
+            except Exception as e:
+                await connection.rollback()
+                logger.error("Error renaming file: %s", e)
+                raise RuntimeError(f"Failed to rename file: {e}")
+            finally:
+                await connection.close()
+
+    async def get_file_content(self, session_id: str, file_id: str) -> Dict[str, Any]:
+        """Get the content of a text file (Issue #70).
+
+        Args:
+            session_id: Chat session identifier
+            file_id: File identifier
+
+        Returns:
+            Dict with file_id, filename, content, mime_type
+
+        Raises:
+            RuntimeError: If file not found or not readable
+        """
+        connection = await self._get_async_db_connection()
+        try:
+            row = await self._lookup_session_file(connection, session_id, file_id)
+            file_path = Path(row["file_path"])
+            if not await asyncio.to_thread(file_path.exists):
+                raise RuntimeError("File not found on disk")
+
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                content = await f.read()
+
+            return {
+                "file_id": row["file_id"],
+                "filename": row["original_filename"],
+                "content": content,
+                "mime_type": row["mime_type"],
+            }
+        except UnicodeDecodeError:
+            raise RuntimeError("File is binary and cannot be read as text")
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.error("Error reading file content: %s", e)
+            raise RuntimeError(f"Failed to read file: {e}")
+        finally:
+            await connection.close()
+
+    async def _write_and_update_file(
+        self, connection, row, content: str, session_id: str
+    ) -> Dict[str, Any]:
+        """Write content to disk and update DB metadata.
+
+        Helper for update_file_content (Issue #70).
+        """
+        file_path = Path(row["file_path"])
+        encoded = content.encode("utf-8")
+        new_hash = self._compute_file_hash(encoded)
+
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(encoded)
+
+        await connection.execute(
+            "UPDATE conversation_files SET file_size = ?, file_hash = ? WHERE file_id = ?",
+            (len(encoded), new_hash, row["file_id"]),
+        )
+        await connection.commit()
+        await self._invalidate_session_cache(session_id)
+        return {
+            "file_id": row["file_id"],
+            "filename": row["original_filename"],
+            "size": len(encoded),
+        }
+
+    async def update_file_content(
+        self, session_id: str, file_id: str, content: str
+    ) -> Dict[str, Any]:
+        """Update the content of a text file (Issue #70)."""
+        async with self._lock:
+            connection = await self._get_async_db_connection()
+            try:
+                row = await self._lookup_session_file(connection, session_id, file_id)
+                return await self._write_and_update_file(
+                    connection, row, content, session_id
+                )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                await connection.rollback()
+                logger.error("Error updating file content: %s", e)
+                raise RuntimeError(f"Failed to update file: {e}")
+            finally:
+                await connection.close()
+
+    async def copy_file(
+        self, session_id: str, file_id: str, new_filename: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Copy a file within a session (Issue #70).
+
+        Args:
+            session_id: Chat session identifier
+            file_id: Source file identifier
+            new_filename: Optional new name (defaults to 'Copy of {original}')
+
+        Returns:
+            Dict with new file information
+        """
+        connection = await self._get_async_db_connection()
+        try:
+            row = await self._lookup_session_file(connection, session_id, file_id)
+            file_path = Path(row["file_path"])
+            if not await asyncio.to_thread(file_path.exists):
+                raise RuntimeError("Source file not found on disk")
+
+            async with aiofiles.open(file_path, "rb") as f:
+                content = await f.read()
+
+            copy_name = new_filename or f"Copy of {row['original_filename']}"
+            return await self.add_file(
+                session_id=session_id,
+                file_content=content,
+                original_filename=copy_name,
+                mime_type=row["mime_type"],
+            )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.error("Error copying file: %s", e)
+            raise RuntimeError(f"Failed to copy file: {e}")
+        finally:
+            await connection.close()
+
+    async def search_files(self, session_id: str, query: str) -> List[Dict[str, Any]]:
+        """Search files by filename within a session (Issue #70).
+
+        Args:
+            session_id: Chat session identifier
+            query: Search term to match against filenames
+
+        Returns:
+            List of matching file dicts
+        """
+        connection = await self._get_async_db_connection()
+        try:
+            async with connection.execute(
+                """
+                SELECT cf.file_id, cf.original_filename as filename,
+                       cf.file_size as size, cf.mime_type, cf.uploaded_at,
+                       cf.uploaded_by, sfa.association_type
+                FROM conversation_files cf
+                JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
+                WHERE sfa.session_id = ? AND cf.is_deleted = 0
+                  AND cf.original_filename LIKE ?
+                ORDER BY sfa.associated_at DESC
+                """,
+                (session_id, f"%{query}%"),
+            ) as cursor:
+                rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error("Error searching files: %s", e)
+            return []
+        finally:
+            await connection.close()
 
     def _initialize_schema(self) -> None:
         """
@@ -559,6 +870,33 @@ class ConversationFileManager:
 
         return self._build_file_response(file_info)
 
+    def _prepare_file_info(
+        self, session_id: str, file_content: bytes, original_filename: str, **kwargs
+    ) -> FileInfo:
+        """Prepare FileInfo for add_file.
+
+        Helper for add_file (Issue #70, #375).
+        """
+        file_size = self._validate_file_size(file_content)
+        file_hash = self._compute_file_hash(file_content)
+        file_id = str(uuid.uuid4())
+        stored_filename = self._generate_stored_filename(original_filename, file_hash)
+        session_dir = self.get_session_dir(session_id)
+        return FileInfo(
+            file_id=file_id,
+            session_id=session_id,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            file_path=session_dir / stored_filename,
+            file_size=file_size,
+            file_hash=file_hash,
+            mime_type=kwargs.get("mime_type"),
+            uploaded_by=kwargs.get("uploaded_by"),
+            message_id=kwargs.get("message_id"),
+            metadata=kwargs.get("metadata"),
+            deduplicated=False,
+        )
+
     async def add_file(
         self,
         session_id: str,
@@ -571,33 +909,21 @@ class ConversationFileManager:
     ) -> Dict[str, Any]:
         """Add a file to the conversation file system."""
         async with self._lock:
-            file_size = self._validate_file_size(file_content)
-            file_hash = self._compute_file_hash(file_content)
-            file_id = str(uuid.uuid4())
-            stored_filename = self._generate_stored_filename(
-                original_filename, file_hash
-            )
-            file_path = self.storage_dir / stored_filename
-
-            # Issue #375: Create FileInfo dataclass to reduce parameter passing
-            file_info = FileInfo(
-                file_id=file_id,
-                session_id=session_id,
-                original_filename=original_filename,
-                stored_filename=stored_filename,
-                file_path=file_path,
-                file_size=file_size,
-                file_hash=file_hash,
+            file_info = self._prepare_file_info(
+                session_id,
+                file_content,
+                original_filename,
                 mime_type=mime_type,
                 uploaded_by=uploaded_by,
                 message_id=message_id,
                 metadata=metadata,
-                deduplicated=False,
             )
 
             connection = await self._get_async_db_connection()
             try:
-                existing_file = await self._check_existing_file(connection, file_hash)
+                existing_file = await self._check_existing_file(
+                    connection, file_info.file_hash
+                )
                 if existing_file:
                     return await self._handle_deduplicated_file(
                         connection, existing_file, file_info
@@ -605,8 +931,8 @@ class ConversationFileManager:
                 return await self._store_new_file(connection, file_info, file_content)
             except Exception as e:
                 await connection.rollback()
-                if await asyncio.to_thread(file_path.exists):
-                    await asyncio.to_thread(file_path.unlink)
+                if await asyncio.to_thread(file_info.file_path.exists):
+                    await asyncio.to_thread(file_info.file_path.unlink)
                 logger.error("Error adding file: %s", e)
                 raise RuntimeError(f"Failed to add file: {e}")
             finally:
@@ -731,7 +1057,7 @@ class ConversationFileManager:
             JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
             WHERE sfa.session_id = ? {deleted_filter}
             ORDER BY sfa.associated_at DESC
-            """,
+            """,  # nosec B608 - deleted_filter is a hardcoded constant
             (session_id,),
         ) as cursor:
             rows = await cursor.fetchall()
@@ -821,7 +1147,7 @@ class ConversationFileManager:
             # Issue #397: Batch SQL delete using IN clause
             placeholders = ",".join("?" * len(file_ids))
             await connection.execute(
-                f"DELETE FROM conversation_files WHERE file_id IN ({placeholders})",
+                f"DELETE FROM conversation_files WHERE file_id IN ({placeholders})",  # nosec B608 - parameterized ?
                 file_ids,
             )
         else:
@@ -832,7 +1158,7 @@ class ConversationFileManager:
                 UPDATE conversation_files
                 SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
                 WHERE file_id IN ({placeholders})
-                """,
+                """,  # nosec B608 - parameterized placeholders, not string interpolation
                 file_ids,
             )
             logger.info("Soft deleted %d files in batch", len(file_ids))

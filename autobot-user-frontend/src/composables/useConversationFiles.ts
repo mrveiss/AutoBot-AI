@@ -18,13 +18,17 @@ const logger = createLogger('useConversationFiles')
 export interface ConversationFile {
   file_id: string
   filename: string
-  file_type: 'upload' | 'generated'
+  file_type: 'upload' | 'generated' | 'created'
   mime_type: string
   size_bytes: number
   upload_timestamp: string
   download_url: string
   preview_url: string
 }
+
+/** Issue #70: Sort options for file list */
+export type SortField = 'name' | 'date' | 'size' | 'type'
+export type SortDirection = 'asc' | 'desc'
 
 /**
  * File statistics for conversation
@@ -55,10 +59,37 @@ export function useConversationFiles(sessionId: string) {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const uploadProgress = ref<number>(0)
+  const searchQuery = ref('')
+  const sortField = ref<SortField>('date')
+  const sortDirection = ref<SortDirection>('desc')
+  const selectedFileIds = ref<Set<string>>(new Set())
 
   // Computed
   const hasFiles = computed(() => files.value.length > 0)
   const totalSizeFormatted = computed(() => formatFileSize(stats.value.total_size_bytes))
+  const selectedCount = computed(() => selectedFileIds.value.size)
+  const allSelected = computed(() => files.value.length > 0 && selectedFileIds.value.size === files.value.length)
+
+  const sortedFiles = computed(() => {
+    let result = [...files.value]
+    if (searchQuery.value) {
+      const q = searchQuery.value.toLowerCase()
+      result = result.filter(f => f.filename.toLowerCase().includes(q))
+    }
+    result.sort((a, b) => {
+      let cmp = 0
+      switch (sortField.value) {
+        case 'name': cmp = a.filename.localeCompare(b.filename); break
+        case 'size': cmp = a.size_bytes - b.size_bytes; break
+        case 'type': cmp = (a.mime_type || '').localeCompare(b.mime_type || ''); break
+        default: cmp = new Date(a.upload_timestamp).getTime() - new Date(b.upload_timestamp).getTime()
+      }
+      return sortDirection.value === 'asc' ? cmp : -cmp
+    })
+    return result
+  })
+
+  const API = `/api/conversation-files/conversation/${sessionId}`
 
   /**
    * Load all files for the current conversation
@@ -320,12 +351,136 @@ export function useConversationFiles(sessionId: string) {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
   }
 
-  /**
-   * Clear error state
-   */
-  const clearError = (): void => {
+  // Issue #70: New file manager operations
+
+  const createFile = async (filename: string, content: string = '', mimeType: string = 'text/plain'): Promise<boolean> => {
+    if (!sessionId) { error.value = 'No session ID'; return false }
+    loading.value = true
     error.value = null
+    try {
+      const response = await api.post(`${API}/files/create`, { filename, content, mime_type: mimeType })
+      const data = await response.json()
+      if (data?.success) { await loadFiles(); return true }
+      error.value = 'Failed to create file'
+      return false
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || err.message || 'Failed to create file'
+      logger.error('Create file error:', err)
+      return false
+    } finally { loading.value = false }
   }
+
+  const renameFile = async (fileId: string, newFilename: string): Promise<boolean> => {
+    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    error.value = null
+    try {
+      const response = await api.put(`${API}/files/${fileId}/rename`, { new_filename: newFilename })
+      const data = await response.json()
+      if (data?.success) {
+        const file = files.value.find(f => f.file_id === fileId)
+        if (file) file.filename = newFilename
+        return true
+      }
+      error.value = 'Rename failed'
+      return false
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || err.message || 'Rename failed'
+      logger.error('Rename error:', err)
+      return false
+    }
+  }
+
+  const getFileContent = async (fileId: string): Promise<string | null> => {
+    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return null }
+    try {
+      const response = await api.get(`${API}/files/${fileId}/content`)
+      const data = await response.json()
+      return data?.content ?? null
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || err.message || 'Failed to read file'
+      logger.error('Get content error:', err)
+      return null
+    }
+  }
+
+  const updateFileContent = async (fileId: string, content: string): Promise<boolean> => {
+    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    error.value = null
+    try {
+      const response = await api.put(`${API}/files/${fileId}/content`, { content })
+      const data = await response.json()
+      if (data?.success) { await loadFiles(); return true }
+      error.value = 'Save failed'
+      return false
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || err.message || 'Save failed'
+      logger.error('Update content error:', err)
+      return false
+    }
+  }
+
+  const copyFile = async (fileId: string, newFilename?: string): Promise<boolean> => {
+    if (!sessionId || !fileId) { error.value = 'Missing parameters'; return false }
+    loading.value = true
+    error.value = null
+    try {
+      const response = await api.post(`${API}/files/${fileId}/copy`, { new_filename: newFilename || null })
+      const data = await response.json()
+      if (data?.success) { await loadFiles(); return true }
+      error.value = 'Copy failed'
+      return false
+    } catch (err: any) {
+      error.value = err.response?.data?.detail || err.message || 'Copy failed'
+      logger.error('Copy error:', err)
+      return false
+    } finally { loading.value = false }
+  }
+
+  const isEditable = (mimeType: string): boolean => {
+    const editableTypes = ['text/', 'application/json', 'application/xml', 'application/javascript']
+    return editableTypes.some(type => mimeType.startsWith(type))
+  }
+
+  // Bulk & sort operations
+
+  const toggleFileSelection = (fileId: string) => {
+    const next = new Set(selectedFileIds.value)
+    if (next.has(fileId)) { next.delete(fileId) } else { next.add(fileId) }
+    selectedFileIds.value = next
+  }
+
+  const selectAllFiles = () => {
+    if (allSelected.value) {
+      selectedFileIds.value = new Set()
+    } else {
+      selectedFileIds.value = new Set(files.value.map(f => f.file_id))
+    }
+  }
+
+  const deleteSelectedFiles = async (): Promise<boolean> => {
+    const ids = Array.from(selectedFileIds.value)
+    if (ids.length === 0) return false
+    loading.value = true
+    error.value = null
+    for (const fid of ids) {
+      try { await api.delete(`${API}/files/${fid}`) } catch { /* continue */ }
+    }
+    selectedFileIds.value = new Set()
+    await loadFiles()
+    loading.value = false
+    return true
+  }
+
+  const setSort = (field: SortField) => {
+    if (sortField.value === field) {
+      sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    } else {
+      sortField.value = field
+      sortDirection.value = field === 'name' ? 'asc' : 'desc'
+    }
+  }
+
+  const clearError = (): void => { error.value = null }
 
   return {
     // State
@@ -334,20 +489,43 @@ export function useConversationFiles(sessionId: string) {
     loading,
     error,
     uploadProgress,
+    searchQuery,
+    sortField,
+    sortDirection,
+    selectedFileIds,
 
     // Computed
     hasFiles,
     totalSizeFormatted,
+    sortedFiles,
+    selectedCount,
+    allSelected,
 
-    // Methods
+    // Core methods
     loadFiles,
     uploadFiles,
     deleteFile,
     downloadFile,
     previewFile,
+
+    // Issue #70: New operations
+    createFile,
+    renameFile,
+    getFileContent,
+    updateFileContent,
+    copyFile,
+
+    // Bulk & sort
+    toggleFileSelection,
+    selectAllFiles,
+    deleteSelectedFiles,
+    setSort,
+
+    // Utilities
     getFileIcon,
     formatFileSize,
     isPreviewable,
+    isEditable,
     clearError
   }
 }
