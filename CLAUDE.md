@@ -56,6 +56,122 @@
 
 ---
 
+## SESSION BOUNDARIES (MANDATORY)
+
+### One Issue Per Session Rule
+
+**When an issue is complete:**
+- ✅ Report completion with summary
+- ✅ Verify issue is closed: `gh issue view <number>`
+- ❌ DO NOT auto-start other existing issues
+- ❌ DO NOT suggest working on related issues without asking
+- ❌ DO NOT scan for more work
+
+**Wait for explicit user instruction** before starting new work.
+
+### Discovered Problems Policy
+
+**If you discover a NEW problem (not in GitHub):**
+
+1. **Create GitHub issue immediately:**
+```bash
+gh issue create --title "Bug: <description>" --body "## Problem
+<what's wrong>
+
+## Discovered During
+Working on #<original-issue>
+
+## Impact
+<severity: critical/high/medium/low>"
+```
+
+2. **Ask user if should fix now:**
+```
+Created issue #<new-number> for <problem>.
+Should I:
+a) Fix it now (will delay current work)
+b) Finish current issue first, then fix
+c) Leave for later
+```
+
+3. **If critical/blocking:** Recommend fixing immediately
+4. **If minor:** Recommend deferring
+
+**If you discover a problem ALREADY in GitHub:**
+- ❌ DO NOT auto-start working on it
+- ✅ Note it: "FYI: Issue #<number> also affects this area"
+- ✅ Link it if related: Comment on original issue mentioning the connection
+
+**If you discover technical debt / refactoring opportunity:**
+- ❌ DO NOT refactor without permission
+- ✅ Create issue: "Refactor: <opportunity>" with rationale
+- ✅ Note: "Created #<number> for future improvement"
+
+### Scope Examples
+
+**✅ GOOD (fixes discovered bug):**
+```
+While implementing #100, discovered critical bug:
+authentication bypass in user_login().
+
+Created issue #150 for this security issue.
+
+Recommend fixing NOW before continuing #100
+(affects the code we're modifying). Proceed?
+```
+
+**✅ GOOD (defers non-critical issue):**
+```
+While implementing #100, noticed suboptimal
+caching in get_user(). Created issue #151.
+
+Deferring to stay focused on #100.
+```
+
+**❌ BAD (drifts to existing issue):**
+```
+Completed #100. I see issue #101 is related
+and I could fix it quickly...
+[starts working without permission]
+```
+
+**❌ BAD (fixes non-critical without asking):**
+```
+While implementing #100, noticed typo in docstring.
+Let me fix that real quick...
+[fixes without creating issue or asking]
+```
+
+### Critical vs Non-Critical Discovered Issues
+
+**Fix immediately WITHOUT asking if:**
+- Security vulnerability in code you're modifying
+- Data corruption risk
+- Syntax error that breaks tests
+- Import error blocking your changes
+
+**Create issue + ASK before fixing if:**
+- Performance problem (not critical)
+- Code smell / tech debt
+- Missing documentation
+- UI/UX improvement opportunity
+- Refactoring opportunity
+
+**Create issue + DEFER (don't ask) if:**
+- Minor style issues
+- Optimization opportunities
+- "Nice to have" improvements
+- Unrelated bugs in other areas
+
+### Multi-Session Coordination
+
+**If running parallel sessions on different issues:**
+- Each session stays in its issue scope
+- If Session A discovers bug in Session B's area → Create issue, let user coordinate
+- Do NOT cross-contaminate: "I'll fix this while Session B works on that"
+
+---
+
 ## MULTI-AGENT SAFETY (MANDATORY)
 
 ### Git Operations
