@@ -1,0 +1,27 @@
+[Unit]
+Description=AutoBot SLM Backend Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ slm_user }}
+Group={{ slm_group }}
+WorkingDirectory={{ slm_backend_dir }}
+Environment="PATH={{ slm_backend_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart={{ slm_backend_dir }}/venv/bin/uvicorn main:app --host {{ slm_backend_host }} --port {{ slm_backend_port }}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:{{ slm_log_dir }}/slm-backend.log
+StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ slm_base_dir }}
+
+[Install]
+WantedBy=multi-user.target

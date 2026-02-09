@@ -1,0 +1,242 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Manager Role - Configures the SLM server (172.16.168.19)
+# Expects code to be already synced via rsync before running.
+---
+
+# ==========================================================
+# System packages
+# ==========================================================
+- name: "SLM | Install system packages"
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - nginx
+      - openssl
+      - nodejs
+      - npm
+      - ansible
+    state: present
+    update_cache: true
+  tags: ['slm', 'packages']
+
+# ==========================================================
+# User and directories
+# ==========================================================
+- name: "SLM | Ensure autobot user exists"
+  ansible.builtin.user:
+    name: "{{ slm_user }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+  tags: ['slm', 'user']
+
+- name: "SLM | Create directory structure"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ slm_user }}"
+    group: "{{ slm_group }}"
+  loop:
+    - "{{ slm_base_dir }}"
+    - "{{ slm_backend_dir }}"
+    - "{{ slm_frontend_dir }}"
+    - "{{ slm_shared_dir }}"
+    - "{{ slm_log_dir }}"
+    - "{{ slm_certs_dir }}"
+  tags: ['slm', 'directories']
+
+# ==========================================================
+# TLS certificates (idempotent - skip if valid cert exists)
+# ==========================================================
+- name: "SLM | Check if TLS certificate exists"
+  ansible.builtin.stat:
+    path: "{{ slm_tls_cert }}"
+  register: slm_cert_stat
+  tags: ['slm', 'tls']
+
+- name: "SLM | Check certificate expiry"
+  ansible.builtin.command:
+    cmd: openssl x509 -checkend 604800 -noout -in {{ slm_tls_cert }}
+  register: slm_cert_valid
+  changed_when: false
+  failed_when: false
+  when: slm_cert_stat.stat.exists
+  tags: ['slm', 'tls']
+
+- name: "SLM | Generate self-signed TLS certificate"
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -days {{ slm_tls_days }} -newkey rsa:2048
+      -keyout {{ slm_tls_key }}
+      -out {{ slm_tls_cert }}
+      -subj '{{ slm_tls_subject }}'
+  when: >-
+    not slm_cert_stat.stat.exists
+    or (slm_cert_valid.rc | default(1)) != 0
+  notify: restart nginx
+  tags: ['slm', 'tls']
+
+- name: "SLM | Set certificate key permissions"
+  ansible.builtin.file:
+    path: "{{ slm_tls_key }}"
+    mode: "0600"
+    owner: root
+    group: root
+  tags: ['slm', 'tls']
+
+# ==========================================================
+# Backend Python venv and dependencies
+# ==========================================================
+- name: "SLM | Check if requirements.txt exists"
+  ansible.builtin.stat:
+    path: "{{ slm_backend_dir }}/requirements.txt"
+  register: slm_requirements_stat
+  tags: ['slm', 'backend']
+
+- name: "SLM | Create Python virtual environment"
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ slm_backend_dir }}/venv
+    creates: "{{ slm_backend_dir }}/venv/bin/python"
+  become_user: "{{ slm_user }}"
+  when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+- name: "SLM | Install Python requirements"
+  ansible.builtin.pip:
+    requirements: "{{ slm_backend_dir }}/requirements.txt"
+    virtualenv: "{{ slm_backend_dir }}/venv"
+    state: present
+  become_user: "{{ slm_user }}"
+  when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+# ==========================================================
+# Backend systemd service
+# ==========================================================
+- name: "SLM | Deploy backend systemd service"
+  ansible.builtin.template:
+    src: autobot-slm-backend.service.j2
+    dest: /etc/systemd/system/{{ slm_backend_service }}.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart slm backend
+  tags: ['slm', 'backend', 'systemd']
+
+- name: "SLM | Enable backend service"
+  ansible.builtin.systemd:
+    name: "{{ slm_backend_service }}"
+    enabled: true
+    daemon_reload: true
+  tags: ['slm', 'backend', 'systemd']
+
+# ==========================================================
+# Frontend build
+# ==========================================================
+- name: "SLM | Check if package.json exists"
+  ansible.builtin.stat:
+    path: "{{ slm_frontend_dir }}/package.json"
+  register: slm_package_json
+  tags: ['slm', 'frontend']
+
+- name: "SLM | Install frontend npm dependencies"
+  community.general.npm:
+    path: "{{ slm_frontend_dir }}"
+    state: present
+  become_user: "{{ slm_user }}"
+  when: slm_frontend_build and slm_package_json.stat.exists
+  tags: ['slm', 'frontend']
+
+- name: "SLM | Build frontend for production"
+  ansible.builtin.command:
+    cmd: npm run build
+    chdir: "{{ slm_frontend_dir }}"
+  become_user: "{{ slm_user }}"
+  when: slm_frontend_build and slm_package_json.stat.exists
+  register: slm_frontend_build_result
+  changed_when: slm_frontend_build_result.rc == 0
+  tags: ['slm', 'frontend']
+
+# ==========================================================
+# Nginx configuration
+# ==========================================================
+- name: "SLM | Deploy nginx configuration"
+  ansible.builtin.template:
+    src: autobot-slm.conf.j2
+    dest: /etc/nginx/sites-available/{{ slm_nginx_config }}
+    mode: "0644"
+    backup: true
+  notify:
+    - test nginx config
+    - reload nginx
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Enable nginx site"
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/{{ slm_nginx_config }}
+    dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
+    state: link
+  notify: reload nginx
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Remove default nginx site"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Ensure nginx is running"
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true
+  tags: ['slm', 'nginx']
+
+# ==========================================================
+# Firewall
+# ==========================================================
+- name: "SLM | Allow HTTP"
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+    comment: "HTTP - AutoBot SLM"
+  ignore_errors: true
+  tags: ['slm', 'firewall']
+
+- name: "SLM | Allow HTTPS"
+  community.general.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+    comment: "HTTPS - AutoBot SLM"
+  ignore_errors: true
+  tags: ['slm', 'firewall']
+
+# ==========================================================
+# Start services
+# ==========================================================
+- name: "SLM | Start backend service"
+  ansible.builtin.systemd:
+    name: "{{ slm_backend_service }}"
+    state: started
+  ignore_errors: true
+  tags: ['slm', 'service']
+
+- name: "SLM | Display deployment summary"
+  ansible.builtin.debug:
+    msg:
+      - "=== SLM Manager Deployment Complete ==="
+      - "Backend: {{ slm_backend_host }}:{{ slm_backend_port }}"
+      - "Frontend: {{ slm_frontend_dir }}/dist"
+      - "Nginx: HTTPS on port 443"
+      - "TLS cert: {{ slm_tls_cert }}"
+      - "Logs: {{ slm_log_dir }}/"
+  tags: ['slm', 'report']

@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SLM Manager role defaults
+
+# User/group
+slm_user: autobot
+slm_group: autobot
+
+# Directory layout
+slm_base_dir: /opt/autobot
+slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
+slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
+slm_shared_dir: "{{ slm_base_dir }}/autobot-shared"
+slm_log_dir: "{{ slm_base_dir }}/logs"
+slm_certs_dir: "{{ slm_base_dir }}/nginx/certs"
+slm_ansible_dir: "{{ slm_backend_dir }}/ansible"
+
+# Backend
+slm_backend_port: 8000
+slm_backend_host: "127.0.0.1"
+slm_backend_service: autobot-slm-backend
+
+# Frontend build
+slm_frontend_build: true
+
+# TLS
+slm_tls_cert: "{{ slm_certs_dir }}/slm.crt"
+slm_tls_key: "{{ slm_certs_dir }}/slm.key"
+slm_tls_days: 365
+slm_tls_subject: "/CN={{ ansible_host | default('172.16.168.19') }}/O=AutoBot/C=US"
+
+# Nginx
+slm_nginx_config: autobot-slm

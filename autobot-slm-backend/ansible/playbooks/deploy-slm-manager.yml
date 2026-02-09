@@ -1,0 +1,30 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Manager Deployment Playbook (Issue #814)
+#
+# Configures the SLM server with all services:
+#   - Backend (FastAPI + uvicorn)
+#   - Frontend (Vue 3 build + nginx)
+#   - TLS certificates
+#   - Systemd services
+#
+# Usage:
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/deploy-slm-manager.yml
+#
+# Tags:
+#   --tags packages    System packages only
+#   --tags tls         TLS certificate generation only
+#   --tags backend     Backend venv + service only
+#   --tags frontend    Frontend build only
+#   --tags nginx       Nginx config only
+#   --tags service     Start/restart services only
+---
+- name: Deploy SLM Manager
+  hosts: 00-SLM-Manager
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: slm_manager

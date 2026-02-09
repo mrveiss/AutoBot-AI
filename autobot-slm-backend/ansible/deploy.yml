@@ -23,6 +23,12 @@
       ansible.builtin.debug:
         msg: "Deploying roles: {{ role_list | join(', ') }}"
 
+    # SLM Manager (self-deploy)
+    - name: Deploy slm-manager role
+      ansible.builtin.include_role:
+        name: slm_manager
+      when: "'slm-manager' in role_list"
+
     # Core Infrastructure Roles
     - name: Deploy slm-agent role
       ansible.builtin.include_role:

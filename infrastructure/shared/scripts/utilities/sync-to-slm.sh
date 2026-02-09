@@ -3,11 +3,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
-# SLM Management Plane Sync Script
-# Syncs SLM backend, frontend, and shared lib to the SLM management node (172.16.168.19)
+# SLM Management Plane Sync & Deploy Script (Issue #814)
+#
+# Phase 1: Rsync code to the SLM server (172.16.168.19)
+# Phase 2: Run Ansible playbook to configure services (certs, nginx, build, systemd)
+#
 # The SLM then handles distributing code to fleet nodes via its code-sync agents.
 #
-# Usage: ./sync-to-slm.sh [--build|--restart|--nginx|--all]
+# Usage: ./sync-to-slm.sh [OPTIONS]
 
 set -e
 
@@ -31,17 +34,17 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
 SLM_BACKEND_LOCAL="$PROJECT_ROOT/autobot-slm-backend"
 SLM_FRONTEND_LOCAL="$PROJECT_ROOT/autobot-slm-frontend"
 SHARED_LIB_LOCAL="$PROJECT_ROOT/autobot-shared"
-NGINX_CONF_LOCAL="$PROJECT_ROOT/infrastructure/autobot-slm-frontend/templates/autobot-slm.conf"
+
+# Ansible paths
+ANSIBLE_DIR="$SLM_BACKEND_LOCAL/ansible"
+ANSIBLE_INVENTORY="$ANSIBLE_DIR/inventory/slm-nodes.yml"
+ANSIBLE_PLAYBOOK="$ANSIBLE_DIR/playbooks/deploy-slm-manager.yml"
 
 # Remote paths (match systemd service and nginx config)
 REMOTE_BASE="/opt/autobot"
 SLM_BACKEND_REMOTE="$REMOTE_BASE/autobot-slm-backend"
 SLM_FRONTEND_REMOTE="$REMOTE_BASE/autobot-slm-frontend"
 SHARED_LIB_REMOTE="$REMOTE_BASE/autobot-shared"
-NGINX_REMOTE="/etc/nginx/sites-enabled/autobot-slm.conf"
-
-# Service names
-BACKEND_SERVICE="autobot-slm-backend"
 
 # Colors
 RED='\033[0;31m'
@@ -55,15 +58,6 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-# Build SSH command with key if available
-ssh_cmd() {
-    if [ -f "$SSH_KEY" ]; then
-        ssh -i "$SSH_KEY" $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "$@"
-    else
-        ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "$@"
-    fi
-}
-
 rsync_cmd() {
     if [ -f "$SSH_KEY" ]; then
         rsync -avz --delete -e "ssh -i $SSH_KEY $SSH_OPTS" "$@"
@@ -75,17 +69,44 @@ rsync_cmd() {
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Syncs SLM management plane code to $REMOTE_HOST"
-    echo "Components: autobot-slm-backend, autobot-slm-frontend, autobot-shared"
+    echo "Syncs code to SLM server, then runs Ansible to configure services."
     echo ""
     echo "Options:"
-    echo "  (none)      Sync files only"
-    echo "  --build     Sync + npm install + npm run build"
-    echo "  --restart   Sync + restart backend service"
-    echo "  --nginx     Sync + deploy nginx config + reload nginx"
-    echo "  --all       Sync + build + nginx + restart (full deploy)"
-    echo "  --help      Show this help"
+    echo "  (none)       Sync files only (no Ansible)"
+    echo "  --deploy     Sync + run full Ansible playbook (recommended)"
+    echo "  --tags TAGS  Sync + run Ansible with specific tags"
+    echo "               Tags: packages, tls, backend, frontend, nginx, service"
+    echo "  --sync-only  Sync files only (same as no option)"
+    echo "  --help       Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --deploy                    # Full deploy (sync + ansible)"
+    echo "  $0 --tags frontend,nginx       # Rebuild frontend + reload nginx"
+    echo "  $0 --tags tls                  # Regenerate TLS certs only"
+    echo "  $0 --tags backend,service      # Update backend + restart service"
 }
+
+# Parse options
+ACTION="sync-only"
+ANSIBLE_TAGS=""
+case "${1:-}" in
+    --help|-h) show_usage; exit 0 ;;
+    --deploy) ACTION="deploy" ;;
+    --tags)
+        ACTION="deploy"
+        ANSIBLE_TAGS="${2:-}"
+        if [ -z "$ANSIBLE_TAGS" ]; then
+            log_error "Missing tags argument. Usage: $0 --tags frontend,nginx"
+            exit 1
+        fi
+        ;;
+    --sync-only|"") ACTION="sync-only" ;;
+    *)
+        log_error "Unknown option: $1"
+        show_usage
+        exit 1
+        ;;
+esac
 
 echo ""
 echo -e "${BLUE}============================================${NC}"
@@ -95,17 +116,12 @@ echo ""
 echo "Target:     $REMOTE_USER@$REMOTE_HOST"
 echo "Components: autobot-slm-backend, autobot-slm-frontend, autobot-shared"
 echo "Remote:     $REMOTE_BASE/"
+echo "Action:     $ACTION"
+[ -n "$ANSIBLE_TAGS" ] && echo "Tags:       $ANSIBLE_TAGS"
 echo ""
 
-# Parse option
-ACTION="${1:-sync}"
-case "$ACTION" in
-    --help|-h) show_usage; exit 0 ;;
-    --build|--restart|--nginx|--all) ;;
-    *) ACTION="sync" ;;
-esac
+# ===== Phase 1: Rsync code =====
 
-# Check connectivity
 log_step "Checking connectivity to $REMOTE_HOST..."
 if ! ping -c 1 -W 2 "$REMOTE_HOST" > /dev/null 2>&1; then
     log_error "Cannot reach $REMOTE_HOST"
@@ -124,7 +140,7 @@ rsync_cmd \
     "$REMOTE_USER@$REMOTE_HOST:$SHARED_LIB_REMOTE/"
 log_info "Shared lib synced"
 
-# Sync SLM backend
+# Sync SLM backend (exclude ansible dir - it stays local for running playbooks)
 echo ""
 log_step "Syncing autobot-slm-backend..."
 rsync_cmd \
@@ -141,7 +157,7 @@ rsync_cmd \
     "$REMOTE_USER@$REMOTE_HOST:$SLM_BACKEND_REMOTE/"
 log_info "Backend synced"
 
-# Sync SLM frontend (source, not dist)
+# Sync SLM frontend (source, not dist - Ansible will build)
 echo ""
 log_step "Syncing autobot-slm-frontend..."
 rsync_cmd \
@@ -153,99 +169,80 @@ rsync_cmd \
     "$REMOTE_USER@$REMOTE_HOST:$SLM_FRONTEND_REMOTE/"
 log_info "Frontend synced"
 
-# Handle options
-case "$ACTION" in
-    --build)
-        echo ""
-        log_step "Installing frontend dependencies..."
-        ssh_cmd "cd $SLM_FRONTEND_REMOTE && npm install"
+# ===== Phase 2: Run Ansible =====
 
-        echo ""
-        log_step "Building frontend for production..."
-        ssh_cmd "cd $SLM_FRONTEND_REMOTE && npm run build"
-        log_info "Frontend built (dist at $SLM_FRONTEND_REMOTE/dist)"
-        ;;
+if [ "$ACTION" = "deploy" ]; then
+    echo ""
+    echo -e "${BLUE}--------------------------------------------${NC}"
+    echo -e "${BLUE}     Running Ansible Playbook               ${NC}"
+    echo -e "${BLUE}--------------------------------------------${NC}"
+    echo ""
 
-    --restart)
-        echo ""
-        log_step "Restarting $BACKEND_SERVICE..."
-        ssh_cmd "sudo systemctl restart $BACKEND_SERVICE" || {
-            log_warn "Could not restart via systemctl"
-        }
-        log_info "Backend restarted"
-        ;;
+    # Verify ansible-playbook is available locally
+    if ! command -v ansible-playbook &> /dev/null; then
+        log_error "ansible-playbook not found. Install: sudo apt install ansible"
+        exit 1
+    fi
 
-    --nginx)
-        echo ""
-        log_step "Deploying nginx config..."
-        if [ -f "$SSH_KEY" ]; then
-            scp -i "$SSH_KEY" $SSH_OPTS "$NGINX_CONF_LOCAL" \
-                "$REMOTE_USER@$REMOTE_HOST:/tmp/autobot-slm.conf"
-        else
-            scp $SSH_OPTS "$NGINX_CONF_LOCAL" \
-                "$REMOTE_USER@$REMOTE_HOST:/tmp/autobot-slm.conf"
-        fi
-        ssh_cmd "sudo cp /tmp/autobot-slm.conf $NGINX_REMOTE && sudo nginx -t && sudo nginx -s reload"
-        log_info "Nginx config deployed and reloaded"
-        ;;
+    # Verify inventory and playbook exist
+    if [ ! -f "$ANSIBLE_INVENTORY" ]; then
+        log_error "Inventory not found: $ANSIBLE_INVENTORY"
+        exit 1
+    fi
+    if [ ! -f "$ANSIBLE_PLAYBOOK" ]; then
+        log_error "Playbook not found: $ANSIBLE_PLAYBOOK"
+        exit 1
+    fi
 
-    --all)
-        echo ""
-        log_step "Installing frontend dependencies..."
-        ssh_cmd "cd $SLM_FRONTEND_REMOTE && npm install"
+    # Build ansible command
+    ANSIBLE_CMD=(
+        ansible-playbook
+        -i "$ANSIBLE_INVENTORY"
+        "$ANSIBLE_PLAYBOOK"
+    )
 
-        echo ""
-        log_step "Building frontend for production..."
-        ssh_cmd "cd $SLM_FRONTEND_REMOTE && npm run build"
-        log_info "Frontend built"
+    # Add SSH key if available
+    if [ -f "$SSH_KEY" ]; then
+        ANSIBLE_CMD+=(--private-key "$SSH_KEY")
+    fi
 
-        echo ""
-        log_step "Deploying nginx config..."
-        if [ -f "$SSH_KEY" ]; then
-            scp -i "$SSH_KEY" $SSH_OPTS "$NGINX_CONF_LOCAL" \
-                "$REMOTE_USER@$REMOTE_HOST:/tmp/autobot-slm.conf"
-        else
-            scp $SSH_OPTS "$NGINX_CONF_LOCAL" \
-                "$REMOTE_USER@$REMOTE_HOST:/tmp/autobot-slm.conf"
-        fi
-        ssh_cmd "sudo cp /tmp/autobot-slm.conf $NGINX_REMOTE && sudo nginx -t && sudo nginx -s reload"
-        log_info "Nginx config deployed"
+    # Add tags if specified
+    if [ -n "$ANSIBLE_TAGS" ]; then
+        ANSIBLE_CMD+=(--tags "$ANSIBLE_TAGS")
+        log_step "Running playbook with tags: $ANSIBLE_TAGS"
+    else
+        log_step "Running full playbook..."
+    fi
 
-        echo ""
-        log_step "Restarting $BACKEND_SERVICE..."
-        ssh_cmd "sudo systemctl restart $BACKEND_SERVICE" || {
-            log_warn "Systemctl restart not available"
-        }
-        log_info "Full deployment complete"
-        ;;
+    # Execute
+    "${ANSIBLE_CMD[@]}"
 
-    *)
-        echo ""
-        log_info "Files synced. Use options for additional actions:"
-        echo ""
-        echo "  --build    Install deps and build frontend"
-        echo "  --restart  Restart SLM backend service"
-        echo "  --nginx    Deploy nginx config and reload"
-        echo "  --all      Build + nginx + restart (full deploy)"
-        ;;
-esac
+    echo ""
+    log_info "Ansible playbook completed"
+fi
+
+# ===== Summary =====
 
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}           Sync Complete!                   ${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
-echo "Manual commands if needed:"
-echo ""
-echo "  Build frontend:"
-echo "    ssh $REMOTE_USER@$REMOTE_HOST 'cd $SLM_FRONTEND_REMOTE && npm run build'"
-echo ""
-echo "  Restart backend:"
-echo "    ssh $REMOTE_USER@$REMOTE_HOST 'sudo systemctl restart $BACKEND_SERVICE'"
-echo ""
-echo "  Reload nginx:"
-echo "    ssh $REMOTE_USER@$REMOTE_HOST 'sudo nginx -s reload'"
-echo ""
-echo "  View logs:"
-echo "    ssh $REMOTE_USER@$REMOTE_HOST 'journalctl -u $BACKEND_SERVICE -f'"
+
+if [ "$ACTION" = "sync-only" ]; then
+    echo "Files synced. To configure services, run:"
+    echo ""
+    echo "  $0 --deploy                    # Full deploy"
+    echo "  $0 --tags frontend,nginx       # Build frontend + nginx"
+    echo "  $0 --tags tls                  # Generate TLS certs"
+    echo "  $0 --tags backend,service      # Backend + restart"
+else
+    echo "Deployment complete. Useful commands:"
+    echo ""
+    echo "  View backend logs:"
+    echo "    ssh $REMOTE_USER@$REMOTE_HOST 'journalctl -u autobot-slm-backend -f'"
+    echo ""
+    echo "  View nginx logs:"
+    echo "    ssh $REMOTE_USER@$REMOTE_HOST 'tail -f /opt/autobot/logs/nginx-error.log'"
+fi
 echo ""
