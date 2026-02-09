@@ -8,6 +8,7 @@ Quick verification of SSH Manager installation and configuration
 """
 
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
@@ -16,7 +17,11 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
+
+# Setup logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def _check_imports() -> bool:
@@ -25,14 +30,14 @@ def _check_imports() -> bool:
 
     Issue #281: Extracted from verify_installation to reduce function length.
     """
-    print("1. Checking imports...")
+    logger.info("1. Checking imports...")
     try:
         from backend.services.ssh_manager import SSHManager  # noqa: F401
 
-        print("   ✅ All modules import successfully")
+        logger.info("   All modules import successfully")
         return True
     except ImportError as e:
-        print(f"   ❌ Import failed: {e}")
+        logger.error("   Import failed: %s", e)
         return False
 
 
@@ -45,23 +50,23 @@ def _check_ssh_key() -> str:
     Returns:
         SSH key path if found, empty string otherwise
     """
-    print("\n2. Checking SSH key...")
+    logger.info("2. Checking SSH key...")
     ssh_key_path = os.path.expanduser("~/.ssh/autobot_key")
     if os.path.exists(ssh_key_path):
-        print(f"   ✅ SSH key found: {ssh_key_path}")
+        logger.info("   SSH key found: %s", ssh_key_path)
 
         # Check permissions
         stat_info = os.stat(ssh_key_path)
         perms = oct(stat_info.st_mode)[-3:]
         if perms == "600":
-            print(f"   ✅ SSH key permissions correct: {perms}")
+            logger.info("   SSH key permissions correct: %s", perms)
         else:
-            print(f"   ⚠️  SSH key permissions should be 600, found: {perms}")
-            print(f"   Fix with: chmod 600 {ssh_key_path}")
+            logger.warning("   SSH key permissions should be 600, found: %s", perms)
+            logger.warning("   Fix with: chmod 600 %s", ssh_key_path)
         return ssh_key_path
     else:
-        print(f"   ❌ SSH key not found: {ssh_key_path}")
-        print(f'   Generate with: ssh-keygen -t rsa -b 4096 -f {ssh_key_path} -N ""')
+        logger.error("   SSH key not found: %s", ssh_key_path)
+        logger.error('   Generate with: ssh-keygen -t rsa -b 4096 -f %s -N ""', ssh_key_path)
         return ""
 
 
@@ -74,10 +79,10 @@ def _check_configuration(project_root: Path) -> Path:
     Returns:
         Config path if found, None otherwise
     """
-    print("\n3. Checking configuration...")
+    logger.info("3. Checking configuration...")
     config_path = project_root / "config" / "config.yaml"
     if config_path.exists():
-        print(f"   ✅ Configuration file found: {config_path}")
+        logger.info("   Configuration file found: %s", config_path)
 
         try:
             import yaml
@@ -86,27 +91,27 @@ def _check_configuration(project_root: Path) -> Path:
                 config = yaml.safe_load(f)
 
             if "ssh" in config:
-                print("   ✅ SSH configuration section found")
+                logger.info("   SSH configuration section found")
 
                 ssh_config = config["ssh"]
-                print(f"   - Enabled: {ssh_config.get('enabled', False)}")
-                print(f"   - Key path: {ssh_config.get('key_path', 'not set')}")
+                logger.info("   - Enabled: %s", ssh_config.get('enabled', False))
+                logger.info("   - Key path: %s", ssh_config.get('key_path', 'not set'))
 
                 if "hosts" in ssh_config:
                     hosts = ssh_config["hosts"]
-                    print(f"   ✅ {len(hosts)} hosts configured")
+                    logger.info("   %d hosts configured", len(hosts))
                     for name, host_config in hosts.items():
                         enabled = "✓" if host_config.get("enabled", False) else "✗"
-                        print(f"      {enabled} {name}: {host_config['ip']}")
+                        logger.info("      %s %s: %s", enabled, name, host_config['ip'])
                 else:
-                    print("   ⚠️  No hosts configured")
+                    logger.warning("   No hosts configured")
             else:
-                print("   ❌ SSH configuration section not found")
+                logger.error("   SSH configuration section not found")
         except Exception as e:
-            print(f"   ❌ Error reading configuration: {e}")
+            logger.error("   Error reading configuration: %s", e)
         return config_path
     else:
-        print(f"   ❌ Configuration file not found: {config_path}")
+        logger.error("   Configuration file not found: %s", config_path)
         return None
 
 
@@ -118,30 +123,30 @@ async def _test_ssh_manager_init(ssh_key_path: str, config_path: Path) -> bool:
     """
     from backend.services.ssh_manager import SSHManager
 
-    print("\n4. Testing SSH Manager initialization...")
+    logger.info("4. Testing SSH Manager initialization...")
     try:
         ssh_manager = SSHManager(
             ssh_key_path=ssh_key_path,
             config_path=str(config_path),
             enable_audit_logging=False,
         )
-        print("   ✅ SSH Manager initialized successfully")
+        logger.info("   SSH Manager initialized successfully")
 
         hosts = ssh_manager.list_hosts()
-        print(f"   ✅ Found {len(hosts)} hosts")
+        logger.info("   Found %d hosts", len(hosts))
 
         await ssh_manager.start()
-        print("   ✅ SSH Manager started successfully")
+        logger.info("   SSH Manager started successfully")
 
         stats = await ssh_manager.get_pool_stats()
-        print(f"   ✅ Connection pool operational (pools: {len(stats)})")
+        logger.info("   Connection pool operational (pools: %d)", len(stats))
 
         await ssh_manager.stop()
-        print("   ✅ SSH Manager stopped successfully")
+        logger.info("   SSH Manager stopped successfully")
         return True
 
     except Exception as e:
-        print(f"   ❌ SSH Manager initialization failed: {e}")
+        logger.error("   SSH Manager initialization failed: %s", e)
         return False
 
 
@@ -153,7 +158,7 @@ async def _test_command_execution(ssh_key_path: str) -> None:
     """
     from backend.services.ssh_manager import SSHManager
 
-    print("\n5. Testing command execution...")
+    logger.info("5. Testing command execution...")
     try:
         ssh_manager = SSHManager(ssh_key_path=ssh_key_path, enable_audit_logging=False)
         await ssh_manager.start()
@@ -163,17 +168,17 @@ async def _test_command_execution(ssh_key_path: str) -> None:
         )
 
         if result.success:
-            print("   ✅ Command execution successful")
-            print(f"   - Output: {result.stdout.strip()}")
-            print(f"   - Execution time: {result.execution_time:.3f}s")
+            logger.info("   Command execution successful")
+            logger.info("   - Output: %s", result.stdout.strip())
+            logger.info("   - Execution time: %.3fs", result.execution_time)
         else:
-            print(f"   ⚠️  Command execution failed (exit code: {result.exit_code})")
+            logger.warning("   Command execution failed (exit code: %d)", result.exit_code)
 
         await ssh_manager.stop()
 
     except Exception as e:
-        print(f"   ⚠️  Command execution test failed: {e}")
-        print("   This is expected if SSH is not configured for localhost")
+        logger.warning("   Command execution test failed: %s", e)
+        logger.warning("   This is expected if SSH is not configured for localhost")
 
 
 def _check_test_files(project_root: Path) -> None:
@@ -182,7 +187,7 @@ def _check_test_files(project_root: Path) -> None:
 
     Issue #281: Extracted from verify_installation to reduce function length.
     """
-    print("\n6. Checking test files...")
+    logger.info("6. Checking test files...")
     test_files = [
         "tests/test_ssh_connection_pool.py",
         "tests/test_ssh_manager_integration.py",
@@ -191,9 +196,9 @@ def _check_test_files(project_root: Path) -> None:
     for test_file in test_files:
         test_path = project_root / test_file
         if test_path.exists():
-            print(f"   ✅ {test_file}")
+            logger.info("   %s", test_file)
         else:
-            print(f"   ❌ {test_file} not found")
+            logger.error("   %s not found", test_file)
 
 
 def _check_documentation(project_root: Path) -> None:
@@ -202,7 +207,7 @@ def _check_documentation(project_root: Path) -> None:
 
     Issue #281: Extracted from verify_installation to reduce function length.
     """
-    print("\n7. Checking documentation...")
+    logger.info("7. Checking documentation...")
     doc_files = [
         "docs/features/SSH_CONNECTION_MANAGER.md",
         "docs/SSH_MANAGER_IMPLEMENTATION_SUMMARY.md",
@@ -211,9 +216,9 @@ def _check_documentation(project_root: Path) -> None:
     for doc_file in doc_files:
         doc_path = project_root / doc_file
         if doc_path.exists():
-            print(f"   ✅ {doc_file}")
+            logger.info("   %s", doc_file)
         else:
-            print(f"   ❌ {doc_file} not found")
+            logger.error("   %s not found", doc_file)
 
 
 def _print_summary() -> None:
@@ -222,33 +227,35 @@ def _print_summary() -> None:
 
     Issue #281: Extracted from verify_installation to reduce function length.
     """
-    print("\n" + "=" * 60)
-    print("Verification Summary")
-    print("=" * 60)
-    print("✅ SSH Manager installation verified successfully!")
-    print()
-    print("Next steps:")
-    print("1. Ensure SSH key is copied to all target hosts:")
-    print(
-        f"   for host in {NetworkConstants.MAIN_MACHINE_IP.rsplit('.', 1)[0]}.{{20..25}}; do"
+    logger.info("=" * 60)
+    logger.info("Verification Summary")
+    logger.info("=" * 60)
+    logger.info("SSH Manager installation verified successfully!")
+    logger.info("")
+    logger.info("Next steps:")
+    logger.info("1. Ensure SSH key is copied to all target hosts:")
+    logger.info(
+        "   for host in %s.{20..25}; do", NetworkConstants.MAIN_MACHINE_IP.rsplit('.', 1)[0]
     )
-    print("       ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$host")
-    print("   done")
-    print()
-    print("2. Run unit tests:")
-    print("   pytest tests/test_ssh_connection_pool.py -v")
-    print()
-    print("3. Run integration tests (requires SSH access):")
-    print("   pytest tests/test_ssh_manager_integration.py -v -m integration")
-    print()
-    print("4. Start AutoBot backend:")
-    print("   bash run_autobot.sh --dev")
-    print()
-    print("5. Test API endpoint:")
-    print(
-        f"   curl http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/remote-terminal/"
+    logger.info("       ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@$host")
+    logger.info("   done")
+    logger.info("")
+    logger.info("2. Run unit tests:")
+    logger.info("   pytest tests/test_ssh_connection_pool.py -v")
+    logger.info("")
+    logger.info("3. Run integration tests (requires SSH access):")
+    logger.info("   pytest tests/test_ssh_manager_integration.py -v -m integration")
+    logger.info("")
+    logger.info("4. Start AutoBot backend:")
+    logger.info("   bash run_autobot.sh --dev")
+    logger.info("")
+    logger.info("5. Test API endpoint:")
+    logger.info(
+        "   curl http://%s:%d/api/remote-terminal/",
+        NetworkConstants.MAIN_MACHINE_IP,
+        NetworkConstants.BACKEND_PORT
     )
-    print()
+    logger.info("")
 
 
 async def verify_installation():
@@ -258,10 +265,10 @@ async def verify_installation():
     Issue #281: Verification steps extracted to helper functions to reduce
     function length from 182 to ~30 lines.
     """
-    print("=" * 60)
-    print("SSH Manager Verification Script")
-    print("=" * 60)
-    print()
+    logger.info("=" * 60)
+    logger.info("SSH Manager Verification Script")
+    logger.info("=" * 60)
+    logger.info("")
 
     # Issue #281: Use extracted helpers for each verification step
     if not _check_imports():
@@ -286,10 +293,10 @@ if __name__ == "__main__":
         result = asyncio.run(verify_installation())
         sys.exit(0 if result else 1)
     except KeyboardInterrupt:
-        print("\n\nVerification interrupted by user")
+        logger.info("Verification interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\nUnexpected error: {e}")
+        logger.error("Unexpected error: %s", e)
         import traceback
 
         traceback.print_exc()
