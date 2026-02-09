@@ -60,7 +60,8 @@ async function fetchAgents() {
       throw new Error(`Failed to fetch agents: ${response.status}`)
     }
 
-    agents.value = await response.json()
+    const data = await response.json()
+    agents.value = data.agents || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to fetch agents'
   } finally {

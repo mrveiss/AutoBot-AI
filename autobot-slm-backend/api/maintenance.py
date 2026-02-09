@@ -13,10 +13,6 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import (
     EventSeverity,
     EventType,
@@ -33,6 +29,9 @@ from models.schemas import (
 )
 from services.auth import get_current_user, require_admin
 from services.database import get_db
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
@@ -66,11 +65,10 @@ async def list_maintenance_windows(
     elif not include_completed:
         query = query.where(MaintenanceWindow.status.in_(["scheduled", "active"]))
 
-    # Get total count
-    count_result = await db.execute(
-        select(MaintenanceWindow.id).where(query.whereclause or True)
+    # Get total count with same filters
+    total = await _count_maintenance_windows(
+        db, node_id, status_filter, include_completed
     )
-    total = len(count_result.all())
 
     # Apply pagination and ordering
     query = query.order_by(MaintenanceWindow.start_time.asc())
@@ -83,6 +81,32 @@ async def list_maintenance_windows(
         windows=[MaintenanceWindowResponse.model_validate(w) for w in windows],
         total=total,
     )
+
+
+async def _count_maintenance_windows(
+    db: AsyncSession,
+    node_id: Optional[str],
+    status_filter: Optional[str],
+    include_completed: bool,
+) -> int:
+    """Count maintenance windows matching filters.
+
+    Helper for list_maintenance_windows (#816).
+    """
+    query = select(func.count(MaintenanceWindow.id))
+    if node_id:
+        query = query.where(
+            or_(
+                MaintenanceWindow.node_id == node_id,
+                MaintenanceWindow.node_id.is_(None),
+            )
+        )
+    if status_filter:
+        query = query.where(MaintenanceWindow.status == status_filter)
+    elif not include_completed:
+        query = query.where(MaintenanceWindow.status.in_(["scheduled", "active"]))
+    result = await db.execute(query)
+    return result.scalar() or 0
 
 
 @router.get("/active", response_model=MaintenanceWindowListResponse)

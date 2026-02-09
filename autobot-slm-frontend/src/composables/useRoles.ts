@@ -10,7 +10,6 @@
 
 import { ref } from 'vue'
 import axios from 'axios'
-import { getBackendUrl } from '@/config/ssot-config'
 
 export interface Role {
   name: string
@@ -67,7 +66,9 @@ export function useRoles() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  const API_BASE = getBackendUrl()
+  // SLM backend endpoints are at /api/* (proxied by nginx)
+  // NOT /autobot-api/* which goes to the Main AutoBot backend
+  const API_BASE = ''
 
   async function fetchRoles(): Promise<void> {
     isLoading.value = true

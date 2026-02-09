@@ -15,11 +15,7 @@ from datetime import datetime
 from typing import Dict, Optional, Tuple
 
 from api.websocket import ws_manager
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from models.database import Node, Service, ServiceConflict, ServiceStatus
 from models.schemas import (
     FleetServicesResponse,
@@ -39,6 +35,9 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.service_categorizer import categorize_service
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -919,6 +918,58 @@ def _build_restart_response(
     )
 
 
+async def _get_restart_services(
+    db: AsyncSession,
+    node_id: str,
+    request: Optional[RestartAllServicesRequest],
+    excluded: list,
+) -> tuple[list, list]:
+    """Query and separate services into non-SLM and SLM lists.
+
+    Helper for restart_all_node_services (#816).
+    """
+    query = select(Service).where(Service.node_id == node_id)
+    if request and request.category and request.category != "all":
+        query = query.where(Service.category == request.category)
+
+    result = await db.execute(query)
+    all_services = result.scalars().all()
+    return _separate_and_order_services(all_services, excluded)
+
+
+async def _restart_service_list(
+    node: Node, services: list, node_id: str, is_slm: bool
+) -> tuple[list, int, int]:
+    """Restart a list of services sequentially, return results.
+
+    Helper for restart_all_node_services (#816).
+    """
+    results = []
+    successful = 0
+    failed = 0
+    for svc in services:
+        svc_result = await _restart_single_service(node, svc, node_id, is_slm)
+        results.append(svc_result)
+        if svc_result["success"]:
+            successful += 1
+        else:
+            failed += 1
+    return results, successful, failed
+
+
+async def _restart_slm_services_deferred(
+    node: Node, slm_services: list, node_id: str
+) -> None:
+    """Restart SLM services after HTTP response is sent.
+
+    Runs as a FastAPI background task to avoid killing the connection
+    when the backend restarts itself (#816).
+    """
+    await asyncio.sleep(1)  # Let response flush
+    for svc in slm_services:
+        await _restart_single_service(node, svc, node_id, is_slm=True)
+
+
 def _separate_and_order_services(
     all_services: list, excluded_services: list
 ) -> tuple[list, list]:
@@ -1020,6 +1071,7 @@ async def restart_all_node_services(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
+    background_tasks: BackgroundTasks,
     request: Optional[RestartAllServicesRequest] = None,
 ) -> RestartAllServicesResponse:
     """
@@ -1027,50 +1079,39 @@ async def restart_all_node_services(
 
     The SLM agent is always restarted last to ensure the node remains
     manageable during the restart process. Other services are restarted
-    in alphabetical order.
+    in alphabetical order. SLM services are deferred to a background
+    task so the HTTP response is sent before the backend restarts.
 
-    Related to Issue #725.
+    Related to Issue #725, #816.
     """
     node = await _get_node_or_404(db, node_id)
+    excluded = request.exclude_services if request else []
+    other_services, slm_services = await _get_restart_services(
+        db, node_id, request, excluded
+    )
 
-    # Get all services on this node, optionally filtered by category
-    query = select(Service).where(Service.node_id == node_id)
-    if request and request.category and request.category != "all":
-        query = query.where(Service.category == request.category)
-
-    result = await db.execute(query)
-    all_services = result.scalars().all()
-
-    if not all_services:
+    if not other_services and not slm_services:
         return _build_empty_restart_response(node_id)
 
-    # Separate and order services (SLM services restart last)
-    excluded = request.exclude_services if request else []
-    other_services, slm_services = _separate_and_order_services(all_services, excluded)
-    ordered_services = other_services + slm_services
+    # Restart non-SLM services synchronously
+    results, successful, failed = await _restart_service_list(
+        node, other_services, node_id, is_slm=False
+    )
 
-    # Execute restarts sequentially
-    results = []
-    successful = 0
-    failed = 0
-    slm_agent_restarted = False
-
-    for svc in ordered_services:
-        is_slm = _is_slm_service(svc.service_name)
-        svc_result = await _restart_single_service(node, svc, node_id, is_slm)
-        results.append(svc_result)
-
-        if svc_result["success"]:
-            successful += 1
-            if is_slm:
-                slm_agent_restarted = True
-        else:
-            failed += 1
+    # Defer SLM services to background task (avoids killing connection)
+    if slm_services:
+        background_tasks.add_task(
+            _restart_slm_services_deferred, node, slm_services, node_id
+        )
 
     await db.commit()
 
     return _build_restart_response(
-        node_id, results, successful, failed, slm_agent_restarted
+        node_id,
+        results,
+        successful,
+        failed,
+        slm_agent_restarted=len(slm_services) > 0,
     )
 
 
