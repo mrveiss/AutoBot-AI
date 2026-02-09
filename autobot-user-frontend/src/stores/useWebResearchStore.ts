@@ -91,6 +91,8 @@ export const useWebResearchStore = defineStore('webResearch', () => {
 
   function toggleWebResearch() {
     settings.value.enabled = !settings.value.enabled
+    // Issue #821: Clear stale error when toggling
+    error.value = null
   }
 
   function setEnabled(enabled: boolean) {

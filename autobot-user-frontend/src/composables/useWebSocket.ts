@@ -41,7 +41,7 @@ export interface UseWebSocketOptions {
 
   /**
    * Maximum reconnection delay in ms (for exponential backoff)
-   * @default 30000
+   * @default 10000
    */
   maxReconnectDelay?: number
 
@@ -95,7 +95,7 @@ const DEFAULT_OPTIONS: Required<UseWebSocketOptions> = {
   autoReconnect: true,
   maxReconnectAttempts: 5,
   reconnectDelay: 1000,
-  maxReconnectDelay: 30000,
+  maxReconnectDelay: 10000, // Issue #821: Cap at 10s for better UX (was 30s)
   connectionTimeout: 5000,
   heartbeatInterval: 0,
   heartbeatMessage: 'ping',

@@ -201,6 +201,11 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function refreshToken(newToken: string, expiresIn?: number) {
+    // Issue #821: Basic validation - reject empty/malformed tokens
+    if (!newToken || typeof newToken !== 'string' || newToken.trim().length === 0) {
+      logger.warn('refreshToken called with invalid token, ignoring')
+      return
+    }
     authState.value.token = newToken
     authState.value.expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined
   }

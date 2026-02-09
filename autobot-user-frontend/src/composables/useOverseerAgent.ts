@@ -115,6 +115,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
   // WebSocket instance
   let ws: WebSocket | null = null
   let reconnectAttempts = 0
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null // Issue #821
   const maxReconnectAttempts = 5
 
   /**
@@ -156,9 +157,9 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
         // Auto-reconnect if not a clean close
         if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000) // Issue #821: 10s cap
           logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`)
-          setTimeout(connect, delay)
+          reconnectTimer = setTimeout(connect, delay)
         }
       }
 
@@ -182,6 +183,11 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    * Disconnect from WebSocket
    */
   const disconnect = (): void => {
+    // Issue #821: Cancel pending reconnect timer to prevent reconnect after unmount
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     if (ws) {
       ws.close(1000, 'Client disconnect')
       ws = null

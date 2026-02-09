@@ -510,8 +510,8 @@ export const useChatStore = defineStore('chat', () => {
     const session = sessions.value.find(s => s.id === sessionId)
     if (!session) return ''
 
-    // Generate unique desktop session ID
-    const desktopSessionId = `desktop-${sessionId}-${Date.now()}`
+    // Generate unique desktop session ID (#821: add random suffix to prevent collision)
+    const desktopSessionId = `desktop-${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
     // Initialize desktop session if not exists
     if (!session.desktopSession) {

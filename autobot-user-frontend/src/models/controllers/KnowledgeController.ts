@@ -259,15 +259,25 @@ export class KnowledgeController {
     try {
       this.knowledgeStore.setLoading(true)
 
-      // Update each document's category
-      await Promise.all(
+      // Issue #821: Use allSettled so one failure doesn't abort remaining updates
+      const results = await Promise.allSettled(
         documentIds.map(id => knowledgeRepository.updateDocument(id, { category }))
       )
 
-      // Update local store
-      documentIds.forEach(id => {
-        this.knowledgeStore.updateDocument(id, { category })
+      // Update local store only for successful updates
+      const failed: string[] = []
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          this.knowledgeStore.updateDocument(documentIds[index], { category })
+        } else {
+          failed.push(documentIds[index])
+        }
       })
+
+      if (failed.length > 0) {
+        logger.warn(`${failed.length}/${documentIds.length} category updates failed`)
+        this.appStore.setGlobalError(`${failed.length} of ${documentIds.length} updates failed`)
+      }
 
       await this.refreshStats()
 
@@ -563,7 +573,15 @@ export class KnowledgeController {
   }
 
   private isStopWord(word: string): boolean {
-    const stopWords = ['the', 'and', 'but', 'for', 'with', 'from', 'this', 'that', 'will', 'have', 'been', 'are']
+    // Issue #821: Expanded stop word list to improve keyword quality
+    const stopWords = [
+      'the', 'and', 'but', 'for', 'with', 'from', 'this', 'that', 'will', 'have', 'been', 'are',
+      'was', 'were', 'has', 'had', 'does', 'did', 'can', 'could', 'would', 'should', 'shall',
+      'not', 'than', 'then', 'when', 'where', 'which', 'what', 'who', 'whom', 'how', 'why',
+      'into', 'about', 'over', 'after', 'before', 'between', 'under', 'also', 'only', 'very',
+      'just', 'being', 'more', 'most', 'some', 'such', 'each', 'other', 'their', 'there',
+      'here', 'they', 'them', 'these', 'those', 'your', 'your', 'make', 'like', 'many'
+    ]
     return stopWords.includes(word)
   }
 
