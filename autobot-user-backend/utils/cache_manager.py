@@ -7,7 +7,7 @@ Use src.utils.advanced_cache_manager instead.
 
 Migration:
     OLD: from backend.utils.cache_manager import cache_manager, cache_response
-    NEW: from src.utils.advanced_cache_manager import cache_manager, cache_response
+    NEW: from utils.advanced_cache_manager import cache_manager, cache_response
 
 All functionality preserved in unified AdvancedCacheManager.
 Archived: archives/2025-11-11_cache_consolidation/cache_manager.py
