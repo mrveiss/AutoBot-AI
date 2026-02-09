@@ -1436,6 +1436,73 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Security (Issue #813)
+  async function getSecurityOverview(): Promise<any> {
+    const response = await client.get('/security/overview')
+    return response.data
+  }
+
+  async function getAuditLogs(page: number = 1, perPage: number = 50, category?: string): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
+    if (category) params.append('category', category)
+    const response = await client.get(`/security/audit-logs?${params}`)
+    return response.data
+  }
+
+  async function getSecurityEvents(page: number = 1, perPage: number = 50, severity?: string): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
+    if (severity) params.append('severity', severity)
+    const response = await client.get(`/security/events?${params}`)
+    return response.data
+  }
+
+  async function getThreatSummary(hours: number = 24): Promise<any> {
+    const response = await client.get(`/security/events/summary?hours=${hours}`)
+    return response.data
+  }
+
+  async function acknowledgeSecurityEvent(
+    eventId: string,
+    data?: { acknowledged_by?: string; notes?: string }
+  ): Promise<any> {
+    const response = await client.post(`/security/events/${eventId}/acknowledge`, data || {})
+    return response.data
+  }
+
+  async function resolveSecurityEvent(
+    eventId: string,
+    data: { resolved_by?: string; resolution_notes: string }
+  ): Promise<any> {
+    const response = await client.post(`/security/events/${eventId}/resolve`, data)
+    return response.data
+  }
+
+  async function getSecurityPolicies(page: number = 1, perPage: number = 50): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
+    const response = await client.get(`/security/policies?${params}`)
+    return response.data
+  }
+
+  async function activateSecurityPolicy(policyId: string): Promise<any> {
+    const response = await client.post(`/security/policies/${policyId}/activate`)
+    return response.data
+  }
+
+  async function deactivateSecurityPolicy(policyId: string): Promise<any> {
+    const response = await client.post(`/security/policies/${policyId}/deactivate`)
+    return response.data
+  }
+
+  // Node Reboot (Issue #813)
+  async function rebootNode(
+    nodeId: string
+  ): Promise<{ success: boolean; message: string; node_id: string }> {
+    const response = await client.post<{ success: boolean; message: string; node_id: string }>(
+      `/nodes/${nodeId}/reboot`
+    )
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -1564,5 +1631,17 @@ export function useSlmApi() {
     resolveError,
     configureAlertThreshold,
     cleanupOldErrors,
+    // Security (Issue #813)
+    getSecurityOverview,
+    getAuditLogs,
+    getSecurityEvents,
+    getThreatSummary,
+    acknowledgeSecurityEvent,
+    resolveSecurityEvent,
+    getSecurityPolicies,
+    activateSecurityPolicy,
+    deactivateSecurityPolicy,
+    // Node Reboot (Issue #813)
+    rebootNode,
   }
 }

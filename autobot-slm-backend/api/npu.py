@@ -8,13 +8,11 @@ Endpoints for managing NPU worker nodes and load balancing.
 """
 
 import logging
+from datetime import datetime
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import Node, Setting
 from models.schemas import (
     NPUCapabilities,
@@ -27,6 +25,9 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/npu", tags=["npu"])
@@ -41,6 +42,48 @@ async def _get_npu_nodes(db: AsyncSession) -> list:
     result = await db.execute(select(Node))
     all_nodes = result.scalars().all()
     return [n for n in all_nodes if n.roles and "npu-worker" in n.roles]
+
+
+async def _update_npu_data(db: AsyncSession, node: Node, updates: dict) -> None:
+    """Merge updates into node.extra_data['npu'] and commit.
+
+    Helper for trigger_npu_detection (Issue #813).
+    """
+    extra = node.extra_data or {}
+    npu_data = extra.get("npu", {})
+    npu_data.update(updates)
+    extra["npu"] = npu_data
+    node.extra_data = extra
+    await db.commit()
+
+
+async def _detect_npu_capabilities(
+    ip_address: str, port: int
+) -> tuple[Optional[NPUCapabilities], str]:
+    """Query NPU worker health endpoint to detect capabilities.
+
+    Helper for trigger_npu_detection (Issue #813).
+    """
+    url = f"http://{ip_address}:{port}/health"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return None, f"NPU worker returned {resp.status_code}"
+
+            data = resp.json()
+            caps = NPUCapabilities(
+                models=data.get("models", []),
+                max_concurrent=data.get("maxConcurrent", 1),
+                memory_gb=data.get("memoryGB", 0.0),
+                device_type=data.get("deviceType", "unknown"),
+                utilization=data.get("utilization", 0.0),
+            )
+            return caps, ""
+    except httpx.ConnectError:
+        return None, f"Cannot connect to NPU worker at {url}"
+    except Exception as exc:
+        return None, f"NPU detection failed: {exc}"
 
 
 async def _get_node_npu_status(node: Node) -> NPUNodeStatusResponse:
@@ -145,26 +188,32 @@ async def trigger_npu_detection(
             detail="Node does not have npu-worker role",
         )
 
-    # Update detection status to pending
-    extra = node.extra_data or {}
-    npu_data = extra.get("npu", {})
-    npu_data["detection_status"] = "pending"
-    npu_data["detection_error"] = None
-    extra["npu"] = npu_data
-    node.extra_data = extra
-    await db.commit()
+    await _update_npu_data(
+        db, node, {"detection_status": "pending", "detection_error": None}
+    )
 
-    # TODO: Issue #255 - Implement actual NPU detection via service call
-    # This would call the NPU worker health endpoint to get capabilities
-    # For now, mark as pending - the reconciler will pick this up
+    # Query the NPU worker health endpoint (Issue #813)
+    capabilities, error_msg = await _detect_npu_capabilities(
+        node.ip_address, node.ssh_port or 8081
+    )
+    result_data = {"last_health_check": datetime.utcnow().isoformat()}
+    if capabilities:
+        result_data.update(
+            detection_status="completed", capabilities=capabilities.model_dump()
+        )
+    else:
+        result_data.update(detection_status="failed", detection_error=error_msg)
 
-    logger.info("NPU detection triggered for node %s", node_id)
+    await _update_npu_data(db, node, result_data)
+    logger.info(
+        "NPU detection for %s: %s", node_id, "success" if capabilities else error_msg
+    )
 
     return NPUDetectionResponse(
-        success=True,
-        message="NPU detection triggered. Status will update when complete.",
+        success=capabilities is not None,
+        message="NPU detection completed." if capabilities else error_msg,
         node_id=node_id,
-        capabilities=None,
+        capabilities=capabilities,
     )
 
 

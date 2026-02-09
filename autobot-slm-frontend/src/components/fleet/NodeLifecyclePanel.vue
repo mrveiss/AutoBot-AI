@@ -16,6 +16,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('NodeLifecyclePanel')
@@ -498,12 +499,64 @@ function deselectAllUpdates(): void {
   selectedUpdateIds.value = []
 }
 
-// WebSocket connection for real-time updates
-// TODO: Enable when backend /api/ws/nodes/{nodeId}/events endpoint is implemented
+// WebSocket connection for real-time node lifecycle events (Issue #813)
 function connectWebSocket(): void {
-  // WebSocket endpoint not yet implemented in backend - skip connection
-  // Will use polling via loadEvents() instead
-  logger.debug('WebSocket disabled - using REST polling for node events')
+  const config = getConfig()
+  const wsUrl = `${config.wsBaseUrl}/api/ws/nodes/${props.nodeId}`
+
+  try {
+    ws = new WebSocket(wsUrl)
+  } catch (err) {
+    logger.debug('WebSocket connection failed, using REST polling:', err)
+    return
+  }
+
+  ws.onopen = () => {
+    logger.info('WebSocket connected for node:', props.nodeId)
+  }
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.type === 'ping' || data.type === 'connected') return
+      handleWebSocketEvent(data)
+    } catch (err) {
+      logger.error('Failed to parse WebSocket message:', err)
+    }
+  }
+
+  ws.onclose = () => {
+    logger.debug('WebSocket disconnected for node:', props.nodeId)
+    ws = null
+  }
+
+  ws.onerror = () => {
+    logger.debug('WebSocket error, falling back to REST polling')
+  }
+}
+
+function handleWebSocketEvent(data: Record<string, unknown>): void {
+  const eventType = String(data.type || 'unknown')
+  const eventData = (data.data || {}) as Record<string, unknown>
+
+  const newEvent: LifecycleEvent = {
+    id: `ws-${Date.now()}`,
+    event_type: eventType as EventType,
+    timestamp: new Date().toISOString(),
+    message: String(eventData.message || `${eventType} event received`),
+    severity: mapEventSeverity(eventType),
+    details: eventData,
+  }
+
+  events.value.unshift(newEvent)
+  totalEvents.value += 1
+}
+
+function mapEventSeverity(eventType: string): SeverityLevel {
+  if (eventType.includes('failed') || eventType.includes('error')) return 'error'
+  if (eventType.includes('warning') || eventType.includes('degraded')) return 'warning'
+  if (eventType.includes('critical')) return 'critical'
+  return 'info'
 }
 
 // Mock data generator for development

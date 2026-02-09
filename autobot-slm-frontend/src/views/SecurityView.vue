@@ -82,31 +82,7 @@ interface TLSEndpoint {
   days_until_expiry: number | null
 }
 
-// Note: useSlmApi is initialized above (slmApi)
-// Use slmApi for TLS operations, generic api for security operations
-const api = {
-  async get(url: string) {
-    // Placeholder - security endpoints may need separate implementation
-    // For now, return empty data structures
-    if (url.includes('/security/overview')) {
-      return { security_score: 0, active_threats: 0, failed_logins_24h: 0, policy_violations: 0, total_events_24h: 0, critical_events: 0, certificates_expiring: 0, recent_events: [] }
-    }
-    if (url.includes('/security/audit-logs')) {
-      return { logs: [], total: 0 }
-    }
-    if (url.includes('/security/events')) {
-      if (url.includes('/summary')) return { total_threats: 0, critical: 0, high: 0, medium: 0, low: 0, acknowledged: 0, resolved: 0, by_type: {} }
-      return { events: [], total: 0 }
-    }
-    if (url.includes('/security/policies')) {
-      return { policies: [], total: 0 }
-    }
-    return {}
-  },
-  async post(_url: string, _data?: unknown) {
-    return {}
-  }
-}
+// All security API calls use slmApi composable (initialized above)
 const activeTab = ref('overview')
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -200,7 +176,7 @@ function formatRelativeTime(timestamp: string): string {
 async function fetchOverview() {
   try {
     loading.value = true
-    const response = await api.get('/security/overview')
+    const response = await slmApi.getSecurityOverview()
     overview.value = response
     logger.info('Security overview loaded')
   } catch (err) {
@@ -214,14 +190,11 @@ async function fetchOverview() {
 async function fetchAuditLogs() {
   try {
     loading.value = true
-    const params = new URLSearchParams({
-      page: currentPage.value.toString(),
-      per_page: perPage.value.toString(),
-    })
-    if (auditCategoryFilter.value) {
-      params.append('category', auditCategoryFilter.value)
-    }
-    const response = await api.get(`/security/audit-logs?${params}`)
+    const response = await slmApi.getAuditLogs(
+      currentPage.value,
+      perPage.value,
+      auditCategoryFilter.value || undefined
+    )
     auditLogs.value = response.logs
     auditLogsTotal.value = response.total
     logger.info('Audit logs loaded:', response.total)
@@ -236,14 +209,11 @@ async function fetchAuditLogs() {
 async function fetchSecurityEvents() {
   try {
     loading.value = true
-    const params = new URLSearchParams({
-      page: currentPage.value.toString(),
-      per_page: perPage.value.toString(),
-    })
-    if (eventSeverityFilter.value) {
-      params.append('severity', eventSeverityFilter.value)
-    }
-    const response = await api.get(`/security/events?${params}`)
+    const response = await slmApi.getSecurityEvents(
+      currentPage.value,
+      perPage.value,
+      eventSeverityFilter.value || undefined
+    )
     securityEvents.value = response.events
     eventsTotal.value = response.total
     logger.info('Security events loaded:', response.total)
@@ -257,7 +227,7 @@ async function fetchSecurityEvents() {
 
 async function fetchThreatSummary() {
   try {
-    const response = await api.get('/security/events/summary?hours=24')
+    const response = await slmApi.getThreatSummary(24)
     threatSummary.value = response
     logger.info('Threat summary loaded')
   } catch (err) {
@@ -268,11 +238,10 @@ async function fetchThreatSummary() {
 async function fetchPolicies() {
   try {
     loading.value = true
-    const params = new URLSearchParams({
-      page: currentPage.value.toString(),
-      per_page: perPage.value.toString(),
-    })
-    const response = await api.get(`/security/policies?${params}`)
+    const response = await slmApi.getSecurityPolicies(
+      currentPage.value,
+      perPage.value
+    )
     policies.value = response.policies
     policiesTotal.value = response.total
     logger.info('Security policies loaded:', response.total)
@@ -425,7 +394,7 @@ function formatExpiryStatus(daysUntil: number | null): { text: string; class: st
 
 async function acknowledgeEvent(eventId: string) {
   try {
-    await api.post(`/security/events/${eventId}/acknowledge`, {})
+    await slmApi.acknowledgeSecurityEvent(eventId)
     await fetchSecurityEvents()
     await fetchOverview()
     logger.info('Event acknowledged:', eventId)
@@ -439,7 +408,7 @@ async function resolveEvent(eventId: string) {
   if (!notes) return
 
   try {
-    await api.post(`/security/events/${eventId}/resolve`, { resolution_notes: notes })
+    await slmApi.resolveSecurityEvent(eventId, { resolution_notes: notes })
     await fetchSecurityEvents()
     await fetchOverview()
     logger.info('Event resolved:', eventId)
@@ -450,8 +419,11 @@ async function resolveEvent(eventId: string) {
 
 async function togglePolicyEnforcement(policyId: string, currentlyEnforced: boolean) {
   try {
-    const endpoint = currentlyEnforced ? 'deactivate' : 'activate'
-    await api.post(`/security/policies/${policyId}/${endpoint}`, {})
+    if (currentlyEnforced) {
+      await slmApi.deactivateSecurityPolicy(policyId)
+    } else {
+      await slmApi.activateSecurityPolicy(policyId)
+    }
     await fetchPolicies()
     logger.info('Policy enforcement toggled:', policyId)
   } catch (err) {

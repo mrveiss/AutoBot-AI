@@ -5,6 +5,7 @@
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
+import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import {
@@ -26,6 +27,7 @@ import RoleManagementModal from '@/components/RoleManagementModal.vue'
 
 const logger = createLogger('FleetOverview')
 const fleetStore = useFleetStore()
+const slmApi = useSlmApi()
 
 // Connection test composable (Issue #737)
 const connectionTest = useNodeConnectionTest()
@@ -296,10 +298,27 @@ function closeServicesPanel(): void {
   showServicesPanel.value = false
 }
 
-// Restart (placeholder)
-function handleRestart(nodeId: string): void {
-  logger.info('Restart requested for node:', nodeId)
-  // TODO: Implement restart functionality
+// Restart node via SSH (Issue #813)
+const isRestarting = ref(false)
+
+async function handleRestart(nodeId: string): Promise<void> {
+  const node = fleetStore.getNode(nodeId)
+  const hostname = node?.hostname || nodeId
+  if (!confirm(`Reboot node "${hostname}"? The node will go offline temporarily.`)) {
+    return
+  }
+
+  isRestarting.value = true
+  try {
+    const result = await slmApi.rebootNode(nodeId)
+    logger.info('Reboot initiated:', result.message)
+    fleetStore.updateNodeStatus(nodeId, 'rebooting')
+  } catch (err) {
+    logger.error('Failed to reboot node:', err)
+    alert(`Failed to reboot node: ${err instanceof Error ? err.message : 'Unknown error'}`)
+  } finally {
+    isRestarting.value = false
+  }
 }
 </script>
 
