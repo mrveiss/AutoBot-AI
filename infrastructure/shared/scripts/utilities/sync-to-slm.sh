@@ -194,11 +194,11 @@ if [ "$ACTION" = "deploy" ]; then
         exit 1
     fi
 
-    # Build ansible command
+    # Build ansible command (run from ansible/ dir so ansible.cfg is picked up)
     ANSIBLE_CMD=(
         ansible-playbook
-        -i "$ANSIBLE_INVENTORY"
-        "$ANSIBLE_PLAYBOOK"
+        -i "inventory/slm-nodes.yml"
+        "playbooks/deploy-slm-manager.yml"
     )
 
     # Add SSH key if available
@@ -214,8 +214,8 @@ if [ "$ACTION" = "deploy" ]; then
         log_step "Running full playbook..."
     fi
 
-    # Execute
-    "${ANSIBLE_CMD[@]}"
+    # Execute from ansible dir so ansible.cfg roles_path works
+    (cd "$ANSIBLE_DIR" && "${ANSIBLE_CMD[@]}")
 
     echo ""
     log_info "Ansible playbook completed"
