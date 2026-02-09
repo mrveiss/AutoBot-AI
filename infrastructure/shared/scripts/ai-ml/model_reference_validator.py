@@ -13,6 +13,7 @@ This script checks that the codebase properly uses centralized ModelConstants
 instead of hardcoded model names.
 """
 
+import logging
 import os
 import re
 import sys
@@ -22,6 +23,8 @@ PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 sys.path.insert(0, PROJECT_ROOT)
+
+logger = logging.getLogger(__name__)
 
 
 def check_hardcoded_models(directory: str, extensions: list[str]) -> list[dict]:
@@ -93,25 +96,25 @@ def check_hardcoded_models(directory: str, extensions: list[str]) -> list[dict]:
 
 def verify_model_constants_usage():
     """Verify that ModelConstants is being used correctly."""
-    print("Verifying ModelConstants usage...")
+    logger.info("Verifying ModelConstants usage...")
 
     try:
-        from src.constants.model_constants import FALLBACK_MODEL, ModelConstants
+        from constants.model_constants import FALLBACK_MODEL, ModelConstants
 
-        print(f"  FALLBACK_MODEL: {FALLBACK_MODEL}")
-        print(f"  DEFAULT_OLLAMA_MODEL: {ModelConstants.DEFAULT_OLLAMA_MODEL}")
-        print(f"  DEFAULT_OPENAI_MODEL: {ModelConstants.DEFAULT_OPENAI_MODEL}")
-        print(f"  DEFAULT_ANTHROPIC_MODEL: {ModelConstants.DEFAULT_ANTHROPIC_MODEL}")
-        print("ModelConstants imported successfully")
+        logger.info(f"  FALLBACK_MODEL: {FALLBACK_MODEL}")
+        logger.info(f"  DEFAULT_OLLAMA_MODEL: {ModelConstants.DEFAULT_OLLAMA_MODEL}")
+        logger.info(f"  DEFAULT_OPENAI_MODEL: {ModelConstants.DEFAULT_OPENAI_MODEL}")
+        logger.info(f"  DEFAULT_ANTHROPIC_MODEL: {ModelConstants.DEFAULT_ANTHROPIC_MODEL}")
+        logger.info("ModelConstants imported successfully")
         return True
     except ImportError as e:
-        print(f"Failed to import ModelConstants: {e}")
+        logger.info(f"Failed to import ModelConstants: {e}")
         return False
 
 
 def verify_env_var_usage():
     """Verify correct environment variable is being used."""
-    print("\nVerifying environment variable usage...")
+    logger.info("\nVerifying environment variable usage...")
 
     correct_var = "AUTOBOT_DEFAULT_LLM_MODEL"
     deprecated_var = "AUTOBOT_OLLAMA_MODEL"
@@ -121,57 +124,58 @@ def verify_env_var_usage():
     deprecated_value = os.getenv(deprecated_var)
 
     if correct_value:
-        print(f"  {correct_var}={correct_value}")
+        logger.info(f"  {correct_var}={correct_value}")
     else:
-        print(f"  {correct_var} not set (will use FALLBACK_MODEL)")
+        logger.info(f"  {correct_var} not set (will use FALLBACK_MODEL)")
 
     if deprecated_value:
-        print(f"  WARNING: Deprecated {deprecated_var}={deprecated_value}")
-        print(f"  Please migrate to {correct_var}")
+        logger.info(f"  WARNING: Deprecated {deprecated_var}={deprecated_value}")
+        logger.info(f"  Please migrate to {correct_var}")
 
     return True
 
 
 def main():
     """Main verification function."""
-    print("=" * 60)
-    print("AutoBot Model References Verification")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("AutoBot Model References Verification")
+    logger.info("=" * 60)
 
     os.chdir(PROJECT_ROOT)
 
     # Verify ModelConstants
     if not verify_model_constants_usage():
-        print("\nERROR: ModelConstants verification failed")
+        logger.info("\nERROR: ModelConstants verification failed")
         sys.exit(1)
 
     # Verify env var usage
     verify_env_var_usage()
 
     # Check for hardcoded models in Python files
-    print("\nScanning for hardcoded model references...")
+    logger.info("\nScanning for hardcoded model references...")
 
     findings = check_hardcoded_models(PROJECT_ROOT, extensions=[".py"])
 
     if findings:
-        print(f"\nFound {len(findings)} potential hardcoded model references:")
+        logger.info(f"\nFound {len(findings)} potential hardcoded model references:")
         for finding in findings:
             rel_path = os.path.relpath(finding["file"], PROJECT_ROOT)
-            print(f"  {rel_path}:{finding['line']}")
-            print(f"    {finding['content'][:80]}...")
+            logger.info(f"  {rel_path}:{finding['line']}")
+            logger.info(f"    {finding['content'][:80]}...")
     else:
-        print("No hardcoded model references found in active code")
+        logger.info("No hardcoded model references found in active code")
 
-    print("\n" + "=" * 60)
-    print("Verification complete")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("Verification complete")
+    logger.info("=" * 60)
 
-    print("\nCorrect usage pattern:")
-    print("  from src.constants.model_constants import ModelConstants")
-    print("  model = ModelConstants.DEFAULT_OLLAMA_MODEL")
-    print("\nEnvironment variable:")
-    print("  AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct")
+    logger.info("\nCorrect usage pattern:")
+    logger.info("  from constants.model_constants import ModelConstants")
+    logger.info("  model = ModelConstants.DEFAULT_OLLAMA_MODEL")
+    logger.info("\nEnvironment variable:")
+    logger.info("  AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()
