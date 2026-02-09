@@ -48,7 +48,7 @@ croniter>=2.0.0
 # SSO Integration (Issue #576 Phase 4)
 authlib>=1.3.0  # OAuth2/OIDC client
 ldap3>=2.9.0  # LDAP/Active Directory
-pysaml2>=7.4.0  # SAML 2.0 Service Provider
+pysaml2>=7.3.0  # SAML 2.0 Service Provider
 
 # 2FA/MFA (Issue #576 Phase 5)
 pyotp>=2.9.0  # TOTP generation and verification
