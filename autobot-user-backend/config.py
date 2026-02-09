@@ -724,6 +724,18 @@ class ConfigManager:
 
         return self._deep_merge(defaults, redis_config)
 
+    def _generate_cors_origins(self) -> list:
+        """Generate CORS origins from all AutoBot VMs (#815)."""
+        from constants.network_constants import NetworkConstants
+
+        origins: set = set()
+        for port in (5173, 8001, 3000):
+            origins.add(f"http://localhost:{port}")
+            origins.add(f"http://127.0.0.1:{port}")
+        for host in NetworkConstants.get_host_configs():
+            origins.add(f"http://{host['ip']}:{host['port']}")
+        return sorted(origins)
+
     def get_backend_config(self) -> Dict[str, Any]:
         """Get backend configuration with fallback defaults"""
         backend_config = self.get("backend", {})
@@ -734,11 +746,7 @@ class ConfigManager:
             "api_endpoint": os.getenv(
                 "AUTOBOT_BACKEND_API_ENDPOINT", "http://localhost:8001"
             ),
-            "cors_origins": [
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://172.16.168.21:5173",
-            ],  # Vue frontend (local + Frontend VM)
+            "cors_origins": self._generate_cors_origins(),
         }
 
         return self._deep_merge(defaults, backend_config)

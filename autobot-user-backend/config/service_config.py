@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level cached maps to avoid repeated dictionary creation
 _HOST_SERVICE_MAP = {
+    "slm": NetworkConstants.SLM_VM_IP,
     "backend": NetworkConstants.MAIN_MACHINE_IP,
     "redis": NetworkConstants.REDIS_VM_IP,
     "frontend": NetworkConstants.FRONTEND_VM_IP,
@@ -32,6 +33,7 @@ _HOST_SERVICE_MAP = {
 }
 
 _PORT_SERVICE_MAP = {
+    "slm": NetworkConstants.SLM_PORT,
     "backend": NetworkConstants.BACKEND_PORT,
     "redis": NetworkConstants.REDIS_PORT,
     "frontend": NetworkConstants.FRONTEND_PORT,
@@ -150,7 +152,7 @@ class ServiceConfigMixin:
             "timeout": 60,
             "max_retries": 3,
             "streaming": False,
-            "cors_origins": [],
+            "cors_origins": self.get_cors_origins(),
             "allowed_hosts": ["*"],
             "max_request_size": 10485760,  # 10MB
         }
@@ -236,52 +238,33 @@ class ServiceConfigMixin:
         }
 
     def get_cors_origins(self) -> list:
-        """Generate CORS allowed origins from infrastructure configuration
+        """Generate CORS origins from ALL infrastructure machines (#815).
 
-        Returns a list of allowed origins including:
-        - Localhost variants for development
-        - Frontend service (Vite dev server)
-        - Browser service (Playwright)
-        - Backend service (for WebSocket/CORS testing)
+        Iterates every VM in ``NetworkConstants.get_host_configs()`` so
+        that adding a new machine automatically allows CORS from it.
+        ``security.cors_origins`` in the config file still overrides.
         """
-        # Check if explicitly configured in security.cors_origins
         explicit_origins = self.get_nested("security.cors_origins", [])
         if explicit_origins:
             return explicit_origins
 
-        # Otherwise, generate from infrastructure config
-        frontend_host = self.get_host("frontend")
-        frontend_port = self.get_port("frontend")
-        browser_host = self.get_host("browser_service")
-        browser_port = self.get_port("browser_service")
-        backend_host = self.get_host("backend")
-        backend_port = self.get_port("backend")
+        origins: set[str] = set()
 
-        origins = [
-            # Localhost variants for development
-            # Vite dev server default
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",
-            f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.FRONTEND_PORT}",
-            # Browser/other dev tools
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BROWSER_SERVICE_PORT}",
-            f"http://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}",
-            # Frontend service
-            f"http://{frontend_host}:{frontend_port}",
-            # Browser service (Playwright)
-            f"http://{browser_host}:{browser_port}",
-            # Backend service (for testing/debugging)
-            f"http://{backend_host}:{backend_port}",
-        ]
+        # Localhost variants for development
+        dev_ports = {
+            NetworkConstants.FRONTEND_PORT,
+            NetworkConstants.BACKEND_PORT,
+            NetworkConstants.BROWSER_SERVICE_PORT,
+        }
+        for port in dev_ports:
+            origins.add(f"http://{NetworkConstants.LOCALHOST_NAME}:{port}")
+            origins.add(f"http://{NetworkConstants.LOCALHOST_IP}:{port}")
 
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_origins = []
-        for origin in origins:
-            if origin not in seen:
-                seen.add(origin)
-                unique_origins.append(origin)
+        # Every AutoBot VM with its primary service port
+        for host in NetworkConstants.get_host_configs():
+            origins.add(f"http://{host['ip']}:{host['port']}")
 
-        return unique_origins
+        return sorted(origins)
 
     def get_path(self, category: str, name: str = None) -> str:
         """
