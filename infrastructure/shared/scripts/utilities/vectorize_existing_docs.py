@@ -31,13 +31,69 @@ from dotenv import load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def _process_fact_result(fact_id: str, result: Dict[str, Any]) -> tuple:
+    """
+    Process vectorization result for a single fact.
+
+    Helper for vectorize_facts_batch (#825).
+
+    Args:
+        fact_id: The fact ID being processed
+        result: Result dictionary from vectorize_existing_fact
+
+    Returns:
+        Tuple of (success_delta, error_delta, skipped_delta, error_entry or None)
+    """
+    if result.get("status") == "success":
+        return (1, 0, 0, None)
+    elif result.get("status") == "skipped":
+        return (0, 0, 1, None)
+    else:
+        error_entry = {
+            "fact_id": fact_id,
+            "error": result.get("message", "Unknown error"),
+        }
+        return (0, 1, 0, error_entry)
+
+
+async def _process_batch(
+    kb: KnowledgeBase, batch: List[str], counters: Dict[str, int], errors: List[Dict]
+) -> None:
+    """
+    Process a single batch of facts.
+
+    Helper for vectorize_facts_batch (#825).
+
+    Args:
+        kb: KnowledgeBase instance
+        batch: List of fact IDs to process
+        counters: Dictionary with success_count, error_count, skipped_count keys
+        errors: List to append error entries to
+    """
+    for fact_id in batch:
+        try:
+            result = await kb.vectorize_existing_fact(fact_id)
+            success_d, error_d, skipped_d, error_entry = _process_fact_result(
+                fact_id, result
+            )
+            counters["success_count"] += success_d
+            counters["error_count"] += error_d
+            counters["skipped_count"] += skipped_d
+            if error_entry:
+                errors.append(error_entry)
+
+        except Exception as e:
+            counters["error_count"] += 1
+            errors.append({"fact_id": fact_id, "error": str(e)})
 
 
 async def get_documentation_fact_ids(kb: KnowledgeBase) -> List[str]:
@@ -79,6 +135,9 @@ async def vectorize_facts_batch(
     """
     Vectorize facts in batches with progress tracking.
 
+    Issue #825: Extracted _process_fact_result and _process_batch helpers
+    to reduce function length from 72 to ~40 lines.
+
     Args:
         kb: KnowledgeBase instance
         fact_ids: List of fact IDs to vectorize
@@ -88,9 +147,7 @@ async def vectorize_facts_batch(
         Summary dict with success/failure counts
     """
     total = len(fact_ids)
-    success_count = 0
-    error_count = 0
-    skipped_count = 0
+    counters = {"success_count": 0, "error_count": 0, "skipped_count": 0}
     errors = []
 
     logger.info("Starting vectorization of %d documentation facts...", total)
@@ -104,26 +161,7 @@ async def vectorize_facts_batch(
             "Processing batch %d/%d (%d facts)...", batch_num, total_batches, len(batch)
         )
 
-        for fact_id in batch:
-            try:
-                result = await kb.vectorize_existing_fact(fact_id)
-
-                if result.get("status") == "success":
-                    success_count += 1
-                elif result.get("status") == "skipped":
-                    skipped_count += 1
-                else:
-                    error_count += 1
-                    errors.append(
-                        {
-                            "fact_id": fact_id,
-                            "error": result.get("message", "Unknown error"),
-                        }
-                    )
-
-            except Exception as e:
-                error_count += 1
-                errors.append({"fact_id": fact_id, "error": str(e)})
+        await _process_batch(kb, batch, counters, errors)
 
         # Progress update
         processed = min(i + batch_size, total)
@@ -133,16 +171,16 @@ async def vectorize_facts_batch(
             processed,
             total,
             pct,
-            success_count,
-            error_count,
-            skipped_count,
+            counters["success_count"],
+            counters["error_count"],
+            counters["skipped_count"],
         )
 
     return {
         "total": total,
-        "success": success_count,
-        "errors": error_count,
-        "skipped": skipped_count,
+        "success": counters["success_count"],
+        "errors": counters["error_count"],
+        "skipped": counters["skipped_count"],
         "error_details": errors[:10],  # Only first 10 errors
     }
 

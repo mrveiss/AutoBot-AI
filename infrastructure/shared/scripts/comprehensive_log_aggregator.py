@@ -34,7 +34,7 @@ import docker
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 # Issue #315 - extracted helper functions to reduce deep nesting
 
@@ -95,7 +95,7 @@ def _process_docker_log_line(
             },
         )
     except Exception as e:
-        print(f"❌ Error processing log line from {container.name}: {e}")
+        logger.error("Error processing log line from %s: %s", container.name, e)
 
 
 def _process_journalctl_line(line: str, pid: str, send_callback, running_flag) -> bool:
@@ -131,11 +131,11 @@ def _monitor_log_files(log_aggregator, running_flag) -> None:
 
     for log_file in log_files:
         if log_file.exists():
-            print(f"📄 Monitoring log file: {log_file}")
+            logger.info("Monitoring log file: %s", log_file)
             log_aggregator.tail_log_file(str(log_file), "Backend-File")
             return
 
-    print("⚠️ No backend log files found")
+    logger.warning("No backend log files found")
 
 
 def _process_tail_log_line(
@@ -173,9 +173,9 @@ class ComprehensiveLogAggregator:
         # Initialize Docker client
         try:
             self.docker_client = docker.from_env()
-            print("✅ Docker client initialized")
+            logger.info("Docker client initialized")
         except Exception as e:
-            print(f"⚠️ Docker client failed to initialize: {e}")
+            logger.warning("Docker client failed to initialize: %s", e)
 
         # Setup logging
         logging.basicConfig(level=logging.INFO)
@@ -218,10 +218,10 @@ class ComprehensiveLogAggregator:
                     data=json.dumps(log_entry) + "\n",
                 ) as response:
                     if response.status not in [200, 201]:
-                        print(f"❌ Seq error {response.status}: {await response.text()}")
+                        logger.error("Seq error %s: %s", response.status, await response.text())
 
         except Exception as e:
-            print(f"❌ Failed to send to Seq: {e}")
+            logger.error("Failed to send to Seq: %s", e)
 
     async def get_docker_containers(self) -> List[dict]:
         """Get all AutoBot-related Docker containers."""
@@ -252,12 +252,12 @@ class ComprehensiveLogAggregator:
                     for keyword in ["autobot", "redis", "seq", "python", "node"]
                 ):
                     containers.append(container_info)
-                    print(
-                        f"📦 Found container: {container.name} ({container_info['image']})"
+                    logger.info(
+                        "Found container: %s (%s)", container.name, container_info['image']
                     )
 
         except Exception as e:
-            print(f"❌ Error getting containers: {e}")
+            logger.error("Error getting containers: %s", e)
 
         return containers
 
@@ -268,7 +268,7 @@ class ComprehensiveLogAggregator:
 
         try:
             container = self.docker_client.containers.get(container_name)
-            print(f"🔄 Starting log stream for container: {container.name}")
+            logger.info("Starting log stream for container: %s", container.name)
 
             # Stream logs in a separate thread to avoid blocking
             def stream_logs():
@@ -292,17 +292,17 @@ class ComprehensiveLogAggregator:
                         )
 
                 except Exception as e:
-                    print(f"❌ Error streaming logs from {container.name}: {e}")
+                    logger.error("Error streaming logs from %s: %s", container.name, e)
 
             # Start streaming in executor
             self.executor.submit(stream_logs)
 
         except Exception as e:
-            print(f"❌ Error setting up log stream for {container_name}: {e}")
+            logger.error("Error setting up log stream for %s: %s", container_name, e)
 
     async def stream_backend_logs(self):
         """Stream logs from the main Python backend (Issue #315 - refactored)."""
-        print("🔄 Starting backend log monitoring...")
+        logger.info("Starting backend log monitoring...")
 
         # Monitor backend process logs
         def monitor_backend():
@@ -314,21 +314,21 @@ class ComprehensiveLogAggregator:
                 )
 
                 if result.returncode != 0:
-                    print("⚠️ Backend process not found")
+                    logger.warning("Backend process not found")
                     return
 
                 pid = result.stdout.strip()
-                print(f"📍 Found backend process PID: {pid}")
+                logger.info("Found backend process PID: %s", pid)
 
                 # Use journalctl to follow logs if available
                 try:
                     self._monitor_journalctl(pid)
                 except FileNotFoundError:
-                    print("⚠️ journalctl not available, using alternative method")
+                    logger.warning("journalctl not available, using alternative method")
                     _monitor_log_files(self, lambda: self.running)
 
             except Exception as e:
-                print(f"❌ Error monitoring backend logs: {e}")
+                logger.error("Error monitoring backend logs: %s", e)
 
         self.executor.submit(monitor_backend)
 
@@ -380,12 +380,12 @@ class ComprehensiveLogAggregator:
                     break
 
         except Exception as e:
-            print(f"❌ Error tailing file {file_path}: {e}")
+            logger.error("Error tailing file %s: %s", file_path, e)
 
     async def stream_system_logs(self):
         """Stream system-wide logs relevant to AutoBot."""
 
-        print("🔄 Starting system log monitoring...")
+        logger.info("Starting system log monitoring...")
 
         def monitor_system():
             """Monitor system journal logs for AutoBot-related entries."""
@@ -422,7 +422,7 @@ class ComprehensiveLogAggregator:
                         )
 
             except Exception as e:
-                print(f"❌ Error monitoring system logs: {e}")
+                logger.error("Error monitoring system logs: %s", e)
 
         self.executor.submit(monitor_system)
 
@@ -461,13 +461,13 @@ class ComprehensiveLogAggregator:
                 },
             )
 
-        print("✅ Test logs sent to Seq")
+        logger.info("Test logs sent to Seq")
 
     async def start_all_monitoring(self):
         """Start monitoring all log sources."""
 
         self.running = True
-        print("🚀 Starting comprehensive log aggregation...")
+        logger.info("Starting comprehensive log aggregation...")
 
         # Send startup event
         await self.send_startup_event()
@@ -487,8 +487,8 @@ class ComprehensiveLogAggregator:
         # Start system monitoring
         tasks.append(asyncio.create_task(self.stream_system_logs()))
 
-        print(f"📊 Started {len(tasks)} monitoring tasks")
-        print("🔍 Log aggregation running... Press Ctrl+C to stop")
+        logger.info("Started %d monitoring tasks", len(tasks))
+        logger.info("Log aggregation running... Press Ctrl+C to stop")
 
         try:
             # Keep running until interrupted
@@ -496,7 +496,7 @@ class ComprehensiveLogAggregator:
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         except KeyboardInterrupt:
-            print("\n🛑 Stopping log aggregation...")
+            logger.info("Stopping log aggregation...")
             self.running = False
 
             # Cancel all tasks
@@ -508,7 +508,7 @@ class ComprehensiveLogAggregator:
 
         finally:
             self.executor.shutdown(wait=True)
-            print("✅ Log aggregation stopped")
+            logger.info("Log aggregation stopped")
 
 
 async def main():
@@ -540,21 +540,21 @@ async def main():
 
     if args.list_containers:
         containers = await aggregator.get_docker_containers()
-        print("\n📦 AutoBot Docker Containers:")
+        logger.info("AutoBot Docker Containers:")
         for container in containers:
-            print(
-                f"  • {container['name']} ({container['image']}) - {container['status']}"
+            logger.info(
+                "  • %s (%s) - %s", container['name'], container['image'], container['status']
             )
         return
 
     if args.start_all:
         await aggregator.start_all_monitoring()
     else:
-        print("Use --start-all to begin monitoring or --test-logs to test connectivity")
+        logger.info("Use --start-all to begin monitoring or --test-logs to test connectivity")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n👋 Goodbye!")
+        logger.info("Goodbye!")
