@@ -25,13 +25,13 @@ from typing import Any, Dict, List, Optional, Tuple
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from src.config import UnifiedConfigManager
-from src.knowledge_base import KnowledgeBase
-from src.utils.redis_client import get_redis_client
+from config import UnifiedConfigManager
+from knowledge_base import KnowledgeBase
+from utils.redis_client import get_redis_client
 
 # Initialize unified config
 config = UnifiedConfigManager()
-# from src.utils.semantic_chunker import SemanticChunker  # Skip if not available
+# from utils.semantic_chunker import SemanticChunker  # Skip if not available
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -352,7 +352,7 @@ def main():
     if not success:
         sys.exit(1)
 
-    print("\n🛡️  KNOWLEDGE RETRIEVAL CONSISTENCY: GUARANTEED")
+    logger.info("\n🛡️  KNOWLEDGE RETRIEVAL CONSISTENCY: GUARANTEED")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.command_manual_manager import CommandManualManager  # noqa: E402
+from command_manual_manager import CommandManualManager  # noqa: E402
 
 # Issue #281: Essential commands extracted from get_essential_commands
 # Tuple of 119 command names organized by category
@@ -366,19 +366,19 @@ class ManPageIngester:
 
     def print_statistics(self) -> None:
         """Print ingestion statistics."""
-        print("\n" + "=" * 50)
-        print("COMMAND MANUAL INGESTION STATISTICS")
-        print("=" * 50)
-        print(f"Commands attempted: {self.stats['attempted']}")
-        print(f"Successfully ingested: {self.stats['successful']}")
-        print(f"Failed to ingest: {self.stats['failed']}")
-        print(f"Skipped (already exists): {self.stats['skipped']}")
+        logger.info("\n" + "=" * 50)
+        logger.info("COMMAND MANUAL INGESTION STATISTICS")
+        logger.info("=" * 50)
+        logger.info(f"Commands attempted: {self.stats['attempted']}")
+        logger.info(f"Successfully ingested: {self.stats['successful']}")
+        logger.error(f"Failed to ingest: {self.stats['failed']}")
+        logger.info(f"Skipped (already exists): {self.stats['skipped']}")
 
         if self.stats["attempted"] > 0:
             success_rate = (self.stats["successful"] / self.stats["attempted"]) * 100
-            print(f"Success rate: {success_rate:.1f}%")
+            logger.info(f"Success rate: {success_rate:.1f}%")
 
-        print("=" * 50)
+        logger.info("=" * 50)
 
     def verify_ingestion(self, sample_commands: list = None) -> None:
         """Verify that ingested commands are properly stored.
@@ -389,13 +389,13 @@ class ManPageIngester:
         if sample_commands is None:
             sample_commands = ["ls", "cat", "grep", "ps", "ifconfig"]
 
-        print("\nVerifying ingestion...")
+        logger.info("\nVerifying ingestion...")
         for command in sample_commands:
             manual = self.manager.get_manual(command)
             if manual:
-                print(f"✓ {command}: {manual.description[:50]}...")
+                logger.info(f"✓ {command}: {manual.description[:50]}...")
             else:
-                print(f"✗ {command}: Not found in knowledge base")
+                logger.info(f"✗ {command}: Not found in knowledge base")
 
 
 def main():
@@ -443,7 +443,7 @@ def main():
         ingester.ingest_all_advanced()
     elif args.mode == "custom":
         if not args.custom_file:
-            print("Error: --custom-file required for custom mode")
+            logger.error("Error: --custom-file required for custom mode")
             sys.exit(1)
         ingester.ingest_custom_list(args.custom_file)
 
@@ -454,7 +454,7 @@ def main():
     if args.verify:
         ingester.verify_ingestion()
 
-    print("\nIngestion complete!")
+    logger.info("\nIngestion complete!")
 
 
 if __name__ == "__main__":
