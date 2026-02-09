@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 async def test_autobot_kb():
     """Test the actual AutoBot knowledge base"""
     try:
-        from src.config import config as global_config
-        from src.knowledge_base import KnowledgeBase
+        from config import config as global_config
+        from knowledge_base import KnowledgeBase
 
         # Initialize KB
         kb = KnowledgeBase(config_manager=global_config)
@@ -29,36 +29,39 @@ async def test_autobot_kb():
         # Test search with correct signature
         results = await kb.search("deployment configuration")  # Use default n_results=5
 
-        logger.info(f"✅ Knowledge base works! Found {len(results)} results")
+        logger.info("Knowledge base works! Found %s results", len(results))
 
         for i, result in enumerate(results[:2]):
-            logger.info(f"Result {i+1}: {result['content'][:100]}...")
+            logger.info("Result %s: %s...", i+1, result['content'][:100])
 
         return True, len(results)
 
     except Exception as e:
-        logger.error(f"❌ KB test failed: {e}")
+        logger.error("KB test failed: %s", e)
         return False, 0
 
 
 async def main():
-    print("🧪 Testing AutoBot Knowledge Base Current State")
+    logger.info("Testing AutoBot Knowledge Base Current State")
 
     success, count = await test_autobot_kb()
 
-    print("\n📊 RESULT:")
-    print(f"  Status: {'✅ WORKING' if success else '❌ BROKEN'}")
-    print(f"  Results: {count}")
+    logger.info("")
+    logger.info("RESULT:")
+    logger.info("  Status: %s", 'WORKING' if success else 'BROKEN')
+    logger.info("  Results: %s", count)
 
     if success and count > 0:
-        print("\n🎯 CONCLUSION: KEEP LLAMAINDEX")
-        print("  • Current implementation works with existing 13,383 vectors")
-        print("  • No migration needed")
-        print("  • Just fix any remaining LLM configuration issues")
+        logger.info("")
+        logger.info("CONCLUSION: KEEP LLAMAINDEX")
+        logger.info("  • Current implementation works with existing 13,383 vectors")
+        logger.info("  • No migration needed")
+        logger.info("  • Just fix any remaining LLM configuration issues")
     else:
-        print("\n🎯 CONCLUSION: INVESTIGATE FURTHER")
-        print("  • Current implementation has issues")
-        print("  • May need to migrate to LangChain")
+        logger.info("")
+        logger.info("CONCLUSION: INVESTIGATE FURTHER")
+        logger.info("  • Current implementation has issues")
+        logger.info("  • May need to migrate to LangChain")
 
 
 if __name__ == "__main__":

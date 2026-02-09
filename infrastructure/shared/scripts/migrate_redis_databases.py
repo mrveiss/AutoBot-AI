@@ -17,7 +17,7 @@ import redis
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from src.utils.redis_database_manager import RedisDatabase
+from utils.redis_database_manager import RedisDatabase
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -266,23 +266,23 @@ def main():
     if verify_only:
         # Just verify current state
         results = migrator.verify_migration()
-        print("\nCurrent Redis database distribution:")
+        logger.info("\nCurrent Redis database distribution:")
         for db_info, count in results.items():
-            print(f"  {db_info}: {count} keys")
+            logger.info(f"  {db_info}: {count} keys")
         return
 
     # Run migration
     success = migrator.run_migration(cleanup=cleanup)
 
     if success:
-        print("\n✅ Migration completed successfully!")
+        logger.info("\n✅ Migration completed successfully!")
         # Show results
         results = migrator.verify_migration()
-        print("\nFinal Redis database distribution:")
+        logger.info("\nFinal Redis database distribution:")
         for db_info, count in results.items():
-            print(f"  {db_info}: {count} keys")
+            logger.info(f"  {db_info}: {count} keys")
     else:
-        print("\n❌ Migration failed!")
+        logger.error("\n❌ Migration failed!")
         sys.exit(1)
 
 

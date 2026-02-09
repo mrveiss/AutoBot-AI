@@ -21,8 +21,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.constants.threshold_constants import TimingConstants
-from src.utils.gpu_acceleration_optimizer import (
+from constants.threshold_constants import TimingConstants
+from utils.gpu_acceleration_optimizer import (
     benchmark_gpu,
     get_gpu_capabilities,
     gpu_optimizer,
@@ -31,7 +31,7 @@ from src.utils.gpu_acceleration_optimizer import (
 )
 
 # Import performance monitoring components
-from src.utils.performance_monitor import (
+from utils.performance_monitor import (
     add_alert_callback,
     collect_metrics,
     get_performance_dashboard,
@@ -518,11 +518,11 @@ async def main():
             logger.info("Monitoring stopped successfully")
 
         elif args.command == "status":
-            print(json.dumps(manager.get_status_report(), indent=2))
+            logger.info(json.dumps(manager.get_status_report(), indent=2))
 
         elif args.command == "benchmark":
             await manager.initialize()
-            print(
+            logger.info(
                 json.dumps(await manager.run_benchmark_suite(), indent=2, default=str)
             )
 

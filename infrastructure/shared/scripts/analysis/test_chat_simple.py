@@ -11,6 +11,8 @@ import logging
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -20,23 +22,23 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_chat():
     """Test the chat workflow with a simple message"""
-    from src.chat_workflow import process_chat_message
+    from chat_workflow import process_chat_message
 
     try:
-        print("Testing chat workflow...")
+        logger.info("Testing chat workflow...")
         result = await asyncio.wait_for(
             process_chat_message("hello", "test-chat"), timeout=10.0
         )
 
-        print(f"✅ Success! Response: {result.response[:100]}...")
-        print(f"   Knowledge Status: {result.knowledge_status.value}")
-        print(f"   Message Type: {result.message_type.value}")
-        print(f"   Processing Time: {result.processing_time:.2f}s")
+        logger.info(f"✅ Success! Response: {result.response[:100]}...")
+        logger.info(f"   Knowledge Status: {result.knowledge_status.value}")
+        logger.info(f"   Message Type: {result.message_type.value}")
+        logger.info(f"   Processing Time: {result.processing_time:.2f}s")
 
     except asyncio.TimeoutError:
-        print("❌ Test timed out after 10 seconds")
+        logger.error("❌ Test timed out after 10 seconds")
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        logger.error(f"❌ Test failed: {e}")
         import traceback
 
         traceback.print_exc()

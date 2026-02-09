@@ -11,12 +11,15 @@ import json
 import os
 import sys
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.knowledge_base import KnowledgeBase
-from src.knowledge_sync_incremental import run_incremental_sync
+from knowledge_base import KnowledgeBase
+from knowledge_sync_incremental import run_incremental_sync
 
 
 def _determine_doc_category(rel_path: str) -> str:
@@ -60,14 +63,14 @@ async def _remove_outdated_entries(kb, all_facts: list) -> int:
 
     Issue #281: Extracted from sync_docs to reduce function length.
     """
-    print("Removing outdated documentation entries...")
+    logger.info("Removing outdated documentation entries...")
     removed_count = 0
     for fact in all_facts:
         metadata = fact.get("metadata", {})
         if metadata.get("source") in ["project-docs", "project-documentation"]:
             await kb.delete_fact(fact["id"])
             removed_count += 1
-    print(f"✓ Removed {removed_count} outdated documentation entries")
+    logger.info(f"✓ Removed {removed_count} outdated documentation entries")
     return removed_count
 
 
@@ -104,10 +107,10 @@ async def _sync_single_file(kb, file_path: str, project_root: str) -> bool:
     result = await kb.store_fact(searchable_text, metadata)
 
     if result["status"] == "success":
-        print(f"✓ Synced: {rel_path} [{category}]")
+        logger.info(f"✓ Synced: {rel_path} [{category}]")
         return True
     else:
-        print(f"❌ Failed to sync {rel_path}: {result['message']}")
+        logger.error(f"❌ Failed to sync {rel_path}: {result['message']}")
         return False
 
 
@@ -129,7 +132,7 @@ def _save_sync_state(success_count: int, removed_count: int, total_files: int) -
     with open("data/kb_sync_state.json", "w") as f:
         json.dump(sync_data, f, indent=2)
 
-    print("✅ Sync state saved to data/kb_sync_state.json")
+    logger.info("✅ Sync state saved to data/kb_sync_state.json")
 
 
 async def _test_search_functionality(kb) -> None:
@@ -138,20 +141,20 @@ async def _test_search_functionality(kb) -> None:
 
     Issue #281: Extracted from sync_docs to reduce function length.
     """
-    print("\\n=== Testing Search Functionality ===")
+    logger.info("\\n=== Testing Search Functionality ===")
     test_queries = ["debian", "installation", "autobot", "configuration"]
 
     for query in test_queries:
         try:
             results = await kb.get_fact(query=query)
-            print(f"Search '{query}': {len(results)} results found")
+            logger.info(f"Search '{query}': {len(results)} results found")
         except Exception as e:
-            print(f"Search '{query}': error - {str(e)}")
+            logger.error(f"Search '{query}': error - {str(e)}")
 
 
 async def sync_docs():
     """Re-sync all documentation to ensure KB is current."""
-    print("=== Knowledge Base Documentation Sync ===")
+    logger.info("=== Knowledge Base Documentation Sync ===")
 
     # Initialize KB
     kb = KnowledgeBase()
@@ -164,7 +167,7 @@ async def sync_docs():
     # Collect documentation files
     project_root = "/home/kali/Desktop/AutoBot"
     filtered_files = _collect_documentation_files(project_root)
-    print(f"Found {len(filtered_files)} documentation files to sync")
+    logger.info(f"Found {len(filtered_files)} documentation files to sync")
 
     # Sync each file
     success_count = 0
@@ -173,41 +176,41 @@ async def sync_docs():
             if await _sync_single_file(kb, file_path, project_root):
                 success_count += 1
         except Exception as e:
-            print(f"❌ Error syncing {file_path}: {str(e)}")
+            logger.error(f"❌ Error syncing {file_path}: {str(e)}")
 
     # Report results
-    print("\\n=== Sync Results ===")
-    print(f"✓ Successfully synced: {success_count} documents")
+    logger.info("\\n=== Sync Results ===")
+    logger.info(f"✓ Successfully synced: {success_count} documents")
 
     if success_count > 0:
         _save_sync_state(success_count, removed_count, len(filtered_files))
         await _test_search_functionality(kb)
-        print("\\n🎉 Knowledge base documentation sync completed successfully!")
-        print("Users can now search for updated documentation content.")
+        logger.info("\\n🎉 Knowledge base documentation sync completed successfully!")
+        logger.info("Users can now search for updated documentation content.")
         return True
     else:
-        print("\\n💥 Knowledge base documentation sync failed!")
+        logger.error("\\n💥 Knowledge base documentation sync failed!")
         return False
 
 
 async def incremental_sync():
     """Perform intelligent incremental sync with 10-50x performance improvement"""
-    print("=== Incremental Knowledge Base Sync ===")
-    print("🚀 Using advanced incremental sync with GPU acceleration")
+    logger.info("=== Incremental Knowledge Base Sync ===")
+    logger.info("🚀 Using advanced incremental sync with GPU acceleration")
 
     try:
         # Use the new incremental sync system
         metrics = await run_incremental_sync()
 
-        print("\\n=== Incremental Sync Results ===")
-        print(f"📁 Files scanned: {metrics.total_files_scanned}")
-        print(f"🔄 Files changed: {metrics.files_changed}")
-        print(f"➕ Files added: {metrics.files_added}")
-        print(f"➖ Files removed: {metrics.files_removed}")
-        print(f"🧩 Chunks processed: {metrics.total_chunks_processed}")
-        print(f"⏱️  Total time: {metrics.total_processing_time:.3f}s")
-        print(f"⚡ Performance: {metrics.avg_chunks_per_second:.1f} chunks/sec")
-        print(f"🎮 GPU acceleration: {'✅' if metrics.gpu_acceleration_used else '❌'}")
+        logger.info("\\n=== Incremental Sync Results ===")
+        logger.info(f"📁 Files scanned: {metrics.total_files_scanned}")
+        logger.info(f"🔄 Files changed: {metrics.files_changed}")
+        logger.info(f"➕ Files added: {metrics.files_added}")
+        logger.info(f"➖ Files removed: {metrics.files_removed}")
+        logger.info(f"🧩 Chunks processed: {metrics.total_chunks_processed}")
+        logger.info(f"⏱️  Total time: {metrics.total_processing_time:.3f}s")
+        logger.info(f"⚡ Performance: {metrics.avg_chunks_per_second:.1f} chunks/sec")
+        logger.error(f"🎮 GPU acceleration: {'✅' if metrics.gpu_acceleration_used else '❌'}")
 
         # Calculate improvement estimate
         if metrics.total_chunks_processed > 0:
@@ -217,18 +220,18 @@ async def incremental_sync():
             improvement_factor = estimated_full_sync_time / max(
                 metrics.total_processing_time, 0.1
             )
-            print(
+            logger.info(
                 f"📈 Estimated improvement: {improvement_factor:.1f}x faster than full sync"
             )
 
             if improvement_factor >= 10:
-                print("🎯 TARGET ACHIEVED: 10-50x performance improvement!")
+                logger.info("🎯 TARGET ACHIEVED: 10-50x performance improvement!")
             else:
-                print("⚠️  Performance target not yet reached")
+                logger.warning("⚠️  Performance target not yet reached")
 
         # Test search functionality if any changes were made
         if metrics.files_changed + metrics.files_added > 0:
-            print("\\n=== Testing Updated Search Functionality ===")
+            logger.info("\\n=== Testing Updated Search Functionality ===")
 
             # Initialize knowledge base for testing
             kb = KnowledgeBase()
@@ -239,16 +242,16 @@ async def incremental_sync():
             for query in test_queries:
                 try:
                     results = await kb.get_fact(query=query)
-                    print(f"Search '{query}': {len(results)} results found")
+                    logger.info(f"Search '{query}': {len(results)} results found")
                 except Exception as e:
-                    print(f"Search '{query}': error - {str(e)}")
+                    logger.error(f"Search '{query}': error - {str(e)}")
 
-        print("\\n✅ Incremental sync completed successfully!")
+        logger.info("\\n✅ Incremental sync completed successfully!")
         return True
 
     except Exception as e:
-        print(f"❌ Incremental sync failed: {e}")
-        print("Falling back to legacy full sync...")
+        logger.error(f"❌ Incremental sync failed: {e}")
+        logger.info("Falling back to legacy full sync...")
         return await sync_docs()
 
 
@@ -275,7 +278,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.force_full:
-        print("⚠️  WARNING: Using legacy full sync method (much slower)")
+        logger.warning("⚠️  WARNING: Using legacy full sync method (much slower)")
         success = asyncio.run(sync_docs())
     else:
         # Default to incremental sync (much faster)
