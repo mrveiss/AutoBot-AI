@@ -61,11 +61,47 @@
       when: deploy_role == 'ai-stack'
       tags: ['ai-stack']
 
+    - name: "Apply Backend Role"
+      include_role:
+        name: backend
+      when: deploy_role == 'backend'
+      tags: ['backend']
+
     - name: "Apply Browser Role"
       include_role:
         name: browser
       when: deploy_role == 'browser'
       tags: ['browser']
+
+    - name: "Apply LLM Role"
+      include_role:
+        name: llm
+      when: deploy_role == 'llm'
+      tags: ['llm']
+
+    - name: "Apply VNC Role"
+      include_role:
+        name: vnc
+      when: deploy_role == 'vnc'
+      tags: ['vnc']
+
+    - name: "Apply Monitoring Role"
+      include_role:
+        name: monitoring
+      when: deploy_role == 'monitoring'
+      tags: ['monitoring']
+
+    - name: "Apply PostgreSQL Role"
+      include_role:
+        name: postgresql
+      when: deploy_role == 'postgresql'
+      tags: ['postgresql']
+
+    - name: "Apply SLM Manager Role"
+      include_role:
+        name: slm_manager
+      when: deploy_role == 'slm-manager'
+      tags: ['slm-manager']
 
   post_tasks:
     - name: "Display deployment summary"

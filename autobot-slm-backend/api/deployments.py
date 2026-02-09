@@ -9,9 +9,6 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.schemas import (
     DeploymentCreate,
     DeploymentListResponse,
@@ -22,6 +19,8 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.deployment import deployment_service
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/deployments", tags=["deployments"])
@@ -109,6 +108,14 @@ AVAILABLE_ROLES = [
             "security_type": "VeNCrypt",
         },
         tools=["tigervnc-standalone-server", "websockify", "novnc", "x11vnc"],
+    ),
+    RoleInfo(
+        name="postgresql",
+        description="PostgreSQL 16 database server",
+        category="data",
+        dependencies=["slm-agent"],
+        variables={"postgresql_port": 5432, "postgresql_version": "16"},
+        tools=["postgresql", "psql", "pg_dump", "pg_restore"],
     ),
 ]
 

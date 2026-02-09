@@ -18,9 +18,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from typing_extensions import Annotated
-
 from services.auth import get_current_user
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
@@ -61,6 +60,7 @@ class PlaybookInfo(BaseModel):
     playbook_file: str
     target_hosts: list[str]
     variables: dict = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
     estimated_duration: str = "5-10 minutes"
     requires_confirmation: bool = True
 
@@ -138,14 +138,30 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         description="Deploy Prometheus, Grafana, and Alertmanager for "
         "comprehensive fleet monitoring and alerting.",
         category=PlaybookCategory.MONITORING,
-        playbook_file="deploy-monitoring.yml",
-        target_hosts=["monitoring"],
+        playbook_file="deploy-slm-manager.yml",
+        target_hosts=["00-SLM-Manager"],
         variables={
             "prometheus_port": 9090,
             "grafana_port": 3000,
-            "alertmanager_port": 9093,
         },
+        tags=["monitoring"],
         estimated_duration="10-15 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="postgresql-db",
+        name="PostgreSQL Database Setup",
+        description="Deploy PostgreSQL 16 database server for SLM "
+        "backend data persistence.",
+        category=PlaybookCategory.DATABASE,
+        playbook_file="deploy-slm-manager.yml",
+        target_hosts=["00-SLM-Manager"],
+        variables={
+            "postgresql_version": "16",
+            "postgresql_port": 5432,
+        },
+        tags=["postgresql"],
+        estimated_duration="5-10 minutes",
         requires_confirmation=True,
     ),
     PlaybookInfo(
@@ -311,16 +327,22 @@ async def _run_playbook(
             await _simulate_playbook_execution(execution, playbook)
             return
 
+        inventory_dir = os.path.join(os.path.dirname(PLAYBOOKS_DIR), "inventory")
+        inventory_path = os.path.join(inventory_dir, "slm-nodes.yml")
         cmd = [
             "ansible-playbook",
             "-i",
-            "slm-server/ansible/inventory.yml",
+            inventory_path,
             playbook_path,
         ]
 
         # Add limit if specified
         if limit_hosts:
             cmd.extend(["--limit", ",".join(limit_hosts)])
+
+        # Add tags if specified
+        if playbook.tags:
+            cmd.extend(["--tags", ",".join(playbook.tags)])
 
         # Add extra variables
         merged_vars = {**playbook.variables, **variables}
