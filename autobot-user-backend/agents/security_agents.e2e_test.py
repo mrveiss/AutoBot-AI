@@ -8,8 +8,8 @@ import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.agents.network_discovery_agent import network_discovery_agent
-from src.agents.security_scanner_agent import security_scanner_agent
+from agents.network_discovery_agent import network_discovery_agent
+from agents.security_scanner_agent import security_scanner_agent
 
 
 async def test_security_scanner():

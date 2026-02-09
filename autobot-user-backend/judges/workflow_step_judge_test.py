@@ -7,8 +7,8 @@ Tests workflow step evaluation, approval logic, and integration with workflow sy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from src.judges import JudgmentConfidence, JudgmentDimension, JudgmentResult
-from src.judges.workflow_step_judge import WorkflowStepJudge
+from judges import JudgmentConfidence, JudgmentDimension, JudgmentResult
+from judges.workflow_step_judge import WorkflowStepJudge
 
 
 class TestWorkflowStepJudge:

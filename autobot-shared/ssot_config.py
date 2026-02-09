@@ -619,7 +619,7 @@ class CacheConfig(BaseSettings):
     Redis connection pool, L1 (in-memory) sizes, and L2 (Redis) TTLs.
 
     Usage:
-        from src.config.ssot_config import config
+        from autobot_shared.ssot_config import config
 
         # Access cache settings
         pressure = config.cache.coordinator.pressure_threshold
@@ -834,7 +834,7 @@ class AutoBotConfig(BaseSettings):
     computed properties for commonly used URLs.
 
     Usage:
-        from src.config.ssot_config import get_config
+        from autobot_shared.ssot_config import get_config
 
         config = get_config()
         backend = config.backend_url  # http://172.16.168.20:8001
@@ -1073,7 +1073,7 @@ def reload_config() -> AutoBotConfig:
 
 
 # Convenience export - lazy singleton
-# This allows: from src.config.ssot_config import config
+# This allows: from autobot_shared.ssot_config import config
 # while still supporting get_config() for explicit access
 class _ConfigProxy:
     """Lazy proxy for config singleton."""

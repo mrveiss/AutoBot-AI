@@ -29,7 +29,7 @@ def mock_redis():
 @pytest.mark.asyncio
 async def test_check_rate_limit_allows_under_threshold(mock_redis):
     """Rate limiter allows requests under threshold."""
-    from src.user_management.middleware.rate_limit import PasswordChangeRateLimiter
+    from user_management.middleware.rate_limit import PasswordChangeRateLimiter
 
     user_id = uuid.uuid4()
     mock_redis.get = AsyncMock(return_value="2")  # 2 attempts
@@ -48,7 +48,7 @@ async def test_check_rate_limit_allows_under_threshold(mock_redis):
 @pytest.mark.asyncio
 async def test_check_rate_limit_blocks_exceeded(mock_redis):
     """Rate limiter blocks when threshold exceeded."""
-    from src.user_management.middleware.rate_limit import (
+    from user_management.middleware.rate_limit import (
         PasswordChangeRateLimiter,
         RateLimitExceeded,
     )
@@ -72,7 +72,7 @@ async def test_check_rate_limit_blocks_exceeded(mock_redis):
 @pytest.mark.asyncio
 async def test_record_attempt_increments_on_failure(mock_redis):
     """Recording failed attempt increments counter."""
-    from src.user_management.middleware.rate_limit import PasswordChangeRateLimiter
+    from user_management.middleware.rate_limit import PasswordChangeRateLimiter
 
     user_id = uuid.uuid4()
     mock_redis.incr = AsyncMock(return_value=2)
@@ -93,7 +93,7 @@ async def test_record_attempt_increments_on_failure(mock_redis):
 @pytest.mark.asyncio
 async def test_record_attempt_clears_on_success(mock_redis):
     """Recording successful attempt clears counter."""
-    from src.user_management.middleware.rate_limit import PasswordChangeRateLimiter
+    from user_management.middleware.rate_limit import PasswordChangeRateLimiter
 
     user_id = uuid.uuid4()
     mock_redis.delete = AsyncMock(return_value=1)

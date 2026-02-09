@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
-from src.enhanced_memory_manager import EnhancedMemoryManager
-from src.multimodal_processor import (
+from enhanced_memory_manager import EnhancedMemoryManager
+from multimodal_processor import (
     ModalityType,
     MultiModalInput,
     ProcessingIntent,
     UnifiedMultiModalProcessor,
 )
-from src.utils.config_manager import ConfigManager
+from utils.config_manager import ConfigManager
 
 from backend.services.config_service import ConfigService
 

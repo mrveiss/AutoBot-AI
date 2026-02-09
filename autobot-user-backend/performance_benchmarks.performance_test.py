@@ -15,12 +15,12 @@ from unittest.mock import MagicMock, patch
 
 import psutil
 import pytest
-from src.enhanced_memory_manager import EnhancedMemoryManager
-from src.knowledge_base import KnowledgeBase
+from enhanced_memory_manager import EnhancedMemoryManager
+from knowledge_base import KnowledgeBase
 
 # Import components to benchmark
-from src.llm_interface import LLMInterface
-from src.orchestrator import Orchestrator
+from llm_interface import LLMInterface
+from orchestrator import Orchestrator
 
 
 class PerformanceBenchmark:

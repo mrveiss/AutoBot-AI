@@ -13,8 +13,8 @@ import time
 from unittest.mock import patch
 
 import pytest
-from src.enhanced_security_layer import EnhancedSecurityLayer
-from src.secure_command_executor import CommandRisk
+from enhanced_security_layer import EnhancedSecurityLayer
+from secure_command_executor import CommandRisk
 
 
 class TestSecurityEdgeCases:

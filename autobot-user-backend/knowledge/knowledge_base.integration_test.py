@@ -20,7 +20,7 @@ import statistics
 import time
 
 import pytest
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 
 class TestKnowledgeBaseRedisIntegration:

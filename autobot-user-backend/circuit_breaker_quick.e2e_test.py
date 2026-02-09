@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.circuit_breaker import (
+from circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenError,
     circuit_breaker_async,

@@ -8,7 +8,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
-from src.utils.config_manager import ConfigManager
+from utils.config_manager import ConfigManager
 
 
 class TestConfigurationSecurity:
