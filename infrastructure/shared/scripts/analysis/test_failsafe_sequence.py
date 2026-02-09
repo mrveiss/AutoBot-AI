@@ -22,20 +22,20 @@ from llm_interface import LLMInterface
 
 async def test_failsafe_sequence():
     """Mimic the exact sequence the failsafe agent uses"""
-    logger.error("🔄 Testing LLM Failsafe sequence...")
+    logger.info("Testing LLM Failsafe sequence...")
 
     try:
         # This is exactly what the failsafe agent does
         llm = LLMInterface()
 
         logger.info("   LLM interface created")
-        logger.info(f"   Task LLM alias: {llm.task_llm_alias}")
+        logger.info("   Task LLM alias: %s", llm.task_llm_alias)
 
         # Create the same message structure
         prompt = "Say hello back to the user."
         messages = [{"role": "user", "content": prompt}]
 
-        logger.info(f"   Messages: {messages}")
+        logger.info("   Messages: %s", messages)
         logger.info("   Making chat_completion call with llm_type='task'...")
 
         # This is the exact call that hangs
@@ -46,22 +46,22 @@ async def test_failsafe_sequence():
         )
         end_time = time.time()
 
-        logger.info(f"✅ Response received in {end_time - start_time:.2f}s!")
-        logger.info(f"   Response data: {response_data}")
+        logger.info("✅ Response received in %.2fs!", end_time - start_time)
+        logger.info("   Response data: %s", response_data)
 
         response = response_data.get("response", "")
-        logger.info(f"   Extracted response: {response}")
+        logger.info("   Extracted response: %s", response)
 
         return True
 
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
-        logger.error(f"❌ chat_completion call timed out after {elapsed:.2f}s")
+        logger.error("❌ chat_completion call timed out after %.2fs", elapsed)
         return False
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error(f"❌ chat_completion call failed after {elapsed:.2f}s: {e}")
+        logger.error("❌ chat_completion call failed after {elapsed:.2f}s: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -97,19 +97,19 @@ async def test_direct_ollama_completion():
         )
         end_time = time.time()
 
-        logger.info(f"✅ Direct Ollama response in {end_time - start_time:.2f}s!")
-        logger.info(f"   Response: {response_data.get('response', 'No response')[:100]}...")
+        logger.info("✅ Direct Ollama response in %.2fs!", end_time - start_time)
+        logger.info("   Response: %s...", response_data.get('response', 'No response')[:100])
 
         return True
 
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
-        logger.error(f"❌ Direct Ollama call timed out after {elapsed:.2f}s")
+        logger.error("❌ Direct Ollama call timed out after %.2fs", elapsed)
         return False
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error(f"❌ Direct Ollama call failed after {elapsed:.2f}s: {e}")
+        logger.error("❌ Direct Ollama call failed after {elapsed:.2f}s: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -136,4 +136,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

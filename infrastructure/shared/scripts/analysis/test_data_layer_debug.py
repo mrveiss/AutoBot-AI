@@ -29,7 +29,7 @@ def test_redis_basic():
             host="localhost", port=6379, decode_responses=True, socket_timeout=2
         )
         response = client.ping()
-        logger.info(f"✅ Basic Redis connection: {response}")
+        logger.info("✅ Basic Redis connection: %s", response)
 
         # Check all 16 databases
         for db_num in range(16):
@@ -43,19 +43,19 @@ def test_redis_basic():
                 )
                 key_count = db_client.dbsize()
                 if key_count > 0:
-                    logger.info(f"✅ DB {db_num}: {key_count} keys")
+                    logger.info("✅ DB {db_num}: %s keys", key_count)
                     # Show sample keys
                     keys = db_client.keys("*")[:5]
                     for key in keys:
                         key_type = db_client.type(key)
-                        logger.info(f"    - {key} ({key_type})")
+                        logger.info("    - {key} (%s)", key_type)
                 else:
-                    logger.info(f"⚪ DB {db_num}: empty")
+                    logger.info("⚪ DB %s: empty", db_num)
             except Exception as e:
-                logger.error(f"❌ DB {db_num}: {e}")
+                logger.error("❌ DB {db_num}: %s", e)
 
     except Exception as e:
-        logger.error(f"❌ Redis connection failed: {e}")
+        logger.error("❌ Redis connection failed: %s", e)
         logger.info(traceback.format_exc())
 
 
@@ -70,33 +70,33 @@ def test_vector_database():
 
         # Check for LlamaIndex keys
         keys = client.keys("llama_index:*")
-        logger.info(f"LlamaIndex keys found: {len(keys)}")
+        logger.info("LlamaIndex keys found: %s", len(keys))
 
         # Check for FT indexes
         try:
             indexes = client.execute_command("FT._LIST")
-            logger.info(f"RedisSearch indexes: {indexes}")
+            logger.info("RedisSearch indexes: %s", indexes)
 
             # Get index info if any exist
             for index_name in indexes:
                 try:
                     info = client.execute_command("FT.INFO", index_name)
-                    logger.info(f"Index {index_name} info: {info}")
+                    logger.info("Index {index_name} info: %s", info)
                 except Exception as e:
-                    logger.info(f"Could not get info for index {index_name}: {e}")
+                    logger.info("Could not get info for index {index_name}: %s", e)
 
         except Exception as e:
-            logger.info(f"No RedisSearch indexes found: {e}")
+            logger.info("No RedisSearch indexes found: %s", e)
 
         # Check for any vector-like keys
         all_keys = client.keys("*")
-        logger.info(f"Total keys in DB 8: {len(all_keys)}")
+        logger.info("Total keys in DB 8: %s", len(all_keys))
         for key in all_keys[:10]:  # Show first 10
             key_type = client.type(key)
-            logger.info(f"    - {key} ({key_type})")
+            logger.info("    - {key} (%s)", key_type)
 
     except Exception as e:
-        logger.error(f"❌ Vector database test failed: {e}")
+        logger.error("❌ Vector database test failed: %s", e)
         logger.info(traceback.format_exc())
 
 
@@ -110,10 +110,10 @@ def test_sqlite_databases():
         return
 
     sqlite_files = list(data_dir.glob("*.db"))
-    logger.info(f"Found {len(sqlite_files)} SQLite files:")
+    logger.info("Found %s SQLite files:", len(sqlite_files))
 
     for db_file in sqlite_files:
-        logger.info(f"\n--- {db_file.name} ---")
+        logger.info("\n--- %s ---", db_file.name)
         try:
             conn = sqlite3.connect(str(db_file))
             cursor = conn.cursor()
@@ -122,21 +122,21 @@ def test_sqlite_databases():
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = cursor.fetchall()
 
-            logger.info(f"Tables: {[t[0] for t in tables]}")
+            logger.info("Tables: %s", [t[0] for t in tables])
 
             # Get row counts for each table
             for (table_name,) in tables:
                 try:
                     cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                     count = cursor.fetchone()[0]
-                    logger.info(f"  {table_name}: {count} rows")
+                    logger.info("  {table_name}: %s rows", count)
                 except Exception as e:
-                    logger.error(f"  {table_name}: Error counting - {e}")
+                    logger.error("  {table_name}: Error counting - %s", e)
 
             conn.close()
 
         except Exception as e:
-            logger.error(f"❌ Error reading {db_file}: {e}")
+            logger.error("❌ Error reading {db_file}: %s", e)
 
 
 def _inspect_sqlite_file(file: Path) -> None:
@@ -146,16 +146,16 @@ def _inspect_sqlite_file(file: Path) -> None:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
-        logger.info(f"    SQLite tables: {[t[0] for t in tables]}")
+        logger.info("    SQLite tables: %s", [t[0] for t in tables])
         conn.close()
     except Exception as e:
-        logger.error(f"    SQLite error: {e}")
+        logger.error("    SQLite error: %s", e)
 
 
 def _process_chromadb_file(file: Path, chroma_path: Path) -> None:
     """Process a single ChromaDB file (Issue #315: extracted helper)."""
     size_mb = file.stat().st_size / 1024 / 1024
-    logger.info(f"  {file.relative_to(chroma_path)}: {size_mb:.1f} MB")
+    logger.info("  %s: %.1f MB", file.relative_to(chroma_path), size_mb)
 
     if file.name.endswith(".sqlite3"):
         _inspect_sqlite_file(file)
@@ -170,10 +170,10 @@ def test_chromadb():
     for chroma_dir in chromadb_dirs:
         path = Path(chroma_dir)
         if not path.exists():
-            logger.info(f"⚪ {chroma_dir} doesn't exist")
+            logger.info("⚪ %s doesn't exist", chroma_dir)
             continue
 
-        logger.info(f"\n--- {chroma_dir} ---")
+        logger.info("\n--- %s ---", chroma_dir)
         files = list(path.rglob("*"))
         for file in files:
             if file.is_file():
@@ -197,29 +197,29 @@ def test_backend_errors():
 
         # Test database validation
         validation = manager.validate_database_separation()
-        logger.error(f"Database separation validation: {'✅' if validation else '❌'}")
+        logger.error("Database separation validation: %s", '✅' if validation else '❌')
 
         # Test connections
         try:
             manager.get_connection("main")
             logger.info("✅ Main connection works")
         except Exception as e:
-            logger.error(f"❌ Main connection failed: {e}")
+            logger.error("❌ Main connection failed: %s", e)
 
         try:
             manager.get_connection("vectors")
             logger.info("✅ Vectors connection works")
         except Exception as e:
-            logger.error(f"❌ Vectors connection failed: {e}")
+            logger.error("❌ Vectors connection failed: %s", e)
 
         # Show database mapping
         db_info = manager.get_database_info()
         logger.info("\nDatabase mapping:")
         for name, config in db_info.items():
-            logger.info(f"  {name}: DB {config.get('db')} - {config.get('description')}")
+            logger.info("  {name}: DB {config.get('db')} - %s", config.get('description'))
 
     except Exception as e:
-        logger.error(f"❌ Backend configuration test failed: {e}")
+        logger.error("❌ Backend configuration test failed: %s", e)
         logger.info(traceback.format_exc())
 
 
@@ -233,7 +233,7 @@ async def test_async_redis():
             "redis://localhost:6379/0", decode_responses=True
         )
         result = await redis_client.ping()
-        logger.info(f"✅ Async Redis ping: {result}")
+        logger.info("✅ Async Redis ping: %s", result)
 
         # Test different databases async
         for db_num in [0, 1, 8]:
@@ -242,15 +242,15 @@ async def test_async_redis():
                     f"redis://localhost:6379/{db_num}", decode_responses=True
                 )
                 key_count = await db_client.dbsize()
-                logger.info(f"✅ Async DB {db_num}: {key_count} keys")
+                logger.info("✅ Async DB {db_num}: %s keys", key_count)
                 await db_client.close()
             except Exception as e:
-                logger.error(f"❌ Async DB {db_num}: {e}")
+                logger.error("❌ Async DB {db_num}: %s", e)
 
         await redis_client.close()
 
     except Exception as e:
-        logger.error(f"❌ Async Redis test failed: {e}")
+        logger.error("❌ Async Redis test failed: %s", e)
         logger.info(traceback.format_exc())
 
 
@@ -270,9 +270,9 @@ def test_environment_variables():
     for var in redis_env_vars:
         value = os.getenv(var)
         if value:
-            logger.info(f"✅ {var}={value}")
+            logger.info("✅ {var}=%s", value)
         else:
-            logger.info(f"⚪ {var} not set")
+            logger.info("⚪ %s not set", var)
 
     # Check docker environment detection
     if os.path.exists("/.dockerenv"):
@@ -301,4 +301,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()

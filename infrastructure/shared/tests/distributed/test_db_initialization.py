@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, List, Tuple
 
 import pytest
-from src.conversation_file_manager import ConversationFileManager
+from conversation_file_manager import ConversationFileManager
 
 # Configure logging for tests
 logging.basicConfig(level=logging.INFO)

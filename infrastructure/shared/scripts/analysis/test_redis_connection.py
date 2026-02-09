@@ -8,24 +8,27 @@ This addresses the original Redis connection issue
 """
 
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, ".")
 
 
 def test_redis_connection():
     """Test Redis connection using service registry"""
-    print("🔗 Testing Redis Connection via Service Registry")
-    print("=" * 50)
+    logger.info("🔗 Testing Redis Connection via Service Registry")
+    logger.info("=" * 50)
 
     try:
         # Import service registry
-        from src.utils.service_registry import get_service_url
+        from utils.service_registry import get_service_url
 
-        print("✅ Service registry imported successfully")
+        logger.info("✅ Service registry imported successfully")
 
         # Get Redis URL using service registry
         redis_url = get_service_url("redis")
-        print(f"✅ Redis URL resolved: {redis_url}")
+        logger.info(f"✅ Redis URL resolved: {redis_url}")
 
         # Test with redis-py
         import redis
@@ -34,14 +37,14 @@ def test_redis_connection():
         if redis_url.startswith("redis://"):
             redis_client = redis.from_url(redis_url)
         else:
-            print("❌ Invalid Redis URL format")
+            logger.error("❌ Invalid Redis URL format")
             return False
 
         # Test connection
-        print("🔄 Testing Redis connection...")
+        logger.info("🔄 Testing Redis connection...")
         result = redis_client.ping()
         if result:
-            print("✅ Redis PING successful!")
+            logger.info("✅ Redis PING successful!")
 
             # Test basic operations
             test_key = "service_registry_test"
@@ -51,48 +54,48 @@ def test_redis_connection():
             retrieved_value = redis_client.get(test_key)
 
             if retrieved_value.decode() == test_value:
-                print("✅ Redis SET/GET operations working!")
+                logger.info("✅ Redis SET/GET operations working!")
             else:
-                print("❌ Redis operations failed")
+                logger.error("❌ Redis operations failed")
                 return False
 
             # Cleanup
             redis_client.delete(test_key)
-            print("✅ Redis cleanup completed")
+            logger.info("✅ Redis cleanup completed")
 
         else:
-            print("❌ Redis PING failed")
+            logger.error("❌ Redis PING failed")
             return False
 
     except ImportError as e:
-        print(f"❌ Import error: {e}")
+        logger.error(f"❌ Import error: {e}")
         return False
     except redis.ConnectionError as e:
-        print(f"❌ Redis connection error: {e}")
+        logger.error(f"❌ Redis connection error: {e}")
         return False
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        logger.error(f"❌ Unexpected error: {e}")
         import traceback
 
         traceback.print_exc()
         return False
 
     # Test with Redis Database Manager
-    print("\n🗄️ Testing Redis Database Manager with Service Registry")
+    logger.info("\n🗄️ Testing Redis Database Manager with Service Registry")
     try:
-        from src.utils.redis_database_manager import RedisDatabaseManager
+        from utils.redis_database_manager import RedisDatabaseManager
 
         manager = RedisDatabaseManager()
-        print("✅ Redis Database Manager initialized")
-        print(f"   Host: {manager.host}")
-        print(f"   Port: {manager.port}")
+        logger.info("✅ Redis Database Manager initialized")
+        logger.info(f"   Host: {manager.host}")
+        logger.info(f"   Port: {manager.port}")
 
         # Test connection to main database
         main_client = manager.get_connection("main")
         ping_result = main_client.ping()
 
         if ping_result:
-            print("✅ Redis Database Manager connection successful!")
+            logger.info("✅ Redis Database Manager connection successful!")
 
             # Test database separation
             databases = ["main", "knowledge", "agents", "prompts"]
@@ -100,16 +103,16 @@ def test_redis_connection():
                 try:
                     client = manager.get_connection(db_name)
                     client.ping()
-                    print(f"✅ Database '{db_name}' connection successful")
+                    logger.info(f"✅ Database '{db_name}' connection successful")
                 except Exception as e:
-                    print(f"❌ Database '{db_name}' connection failed: {e}")
+                    logger.error(f"❌ Database '{db_name}' connection failed: {e}")
 
         else:
-            print("❌ Redis Database Manager connection failed")
+            logger.error("❌ Redis Database Manager connection failed")
             return False
 
     except Exception as e:
-        print(f"❌ Redis Database Manager error: {e}")
+        logger.error(f"❌ Redis Database Manager error: {e}")
         return False
 
     return True
@@ -117,12 +120,12 @@ def test_redis_connection():
 
 def test_agent_communication_fix():
     """Test that the original agent communication issue is resolved"""
-    print("\n📡 Testing Agent Communication Redis Fix")
-    print("=" * 40)
+    logger.info("\n📡 Testing Agent Communication Redis Fix")
+    logger.info("=" * 40)
 
     try:
         # This would be the code path that was failing before
-        from src.utils.redis_client import get_redis_client
+        from utils.redis_client import get_redis_client
 
         # This should now use the service registry
         redis_client = get_redis_client()
@@ -130,27 +133,27 @@ def test_agent_communication_fix():
         # Test the connection that was failing
         result = redis_client.ping()
         if result:
-            print("✅ Agent communication Redis connection fixed!")
+            logger.info("✅ Agent communication Redis connection fixed!")
 
             # Test the specific operations that were failing
             test_channel = "test_agent_communication"
             redis_client.publish(test_channel, "test_message")
-            print("✅ Redis publish operation working")
+            logger.info("✅ Redis publish operation working")
 
         else:
-            print("❌ Agent communication still has Redis issues")
+            logger.error("❌ Agent communication still has Redis issues")
             return False
 
     except Exception as e:
-        print(f"❌ Agent communication test failed: {e}")
+        logger.error(f"❌ Agent communication test failed: {e}")
         return False
 
     return True
 
 
 if __name__ == "__main__":
-    print("AutoBot Redis Connection Test (Service Registry)")
-    print("=" * 60)
+    logger.info("AutoBot Redis Connection Test (Service Registry)")
+    logger.info("=" * 60)
 
     success = True
 
@@ -163,9 +166,9 @@ if __name__ == "__main__":
         success = False
 
     if success:
-        print("\n🎉 All Redis connection tests PASSED!")
-        print("✅ Original Redis connection issue has been RESOLVED!")
+        logger.info("\n🎉 All Redis connection tests PASSED!")
+        logger.info("✅ Original Redis connection issue has been RESOLVED!")
         sys.exit(0)
     else:
-        print("\n❌ Some Redis connection tests FAILED!")
+        logger.error("\n❌ Some Redis connection tests FAILED!")
         sys.exit(1)

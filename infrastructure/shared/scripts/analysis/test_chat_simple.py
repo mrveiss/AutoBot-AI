@@ -30,15 +30,15 @@ async def test_chat():
             process_chat_message("hello", "test-chat"), timeout=10.0
         )
 
-        logger.info(f"✅ Success! Response: {result.response[:100]}...")
-        logger.info(f"   Knowledge Status: {result.knowledge_status.value}")
-        logger.info(f"   Message Type: {result.message_type.value}")
-        logger.info(f"   Processing Time: {result.processing_time:.2f}s")
+        logger.info("✅ Success! Response: %s...", result.response[:100])
+        logger.info("   Knowledge Status: %s", result.knowledge_status.value)
+        logger.info("   Message Type: %s", result.message_type.value)
+        logger.info("   Processing Time: %.2fs", result.processing_time)
 
     except asyncio.TimeoutError:
         logger.error("❌ Test timed out after 10 seconds")
     except Exception as e:
-        logger.error(f"❌ Test failed: {e}")
+        logger.error("❌ Test failed: %s", e)
         import traceback
 
         traceback.print_exc()

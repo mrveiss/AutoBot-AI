@@ -39,12 +39,12 @@ async def test_research_disabled():
             timeout=15.0,
         )
 
-        logger.info(f"✅ Response: {result.response}")
-        logger.info(f"   Knowledge Status: {result.knowledge_status.value}")
-        logger.info(f"   Processing Time: {result.processing_time:.2f}s\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s", result.knowledge_status.value)
+        logger.info("   Processing Time: %.2fs\n", result.processing_time)
 
     except Exception as e:
-        logger.error(f"❌ Test failed: {e}")
+        logger.error("❌ Test failed: %s", e)
         import traceback
 
         traceback.print_exc()

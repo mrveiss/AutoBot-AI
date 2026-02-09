@@ -36,12 +36,12 @@ async def test_research_dialogue():
             timeout=15.0,
         )
 
-        logger.info(f"✅ Response: {result.response}")
-        logger.info(f"   Knowledge Status: {result.knowledge_status.value}")
-        logger.info(f"   Processing Time: {result.processing_time:.2f}s\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s", result.knowledge_status.value)
+        logger.info("   Processing Time: %.2fs\n", result.processing_time)
 
     except Exception as e:
-        logger.error(f"❌ Test 1 failed: {e}\n")
+        logger.error("❌ Test 1 failed: %s\n", e)
 
     # Test 2: "Yes" response
     try:
@@ -50,11 +50,11 @@ async def test_research_dialogue():
             process_chat_message("yes", "test-chat"), timeout=10.0
         )
 
-        logger.info(f"✅ Response: {result.response}")
-        logger.info(f"   Knowledge Status: {result.knowledge_status.value}\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s\n", result.knowledge_status.value)
 
     except Exception as e:
-        logger.error(f"❌ Test 2 failed: {e}\n")
+        logger.error("❌ Test 2 failed: %s\n", e)
 
     # Test 3: "No" response
     try:
@@ -63,11 +63,11 @@ async def test_research_dialogue():
             process_chat_message("no", "test-chat"), timeout=10.0
         )
 
-        logger.info(f"✅ Response: {result.response}")
-        logger.info(f"   Knowledge Status: {result.knowledge_status.value}\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s\n", result.knowledge_status.value)
 
     except Exception as e:
-        logger.error(f"❌ Test 3 failed: {e}\n")
+        logger.error("❌ Test 3 failed: %s\n", e)
 
 
 if __name__ == "__main__":

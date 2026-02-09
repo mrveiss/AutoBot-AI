@@ -7,8 +7,11 @@
 import asyncio
 import sys
 
+logger = logging.getLogger(__name__)
+
 from playwright.async_api import async_playwright
-from src.constants import ServiceURLs
+from constants import ServiceURLs
+import logging
 
 
 async def capture_console_errors():
@@ -49,14 +52,14 @@ async def capture_console_errors():
         page.on("requestfailed", on_request_failed)
 
         # Navigate to the page
-        print("Loading AutoBot frontend...")
+        logger.info("Loading AutoBot frontend...")
         try:
             response = await page.goto(
                 ServiceURLs.FRONTEND_LOCAL, wait_until="networkidle", timeout=30000
             )
-            print(f"Page loaded with status: {response.status}")
+            logger.info(f"Page loaded with status: {response.status}")
         except Exception as e:
-            print(f"Failed to load page: {e}")
+            logger.error(f"Failed to load page: {e}")
 
         # Wait for Vue to initialize
         await page.wait_for_timeout(3000)
@@ -75,37 +78,37 @@ async def capture_console_errors():
                 }
             """
             )
-            print(f"Vue status: {vue_info}")
+            logger.info(f"Vue status: {vue_info}")
         except Exception:
-            print("Could not check Vue status")
+            logger.info("Could not check Vue status")
 
         # Print results
-        print("\n=== CONSOLE ERRORS AND WARNINGS ===")
+        logger.error("\n=== CONSOLE ERRORS AND WARNINGS ===")
         error_count = 0
         warning_count = 0
         for msg in console_messages:
             if msg["type"] in ["error", "warning"]:
-                print(f"[{msg['type'].upper()}] {msg['text']}")
-                print(f"  Location: {msg['location']}")
+                logger.info(f"[{msg['type'].upper()}] {msg['text']}")
+                logger.info(f"  Location: {msg['location']}")
                 if msg["type"] == "error":
                     error_count += 1
                 else:
                     warning_count += 1
 
-        print(f"\nTotal errors: {error_count}")
-        print(f"Total warnings: {warning_count}")
+        logger.error(f"\nTotal errors: {error_count}")
+        logger.warning(f"Total warnings: {warning_count}")
 
-        print("\n=== PAGE ERRORS ===")
+        logger.error("\n=== PAGE ERRORS ===")
         for err in page_errors:
-            print(f"ERROR: {err}")
+            logger.error(f"ERROR: {err}")
 
-        print("\n=== FAILED NETWORK REQUESTS ===")
+        logger.error("\n=== FAILED NETWORK REQUESTS ===")
         for req in failed_requests:
-            print(f"FAILED: {req['method']} {req['url']}")
-            print(f"  Reason: {req['failure']}")
+            logger.error(f"FAILED: {req['method']} {req['url']}")
+            logger.error(f"  Reason: {req['failure']}")
 
         # Check for specific Vue components
-        print("\n=== CHECKING VUE COMPONENTS ===")
+        logger.info("\n=== CHECKING VUE COMPONENTS ===")
         components_check = await page.evaluate(
             """
             () => {
@@ -133,7 +136,7 @@ async def capture_console_errors():
         )
 
         for check in components_check:
-            print(f"  {check}")
+            logger.info(f"  {check}")
 
         await browser.close()
 

@@ -22,7 +22,7 @@ from agents.llm_failsafe_agent import get_robust_llm_response
 
 async def test_llm_direct():
     """Test LLM directly with a simple prompt"""
-    logger.error("🤖 Testing LLM Failsafe Agent directly...")
+    logger.info("Testing LLM Failsafe Agent directly...")
 
     start_time = time.time()
 
@@ -30,7 +30,7 @@ async def test_llm_direct():
         # Simple test prompt
         prompt = "Say hello back to the user."
 
-        logger.info(f"   Sending prompt: {prompt}")
+        logger.info("   Sending prompt: %s", prompt)
         logger.info("   Waiting for response...")
 
         # Get response with 15 second timeout to see if it's faster than 30s
@@ -40,23 +40,23 @@ async def test_llm_direct():
 
         elapsed = time.time() - start_time
 
-        logger.info(f"✅ LLM response received in {elapsed:.2f}s:")
-        logger.info(f"   Tier used: {response.tier_used.value}")
-        logger.info(f"   Model: {response.model_used}")
-        logger.info(f"   Success: {response.success}")
-        logger.info(f"   Content: {response.content[:100]}...")
-        logger.warning(f"   Warnings: {response.warnings}")
+        logger.info("✅ LLM response received in %.2fs:", elapsed)
+        logger.info("   Tier used: %s", response.tier_used.value)
+        logger.info("   Model: %s", response.model_used)
+        logger.info("   Success: %s", response.success)
+        logger.info("   Content: %s...", response.content[:100])
+        logger.warning("   Warnings: %s", response.warnings)
 
         return True
 
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
-        logger.error(f"❌ LLM request timed out after {elapsed:.2f}s")
+        logger.error("❌ LLM request timed out after %.2fs", elapsed)
         return False
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error(f"❌ LLM request failed after {elapsed:.2f}s: {e}")
+        logger.error("❌ LLM request failed after {elapsed:.2f}s: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -81,21 +81,21 @@ async def test_classification_direct():
 
         elapsed = time.time() - start_time
 
-        logger.info(f"✅ Classification completed in {elapsed:.2f}s:")
-        logger.info(f"   Complexity: {result.complexity.value}")
-        logger.info(f"   Confidence: {result.confidence}")
-        logger.info(f"   Reasoning: {result.reasoning[:50]}...")
+        logger.info("✅ Classification completed in %.2fs:", elapsed)
+        logger.info("   Complexity: %s", result.complexity.value)
+        logger.info("   Confidence: %s", result.confidence)
+        logger.info("   Reasoning: %s...", result.reasoning[:50])
 
         return True
 
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
-        logger.error(f"❌ Classification timed out after {elapsed:.2f}s")
+        logger.error("❌ Classification timed out after %.2fs", elapsed)
         return False
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error(f"❌ Classification failed after {elapsed:.2f}s: {e}")
+        logger.error("❌ Classification failed after {elapsed:.2f}s: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -125,9 +125,9 @@ async def test_kb_search():
 
         elapsed = time.time() - start_time
 
-        logger.info(f"✅ KB search completed in {elapsed:.2f}s:")
+        logger.info("✅ KB search completed in %.2fs:", elapsed)
         if result and result.get("documents"):
-            logger.info(f"   Found {len(result['documents'])} documents")
+            logger.info("   Found %s documents", len(result['documents']))
         else:
             logger.info("   No documents found")
 
@@ -135,12 +135,12 @@ async def test_kb_search():
 
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
-        logger.error(f"❌ KB search timed out after {elapsed:.2f}s")
+        logger.error("❌ KB search timed out after %.2fs", elapsed)
         return False
 
     except Exception as e:
         elapsed = time.time() - start_time
-        logger.error(f"❌ KB search failed after {elapsed:.2f}s: {e}")
+        logger.error("❌ KB search failed after {elapsed:.2f}s: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -160,17 +160,18 @@ async def main():
     ]
 
     for test_name, test_coro in tests:
-        logger.info(f"\n📋 Running {test_name}...")
+        logger.info("\n📋 Running %s...", test_name)
         try:
             success = await test_coro
             if not success:
-                logger.info(f"🚨 {test_name} is the likely culprit!")
+                logger.info("🚨 %s is the likely culprit!", test_name)
         except Exception as e:
-            logger.error(f"❌ {test_name} crashed: {e}")
+            logger.error("❌ {test_name} crashed: %s", e)
 
     logger.info("\n" + "=" * 50)
     logger.error("🔍 Test completed. Check above for timeouts or failures.")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

@@ -25,9 +25,9 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.security.domain_security import DomainSecurityConfig, DomainSecurityManager
-from src.security.input_validator import WebResearchInputValidator
-from src.security.secure_web_research import SecureWebResearch
+from security.domain_security import DomainSecurityConfig, DomainSecurityManager
+from security.input_validator import WebResearchInputValidator
+from security.secure_web_research import SecureWebResearch
 
 # Set up logging
 logging.basicConfig(
@@ -544,9 +544,9 @@ class WebResearchSecurityTester:
 
     def print_results(self):
         """Print formatted test results"""
-        print("\n" + "=" * 80)
-        print("AUTOBOT WEB RESEARCH SECURITY TEST RESULTS")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info("AUTOBOT WEB RESEARCH SECURITY TEST RESULTS")
+        logger.info("=" * 80)
 
         status_color = {
             "PASSED": "\033[92m",  # Green
@@ -560,39 +560,39 @@ class WebResearchSecurityTester:
         overall_status = self.test_results["overall_status"]
         color = status_color.get(overall_status, "")
 
-        print(f"Overall Status: {color}{overall_status}{reset_color}")
-        print(f"Tests Passed: {self.test_results['tests_passed']}")
-        print(f"Tests Failed: {self.test_results['tests_failed']}")
+        logger.info(f"Overall Status: {color}{overall_status}{reset_color}")
+        logger.info(f"Tests Passed: {self.test_results['tests_passed']}")
+        logger.error(f"Tests Failed: {self.test_results['tests_failed']}")
         print(
             f"Total Tests: {self.test_results['tests_passed'] + self.test_results['tests_failed']}"
         )
 
-        print("\nDetailed Results:")
-        print("-" * 40)
+        logger.info("\nDetailed Results:")
+        logger.info("-" * 40)
 
         for test_name, details in self.test_results["test_details"].items():
             status = details.get("status", "unknown")
             color = status_color.get(status, "")
-            print(f"\n{test_name.upper()}: {color}{status}{reset_color}")
+            logger.info(f"\n{test_name.upper()}: {color}{status}{reset_color}")
 
             if "subtests" in details:
                 for subtest, result in details["subtests"].items():
                     result_status = "PASSED" if result == "PASSED" else "FAILED"
                     subtest_color = status_color.get(result_status, "")
-                    print(f"  └─ {subtest}: {subtest_color}{result}{reset_color}")
+                    logger.info(f"  └─ {subtest}: {subtest_color}{result}{reset_color}")
 
             if "metrics" in details:
-                print("  Metrics:")
+                logger.info("  Metrics:")
                 for metric, value in details["metrics"].items():
-                    print(f"    └─ {metric}: {value}")
+                    logger.info(f"    └─ {metric}: {value}")
 
             if "error" in details:
-                print(f"  Error: {details['error']}")
+                logger.error(f"  Error: {details['error']}")
 
-        print("\n" + "=" * 80)
+        logger.info("\n" + "=" * 80)
 
         if overall_status == "PASSED":
-            print("🛡️  ALL SECURITY TESTS PASSED - Web research can be safely enabled")
+            logger.info("🛡️  ALL SECURITY TESTS PASSED - Web research can be safely enabled")
         elif overall_status == "MOSTLY_PASSED":
             print(
                 "⚠️  MOST TESTS PASSED - Review failed tests before enabling web research"
@@ -602,13 +602,13 @@ class WebResearchSecurityTester:
                 "❌ SECURITY TESTS FAILED - DO NOT enable web research until issues are resolved"
             )
 
-        print("=" * 80)
+        logger.info("=" * 80)
 
 
 async def main():
     """Main test execution"""
-    print("AutoBot Web Research Security Test Suite")
-    print("Testing comprehensive security implementation...")
+    logger.info("AutoBot Web Research Security Test Suite")
+    logger.info("Testing comprehensive security implementation...")
 
     tester = WebResearchSecurityTester()
     results = await tester.run_all_tests()
@@ -621,7 +621,7 @@ async def main():
     with open(results_file, "w") as f:
         json.dump(results, f, indent=2)
 
-    print(f"\nDetailed results saved to: {results_file}")
+    logger.info(f"\nDetailed results saved to: {results_file}")
 
     # Exit with appropriate code
     if results["overall_status"] in ["PASSED", "MOSTLY_PASSED"]:
