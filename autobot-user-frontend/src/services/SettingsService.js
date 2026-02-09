@@ -5,7 +5,7 @@
  * by providing a single source of truth for all application settings.
  */
 
-import apiClient from '@/utils/ApiClient.js';
+import apiClient from '@/utils/ApiClient';
 import { reactive } from 'vue';
 import appConfig from '@/config/AppConfig.js';
 import cacheService from './CacheService.js';

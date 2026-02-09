@@ -3,7 +3,7 @@
  * This tool helps diagnose API connectivity issues and verifies endpoint functionality
  */
 
-import apiClient from './ApiClient.js';
+import apiClient from './ApiClient';
 import apiMapper from './ApiEndpointMapper.js';
 
 class ApiDiagnostics {

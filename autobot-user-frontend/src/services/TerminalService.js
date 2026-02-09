@@ -5,7 +5,7 @@
 
 import { reactive, ref } from 'vue';
 import appConfig from '@/config/AppConfig.js';
-import apiClient from '@/utils/ApiClient.js';
+import apiClient from '@/utils/ApiClient';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
 

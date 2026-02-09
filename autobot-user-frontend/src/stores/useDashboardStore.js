@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import ApiClient from '../utils/ApiClient.js'
+import ApiClient from '../utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for DashboardStore

@@ -22,7 +22,7 @@ vi.mock('@/utils/ApiClient', () => ({
   },
 }))
 
-vi.mock('@/services/api.js', () => ({
+vi.mock('@/services/api', () => ({
   default: {
     sendMessage: vi.fn(),
     getChatHistory: vi.fn(),

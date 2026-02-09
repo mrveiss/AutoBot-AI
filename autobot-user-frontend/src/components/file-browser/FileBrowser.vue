@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import apiClient from '@/utils/ApiClient.js'
+import apiClient from '@/utils/ApiClient'
 import { useUserStore } from '@/stores/useUserStore'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'

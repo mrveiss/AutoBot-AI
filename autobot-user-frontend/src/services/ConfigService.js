@@ -6,7 +6,7 @@
  */
 
 import appConfig from '@/config/AppConfig.js';
-import { ApiClient } from '@/utils/ApiClient.js';
+import { ApiClient } from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for ConfigService

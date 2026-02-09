@@ -16,7 +16,7 @@ import type {
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 import { apiService } from '@/services/api'
-import apiClient from '@/utils/ApiClient.js'
+import apiClient from '@/utils/ApiClient'
 
 // Chat Interface Composable
 export function useChatInterface() {

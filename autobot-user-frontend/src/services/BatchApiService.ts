@@ -3,8 +3,8 @@
  * Updated to use correct ApiClient singleton with proper error handling
  */
 
-import apiClient from '@/utils/ApiClient.ts';
-import type { ApiClient } from '@/utils/ApiClient.ts';
+import apiClient from '@/utils/ApiClient';
+import type { ApiClient } from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for BatchApiService

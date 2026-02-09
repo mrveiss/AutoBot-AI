@@ -4,7 +4,7 @@
  * Enhanced with graceful API fallbacks
  */
 import { ref, computed, onMounted, onUnmounted, getCurrentInstance } from 'vue'
-import { apiService } from '@/services/api.js'
+import { apiService } from '@/services/api'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 import { createLogger } from '@/utils/debugUtils'
 

@@ -5,7 +5,7 @@
  * between ChatInterface.vue and HistoryView.vue components.
  */
 
-import apiClient from '@/utils/ApiClient.js';
+import apiClient from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for ChatHistoryService

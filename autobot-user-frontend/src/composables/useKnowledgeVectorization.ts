@@ -285,7 +285,7 @@ export function useKnowledgeVectorization() {
         timeout: knowledgeTimeout
       })
 
-      // Parse JSON response (handles both ApiClient.ts Response and ApiClient.js parsed JSON)
+      // Parse JSON response (handles both ApiClient parsed JSON)
       const data = await parseApiResponse(response)
 
       // Check if backend returned success status

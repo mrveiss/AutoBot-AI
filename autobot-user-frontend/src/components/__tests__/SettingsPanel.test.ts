@@ -19,7 +19,7 @@ vi.mock('@/utils/ApiClient', () => ({
   },
 }))
 
-vi.mock('@/services/api.js', () => ({
+vi.mock('@/services/api', () => ({
   default: {
     getSettings: vi.fn(),
     saveSettings: vi.fn(),

@@ -34,6 +34,7 @@ import '@xterm/xterm/css/xterm.css'
 // Import plugins
 import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
+import ApiPlugin from './plugins/api'
 
 // Import global services
 import './services/GlobalWebSocketService.js'
@@ -67,16 +68,13 @@ pinia.use(piniaPluginPersistedstate)
 
 // Create Vue app
 const app = createApp(App)
-app.use(router)
-
-// Install RUM plugin for development monitoring
-app.use(rumPlugin, { router })
 
 // Use plugins
 app.use(pinia)
 app.use(router)
-app.use(rumPlugin)
+app.use(rumPlugin, { router })
 app.use(errorHandlerPlugin)
+app.use(ApiPlugin)
 
 // Global error handler for uncaught errors
 app.config.errorHandler = (err, _instance, info) => {

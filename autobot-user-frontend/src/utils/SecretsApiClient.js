@@ -5,7 +5,7 @@
  * with proper error handling and chat scope management.
  */
 
-import { ApiClient } from './ApiClient.js';
+import { ApiClient } from './ApiClient';
 
 class SecretsApiClient {
     constructor() {

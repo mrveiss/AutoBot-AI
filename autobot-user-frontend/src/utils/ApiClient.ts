@@ -9,8 +9,9 @@ const logger = createLogger('ApiClient');
 export interface RequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
-  onUploadProgress?: (progressEvent: any) => void; // For upload progress tracking
-  responseType?: string; // For response type specification (e.g., 'blob')
+  maxRetries?: number;
+  onUploadProgress?: (progressEvent: any) => void;
+  responseType?: string;
 }
 
 export interface ApiResponse {
@@ -23,22 +24,25 @@ export interface ApiResponse {
   blob(): Promise<Blob>;
 }
 
-// Enhanced ApiClient with TypeScript support
-// Issue #598: All timeouts now sourced from AppConfig (SINGLE SOURCE OF TRUTH)
+// Enhanced ApiClient — consolidated from JS and TS implementations (#810)
+// Issue #598: All timeouts sourced from AppConfig (SINGLE SOURCE OF TRUTH)
+// Convenience methods (get/post/put/delete) return parsed JSON data.
+// Use rawRequest() for raw Response access (streaming, blobs).
 export class ApiClient {
   private baseUrl: string;
   private defaultHeaders: Record<string, string>;
   private baseUrlPromise: Promise<string> | null;
   private defaultTimeout: number;
+  private settings: Record<string, any>;
 
   constructor() {
-    this.baseUrl = ''; // Will be loaded async
+    this.baseUrl = '';
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
     this.baseUrlPromise = null;
-    // Issue #598: Use AppConfig as single source of truth for timeout
     this.defaultTimeout = appConfig.getTimeout('default');
+    this.settings = this._loadSettings();
     this.initializeBaseUrl();
   }
 
@@ -52,41 +56,108 @@ export class ApiClient {
     this.defaultTimeout = timeout;
   }
 
-  // Invalidate cache (placeholder for future caching implementation)
-  invalidateCache(): void {
-    // Currently no caching implemented
-    // This method exists for future caching functionality
+  updateBaseUrl(newBaseUrl: string): void {
+    this.baseUrl = newBaseUrl;
   }
 
-  // Initialize base URL async
+  invalidateCache(): void {
+    try {
+      appConfig.invalidateCache();
+    } catch (_error) {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('autobot_api_') || key.startsWith('autobot_config_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    }
+  }
+
+  getConfiguration(): Record<string, any> {
+    return {
+      baseUrl: this.baseUrl,
+      timeout: this.defaultTimeout,
+      proxyMode: !this.baseUrl,
+      settings: this.settings,
+    };
+  }
+
+  // ==================================================================================
+  // LOCAL SETTINGS (localStorage-based configuration)
+  // ==================================================================================
+
+  private _loadSettings(): Record<string, any> {
+    try {
+      const stored = localStorage.getItem('autobot_backend_settings');
+      return stored ? JSON.parse(stored) : {};
+    } catch (error) {
+      logger.warn('Failed to load settings:', error);
+      return {};
+    }
+  }
+
+  saveLocalSettings(settings: Record<string, any>): void {
+    try {
+      localStorage.setItem('autobot_backend_settings', JSON.stringify(settings));
+      this.settings = settings;
+    } catch (error) {
+      logger.error('Failed to save settings:', error);
+    }
+  }
+
+  loadLocalSettings(): Record<string, any> {
+    this.settings = this._loadSettings();
+    return this.settings;
+  }
+
+  // ==================================================================================
+  // BASE URL INITIALIZATION
+  // ==================================================================================
+
   private async initializeBaseUrl(): Promise<void> {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
     } catch (_error) {
-      logger.warn('[ApiClient.ts] AppConfig initialization failed, using NetworkConstants fallback');
-      // Use NetworkConstants instead of hardcoded IP
-      this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
+      logger.warn('AppConfig initialization failed, using NetworkConstants fallback');
+      this.baseUrl = this._detectBaseUrl();
     }
   }
 
-  // Ensure base URL is loaded before making requests
+  private _detectBaseUrl(): string {
+    const backendHost = import.meta.env.VITE_BACKEND_HOST;
+    const backendPort = import.meta.env.VITE_BACKEND_PORT;
+    const protocol = import.meta.env.VITE_HTTP_PROTOCOL;
+
+    // Proxy mode: Vite dev server uses empty baseUrl for proxy
+    const isViteDevServer = typeof window !== 'undefined' && window.location.port === '5173';
+    if (isViteDevServer && import.meta.env.DEV) {
+      return '';
+    }
+
+    if (backendHost && backendPort && protocol) {
+      return `${protocol}://${backendHost}:${backendPort}`;
+    }
+
+    return `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
+  }
+
   private async ensureBaseUrl(): Promise<string> {
     if (this.baseUrl) {
       return this.baseUrl;
     }
-
     if (!this.baseUrlPromise) {
       this.baseUrlPromise = this.initializeBaseUrl().then(() => this.baseUrl);
     }
-
     return await this.baseUrlPromise;
   }
 
-  // Base request method with error handling and timeout support
-  async request(endpoint: string, options: RequestOptions & {
+  // ==================================================================================
+  // RAW REQUEST — returns Response object (for streaming, blobs, etc.)
+  // ==================================================================================
+
+  async rawRequest(endpoint: string, options: RequestOptions & {
     method?: string;
     body?: any;
-  } = {}): Promise<ApiResponse> {
+  } = {}): Promise<Response> {
     const {
       method = 'GET',
       headers = {},
@@ -94,23 +165,31 @@ export class ApiClient {
       timeout = options.timeout || this.defaultTimeout,
     } = options;
 
-    // Ensure base URL is loaded
     const baseUrl = await this.ensureBaseUrl();
     const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const timeoutId = window.setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(url, {
+      const fetchOptions: RequestInit = {
         method,
         headers: { ...this.defaultHeaders, ...headers },
-        body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
-      });
+      };
 
+      // Handle body — support FormData (don't stringify, remove Content-Type)
+      if (body instanceof FormData) {
+        fetchOptions.body = body;
+        const hdrs = fetchOptions.headers as Record<string, string>;
+        delete hdrs['Content-Type'];
+      } else if (body !== undefined) {
+        fetchOptions.body = JSON.stringify(body);
+      }
+
+      const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
-      return response as ApiResponse;
+      return response;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
@@ -120,338 +199,408 @@ export class ApiClient {
     }
   }
 
-  // GET request
-  async get(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
-    return this.request(endpoint, { method: 'GET', ...options });
-  }
-
-  // POST request
-  async post(endpoint: string, data?: any, options: RequestOptions = {}): Promise<ApiResponse> {
-    const result = await this.request(endpoint, { method: 'POST', body: data, ...options });
-    return result;
-  }
-
-  // PUT request
-  async put(endpoint: string, data?: any, options: RequestOptions = {}): Promise<ApiResponse> {
-    return this.request(endpoint, { method: 'PUT', body: data, ...options });
-  }
-
-  // DELETE request
-  async delete(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse> {
-    return this.request(endpoint, { method: 'DELETE', ...options });
-  }
-
   // ==================================================================================
-  // CHAT API METHODS - FIXED TO MATCH BACKEND
+  // CONVENIENCE METHODS — return parsed JSON data (not Response)
   // ==================================================================================
 
-  /**
-   * Send a chat message using the correct backend endpoint
-   * Backend expects: POST /api/chat with ChatMessage format
-   */
-  async sendChatMessage(message: string, options: any = {}): Promise<any> {
-    // Use the correct endpoint: /api/chat (not /api/chat/message)
-    const response = await this.post('/api/chat', {
-      content: message,
-      role: "user",
-      session_id: options.chatId || options.session_id || null,
-      message_type: options.message_type || "text",
-      metadata: options.metadata || {}
+  private async _extractErrorInfo(response: Response): Promise<{
+    status: number; message: string; details: any;
+  }> {
+    try {
+      const errorData = await response.json();
+      return {
+        status: response.status,
+        message: errorData.message || errorData.detail || 'Unknown error',
+        details: errorData,
+      };
+    } catch {
+      return {
+        status: response.status,
+        message: response.statusText || 'Unknown error',
+        details: null,
+      };
+    }
+  }
+
+  // GET with retry logic and exponential backoff
+  async get(endpoint: string, options: RequestOptions = {}): Promise<any> {
+    let lastError: Error | undefined;
+    const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await this.rawRequest(endpoint, {
+          method: 'GET', ...options,
+        });
+
+        if (!response.ok) {
+          const errorData = await this._extractErrorInfo(response);
+          throw new Error(
+            `HTTP ${response.status}: ${errorData.message}`
+          );
+        }
+
+        return await response.json();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        logger.warn(
+          `GET attempt ${attempt} failed for ${endpoint}:`,
+          lastError.message
+        );
+
+        // Don't retry 4xx client errors
+        if (lastError.message.includes('HTTP 4')) {
+          break;
+        }
+
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          await new Promise(resolve => window.setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    logger.error(`GET failed after ${maxRetries} attempts: ${endpoint}`, lastError);
+    throw lastError;
+  }
+
+  // POST — returns parsed JSON
+  async post(endpoint: string, data?: any, options: RequestOptions = {}): Promise<any> {
+    const response = await this.rawRequest(endpoint, {
+      method: 'POST', body: data, ...options,
     });
 
-    // Check if it's a streaming response
+    if (!response.ok) {
+      const errorData = await this._extractErrorInfo(response);
+      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+    }
+
+    return await response.json();
+  }
+
+  // PUT — returns parsed JSON
+  async put(endpoint: string, data?: any, options: RequestOptions = {}): Promise<any> {
+    const response = await this.rawRequest(endpoint, {
+      method: 'PUT', body: data, ...options,
+    });
+
+    if (!response.ok) {
+      const errorData = await this._extractErrorInfo(response);
+      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+    }
+
+    return await response.json();
+  }
+
+  // DELETE — returns parsed JSON (handles empty responses)
+  async delete(endpoint: string, options: RequestOptions = {}): Promise<any> {
+    const response = await this.rawRequest(endpoint, {
+      method: 'DELETE', ...options,
+    });
+
+    if (!response.ok) {
+      const errorData = await this._extractErrorInfo(response);
+      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    return {};
+  }
+
+  // ==================================================================================
+  // FILE UPLOAD with progress tracking
+  // ==================================================================================
+
+  async uploadFile(
+    endpoint: string,
+    file: File,
+    progressCallback: ((progress: number) => void) | null = null,
+    options: { fields?: Record<string, string>; timeout?: number } = {}
+  ): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    if (options.fields) {
+      Object.entries(options.fields).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+    }
+
+    const baseUrl = await this.ensureBaseUrl();
+    const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
+    const xhr = new XMLHttpRequest();
+
+    const uploadPromise = new Promise<any>((resolve, reject) => {
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve({ success: true });
+          }
+        } else {
+          reject(new Error(`Upload failed: HTTP ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Upload failed: Network error'));
+      xhr.ontimeout = () => reject(new Error('Upload failed: Timeout'));
+
+      if (progressCallback) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            progressCallback(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+      }
+
+      xhr.open('POST', url);
+      xhr.timeout = options.timeout || appConfig.getTimeout('upload');
+      xhr.send(formData);
+    });
+
+    return await uploadPromise;
+  }
+
+  // ==================================================================================
+  // CHAT API METHODS — corrected endpoints from #552
+  // ==================================================================================
+
+  async sendChatMessage(message: string, options: any = {}): Promise<any> {
+    const response = await this.rawRequest('/api/chat', {
+      method: 'POST',
+      body: {
+        content: message,
+        role: 'user',
+        session_id: options.chatId || options.session_id || null,
+        message_type: options.message_type || 'text',
+        metadata: options.metadata || {},
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await this._extractErrorInfo(response);
+      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+    }
+
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('text/event-stream')) {
-      return {
-        type: 'streaming',
-        response: response
-      };
-    } else {
-      const data = await response.json();
-      return {
-        type: 'json',
-        data: data
-      };
+      return { type: 'streaming', response };
     }
+    const data = await response.json();
+    return { type: 'json', data };
   }
 
-  /**
-   * Create a new chat session
-   * Backend endpoint: POST /api/chat/sessions
-   * Backend expects SessionCreate model: { title?: string, metadata?: dict }
-   */
   async createNewChat(): Promise<any> {
-    const response = await this.post('/api/chat/sessions', {});
-    return response.json();
+    return await this.post('/api/chat/sessions', {});
   }
 
-  /**
-   * Get list of chat sessions
-   * Backend endpoint: GET /api/chats
-   * Issue #671: Added optional options parameter for timeout control
-   */
   async getChatList(options: RequestOptions = {}): Promise<any> {
-    // Issue #671: Use short timeout for init calls to prevent UI freezing
     const timeout = options.timeout || appConfig.getTimeout('short');
-    const response = await this.get('/api/chats', { ...options, timeout });
-    return response.json();
+    return await this.get('/api/chats', { ...options, timeout });
   }
 
-  /**
-   * Get messages for a specific chat session
-   * Backend endpoint: GET /api/chat/sessions/{session_id}
-   */
   async getChatMessages(chatId: string): Promise<any> {
-    const response = await this.get(`/api/chat/sessions/${chatId}`);
-    return response.json();
+    return await this.get(`/api/chat/sessions/${chatId}`);
   }
 
-  /**
-   * Save chat messages in bulk to a session
-   * Backend endpoint: POST /api/chats/{chat_id}/save
-   * @param chatId - The chat session ID
-   * @param messages - Array of messages to save
-   * @returns Promise with save result
-   */
   async saveChatMessages(chatId: string, messages: any[]): Promise<any> {
-    try {
-      const response = await this.post(`/api/chats/${chatId}/save`, {
-        data: {
-          messages: messages,
-          name: ""  // Optional session name
-        }
-      });
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      logger.error('Failed to save chat messages:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a chat session
-   * Backend endpoint: DELETE /api/chat/sessions/{session_id}
-   */
-  async deleteChat(chatId: string): Promise<any> {
-    const response = await this.delete(`/api/chat/sessions/${chatId}`);
-    return response.json();
-  }
-
-  /**
-   * Update a chat session (title, metadata)
-   * Backend endpoint: PUT /api/chat/sessions/{session_id}
-   */
-  async updateChatSession(chatId: string, updates: any): Promise<any> {
-    const response = await this.put(`/api/chat/sessions/${chatId}`, updates);
-    return response.json();
-  }
-
-  // ==================================================================================
-  // STREAMING METHODS FOR REAL-TIME CHAT
-  // ==================================================================================
-
-  /**
-   * Send streaming chat message
-   * Backend endpoint: POST /api/chat/stream
-   */
-  async sendStreamingMessage(message: string, options: any = {}): Promise<ApiResponse> {
-    const response = await this.post('/api/chat/stream', {
-      content: message,
-      role: "user",
-      session_id: options.chatId || options.session_id || null,
-      message_type: options.message_type || "text",
-      metadata: options.metadata || {}
+    return await this.post(`/api/chats/${chatId}/save`, {
+      data: { messages, name: '' },
     });
-
-    return response; // Return the streaming response directly
   }
 
-  /**
-   * Export chat session
-   * Backend endpoint: GET /api/chat/sessions/{session_id}/export
-   */
+  async deleteChat(chatId: string): Promise<any> {
+    return await this.delete(`/api/chat/sessions/${chatId}`);
+  }
+
+  async updateChatSession(chatId: string, updates: any): Promise<any> {
+    return await this.put(`/api/chat/sessions/${chatId}`, updates);
+  }
+
+  // ==================================================================================
+  // STREAMING METHODS
+  // ==================================================================================
+
+  async sendStreamingMessage(message: string, options: any = {}): Promise<Response> {
+    return await this.rawRequest('/api/chat/stream', {
+      method: 'POST',
+      body: {
+        content: message,
+        role: 'user',
+        session_id: options.chatId || options.session_id || null,
+        message_type: options.message_type || 'text',
+        metadata: options.metadata || {},
+      },
+    });
+  }
+
   async exportChatSession(sessionId: string, format: string = 'json'): Promise<Blob> {
-    const response = await this.get(`/api/chat/sessions/${sessionId}/export?format=${format}`);
+    const response = await this.rawRequest(
+      `/api/chat/sessions/${sessionId}/export?format=${format}`,
+      { method: 'GET' }
+    );
     return response.blob();
   }
 
-  /**
-   * Get chat statistics
-   * Backend endpoint: GET /api/chat/stats
-   */
   async getChatStats(): Promise<any> {
-    const response = await this.get('/api/chat/stats');
-    return response.json();
+    return await this.get('/api/chat/stats');
   }
 
   // ==================================================================================
-  // OTHER API METHODS
+  // SETTINGS & HEALTH API METHODS
   // ==================================================================================
 
-  /**
-   * Get user settings
-   * Issue #671: Added optional options parameter for timeout control
-   */
   async getSettings(options: RequestOptions = {}): Promise<any> {
-    // Issue #671: Use short timeout for init calls
     const timeout = options.timeout || appConfig.getTimeout('short');
-    const response = await this.get('/api/settings/', { ...options, timeout });
-    return response.json();
+    return await this.get('/api/settings/', { ...options, timeout });
   }
 
   async saveSettings(settings: any): Promise<any> {
-    const response = await this.post('/api/settings/', settings);
-    return response.json();
+    return await this.post('/api/settings/', settings);
   }
 
   async getSystemHealth(): Promise<any> {
-    // Issue #598: Use health-specific timeout from AppConfig
-    const response = await this.get('/api/system/health', { timeout: appConfig.getTimeout('health') });
-    return response.json();
+    return await this.get('/api/system/health', {
+      timeout: appConfig.getTimeout('health'),
+    });
   }
 
   async getServiceHealth(): Promise<any> {
-    // Use monitoring services health endpoint
-    // Issue #598: Use health-specific timeout from AppConfig
-    const response = await this.get('/api/monitoring/services/health', { timeout: appConfig.getTimeout('health') });
-    return response.json();
+    return await this.get('/api/monitoring/services/health', {
+      timeout: appConfig.getTimeout('health'),
+    });
   }
 
-  async checkHealth(): Promise<any> {
-    // Issue #598: Use health-specific timeout from AppConfig
-    const response = await this.get('/api/health', { timeout: appConfig.getTimeout('health') });
-    return response.json();
+  async checkHealth(): Promise<boolean> {
+    try {
+      const health = await this.get('/api/health', {
+        timeout: appConfig.getTimeout('health'),
+      });
+      return health?.status === 'healthy';
+    } catch (error) {
+      logger.warn('Health check failed:', error);
+      return false;
+    }
   }
 
   async checkChatHealth(): Promise<any> {
-    // Issue #598: Use health-specific timeout from AppConfig
-    const response = await this.get('/api/chat/health', { timeout: appConfig.getTimeout('health') });
-    return response.json();
+    return await this.get('/api/chat/health', {
+      timeout: appConfig.getTimeout('health'),
+    });
+  }
+
+  async validateConnection(): Promise<boolean> {
+    try {
+      return await appConfig.validateConnection();
+    } catch (_error) {
+      return await this.checkHealth();
+    }
   }
 
   // ==================================================================================
-  // TERMINAL API METHODS
+  // TERMINAL API METHODS — corrected endpoints from #73, #552
   // ==================================================================================
 
-  /**
-   * Create a new terminal session (Tools Terminal - direct PTY)
-   * Backend endpoint: POST /api/terminal/sessions
-   *
-   * NOTE: This is for Tools Terminal (standalone, no agent control).
-   * For Chat Terminal with agent control, use createAgentTerminalSession().
-   * Issue #73: Fixed to use correct endpoint for Tools Terminal
-   */
-  async createTerminalSession(options: any): Promise<any> {
-    const response = await this.post('/api/terminal/sessions', options);
-    return response.json();
+  async createTerminalSession(config: any = {}): Promise<any> {
+    const payload = {
+      user_id: config.user_id || 'default',
+      security_level: config.security_level || 'standard',
+      enable_logging: config.enable_logging !== undefined ? config.enable_logging : false,
+      enable_workflow_control: config.enable_workflow_control !== undefined
+        ? config.enable_workflow_control : true,
+      initial_directory: config.initial_directory || null,
+    };
+    return await this.post('/api/terminal/sessions', payload);
   }
 
-  /**
-   * Create an agent terminal session (Chat Terminal - with agent control)
-   * Backend endpoint: POST /api/agent-terminal/sessions
-   *
-   * NOTE: This is for Chat Terminal with AI agent control and approval workflow.
-   * For Tools Terminal (direct PTY), use createTerminalSession().
-   * Issue #73: Agent Terminal for Chat Terminal with approval workflow
-   */
-  async createAgentTerminalSession(options: {
+  async createAgentTerminalSession(config: {
     agent_id?: string;
     agent_role?: string;
     conversation_id?: string;
     host?: string;
     metadata?: Record<string, any>;
-  }): Promise<any> {
+  } = {}): Promise<any> {
     const payload = {
-      agent_id: options.agent_id || `agent_${Date.now()}`,
-      agent_role: options.agent_role || 'chat_agent',
-      conversation_id: options.conversation_id || null,
-      host: options.host || 'main',
-      metadata: options.metadata || null
+      agent_id: config.agent_id || `agent_${Date.now()}`,
+      agent_role: config.agent_role || 'chat_agent',
+      conversation_id: config.conversation_id || null,
+      host: config.host || 'main',
+      metadata: config.metadata || null,
     };
-    const response = await this.post('/api/agent-terminal/sessions', payload);
-    return response.json();
+    return await this.post('/api/agent-terminal/sessions', payload);
   }
 
-  /**
-   * Get all terminal sessions (Tools Terminal)
-   * Backend endpoint: GET /api/terminal/sessions
-   * Issue #73: Fixed to use correct endpoint
-   */
-  async getTerminalSessions(): Promise<any> {
+  async getTerminalSessions(): Promise<any[]> {
     const response = await this.get('/api/terminal/sessions');
-    return response.json();
+    return response.sessions || [];
   }
 
-  /**
-   * Get all agent terminal sessions (Chat Terminal)
-   * Backend endpoint: GET /api/agent-terminal/sessions
-   */
   async getAgentTerminalSessions(filters: {
     agent_id?: string;
     conversation_id?: string;
-  } = {}): Promise<any> {
+  } = {}): Promise<any[]> {
     const params = new URLSearchParams();
     if (filters.agent_id) params.append('agent_id', filters.agent_id);
     if (filters.conversation_id) params.append('conversation_id', filters.conversation_id);
     const query = params.toString() ? `?${params.toString()}` : '';
     const response = await this.get(`/api/agent-terminal/sessions${query}`);
-    return response.json();
+    return response.sessions || [];
   }
 
-  /**
-   * Get terminal session info (Tools Terminal)
-   * Backend endpoint: GET /api/terminal/sessions/{sessionId}
-   * Issue #73: Fixed to use correct endpoint
-   */
   async getTerminalSessionInfo(sessionId: string): Promise<any> {
-    const response = await this.get(`/api/terminal/sessions/${sessionId}`);
-    return response.json();
+    return await this.get(`/api/terminal/sessions/${sessionId}`);
   }
 
-  /**
-   * Get agent terminal session info (Chat Terminal)
-   * Backend endpoint: GET /api/agent-terminal/sessions/{sessionId}
-   */
   async getAgentTerminalSessionInfo(sessionId: string): Promise<any> {
-    const response = await this.get(`/api/agent-terminal/sessions/${sessionId}`);
-    return response.json();
+    return await this.get(`/api/agent-terminal/sessions/${sessionId}`);
   }
 
-  /**
-   * Delete terminal session (Tools Terminal)
-   * Backend endpoint: DELETE /api/terminal/sessions/{sessionId}
-   * Issue #73: Fixed to use correct endpoint
-   */
   async deleteTerminalSession(sessionId: string): Promise<any> {
-    const response = await this.delete(`/api/terminal/sessions/${sessionId}`);
-    return response.json();
+    return await this.delete(`/api/terminal/sessions/${sessionId}`);
   }
 
-  /**
-   * Delete agent terminal session (Chat Terminal)
-   * Backend endpoint: DELETE /api/agent-terminal/sessions/{sessionId}
-   */
   async deleteAgentTerminalSession(sessionId: string): Promise<any> {
-    const response = await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
-    return response.json();
+    return await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
   }
 
-  /**
-   * Execute terminal command (deprecated - use WebSocket for real-time I/O)
-   * Backend endpoint: POST /api/terminal/command
-   * Issue #552: Fixed path - backend uses /command not /execute
-   */
   async executeTerminalCommand(command: string, options: any = {}): Promise<any> {
-    const response = await this.post('/api/terminal/command', {
+    return await this.post('/api/terminal/command', {
       command,
-      ...options
+      timeout: options.timeout || 30000,
+      cwd: options.cwd || null,
+      env: options.env || {},
     });
-    return response.json();
+  }
+
+  // ==================================================================================
+  // BROWSER SESSION API METHODS — from Issue #73
+  // ==================================================================================
+
+  async getOrCreateChatBrowserSession(config: {
+    conversation_id?: string;
+    headless?: boolean;
+    initial_url?: string;
+  } = {}): Promise<any> {
+    return await this.post('/api/research-browser/chat-session', {
+      conversation_id: config.conversation_id,
+      headless: config.headless || false,
+      initial_url: config.initial_url || null,
+    });
+  }
+
+  async getChatBrowserSession(conversationId: string): Promise<any> {
+    return await this.get(`/api/research-browser/chat-session/${conversationId}`);
+  }
+
+  async deleteChatBrowserSession(conversationId: string): Promise<any> {
+    return await this.delete(`/api/research-browser/chat-session/${conversationId}`);
   }
 }
 
-// Export singleton instance
+// Create singleton instance
 const apiClient = new ApiClient();
 export default apiClient;

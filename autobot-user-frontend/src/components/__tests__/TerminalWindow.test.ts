@@ -15,7 +15,7 @@ vi.mock('@/utils/ApiClient', () => ({
   default: createMockApiService().client,
 }))
 
-vi.mock('@/services/api.js', () => createMockApiService())
+vi.mock('@/services/api', () => createMockApiService())
 
 describe('TerminalWindow', () => {
   let user: ReturnType<typeof userEvent.setup>

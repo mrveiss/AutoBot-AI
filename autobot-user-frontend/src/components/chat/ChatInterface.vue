@@ -125,7 +125,7 @@ import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import { useToast } from '@/composables/useToast'
 import { useOverseerAgent } from '@/composables/useOverseerAgent'
-import ApiClient from '@/utils/ApiClient.js'
+import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
