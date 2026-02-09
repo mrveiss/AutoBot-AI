@@ -93,10 +93,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
 
-    # Run database migrations before initializing SQLAlchemy
-    await _run_migrations()
-
+    # Create base tables first, then apply incremental migrations
     await db_service.initialize()
+    await _run_migrations()
     await _ensure_admin_user()
     await _seed_default_roles()
     await reconciler_service.start()

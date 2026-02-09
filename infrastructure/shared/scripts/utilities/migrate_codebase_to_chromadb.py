@@ -21,7 +21,7 @@ import redis
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

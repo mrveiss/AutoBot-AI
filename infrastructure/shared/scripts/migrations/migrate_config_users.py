@@ -33,11 +33,11 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.config import UnifiedConfigManager
-from src.user_management.config import DeploymentMode, get_deployment_config
-from src.user_management.database import db_session_context, init_database
-from src.user_management.models import Organization, Permission, Role, User, UserRole
-from src.user_management.models.role import SYSTEM_PERMISSIONS, SYSTEM_ROLES
+from config import UnifiedConfigManager
+from user_management.config import DeploymentMode, get_deployment_config
+from user_management.database import db_session_context, init_database
+from user_management.models import Organization, Permission, Role, User, UserRole
+from user_management.models.role import SYSTEM_PERMISSIONS, SYSTEM_ROLES
 
 logging.basicConfig(
     level=logging.INFO,

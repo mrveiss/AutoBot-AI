@@ -17,8 +17,8 @@ import requests
 
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from src.constants.network_constants import NetworkConstants, ServiceURLs
-from src.utils.redis_client import get_redis_client
+from constants.network_constants import NetworkConstants, ServiceURLs
+from utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

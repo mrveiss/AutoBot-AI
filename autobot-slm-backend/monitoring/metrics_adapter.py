@@ -38,7 +38,7 @@ class MetricsAdapter:
         """Lazy load legacy SystemMetricsCollector"""
         if self._legacy_system_metrics is None:
             try:
-                from src.utils.system_metrics import SystemMetricsCollector
+                from utils.system_metrics import SystemMetricsCollector
 
                 self._legacy_system_metrics = SystemMetricsCollector()
             except ImportError:
@@ -51,7 +51,7 @@ class MetricsAdapter:
         """Lazy load legacy ErrorMetricsCollector"""
         if self._legacy_error_metrics is None:
             try:
-                from src.utils.error_metrics import ErrorMetricsCollector
+                from utils.error_metrics import ErrorMetricsCollector
 
                 # ErrorMetricsCollector may require redis_client parameter
                 self._legacy_error_metrics = ErrorMetricsCollector()

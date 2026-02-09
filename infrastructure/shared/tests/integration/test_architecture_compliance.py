@@ -19,9 +19,9 @@ import redis
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.config import unified_config_manager
-from src.constants.network_constants import NetworkConstants
-from src.utils.redis_client import get_redis_client
+from config import unified_config_manager
+from constants.network_constants import NetworkConstants
+from utils.redis_client import get_redis_client
 
 
 class TestServiceDistribution:
@@ -129,8 +129,8 @@ class TestConfigurationSource:
 
     def test_no_hardcoded_ips_in_redis_helper(self):
         """Ensure redis_helper uses unified_config_manager"""
-        from src.utils import redis_helper
-        from src.utils.redis_helper import REDIS_HOST
+        from utils import redis_helper
+        from utils.redis_helper import REDIS_HOST
 
         # These should come from configuration, not be hardcoded
         assert REDIS_HOST != NetworkConstants.REDIS_VM_IP or (
@@ -168,7 +168,7 @@ class TestRedisConnection:
     @pytest.mark.integration
     def test_redis_timeout_configuration(self):
         """Test that Redis connections have proper timeout settings"""
-        from src.utils.redis_helper import TIMEOUT_CONFIG
+        from utils.redis_helper import TIMEOUT_CONFIG
 
         assert TIMEOUT_CONFIG["socket_timeout"] > 0, "socket_timeout must be positive"
         assert (

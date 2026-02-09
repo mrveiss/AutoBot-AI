@@ -39,7 +39,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -208,8 +208,8 @@ class EmbeddedKnowledgeClient:
         if self._kb is None:
             if self._lazy_init:
                 # Lazy import to avoid circular dependencies
-                from src.config import config
-                from src.knowledge_base import KnowledgeBase
+                from config import config
+                from knowledge_base import KnowledgeBase
 
                 self._kb = KnowledgeBase(config_manager=config)
                 self._initialized = True
