@@ -22,11 +22,22 @@
 #   --tags service     Start/restart services only
 #   --tags postgresql  Database only
 #   --tags monitoring  Prometheus + Grafana only
+#   --tags seed        Register fleet nodes in SLM database
 ---
 - name: Deploy SLM Manager
   hosts: 00-SLM-Manager
   become: true
   gather_facts: true
+
+  pre_tasks:
+    - name: Remove conflicting APT source files from prior installs
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/grafana.list
+        - /etc/apt/sources.list.d/grafana.sources
+      tags: ['always']
 
   roles:
     - role: postgresql
@@ -38,3 +49,8 @@
         monitoring_install_prometheus: true
         monitoring_install_grafana: true
         monitoring_install_node_exporter: true
+
+# After all services are up, register fleet nodes in SLM database
+- name: Seed Fleet Nodes
+  import_playbook: seed-fleet-nodes.yml
+  tags: ['seed']

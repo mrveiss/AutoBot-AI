@@ -8,6 +8,12 @@
 # PostgreSQL version
 postgresql_version: "16"
 
+# APT repository release codename override
+# Set this if ansible_distribution_release is not supported by pgdg
+# (e.g. focal EOL, kali-rolling). Use the nearest Debian/Ubuntu LTS codename.
+# Leave empty to auto-detect from ansible_distribution_release.
+postgresql_apt_release: ""
+
 # Service configuration
 postgresql_service: "postgresql"
 postgresql_data_dir: "/var/lib/postgresql/{{ postgresql_version }}/main"
@@ -46,6 +52,14 @@ postgresql_password_encryption: "scram-sha-256"
 # Credentials storage
 postgresql_credentials_dir: "/etc/autobot"
 postgresql_credentials_file: "db-credentials.env"
+
+# Database user and databases (override per-playbook)
+db_user: "slm_app"
+db_host: "127.0.0.1"
+db_env_prefix: "SLM"
+databases:
+  - slm
+  - slm_users
 
 # AutoBot user
 autobot_user: "autobot"

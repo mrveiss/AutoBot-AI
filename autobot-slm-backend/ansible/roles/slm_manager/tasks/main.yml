@@ -120,12 +120,48 @@
   register: slm_requirements_stat
   tags: ['slm', 'backend']
 
+- name: "SLM | Check venv Python version matches system"
+  ansible.builtin.shell:
+    cmd: >-
+      {{ slm_backend_dir }}/venv/bin/python3 --version 2>/dev/null
+      | grep -oP '\d+\.\d+'
+  register: _venv_py_version
+  changed_when: false
+  failed_when: false
+  when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+- name: "SLM | Get system Python version"
+  ansible.builtin.shell:
+    cmd: python3 --version | grep -oP '\d+\.\d+'
+  register: _sys_py_version
+  changed_when: false
+  when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+- name: "SLM | Remove stale venv after OS/Python upgrade"
+  ansible.builtin.file:
+    path: "{{ slm_backend_dir }}/venv"
+    state: absent
+  when:
+    - slm_requirements_stat.stat.exists
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != _sys_py_version.stdout
+  tags: ['slm', 'backend']
+
 - name: "SLM | Create Python virtual environment"
   ansible.builtin.command:
     cmd: python3 -m venv {{ slm_backend_dir }}/venv
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+- name: "SLM | Bootstrap pip in virtual environment"
+  ansible.builtin.command:
+    cmd: "{{ slm_backend_dir }}/venv/bin/python3 -m ensurepip --upgrade"
+  become_user: "{{ slm_user }}"
+  when: slm_requirements_stat.stat.exists
+  changed_when: true
   tags: ['slm', 'backend']
 
 - name: "SLM | Install Python requirements"
