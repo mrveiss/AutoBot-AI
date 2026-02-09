@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.config import config
-from src.utils.redis_client import get_redis_client
+from config import config
+from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -661,36 +661,37 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Environment Variable Analysis Results ===")
-    print(f"Total hardcoded values found: {results['total_hardcoded_values']}")
-    print(f"High priority issues: {results['high_priority_count']}")
-    print(f"Configuration recommendations: {results['recommendations_count']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info(f"\n=== Environment Variable Analysis Results ===")
+    logger.info(f"Total hardcoded values found: {results['total_hardcoded_values']}")
+    logger.info(f"High priority issues: {results['high_priority_count']}")
+    logger.info(f"Configuration recommendations: {results['recommendations_count']}")
+    logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print category breakdown
-    print(f"\n=== Categories ===")
+    logger.info(f"\n=== Categories ===")
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        logger.info(f"{category}: {count}")
 
     # Print top recommendations
-    print(f"\n=== Top Configuration Recommendations ===")
+    logger.info(f"\n=== Top Configuration Recommendations ===")
     recommendations = results["configuration_recommendations"]
     high_priority = [r for r in recommendations if r["priority"] == "high"]
 
     for i, rec in enumerate(high_priority[:5], 1):
-        print(f"\n{i}. {rec['env_var_name']} ({rec['priority']} priority)")
-        print(f"   Category: {rec['category']}")
-        print(f"   Default: {rec['default_value']}")
-        print(f"   Description: {rec['description']}")
-        print(f"   Files affected: {len(rec['affected_files'])}")
+        logger.info(f"\n{i}. {rec['env_var_name']} ({rec['priority']} priority)")
+        logger.info(f"   Category: {rec['category']}")
+        logger.info(f"   Default: {rec['default_value']}")
+        logger.info(f"   Description: {rec['description']}")
+        logger.info(f"   Files affected: {len(rec['affected_files'])}")
 
     # Print metrics
-    print(f"\n=== Metrics ===")
+    logger.info(f"\n=== Metrics ===")
     metrics = results["metrics"]
-    print(f"Security issues: {metrics['security_issues']}")
-    print(f"Files affected: {metrics['files_affected']}")
-    print(f"Configuration complexity: {metrics['configuration_complexity']}")
+    logger.info(f"Security issues: {metrics['security_issues']}")
+    logger.info(f"Files affected: {metrics['files_affected']}")
+    logger.info(f"Configuration complexity: {metrics['configuration_complexity']}")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

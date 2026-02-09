@@ -15,10 +15,58 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.utils.system_context import generate_unique_key, get_system_context
+from utils.system_context import generate_unique_key, get_system_context
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
+async def _verify_stored_metadata(kb, fact_id: str) -> int:
+    """
+    Verify stored metadata has all required OS context fields.
+
+    Helper for main (#825).
+
+    Args:
+        kb: KnowledgeBase instance
+        fact_id: Fact ID to verify
+
+    Returns:
+        0 on success, 1 on failure
+    """
+    logger.info("\n4. Verifying Stored Metadata...")
+    fact = await kb.get_fact(fact_id)
+
+    if fact:
+        meta = fact.get("metadata", {})
+        logger.info(f"   ✓ Machine ID: {meta.get('machine_id')}")
+        logger.info(f"   ✓ OS Name: {meta.get('os_name')}")
+        logger.info(f"   ✓ Unique Key: {meta.get('unique_key')}")
+
+        # Verify all OS fields are present
+        required_fields = [
+            "machine_id",
+            "machine_ip",
+            "os_name",
+            "os_version",
+            "os_type",
+            "architecture",
+            "kernel_version",
+            "unique_key",
+        ]
+
+        missing = [f for f in required_fields if f not in meta]
+
+        if missing:
+            logger.error(f"   ✗ Missing fields: {missing}")
+            return 1
+        else:
+            logger.info("   ✓ All OS context fields present")
+            return 0
+
+    else:
+        logger.error("   ✗ Could not retrieve fact")
+        return 1
 
 
 async def main():
@@ -43,7 +91,7 @@ async def main():
     # Store a simple test fact with OS context
     logger.info("\n3. Testing Fact Storage with OS Context...")
 
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
     kb = KnowledgeBase()
     await kb.initialize()
@@ -58,9 +106,7 @@ async def main():
         "command": "ls",
         "section": "1",
         "title": "test man ls(1)",
-        # OS Context
         **ctx,
-        # Unique key
         "unique_key": test_key,
         "category": "test",
         "source": "quick_test",
@@ -75,37 +121,8 @@ async def main():
         logger.info(f"   ✓ Stored fact: {fact_id}")
 
         # Retrieve and verify
-        logger.info("\n4. Verifying Stored Metadata...")
-        fact = await kb.get_fact(fact_id)
-
-        if fact:
-            meta = fact.get("metadata", {})
-            logger.info(f"   ✓ Machine ID: {meta.get('machine_id')}")
-            logger.info(f"   ✓ OS Name: {meta.get('os_name')}")
-            logger.info(f"   ✓ Unique Key: {meta.get('unique_key')}")
-
-            # Verify all OS fields are present
-            required_fields = [
-                "machine_id",
-                "machine_ip",
-                "os_name",
-                "os_version",
-                "os_type",
-                "architecture",
-                "kernel_version",
-                "unique_key",
-            ]
-
-            missing = [f for f in required_fields if f not in meta]
-
-            if missing:
-                logger.error(f"   ✗ Missing fields: {missing}")
-                return 1
-            else:
-                logger.info("   ✓ All OS context fields present")
-
-        else:
-            logger.error("   ✗ Could not retrieve fact")
+        verify_result = await _verify_stored_metadata(kb, fact_id)
+        if verify_result != 0:
             return 1
 
     else:

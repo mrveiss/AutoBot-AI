@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.config import config
-from src.utils.redis_client import get_redis_client
+from config import config
+from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -911,37 +911,38 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== API Consistency Analysis Results ===")
-    print(f"Total endpoints: {results['total_endpoints']}")
-    print(f"Inconsistencies found: {results['inconsistencies_found']}")
-    print(f"Overall consistency score: {results['consistency_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info(f"\n=== API Consistency Analysis Results ===")
+    logger.info(f"Total endpoints: {results['total_endpoints']}")
+    logger.info(f"Inconsistencies found: {results['inconsistencies_found']}")
+    logger.info(f"Overall consistency score: {results['consistency_score']}/100")
+    logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print(f"\n=== Detailed Metrics ===")
-    print(f"Naming consistency: {metrics['naming_consistency']}/100")
-    print(f"Response format consistency: {metrics['response_format_consistency']}/100")
-    print(f"Error handling consistency: {metrics['error_handling_consistency']}/100")
-    print(f"Auth pattern consistency: {metrics['auth_pattern_consistency']}/100")
+    logger.info(f"\n=== Detailed Metrics ===")
+    logger.info(f"Naming consistency: {metrics['naming_consistency']}/100")
+    logger.info(f"Response format consistency: {metrics['response_format_consistency']}/100")
+    logger.info(f"Error handling consistency: {metrics['error_handling_consistency']}/100")
+    logger.info(f"Auth pattern consistency: {metrics['auth_pattern_consistency']}/100")
 
     # Print found endpoints
-    print(f"\n=== API Endpoints Found ===")
+    logger.info(f"\n=== API Endpoints Found ===")
     for endpoint in results["endpoints"]:
-        print(f"{endpoint['method']} {endpoint['path']} -> {endpoint['function']}()")
-        print(
+        logger.info(f"{endpoint['method']} {endpoint['path']} -> {endpoint['function']}()")
+        logger.info(
             f"  Auth: {endpoint['has_auth']}, Validation: {endpoint['has_validation']}, "
             f"Error Handling: {endpoint['has_error_handling']}"
         )
 
     # Print inconsistencies
     if results["inconsistencies"]:
-        print(f"\n=== Consistency Issues ===")
+        logger.info(f"\n=== Consistency Issues ===")
         for inc in results["inconsistencies"]:
-            print(f"{inc['type']} ({inc['severity']}): {inc['description']}")
-            print(f"  Affects {inc['affected_endpoints_count']} endpoints")
-            print(f"  Suggestion: {inc['suggestion']}")
+            logger.info(f"{inc['type']} ({inc['severity']}): {inc['description']}")
+            logger.info(f"  Affects {inc['affected_endpoints_count']} endpoints")
+            logger.info(f"  Suggestion: {inc['suggestion']}")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

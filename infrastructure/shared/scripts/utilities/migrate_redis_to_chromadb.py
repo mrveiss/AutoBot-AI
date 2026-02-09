@@ -43,7 +43,7 @@ from chromadb.config import Settings as ChromaSettings
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -429,6 +429,63 @@ class RedisToChromaDBMigration:
             logger.error("Verification failed: %s", e)
             return False
 
+    async def _migrate_single_batch(self, batch_num: int, cursor: int) -> tuple:
+        """
+        Migrate a single batch of vectors.
+
+        Helper for migrate (#825).
+
+        Args:
+            batch_num: Batch number
+            cursor: Current SCAN cursor
+
+        Returns:
+            Tuple of (new_cursor, imported_count, batch_time)
+        """
+        batch_start = time.time()
+        logger.info("\nBatch %s: SCAN cursor=%s", batch_num, cursor)
+
+        # Export from Redis using SCAN
+        cursor, ids, embeddings, documents, metadatas = await self.export_vectors_batch(
+            cursor, self.batch_size
+        )
+
+        if not ids:
+            logger.warning("No vectors exported in batch %s", batch_num)
+            return cursor, 0, time.time() - batch_start
+
+        # Import to ChromaDB
+        imported_count = await self.import_vectors_batch(
+            ids, embeddings, documents, metadatas
+        )
+
+        batch_time = time.time() - batch_start
+        return cursor, imported_count, batch_time
+
+    def _log_batch_progress(self, batch_num: int, imported_count: int, batch_time: float):
+        """
+        Log batch migration progress.
+
+        Helper for migrate (#825).
+
+        Args:
+            batch_num: Batch number
+            imported_count: Number of vectors imported
+            batch_time: Time taken for batch
+        """
+        self.migrated_vectors += imported_count
+
+        progress = (
+            (self.migrated_vectors / self.total_vectors) * 100
+            if self.total_vectors > 0
+            else 0
+        )
+
+        logger.info(
+            f"✅ Batch {batch_num} complete: {imported_count} vectors "
+            f"({batch_time:.1f}s) - Progress: {progress:.1f}%"
+        )
+
     async def migrate(self):
         """Execute the full migration"""
         start_time = time.time()
@@ -450,48 +507,18 @@ class RedisToChromaDBMigration:
 
         # Migrate in batches using SCAN cursor
         batch_num = 0
-        cursor = 0  # SCAN cursor (0 = start, returns to 0 when complete)
+        cursor = 0
 
         # Loop until cursor returns to 0 (complete iteration)
         while True:
             batch_num += 1
-            batch_start = time.time()
 
-            logger.info("\nBatch %s: SCAN cursor=%s", batch_num, cursor)
-
-            # Export from Redis using SCAN (CRITICAL: now includes documents)
-            (
-                cursor,
-                ids,
-                embeddings,
-                documents,
-                metadatas,
-            ) = await self.export_vectors_batch(cursor, self.batch_size)
-
-            if not ids:
-                logger.warning("No vectors exported in batch %s", batch_num)
-                # If cursor is 0, we've completed the full scan
-                if cursor == 0:
-                    break
-                continue
-
-            # Import to ChromaDB (CRITICAL: now includes documents parameter)
-            imported_count = await self.import_vectors_batch(
-                ids, embeddings, documents, metadatas
-            )
-            self.migrated_vectors += imported_count
-
-            batch_time = time.time() - batch_start
-            progress = (
-                (self.migrated_vectors / self.total_vectors) * 100
-                if self.total_vectors > 0
-                else 0
+            cursor, imported_count, batch_time = await self._migrate_single_batch(
+                batch_num, cursor
             )
 
-            logger.info(
-                f"✅ Batch {batch_num} complete: {imported_count} vectors "
-                f"({batch_time:.1f}s) - Progress: {progress:.1f}%"
-            )
+            if imported_count > 0:
+                self._log_batch_progress(batch_num, imported_count, batch_time)
 
             # If cursor is 0, we've completed the full scan
             if cursor == 0:

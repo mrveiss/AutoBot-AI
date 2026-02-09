@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 # Configure logging
 logging.basicConfig(
@@ -76,8 +76,12 @@ class NPUWorker:
         # Setup FastAPI routes
         self.setup_routes()
 
-    def setup_routes(self):
-        """Setup FastAPI routes for health, stats, inference, and model management."""
+    def _register_lifecycle_handlers(self):
+        """
+        Register FastAPI lifecycle handlers.
+
+        Helper for setup_routes (#825).
+        """
 
         @self.app.on_event("startup")
         async def startup():
@@ -88,6 +92,13 @@ class NPUWorker:
         async def shutdown():
             """Cleanup NPU worker resources on application shutdown."""
             await self.cleanup()
+
+    def _register_info_endpoints(self):
+        """
+        Register health and stats endpoints.
+
+        Helper for setup_routes (#825).
+        """
 
         @self.app.get("/health")
         async def health_check():
@@ -118,6 +129,13 @@ class NPUWorker:
                     for name, info in self.loaded_models.items()
                 },
             }
+
+    def _register_inference_endpoints(self):
+        """
+        Register inference and model management endpoints.
+
+        Helper for setup_routes (#825).
+        """
 
         @self.app.post("/inference", response_model=NPUTaskResponse)
         async def process_inference(request: NPUTaskRequest):
@@ -159,6 +177,12 @@ class NPUWorker:
                 "loaded_models": list(self.loaded_models.keys()),
                 "available_models": await self.get_available_models(),
             }
+
+    def setup_routes(self):
+        """Setup FastAPI routes for health, stats, inference, and model management."""
+        self._register_lifecycle_handlers()
+        self._register_info_endpoints()
+        self._register_inference_endpoints()
 
     async def initialize(self):
         """Initialize NPU worker."""

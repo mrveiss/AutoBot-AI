@@ -9,6 +9,7 @@ Author: mrveiss
 """
 
 import asyncio
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -18,8 +19,10 @@ import pytest
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
+
+logger = logging.getLogger(__name__)
 
 # Build URLs from centralized configuration
 BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
@@ -67,10 +70,10 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/health", "method": "GET"},
         )
 
-        print("\nHealth Endpoint Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")
-        print(f"  P95: {result.p95_time_ms:.2f}ms")
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")
+        logger.info("Health Endpoint Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.2f}")
+        logger.info("  P95: %sms", f"{result.p95_time_ms:.2f}")
+        logger.info("  Ops/sec: %s", f"{result.ops_per_second:.2f}")
 
         assert result.passed
         # Health checks should be very fast (< 100ms avg for mock)
@@ -96,10 +99,10 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/chat/message", "method": "POST"},
         )
 
-        print("\nChat Endpoint Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")
-        print(f"  P95: {result.p95_time_ms:.2f}ms")
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")
+        logger.info("Chat Endpoint Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.2f}")
+        logger.info("  P95: %sms", f"{result.p95_time_ms:.2f}")
+        logger.info("  Ops/sec: %s", f"{result.ops_per_second:.2f}")
 
         assert result.passed
 
@@ -120,9 +123,9 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/mcp/tools", "method": "GET"},
         )
 
-        print("\nMCP Tools List Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")
-        print(f"  P95: {result.p95_time_ms:.2f}ms")
+        logger.info("MCP Tools List Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.2f}")
+        logger.info("  P95: %sms", f"{result.p95_time_ms:.2f}")
 
         assert result.passed
 
@@ -146,9 +149,9 @@ class TestAPIEndpointBenchmarks:
             metadata={"endpoint": "/api/knowledge/query", "method": "POST", "top_k": 5},
         )
 
-        print("\nKnowledge Search Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")
-        print(f"  P95: {result.p95_time_ms:.2f}ms")
+        logger.info("Knowledge Search Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.2f}")
+        logger.info("  P95: %sms", f"{result.p95_time_ms:.2f}")
 
         assert result.passed
 
@@ -170,9 +173,9 @@ class TestAPIEndpointBenchmarks:
             metadata={"concurrent_requests": 5, "endpoint": "/api/health"},
         )
 
-        print("\nConcurrent Requests Benchmark (5 concurrent):")
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")
-        print(f"  P95: {result.p95_time_ms:.2f}ms")
+        logger.info("Concurrent Requests Benchmark (5 concurrent):")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.2f}")
+        logger.info("  P95: %sms", f"{result.p95_time_ms:.2f}")
 
         assert result.passed
 
@@ -199,9 +202,9 @@ class TestAPIEndpointBenchmarks:
             metadata={"data_size": "100 agents"},
         )
 
-        print("\nJSON Serialization Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")
+        logger.info("JSON Serialization Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.4f}")
+        logger.info("  Ops/sec: %s", f"{result.ops_per_second:.2f}")
 
         assert result.passed
         # JSON serialization should be very fast
@@ -231,9 +234,9 @@ class TestAPIEndpointBenchmarks:
             metadata={"data_size": "100 agents"},
         )
 
-        print("\nJSON Deserialization Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")
+        logger.info("JSON Deserialization Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.4f}")
+        logger.info("  Ops/sec: %s", f"{result.ops_per_second:.2f}")
 
         assert result.passed
         assert_performance(result, max_avg_ms=1.0, min_ops_per_second=1000)
@@ -277,9 +280,9 @@ class TestAPIResponseTimeBenchmarks:
             metadata={"model": "AgentModel"},
         )
 
-        print("\nPydantic Validation Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")
+        logger.info("Pydantic Validation Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.4f}")
+        logger.info("  Ops/sec: %s", f"{result.ops_per_second:.2f}")
 
         assert result.passed
         # Pydantic validation should be fast
@@ -299,9 +302,9 @@ class TestAPIResponseTimeBenchmarks:
             metadata={"type": "uuid4"},
         )
 
-        print("\nUUID Generation Benchmark:")
-        print(f"  Avg: {result.avg_time_ms:.6f}ms")
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")
+        logger.info("UUID Generation Benchmark:")
+        logger.info("  Avg: %sms", f"{result.avg_time_ms:.6f}")
+        logger.info("  Ops/sec: %s", f"{result.ops_per_second:.2f}")
 
         assert result.passed
         # UUID generation is very fast

@@ -7,14 +7,19 @@ Script to reset and recreate the knowledge base index with correct dimensions.
 """
 
 import asyncio
+import logging
 import os
 import sys
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import global_config_manager
-from src.utils.redis_client import get_redis_client
+from config import global_config_manager
+from utils.redis_client import get_redis_client
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
 async def reset_knowledge_base_index():
@@ -22,14 +27,14 @@ async def reset_knowledge_base_index():
 
     redis_client = get_redis_client(async_client=True)
     if not redis_client:
-        print("Redis client not available")
+        logger.error("Redis client not available")
         return
 
     index_name = global_config_manager.get_nested(
         "memory.redis.index_name", "autobot_knowledge_index"
     )
 
-    print(f"Resetting knowledge base index: {index_name}")
+    logger.info("Resetting knowledge base index: %s", index_name)
 
     try:
         # Get all keys for the index
@@ -37,28 +42,29 @@ async def reset_knowledge_base_index():
         keys = await redis_client.keys(pattern)
 
         if keys:
-            print(f"Found {len(keys)} keys to delete")
+            logger.info("Found %s keys to delete", len(keys))
             # Delete all keys
             for key in keys:
                 await redis_client.delete(key)
-            print("All keys deleted")
+            logger.info("All keys deleted")
         else:
-            print("No existing keys found")
+            logger.info("No existing keys found")
 
         # Try to drop the index itself using FT.DROPINDEX
         try:
             await redis_client.execute_command("FT.DROPINDEX", index_name)
-            print(f"Dropped index: {index_name}")
+            logger.info("Dropped index: %s", index_name)
         except Exception as e:
-            print(f"Could not drop index (may not exist): {e}")
+            logger.info("Could not drop index (may not exist): %s", e)
 
-        print("\nKnowledge base index has been reset.")
-        print(
+        logger.info("")
+        logger.info("Knowledge base index has been reset.")
+        logger.info(
             "The index will be recreated with correct dimensions when you add documents."
         )
 
     except Exception as e:
-        print(f"Error resetting knowledge base: {e}")
+        logger.error("Error resetting knowledge base: %s", e)
 
 
 if __name__ == "__main__":

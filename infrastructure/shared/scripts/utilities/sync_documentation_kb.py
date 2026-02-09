@@ -32,7 +32,7 @@ from typing import Dict, List, Set, Tuple
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -229,6 +229,47 @@ class DocumentationSyncManager:
 
         return chunks
 
+    async def _apply_sync_changes(self, added, modified, deleted, previous_state: Dict) -> Dict:
+        """
+        Apply detected changes to knowledge base.
+
+        Helper for sync (#825).
+
+        Args:
+            added: Set of added file paths
+            modified: Set of modified file paths
+            deleted: Set of deleted file paths
+            previous_state: Previous sync state
+
+        Returns:
+            New sync state dictionary
+        """
+        new_state = previous_state.copy()
+
+        # 1. Remove deleted documents
+        for file_path in deleted:
+            if file_path in previous_state:
+                fact_ids = previous_state[file_path].get("fact_ids", [])
+                await self.remove_document_chunks(file_path, fact_ids)
+                del new_state[file_path]
+
+        # 2. Update modified documents
+        for file_path in modified:
+            logger.info("Updating modified: %s", file_path)
+            if file_path in previous_state:
+                old_fact_ids = previous_state[file_path].get("fact_ids", [])
+                await self.remove_document_chunks(file_path, old_fact_ids)
+            result = await self.index_document(file_path)
+            new_state[file_path] = result
+
+        # 3. Add new documents
+        for file_path in added:
+            logger.info("Adding new: %s", file_path)
+            result = await self.index_document(file_path)
+            new_state[file_path] = result
+
+        return new_state
+
     async def sync(self, dry_run: bool = False):
         """
         Perform full synchronization
@@ -264,31 +305,7 @@ class DocumentationSyncManager:
             return
 
         # Apply changes
-        new_state = previous_state.copy()
-
-        # 1. Remove deleted documents
-        for file_path in deleted:
-            if file_path in previous_state:
-                fact_ids = previous_state[file_path].get("fact_ids", [])
-                await self.remove_document_chunks(file_path, fact_ids)
-                del new_state[file_path]
-
-        # 2. Update modified documents (remove old + add new)
-        for file_path in modified:
-            logger.info("Updating modified: %s", file_path)
-            # Remove old chunks
-            if file_path in previous_state:
-                old_fact_ids = previous_state[file_path].get("fact_ids", [])
-                await self.remove_document_chunks(file_path, old_fact_ids)
-            # Index new version
-            result = await self.index_document(file_path)
-            new_state[file_path] = result
-
-        # 3. Add new documents
-        for file_path in added:
-            logger.info("Adding new: %s", file_path)
-            result = await self.index_document(file_path)
-            new_state[file_path] = result
+        new_state = await self._apply_sync_changes(added, modified, deleted, previous_state)
 
         # Save new state
         self.save_sync_state(new_state)

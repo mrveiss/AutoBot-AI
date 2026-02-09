@@ -3,6 +3,7 @@
 Script to refactor hardcoded IP addresses and URLs to use shared constants
 """
 
+import logging
 import re
 import sys
 from pathlib import Path
@@ -11,7 +12,9 @@ from typing import Dict, List, Tuple
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.config import unified_config_manager
+from config import unified_config_manager
+
+logger = logging.getLogger(__name__)
 
 
 def get_replacement_map() -> Dict[str, str]:
@@ -112,8 +115,8 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
 
     # Check if we already have the import
     if (
-        "from src.constants import NetworkConstants" in content
-        or "from src.constants.network_constants import NetworkConstants" in content
+        "from constants import NetworkConstants" in content
+        or "from constants.network_constants import NetworkConstants" in content
     ):
         return content
 
@@ -126,7 +129,7 @@ def add_import_if_needed(content: str, file_path: Path) -> str:
 
     # Find where to add the import
     lines = content.split("\n")
-    import_line = "from src.constants import NetworkConstants, ServiceURLs"
+    import_line = "from constants import NetworkConstants, ServiceURLs"
 
     # Find the best place to add the import
     last_import_line = -1
@@ -221,14 +224,14 @@ def refactor_file(file_path: Path, content: str = None) -> bool:
         if replacements > 0:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
-            print(f"   ✅ {file_path.name}: {replacements} replacements")
+            logger.info(f"   ✅ {file_path.name}: {replacements} replacements")
             return True
         else:
-            print(f"   ⏭️  {file_path.name}: No changes needed")
+            logger.info(f"   ⏭️  {file_path.name}: No changes needed")
             return False
 
     except Exception as e:
-        print(f"   ❌ Error refactoring {file_path}: {e}")
+        logger.info(f"   ❌ Error refactoring {file_path}: {e}")
         return False
 
 
@@ -253,14 +256,14 @@ def find_core_files() -> List[Path]:
 
 def main():
     """Main refactoring function"""
-    print("🚀 Starting network constants refactoring...")
-    print(f"📋 Will replace {len(REPLACEMENT_MAP)} hardcoded values with constants")
+    logger.info("🚀 Starting network constants refactoring...")
+    logger.info(f"📋 Will replace {len(REPLACEMENT_MAP)} hardcoded values with constants")
 
     # Use project-relative path
     root_path = Path(__file__).parent.parent.parent
 
     files = find_core_files()
-    print(f"📁 Found {len(files)} files to analyze")
+    logger.info(f"📁 Found {len(files)} files to analyze")
 
     total_files_changed = 0
 
@@ -277,23 +280,24 @@ def main():
             if not has_hardcoded:
                 continue
 
-            print(f"🔧 Refactoring {file_path.relative_to(root_path)}...")
+            logger.info(f"🔧 Refactoring {file_path.relative_to(root_path)}...")
             # Pass pre-read content to avoid second file open
             if refactor_file(file_path, content=content):
                 total_files_changed += 1
 
         except Exception as e:
-            print(f"❌ Error processing {file_path}: {e}")
+            logger.info(f"❌ Error processing {file_path}: {e}")
 
-    print("\n✅ Network constants refactoring complete!")
-    print(f"📊 Files modified: {total_files_changed}")
-    print(f"🔄 Total patterns available for replacement: {len(REPLACEMENT_MAP)}")
+    logger.info("\n✅ Network constants refactoring complete!")
+    logger.info(f"📊 Files modified: {total_files_changed}")
+    logger.info(f"🔄 Total patterns available for replacement: {len(REPLACEMENT_MAP)}")
 
-    print("\n💡 Next steps:")
-    print("   1. Test the refactored code")
-    print("   2. Update any remaining hardcoded values manually")
-    print("   3. Add environment-specific configuration")
+    logger.info("\n💡 Next steps:")
+    logger.info("   1. Test the refactored code")
+    logger.info("   2. Update any remaining hardcoded values manually")
+    logger.info("   3. Add environment-specific configuration")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()
