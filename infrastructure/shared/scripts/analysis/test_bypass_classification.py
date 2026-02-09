@@ -21,12 +21,12 @@ from agents.llm_failsafe_agent import get_robust_llm_response
 
 async def test_llm_failsafe_direct():
     """Test the LLM failsafe agent directly"""
-    logger.error("🤖 Testing LLM Failsafe Agent directly...")
+    logger.info("Testing LLM Failsafe Agent directly...")
 
     try:
         prompt = "Say hello back to the user."
 
-        logger.info(f"   Calling get_robust_llm_response with: {prompt}")
+        logger.info("   Calling get_robust_llm_response with: %s", prompt)
 
         # Set a timeout to catch hangs
         response = await asyncio.wait_for(
@@ -34,9 +34,9 @@ async def test_llm_failsafe_direct():
         )
 
         logger.error("✅ LLM Failsafe response received:")
-        logger.info(f"   Tier: {response.tier_used.value}")
-        logger.info(f"   Content: {response.content[:100]}...")
-        logger.info(f"   Success: {response.success}")
+        logger.info("   Tier: %s", response.tier_used.value)
+        logger.info("   Content: %s...", response.content[:100])
+        logger.info("   Success: %s", response.success)
 
         return True
 
@@ -45,7 +45,7 @@ async def test_llm_failsafe_direct():
         return False
 
     except Exception as e:
-        logger.error(f"❌ LLM Failsafe failed: {e}")
+        logger.error("❌ LLM Failsafe failed: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -82,7 +82,7 @@ async def test_classification_without_communication():
         )
 
         logger.info("✅ Direct LLM interface response:")
-        logger.info(f"   Response: {response.get('response', 'No response')[:100]}...")
+        logger.info("   Response: %s...", response.get('response', 'No response')[:100])
 
         return True
 
@@ -91,7 +91,7 @@ async def test_classification_without_communication():
         return False
 
     except Exception as e:
-        logger.error(f"❌ Direct LLM interface failed: {e}")
+        logger.error("❌ Direct LLM interface failed: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -121,4 +121,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
