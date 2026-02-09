@@ -626,23 +626,39 @@ async function loadPatterns() {
     // Issue #701: Added type assertion for response
     const response = await api.get<ApiDataResponse>('/api/code-review/patterns')
     patterns.value = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns || []
+    applyPatternPrefs()
   } catch (error) {
     logger.warn('Failed to load patterns:', error)
     patterns.value = []
   }
 }
 
-async function togglePattern(pattern: Pattern) {
-  pattern.enabled = !pattern.enabled
+const PATTERN_PREFS_KEY = 'autobot-code-review-pattern-prefs';
+
+function savePatternPrefs(): void {
+  const disabled = patterns.value
+    .filter(p => !p.enabled)
+    .map(p => p.id);
+  localStorage.setItem(PATTERN_PREFS_KEY, JSON.stringify(disabled));
+}
+
+function applyPatternPrefs(): void {
   try {
-    // Issue #552: Backend doesn't have /patterns/toggle endpoint yet
-    // Pattern state is managed client-side only for now
-    // TODO: Implement backend endpoint for persistent pattern preferences
-    logger.debug('Pattern toggled (client-side only):', { id: pattern.id, enabled: pattern.enabled })
-  } catch (error) {
-    logger.warn('Failed to toggle pattern:', error)
-    pattern.enabled = !pattern.enabled
+    const raw = localStorage.getItem(PATTERN_PREFS_KEY);
+    if (!raw) return;
+    const disabled: string[] = JSON.parse(raw);
+    for (const p of patterns.value) {
+      if (disabled.includes(p.id)) p.enabled = false;
+    }
+  } catch {
+    logger.warn('Failed to parse pattern preferences from localStorage');
   }
+}
+
+function togglePattern(pattern: Pattern) {
+  pattern.enabled = !pattern.enabled;
+  savePatternPrefs();
+  logger.debug('Pattern toggled:', { id: pattern.id, enabled: pattern.enabled });
 }
 
 async function markResolved(issue: ReviewIssue) {

@@ -22,7 +22,6 @@
           <div v-if="exportMenuOpen" class="dropdown-menu">
             <button @click="exportReport('json')">Export JSON</button>
             <button @click="exportReport('csv')">Export CSV</button>
-            <button @click="exportReport('pdf')">Export PDF</button>
           </div>
         </div>
       </div>
@@ -754,8 +753,6 @@ async function exportReport(format: string): Promise<void> {
         downloadFile(JSON.stringify(data, null, 2), `quality-report-${Date.now()}.json`, 'application/json');
       } else if (format === 'csv') {
         downloadFile(data.content, `quality-report-${Date.now()}.csv`, 'text/csv');
-      } else {
-        logger.info('PDF export not yet implemented');
       }
     }
   } catch (error) {

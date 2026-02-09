@@ -601,7 +601,7 @@ export function useWorkflowBuilder() {
     executeTemplate: executeApiTemplate
   } = useWorkflowTemplates();
 
-  // Hardcoded fallback templates
+  // Minimal fallback templates shown when API is unreachable
   const builtInTemplates: WorkflowTemplate[] = [
     {
       id: 'system_update',
@@ -609,87 +609,7 @@ export function useWorkflowBuilder() {
       description: 'Update and upgrade system packages',
       category: 'System',
       icon: 'fas fa-sync-alt',
-      steps: [
-        {
-          command: 'sudo apt update',
-          description: 'Update package repositories',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 30,
-        },
-        {
-          command: 'sudo apt upgrade -y',
-          description: 'Upgrade installed packages',
-          risk_level: 'medium',
-          requires_confirmation: true,
-          estimated_duration: 120,
-        },
-        {
-          command: 'sudo apt autoremove -y',
-          description: 'Remove unnecessary packages',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 15,
-        },
-        {
-          command: 'apt list --upgradable',
-          description: 'Check for remaining updates',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 5,
-        },
-      ],
-    },
-    {
-      id: 'dev_environment',
-      name: 'Development Environment',
-      description: 'Setup development environment with common tools',
-      category: 'Development',
-      icon: 'fas fa-code',
-      steps: [
-        {
-          command: 'sudo apt update',
-          description: 'Update system packages',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 30,
-        },
-        {
-          command: 'sudo apt install -y git',
-          description: 'Install Git version control',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 20,
-        },
-        {
-          command: 'curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -',
-          description: 'Setup Node.js repository',
-          risk_level: 'medium',
-          requires_confirmation: true,
-          estimated_duration: 30,
-        },
-        {
-          command: 'sudo apt install -y nodejs',
-          description: 'Install Node.js and npm',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 45,
-        },
-        {
-          command: 'sudo apt install -y python3 python3-pip',
-          description: 'Install Python 3 and pip',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 30,
-        },
-        {
-          command: 'git --version && node --version && python3 --version',
-          description: 'Verify installations',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 5,
-        },
-      ],
+      steps: [{ command: 'sudo apt update && sudo apt upgrade -y', description: 'Update system', risk_level: 'medium', requires_confirmation: true, estimated_duration: 120 }],
     },
     {
       id: 'security_scan',
@@ -697,87 +617,7 @@ export function useWorkflowBuilder() {
       description: 'Run security scanning workflow',
       category: 'Security',
       icon: 'fas fa-shield-alt',
-      steps: [
-        {
-          command: 'sudo apt update',
-          description: 'Update package database',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 30,
-        },
-        {
-          command: 'sudo apt install -y nmap lynis',
-          description: 'Install security scanning tools',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 60,
-        },
-        {
-          command: 'sudo nmap -sS -O localhost',
-          description: 'Scan local ports and services',
-          risk_level: 'medium',
-          requires_confirmation: true,
-          estimated_duration: 120,
-        },
-        {
-          command: 'sudo lynis audit system',
-          description: 'Run system security audit',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 300,
-        },
-        {
-          command: 'find /etc -perm -o=w -type f 2>/dev/null',
-          description: 'Check for world-writable files in /etc',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 10,
-        },
-      ],
-    },
-    {
-      id: 'backup_creation',
-      name: 'Backup Creation',
-      description: 'Create backups of important files',
-      category: 'Backup',
-      icon: 'fas fa-archive',
-      steps: [
-        {
-          command: 'mkdir -p ~/backups/$(date +%Y%m%d)',
-          description: 'Create dated backup directory',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 2,
-        },
-        {
-          command: 'tar -czf ~/backups/$(date +%Y%m%d)/config_backup.tar.gz ~/.bashrc ~/.profile /etc/hosts',
-          description: 'Backup configuration files',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 10,
-        },
-        {
-          command: 'tar -czf ~/backups/$(date +%Y%m%d)/docs_backup.tar.gz ~/Documents',
-          description: 'Backup documents directory',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 60,
-        },
-        {
-          command: 'ls -la ~/backups/$(date +%Y%m%d)/',
-          description: 'Verify backup files created',
-          risk_level: 'low',
-          requires_confirmation: false,
-          estimated_duration: 2,
-        },
-        {
-          command: 'find ~/backups -type d -mtime +30 -exec rm -rf {} +',
-          description: 'Clean up backups older than 30 days',
-          risk_level: 'medium',
-          requires_confirmation: true,
-          estimated_duration: 5,
-        },
-      ],
+      steps: [{ command: 'sudo lynis audit system', description: 'System security audit', risk_level: 'low', requires_confirmation: false, estimated_duration: 300 }],
     },
   ];
 

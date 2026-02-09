@@ -102,14 +102,6 @@
           />
         </div>
 
-        <!-- Resize Handle (Edit Mode) -->
-        <div
-          v-if="isEditMode"
-          class="resize-handle"
-          @mousedown="startResize($event, widget)"
-        >
-          <i class="fas fa-grip-lines"></i>
-        </div>
       </div>
 
       <!-- Empty State -->
@@ -625,11 +617,6 @@ function handleDragEnd() {
   draggingWidgetId.value = null
 }
 
-function startResize(event: MouseEvent, widget: Widget) {
-  // Could implement drag-to-resize functionality
-  logger.debug('Resize started for:', widget.id)
-}
-
 // ============================================================================
 // Lifecycle
 // ============================================================================
@@ -908,22 +895,6 @@ onMounted(() => {
 .widget-content {
   flex: 1;
   overflow: auto;
-}
-
-.resize-handle {
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-default);
-  color: var(--text-tertiary);
-  cursor: ns-resize;
-}
-
-.resize-handle:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
 }
 
 /* Empty Dashboard */

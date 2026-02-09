@@ -113,7 +113,7 @@
 
     <div class="terminal-footer">
       <div class="footer-info">
-        <span>Press Ctrl+C to interrupt, Ctrl+D to exit, Tab for completion</span>
+        <span>Press Ctrl+C to interrupt, Ctrl+D to exit</span>
       </div>
       <div class="footer-actions">
         <button
@@ -1007,8 +1007,7 @@ export default {
           break;
 
         case 'Tab':
-          event.preventDefault();
-          // TODO: Implement tab completion
+          // Allow default Tab behavior (focus navigation)
           break;
 
         case 'c':
@@ -1088,6 +1087,9 @@ export default {
             url: url
           });
         } catch (error) {
+          if (error?.name !== 'AbortError') {
+            logger.warn('Share failed:', error);
+          }
         }
       } else {
         // Fallback: copy to clipboard

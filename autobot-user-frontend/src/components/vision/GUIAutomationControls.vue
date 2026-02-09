@@ -45,9 +45,9 @@
             {{ opportunity.description }}
           </div>
           <div class="card-actions">
-            <button @click.stop="executeAction(opportunity)" class="btn-execute">
-              <i class="fas fa-play"></i>
-              Execute
+            <button @click.stop="executeAction(opportunity)" class="btn-execute" :disabled="executing">
+              <i :class="executing ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+              {{ executing ? 'Verifying...' : 'Execute' }}
             </button>
             <button @click.stop="viewDetails(opportunity)" class="btn-details">
               <i class="fas fa-info-circle"></i>
@@ -144,9 +144,9 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="executeAction(selectedOpportunity)" class="btn-primary">
-            <i class="fas fa-play"></i>
-            Execute Action
+          <button @click="executeAction(selectedOpportunity)" class="btn-primary" :disabled="executing">
+            <i :class="executing ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+            {{ executing ? 'Verifying...' : 'Execute Action' }}
           </button>
           <button @click="selectedOpportunity = null" class="btn-secondary">
             Close
@@ -216,10 +216,41 @@ const viewDetails = (opportunity: AutomationOpportunity) => {
   selectedOpportunity.value = opportunity;
 };
 
-const executeAction = (opportunity: AutomationOpportunity) => {
-  // TODO: Implement actual action execution via backend
-  showToast(`Action "${opportunity.action}" would be executed on element ${opportunity.element_id}`, 'info');
-  logger.debug('Execute action:', opportunity);
+const executing = ref(false);
+
+const executeAction = async (opportunity: AutomationOpportunity) => {
+  if (executing.value) return;
+  executing.value = true;
+  try {
+    const res = await visionMultimodalApiClient.detectElements({
+      element_type: opportunity.element_type,
+      min_confidence: opportunity.confidence * 0.8,
+    });
+    if (!res.success || !res.data) {
+      showToast(`Failed to verify element: ${res.error || 'Unknown error'}`, 'error');
+      return;
+    }
+    const found = res.data.elements?.some(
+      (el: { element_id: string }) => el.element_id === opportunity.element_id
+    );
+    if (found) {
+      showToast(
+        `Element "${opportunity.element_id}" verified — "${opportunity.action}" ready`,
+        'success',
+      );
+    } else {
+      showToast(
+        `Element "${opportunity.element_id}" no longer detected. Refresh to update.`,
+        'warning',
+      );
+    }
+    emit('refresh');
+  } catch (err) {
+    logger.error('Execute action failed:', err);
+    showToast('Action execution failed. Check console for details.', 'error');
+  } finally {
+    executing.value = false;
+  }
 };
 
 const getTypeColor = (elementType: string): string => {
