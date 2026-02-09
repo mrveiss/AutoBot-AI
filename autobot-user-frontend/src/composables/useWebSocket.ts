@@ -236,6 +236,11 @@ export function useWebSocket(
         logger.error('Error:', event)
         error.value = new Error('WebSocket error')
         isConnecting.value = false
+        // Clear heartbeat timer - dead socket should not keep sending pings (#820)
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer)
+          heartbeatTimer = null
+        }
         opts.onError(event)
       }
 
@@ -331,9 +336,12 @@ export function useWebSocket(
   // Watch URL changes and reconnect
   if (url && typeof url !== 'string') {
     watch(url, (newUrl, oldUrl) => {
-      if (newUrl !== oldUrl && isConnected.value) {
-        logger.info('URL changed, reconnecting...')
-        reconnect()
+      if (newUrl !== oldUrl && (isConnected.value || isConnecting.value)) {
+        logger.info('URL changed, disconnecting old connection before reconnecting...')
+        // Disconnect old connection first to prevent accumulating connections (#820)
+        disconnect()
+        reconnectAttempts.value = 0
+        setTimeout(connect, 100)
       }
     })
   }

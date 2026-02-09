@@ -62,6 +62,10 @@ export function useCommandApproval() {
   const currentProjectPath = ref<string | null>(null)
   const currentUserId = ref<string>('web_user')
 
+  // Issue #820: Track active polling for cancellation
+  let pollingAbortController: AbortController | null = null
+  let pollingTimerId: ReturnType<typeof setTimeout> | null = null
+
   // Helper notification
   const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     showToast(message, type, type === 'error' ? 5000 : 3000)
@@ -80,28 +84,49 @@ export function useCommandApproval() {
   }
 
   /**
-   * Poll command state from queue (event-driven, no timeouts!)
+   * Cancel any active polling loop (#820).
+   */
+  const cancelPolling = () => {
+    if (pollingAbortController) {
+      pollingAbortController.abort()
+      pollingAbortController = null
+    }
+    if (pollingTimerId) {
+      clearTimeout(pollingTimerId)
+      pollingTimerId = null
+    }
+  }
+
+  /**
+   * Poll command state from queue with cancellation support (#820).
    */
   const pollCommandState = async (
     command_id: string,
     callback: (result: CommandResult) => void
   ) => {
+    // Cancel any previous polling before starting new one
+    cancelPolling()
+
     const maxAttempts = 100 // 100 * 500ms = 50 seconds max
     let attempt = 0
+    pollingAbortController = new AbortController()
+    const signal = pollingAbortController.signal
 
     const poll = async () => {
+      if (signal.aborted) return // Stop if cancelled
+
       try {
         const backendUrl = await appConfig.getApiUrl(
           `/api/agent-terminal/commands/${command_id}`
         )
-        const response = await fetch(backendUrl)
+        const response = await fetch(backendUrl, { signal })
 
         if (!response.ok) {
           logger.error('Failed to get command state:', response.status)
-          if (attempt < maxAttempts) {
+          if (attempt < maxAttempts && !signal.aborted) {
             attempt++
-            setTimeout(poll, 500)
-          } else {
+            pollingTimerId = setTimeout(poll, 500)
+          } else if (!signal.aborted) {
             callback({ state: 'error', error: 'HTTP error' })
           }
           return
@@ -132,19 +157,20 @@ export function useCommandApproval() {
         }
 
         // Command still running - poll again
-        if (attempt < maxAttempts) {
+        if (attempt < maxAttempts && !signal.aborted) {
           attempt++
-          setTimeout(poll, 500) // Poll every 500ms
-        } else {
+          pollingTimerId = setTimeout(poll, 500) // Poll every 500ms
+        } else if (!signal.aborted) {
           logger.error('Polling timed out after 50 seconds')
           callback({ state: 'timeout', error: 'Polling timeout' })
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
         logger.error('Polling error:', error)
-        if (attempt < maxAttempts) {
+        if (attempt < maxAttempts && !signal.aborted) {
           attempt++
-          setTimeout(poll, 500)
-        } else {
+          pollingTimerId = setTimeout(poll, 500)
+        } else if (!signal.aborted) {
           callback({ state: 'error', error: (error as Error).message })
         }
       }
@@ -377,6 +403,7 @@ export function useCommandApproval() {
     // Methods
     approveCommand,
     pollCommandState,
+    cancelPolling,
     promptForComment,
     submitApprovalWithComment,
     cancelComment,

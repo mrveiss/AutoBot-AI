@@ -495,9 +495,12 @@ export const useChatStore = defineStore('chat', () => {
     })
 
     // Issue #709: Reset typing state after sync to clear any stale state
-    // This ensures a clean state on page load/refresh
-    isTyping.value = false
-    streamingPreview.value = ''
+    // Issue #820: Only reset if not actively streaming to prevent interrupting active streams
+    const isActivelyStreaming = isTyping.value && streamingPreview.value.length > 0
+    if (!hasPendingApproval.value && !isActivelyStreaming) {
+      isTyping.value = false
+      streamingPreview.value = ''
+    }
 
     logger.debug(`✅ Session sync complete: ${sessions.value.length} sessions in store`)
   }

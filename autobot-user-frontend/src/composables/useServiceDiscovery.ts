@@ -39,6 +39,7 @@ export function useServiceDiscovery() {
 
   /**
    * Get the auth token from user store.
+   * Returns null when no real auth token is available (#820).
    */
   function getAuthToken(): string | null {
     // Access token from user store's authState
@@ -46,9 +47,8 @@ export function useServiceDiscovery() {
     if (authState && authState.token && authState.token !== 'single_user_mode') {
       return authState.token
     }
-    // For single user mode or no auth, return a placeholder
-    // The SLM will handle auth appropriately
-    return 'single_user_mode'
+    // Return null when no real token - callers must handle this (#820)
+    return null
   }
 
   /**
@@ -79,15 +79,13 @@ export function useServiceDiscovery() {
 
     try {
       const token = getAuthToken()
-      if (!token) {
-        throw new Error('Not authenticated')
-      }
 
       if (forceRefresh) {
         clearDiscoveryCache()
       }
 
-      const url = await discoverService(serviceName, token)
+      // Pass token to discovery; use empty string for single-user/no-auth mode (#820)
+      const url = await discoverService(serviceName, token ?? '')
 
       services.value.set(serviceName, {
         url,

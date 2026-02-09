@@ -41,7 +41,7 @@
  * ```
  */
 
-import { ref, computed, onUnmounted, getCurrentInstance, type Ref } from 'vue'
+import { ref, computed, onUnmounted, onErrorCaptured, getCurrentInstance, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for useErrorHandler
@@ -636,31 +636,48 @@ export async function retryOperation<T>(
 // ========================================
 
 /**
- * Create error boundary for catching Vue errors
- * Use in component setup to catch errors from child components
+ * Create error boundary for catching Vue errors from child components.
+ * Uses Vue 3's onErrorCaptured lifecycle hook for component-level error handling.
  *
- * @param onError - Error handler callback
+ * @param onError - Error handler callback. Return false to prevent propagation.
  *
  * @example
  * ```typescript
- * useErrorBoundary((error, instance) => {
+ * const { hasError, lastError, clearError } = useErrorBoundary((error, instance) => {
  *   console.error('Child component error:', error)
  *   showErrorNotification(error.message)
  * })
  * ```
  */
-export function useErrorBoundary(onError: (error: Error, instance: any) => void) {
+export function useErrorBoundary(onError: (error: Error, instance: any) => boolean | void) {
+  const hasError = ref(false)
+  const lastError = ref<Error | null>(null)
+
   const instance = getCurrentInstance()
 
   if (instance) {
-    // Note: Vue 3 error boundary requires app-level configuration
-    // This is a placeholder for component-level error handling
-    logger.warn(
-      '[useErrorBoundary] For proper error boundaries, configure app.config.errorHandler in main.ts'
-    )
+    // Issue #820: Use Vue 3's onErrorCaptured for actual error boundary behavior
+    onErrorCaptured((err: Error, vm: any, info: string) => {
+      hasError.value = true
+      lastError.value = err
+      logger.error(`[useErrorBoundary] Caught error in child component (${info}):`, err)
+      const result = onError(err, vm)
+      // Return false to stop error propagation, otherwise let it bubble
+      return result === false ? false : undefined
+    })
+  } else {
+    logger.warn('[useErrorBoundary] Must be called inside setup()')
+  }
+
+  const clearError = () => {
+    hasError.value = false
+    lastError.value = null
   }
 
   return {
-    onError
+    onError,
+    hasError,
+    lastError,
+    clearError
   }
 }

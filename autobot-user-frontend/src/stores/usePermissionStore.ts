@@ -84,6 +84,23 @@ interface ProjectApprovalsResponse {
 }
 
 export const usePermissionStore = defineStore('permission', () => {
+  // Issue #820: AbortController for cancelling in-flight fetch requests
+  let abortController: AbortController | null = null
+
+  function getSignal(): AbortSignal {
+    if (!abortController) {
+      abortController = new AbortController()
+    }
+    return abortController.signal
+  }
+
+  function abortPendingRequests(): void {
+    if (abortController) {
+      abortController.abort()
+      abortController = null
+    }
+  }
+
   // State
   const status = ref<PermissionStatus | null>(null)
   const currentMode = ref<PermissionMode>('default')
@@ -131,7 +148,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl('/api/permissions/status')
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: getSignal() })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -145,6 +162,7 @@ export const usePermissionStore = defineStore('permission', () => {
       logger.debug('Permission status fetched:', data)
       return data
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return null
       const msg = e instanceof Error ? e.message : 'Unknown error'
       logger.error('Failed to fetch permission status:', msg)
       error.value = msg
@@ -163,7 +181,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl(`/api/permissions/mode?is_admin=${isAdmin}`)
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: getSignal() })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -177,6 +195,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       logger.debug('Permission mode fetched:', data)
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       const msg = e instanceof Error ? e.message : 'Unknown error'
       logger.error('Failed to fetch permission mode:', msg)
       error.value = msg
@@ -231,7 +250,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl('/api/permissions/rules')
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: getSignal() })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -248,6 +267,7 @@ export const usePermissionStore = defineStore('permission', () => {
         deny: data.deny.length
       })
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
       const msg = e instanceof Error ? e.message : 'Unknown error'
       logger.error('Failed to fetch permission rules:', msg)
       error.value = msg
@@ -476,9 +496,11 @@ export const usePermissionStore = defineStore('permission', () => {
   }
 
   /**
-   * Initialize store - fetch status and rules
+   * Initialize store - fetch status and rules.
+   * Aborts any pending requests from previous initialization (#820).
    */
   async function initialize(isAdmin = false): Promise<void> {
+    abortPendingRequests()
     await fetchStatus()
     if (enabled.value) {
       await Promise.all([fetchMode(isAdmin), fetchRules()])
@@ -517,6 +539,7 @@ export const usePermissionStore = defineStore('permission', () => {
     fetchProjectApprovals,
     storeApproval,
     clearProjectApprovals,
-    initialize
+    initialize,
+    abortPendingRequests
   }
 })

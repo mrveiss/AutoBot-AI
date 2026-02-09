@@ -97,6 +97,8 @@ export const useAppStore = defineStore('app', () => {
   const systemNotifications = ref<SystemNotification[]>([])
   const notificationSettings = ref<NotificationSettings>({ ...defaultNotificationSettings })
   const lastActivityCheck = ref(Date.now())
+  // Issue #820: Track auto-hide timer IDs to prevent leaks on removal/reset
+  const notificationTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Loading State
   const isLoading = ref(false)
@@ -332,9 +334,12 @@ export const useAppStore = defineStore('app', () => {
     if (notificationSettings.value.enabled) {
       const hideDelay = getAutoHideDelay(notification.severity)
       if (hideDelay > 0) {
-        setTimeout(() => {
+        // Issue #820: Store timer ID so it can be cleared on removal
+        const timerId = setTimeout(() => {
+          notificationTimers.delete(newNotification.id)
           hideSystemNotification(newNotification.id)
         }, hideDelay * 1000)
+        notificationTimers.set(newNotification.id, timerId)
       }
     }
 
@@ -349,6 +354,12 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const removeSystemNotification = (id: string) => {
+    // Issue #820: Clear auto-hide timer to prevent leak
+    const timerId = notificationTimers.get(id)
+    if (timerId) {
+      clearTimeout(timerId)
+      notificationTimers.delete(id)
+    }
     const index = systemNotifications.value.findIndex(n => n.id === id)
     if (index !== -1) {
       systemNotifications.value.splice(index, 1)
@@ -356,6 +367,11 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const clearAllNotifications = () => {
+    // Issue #820: Clear all auto-hide timers to prevent leaks
+    for (const timerId of notificationTimers.values()) {
+      clearTimeout(timerId)
+    }
+    notificationTimers.clear()
     systemNotifications.value = []
   }
 

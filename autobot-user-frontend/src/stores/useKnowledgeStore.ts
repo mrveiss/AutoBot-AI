@@ -293,20 +293,11 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
       stats.value = await response.json()
     } catch (error) {
       logger.error('Failed to refresh stats:', error)
-      // Set default stats on error
+      // Issue #820: Preserve previous stats on error instead of resetting to zeros.
+      // Only update the status field to indicate the error state.
       stats.value = {
-        total_documents: 0,
-        total_chunks: 0,
-        total_facts: 0,
-        total_vectors: 0,
-        categories: [],
-        db_size: 0,
-        status: 'error',
-        last_updated: null,
-        redis_db: null,
-        index_name: null,
-        initialized: false,
-        rag_available: false
+        ...stats.value,
+        status: 'error'
       }
     } finally {
       isLoading.value = false
