@@ -37,7 +37,7 @@ import errorHandlerPlugin from './plugins/errorHandler'
 import ApiPlugin from './plugins/api'
 
 // Import global services
-import './services/GlobalWebSocketService.js'
+import './services/GlobalWebSocketService'
 
 // Import async component error handling setup
 import { setupAsyncComponentErrorHandler } from './utils/asyncComponentHelpers'

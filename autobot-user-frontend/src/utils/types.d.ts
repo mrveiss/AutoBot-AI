@@ -1,14 +1,5 @@
 // Type declarations for JavaScript modules
 
-declare module '@/composables/useGlobalWebSocket.js' {
-  export function useGlobalWebSocket(): {
-    isConnected: import('vue').Ref<boolean>
-    send: (data: any) => boolean
-    on: (handler: (data: any) => void) => () => void
-    state: import('vue').Ref<Record<string, any>>
-  } | undefined
-}
-
 declare module '@/utils/ChatIdGenerator.js' {
   export function generateChatId(): string
   export function generateMessageId(): string

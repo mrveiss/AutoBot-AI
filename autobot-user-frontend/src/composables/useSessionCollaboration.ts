@@ -25,7 +25,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, type Ref, type ComputedRef } from 'vue'
 import { useChatStore, type UserContext, type SessionActivity } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
-import globalWebSocketService from '@/services/GlobalWebSocketService.js'
+import globalWebSocketService from '@/services/GlobalWebSocketService'
 
 // Create scoped logger
 const logger = createLogger('SessionCollaboration')

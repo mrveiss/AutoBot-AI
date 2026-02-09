@@ -323,7 +323,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import { useTerminalService } from '@/services/TerminalService.js';
+import { useTerminalService } from '@/services/TerminalService';
 import { useRoute, useRouter } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
 import { createLogger } from '@/utils/debugUtils';

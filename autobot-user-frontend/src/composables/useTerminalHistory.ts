@@ -36,7 +36,7 @@
  */
 
 import { ref, onUnmounted, computed } from 'vue'
-import terminalService from '@/services/TerminalService.js'
+import terminalService from '@/services/TerminalService'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useTerminalHistory')

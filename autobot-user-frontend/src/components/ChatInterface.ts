@@ -13,7 +13,7 @@ import type {
   KnowledgeBaseStatus,
   FileUploadResponse
 } from '@/types/api'
-import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket.js'
+import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 import { apiService } from '@/services/api'
 import apiClient from '@/utils/ApiClient'
