@@ -10,10 +10,9 @@ Manages role definitions and provides default roles for code distribution.
 import logging
 from typing import Dict, List, Optional
 
+from models.database import Role, SyncType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.database import Role, SyncType
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,8 @@ DEFAULT_ROLES = [
         "name": "backend",
         "display_name": "Backend API",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["backend/", "src/"],
-        "target_path": "/home/autobot/AutoBot",
+        "source_paths": ["autobot-user-backend/"],
+        "target_path": "/opt/autobot",
         "systemd_service": "autobot-backend",
         "auto_restart": False,
         "health_check_port": 8001,
@@ -41,20 +40,20 @@ DEFAULT_ROLES = [
         "name": "frontend",
         "display_name": "Frontend UI",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["autobot-vue/"],
-        "target_path": "/home/autobot/autobot-vue",
+        "source_paths": ["autobot-user-frontend/"],
+        "target_path": "/opt/autobot",
         "systemd_service": "autobot-frontend",
         "auto_restart": True,
         "health_check_port": 5173,
-        "post_sync_cmd": "cd /home/autobot/autobot-vue && npm install",
+        "post_sync_cmd": "cd /opt/autobot/autobot-user-frontend && npm install",
     },
     {
         "name": "slm-server",
         "display_name": "SLM Server",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["slm-server/", "slm-admin/"],
-        "target_path": "/home/autobot/AutoBot",
-        "systemd_service": "slm-backend",
+        "source_paths": ["autobot-slm-backend/", "autobot-slm-frontend/"],
+        "target_path": "/opt/autobot",
+        "systemd_service": "autobot-slm-backend",
         "auto_restart": False,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
@@ -63,7 +62,7 @@ DEFAULT_ROLES = [
         "name": "slm-agent",
         "display_name": "SLM Agent",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["src/slm/agent/"],
+        "source_paths": ["autobot-slm-backend/slm/agent/"],
         "target_path": "/opt/slm-agent",
         "systemd_service": "slm-agent",
         "auto_restart": True,
@@ -72,8 +71,8 @@ DEFAULT_ROLES = [
         "name": "npu-worker",
         "display_name": "NPU Worker",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["resources/windows-npu-worker/"],
-        "target_path": "C:\\AutoBot\\npu-worker",
+        "source_paths": ["autobot-npu-worker/"],
+        "target_path": "/opt/autobot/autobot-npu-worker",
         "auto_restart": False,
         "health_check_port": 8081,
     },
@@ -81,8 +80,8 @@ DEFAULT_ROLES = [
         "name": "browser-service",
         "display_name": "Browser Automation",
         "sync_type": SyncType.COMPONENT.value,
-        "source_paths": ["browser-service/"],
-        "target_path": "/home/autobot/browser-service",
+        "source_paths": ["autobot-browser-worker/"],
+        "target_path": "/opt/autobot/autobot-browser-worker",
         "systemd_service": "autobot-browser",
         "auto_restart": True,
         "health_check_port": 3000,

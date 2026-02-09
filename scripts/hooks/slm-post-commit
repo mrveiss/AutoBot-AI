@@ -1,0 +1,61 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Git Post-Commit Hook - Notifies SLM server of new commits (#824)
+#
+# Install: ln -sf scripts/hooks/slm-post-commit .git/hooks/post-commit
+#
+# When a commit is made on the dev machine (code-source), this hook
+# sends a notification to the SLM server. The SLM then marks all
+# fleet nodes as "outdated" so they can be synced.
+
+set -e
+
+# SLM server configuration
+SLM_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
+SLM_PORT="${AUTOBOT_SLM_PORT:-8000}"
+SLM_URL="https://${SLM_HOST}:${SLM_PORT}"
+
+# Code-source node ID (dev machine in Ansible inventory)
+CODE_SOURCE_NODE_ID="${AUTOBOT_CODE_SOURCE_NODE:-01-Code-Source}"
+
+# Get commit info from git
+COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+COMMIT_MSG=$(git log -1 --pretty=%s)
+
+# Only notify on tracked branches (skip detached HEAD, etc)
+if [ "$COMMIT_BRANCH" = "HEAD" ]; then
+    exit 0
+fi
+
+# Send notification to SLM (non-blocking, don't fail the commit)
+notify_slm() {
+    local payload
+    payload=$(cat <<PAYLOAD
+{
+    "node_id": "${CODE_SOURCE_NODE_ID}",
+    "commit": "${COMMIT_HASH}",
+    "branch": "${COMMIT_BRANCH}",
+    "message": "${COMMIT_MSG}",
+    "is_code_source": true
+}
+PAYLOAD
+)
+
+    # Use --insecure for self-signed TLS certs
+    curl -s --insecure \
+        -X POST "${SLM_URL}/api/code-source/notify" \
+        -H "Content-Type: application/json" \
+        -d "${payload}" \
+        --connect-timeout 3 \
+        --max-time 5 \
+        > /dev/null 2>&1
+}
+
+# Run in background so commit doesn't hang if SLM is unreachable
+notify_slm &
+
+exit 0

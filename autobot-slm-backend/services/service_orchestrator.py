@@ -93,14 +93,14 @@ _SERVICE_DEFINITIONS = {
         default_port=5173,
         systemd_service="nginx",  # Production uses nginx
         start_command=(
-            "cd /home/autobot/autobot-vue && "
+            "cd /opt/autobot/autobot-slm-frontend && "
             "nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &"
         ),
         stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
         health_check_path="/",
         health_check_type="http",
         requires_sudo=False,
-        working_dir="/home/autobot/autobot-vue",
+        working_dir="/opt/autobot/autobot-slm-frontend",
         description="Vue.js frontend development server",
     ),
     # Redis Stack (database VM)
@@ -126,7 +126,7 @@ _SERVICE_DEFINITIONS = {
         default_port=8081,
         systemd_service="autobot-npu-worker",
         start_command=(
-            "cd /home/autobot/AutoBot && "
+            "cd /opt/autobot/autobot-npu-worker && "
             "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 "
             "> logs/npu-worker.log 2>&1 &"
         ),
@@ -161,14 +161,14 @@ _SERVICE_DEFINITIONS = {
         default_host="172.16.168.25",
         default_port=3000,
         start_command=(
-            "cd /home/autobot/browser && "
+            "cd /opt/autobot/autobot-browser-worker && "
             "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
         ),
         stop_command="pkill -f 'playwright-server'",
         health_check_path="/",
         health_check_type="http",
         requires_sudo=False,
-        working_dir="/home/autobot/browser",
+        working_dir="/opt/autobot/autobot-browser-worker",
         description="Playwright browser automation service",
     ),
     # SLM Backend (this server)

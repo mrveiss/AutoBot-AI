@@ -17,17 +17,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
-from sqlalchemy import select
-
 from models.database import Setting
 from services.database import db_service
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
 # Configuration
-CODE_PACKAGE_DIR = Path("/tmp/slm-code-packages")
+CODE_PACKAGE_DIR = Path("/tmp/slm-code-packages")  # nosec B108
 AGENT_CODE_PATH = "src/slm/agent"  # Relative to repo root
-DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/home/autobot/AutoBot")
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 # Remote agent installation path on managed nodes
 REMOTE_AGENT_PATH = "/opt/slm-agent"
 # SSH key for connecting to managed nodes
