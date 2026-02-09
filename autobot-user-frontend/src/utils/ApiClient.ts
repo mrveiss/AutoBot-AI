@@ -264,7 +264,7 @@ export class ApiClient {
     throw lastError;
   }
 
-  // POST — returns parsed JSON
+  // POST — returns parsed JSON (handles 204 No Content: #822)
   async post(endpoint: string, data?: any, options: RequestOptions = {}): Promise<any> {
     const response = await this.rawRequest(endpoint, {
       method: 'POST', body: data, ...options,
@@ -275,10 +275,15 @@ export class ApiClient {
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
-    return await response.json();
+    if (response.status === 204) return {};
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    return {};
   }
 
-  // PUT — returns parsed JSON
+  // PUT — returns parsed JSON (handles 204 No Content: #822)
   async put(endpoint: string, data?: any, options: RequestOptions = {}): Promise<any> {
     const response = await this.rawRequest(endpoint, {
       method: 'PUT', body: data, ...options,
@@ -289,7 +294,12 @@ export class ApiClient {
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
-    return await response.json();
+    if (response.status === 204) return {};
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    return {};
   }
 
   // DELETE — returns parsed JSON (handles empty responses)

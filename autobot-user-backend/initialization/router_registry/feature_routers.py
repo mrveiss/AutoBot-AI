@@ -241,6 +241,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-rag"],
         "knowledge_rag",
     ),
+    # Admin feature flags and access control
+    (
+        "backend.api.feature_flags",
+        "/admin",
+        ["admin", "feature-flags"],
+        "feature_flags",
+    ),
 ]
 
 

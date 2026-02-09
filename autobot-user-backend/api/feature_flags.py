@@ -20,9 +20,11 @@ import logging
 from datetime import datetime
 from typing import Dict, List
 
+from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.services.access_control_metrics import (
     AccessControlMetrics,
     get_metrics_service,
@@ -33,12 +35,10 @@ from backend.services.feature_flags import (
     FeatureFlags,
     get_feature_flags,
 )
-from auth_middleware import get_current_user
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/admin", tags=["admin", "feature-flags"])
+router = APIRouter(tags=["admin", "feature-flags"])
 
 
 # Request/Response Models

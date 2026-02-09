@@ -9,7 +9,7 @@
  *
  * Backend APIs:
  * - /api/orchestrator/* - Enhanced multi-agent orchestration
- * - /api/workflow_automation/* - Workflow automation management
+ * - /api/workflow-automation/* - Workflow automation management
  */
 
 import { ref, computed, reactive, onUnmounted, onMounted } from 'vue';
@@ -361,7 +361,7 @@ class WorkflowBuilderApiClient {
   }
 
   // ==================================================================================
-  // WORKFLOW AUTOMATION API (/api/workflow_automation)
+  // WORKFLOW AUTOMATION API (/api/workflow-automation)
   // ==================================================================================
 
   /** Create a new workflow */
@@ -372,7 +372,7 @@ class WorkflowBuilderApiClient {
     sessionId: string,
     automationMode: AutomationMode = 'semi_automatic'
   ): Promise<ApiResponse<{ success: boolean; workflow_id: string; message: string }>> {
-    return this.request('/api/workflow_automation/create_workflow', {
+    return this.request('/api/workflow-automation/create_workflow', {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -395,7 +395,7 @@ class WorkflowBuilderApiClient {
   async startWorkflow(
     workflowId: string
   ): Promise<ApiResponse<{ success: boolean; message: string }>> {
-    return this.request(`/api/workflow_automation/start_workflow/${workflowId}`, {
+    return this.request(`/api/workflow-automation/start_workflow/${workflowId}`, {
       method: 'POST',
     });
   }
@@ -407,7 +407,7 @@ class WorkflowBuilderApiClient {
     stepId?: string,
     userInput?: string
   ): Promise<ApiResponse<{ success: boolean; message: string }>> {
-    return this.request('/api/workflow_automation/control_workflow', {
+    return this.request('/api/workflow-automation/control_workflow', {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
@@ -422,14 +422,14 @@ class WorkflowBuilderApiClient {
   async getWorkflowStatus(
     workflowId: string
   ): Promise<ApiResponse<{ success: boolean; workflow: ActiveWorkflow }>> {
-    return this.request(`/api/workflow_automation/workflow_status/${workflowId}`);
+    return this.request(`/api/workflow-automation/workflow_status/${workflowId}`);
   }
 
   /** Get all active workflows */
   async getActiveWorkflows(): Promise<
     ApiResponse<{ success: boolean; workflows: ActiveWorkflow[]; count: number }>
   > {
-    return this.request('/api/workflow_automation/active_workflows');
+    return this.request('/api/workflow-automation/active_workflows');
   }
 
   /** Create workflow from natural language */
@@ -448,7 +448,7 @@ class WorkflowBuilderApiClient {
       plan?: PlanApprovalRequest;
     }>
   > {
-    return this.request('/api/workflow_automation/create_from_chat', {
+    return this.request('/api/workflow-automation/create_from_chat', {
       method: 'POST',
       body: JSON.stringify({
         user_request: userRequest,
@@ -473,7 +473,7 @@ class WorkflowBuilderApiClient {
       plan: PlanApprovalRequest;
     }>
   > {
-    return this.request(`/api/workflow_automation/present_plan/${workflowId}`, {
+    return this.request(`/api/workflow-automation/present_plan/${workflowId}`, {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
@@ -499,7 +499,7 @@ class WorkflowBuilderApiClient {
       message: string;
     }>
   > {
-    return this.request('/api/workflow_automation/approve_plan', {
+    return this.request('/api/workflow-automation/approve_plan', {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
@@ -522,7 +522,7 @@ class WorkflowBuilderApiClient {
       approval: PlanApprovalRequest | null;
     }>
   > {
-    return this.request(`/api/workflow_automation/pending_approval/${workflowId}`);
+    return this.request(`/api/workflow-automation/pending_approval/${workflowId}`);
   }
 }
 
@@ -1208,7 +1208,7 @@ export function useWorkflowBuilder() {
       wsConnection.close();
     }
 
-    const wsUrl = `${getBackendUrl().replace('http', 'ws')}/api/workflow_automation/workflow_ws/${sessionId}`;
+    const wsUrl = `${getBackendUrl().replace('http', 'ws')}/api/workflow-automation/workflow_ws/${sessionId}`;
     wsConnection = new WebSocket(wsUrl);
 
     wsConnection.onopen = () => {
