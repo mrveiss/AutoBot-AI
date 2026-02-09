@@ -12,9 +12,11 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCodeSync } from '@/composables/useCodeSync'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const codeSync = useCodeSync()
+const authStore = useAuthStore()
 
 // Polling interval for status updates (1 minute)
 const POLL_INTERVAL = 60000
@@ -35,6 +37,7 @@ async function refresh(): Promise<void> {
 }
 
 onMounted(async () => {
+  if (!authStore.isAuthenticated) return
   await refresh()
   pollTimer = setInterval(refresh, POLL_INTERVAL)
 })

@@ -78,6 +78,7 @@ async function refreshCodeSyncStatus(): Promise<void> {
 }
 
 onMounted(async () => {
+  if (!authStore.isAuthenticated) return
   // Fetch initial code sync status
   await refreshCodeSyncStatus()
   // Set up polling for code sync status

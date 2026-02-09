@@ -35,7 +35,14 @@ export function useSlmWebSocket() {
       return
     }
 
-    socket.value = new WebSocket(WS_URL)
+    try {
+      socket.value = new WebSocket(WS_URL)
+    } catch (err) {
+      // SecurityError when mixed content is blocked (ws:// from https:// page)
+      connected.value = false
+      scheduleReconnect()
+      return
+    }
 
     socket.value.onopen = () => {
       connected.value = true
