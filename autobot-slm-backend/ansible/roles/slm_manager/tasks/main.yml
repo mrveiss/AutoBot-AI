@@ -7,34 +7,42 @@
 ---
 
 # ==========================================================
-# System packages
+# System packages (assume blank host)
 # ==========================================================
-- name: "SLM | Install system packages"
+- name: "SLM | Install prerequisites"
   ansible.builtin.apt:
     name:
+      - curl
+      - gnupg
+      - ca-certificates
       - python3
       - python3-pip
       - python3-venv
       - nginx
       - openssl
       - ansible
+      - build-essential
     state: present
     update_cache: true
   tags: ['slm', 'packages']
 
-- name: "SLM | Check if Node.js is installed"
-  ansible.builtin.command:
-    cmd: node --version
-  register: slm_node_check
-  changed_when: false
-  failed_when: false
+- name: "SLM | Check if NodeSource repo exists"
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/nodesource.list
+  register: slm_nodesource_repo
   tags: ['slm', 'packages']
 
-- name: "SLM | Install Node.js via NodeSource (includes npm)"
+- name: "SLM | Add NodeSource repository for Node.js 20.x"
   ansible.builtin.shell: |
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-  when: slm_node_check.rc != 0
+  when: not slm_nodesource_repo.stat.exists
+  tags: ['slm', 'packages']
+
+- name: "SLM | Install Node.js (includes npm)"
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
   tags: ['slm', 'packages']
 
 # ==========================================================
