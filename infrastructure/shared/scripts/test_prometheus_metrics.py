@@ -10,24 +10,27 @@ Validates that all new metrics are properly exposed.
 
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.monitoring.metrics_adapter import get_metrics_adapter
-from src.monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.metrics_adapter import get_metrics_adapter
+from monitoring.prometheus_metrics import get_metrics_manager
 
 
 def test_prometheus_metrics():
     """Test that all Phase 1 metrics are properly initialized"""
-    print("=" * 70)
-    print("Testing Phase 1 Prometheus Metrics (Issue #344)")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("Testing Phase 1 Prometheus Metrics (Issue #344)")
+    logger.info("=" * 70)
 
     metrics_manager = get_metrics_manager()
 
     # Test that all new metrics exist
-    print("\n✓ Checking System Metrics...")
+    logger.info("\n✓ Checking System Metrics...")
     assert hasattr(metrics_manager, "system_cpu_usage"), "Missing system_cpu_usage"
     assert hasattr(
         metrics_manager, "system_memory_usage"
@@ -36,14 +39,14 @@ def test_prometheus_metrics():
     assert hasattr(
         metrics_manager, "system_network_bytes"
     ), "Missing system_network_bytes"
-    print("  ✓ All system metrics initialized")
+    logger.info("  ✓ All system metrics initialized")
 
-    print("\n✓ Checking Error Metrics...")
+    logger.error("\n✓ Checking Error Metrics...")
     assert hasattr(metrics_manager, "errors_total"), "Missing errors_total"
     assert hasattr(metrics_manager, "error_rate"), "Missing error_rate"
-    print("  ✓ All error metrics initialized")
+    logger.error("  ✓ All error metrics initialized")
 
-    print("\n✓ Checking Claude API Metrics...")
+    logger.info("\n✓ Checking Claude API Metrics...")
     assert hasattr(
         metrics_manager, "claude_api_requests_total"
     ), "Missing claude_api_requests_total"
@@ -56,9 +59,9 @@ def test_prometheus_metrics():
     assert hasattr(
         metrics_manager, "claude_api_rate_limit_remaining"
     ), "Missing claude_api_rate_limit_remaining"
-    print("  ✓ All Claude API metrics initialized")
+    logger.info("  ✓ All Claude API metrics initialized")
 
-    print("\n✓ Checking Service Health Metrics...")
+    logger.info("\n✓ Checking Service Health Metrics...")
     assert hasattr(
         metrics_manager, "service_health_score"
     ), "Missing service_health_score"
@@ -66,10 +69,10 @@ def test_prometheus_metrics():
         metrics_manager, "service_response_time"
     ), "Missing service_response_time"
     assert hasattr(metrics_manager, "service_status"), "Missing service_status"
-    print("  ✓ All service health metrics initialized")
+    logger.info("  ✓ All service health metrics initialized")
 
     # Test recording methods
-    print("\n✓ Testing metric recording methods...")
+    logger.info("\n✓ Testing metric recording methods...")
     metrics_manager.update_system_cpu(45.5)
     metrics_manager.update_system_memory(62.3)
     metrics_manager.update_system_disk("/", 35.2)
@@ -83,10 +86,10 @@ def test_prometheus_metrics():
     metrics_manager.update_service_health("backend", 95.0)
     metrics_manager.record_service_response_time("redis", 0.015)
     metrics_manager.update_service_status("ollama", "online")
-    print("  ✓ All recording methods work")
+    logger.info("  ✓ All recording methods work")
 
     # Test metrics output
-    print("\n✓ Testing metrics output...")
+    logger.info("\n✓ Testing metrics output...")
     metrics_output = metrics_manager.get_metrics().decode("utf-8")
 
     # Check that new metrics appear in output
@@ -108,25 +111,25 @@ def test_prometheus_metrics():
 
     for metric in expected_metrics:
         if metric in metrics_output:
-            print(f"  ✓ {metric}")
+            logger.info(f"  ✓ {metric}")
         else:
-            print(f"  ✗ {metric} NOT FOUND")
+            logger.info(f"  ✗ {metric} NOT FOUND")
             return False
 
-    print("\n✓ Testing MetricsAdapter...")
+    logger.info("\n✓ Testing MetricsAdapter...")
     adapter = get_metrics_adapter()
     adapter.record_system_cpu(50.0)
     adapter.record_error("test", "test_component", "TEST_ERROR")
     adapter.record_claude_api_request("test_tool", True, 1024)
-    print("  ✓ MetricsAdapter works (dual-write)")
+    logger.info("  ✓ MetricsAdapter works (dual-write)")
 
-    print("\n" + "=" * 70)
-    print("✅ All Phase 1 metrics tests PASSED!")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info("✅ All Phase 1 metrics tests PASSED!")
+    logger.info("=" * 70)
     print(
         "\nMetrics endpoint ready at: http://172.16.168.20:8001/api/monitoring/metrics"
     )
-    print("Configure Prometheus to scrape this endpoint.\n")
+    logger.info("Configure Prometheus to scrape this endpoint.\n")
 
     return True
 
@@ -136,7 +139,7 @@ if __name__ == "__main__":
         success = test_prometheus_metrics()
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"\n❌ Test failed with error: {e}")
+        logger.error(f"\n❌ Test failed with error: {e}")
         import traceback
 
         traceback.print_exc()

@@ -9,45 +9,48 @@ Demonstrates the functionality of the awareness injection system
 
 import asyncio
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.llm_self_awareness import get_llm_self_awareness
-from src.middleware.llm_awareness_middleware import get_awareness_injector
+from llm_self_awareness import get_llm_self_awareness
+from middleware.llm_awareness_middleware import get_awareness_injector
 
 
 async def test_awareness_system():
     """Test the LLM awareness system components"""
-    print("🤖 Testing AutoBot LLM Self-Awareness System\n")
+    logger.info("🤖 Testing AutoBot LLM Self-Awareness System\n")
 
     try:
         # Initialize awareness system
         awareness = get_llm_self_awareness()
         injector = get_awareness_injector()
 
-        print("1. System Context Overview")
-        print("-" * 50)
+        logger.info("1. System Context Overview")
+        logger.info("-" * 50)
         context = await awareness.get_system_context(include_detailed=False)
-        print(f"System: {context['system_identity']['name']}")
-        print(f"Current Phase: {context['system_identity']['current_phase']}")
-        print(f"System Maturity: {context['system_identity']['system_maturity']}%")
-        print(f"Active Capabilities: {context['current_capabilities']['count']}")
+        logger.info(f"System: {context['system_identity']['name']}")
+        logger.info(f"Current Phase: {context['system_identity']['current_phase']}")
+        logger.info(f"System Maturity: {context['system_identity']['system_maturity']}%")
+        logger.info(f"Active Capabilities: {context['current_capabilities']['count']}")
 
-        print("\nCapability Categories:")
+        logger.info("\nCapability Categories:")
         for category, caps in context["current_capabilities"]["categories"].items():
-            print(f"  - {category.title()}: {len(caps)} capabilities")
+            logger.info(f"  - {category.title()}: {len(caps)} capabilities")
 
-        print("\n2. Capability Summary")
-        print("-" * 50)
+        logger.info("\n2. Capability Summary")
+        logger.info("-" * 50)
         summary = awareness.create_capability_summary()
         # Show first few lines of summary
         summary_lines = summary.split("\n")[:15]
-        print("\n".join(summary_lines))
+        logger.info("\n".join(summary_lines))
         if len(summary.split("\n")) > 15:
-            print("... (truncated)")
+            logger.info("... (truncated)")
 
-        print("\n3. Prompt Injection Test")
-        print("-" * 50)
+        logger.info("\n3. Prompt Injection Test")
+        logger.info("-" * 50)
         test_prompts = [
             "How can I use the workflow system?",
             "What AI capabilities do I have?",
@@ -55,19 +58,19 @@ async def test_awareness_system():
         ]
 
         for prompt in test_prompts:
-            print(f"\nOriginal: {prompt}")
+            logger.info(f"\nOriginal: {prompt}")
             enhanced = await awareness.inject_awareness_context(
                 prompt, context_level="basic"
             )
             # Show just the injected context part (first few lines)
             context_lines = enhanced.split("\n")[:8]
-            print("Enhanced with context:")
-            print("\n".join(context_lines))
-            print("... (context continues) ...")
-            print()
+            logger.info("Enhanced with context:")
+            logger.info("\n".join(context_lines))
+            logger.info("... (context continues) ...")
+            logger.info("")
 
-        print("\n4. Query Analysis Test")
-        print("-" * 50)
+        logger.info("\n4. Query Analysis Test")
+        logger.info("-" * 50)
         test_queries = [
             "What can I do with AI features?",
             "How do I progress to the next phase?",
@@ -75,47 +78,47 @@ async def test_awareness_system():
         ]
 
         for query in test_queries:
-            print(f"\nQuery: {query}")
+            logger.info(f"\nQuery: {query}")
             analysis = await awareness.get_phase_aware_response(query)
             print(
                 f"Relevant Capabilities: {len(analysis['context']['relevant_capabilities'])}"
             )
             if analysis["recommendations"]:
-                print("Recommendations:")
+                logger.info("Recommendations:")
                 for rec in analysis["recommendations"]:
                     print(
                         f"  - {rec['type']}: {rec.get('suggestion', rec.get('next_action', 'See details'))}"
                     )
 
-        print("\n5. System Metrics")
-        print("-" * 50)
+        logger.info("\n5. System Metrics")
+        logger.info("-" * 50)
         metrics = context["system_metrics"]
         operational = context["operational_status"]
 
-        print(f"Maturity Score: {metrics['maturity_score']}%")
-        print(f"Validation Score: {metrics['validation_score']}%")
+        logger.info(f"Maturity Score: {metrics['maturity_score']}%")
+        logger.info(f"Validation Score: {metrics['validation_score']}%")
         print(
             f"Auto-progression: {'Enabled' if operational['auto_progression_enabled'] else 'Disabled'}"
         )
-        print(f"Milestones Achieved: {operational['milestones_achieved']}")
+        logger.info(f"Milestones Achieved: {operational['milestones_achieved']}")
 
-        print("\n6. System Prompt Generation")
-        print("-" * 50)
+        logger.info("\n6. System Prompt Generation")
+        logger.info("-" * 50)
         system_prompt = await injector.get_system_prompt_prefix(detailed=False)
-        print("Generated System Prompt:")
-        print(system_prompt)
+        logger.info("Generated System Prompt:")
+        logger.info(system_prompt)
 
-        print("\n✅ LLM Self-Awareness System Test Complete!")
+        logger.info("\n✅ LLM Self-Awareness System Test Complete!")
         print(
             f"System is operating at {context['system_identity']['system_maturity']}% maturity"
         )
 
         # Export awareness data for inspection
         export_path = await awareness.export_awareness_data()
-        print(f"\n📄 Detailed awareness data exported to: {export_path}")
+        logger.info(f"\n📄 Detailed awareness data exported to: {export_path}")
 
     except Exception as e:
-        print(f"❌ Error during awareness system test: {e}")
+        logger.error(f"❌ Error during awareness system test: {e}")
         import traceback
 
         traceback.print_exc()
@@ -123,8 +126,8 @@ async def test_awareness_system():
 
 async def test_api_integration():
     """Test API integration with awareness system"""
-    print("\n🌐 Testing API Integration")
-    print("-" * 50)
+    logger.info("\n🌐 Testing API Integration")
+    logger.info("-" * 50)
 
     try:
         import aiohttp
@@ -142,23 +145,23 @@ async def test_api_integration():
                     async with session.get(endpoint) as response:
                         if response.status == 200:
                             data = await response.json()
-                            print(f"✅ {endpoint}: {data.get('status', 'unknown')}")
+                            logger.info(f"✅ {endpoint}: {data.get('status', 'unknown')}")
                         else:
-                            print(f"⚠️ {endpoint}: HTTP {response.status}")
+                            logger.warning(f"⚠️ {endpoint}: HTTP {response.status}")
                 except Exception as e:
-                    print(f"❌ {endpoint}: {str(e)}")
+                    logger.error(f"❌ {endpoint}: {str(e)}")
 
-        print("\nAPI integration test complete!")
+        logger.info("\nAPI integration test complete!")
 
     except ImportError:
-        print("⚠️ aiohttp not available, skipping API tests")
+        logger.warning("⚠️ aiohttp not available, skipping API tests")
     except Exception as e:
-        print(f"❌ API integration test failed: {e}")
+        logger.error(f"❌ API integration test failed: {e}")
 
 
 if __name__ == "__main__":
-    print("AutoBot LLM Self-Awareness Test Suite")
-    print("=" * 50)
+    logger.info("AutoBot LLM Self-Awareness Test Suite")
+    logger.info("=" * 50)
 
     # Run main awareness system test
     asyncio.run(test_awareness_system())
@@ -167,4 +170,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(test_api_integration())
     except Exception as e:
-        print(f"\n⚠️ API integration test skipped: {e}")
+        logger.warning(f"\n⚠️ API integration test skipped: {e}")

@@ -18,7 +18,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.utils.system_context import (
+from utils.system_context import (
     generate_unique_key,
     get_compatible_os_list,
     get_system_context,
@@ -166,7 +166,7 @@ async def test_single_man_page(command="ls", section="1"):
 
     try:
         # Initialize Knowledge Base V2
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         logger.info("\n1. Initializing Knowledge Base V2...")
         kb_v2 = KnowledgeBase()
