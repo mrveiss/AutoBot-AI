@@ -7,13 +7,13 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="/home/kali/Desktop/AutoBot"
-LOCAL_FRONTEND_DIR="$PROJECT_ROOT/autobot-vue"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-vue"
 
 # Remote Configuration
-FRONTEND_VM="172.16.168.21"
-FRONTEND_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Service Directory Mapping (CRITICAL FIX)
 SERVICE_DIR="/opt/autobot/src/autobot-vue"
@@ -186,7 +186,7 @@ EOF
 restart_frontend_service() {
     log_info "Restarting frontend service..."
 
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         # Kill existing Vite processes
@@ -202,16 +202,16 @@ restart_frontend_service() {
         cd /opt/autobot/src/autobot-vue
 
         # Set environment variables
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
         # Start with logging
-        nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
+        nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
 
-        echo $! > /tmp/frontend.pid
+        echo \$! > /tmp/frontend.pid
 
-        echo "Frontend service started with PID: $(cat /tmp/frontend.pid)"
+        echo "Frontend service started with PID: \$(cat /tmp/frontend.pid)"
 EOF
 
     if [ $? -eq 0 ]; then

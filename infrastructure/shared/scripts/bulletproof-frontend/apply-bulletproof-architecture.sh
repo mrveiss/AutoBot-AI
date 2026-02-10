@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="/home/kali/Desktop/AutoBot"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Colors
 RED='\033[0;31m'
@@ -43,7 +43,7 @@ main() {
 
     # Step 3: Verify frontend is operational
     log_info "Step 3: Final verification..."
-    local frontend_url="http://172.16.168.21:5173"
+    local frontend_url="http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}"
 
     if curl -s -f "$frontend_url" >/dev/null 2>&1; then
         log_info "✅ Frontend is responding at $frontend_url"

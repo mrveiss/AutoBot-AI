@@ -9,6 +9,10 @@
 
 set -e
 
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Configuration
 JAEGER_VERSION="${JAEGER_VERSION:-1.53.0}"
 JAEGER_USER="${JAEGER_USER:-autobot}"
@@ -41,8 +45,8 @@ log_error() {
 # Check if running on correct VM
 check_vm() {
     local current_ip=$(hostname -I | awk '{print $1}')
-    if [[ "$current_ip" != "172.16.168.23" ]]; then
-        log_warn "This script is designed for the Redis VM (172.16.168.23)"
+    if [[ "$current_ip" != "${AUTOBOT_REDIS_HOST:-172.16.168.23}" ]]; then
+        log_warn "This script is designed for the Redis VM (${AUTOBOT_REDIS_HOST:-172.16.168.23})"
         log_warn "Current IP: $current_ip"
         read -p "Continue anyway? (y/N): " confirm
         if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -206,7 +210,7 @@ verify_installation() {
 
     # Check Jaeger UI
     if curl -s -o /dev/null -w "%{http_code}" "http://localhost:16686" | grep -q "200"; then
-        log_success "Jaeger UI is accessible at http://172.16.168.23:16686"
+        log_success "Jaeger UI is accessible at http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:16686"
     else
         log_warn "Jaeger UI not responding yet (may still be starting)"
     fi
@@ -248,9 +252,9 @@ print_summary() {
     echo "Install Dir: ${JAEGER_INSTALL_DIR}"
     echo ""
     echo "Endpoints:"
-    echo "  - Jaeger UI:   http://172.16.168.23:16686"
-    echo "  - OTLP gRPC:   http://172.16.168.23:4317"
-    echo "  - OTLP HTTP:   http://172.16.168.23:4318"
+    echo "  - Jaeger UI:   http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:16686"
+    echo "  - OTLP gRPC:   http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:4317"
+    echo "  - OTLP HTTP:   http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:4318"
     echo ""
     echo "Service Management:"
     echo "  - Status:  sudo systemctl status jaeger"
@@ -260,7 +264,7 @@ print_summary() {
     echo "  - Logs:    sudo journalctl -u jaeger -f"
     echo ""
     echo "Configuration for AutoBot backend:"
-    echo "  export AUTOBOT_JAEGER_ENDPOINT=http://172.16.168.23:4317"
+    echo "  export AUTOBOT_JAEGER_ENDPOINT=http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:4317"
     echo ""
     echo "=============================================="
 }

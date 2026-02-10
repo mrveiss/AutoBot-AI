@@ -7,13 +7,13 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="/home/kali/Desktop/AutoBot"
-LOCAL_FRONTEND_DIR="$PROJECT_ROOT/autobot-vue"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-vue"
 
 # Remote Configuration
-FRONTEND_VM="172.16.168.21"
-FRONTEND_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SERVICE_DIR="/opt/autobot/src/autobot-vue"
 
 # Colors
@@ -274,7 +274,7 @@ EOF
 restart_and_verify_service() {
     log_info "Restarting and verifying frontend service..."
 
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         # Stop existing processes
@@ -288,18 +288,18 @@ restart_and_verify_service() {
         cd /opt/autobot/src/autobot-vue
 
         # Set environment
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
         # Create logs directory
         mkdir -p logs
 
         # Start service with monitoring
-        nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
-        echo $! > /tmp/frontend.pid
+        nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
+        echo \$! > /tmp/frontend.pid
 
-        echo "Frontend service started with PID: $(cat /tmp/frontend.pid)"
+        echo "Frontend service started with PID: \$(cat /tmp/frontend.pid)"
 
         # Wait for service to start
         echo "Waiting for service to initialize..."
@@ -309,22 +309,22 @@ restart_and_verify_service() {
         max_attempts=30
         attempt=1
 
-        while [ $attempt -le $max_attempts ]; do
-            if netstat -tlnp 2>/dev/null | grep -q ":5173.*LISTEN"; then
-                echo "✓ Service is listening on port 5173"
+        while [ \$attempt -le \$max_attempts ]; do
+            if netstat -tlnp 2>/dev/null | grep -q ":${AUTOBOT_FRONTEND_PORT:-5173}.*LISTEN"; then
+                echo "Service is listening on port ${AUTOBOT_FRONTEND_PORT:-5173}"
                 break
             fi
 
-            if [ $attempt -eq $max_attempts ]; then
-                echo "ERROR: Service failed to start after $max_attempts attempts"
+            if [ \$attempt -eq \$max_attempts ]; then
+                echo "ERROR: Service failed to start after \$max_attempts attempts"
                 exit 1
             fi
 
             sleep 2
-            attempt=$((attempt + 1))
+            attempt=\$((attempt + 1))
         done
 
-        echo "✓ Frontend service restart completed"
+        echo "Frontend service restart completed"
 EOF
 
     if [ $? -eq 0 ]; then

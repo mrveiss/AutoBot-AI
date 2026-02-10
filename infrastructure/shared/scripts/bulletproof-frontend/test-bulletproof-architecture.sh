@@ -7,9 +7,10 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRONTEND_VM="172.16.168.21"
-FRONTEND_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 TEST_RESULTS_DIR="/tmp/bulletproof-test-results"
 
 # Colors
@@ -252,19 +253,19 @@ test_service_restart_recovery() {
     log_debug "Testing service restart recovery..."
 
     # Kill the service and check if it recovers
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         echo "Killing frontend service for restart test..."
         pkill -f "vite.*5173" || true
         sleep 3
 
         # Start service again
         cd /opt/autobot/src/autobot-vue
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
-        nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
-        echo $! > /tmp/frontend.pid
+        nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
+        echo \$! > /tmp/frontend.pid
 
         echo "Service restarted"
 EOF

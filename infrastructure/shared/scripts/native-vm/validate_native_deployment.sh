@@ -4,11 +4,15 @@
 
 set -e
 
-# Load unified configuration system
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
-if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
+# Load unified configuration system (legacy)
+_NATIVE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
+if [[ -f "${_NATIVE_SCRIPT_DIR}/config/load_config.sh" ]]; then
     export PATH="$HOME/bin:$PATH"  # Ensure yq is available
-    source "${SCRIPT_DIR}/config/load_config.sh"
+    source "${_NATIVE_SCRIPT_DIR}/config/load_config.sh"
     echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
 else
     echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"

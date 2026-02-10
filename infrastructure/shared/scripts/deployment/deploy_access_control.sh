@@ -43,23 +43,24 @@ NC='\033[0m'
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-REDIS_HOST="172.16.168.23"
-REDIS_PORT="6379"
-BACKEND_HOST="172.16.168.20"
-BACKEND_PORT="8001"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../../../.." && pwd)}"
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 
 # VM configuration
 declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-REMOTE_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 
 # Options
 DRY_RUN=false

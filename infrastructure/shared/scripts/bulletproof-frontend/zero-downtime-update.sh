@@ -7,13 +7,13 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="/home/kali/Desktop/AutoBot"
-LOCAL_FRONTEND_DIR="$PROJECT_ROOT/autobot-vue"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-vue"
 
 # Remote Configuration
-FRONTEND_VM="172.16.168.21"
-FRONTEND_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Blue-Green Deployment Configuration
 PRIMARY_DIR="/opt/autobot/src/autobot-vue"
@@ -170,52 +170,52 @@ EOF
 start_staging_service() {
     log_info "Starting staging service on alternate port..."
 
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
-        next_dir=$(cat /tmp/next-deployment-dir)
+        next_dir=\$(cat /tmp/next-deployment-dir)
         staging_port=5174
 
-        echo "Starting staging service in: $next_dir"
+        echo "Starting staging service in: \$next_dir"
 
-        cd "$next_dir"
+        cd "\$next_dir"
 
         # Kill any existing staging service
         pkill -f "vite.*5174" || true
         sleep 2
 
         # Set environment for staging
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
         # Start staging service
         mkdir -p logs
-        nohup npm run dev -- --host 0.0.0.0 --port $staging_port > logs/staging.log 2>&1 &
+        nohup npm run dev -- --host 0.0.0.0 --port \$staging_port > logs/staging.log 2>&1 &
 
-        staging_pid=$!
-        echo $staging_pid > /tmp/staging-frontend.pid
+        staging_pid=\$!
+        echo \$staging_pid > /tmp/staging-frontend.pid
 
-        echo "Staging service started on port $staging_port (PID: $staging_pid)"
+        echo "Staging service started on port \$staging_port (PID: \$staging_pid)"
 
         # Wait for staging service to be ready
         echo "Waiting for staging service to initialize..."
         max_attempts=30
         attempt=1
 
-        while [ $attempt -le $max_attempts ]; do
-            if curl -s -f "http://localhost:$staging_port" >/dev/null 2>&1; then
-                echo "✓ Staging service is responding"
+        while [ \$attempt -le \$max_attempts ]; do
+            if curl -s -f "http://localhost:\$staging_port" >/dev/null 2>&1; then
+                echo "Staging service is responding"
                 break
             fi
 
-            if [ $attempt -eq $max_attempts ]; then
-                echo "ERROR: Staging service failed to start after $max_attempts attempts"
+            if [ \$attempt -eq \$max_attempts ]; then
+                echo "ERROR: Staging service failed to start after \$max_attempts attempts"
                 exit 1
             fi
 
             sleep 2
-            attempt=$((attempt + 1))
+            attempt=\$((attempt + 1))
         done
 
         echo "Staging service ready for testing"
@@ -293,21 +293,21 @@ EOF
 perform_zero_downtime_swap() {
     log_info "Performing zero-downtime service swap..."
 
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
-        next_dir=$(cat /tmp/next-deployment-dir)
-        current_deployment=$(cat /tmp/current-deployment)
+        next_dir=\$(cat /tmp/next-deployment-dir)
+        current_deployment=\$(cat /tmp/current-deployment)
 
         echo "Performing zero-downtime swap..."
-        echo "Current deployment: $current_deployment"
-        echo "Next directory: $next_dir"
+        echo "Current deployment: \$current_deployment"
+        echo "Next directory: \$next_dir"
 
         # Stop current primary service (but keep it available)
         echo "Preparing primary service for swap..."
-        current_pid=$(cat /tmp/frontend.pid 2>/dev/null || echo "")
-        if [ -n "$current_pid" ] && kill -0 "$current_pid" 2>/dev/null; then
-            echo "Current service running with PID: $current_pid"
+        current_pid=\$(cat /tmp/frontend.pid 2>/dev/null || echo "")
+        if [ -n "\$current_pid" ] && kill -0 "\$current_pid" 2>/dev/null; then
+            echo "Current service running with PID: \$current_pid"
         fi
 
         # Create symbolic link for seamless swap
@@ -316,63 +316,63 @@ perform_zero_downtime_swap() {
             sudo rm -f "/opt/autobot/src/autobot-vue"
         elif [ -d "/opt/autobot/src/autobot-vue" ] && [ ! -L "/opt/autobot/src/autobot-vue" ]; then
             # Move existing directory to backup
-            backup_name="autobot-vue-backup-$(date +%Y%m%d_%H%M%S)"
-            sudo mv "/opt/autobot/src/autobot-vue" "/opt/autobot/backups/$backup_name"
+            backup_name="autobot-vue-backup-\$(date +%Y%m%d_%H%M%S)"
+            sudo mv "/opt/autobot/src/autobot-vue" "/opt/autobot/backups/\$backup_name"
         fi
 
         # Create new symbolic link pointing to staging
-        sudo ln -sf "$next_dir" "/opt/autobot/src/autobot-vue"
+        sudo ln -sf "\$next_dir" "/opt/autobot/src/autobot-vue"
 
-        echo "Symbolic link created: /opt/autobot/src/autobot-vue -> $next_dir"
+        echo "Symbolic link created: /opt/autobot/src/autobot-vue -> \$next_dir"
 
         # Update service configuration to use primary port
         cd "/opt/autobot/src/autobot-vue"
 
         # Stop staging service
-        staging_pid=$(cat /tmp/staging-frontend.pid 2>/dev/null || echo "")
-        if [ -n "$staging_pid" ]; then
-            kill "$staging_pid" || true
+        staging_pid=\$(cat /tmp/staging-frontend.pid 2>/dev/null || echo "")
+        if [ -n "\$staging_pid" ]; then
+            kill "\$staging_pid" || true
         fi
 
         # Stop current primary service
-        if [ -n "$current_pid" ]; then
-            kill "$current_pid" || true
+        if [ -n "\$current_pid" ]; then
+            kill "\$current_pid" || true
         fi
         pkill -f "vite.*5173" || true
 
         sleep 3
 
         # Start new primary service
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
         mkdir -p logs
-        nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
+        nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
 
-        new_pid=$!
-        echo $new_pid > /tmp/frontend.pid
+        new_pid=\$!
+        echo \$new_pid > /tmp/frontend.pid
 
-        echo "New primary service started with PID: $new_pid"
+        echo "New primary service started with PID: \$new_pid"
 
         # Wait for new service to be ready
         echo "Verifying new primary service..."
         max_attempts=30
         attempt=1
 
-        while [ $attempt -le $max_attempts ]; do
-            if curl -s -f "http://localhost:5173" >/dev/null 2>&1; then
-                echo "✓ New primary service is responding"
+        while [ \$attempt -le \$max_attempts ]; do
+            if curl -s -f "http://localhost:${AUTOBOT_FRONTEND_PORT:-5173}" >/dev/null 2>&1; then
+                echo "New primary service is responding"
                 break
             fi
 
-            if [ $attempt -eq $max_attempts ]; then
+            if [ \$attempt -eq \$max_attempts ]; then
                 echo "ERROR: New primary service failed to start"
                 exit 1
             fi
 
             sleep 2
-            attempt=$((attempt + 1))
+            attempt=\$((attempt + 1))
         done
 
         echo "Zero-downtime swap completed successfully"
@@ -432,17 +432,17 @@ verify_production_service() {
 rollback_deployment() {
     log_error "Rolling back zero-downtime deployment..."
 
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         echo "Performing rollback..."
 
         # Find most recent backup
         if [ -d "/opt/autobot/backups" ]; then
-            latest_backup=$(ls -t /opt/autobot/backups/ | grep "autobot-vue" | head -1)
+            latest_backup=\$(ls -t /opt/autobot/backups/ | grep "autobot-vue" | head -1)
 
-            if [ -n "$latest_backup" ]; then
-                echo "Rolling back to: $latest_backup"
+            if [ -n "\$latest_backup" ]; then
+                echo "Rolling back to: \$latest_backup"
 
                 # Stop current service
                 pkill -f "vite.*5173" || true
@@ -452,17 +452,17 @@ rollback_deployment() {
                 sudo rm -rf "/opt/autobot/src/autobot-vue"
 
                 # Restore backup
-                sudo mv "/opt/autobot/backups/$latest_backup" "/opt/autobot/src/autobot-vue"
+                sudo mv "/opt/autobot/backups/\$latest_backup" "/opt/autobot/src/autobot-vue"
                 sudo chown -R autobot-service:autobot-service "/opt/autobot/src/autobot-vue"
 
                 # Restart service
                 cd "/opt/autobot/src/autobot-vue"
-                export VITE_BACKEND_HOST=172.16.168.20
-                export VITE_BACKEND_PORT=8001
+                export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+                export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
                 export NODE_ENV=development
 
-                nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
-                echo $! > /tmp/frontend.pid
+                nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
+                echo \$! > /tmp/frontend.pid
 
                 echo "Rollback completed"
             else
