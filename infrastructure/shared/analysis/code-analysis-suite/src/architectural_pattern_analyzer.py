@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.config import config
-from src.utils.redis_client import get_redis_client
+from config import config
+from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -904,47 +904,47 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Architectural Pattern Analysis Results ===")
-    print(f"Total components: {results['total_components']}")
-    print(f"Architectural issues: {results['architectural_issues']}")
-    print(f"Design patterns found: {results['design_patterns_found']}")
-    print(f"Architecture score: {results['architecture_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info(f"\n=== Architectural Pattern Analysis Results ===")
+    logger.info(f"Total components: {results['total_components']}")
+    logger.info(f"Architectural issues: {results['architectural_issues']}")
+    logger.info(f"Design patterns found: {results['design_patterns_found']}")
+    logger.info(f"Architecture score: {results['architecture_score']}/100")
+    logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print(f"\n=== Architectural Metrics ===")
-    print(f"Coupling score: {metrics['coupling_score']}/100 (lower is better)")
-    print(f"Cohesion score: {metrics['cohesion_score']}/100")
-    print(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")
-    print(f"Maintainability index: {metrics['maintainability_index']}/100")
-    print(f"Abstraction score: {metrics['abstraction_score']}/100")
-    print(f"Instability score: {metrics['instability_score']}/100")
+    logger.info(f"\n=== Architectural Metrics ===")
+    logger.info(f"Coupling score: {metrics['coupling_score']}/100 (lower is better)")
+    logger.info(f"Cohesion score: {metrics['cohesion_score']}/100")
+    logger.info(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")
+    logger.info(f"Maintainability index: {metrics['maintainability_index']}/100")
+    logger.info(f"Abstraction score: {metrics['abstraction_score']}/100")
+    logger.info(f"Instability score: {metrics['instability_score']}/100")
 
     # Print detected patterns
-    print(f"\n=== Detected Design Patterns ===")
+    logger.info(f"\n=== Detected Design Patterns ===")
     pattern_counts = {}
     for pattern in results["detected_patterns"]:
         pattern_name = pattern["pattern"]
         pattern_counts[pattern_name] = pattern_counts.get(pattern_name, 0) + 1
 
     for pattern, count in pattern_counts.items():
-        print(f"{pattern.title()}: {count} instances")
+        logger.info(f"{pattern.title()}: {count} instances")
 
     # Print architectural issues
     if results["architectural_issues"]:
-        print(f"\n=== Architectural Issues ===")
+        logger.info(f"\n=== Architectural Issues ===")
         for issue in results["architectural_issues"]:
-            print(f"{issue['type']} ({issue['severity']}): {issue['description']}")
-            print(f"  Affects {issue['affected_components_count']} components")
-            print(f"  Suggestion: {issue['suggestion']}")
-            print(f"  Refactoring effort: {issue['refactoring_effort']}")
+            logger.info(f"{issue['type']} ({issue['severity']}): {issue['description']}")
+            logger.info(f"  Affects {issue['affected_components_count']} components")
+            logger.info(f"  Suggestion: {issue['suggestion']}")
+            logger.info(f"  Refactoring effort: {issue['refactoring_effort']}")
 
     # Print recommendations
     if results["recommendations"]:
-        print(f"\n=== Architecture Recommendations ===")
+        logger.info(f"\n=== Architecture Recommendations ===")
         for i, rec in enumerate(results["recommendations"], 1):
-            print(f"{i}. {rec}")
+            logger.info(f"{i}. {rec}")
 
 
 if __name__ == "__main__":

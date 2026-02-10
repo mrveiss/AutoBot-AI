@@ -16,7 +16,7 @@ asyncpg>=0.29.0  # Async PostgreSQL driver for SQLAlchemy
 psycopg2-binary>=2.9.9  # Sync PostgreSQL driver for migrations
 
 # Data validation
-pydantic>=2.5.0
+pydantic[email]>=2.5.0
 pydantic-settings>=2.1.0
 typing_extensions>=4.0.0  # For Python 3.8 compatibility
 

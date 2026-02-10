@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.config import config
-from src.utils.redis_client import get_redis_client
+from config import config
+from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -721,34 +721,34 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Performance Analysis Results ===")
-    print(f"Total performance issues: {results['total_performance_issues']}")
-    print(f"Critical issues: {results['critical_issues']}")
-    print(f"High priority issues: {results['high_priority_issues']}")
-    print(f"Optimization recommendations: {results['recommendations_count']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info(f"\n=== Performance Analysis Results ===")
+    logger.info(f"Total performance issues: {results['total_performance_issues']}")
+    logger.error(f"Critical issues: {results['critical_issues']}")
+    logger.info(f"High priority issues: {results['high_priority_issues']}")
+    logger.info(f"Optimization recommendations: {results['recommendations_count']}")
+    logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print category breakdown
-    print(f"\n=== Issue Categories ===")
+    logger.info(f"\n=== Issue Categories ===")
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        logger.info(f"{category}: {count}")
 
     # Print top critical issues
-    print(f"\n=== Critical Performance Issues ===")
+    logger.error(f"\n=== Critical Performance Issues ===")
     critical_issues = [
         i for i in results["performance_details"] if i["severity"] == "critical"
     ]
     for i, issue in enumerate(critical_issues[:5], 1):
-        print(f"\n{i}. {issue['type']} in {issue['file']}:{issue['line']}")
-        print(f"   Description: {issue['description']}")
-        print(f"   Suggestion: {issue['suggestion']}")
+        logger.info(f"\n{i}. {issue['type']} in {issue['file']}:{issue['line']}")
+        logger.info(f"   Description: {issue['description']}")
+        logger.info(f"   Suggestion: {issue['suggestion']}")
 
     # Print optimization recommendations
-    print(f"\n=== Optimization Recommendations ===")
+    logger.info(f"\n=== Optimization Recommendations ===")
     for i, rec in enumerate(results["optimization_recommendations"][:3], 1):
-        print(f"\n{i}. {rec['title']} ({rec['priority']} priority)")
-        print(f"   {rec['description']}")
-        print(f"   Files affected: {len(rec['affected_files'])}")
+        logger.info(f"\n{i}. {rec['title']} ({rec['priority']} priority)")
+        logger.info(f"   {rec['description']}")
+        logger.info(f"   Files affected: {len(rec['affected_files'])}")
 
 
 if __name__ == "__main__":

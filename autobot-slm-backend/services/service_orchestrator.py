@@ -136,14 +136,14 @@ _SERVICE_DEFINITIONS = {
         requires_sudo=False,
         description="NPU hardware AI acceleration worker",
     ),
-    # AI Stack (Ollama runs locally on backend machine)
+    # AI Stack (Ollama runs on main/code-source machine)
     "ai-stack": ServiceDefinition(
         name="ai-stack",
         service_type=AutoBotServiceType.AI_STACK,
         default_host_env="AUTOBOT_AI_STACK_HOST",
         default_port_env="AUTOBOT_AI_STACK_PORT",
-        default_host="172.16.168.24",
-        default_port=8080,
+        default_host="172.16.168.20",
+        default_port=11434,
         systemd_service="ollama",
         start_command="ollama serve",
         stop_command="pkill -f 'ollama serve'",

@@ -17,10 +17,10 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 # Import canonical Redis client utility (Issue #692)
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -352,60 +352,60 @@ Database: {vector['metadata'].get('database', 'analytics_db8')}
 async def main():
     """Main execution function"""
     try:
-        print("🚀 Creating Vector Knowledge Base from Code Indexes...")
-        print(f"⏰ Started at: {datetime.now().isoformat()}")
+        logger.info("🚀 Creating Vector Knowledge Base from Code Indexes...")
+        logger.info(f"⏰ Started at: {datetime.now().isoformat()}")
 
         creator = CodeVectorKnowledgeCreator()
 
         # Initialize connections
         if not await creator.initialize():
-            print("❌ Failed to initialize connections")
+            logger.error("❌ Failed to initialize connections")
             return
 
         # Get code analytics vectors
-        print("\n📊 Step 1: Extracting code analytics vectors...")
+        logger.info("\n📊 Step 1: Extracting code analytics vectors...")
         vectors = await creator.get_code_analytics_vectors()
 
         if not vectors:
-            print("❌ No code analytics vectors found")
+            logger.error("❌ No code analytics vectors found")
             return
 
-        print(f"✅ Found {len(vectors)} code analytics vectors")
+        logger.info(f"✅ Found {len(vectors)} code analytics vectors")
 
         # Create vector knowledge entries
-        print("\n📝 Step 2: Creating vector knowledge entries...")
+        logger.info("\n📝 Step 2: Creating vector knowledge entries...")
         created_count = await creator.create_vector_knowledge_entries(vectors)
 
         if created_count == 0:
-            print("❌ Failed to create any knowledge entries")
+            logger.error("❌ Failed to create any knowledge entries")
             return
 
-        print(f"✅ Created {created_count} vector knowledge entries")
+        logger.info(f"✅ Created {created_count} vector knowledge entries")
 
         # Create search index
-        print("\n🔨 Step 3: Creating search index...")
+        logger.info("\n🔨 Step 3: Creating search index...")
         index_created = await creator.create_search_index()
 
         if not index_created:
-            print("⚠️ Search index creation failed, but entries were created")
+            logger.error("⚠️ Search index creation failed, but entries were created")
         else:
-            print("✅ Search index created successfully")
+            logger.info("✅ Search index created successfully")
 
         # Test search functionality
-        print("\n🔍 Step 4: Testing search functionality...")
+        logger.info("\n🔍 Step 4: Testing search functionality...")
         search_works = await creator.test_search_functionality()
 
         if search_works:
-            print("✅ Vector knowledge search is working")
+            logger.info("✅ Vector knowledge search is working")
         else:
-            print("⚠️ Search test failed, but knowledge base was created")
+            logger.error("⚠️ Search test failed, but knowledge base was created")
 
         # Summary
-        print("\n🎉 Vector Knowledge Base Creation Complete!")
-        print("📊 Statistics:")
-        print(f"  - Source vectors processed: {len(vectors)}")
-        print(f"  - Knowledge entries created: {created_count}")
-        print(f"  - Search index: {'✅ Created' if index_created else '❌ Failed'}")
+        logger.info("\n🎉 Vector Knowledge Base Creation Complete!")
+        logger.info("📊 Statistics:")
+        logger.info(f"  - Source vectors processed: {len(vectors)}")
+        logger.info(f"  - Knowledge entries created: {created_count}")
+        logger.error(f"  - Search index: {'✅ Created' if index_created else '❌ Failed'}")
         print(
             f"  - Search functionality: {'✅ Working' if search_works else '❌ Issues'}"
         )
@@ -417,7 +417,7 @@ async def main():
         )
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         import traceback
 
         traceback.print_exc()
