@@ -20,6 +20,13 @@ Options:
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -88,14 +95,14 @@ check_prerequisites() {
     print_status "INFO" "Checking AutoBot services..."
 
     # Check backend
-    if curl -s http://172.16.168.20:8001/api/health >/dev/null 2>&1; then
+    if curl -s http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health >/dev/null 2>&1; then
         print_status "SUCCESS" "Backend API accessible"
     else
         print_status "WARNING" "Backend API not accessible - some tests may fail"
     fi
 
     # Check Redis
-    if redis-cli -h 172.16.168.23 -p 6379 ping >/dev/null 2>&1; then
+    if redis-cli -h ${AUTOBOT_REDIS_HOST:-172.16.168.23} -p ${AUTOBOT_REDIS_PORT:-6379} ping >/dev/null 2>&1; then
         print_status "SUCCESS" "Redis accessible"
     else
         print_status "WARNING" "Redis not accessible - database tests may fail"

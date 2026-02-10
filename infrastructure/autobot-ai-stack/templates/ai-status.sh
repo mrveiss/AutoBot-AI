@@ -2,6 +2,13 @@
 # AutoBot AI Stack - Status Script
 # Manual intervention script for checking the AI stack status
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 SERVICE_NAME="autobot-ai-stack"
 HEALTH_PORT=8080
 
@@ -35,14 +42,14 @@ echo ""
 
 # Check connections to dependencies
 echo "Dependency Connections:"
-echo -n "  Redis (172.16.168.23:6379): "
-if timeout 2 bash -c "echo > /dev/tcp/172.16.168.23/6379" 2>/dev/null; then
+echo -n "  Redis (${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}): "
+if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-172.16.168.23}/${AUTOBOT_REDIS_PORT:-6379}" 2>/dev/null; then
     echo "OK"
 else
     echo "UNREACHABLE"
 fi
-echo -n "  ChromaDB (172.16.168.23:8000): "
-if timeout 2 bash -c "echo > /dev/tcp/172.16.168.23/8000" 2>/dev/null; then
+echo -n "  ChromaDB (${AUTOBOT_REDIS_HOST:-172.16.168.23}:8000): "
+if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-172.16.168.23}/8000" 2>/dev/null; then
     echo "OK"
 else
     echo "UNREACHABLE"

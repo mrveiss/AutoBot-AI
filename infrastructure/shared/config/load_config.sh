@@ -4,6 +4,11 @@
 
 # Get the directory where this script is located (config/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 CONFIG_FILE="${SCRIPT_DIR}/complete.yaml"
 
 # Check if yq is available for YAML parsing
@@ -27,13 +32,13 @@ get_config() {
     else
         # Fallback to hardcoded critical values if yq unavailable
         case "$key" in
-            "infrastructure.hosts.backend") echo "172.16.168.20" ;;
-            "infrastructure.hosts.frontend") echo "172.16.168.21" ;;
-            "infrastructure.hosts.redis") echo "172.16.168.23" ;;
-            "infrastructure.hosts.ollama") echo "localhost" ;;
-            "infrastructure.hosts.ai_stack") echo "172.16.168.24" ;;
-            "infrastructure.hosts.npu_worker") echo "172.16.168.22" ;;
-            "infrastructure.hosts.browser_service") echo "172.16.168.25" ;;
+            "infrastructure.hosts.backend") echo "${AUTOBOT_BACKEND_HOST:-172.16.168.20}" ;;
+            "infrastructure.hosts.frontend") echo "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" ;;
+            "infrastructure.hosts.redis") echo "${AUTOBOT_REDIS_HOST:-172.16.168.23}" ;;
+            "infrastructure.hosts.ollama") echo "${AUTOBOT_OLLAMA_HOST:-localhost}" ;;
+            "infrastructure.hosts.ai_stack") echo "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" ;;
+            "infrastructure.hosts.npu_worker") echo "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" ;;
+            "infrastructure.hosts.browser_service") echo "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}" ;;
             "infrastructure.ports.backend") echo "8001" ;;
             "infrastructure.ports.frontend") echo "5173" ;;
             "infrastructure.ports.redis") echo "6379" ;;
