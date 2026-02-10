@@ -46,19 +46,31 @@ def _get_test_documents() -> list:
         },
         {
             "title": "API Documentation",
-            "content": "AutoBot provides a comprehensive REST API with over 500 endpoints for system management, AI operations, and workflow automation.",
+            "content": (
+                "AutoBot provides a comprehensive REST API with over"
+                " 500 endpoints for system management, AI operations,"
+                " and workflow automation."
+            ),
             "source": "docs/api/overview.md",
             "category": "documentation/api",
         },
         {
             "title": "Architecture Overview",
-            "content": "AutoBot uses a distributed VM architecture with 6 specialized VMs: Frontend, NPU Worker, Redis, AI Stack, Browser, and Backend.",
+            "content": (
+                "AutoBot uses a distributed VM architecture with 6"
+                " specialized VMs: Frontend, NPU Worker, Redis,"
+                " AI Stack, Browser, and Backend."
+            ),
             "source": "docs/architecture.md",
             "category": "documentation/architecture",
         },
         {
             "title": "CLAUDE Instructions",
-            "content": "This document contains important instructions and fixes for the AutoBot system. Always follow distributed architecture rules.",
+            "content": (
+                "This document contains important instructions and"
+                " fixes for the AutoBot system. Always follow"
+                " distributed architecture rules."
+            ),
             "source": "CLAUDE.md",
             "category": "documentation/root",
         },
@@ -125,8 +137,10 @@ async def _add_documents_to_kb(kb, documents: list) -> None:
                 if result.get("status") == "success":
                     logger.info(f"✅ Added to vector store: {doc['title']}")
                 else:
+                    msg = result.get('message', 'Unknown error')
                     logger.info(
-                        f"❌ Failed to add to vector store: {doc['title']} - {result.get('message', 'Unknown error')}"
+                        "❌ Failed to add to vector store:"
+                        " %s - %s", doc['title'], msg,
                     )
             except Exception as e:
                 logger.error(f"❌ Exception adding to vector store: {doc['title']} - {e}")

@@ -476,8 +476,10 @@ class AutoBotMonitor:
         logger.info("\n🎮 GPU Status:")
         if gpu.get("available"):
             logger.info(f"   Device: {gpu['name']}")
+            mem_pct = gpu['memory_used_mb'] / gpu['memory_total_mb'] * 100
             logger.info(
-                f"   Memory: {gpu['memory_used_mb']}/{gpu['memory_total_mb']} MB ({(gpu['memory_used_mb']/gpu['memory_total_mb']*100):.1f}%)"
+                "   Memory: %s/%s MB (%.1f%%)",
+                gpu['memory_used_mb'], gpu['memory_total_mb'], mem_pct,
             )
             logger.info(f"   Utilization: {gpu['utilization_percent']}%")
             logger.info(f"   Temperature: {gpu['temperature_c']}°C")
@@ -496,9 +498,10 @@ class AutoBotMonitor:
                 logger.info("   Note: NPU requires native Linux/Windows for driver access")
             elif npu.get("driver_available"):
                 logger.info("   Drivers: ✅ Available")
-                logger.info(
-                    f"   OpenVINO: {'✅' if npu.get('openvino_support') else '❌'} {'Supported' if npu.get('openvino_support') else 'Not detected'}"
-                )
+                ov_ok = npu.get('openvino_support')
+                ov_icon = '✅' if ov_ok else '❌'
+                ov_text = 'Supported' if ov_ok else 'Not detected'
+                logger.info("   OpenVINO: %s %s", ov_icon, ov_text)
                 logger.info(f"   Utilization: {npu.get('utilization_percent', 0)}%")
             else:
                 logger.error("   Drivers: ❌ Not installed or not accessible")
@@ -613,11 +616,15 @@ class AutoBotMonitor:
             logger.info(
                 f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)"
             )
+            mem = resources['memory']
             logger.info(
-                f"   Memory: {resources['memory']['used_gb']:.1f}/{resources['memory']['total_gb']:.1f} GB ({resources['memory']['percent']:.1f}%)"
+                "   Memory: %.1f/%.1f GB (%.1f%%)",
+                mem['used_gb'], mem['total_gb'], mem['percent'],
             )
+            dsk = resources['disk']
             logger.info(
-                f"   Disk: {resources['disk']['used_gb']:.1f}/{resources['disk']['total_gb']:.1f} GB ({resources['disk']['percent']:.1f}%)"
+                "   Disk: %.1f/%.1f GB (%.1f%%)",
+                dsk['used_gb'], dsk['total_gb'], dsk['percent'],
             )
 
         # Frontend Status
