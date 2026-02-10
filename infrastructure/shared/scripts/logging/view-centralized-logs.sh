@@ -4,6 +4,7 @@
 # Interactive log viewing interface for centralized logs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
 
@@ -22,11 +23,11 @@ show_menu() {
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
     echo ""
     echo -e "${YELLOW}Available VMs:${NC}"
-    echo "1. VM1 - Frontend (172.16.168.21)"
-    echo "2. VM2 - NPU Worker (172.16.168.22)"
-    echo "3. VM3 - Redis (172.16.168.23)"
-    echo "4. VM4 - AI Stack (172.16.168.24)"
-    echo "5. VM5 - Browser (172.16.168.25)"
+    echo "1. VM1 - Frontend (${AUTOBOT_FRONTEND_HOST:-172.16.168.21})"
+    echo "2. VM2 - NPU Worker (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22})"
+    echo "3. VM3 - Redis (${AUTOBOT_REDIS_HOST:-172.16.168.23})"
+    echo "4. VM4 - AI Stack (${AUTOBOT_AI_STACK_HOST:-172.16.168.24})"
+    echo "5. VM5 - Browser (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25})"
     echo "6. Main WSL Machine"
     echo ""
     echo -e "${YELLOW}Log Analysis:${NC}"

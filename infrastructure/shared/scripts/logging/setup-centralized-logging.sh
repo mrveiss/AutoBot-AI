@@ -6,10 +6,11 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 LOGS_DIR="$PROJECT_ROOT/logs"
 CENTRALIZED_DIR="$LOGS_DIR/autobot-centralized"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -18,15 +19,6 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
-
-# VM Configuration
-declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
-)
 
 log_info() {
     echo -e "${CYAN}[INFO]${NC} $1"
@@ -44,6 +36,15 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# VM Configuration
+declare -A VMS=(
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+)
+
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
@@ -56,7 +57,7 @@ check_prerequisites() {
     # Check SSH connectivity to all VMs
     for vm_name in "${!VMS[@]}"; do
         vm_ip="${VMS[$vm_name]}"
-        if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes autobot@"$vm_ip" "echo 'test'" &>/dev/null; then
+        if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "echo 'test'" &>/dev/null; then
             log_error "Cannot connect to $vm_name ($vm_ip)"
             exit 1
         fi
@@ -105,24 +106,24 @@ setup_rsyslog_client() {
     local rsyslog_config="/tmp/autobot-remote-logging.conf"
     cat > "$rsyslog_config" << EOF
 # AutoBot Remote Logging Configuration
-# Forward logs to main machine (172.16.168.20)
+# Forward logs to main machine (${AUTOBOT_BACKEND_HOST})
 
 # Forward all logs to main machine
-*.*  @@172.16.168.20:514
+*.*  @@${AUTOBOT_BACKEND_HOST}:514
 
 # Also log locally for redundancy
 *.*  /var/log/autobot-local.log
 
 # Specific application logs
-local0.*  @@172.16.168.20:514
-local1.*  @@172.16.168.20:514
+local0.*  @@${AUTOBOT_BACKEND_HOST}:514
+local1.*  @@${AUTOBOT_BACKEND_HOST}:514
 EOF
 
     # Copy configuration to VM
-    scp -i "$SSH_KEY" "$rsyslog_config" autobot@"$vm_ip":/tmp/
+    scp -i "$SSH_KEY" "$rsyslog_config" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip":/tmp/
 
     # Install and configure rsyslog on VM
-    ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
         sudo apt-get update -qq && sudo apt-get install -y rsyslog
         sudo cp /tmp/autobot-remote-logging.conf /etc/rsyslog.d/10-autobot-remote.conf
         sudo systemctl enable rsyslog
@@ -230,17 +231,18 @@ create_log_collection_scripts() {
 # Collects service-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # VM Configuration
 declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 collect_service_logs() {
@@ -251,24 +253,24 @@ collect_service_logs() {
     echo "Collecting service logs from $vm_name ($vm_ip)..."
 
     # Collect journald logs for autobot services
-    ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
         sudo journalctl -u 'autobot*' --since '1 hour ago' --no-pager
     " > "$CENTRALIZED_DIR/$vm_name/service/autobot-services-$timestamp.log" 2>/dev/null
 
     # Collect system service logs
     case "$vm_name" in
         "vm1-frontend")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 sudo journalctl -u nginx --since '1 hour ago' --no-pager
             " > "$CENTRALIZED_DIR/$vm_name/service/nginx-$timestamp.log" 2>/dev/null
             ;;
         "vm3-redis")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 sudo journalctl -u redis-stack-server --since '1 hour ago' --no-pager
             " > "$CENTRALIZED_DIR/$vm_name/service/redis-$timestamp.log" 2>/dev/null
             ;;
         "vm5-browser")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 sudo journalctl -u 'docker*' --since '1 hour ago' --no-pager
             " > "$CENTRALIZED_DIR/$vm_name/service/docker-$timestamp.log" 2>/dev/null
             ;;
@@ -295,17 +297,18 @@ EOF
 # Collects application-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # VM Configuration with their application log paths
 declare -A VM_LOG_PATHS=(
-    ["vm1-frontend"]="172.16.168.21:/var/log/nginx/*.log"
-    ["vm2-npu-worker"]="172.16.168.22:/home/autobot/logs/*.log"
-    ["vm3-redis"]="172.16.168.23:/var/log/redis/*.log"
-    ["vm4-ai-stack"]="172.16.168.24:/home/autobot/logs/*.log"
-    ["vm5-browser"]="172.16.168.25:/home/autobot/logs/*.log"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:/var/log/nginx/*.log"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:/home/autobot/logs/*.log"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}:/var/log/redis/*.log"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:/home/autobot/logs/*.log"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:/home/autobot/logs/*.log"
 )
 
 collect_application_logs() {
@@ -317,7 +320,7 @@ collect_application_logs() {
     echo "Collecting application logs from $vm_name ($vm_ip)..."
 
     # Use rsync to collect log files
-    rsync -avz -e "ssh -i $SSH_KEY" autobot@"$vm_ip":"$log_path" "$CENTRALIZED_DIR/$vm_name/application/" 2>/dev/null || echo "No application logs found for $vm_name"
+    rsync -avz -e "ssh -i $SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip":"$log_path" "$CENTRALIZED_DIR/$vm_name/application/" 2>/dev/null || echo "No application logs found for $vm_name"
 
     echo "Application logs collected from $vm_name"
 }
@@ -378,11 +381,11 @@ show_menu() {
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
     echo ""
     echo -e "${YELLOW}Available VMs:${NC}"
-    echo "1. VM1 - Frontend (172.16.168.21)"
-    echo "2. VM2 - NPU Worker (172.16.168.22)"
-    echo "3. VM3 - Redis (172.16.168.23)"
-    echo "4. VM4 - AI Stack (172.16.168.24)"
-    echo "5. VM5 - Browser (172.16.168.25)"
+    echo "1. VM1 - Frontend (${AUTOBOT_FRONTEND_HOST:-172.16.168.21})"
+    echo "2. VM2 - NPU Worker (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22})"
+    echo "3. VM3 - Redis (${AUTOBOT_REDIS_HOST:-172.16.168.23})"
+    echo "4. VM4 - AI Stack (${AUTOBOT_AI_STACK_HOST:-172.16.168.24})"
+    echo "5. VM5 - Browser (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25})"
     echo "6. Main WSL Machine"
     echo "7. View aggregated error logs"
     echo "8. Search all logs"

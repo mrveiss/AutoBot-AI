@@ -5,6 +5,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -263,7 +266,7 @@ All instances of the following vulnerable SSH options were removed:
 - \`production.yml\`: Updated ansible_ssh_common_args to remove vulnerable options
 
 ## Next Steps
-1. Test SSH connections: \`ssh autobot@172.16.168.21 'echo OK'\`
+1. Test SSH connections: \`ssh ${AUTOBOT_SSH_USER}@${AUTOBOT_FRONTEND_HOST} 'echo OK'\`
 2. Verify security: \`./scripts/security/ssh-hardening/verify-ssh-security.sh\`
 3. Test all sync scripts: \`./scripts/utilities/sync-to-vm.sh --test-connection frontend\`
 4. Run full AutoBot startup: \`bash run_autobot.sh --dev\`
@@ -311,7 +314,7 @@ main() {
         echo ""
         log_info "Next steps:"
         echo "  1. Verify security: ./scripts/security/ssh-hardening/verify-ssh-security.sh"
-        echo "  2. Test connections: ssh autobot@172.16.168.21 'echo OK'"
+        echo "  2. Test connections: ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_FRONTEND_HOST:-172.16.168.21} 'echo OK'"
         echo "  3. Test sync: ./scripts/utilities/sync-to-vm.sh --test-connection all"
         echo ""
     else

@@ -13,11 +13,14 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Configuration
 CERT_DIR="/home/kali/Desktop/AutoBot/certs"
 CA_DIR="${CERT_DIR}/ca"
-SSH_KEY="$HOME/.ssh/autobot_key"
-REMOTE_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 REMOTE_CERT_DIR="/etc/autobot/certs"
 
 # Colors for output
@@ -77,11 +80,11 @@ done
 
 # VM Configuration: service_name:ip_address:remote_service_name
 declare -a VMS=(
-    "frontend:172.16.168.21:nginx"
-    "npu-worker:172.16.168.22:npu-worker"
-    "redis:172.16.168.23:redis-stack-server"
-    "ai-stack:172.16.168.24:backend"
-    "browser:172.16.168.25:playwright"
+    "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:nginx"
+    "npu-worker:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:npu-worker"
+    "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}:redis-stack-server"
+    "ai-stack:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:backend"
+    "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:playwright"
 )
 
 # Verify prerequisites

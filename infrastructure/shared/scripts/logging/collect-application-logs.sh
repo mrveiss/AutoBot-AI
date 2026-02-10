@@ -4,9 +4,10 @@
 # Collects application-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Color codes
 GREEN='\033[0;32m'
@@ -17,11 +18,11 @@ NC='\033[0m'
 
 # VM Configuration with their application log paths
 declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 collect_application_logs() {
@@ -32,7 +33,7 @@ collect_application_logs() {
     echo -e "${CYAN}Collecting application logs from $vm_name ($vm_ip)...${NC}"
 
     # Try to collect application logs from common locations
-    ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
         echo 'Searching for application logs...'
 
         # Look for logs in home directory
@@ -47,7 +48,7 @@ collect_application_logs() {
     " > "$CENTRALIZED_DIR/$vm_name/application/app-search-$timestamp.log" 2>/dev/null
 
     # Collect readable log files
-    ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
         # Copy readable log files from home directory
         for log_file in \$(find /home/autobot -name '*.log' -type f -mtime -1 2>/dev/null); do
             if [[ -r \"\$log_file\" ]]; then
@@ -61,7 +62,7 @@ collect_application_logs() {
     # VM-specific application log collection
     case "$vm_name" in
         "vm1-frontend")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # Vue.js application logs
                 echo '--- Vue.js build logs ---'
                 find /home/autobot -name 'npm-debug.log' -o -name 'yarn-error.log' 2>/dev/null | xargs cat 2>/dev/null || echo 'No Vue.js build logs found'
@@ -72,7 +73,7 @@ collect_application_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/application/frontend-app-$timestamp.log" 2>/dev/null
             ;;
         "vm3-redis")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # Redis application data
                 echo '--- Redis database info ---'
                 redis-cli info keyspace 2>/dev/null || echo 'Redis not accessible'
@@ -85,7 +86,7 @@ collect_application_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/application/redis-data-$timestamp.log" 2>/dev/null
             ;;
         "vm4-ai-stack")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # AI application logs
                 echo '--- Python application logs ---'
                 find /home/autobot -name '*.log' -path '*/python*' -o -path '*/ai*' -o -path '*/ml*' 2>/dev/null | xargs tail -n 20 2>/dev/null || echo 'No AI application logs found'
@@ -95,7 +96,7 @@ collect_application_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/application/ai-app-$timestamp.log" 2>/dev/null
             ;;
         "vm5-browser")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # Browser automation logs
                 echo '--- Playwright logs ---'
                 find /home/autobot -name '*playwright*' -name '*.log' 2>/dev/null | xargs tail -n 50 2>/dev/null || echo 'No Playwright logs found'
@@ -108,7 +109,7 @@ collect_application_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/application/browser-app-$timestamp.log" 2>/dev/null
             ;;
         "vm2-npu-worker")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # NPU worker application logs
                 echo '--- AI inference logs ---'
                 find /home/autobot -name '*inference*' -name '*.log' 2>/dev/null | xargs tail -n 30 2>/dev/null || echo 'No inference logs found'
@@ -124,7 +125,7 @@ collect_application_logs() {
 
     # Try to use rsync for any additional log files (non-blocking)
     rsync -avz --timeout=10 -e "ssh -i $SSH_KEY -o ConnectTimeout=5" \
-        autobot@"$vm_ip":/home/autobot/logs/ \
+        "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip":/home/autobot/logs/ \
         "$CENTRALIZED_DIR/$vm_name/application/" 2>/dev/null || echo "Rsync to $vm_name not available"
 
     echo -e "${GREEN}Application logs collected from $vm_name${NC}"

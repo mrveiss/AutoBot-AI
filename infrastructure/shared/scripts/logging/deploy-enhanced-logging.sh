@@ -7,11 +7,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 LOGS_DIR="$PROJECT_ROOT/logs"
 CENTRALIZED_DIR="$LOGS_DIR/autobot-centralized"
 CONFIG_DIR="$PROJECT_ROOT/config/logging"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -24,11 +25,11 @@ NC='\033[0m' # No Color
 
 # VM Configuration
 declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 # Service-specific log paths for each VM
@@ -81,7 +82,7 @@ check_prerequisites() {
     local failed_vms=()
     for vm_name in "${!VMS[@]}"; do
         vm_ip="${VMS[$vm_name]}"
-        if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes autobot@"$vm_ip" "echo 'test'" &>/dev/null; then
+        if ! ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o BatchMode=yes "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "echo 'test'" &>/dev/null; then
             log_warning "Cannot connect to $vm_name ($vm_ip)"
             failed_vms+=("$vm_name")
         fi
@@ -181,7 +182,7 @@ positions:
   filename: /tmp/positions.yaml
 
 clients:
-  - url: http://172.16.168.20:3100/loki/api/v1/push
+  - url: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3100/loki/api/v1/push
 
 scrape_configs:
   # AutoBot system logs
@@ -335,8 +336,8 @@ EOF
     docker-compose -f docker-compose-loki.yml up -d
 
     log_success "Loki logging stack deployed on main machine"
-    log_info "Loki available at: http://172.16.168.20:3100"
-    log_info "Grafana logs dashboard at: http://172.16.168.20:3001 (admin/autobot123)"
+    log_info "Loki available at: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3100"
+    log_info "Grafana logs dashboard at: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3001 (admin/autobot123)"
 }
 
 deploy_promtail_agents() {
@@ -401,8 +402,8 @@ echo "Promtail deployed successfully on $vm_name"
 EOF
 
         # Deploy to VM
-        scp -i "$SSH_KEY" "/tmp/deploy-promtail-$vm_name.sh" autobot@"$vm_ip":/tmp/
-        ssh -i "$SSH_KEY" autobot@"$vm_ip" "chmod +x /tmp/deploy-promtail-$vm_name.sh && sudo /tmp/deploy-promtail-$vm_name.sh"
+        scp -i "$SSH_KEY" "/tmp/deploy-promtail-$vm_name.sh" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip":/tmp/
+        ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "chmod +x /tmp/deploy-promtail-$vm_name.sh && sudo /tmp/deploy-promtail-$vm_name.sh"
 
         rm "/tmp/deploy-promtail-$vm_name.sh"
         log_success "Promtail deployed on $vm_name"
@@ -1188,8 +1189,8 @@ echo "  Performance:     python3 $SCRIPT_DIR/performance-aggregator.py --central
 echo "  Parse logs:      python3 $SCRIPT_DIR/enhanced-log-parser.py --centralized-dir ../logs/autobot-centralized"
 echo ""
 echo -e "${CYAN}Web Interfaces:${NC}"
-echo "  Loki API:        http://172.16.168.20:3100"
-echo "  Grafana Logs:    http://172.16.168.20:3001 (admin/autobot123)"
+echo "  Loki API:        http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3100"
+echo "  Grafana Logs:    http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3001 (admin/autobot123)"
 echo ""
 echo -e "${CYAN}Log Locations:${NC}"
 echo "  Centralized:     $(dirname "$SCRIPT_DIR")/../logs/autobot-centralized/"
@@ -1237,7 +1238,7 @@ check_vm_connectivity() {
     local vm_ip="$2"
 
     echo -n "  $vm_name ($vm_ip): "
-    if ssh -i ~/.ssh/autobot_key -o ConnectTimeout=3 -o BatchMode=yes autobot@"$vm_ip" "echo test" >/dev/null 2>&1; then
+    if ssh -i "${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}" -o ConnectTimeout=3 -o BatchMode=yes "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "echo test" >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Connected${NC}"
         return 0
     else
@@ -1262,11 +1263,11 @@ echo ""
 # Check VM connectivity
 echo -e "${BLUE}VM Connectivity:${NC}"
 declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 connected_vms=0
@@ -1283,7 +1284,7 @@ echo -e "${BLUE}Promtail Agents:${NC}"
 for vm_name in "${!VMS[@]}"; do
     vm_ip="${VMS[$vm_name]}"
     echo -n "  $vm_name: "
-    if ssh -i ~/.ssh/autobot_key -o ConnectTimeout=3 autobot@"$vm_ip" "systemctl is-active promtail" >/dev/null 2>&1; then
+    if ssh -i "${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}" -o ConnectTimeout=3 "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "systemctl is-active promtail" >/dev/null 2>&1; then
         echo -e "${GREEN}✓ Active${NC}"
     else
         echo -e "${RED}✗ Inactive${NC}"
@@ -1841,8 +1842,8 @@ main() {
 
     # Show access information
     echo -e "${CYAN}🌐 Web Interfaces:${NC}"
-    echo "  Loki API:        http://172.16.168.20:3100"
-    echo "  Grafana Logs:    http://172.16.168.20:3001 (admin/autobot123)"
+    echo "  Loki API:        http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3100"
+    echo "  Grafana Logs:    http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3001 (admin/autobot123)"
     echo ""
 
     echo -e "${CYAN}🔧 Management Commands:${NC}"
@@ -1864,7 +1865,7 @@ main() {
     echo "  1. Check system status: bash scripts/logging/logging-system-status.sh"
     echo "  2. Review documentation: docs/CENTRALIZED_LOGGING_SYSTEM.md"
     echo "  3. Configure alerts: Set ALERT_WEBHOOK environment variable"
-    echo "  4. Access Grafana: http://172.16.168.20:3001"
+    echo "  4. Access Grafana: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:3001"
     echo ""
 }
 
