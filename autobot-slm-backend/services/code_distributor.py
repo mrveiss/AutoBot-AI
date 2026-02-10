@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 CODE_PACKAGE_DIR = Path("/tmp/slm-code-packages")  # nosec B108
-AGENT_CODE_PATH = "src/slm/agent"  # Relative to repo root
+AGENT_CODE_PATH = "autobot-slm-backend/slm/agent"  # Relative to repo root
 DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 # Remote agent installation path on managed nodes
 REMOTE_AGENT_PATH = "/opt/slm-agent"
