@@ -16,10 +16,12 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import DeclarativeBase
 
@@ -928,3 +930,91 @@ class CodeSource(Base):
     last_notified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
+# Performance Monitoring Models (Issue #752)
+# =============================================================================
+
+
+class PerformanceTrace(Base):
+    """Distributed trace tracking for performance monitoring (Issue #752)."""
+
+    __tablename__ = "performance_traces"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trace_id = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    source_node_id = Column(String(100), nullable=True)
+    status = Column(String(20), default="ok")
+    duration_ms = Column(Float, nullable=False)
+    span_count = Column(Integer, default=1)
+    error_message = Column(Text, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+
+class TraceSpan(Base):
+    """Individual span within a distributed trace (Issue #752)."""
+
+    __tablename__ = "trace_spans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    span_id = Column(String(64), unique=True, nullable=False)
+    trace_id = Column(
+        String(64),
+        ForeignKey("performance_traces.trace_id"),
+        nullable=False,
+        index=True,
+    )
+    parent_span_id = Column(String(64), nullable=True)
+    name = Column(String(255), nullable=False)
+    service_name = Column(String(100), nullable=False)
+    node_id = Column(String(100), nullable=True)
+    status = Column(String(20), default="ok")
+    duration_ms = Column(Float, nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    attributes_json = Column(Text, nullable=True)
+
+
+class SLODefinition(Base):
+    """Service Level Objective definition for performance tracking (Issue #752)."""
+
+    __tablename__ = "slo_definitions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slo_id = Column(String(64), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    target_percent = Column(Float, nullable=False)
+    metric_type = Column(String(50), nullable=False)
+    threshold_value = Column(Float, nullable=False)
+    threshold_unit = Column(String(20), nullable=False)
+    window_days = Column(Integer, default=30)
+    node_id = Column(String(100), nullable=True)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class AlertRule(Base):
+    """Alert rule configuration for performance monitoring (Issue #752)."""
+
+    __tablename__ = "alert_rules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rule_id = Column(String(64), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    metric_type = Column(String(50), nullable=False)
+    condition = Column(String(20), nullable=False)
+    threshold = Column(Float, nullable=False)
+    duration_seconds = Column(Integer, default=300)
+    severity = Column(String(20), default="warning")
+    node_id = Column(String(100), nullable=True)
+    notification_channels = Column(Text, nullable=True)
+    enabled = Column(Boolean, default=True)
+    last_triggered = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

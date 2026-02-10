@@ -235,6 +235,44 @@ const router = createRouter({
       ]
     },
     {
+      // Issue #752: Comprehensive performance monitoring
+      path: '/performance',
+      name: 'performance',
+      component: () => import('@/views/PerformanceView.vue'),
+      meta: { title: 'Performance' },
+      children: [
+        {
+          path: '',
+          name: 'performance-default',
+          redirect: '/performance/overview'
+        },
+        {
+          path: 'overview',
+          name: 'performance-overview',
+          component: () => import('@/views/performance/PerformanceOverview.vue'),
+          meta: { title: 'Performance Overview', parent: 'performance' }
+        },
+        {
+          path: 'traces',
+          name: 'performance-traces',
+          component: () => import('@/views/performance/TracingView.vue'),
+          meta: { title: 'Distributed Traces', parent: 'performance' }
+        },
+        {
+          path: 'slos',
+          name: 'performance-slos',
+          component: () => import('@/views/performance/SLODashboard.vue'),
+          meta: { title: 'SLO Dashboard', parent: 'performance' }
+        },
+        {
+          path: 'alerts',
+          name: 'performance-alerts',
+          component: () => import('@/views/performance/AlertRulesView.vue'),
+          meta: { title: 'Alert Rules', parent: 'performance' }
+        },
+      ]
+    },
+    {
       path: '/security',
       name: 'security',
       component: () => import('@/views/SecurityView.vue'),

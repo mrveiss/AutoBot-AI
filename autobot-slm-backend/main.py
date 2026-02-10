@@ -50,6 +50,7 @@ from api import (
     websocket_router,
 )
 from api.code_source import router as code_source_router
+from api.performance import router as performance_router
 from api.roles import router as roles_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -186,6 +187,7 @@ app.include_router(stateful_router, prefix="/api")
 app.include_router(updates_router, prefix="/api")
 app.include_router(maintenance_router, prefix="/api")
 app.include_router(monitoring_router, prefix="/api")
+app.include_router(performance_router, prefix="/api")
 app.include_router(errors_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")
