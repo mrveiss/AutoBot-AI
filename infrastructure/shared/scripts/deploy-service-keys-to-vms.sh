@@ -4,6 +4,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -17,14 +20,14 @@ echo ""
 
 # Service-to-VM mapping
 declare -A VM_MAP
-VM_MAP["main-backend"]="172.16.168.20"
-VM_MAP["frontend"]="172.16.168.21"
-VM_MAP["npu-worker"]="172.16.168.22"
-VM_MAP["redis-stack"]="172.16.168.23"
-VM_MAP["ai-stack"]="172.16.168.24"
-VM_MAP["browser-service"]="172.16.168.25"
+VM_MAP["main-backend"]="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+VM_MAP["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+VM_MAP["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+VM_MAP["redis-stack"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+VM_MAP["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+VM_MAP["browser-service"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SOURCE_DIR="/tmp/service-keys"
 
 deploy_to_vm() {
@@ -41,7 +44,7 @@ deploy_to_vm() {
     fi
 
     # Create directory on VM
-    ssh -i "$SSH_KEY" autobot@${vm_ip} \
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}@${vm_ip}" \
         "sudo mkdir -p /etc/autobot/service-keys && \
          sudo chown autobot:autobot /etc/autobot/service-keys && \
          sudo chmod 700 /etc/autobot/service-keys" 2>/dev/null
@@ -52,7 +55,7 @@ deploy_to_vm() {
     fi
 
     # Copy file to temp location then move to final location
-    scp -i "$SSH_KEY" "$key_file" autobot@${vm_ip}:/tmp/${service_id}.env 2>/dev/null
+    scp -i "$SSH_KEY" "$key_file" "${AUTOBOT_SSH_USER:-autobot}@${vm_ip}:/tmp/${service_id}.env" 2>/dev/null
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}  ❌ Failed to copy file to ${vm_ip}${NC}"
@@ -60,7 +63,7 @@ deploy_to_vm() {
     fi
 
     # Move to final location and set permissions
-    ssh -i "$SSH_KEY" autobot@${vm_ip} \
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}@${vm_ip}" \
         "sudo mv /tmp/${service_id}.env /etc/autobot/service-keys/${service_id}.env && \
          sudo chown autobot:autobot /etc/autobot/service-keys/${service_id}.env && \
          sudo chmod 600 /etc/autobot/service-keys/${service_id}.env" 2>/dev/null
@@ -71,7 +74,7 @@ deploy_to_vm() {
     fi
 
     # Verify deployment
-    local file_check=$(ssh -i "$SSH_KEY" autobot@${vm_ip} \
+    local file_check=$(ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}@${vm_ip}" \
         "test -f /etc/autobot/service-keys/${service_id}.env && echo 'exists'" 2>/dev/null)
 
     if [ "$file_check" = "exists" ]; then

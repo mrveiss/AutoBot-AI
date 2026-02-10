@@ -3,6 +3,9 @@
 # AutoBot Agent Local-Only Edit Policy Enforcement Script
 # Adds mandatory local-only editing rules to all agent configurations
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 # Local-only editing enforcement text to add to all agents
 LOCAL_EDIT_POLICY='
 

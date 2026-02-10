@@ -5,7 +5,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 LOG_FILE="$PROJECT_ROOT/logs/backend.log"
 REPORT_DIR="$PROJECT_ROOT/reports/service-auth"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -155,8 +156,8 @@ check_service_keys() {
     echo ""
 
     # Check if Redis is accessible
-    if ! redis-cli -h 172.16.168.23 -p 6379 ping > /dev/null 2>&1; then
-        echo -e "${RED}❌ Cannot connect to Redis at 172.16.168.23:6379${NC}"
+    if ! redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping > /dev/null 2>&1; then
+        echo -e "${RED}❌ Cannot connect to Redis at ${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}${NC}"
         return 1
     fi
 
@@ -164,7 +165,7 @@ check_service_keys() {
     local services=("main-backend" "frontend" "npu-worker" "redis-stack" "ai-stack" "browser-service")
 
     for service in "${services[@]}"; do
-        local key_exists=$(redis-cli -h 172.16.168.23 -p 6379 exists "service:key:$service")
+        local key_exists=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" exists "service:key:$service")
         if [ "$key_exists" -eq 1 ]; then
             echo -e "${GREEN}✅ $service: Key exists${NC}"
         else

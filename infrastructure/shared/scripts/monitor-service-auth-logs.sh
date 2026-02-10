@@ -1,6 +1,9 @@
 #!/bin/bash
 # Monitor service authentication logs across all VMs
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 echo "🔍 Service Authentication Log Monitor"
 echo "===================================="
 echo "Monitoring mode: LOGGING (Day 2)"
@@ -15,7 +18,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Monitor local backend logs
-echo -e "${BLUE}=== Main Backend (172.16.168.20) ===${NC}"
+echo -e "${BLUE}=== Main Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}) ===${NC}"
 if [ -f /var/log/autobot/backend.log ]; then
     tail -20 /var/log/autobot/backend.log | grep -i "auth" || echo "No auth logs yet"
 elif [ -f logs/backend.log ]; then
@@ -26,11 +29,11 @@ fi
 echo ""
 
 # Monitor each VM
-for vm in frontend:172.16.168.21 npu:172.16.168.22 redis:172.16.168.23 aiml:172.16.168.24 browser:172.16.168.25; do
+for vm in "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "npu:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}" "aiml:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"; do
     IFS=':' read -r name ip <<< "$vm"
     echo -e "${BLUE}=== ${name^} ($ip) ===${NC}"
 
-    ssh -i ~/.ssh/autobot_key autobot@$ip \
+    ssh -i "${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}" "${AUTOBOT_SSH_USER:-autobot}@$ip" \
         "tail -20 /var/log/autobot/*.log 2>/dev/null | grep -i auth || echo 'No auth logs yet'" 2>/dev/null || echo "Cannot connect to $name"
 
     echo ""

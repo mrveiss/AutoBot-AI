@@ -4,6 +4,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 echo "🔍 Week 1 Implementation Verification"
 echo "======================================"
 echo ""
@@ -130,12 +133,12 @@ echo "📋 Part 4: Backend Health Check"
 echo "--------------------------------"
 
 # Check if backend is running
-if curl -s http://172.16.168.20:8001/api/health > /dev/null 2>&1; then
+if curl -s "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health" > /dev/null 2>&1; then
     echo -e "${GREEN}✓${NC} Backend is running"
     ((PASSED++))
 
     # Check health endpoint response
-    HEALTH=$(curl -s http://172.16.168.20:8001/api/health 2>/dev/null || echo "{}")
+    HEALTH=$(curl -s "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health" 2>/dev/null || echo "{}")
 
     # Check if database status is reported
     if echo "$HEALTH" | grep -q "database"; then

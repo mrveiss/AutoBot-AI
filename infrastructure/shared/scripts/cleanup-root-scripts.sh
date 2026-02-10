@@ -10,7 +10,10 @@
 
 set -e  # Exit on any error
 
-AUTOBOT_ROOT="/home/kali/Desktop/AutoBot"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
+AUTOBOT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
 cd "$AUTOBOT_ROOT"
 
 # Color output for clarity
