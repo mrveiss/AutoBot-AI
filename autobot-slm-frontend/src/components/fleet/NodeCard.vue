@@ -5,6 +5,7 @@
 
 import { ref, computed } from 'vue'
 import type { SLMNode } from '@/types/slm'
+import { useFleetStore } from '@/stores/fleet'
 
 const props = defineProps<{
   node: SLMNode
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   (e: 'action', action: string, nodeId: string): void
 }>()
 
+const fleetStore = useFleetStore()
 const showMenu = ref(false)
 
 const statusClass = computed(() => {
@@ -80,6 +82,15 @@ function toggleMenu(): void {
 function closeMenu(): void {
   showMenu.value = false
 }
+
+// Update indicators (#682)
+const updateSummary = computed(() => {
+  return fleetStore.getNodeUpdateSummary(props.node.node_id)
+})
+
+const hasUpdates = computed(() => {
+  return (updateSummary.value?.total_updates ?? 0) > 0
+})
 </script>
 
 <template>
@@ -227,6 +238,28 @@ function closeMenu(): void {
       <span v-if="node.roles.length === 0" class="text-xs text-gray-400 italic">
         No roles assigned
       </span>
+    </div>
+
+    <!-- Update Status Badge (#682) -->
+    <div v-if="hasUpdates" class="flex items-center gap-2 mb-3">
+      <button
+        @click="handleAction('updates')"
+        class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors w-full"
+      >
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span v-if="updateSummary?.system_updates" class="whitespace-nowrap">
+          {{ updateSummary.system_updates }} pkg{{ updateSummary.system_updates !== 1 ? 's' : '' }}
+        </span>
+        <span
+          v-if="updateSummary?.system_updates && updateSummary?.code_update_available"
+          class="text-amber-400"
+        >+</span>
+        <span v-if="updateSummary?.code_update_available" class="whitespace-nowrap">
+          code
+        </span>
+      </button>
     </div>
 
     <!-- Health Metrics -->

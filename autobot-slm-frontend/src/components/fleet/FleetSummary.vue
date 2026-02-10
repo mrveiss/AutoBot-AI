@@ -38,11 +38,18 @@ const stats = computed(() => [
     color: 'text-danger-600',
     bgColor: 'bg-red-100',
   },
+  {
+    label: 'Need Updates',
+    value: fleetStore.nodesNeedingUpdates,
+    icon: 'update',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-100',
+  },
 ])
 </script>
 
 <template>
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
     <div
       v-for="stat in stats"
       :key="stat.label"
@@ -65,6 +72,10 @@ const stats = computed(() => [
           <!-- Error icon -->
           <svg v-else-if="stat.icon === 'error'" :class="['w-5 h-5', stat.color]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <!-- Update icon (#682) -->
+          <svg v-else-if="stat.icon === 'update'" :class="['w-5 h-5', stat.color]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
         </div>
         <div>

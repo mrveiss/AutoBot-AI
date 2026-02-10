@@ -38,6 +38,7 @@ import type {
   MaintenanceWindowListResponse,
   NPUNodeStatus,
   NPULoadBalancingConfig,
+  FleetUpdateSummary,
 } from '@/types/slm'
 
 // SLM Admin uses the local SLM backend API
@@ -62,6 +63,8 @@ interface BackendNodeResponse {
   ssh_user?: string
   ssh_port?: number
   auth_method?: string
+  code_status?: string
+  code_version?: string
 }
 
 interface NodesResponse {
@@ -95,6 +98,8 @@ function mapBackendNode(node: BackendNodeResponse): SLMNode {
     },
     created_at: node.created_at,
     updated_at: node.updated_at,
+    code_status: (node.code_status as SLMNode['code_status']) || undefined,
+    code_version: node.code_version || undefined,
   }
 }
 
@@ -247,6 +252,12 @@ export function useSlmApi() {
 
   async function deployCertificate(nodeId: string): Promise<ActionResponse> {
     const response = await client.post<ActionResponse>(`/nodes/${nodeId}/certificate/deploy`)
+    return response.data
+  }
+
+  // Fleet Update Summary (#682)
+  async function getFleetUpdateSummary(): Promise<FleetUpdateSummary> {
+    const response = await client.get<FleetUpdateSummary>('/updates/fleet-summary')
     return response.data
   }
 
@@ -1524,6 +1535,7 @@ export function useSlmApi() {
     renewCertificate,
     deployCertificate,
     // Updates
+    getFleetUpdateSummary,  // Fleet update summary (#682)
     checkUpdates,
     applyUpdates,
     // Roles

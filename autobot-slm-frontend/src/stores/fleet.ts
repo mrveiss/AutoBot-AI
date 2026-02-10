@@ -16,6 +16,8 @@ import type {
   SLMNode,
   NodeHealth,
   FleetSummary,
+  FleetUpdateSummary,
+  NodeUpdateSummary,
   HealthStatus,
   NodeRole,
   NodeCreate,
@@ -63,6 +65,9 @@ export const useFleetStore = defineStore('fleet', () => {
 
   /** NPU load balancing configuration */
   const npuLoadBalancingConfig = ref<NPULoadBalancingConfig | null>(null)
+
+  /** Fleet-wide update summary (#682) */
+  const fleetUpdateSummary = ref<FleetUpdateSummary | null>(null)
 
   // ============================================================
   // Getters
@@ -141,6 +146,35 @@ export const useFleetStore = defineStore('fleet', () => {
       node => !node.roles.includes('npu-worker')
     )
   })
+
+  /** Count of nodes that need updates (#682) */
+  const nodesNeedingUpdates = computed(() => {
+    return fleetUpdateSummary.value?.nodes_needing_updates ?? 0
+  })
+
+  // ============================================================
+  // Actions - Fleet Update Summary (#682)
+  // ============================================================
+
+  /**
+   * Fetch fleet-wide update summary from API.
+   * Updates are supplementary info; failures are silently handled.
+   */
+  async function fetchFleetUpdateSummary(): Promise<void> {
+    try {
+      fleetUpdateSummary.value = await api.getFleetUpdateSummary()
+    } catch (_err) {
+      // Silently fail - updates are supplementary info
+      fleetUpdateSummary.value = null
+    }
+  }
+
+  /**
+   * Get update summary for a specific node by ID (#682)
+   */
+  function getNodeUpdateSummary(nodeId: string): NodeUpdateSummary | undefined {
+    return fleetUpdateSummary.value?.nodes.find(n => n.node_id === nodeId)
+  }
 
   // ============================================================
   // Actions - Roles
@@ -772,6 +806,7 @@ export const useFleetStore = defineStore('fleet', () => {
     availableRoles,
     npuCapabilities,
     npuLoadBalancingConfig,
+    fleetUpdateSummary,
 
     // Getters
     nodeList,
@@ -781,6 +816,11 @@ export const useFleetStore = defineStore('fleet', () => {
     selectedNodeCertificate,
     npuNodes,
     nonNpuNodes,
+    nodesNeedingUpdates,
+
+    // Actions - Fleet Update Summary (#682)
+    fetchFleetUpdateSummary,
+    getNodeUpdateSummary,
 
     // Actions - Roles
     fetchRoles,

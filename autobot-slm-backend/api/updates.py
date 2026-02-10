@@ -14,10 +14,6 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import (
     EventSeverity,
     EventType,
@@ -28,6 +24,8 @@ from models.database import (
     UpdateJobStatus,
 )
 from models.schemas import (
+    FleetUpdateSummaryResponse,
+    NodeUpdateSummary,
     UpdateApplyRequest,
     UpdateApplyResponse,
     UpdateCheckResponse,
@@ -37,6 +35,9 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/updates", tags=["updates"])
@@ -347,6 +348,72 @@ async def check_updates(
     return UpdateCheckResponse(
         updates=[UpdateInfoResponse.model_validate(u) for u in updates],
         total=len(updates),
+    )
+
+
+def _build_node_summaries(
+    nodes: list, updates_by_node: dict, global_count: int
+) -> list:
+    """Build per-node update summaries.
+
+    Helper for get_fleet_update_summary (#682).
+    """
+    summaries = []
+    for node in nodes:
+        sys_count = len(updates_by_node.get(node.node_id, []))
+        sys_count += global_count
+        code_outdated = (node.code_status or "") == "outdated"
+        total = sys_count + (1 if code_outdated else 0)
+        summaries.append(
+            NodeUpdateSummary(
+                node_id=node.node_id,
+                hostname=node.hostname,
+                system_updates=sys_count,
+                code_update_available=code_outdated,
+                code_status=node.code_status or "unknown",
+                total_updates=total,
+            )
+        )
+    return summaries
+
+
+@router.get(
+    "/fleet-summary",
+    response_model=FleetUpdateSummaryResponse,
+)
+async def get_fleet_update_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> FleetUpdateSummaryResponse:
+    """Get update summary for all fleet nodes (#682)."""
+    nodes_result = await db.execute(select(Node))
+    nodes = nodes_result.scalars().all()
+
+    updates_result = await db.execute(
+        select(UpdateInfo).where(UpdateInfo.is_applied.is_(False))
+    )
+    all_updates = updates_result.scalars().all()
+
+    # Partition: node-specific vs global updates
+    updates_by_node: dict = {}
+    global_updates = []
+    for upd in all_updates:
+        if upd.node_id:
+            updates_by_node.setdefault(upd.node_id, []).append(upd)
+        else:
+            global_updates.append(upd)
+
+    summaries = _build_node_summaries(nodes, updates_by_node, len(global_updates))
+
+    total_sys = sum(s.system_updates for s in summaries)
+    total_code = sum(1 for s in summaries if s.code_update_available)
+    needing = sum(1 for s in summaries if s.total_updates > 0)
+
+    return FleetUpdateSummaryResponse(
+        nodes=summaries,
+        total_system_updates=total_sys,
+        total_code_updates=total_code,
+        nodes_needing_updates=needing,
     )
 
 
