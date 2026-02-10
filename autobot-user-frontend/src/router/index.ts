@@ -70,7 +70,7 @@ const routes: RouteRecordRaw[] = [
       title: 'AI Assistant',
       icon: 'fas fa-robot',
       description: 'Chat with AI assistant',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -98,7 +98,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Knowledge Base',
       icon: 'fas fa-database',
       description: 'Manage knowledge and documents',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -206,7 +206,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Workflow Automation',
       icon: 'fas fa-project-diagram',
       description: 'Visual workflow builder and automation (Issue #585)',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -217,7 +217,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Analytics',
       icon: 'fas fa-chart-pie',
       description: 'Codebase analytics and business intelligence',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -284,7 +284,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Vision & AI',
       icon: 'fas fa-eye',
       description: 'Vision analysis and multimodal AI features',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -330,7 +330,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Preferences',
       icon: 'fas fa-sliders-h',
       description: 'Customize your AutoBot experience',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   // Issue #729: Infrastructure routes redirected to slm-admin

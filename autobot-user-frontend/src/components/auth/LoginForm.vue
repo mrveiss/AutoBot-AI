@@ -76,14 +76,6 @@
           <span v-else>Sign In</span>
         </button>
 
-        <div class="login-info">
-          <p class="demo-credentials">
-            <strong>Demo Credentials:</strong><br>
-            Admin: admin / autobotadmin123<br>
-            Developer: developer / dev123secure<br>
-            Read-only: readonly / readonly123
-          </p>
-        </div>
       </form>
     </div>
 
@@ -191,12 +183,11 @@ async function handleLogin() {
   isLoading.value = true
 
   try {
-    // Call login API
-    const apiResponse = await ApiClient.post('/api/auth/login', {
+    // ApiClient.post() returns parsed JSON directly (#810)
+    const response = await ApiClient.post('/api/auth/login', {
       username: credentials.username,
       password: credentials.password
     })
-    const response = await apiResponse.json()
 
     if (response.success && response.user && response.token) {
       // Store authentication data
@@ -213,8 +204,8 @@ async function handleLogin() {
       credentials.username = ''
       credentials.password = ''
 
-      // Redirect to dashboard or intended route
-      const redirectTo = router.currentRoute.value.query.redirect as string || '/dashboard'
+      // Redirect to intended route or chat
+      const redirectTo = router.currentRoute.value.query.redirect as string || '/chat'
       await router.push(redirectTo)
 
     } else {
@@ -224,13 +215,16 @@ async function handleLogin() {
   } catch (error: any) {
     logger.error('Login error:', error)
 
-    if (error.status === 401) {
+    // ApiClient throws Error with message like "HTTP 401: Invalid username or password"
+    const statusMatch = error.message?.match(/HTTP (\d+)/)
+    const status = statusMatch ? parseInt(statusMatch[1]) : 0
+    if (status === 401) {
       loginError.value = 'Invalid username or password'
-    } else if (error.status === 423) {
+    } else if (status === 423) {
       lockoutMessage.value = 'Account temporarily locked due to multiple failed attempts'
-    } else if (error.status === 429) {
+    } else if (status === 429) {
       loginError.value = 'Too many login attempts. Please try again later.'
-    } else if (error.status >= 500) {
+    } else if (status >= 500) {
       loginError.value = 'Server error. Please try again later.'
     } else {
       loginError.value = error.message || 'An unexpected error occurred'
@@ -242,9 +236,9 @@ async function handleLogin() {
 
 // Check authentication status on mount
 onMounted(async () => {
-  // If already authenticated, redirect to dashboard
+  // If already authenticated, redirect to chat
   if (userStore.isAuthenticated) {
-    await router.push('/dashboard')
+    await router.push('/chat')
     return
   }
 
@@ -252,7 +246,7 @@ onMounted(async () => {
   userStore.initializeFromStorage()
 
   if (userStore.isAuthenticated) {
-    await router.push('/dashboard')
+    await router.push('/chat')
   }
 })
 </script>
@@ -424,20 +418,6 @@ onMounted(async () => {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-.login-info {
-  margin-top: var(--spacing-4);
-  padding-top: var(--spacing-4);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.demo-credentials {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  line-height: var(--leading-relaxed);
-  margin: 0;
-  text-align: center;
 }
 
 .login-footer {

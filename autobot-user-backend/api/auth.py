@@ -6,15 +6,17 @@ Authentication API endpoints for AutoBot
 Provides login, logout, and session management functionality
 """
 
+import datetime
 import logging
 from collections import defaultdict
 from time import time
 from typing import Dict, List, Optional
 
+import jwt as pyjwt
+from auth_middleware import auth_middleware
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
-from auth_middleware import auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
@@ -462,3 +464,74 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         raise HTTPException(
             status_code=500, detail="Failed to change password. Please try again."
         )
+
+
+def _decode_refresh_token(token: str) -> Dict:
+    """Decode JWT for refresh, allowing recently expired tokens (1h grace).
+
+    Helper for refresh_token (#827).
+    """
+    try:
+        payload = pyjwt.decode(
+            token,
+            auth_middleware.jwt_secret,
+            algorithms=[auth_middleware.jwt_algorithm],
+            options={"verify_exp": False},
+        )
+    except pyjwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+
+    exp = payload.get("exp")
+    if exp:
+        exp_time = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc)
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        if now > exp_time + datetime.timedelta(hours=1):
+            raise HTTPException(
+                status_code=401,
+                detail="Token expired beyond refresh window",
+            )
+    return payload
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refresh_token",
+    error_code_prefix="AUTH",
+)
+@router.post("/refresh")
+async def refresh_token(request: Request):
+    """Refresh an existing JWT token before or shortly after expiry.
+
+    Accepts a valid (or recently expired within 1h) JWT and returns
+    a fresh token with a new expiry window.
+    """
+    from user_management.config import DeploymentMode, get_deployment_config
+
+    config = get_deployment_config()
+    if config.mode == DeploymentMode.SINGLE_USER:
+        return {
+            "success": True,
+            "token": "single_user_mode",
+            "expiresIn": 86400,
+        }
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="No token provided")
+
+    token = auth_header.split(" ")[1]
+    payload = _decode_refresh_token(token)
+
+    user_data = {
+        "username": payload["username"],
+        "role": payload["role"],
+        "email": payload.get("email", ""),
+    }
+    new_token = auth_middleware.create_jwt_token(user_data)
+    expiry_seconds = auth_middleware.jwt_expiry_hours * 3600
+
+    return {
+        "success": True,
+        "token": new_token,
+        "expiresIn": expiry_seconds,
+    }
