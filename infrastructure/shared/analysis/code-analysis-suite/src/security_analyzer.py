@@ -19,6 +19,151 @@ from src.utils.redis_client import get_redis_client
 logger = logging.getLogger(__name__)
 
 
+# Security vulnerability patterns (module-level constant for SecurityAnalyzer)
+# Issue #825: Extracted from __init__ to reduce function body length
+SECURITY_PATTERNS = {
+    "sql_injection": [
+        (
+            r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%',
+            "String formatting in SQL query",
+            "CWE-89",
+        ),
+        (
+            r'execute\s*\(\s*f[\'"].*?\{.*?\}.*?[\'"]\s*\)',
+            "F-string in SQL query",
+            "CWE-89",
+        ),
+        (
+            r"\.format\s*\(.*?\).*?execute",
+            "String format in SQL query",
+            "CWE-89",
+        ),
+        (r"SELECT.*?\+.*?WHERE", "String concatenation in SQL", "CWE-89"),
+    ],
+    "command_injection": [
+        (
+            r"subprocess\.(?:run|call|Popen)\s*\([^)]*shell\s*=\s*True[^)]*\)",
+            "Shell injection risk",
+            "CWE-78",
+        ),
+        (
+            r"os\.system\s*\([^)]*\+[^)]*\)",
+            "Command injection via os.system",
+            "CWE-78",
+        ),
+        (
+            r"os\.popen\s*\([^)]*\+[^)]*\)",
+            "Command injection via os.popen",
+            "CWE-78",
+        ),
+        (r"eval\s*\([^)]*input[^)]*\)", "Code injection via eval", "CWE-94"),
+    ],
+    "path_traversal": [
+        (
+            r"open\s*\([^)]*\+[^)]*\.\.",
+            "Path traversal in file operations",
+            "CWE-22",
+        ),
+        (
+            r"os\.path\.join\s*\([^)]*input[^)]*\)",
+            "Unvalidated path join",
+            "CWE-22",
+        ),
+        (
+            r'/\.\./\.\./\.\./.*?[\'"]',
+            "Potential directory traversal",
+            "CWE-22",
+        ),
+    ],
+    "insecure_crypto": [
+        (r"hashlib\.md5\s*\(", "Weak hash algorithm MD5", "CWE-327"),
+        (r"hashlib\.sha1\s*\(", "Weak hash algorithm SHA1", "CWE-327"),
+        (
+            r"random\.random\s*\(.*?password",
+            "Weak random for security",
+            "CWE-338",
+        ),
+        (r"DES|RC4|MD4", "Weak encryption algorithm", "CWE-327"),
+    ],
+    "hardcoded_secrets": [
+        (
+            r'[\'"](?:password|passwd|pwd|secret|key|token)\s*[:=]\s*[\'"][^\'"]+[\'"]',
+            "Hardcoded secret",
+            "CWE-798",
+        ),
+        (
+            r'[\'"](?:sk-|pk_|ghp_|glpat-)[A-Za-z0-9_-]{20,}[\'"]',
+            "API key in code",
+            "CWE-798",
+        ),
+        (r'[\'"](?:AKIA|ASIA)[A-Z0-9]{16}[\'"]', "AWS access key", "CWE-798"),
+        (
+            r'[\'"].*?(?:@|://).*?:[^@]+@.*?[\'"]',
+            "Credentials in URL",
+            "CWE-798",
+        ),
+    ],
+    "weak_authentication": [
+        (r"auth.*?=.*?False", "Authentication disabled", "CWE-306"),
+        (r"verify\s*=\s*False", "SSL verification disabled", "CWE-295"),
+        (
+            r"check_hostname\s*=\s*False",
+            "Hostname verification disabled",
+            "CWE-295",
+        ),
+        (
+            r"session\.permanent\s*=\s*False",
+            "Non-persistent sessions",
+            "CWE-613",
+        ),
+    ],
+    "xss_vulnerabilities": [
+        (
+            r"render_template_string\s*\([^)]*\+[^)]*\)",
+            "XSS via template injection",
+            "CWE-79",
+        ),
+        (r"innerHTML\s*=\s*[^;]*\+", "Client-side XSS risk", "CWE-79"),
+        (r"document\.write\s*\([^)]*\+[^)]*\)", "DOM-based XSS", "CWE-79"),
+    ],
+    "information_disclosure": [
+        (
+            r"print\s*\([^)]*(?:password|secret|key|token)[^)]*\)",
+            "Secret in print statement",
+            "CWE-209",
+        ),
+        (
+            r"log(?:ger)?\.(?:debug|info|warning|error)\s*\([^)]*(?:password|secret|key|token)",
+            "Secret in logs",
+            "CWE-209",
+        ),
+        (
+            r"traceback\.print_exc\s*\(\s*\)",
+            "Stack trace disclosure",
+            "CWE-209",
+        ),
+        (r"app\.debug\s*=\s*True", "Debug mode in production", "CWE-489"),
+    ],
+    "deserialization": [
+        (r"pickle\.loads?\s*\([^)]*\)", "Unsafe deserialization", "CWE-502"),
+        (r"yaml\.load\s*\([^)]*\)", "Unsafe YAML loading", "CWE-502"),
+        (r"marshal\.loads?\s*\([^)]*\)", "Unsafe marshal loading", "CWE-502"),
+    ],
+    "timing_attacks": [
+        (
+            r"==\s*[^=].*?(?:password|secret|token|hash)",
+            "Timing attack vulnerability",
+            "CWE-208",
+        ),
+        (
+            r"if\s+[^:]*(?:password|hash)\s*==",
+            "String comparison timing",
+            "CWE-208",
+        ),
+    ],
+}
+
+
 @dataclass
 class SecurityVulnerability:
     """Represents a security vulnerability in the codebase"""
@@ -59,148 +204,8 @@ class SecurityAnalyzer:
         self.SECURITY_KEY = "security_analysis:vulnerabilities"
         self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
 
-        # Security vulnerability patterns
-        self.security_patterns = {
-            "sql_injection": [
-                (
-                    r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%',
-                    "String formatting in SQL query",
-                    "CWE-89",
-                ),
-                (
-                    r'execute\s*\(\s*f[\'"].*?\{.*?\}.*?[\'"]\s*\)',
-                    "F-string in SQL query",
-                    "CWE-89",
-                ),
-                (
-                    r"\.format\s*\(.*?\).*?execute",
-                    "String format in SQL query",
-                    "CWE-89",
-                ),
-                (r"SELECT.*?\+.*?WHERE", "String concatenation in SQL", "CWE-89"),
-            ],
-            "command_injection": [
-                (
-                    r"subprocess\.(?:run|call|Popen)\s*\([^)]*shell\s*=\s*True[^)]*\)",
-                    "Shell injection risk",
-                    "CWE-78",
-                ),
-                (
-                    r"os\.system\s*\([^)]*\+[^)]*\)",
-                    "Command injection via os.system",
-                    "CWE-78",
-                ),
-                (
-                    r"os\.popen\s*\([^)]*\+[^)]*\)",
-                    "Command injection via os.popen",
-                    "CWE-78",
-                ),
-                (r"eval\s*\([^)]*input[^)]*\)", "Code injection via eval", "CWE-94"),
-            ],
-            "path_traversal": [
-                (
-                    r"open\s*\([^)]*\+[^)]*\.\.",
-                    "Path traversal in file operations",
-                    "CWE-22",
-                ),
-                (
-                    r"os\.path\.join\s*\([^)]*input[^)]*\)",
-                    "Unvalidated path join",
-                    "CWE-22",
-                ),
-                (
-                    r'/\.\./\.\./\.\./.*?[\'"]',
-                    "Potential directory traversal",
-                    "CWE-22",
-                ),
-            ],
-            "insecure_crypto": [
-                (r"hashlib\.md5\s*\(", "Weak hash algorithm MD5", "CWE-327"),
-                (r"hashlib\.sha1\s*\(", "Weak hash algorithm SHA1", "CWE-327"),
-                (
-                    r"random\.random\s*\(.*?password",
-                    "Weak random for security",
-                    "CWE-338",
-                ),
-                (r"DES|RC4|MD4", "Weak encryption algorithm", "CWE-327"),
-            ],
-            "hardcoded_secrets": [
-                (
-                    r'[\'"](?:password|passwd|pwd|secret|key|token)\s*[:=]\s*[\'"][^\'"]+[\'"]',
-                    "Hardcoded secret",
-                    "CWE-798",
-                ),
-                (
-                    r'[\'"](?:sk-|pk_|ghp_|glpat-)[A-Za-z0-9_-]{20,}[\'"]',
-                    "API key in code",
-                    "CWE-798",
-                ),
-                (r'[\'"](?:AKIA|ASIA)[A-Z0-9]{16}[\'"]', "AWS access key", "CWE-798"),
-                (
-                    r'[\'"].*?(?:@|://).*?:[^@]+@.*?[\'"]',
-                    "Credentials in URL",
-                    "CWE-798",
-                ),
-            ],
-            "weak_authentication": [
-                (r"auth.*?=.*?False", "Authentication disabled", "CWE-306"),
-                (r"verify\s*=\s*False", "SSL verification disabled", "CWE-295"),
-                (
-                    r"check_hostname\s*=\s*False",
-                    "Hostname verification disabled",
-                    "CWE-295",
-                ),
-                (
-                    r"session\.permanent\s*=\s*False",
-                    "Non-persistent sessions",
-                    "CWE-613",
-                ),
-            ],
-            "xss_vulnerabilities": [
-                (
-                    r"render_template_string\s*\([^)]*\+[^)]*\)",
-                    "XSS via template injection",
-                    "CWE-79",
-                ),
-                (r"innerHTML\s*=\s*[^;]*\+", "Client-side XSS risk", "CWE-79"),
-                (r"document\.write\s*\([^)]*\+[^)]*\)", "DOM-based XSS", "CWE-79"),
-            ],
-            "information_disclosure": [
-                (
-                    r"print\s*\([^)]*(?:password|secret|key|token)[^)]*\)",
-                    "Secret in print statement",
-                    "CWE-209",
-                ),
-                (
-                    r"log(?:ger)?\.(?:debug|info|warning|error)\s*\([^)]*(?:password|secret|key|token)",
-                    "Secret in logs",
-                    "CWE-209",
-                ),
-                (
-                    r"traceback\.print_exc\s*\(\s*\)",
-                    "Stack trace disclosure",
-                    "CWE-209",
-                ),
-                (r"app\.debug\s*=\s*True", "Debug mode in production", "CWE-489"),
-            ],
-            "deserialization": [
-                (r"pickle\.loads?\s*\([^)]*\)", "Unsafe deserialization", "CWE-502"),
-                (r"yaml\.load\s*\([^)]*\)", "Unsafe YAML loading", "CWE-502"),
-                (r"marshal\.loads?\s*\([^)]*\)", "Unsafe marshal loading", "CWE-502"),
-            ],
-            "timing_attacks": [
-                (
-                    r"==\s*[^=].*?(?:password|secret|token|hash)",
-                    "Timing attack vulnerability",
-                    "CWE-208",
-                ),
-                (
-                    r"if\s+[^:]*(?:password|hash)\s*==",
-                    "String comparison timing",
-                    "CWE-208",
-                ),
-            ],
-        }
+        # Security vulnerability patterns (use module-level constant)
+        self.security_patterns = SECURITY_PATTERNS
 
         logger.info("Security Analyzer initialized")
 
@@ -804,29 +809,29 @@ async def main():
         root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
     )
 
-    # Print summary
-    print(f"\n=== Security Analysis Results ===")
-    print(f"Total vulnerabilities: {results['total_vulnerabilities']}")
-    print(f"Critical vulnerabilities: {results['critical_vulnerabilities']}")
-    print(f"High severity count: {results['high_severity_count']}")
-    print(f"Security score: {results['metrics']['security_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    # Log summary
+    logger.info("\n=== Security Analysis Results ===")
+    logger.info("Total vulnerabilities: %s", results['total_vulnerabilities'])
+    logger.info("Critical vulnerabilities: %s", results['critical_vulnerabilities'])
+    logger.info("High severity count: %s", results['high_severity_count'])
+    logger.info("Security score: %s/100", results['metrics']['security_score'])
+    logger.info("Analysis time: %.2fs", results['analysis_time_seconds'])
 
-    # Print category breakdown
-    print(f"\n=== Vulnerability Categories ===")
+    # Log category breakdown
+    logger.info("\n=== Vulnerability Categories ===")
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        logger.info(f"{category}: {count}")
 
-    # Print critical vulnerabilities
-    print(f"\n=== Critical Security Vulnerabilities ===")
+    # Log critical vulnerabilities
+    logger.info("\n=== Critical Security Vulnerabilities ===")
     critical_vulns = [
         v for v in results["vulnerability_details"] if v["severity"] == "critical"
     ]
     for i, vuln in enumerate(critical_vulns[:5], 1):
-        print(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")
-        print(f"   {vuln['description']}")
-        print(f"   CWE: {vuln['cwe_id']}")
-        print(f"   Fix: {vuln['fix_suggestion']}")
+        logger.info(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")
+        logger.info(f"   {vuln['description']}")
+        logger.info(f"   CWE: {vuln['cwe_id']}")
+        logger.info(f"   Fix: {vuln['fix_suggestion']}")
 
 
 if __name__ == "__main__":

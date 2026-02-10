@@ -34,6 +34,121 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# Framework detection patterns (Issue #825: extracted from __init__)
+FRAMEWORK_PATTERNS = {
+    "vue": [
+        r"<template>",
+        r"export\s+default\s*{",
+        r"Vue\.component",
+        r"@Component",
+        r"\.vue$",
+    ],
+    "react": [
+        r"import\s+React",
+        r"React\.Component",
+        r"useState",
+        r"useEffect",
+        r"JSX\.Element",
+    ],
+    "angular": [
+        r"@Component",
+        r"@Injectable",
+        r"import.*@angular",
+        r"NgModule",
+    ],
+    "svelte": [r"<script>", r"\$:", r"export\s+let", r"\.svelte$"],
+}
+
+# Frontend-specific issue patterns (Issue #825: extracted from __init__)
+FRONTEND_ISSUE_PATTERNS = {
+    "security": [
+        (r"innerHTML\s*=.*?\+", "XSS via innerHTML concatenation", "high"),
+        (r"eval\s*\(", "Code injection via eval", "critical"),
+        (r"document\.write\s*\(.*?\+", "XSS via document.write", "high"),
+        (r"window\[.*?\]\s*\(", "Dynamic function execution", "medium"),
+        (
+            r"dangerouslySetInnerHTML",
+            "Potential XSS with dangerouslySetInnerHTML",
+            "medium",
+        ),
+    ],
+    "performance": [
+        (r"console\.log", "Console logging in production code", "low"),
+        (r"for\s*\(.*?document\.querySelector", "DOM query in loop", "high"),
+        (
+            r"setInterval\s*\(.*?[^c]lear",
+            "Potential memory leak with setInterval",
+            "medium",
+        ),
+        (
+            r"addEventListener.*?(?!removeEventListener)",
+            "Event listener without cleanup",
+            "medium",
+        ),
+        (r"\.\$forceUpdate\s*\(", "Vue: Avoid $forceUpdate", "medium"),
+        (r"componentWillMount", "React: Deprecated lifecycle method", "medium"),
+    ],
+    "accessibility": [
+        (r"<img(?![^>]*alt\s*=)", "Image without alt attribute", "medium"),
+        (
+            r"<button(?![^>]*aria-label|title)",
+            "Button without accessible label",
+            "medium",
+        ),
+        (
+            r"onclick\s*=.*?(?!onkeydown)",
+            "Click handler without keyboard support",
+            "medium",
+        ),
+        (r"<div.*?onclick", "Non-semantic click handler", "low"),
+        (r'tabindex\s*=\s*["\']?\d+', "Positive tabindex value", "low"),
+    ],
+    "best_practices": [
+        (r"var\s+", "Use const/let instead of var", "low"),
+        (r"==\s*(?!null)", "Use strict equality (===)", "low"),
+        (
+            r"function\s*\(\s*\)\s*{.*?return.*?function",
+            "Consider arrow function",
+            "low",
+        ),
+        (
+            r"async\s+function.*?(?!await)",
+            "Async function without await",
+            "medium",
+        ),
+        (r"catch\s*\(\s*\)\s*{", "Empty catch block", "medium"),
+    ],
+    "vue_specific": [
+        (r"v-html\s*=.*?\+", "Vue: XSS risk with v-html", "high"),
+        (r"\$refs\..*?\.focus\(\)", "Vue: Direct DOM manipulation", "low"),
+        (r"this\.\$parent", "Vue: Avoid $parent access", "medium"),
+        (
+            r'v-for.*?:key\s*=\s*["\']index["\']',
+            "Vue: Avoid index as key",
+            "medium",
+        ),
+    ],
+    "react_specific": [
+        (
+            r"dangerouslySetInnerHTML.*?\+",
+            "React: XSS risk with dangerouslySetInnerHTML",
+            "critical",
+        ),
+        (
+            r"componentWillReceiveProps",
+            "React: Use componentDidUpdate",
+            "medium",
+        ),
+        (r"findDOMNode", "React: Deprecated findDOMNode", "medium"),
+        (
+            r"setState.*?(?!callback)",
+            "React: setState without callback in async",
+            "low",
+        ),
+    ],
+}
+
+
 @dataclass
 class FrontendComponent:
     """Represents a frontend component"""
@@ -74,119 +189,9 @@ class FrontendAnalyzer:
         # Caching key
         self.FRONTEND_KEY = "frontend_analysis:results"
 
-        # Framework detection patterns
-        self.framework_patterns = {
-            "vue": [
-                r"<template>",
-                r"export\s+default\s*{",
-                r"Vue\.component",
-                r"@Component",
-                r"\.vue$",
-            ],
-            "react": [
-                r"import\s+React",
-                r"React\.Component",
-                r"useState",
-                r"useEffect",
-                r"JSX\.Element",
-            ],
-            "angular": [
-                r"@Component",
-                r"@Injectable",
-                r"import.*@angular",
-                r"NgModule",
-            ],
-            "svelte": [r"<script>", r"\$:", r"export\s+let", r"\.svelte$"],
-        }
-
-        # Frontend-specific issue patterns
-        self.frontend_issues = {
-            "security": [
-                (r"innerHTML\s*=.*?\+", "XSS via innerHTML concatenation", "high"),
-                (r"eval\s*\(", "Code injection via eval", "critical"),
-                (r"document\.write\s*\(.*?\+", "XSS via document.write", "high"),
-                (r"window\[.*?\]\s*\(", "Dynamic function execution", "medium"),
-                (
-                    r"dangerouslySetInnerHTML",
-                    "Potential XSS with dangerouslySetInnerHTML",
-                    "medium",
-                ),
-            ],
-            "performance": [
-                (r"console\.log", "Console logging in production code", "low"),
-                (r"for\s*\(.*?document\.querySelector", "DOM query in loop", "high"),
-                (
-                    r"setInterval\s*\(.*?[^c]lear",
-                    "Potential memory leak with setInterval",
-                    "medium",
-                ),
-                (
-                    r"addEventListener.*?(?!removeEventListener)",
-                    "Event listener without cleanup",
-                    "medium",
-                ),
-                (r"\.\$forceUpdate\s*\(", "Vue: Avoid $forceUpdate", "medium"),
-                (r"componentWillMount", "React: Deprecated lifecycle method", "medium"),
-            ],
-            "accessibility": [
-                (r"<img(?![^>]*alt\s*=)", "Image without alt attribute", "medium"),
-                (
-                    r"<button(?![^>]*aria-label|title)",
-                    "Button without accessible label",
-                    "medium",
-                ),
-                (
-                    r"onclick\s*=.*?(?!onkeydown)",
-                    "Click handler without keyboard support",
-                    "medium",
-                ),
-                (r"<div.*?onclick", "Non-semantic click handler", "low"),
-                (r'tabindex\s*=\s*["\']?\d+', "Positive tabindex value", "low"),
-            ],
-            "best_practices": [
-                (r"var\s+", "Use const/let instead of var", "low"),
-                (r"==\s*(?!null)", "Use strict equality (===)", "low"),
-                (
-                    r"function\s*\(\s*\)\s*{.*?return.*?function",
-                    "Consider arrow function",
-                    "low",
-                ),
-                (
-                    r"async\s+function.*?(?!await)",
-                    "Async function without await",
-                    "medium",
-                ),
-                (r"catch\s*\(\s*\)\s*{", "Empty catch block", "medium"),
-            ],
-            "vue_specific": [
-                (r"v-html\s*=.*?\+", "Vue: XSS risk with v-html", "high"),
-                (r"\$refs\..*?\.focus\(\)", "Vue: Direct DOM manipulation", "low"),
-                (r"this\.\$parent", "Vue: Avoid $parent access", "medium"),
-                (
-                    r'v-for.*?:key\s*=\s*["\']index["\']',
-                    "Vue: Avoid index as key",
-                    "medium",
-                ),
-            ],
-            "react_specific": [
-                (
-                    r"dangerouslySetInnerHTML.*?\+",
-                    "React: XSS risk with dangerouslySetInnerHTML",
-                    "critical",
-                ),
-                (
-                    r"componentWillReceiveProps",
-                    "React: Use componentDidUpdate",
-                    "medium",
-                ),
-                (r"findDOMNode", "React: Deprecated findDOMNode", "medium"),
-                (
-                    r"setState.*?(?!callback)",
-                    "React: setState without callback in async",
-                    "low",
-                ),
-            ],
-        }
+        # Use module-level constants
+        self.framework_patterns = FRAMEWORK_PATTERNS
+        self.frontend_issues = FRONTEND_ISSUE_PATTERNS
 
         logger.info("Frontend Analyzer initialized")
 
@@ -836,26 +841,26 @@ async def main():
         patterns=["**/*.js", "**/*.ts", "**/*.vue", "**/*.jsx", "**/*.tsx"],
     )
 
-    print(f"\n=== Frontend Code Analysis Results ===")
-    print(f"Total components: {results['total_components']}")
-    print(f"Total issues: {results['total_issues']}")
-    print(f"Frameworks detected: {', '.join(results['frameworks_detected'])}")
-    print(f"Quality score: {results['quality_score']:.1f}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info("\n=== Frontend Code Analysis Results ===")
+    logger.info("Total components: %s", results['total_components'])
+    logger.info("Total issues: %s", results['total_issues'])
+    logger.info("Frameworks detected: %s", ', '.join(results['frameworks_detected']))
+    logger.info("Quality score: %.1f/100", results['quality_score'])
+    logger.info("Analysis time: %.2fs", results['analysis_time_seconds'])
 
     # Framework usage
-    print(f"\n=== Framework Usage ===")
+    logger.info("\n=== Framework Usage ===")
     for framework, usage in results["framework_usage"].items():
-        print(f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)")
+        logger.info(f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)")
 
     # Issues by category
     categories = ["security", "performance", "accessibility", "best_practices"]
     for category in categories:
         category_issues = [i for i in results["issues"] if i["issue_type"] == category]
         if category_issues:
-            print(f"\n=== {category.replace('_', ' ').title()} Issues ===")
+            logger.info(f"\n=== {category.replace('_', ' ').title()} Issues ===")
             for issue in category_issues[:5]:  # Show first 5
-                print(
+                logger.info(
                     f"• {issue['description']} ({issue['file_path']}:{issue['line_number']})"
                 )
 

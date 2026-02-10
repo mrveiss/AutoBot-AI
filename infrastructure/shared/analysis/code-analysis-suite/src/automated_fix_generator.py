@@ -46,6 +46,152 @@ class FixTemplate:
     risk_level: str
 
 
+def _build_security_templates():
+    """Build security fix templates.
+
+    Helper for _initialize_fix_templates (#825).
+    """
+    return [
+        FixTemplate(
+            pattern=r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%\s*\(([^)]+)\)',
+            replacement=r"execute(\1, (\2,))",
+            fix_type="sql_injection",
+            description="Fix SQL injection by using parameterized queries",
+            confidence=0.9,
+            risk_level="low",
+        ),
+        FixTemplate(
+            pattern=(
+                r'subprocess\.(?:run|call|Popen)\s*\([\'"]'
+                r'([^\'"]*)\{([^}]+)\}([^\'"]*)[\'"]\s*,\s*shell=True\)'
+            ),
+            replacement=r'subprocess.\1(["\2".format(\3)], shell=False)',
+            fix_type="command_injection",
+            description="Fix command injection by avoiding shell=True",
+            confidence=0.8,
+            risk_level="medium",
+        ),
+        FixTemplate(
+            pattern=r"hashlib\.md5\s*\(",
+            replacement="hashlib.sha256(",
+            fix_type="weak_crypto",
+            description="Replace MD5 with SHA256 for better security",
+            confidence=0.9,
+            risk_level="low",
+        ),
+        FixTemplate(
+            pattern=r"random\.random\s*\(\s*\)",
+            replacement="secrets.randbelow(sys.maxsize)",
+            fix_type="weak_random",
+            description="Use cryptographically secure random",
+            confidence=0.8,
+            risk_level="low",
+        ),
+    ]
+
+
+def _build_performance_templates():
+    """Build performance fix templates.
+
+    Helper for _initialize_fix_templates (#825).
+    """
+    return [
+        FixTemplate(
+            pattern=(
+                r"open\s*\(\s*([^)]+)\s*\)"
+                r"(?!\s*(?:with|\.close\(\)|as\s+))"
+            ),
+            replacement=r"with open(\1) as f:",
+            fix_type="memory_leak",
+            description="Fix memory leak by using context manager",
+            confidence=0.9,
+            risk_level="low",
+        ),
+        FixTemplate(
+            pattern=r"time\.sleep\s*\(\s*([^)]+)\s*\)",
+            replacement=r"await asyncio.sleep(\1)",
+            fix_type="blocking_call",
+            description="Replace blocking time.sleep with async equivalent",
+            confidence=0.7,
+            risk_level="medium",
+        ),
+        FixTemplate(
+            pattern=r"requests\.([a-z]+)\s*\(",
+            replacement=(
+                r"async with aiohttp.ClientSession() as session:\n"
+                r"        async with session.\1("
+            ),
+            fix_type="blocking_call",
+            description="Replace blocking requests with async aiohttp",
+            confidence=0.6,
+            risk_level="high",
+        ),
+    ]
+
+
+def _build_code_quality_templates():
+    """Build code quality fix templates.
+
+    Helper for _initialize_fix_templates (#825).
+    """
+    return [
+        FixTemplate(
+            pattern=(
+                r"(\s*)(.*?)\s*=\s*\[\]\s*\n"
+                r"\1for\s+([^:]+):\s*\n"
+                r"\1\s+\2\.append\(([^)]+)\)"
+            ),
+            replacement=r"\1\2 = [\4 for \3]",
+            fix_type="list_comprehension",
+            description="Replace loop with list comprehension",
+            confidence=0.8,
+            risk_level="low",
+        ),
+        FixTemplate(
+            pattern=r'(\w+)\s*\+=\s*[\'"]([^\'"]*)[\'"]',
+            replacement=r'strings.append("\2")',
+            fix_type="string_concatenation",
+            description="Avoid string concatenation in loops",
+            confidence=0.7,
+            risk_level="medium",
+        ),
+    ]
+
+
+def _build_import_templates():
+    """Build import fix templates.
+
+    Helper for _initialize_fix_templates (#825).
+    """
+    return [
+        FixTemplate(
+            pattern=r"import\s+(\w+)\s*\n.*?import\s+\1\s*$",
+            replacement="",
+            fix_type="duplicate_import",
+            description="Remove duplicate import statement",
+            confidence=0.9,
+            risk_level="low",
+        ),
+    ]
+
+
+def _build_environment_templates():
+    """Build environment fix templates.
+
+    Helper for _initialize_fix_templates (#825).
+    """
+    return [
+        FixTemplate(
+            pattern=r'([A-Z_]+)\s*=\s*[\'"]([^\'"]{8,})[\'"]',
+            replacement=r'\1 = os.getenv("\1", "\2")',
+            fix_type="hardcoded_config",
+            description="Move hardcoded config to environment variable",
+            confidence=0.8,
+            risk_level="low",
+        ),
+    ]
+
+
 class AutomatedFixGenerator:
     """Generates automated code fixes based on analysis results"""
 
@@ -65,107 +211,11 @@ class AutomatedFixGenerator:
         """Initialize fix templates for common code issues"""
 
         templates = {
-            "security": [
-                FixTemplate(
-                    pattern=r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%\s*\(([^)]+)\)',
-                    replacement=r"execute(\1, (\2,))",
-                    fix_type="sql_injection",
-                    description="Fix SQL injection by using parameterized queries",
-                    confidence=0.9,
-                    risk_level="low",
-                ),
-                FixTemplate(
-                    pattern=(
-                        r'subprocess\.(?:run|call|Popen)\s*\([\'"]'
-                        r'([^\'"]*)\{([^}]+)\}([^\'"]*)[\'"]\s*,\s*shell=True\)'
-                    ),
-                    replacement=r'subprocess.\1(["\2".format(\3)], shell=False)',
-                    fix_type="command_injection",
-                    description="Fix command injection by avoiding shell=True",
-                    confidence=0.8,
-                    risk_level="medium",
-                ),
-                FixTemplate(
-                    pattern=r"hashlib\.md5\s*\(",
-                    replacement="hashlib.sha256(",
-                    fix_type="weak_crypto",
-                    description="Replace MD5 with SHA256 for better security",
-                    confidence=0.9,
-                    risk_level="low",
-                ),
-                FixTemplate(
-                    pattern=r"random\.random\s*\(\s*\)",
-                    replacement="secrets.randbelow(sys.maxsize)",
-                    fix_type="weak_random",
-                    description="Use cryptographically secure random for security purposes",
-                    confidence=0.8,
-                    risk_level="low",
-                ),
-            ],
-            "performance": [
-                FixTemplate(
-                    pattern=r"open\s*\(\s*([^)]+)\s*\)(?!\s*(?:with|\.close\(\)|as\s+))",
-                    replacement=r"with open(\1) as f:",
-                    fix_type="memory_leak",
-                    description="Fix memory leak by using context manager",
-                    confidence=0.9,
-                    risk_level="low",
-                ),
-                FixTemplate(
-                    pattern=r"time\.sleep\s*\(\s*([^)]+)\s*\)",
-                    replacement=r"await asyncio.sleep(\1)",
-                    fix_type="blocking_call",
-                    description="Replace blocking time.sleep with async equivalent",
-                    confidence=0.7,
-                    risk_level="medium",
-                ),
-                FixTemplate(
-                    pattern=r"requests\.([a-z]+)\s*\(",
-                    replacement=r"async with aiohttp.ClientSession() as session:\n        async with session.\1(",
-                    fix_type="blocking_call",
-                    description="Replace blocking requests with async aiohttp",
-                    confidence=0.6,
-                    risk_level="high",  # Requires more changes
-                ),
-            ],
-            "code_quality": [
-                FixTemplate(
-                    pattern=r"(\s*)(.*?)\s*=\s*\[\]\s*\n\1for\s+([^:]+):\s*\n\1\s+\2\.append\(([^)]+)\)",
-                    replacement=r"\1\2 = [\4 for \3]",
-                    fix_type="list_comprehension",
-                    description="Replace loop with list comprehension for better performance",
-                    confidence=0.8,
-                    risk_level="low",
-                ),
-                FixTemplate(
-                    pattern=r'(\w+)\s*\+=\s*[\'"]([^\'"]*)[\'"]',
-                    replacement=r'strings.append("\2")',
-                    fix_type="string_concatenation",
-                    description="Avoid string concatenation in loops, use list and join",
-                    confidence=0.7,
-                    risk_level="medium",
-                ),
-            ],
-            "imports": [
-                FixTemplate(
-                    pattern=r"import\s+(\w+)\s*\n.*?import\s+\1\s*$",
-                    replacement="",  # Remove duplicate
-                    fix_type="duplicate_import",
-                    description="Remove duplicate import statement",
-                    confidence=0.9,
-                    risk_level="low",
-                ),
-            ],
-            "environment": [
-                FixTemplate(
-                    pattern=r'([A-Z_]+)\s*=\s*[\'"]([^\'"]{8,})[\'"]',
-                    replacement=r'\1 = os.getenv("\1", "\2")',
-                    fix_type="hardcoded_config",
-                    description="Move hardcoded configuration to environment variable",
-                    confidence=0.8,
-                    risk_level="low",
-                ),
-            ],
+            "security": _build_security_templates(),
+            "performance": _build_performance_templates(),
+            "code_quality": _build_code_quality_templates(),
+            "imports": _build_import_templates(),
+            "environment": _build_environment_templates(),
         }
 
         return templates
@@ -770,32 +820,32 @@ async def main():
     # Generate fixes
     results = await generator.generate_fixes(mock_analysis)
 
-    print(f"\n=== Automated Fix Generation Results ===")
-    print(f"Total fixes generated: {results['total_fixes_generated']}")
-    print(f"High confidence fixes: {results['high_confidence_fixes']}")
-    print(f"Low risk fixes: {results['low_risk_fixes']}")
-    print(f"Generation time: {results['generation_time_seconds']:.2f}s")
+    logger.info("\n=== Automated Fix Generation Results ===")
+    logger.info("Total fixes generated: %s", results['total_fixes_generated'])
+    logger.info("High confidence fixes: %s", results['high_confidence_fixes'])
+    logger.info("Low risk fixes: %s", results['low_risk_fixes'])
+    logger.info("Generation time: %.2fs", results['generation_time_seconds'])
 
-    # Print statistics
+    # Log statistics
     stats = results["statistics"]
-    print(f"\n=== Fix Statistics ===")
-    print(f"By type: {stats['by_type']}")
-    print(f"By severity: {stats['by_severity']}")
-    print(f"By confidence: {stats['by_confidence']}")
-    print(f"By risk: {stats['by_risk']}")
-    print(f"Automated fixes: {stats['automated_fixes']}")
-    print(f"Manual review required: {stats['manual_review_required']}")
+    logger.info("\n=== Fix Statistics ===")
+    logger.info("By type: %s", stats['by_type'])
+    logger.info("By severity: %s", stats['by_severity'])
+    logger.info("By confidence: %s", stats['by_confidence'])
+    logger.info("By risk: %s", stats['by_risk'])
+    logger.info("Automated fixes: %s", stats['automated_fixes'])
+    logger.info("Manual review required: %s", stats['manual_review_required'])
 
-    # Print recommendations
-    print(f"\n=== Recommendations ===")
+    # Log recommendations
+    logger.info("\n=== Recommendations ===")
     for rec in results["recommendations"]:
-        print(f"• {rec}")
+        logger.info(f"• {rec}")
 
     # Test safe fix application (dry run)
     if results["fixes"]:
-        print(f"\n=== Testing Safe Fix Application (Dry Run) ===")
+        logger.info(f"\n=== Testing Safe Fix Application (Dry Run) ===")
         application_results = await generator.apply_safe_fixes(results, dry_run=True)
-        print(f"Would apply: {application_results['total_applied']} fixes")
+        logger.info(f"Would apply: {application_results['total_applied']} fixes")
 
 
 if __name__ == "__main__":

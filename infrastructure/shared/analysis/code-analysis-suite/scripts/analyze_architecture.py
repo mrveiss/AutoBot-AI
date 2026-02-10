@@ -8,12 +8,164 @@ import json
 from pathlib import Path
 
 from src.architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
+import logging
+
+
+
+logger = logging.getLogger(__name__)
+
+async def _display_summary_and_metrics(results):
+    """Display summary and architectural quality metrics.
+
+    Helper for analyze_architectural_patterns (Issue #825).
+    """
+    logger.info("\n=== Architectural Pattern Analysis Results ===\n")
+
+    # Summary
+    logger.info(f"📊 **Analysis Summary:**")
+    logger.info(f"   - Total components: {results['total_components']}")
+    logger.info(f"   - Architectural issues: {results['architectural_issues']}")
+    logger.info(f"   - Design patterns found: {results['design_patterns_found']}")
+    logger.info(f"   - Architecture score: {results['architecture_score']}/100")
+    logger.info(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")
+
+    # Detailed metrics
+    metrics = results["metrics"]
+    logger.info("🏛️ **Architectural Quality Metrics:**")
+    logger.info(
+        f"   - Coupling score: {metrics['coupling_score']}/100 (lower coupling is better)"
+    )
+    logger.info(f"   - Cohesion score: {metrics['cohesion_score']}/100")
+    logger.info(f"   - Pattern adherence: {metrics['pattern_adherence_score']}/100")
+    logger.info(f"   - Maintainability index: {metrics['maintainability_index']}/100")
+    logger.info(f"   - Abstraction score: {metrics['abstraction_score']}/100")
+    logger.info(f"   - Instability score: {metrics['instability_score']}/100")
+    logger.info()
+
+
+async def _display_component_breakdown(results):
+    """Display component breakdown by type.
+
+    Helper for analyze_architectural_patterns (Issue #825).
+    """
+    component_types = {}
+    for comp in results["components"]:
+        comp_type = comp["type"]
+        component_types[comp_type] = component_types.get(comp_type, 0) + 1
+
+    logger.info("🧩 **Component Breakdown:**")
+    for comp_type, count in component_types.items():
+        logger.info(f"   - {comp_type.title()}s: {count}")
+    logger.info()
+
+
+async def _display_design_patterns(results):
+    """Display detected design patterns.
+
+    Helper for analyze_architectural_patterns (Issue #825).
+    """
+    if results["detected_patterns"]:
+        pattern_counts = {}
+        for pattern in results["detected_patterns"]:
+            pattern_name = pattern["pattern"]
+            pattern_counts[pattern_name] = pattern_counts.get(pattern_name, 0) + 1
+
+        logger.info("🎨 **Design Patterns Detected:**")
+        for pattern, count in sorted(pattern_counts.items()):
+            logger.info(f"   - {pattern.replace('_', ' ').title()}: {count} instances")
+
+        logger.info("\n📋 **Pattern Details:**")
+        for pattern in results["detected_patterns"][:10]:  # Show first 10
+            logger.info(
+                f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}"
+            )
+            logger.info(f"     {pattern['description']}")
+        logger.info()
+
+
+async def _display_architectural_issues(results):
+    """Display architectural issues with severity.
+
+    Helper for analyze_architectural_patterns (Issue #825).
+    """
+    if results["architectural_issues"]:
+        logger.info("🚨 **Architectural Issues:**")
+        for issue in results["architectural_issues"]:
+            severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            emoji = severity_emoji.get(issue["severity"], "⚪")
+
+            logger.info(
+                f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})"
+            )
+            logger.info(f"      {issue['description']}")
+            logger.info(f"      Affects: {issue['affected_components_count']} components")
+            logger.info(f"      💡 Suggestion: {issue['suggestion']}")
+            logger.info(f"      🔧 Refactoring effort: {issue['refactoring_effort']}")
+            if issue["pattern_violation"]:
+                logger.info(f"      ❌ Violates: {issue['pattern_violation']}")
+
+
+async def _display_coupling_analysis(results):
+    """Display high coupling analysis.
+
+    Helper for analyze_architectural_patterns (Issue #825).
+    """
+    high_coupling_components = [
+        c for c in results["components"] if c["coupling_score"] > 10
+    ]
+    if high_coupling_components:
+        logger.info(f"\n🔗 **High Coupling Analysis:**")
+        logger.info(
+            f"   Found {len(high_coupling_components)} components with high coupling:"
+        )
+        for comp in high_coupling_components[:5]:  # Show top 5
+            logger.info(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")
+            logger.info(f"     Coupling score: {comp['coupling_score']} dependencies")
+            logger.info(f"     Dependencies: {', '.join(comp['dependencies'][:5])}")
+            if len(comp["dependencies"]) > 5:
+                logger.info(f"     ... and {len(comp['dependencies']) - 5} more")
+        logger.info()
+
+
+async def _display_cohesion_and_complexity(results):
+    """Display low cohesion and high complexity analysis.
+
+    Helper for analyze_architectural_patterns (Issue #825).
+    """
+    # Low cohesion analysis
+    low_cohesion_classes = [
+        c
+        for c in results["components"]
+        if c["type"] == "class" and c["cohesion_score"] < 0.3
+    ]
+    if low_cohesion_classes:
+        logger.info(f"🔄 **Low Cohesion Analysis:**")
+        logger.info(f"   Found {len(low_cohesion_classes)} classes with low cohesion:")
+        for comp in low_cohesion_classes[:5]:
+            logger.info(f"   - Class '{comp['name']}' in {comp['file']}")
+            logger.info(f"     Cohesion score: {comp['cohesion_score']:.2f}")
+            logger.info(f"     Interfaces: {len(comp['interfaces'])} methods")
+        logger.info()
+
+    # Complex components
+    complex_components = [
+        c for c in results["components"] if c["complexity_score"] > 20
+    ]
+    if complex_components:
+        logger.info(f"🧠 **High Complexity Analysis:**")
+        logger.info(f"   Found {len(complex_components)} highly complex components:")
+        for comp in complex_components[:5]:
+            logger.info(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")
+            logger.info(f"     Complexity score: {comp['complexity_score']}")
+            if comp["patterns"]:
+                logger.info(f"     Patterns: {', '.join(comp['patterns'])}")
+        logger.info()
 
 
 async def analyze_architectural_patterns():
     """Analyze codebase for architectural patterns and design issues"""
 
-    print("🏗️ Starting architectural pattern analysis...")
+    logger.info("🏗️ Starting architectural pattern analysis...")
 
     analyzer = ArchitecturalPatternAnalyzer()
 
@@ -22,128 +174,19 @@ async def analyze_architectural_patterns():
         root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
     )
 
-    print("\n=== Architectural Pattern Analysis Results ===\n")
-
-    # Summary
-    print(f"📊 **Analysis Summary:**")
-    print(f"   - Total components: {results['total_components']}")
-    print(f"   - Architectural issues: {results['architectural_issues']}")
-    print(f"   - Design patterns found: {results['design_patterns_found']}")
-    print(f"   - Architecture score: {results['architecture_score']}/100")
-    print(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")
-
-    # Detailed metrics
-    metrics = results["metrics"]
-    print("🏛️ **Architectural Quality Metrics:**")
-    print(
-        f"   - Coupling score: {metrics['coupling_score']}/100 (lower coupling is better)"
-    )
-    print(f"   - Cohesion score: {metrics['cohesion_score']}/100")
-    print(f"   - Pattern adherence: {metrics['pattern_adherence_score']}/100")
-    print(f"   - Maintainability index: {metrics['maintainability_index']}/100")
-    print(f"   - Abstraction score: {metrics['abstraction_score']}/100")
-    print(f"   - Instability score: {metrics['instability_score']}/100")
-    print()
-
-    # Component breakdown
-    component_types = {}
-    for comp in results["components"]:
-        comp_type = comp["type"]
-        component_types[comp_type] = component_types.get(comp_type, 0) + 1
-
-    print("🧩 **Component Breakdown:**")
-    for comp_type, count in component_types.items():
-        print(f"   - {comp_type.title()}s: {count}")
-    print()
-
-    # Design patterns detected
-    if results["detected_patterns"]:
-        pattern_counts = {}
-        for pattern in results["detected_patterns"]:
-            pattern_name = pattern["pattern"]
-            pattern_counts[pattern_name] = pattern_counts.get(pattern_name, 0) + 1
-
-        print("🎨 **Design Patterns Detected:**")
-        for pattern, count in sorted(pattern_counts.items()):
-            print(f"   - {pattern.replace('_', ' ').title()}: {count} instances")
-
-        print("\n📋 **Pattern Details:**")
-        for pattern in results["detected_patterns"][:10]:  # Show first 10
-            print(
-                f"   - {pattern['pattern'].title()} in {pattern['file']}:{pattern['line']}"
-            )
-            print(f"     {pattern['description']}")
-        print()
-
-    # Architectural issues
-    if results["architectural_issues"]:
-        print("🚨 **Architectural Issues:**")
-        for issue in results["architectural_issues"]:
-            severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
-            emoji = severity_emoji.get(issue["severity"], "⚪")
-
-            print(
-                f"\n   {emoji} **{issue['type'].replace('_', ' ').title()}** ({issue['severity']})"
-            )
-            print(f"      {issue['description']}")
-            print(f"      Affects: {issue['affected_components_count']} components")
-            print(f"      💡 Suggestion: {issue['suggestion']}")
-            print(f"      🔧 Refactoring effort: {issue['refactoring_effort']}")
-            if issue["pattern_violation"]:
-                print(f"      ❌ Violates: {issue['pattern_violation']}")
-
-    # High coupling analysis
-    high_coupling_components = [
-        c for c in results["components"] if c["coupling_score"] > 10
-    ]
-    if high_coupling_components:
-        print(f"\n🔗 **High Coupling Analysis:**")
-        print(
-            f"   Found {len(high_coupling_components)} components with high coupling:"
-        )
-        for comp in high_coupling_components[:5]:  # Show top 5
-            print(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")
-            print(f"     Coupling score: {comp['coupling_score']} dependencies")
-            print(f"     Dependencies: {', '.join(comp['dependencies'][:5])}")
-            if len(comp["dependencies"]) > 5:
-                print(f"     ... and {len(comp['dependencies']) - 5} more")
-        print()
-
-    # Low cohesion analysis
-    low_cohesion_classes = [
-        c
-        for c in results["components"]
-        if c["type"] == "class" and c["cohesion_score"] < 0.3
-    ]
-    if low_cohesion_classes:
-        print(f"🔄 **Low Cohesion Analysis:**")
-        print(f"   Found {len(low_cohesion_classes)} classes with low cohesion:")
-        for comp in low_cohesion_classes[:5]:
-            print(f"   - Class '{comp['name']}' in {comp['file']}")
-            print(f"     Cohesion score: {comp['cohesion_score']:.2f}")
-            print(f"     Interfaces: {len(comp['interfaces'])} methods")
-        print()
-
-    # Complex components
-    complex_components = [
-        c for c in results["components"] if c["complexity_score"] > 20
-    ]
-    if complex_components:
-        print(f"🧠 **High Complexity Analysis:**")
-        print(f"   Found {len(complex_components)} highly complex components:")
-        for comp in complex_components[:5]:
-            print(f"   - {comp['type'].title()} '{comp['name']}' in {comp['file']}")
-            print(f"     Complexity score: {comp['complexity_score']}")
-            if comp["patterns"]:
-                print(f"     Patterns: {', '.join(comp['patterns'])}")
-        print()
+    await _display_summary_and_metrics(results)
+    await _display_component_breakdown(results)
+    await _display_design_patterns(results)
+    await _display_architectural_issues(results)
+    await _display_coupling_analysis(results)
+    await _display_cohesion_and_complexity(results)
 
     # Save detailed report
     report_path = Path("architectural_analysis_report.json")
     with open(report_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
 
-    print(f"📋 Detailed report saved to: {report_path}")
+    logger.info(f"📋 Detailed report saved to: {report_path}")
 
     # Generate architecture recommendations
     await generate_architecture_recommendations(results)
@@ -151,225 +194,261 @@ async def analyze_architectural_patterns():
     return results
 
 
+async def _dependency_injection():
+    """Display Dependency Injection.
+
+    Helper for generate_architecture_recommendations (Issue #825).
+    """
+    # Dependency Injection
+    logger.info("**2. Dependency Injection Pattern:**")
+    logger.info("```python")
+    logger.info("# ❌ Tight coupling")
+    logger.info("class OrderService:")
+    logger.info("    def __init__(self):")
+    logger.info("        self.db = MySQLDatabase()  # Hard dependency")
+    logger.info("        self.email = SMTPEmailService()  # Hard dependency")
+    logger.info()
+    logger.info("# ✅ Dependency injection")
+    logger.info("from abc import ABC, abstractmethod")
+    logger.info()
+    logger.info("class DatabaseInterface(ABC):")
+    logger.info("    @abstractmethod")
+    logger.info("    def save(self, data): pass")
+    logger.info()
+    logger.info("class OrderService:")
+    logger.info("    def __init__(self, db: DatabaseInterface, email_service):")
+    logger.info("        self.db = db  # Injected dependency")
+    logger.info("        self.email = email_service  # Injected dependency")
+    logger.info("```")
+    logger.info()
+
+
+async def _observer_pattern():
+    """Display Observer Pattern.
+
+    Helper for generate_architecture_recommendations (Issue #825).
+    """
+    # Observer Pattern
+    logger.info("**3. Observer Pattern for Event Handling:**")
+    logger.info("```python")
+    logger.info("# ❌ Tight coupling between components")
+    logger.info("class User:")
+    logger.info("    def update_profile(self):")
+    logger.info("        # Direct calls to other services")
+    logger.info("        email_service.send_notification()")
+    logger.info("        audit_service.log_change()")
+    logger.info("        cache_service.invalidate()")
+    logger.info()
+    logger.info("# ✅ Observer pattern")
+    logger.info("class EventBus:")
+    logger.info("    def __init__(self):")
+    logger.info("        self.observers = []")
+    logger.info("    ")
+    logger.info("    def subscribe(self, observer):")
+    logger.info("        self.observers.append(observer)")
+    logger.info("    ")
+    logger.info("    def notify(self, event):")
+    logger.info("        for observer in self.observers:")
+    logger.info("            observer.handle(event)")
+    logger.info()
+    logger.info("class User:")
+    logger.info("    def update_profile(self):")
+    logger.info("        # Publish event instead of direct coupling")
+    logger.info("        event_bus.notify(ProfileUpdatedEvent(self))")
+    logger.info("```")
+    logger.info()
+
+
+async def _factory_pattern(config_type):
+    """Display Factory Pattern.
+
+    Helper for generate_architecture_recommendations (Issue #825).
+    """
+    # Factory Pattern
+    logger.info("**4. Factory Pattern for Object Creation:**")
+    logger.info("```python")
+    logger.info("# ❌ Complex object creation scattered everywhere")
+    logger.info("if config_type == 'development':")
+    logger.info("    db = SqliteDatabase()")
+    logger.info("elif config_type == 'production':")
+    logger.info("    db = PostgresDatabase()")
+    logger.info()
+    logger.info("# ✅ Factory pattern")
+    logger.info("class DatabaseFactory:")
+    logger.info("    @staticmethod")
+    logger.info("    def create_database(config_type: str):")
+    logger.info("        if config_type == 'development':")
+    logger.info("            return SqliteDatabase()")
+    logger.info("        elif config_type == 'production':")
+    logger.info("            return PostgresDatabase()")
+    logger.info("        else:")
+    logger.info("            raise ValueError(f'Unknown config type: {config_type}')")
+    logger.info("```")
+    logger.info()
+
+    # Layered Architecture
+    logger.info("**5. Layered Architecture Pattern:**")
+    logger.info("```")
+    logger.info("src/")
+    logger.info("├── presentation/     # Controllers, API endpoints")
+    logger.info("├── application/      # Use cases, application services")
+    logger.info("├── domain/          # Business logic, entities")
+    logger.info("└── infrastructure/  # Database, external services")
+    logger.info()
+    logger.info("# Dependency flow: Presentation -> Application -> Domain")
+    logger.info("# Infrastructure depends on Domain (Dependency Inversion)")
+    logger.info("```")
+    logger.info()
+
+
+async def _repository_pattern():
+    """Display Repository Pattern.
+
+    Helper for generate_architecture_recommendations (Issue #825).
+    """
+    # Repository Pattern
+    logger.info("**6. Repository Pattern for Data Access:**")
+    logger.info("```python")
+    logger.info("# ❌ Direct database calls in business logic")
+    logger.info("class UserService:")
+    logger.info("    def get_user(self, user_id):")
+    logger.info("        cursor.execute('SELECT * FROM users WHERE id = %s', user_id)")
+    logger.info("        return cursor.fetchone()")
+    logger.info()
+    logger.info("# ✅ Repository pattern")
+    logger.info("class UserRepository(ABC):")
+    logger.info("    @abstractmethod")
+    logger.info("    def get_by_id(self, user_id: int) -> User: pass")
+    logger.info("    ")
+    logger.info("    @abstractmethod")
+    logger.info("    def save(self, user: User): pass")
+    logger.info()
+    logger.info("class UserService:")
+    logger.info("    def __init__(self, user_repo: UserRepository):")
+    logger.info("        self.user_repo = user_repo")
+    logger.info("    ")
+    logger.info("    def get_user(self, user_id: int) -> User:")
+    logger.info("        return self.user_repo.get_by_id(user_id)")
+    logger.info("```")
+    logger.info()
+
+
 async def generate_architecture_recommendations(results):
     """Generate specific architectural improvement recommendations"""
 
-    print("\n=== Architectural Improvement Recommendations ===\n")
+    logger.info("\n=== Architectural Improvement Recommendations ===\n")
 
     recommendations = results["recommendations"]
 
     if recommendations:
-        print("🏗️ **Priority Recommendations:**")
+        logger.info("🏗️ **Priority Recommendations:**")
         for i, rec in enumerate(recommendations, 1):
-            print(f"{i}. {rec}")
-        print()
+            logger.info(f"{i}. {rec}")
+        logger.info()
 
     # Specific improvement patterns
-    print("🛠️ **Architectural Improvement Patterns:**\n")
+    logger.info("🛠️ **Architectural Improvement Patterns:**\n")
 
     # SOLID Principles
-    print("**1. SOLID Principles Application:**")
-    print("```python")
-    print("# ❌ God class violating SRP")
-    print("class UserManager:")
-    print("    def create_user(self): pass")
-    print("    def send_email(self): pass")
-    print("    def log_action(self): pass")
-    print("    def validate_data(self): pass")
-    print()
-    print("# ✅ Separated responsibilities")
-    print("class UserService:")
-    print("    def create_user(self): pass")
-    print()
-    print("class EmailService:")
-    print("    def send_email(self): pass")
-    print()
-    print("class Logger:")
-    print("    def log_action(self): pass")
-    print()
-    print("class Validator:")
-    print("    def validate_data(self): pass")
-    print("```")
-    print()
+    logger.info("**1. SOLID Principles Application:**")
+    logger.info("```python")
+    logger.info("# ❌ God class violating SRP")
+    logger.info("class UserManager:")
+    logger.info("    def create_user(self): pass")
+    logger.info("    def send_email(self): pass")
+    logger.info("    def log_action(self): pass")
+    logger.info("    def validate_data(self): pass")
+    logger.info()
+    logger.info("# ✅ Separated responsibilities")
+    logger.info("class UserService:")
+    logger.info("    def create_user(self): pass")
+    logger.info()
+    logger.info("class EmailService:")
+    logger.info("    def send_email(self): pass")
+    logger.info()
+    logger.info("class Logger:")
+    logger.info("    def log_action(self): pass")
+    logger.info()
+    logger.info("class Validator:")
+    logger.info("    def validate_data(self): pass")
+    logger.info("```")
+    logger.info()
 
-    # Dependency Injection
-    print("**2. Dependency Injection Pattern:**")
-    print("```python")
-    print("# ❌ Tight coupling")
-    print("class OrderService:")
-    print("    def __init__(self):")
-    print("        self.db = MySQLDatabase()  # Hard dependency")
-    print("        self.email = SMTPEmailService()  # Hard dependency")
-    print()
-    print("# ✅ Dependency injection")
-    print("from abc import ABC, abstractmethod")
-    print()
-    print("class DatabaseInterface(ABC):")
-    print("    @abstractmethod")
-    print("    def save(self, data): pass")
-    print()
-    print("class OrderService:")
-    print("    def __init__(self, db: DatabaseInterface, email_service):")
-    print("        self.db = db  # Injected dependency")
-    print("        self.email = email_service  # Injected dependency")
-    print("```")
-    print()
+    await _dependency_injection()
 
-    # Observer Pattern
-    print("**3. Observer Pattern for Event Handling:**")
-    print("```python")
-    print("# ❌ Tight coupling between components")
-    print("class User:")
-    print("    def update_profile(self):")
-    print("        # Direct calls to other services")
-    print("        email_service.send_notification()")
-    print("        audit_service.log_change()")
-    print("        cache_service.invalidate()")
-    print()
-    print("# ✅ Observer pattern")
-    print("class EventBus:")
-    print("    def __init__(self):")
-    print("        self.observers = []")
-    print("    ")
-    print("    def subscribe(self, observer):")
-    print("        self.observers.append(observer)")
-    print("    ")
-    print("    def notify(self, event):")
-    print("        for observer in self.observers:")
-    print("            observer.handle(event)")
-    print()
-    print("class User:")
-    print("    def update_profile(self):")
-    print("        # Publish event instead of direct coupling")
-    print("        event_bus.notify(ProfileUpdatedEvent(self))")
-    print("```")
-    print()
 
-    # Factory Pattern
-    print("**4. Factory Pattern for Object Creation:**")
-    print("```python")
-    print("# ❌ Complex object creation scattered everywhere")
-    print("if config_type == 'development':")
-    print("    db = SqliteDatabase()")
-    print("elif config_type == 'production':")
-    print("    db = PostgresDatabase()")
-    print()
-    print("# ✅ Factory pattern")
-    print("class DatabaseFactory:")
-    print("    @staticmethod")
-    print("    def create_database(config_type: str):")
-    print("        if config_type == 'development':")
-    print("            return SqliteDatabase()")
-    print("        elif config_type == 'production':")
-    print("            return PostgresDatabase()")
-    print("        else:")
-    print("            raise ValueError(f'Unknown config type: {config_type}')")
-    print("```")
-    print()
+    await _observer_pattern()
 
-    # Layered Architecture
-    print("**5. Layered Architecture Pattern:**")
-    print("```")
-    print("src/")
-    print("├── presentation/     # Controllers, API endpoints")
-    print("├── application/      # Use cases, application services")
-    print("├── domain/          # Business logic, entities")
-    print("└── infrastructure/  # Database, external services")
-    print()
-    print("# Dependency flow: Presentation -> Application -> Domain")
-    print("# Infrastructure depends on Domain (Dependency Inversion)")
-    print("```")
-    print()
 
-    # Repository Pattern
-    print("**6. Repository Pattern for Data Access:**")
-    print("```python")
-    print("# ❌ Direct database calls in business logic")
-    print("class UserService:")
-    print("    def get_user(self, user_id):")
-    print("        cursor.execute('SELECT * FROM users WHERE id = %s', user_id)")
-    print("        return cursor.fetchone()")
-    print()
-    print("# ✅ Repository pattern")
-    print("class UserRepository(ABC):")
-    print("    @abstractmethod")
-    print("    def get_by_id(self, user_id: int) -> User: pass")
-    print("    ")
-    print("    @abstractmethod")
-    print("    def save(self, user: User): pass")
-    print()
-    print("class UserService:")
-    print("    def __init__(self, user_repo: UserRepository):")
-    print("        self.user_repo = user_repo")
-    print("    ")
-    print("    def get_user(self, user_id: int) -> User:")
-    print("        return self.user_repo.get_by_id(user_id)")
-    print("```")
-    print()
+    await _factory_pattern(config_type)
+
+
+    await _repository_pattern()
+
 
 
 async def demonstrate_architecture_testing():
     """Show how to add architectural tests"""
 
-    print("=== Architectural Testing Setup ===\n")
+    logger.info("=== Architectural Testing Setup ===\n")
 
-    print("🧪 **Add Architectural Tests:**")
-    print()
+    logger.info("🧪 **Add Architectural Tests:**")
+    logger.info()
 
-    print("**1. Dependency Rules Testing:**")
-    print("```python")
-    print("import ast")
-    print("from pathlib import Path")
-    print()
-    print("def test_layer_dependencies():")
-    print('    """Test that presentation layer doesn\'t import from infrastructure"""')
-    print("    presentation_files = list(Path('src/presentation').glob('**/*.py'))")
-    print("    ")
-    print("    for file_path in presentation_files:")
-    print("        with open(file_path) as f:")
-    print("            tree = ast.parse(f.read())")
-    print("        ")
-    print("        for node in ast.walk(tree):")
-    print("            if isinstance(node, ast.ImportFrom):")
-    print("                if node.module and 'infrastructure' in node.module:")
-    print(
+    logger.info("**1. Dependency Rules Testing:**")
+    logger.info("```python")
+    logger.info("import ast")
+    logger.info("from pathlib import Path")
+    logger.info()
+    logger.info("def test_layer_dependencies():")
+    logger.info('    """Test that presentation layer doesn\'t import from infrastructure"""')
+    logger.info("    presentation_files = list(Path('src/presentation').glob('**/*.py'))")
+    logger.info("    ")
+    logger.info("    for file_path in presentation_files:")
+    logger.info("        with open(file_path) as f:")
+    logger.info("            tree = ast.parse(f.read())")
+    logger.info("        ")
+    logger.info("        for node in ast.walk(tree):")
+    logger.info("            if isinstance(node, ast.ImportFrom):")
+    logger.info("                if node.module and 'infrastructure' in node.module:")
+    logger.info(
         "                    assert False, f'{file_path} imports from infrastructure'"
     )
-    print("```")
-    print()
+    logger.info("```")
+    logger.info()
 
-    print("**2. Complexity Monitoring:**")
-    print("```python")
-    print("def test_class_complexity():")
-    print('    """Ensure classes don\'t exceed complexity thresholds"""')
-    print("    for file_path in Path('src').rglob('*.py'):")
-    print("        with open(file_path) as f:")
-    print("            tree = ast.parse(f.read())")
-    print("        ")
-    print("        for node in ast.walk(tree):")
-    print("            if isinstance(node, ast.ClassDef):")
-    print(
+    logger.info("**2. Complexity Monitoring:**")
+    logger.info("```python")
+    logger.info("def test_class_complexity():")
+    logger.info('    """Ensure classes don\'t exceed complexity thresholds"""')
+    logger.info("    for file_path in Path('src').rglob('*.py'):")
+    logger.info("        with open(file_path) as f:")
+    logger.info("            tree = ast.parse(f.read())")
+    logger.info("        ")
+    logger.info("        for node in ast.walk(tree):")
+    logger.info("            if isinstance(node, ast.ClassDef):")
+    logger.info(
         "                method_count = len([n for n in node.body if isinstance(n, ast.FunctionDef)])"
     )
-    print(
+    logger.info(
         "                assert method_count < 20, f'Class {node.name} has {method_count} methods'"
     )
-    print("```")
-    print()
+    logger.info("```")
+    logger.info()
 
-    print("**3. Pattern Enforcement:**")
-    print("```python")
-    print("def test_singleton_pattern():")
-    print('    """Ensure singletons are properly implemented"""')
-    print("    singleton_files = find_singleton_classes()")
-    print("    ")
-    print("    for file_path, class_name in singleton_files:")
-    print("        # Verify __new__ method is implemented")
-    print("        # Verify thread safety")
-    print("        # Verify instance management")
-    print("        pass")
-    print("```")
-    print()
+    logger.info("**3. Pattern Enforcement:**")
+    logger.info("```python")
+    logger.info("def test_singleton_pattern():")
+    logger.info('    """Ensure singletons are properly implemented"""')
+    logger.info("    singleton_files = find_singleton_classes()")
+    logger.info("    ")
+    logger.info("    for file_path, class_name in singleton_files:")
+    logger.info("        # Verify __new__ method is implemented")
+    logger.info("        # Verify thread safety")
+    logger.info("        # Verify instance management")
+    logger.info("        pass")
+    logger.info("```")
+    logger.info()
 
 
 async def main():
@@ -381,14 +460,14 @@ async def main():
     # Show architectural testing setup
     await demonstrate_architecture_testing()
 
-    print("\n=== Analysis Complete ===")
-    print("Next steps:")
-    print("1. Review architectural_analysis_report.json for detailed findings")
-    print("2. Fix high-severity architectural issues first")
-    print("3. Reduce coupling in highly-coupled components")
-    print("4. Improve cohesion in low-cohesion classes")
-    print("5. Apply appropriate design patterns")
-    print("6. Add architectural tests to enforce design rules")
+    logger.info("\n=== Analysis Complete ===")
+    logger.info("Next steps:")
+    logger.info("1. Review architectural_analysis_report.json for detailed findings")
+    logger.info("2. Fix high-severity architectural issues first")
+    logger.info("3. Reduce coupling in highly-coupled components")
+    logger.info("4. Improve cohesion in low-cohesion classes")
+    logger.info("5. Apply appropriate design patterns")
+    logger.info("6. Add architectural tests to enforce design rules")
 
 
 if __name__ == "__main__":
