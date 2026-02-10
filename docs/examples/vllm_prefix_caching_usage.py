@@ -10,107 +10,120 @@ Requirements:
 """
 
 import asyncio
+import logging
 import time
 
-from src.agent_tier_classifier import (
+# These imports come from the AutoBot project when running in context
+from llm_interface import LLMInterface, LLMRequest  # noqa: F401
+from prompt_optimizer import (  # noqa: F401
     get_agent_tier,
     get_base_prompt_for_agent,
     get_cache_hit_expectation,
+    get_optimized_prompt,
     get_tier_statistics,
 )
-from src.llm_interface import LLMInterface, LLMRequest
-from src.prompt_manager import get_optimized_prompt
+
+logger = logging.getLogger(__name__)
+
+# Frontend engineering tasks for single agent workflow example
+FRONTEND_TASKS = [
+    "Review this React component for performance issues",
+    "Optimize the Redux store structure",
+    "Add TypeScript types to API client",
+    "Implement responsive design for mobile",
+    "Fix accessibility issues in navigation",
+    "Add unit tests for utility functions",
+    "Optimize bundle size with code splitting",
+    "Implement error boundary components",
+    "Add loading states to async operations",
+    "Review CSS-in-JS performance",
+]
+
+
+async def _execute_task_with_cache_tracking(llm, request, task_index, first_task_time):
+    """Execute a single LLM task and log cache performance.
+
+    Helper for example_single_agent_workflow (#825).
+
+    Returns:
+        The first_task_time (set on first task, passed through after).
+    """
+    try:
+        response = await llm.chat_completion(request)
+
+        cached_tokens = response.metadata.get("cached_tokens", 0)
+        total_tokens = response.usage.get("prompt_tokens", 0)
+        cache_hit_rate = (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
+
+        logger.info(f"  Response: {response.content[:100]}...")
+        logger.info(f"  Cache Hit Rate: {cache_hit_rate:.1f}%")
+        logger.info(f"  Processing Time: {response.processing_time:.2f}s")
+
+        if task_index == 1:
+            first_task_time = response.processing_time
+        else:
+            speedup = first_task_time / response.processing_time
+            logger.info(f"  Speedup vs First Task: {speedup:.2f}x")
+
+        logger.info("")
+
+    except Exception as e:
+        logger.error(f"  Error: {e}\n")
+
+    return first_task_time
 
 
 async def example_single_agent_workflow():
-    """
-    Example 1: Single Agent Type (Maximum Cache Hit Rate)
+    """Example 1: Single Agent Type (Maximum Cache Hit Rate).
 
-    Scenario: User executes 10 tasks with the same agent type (frontend-engineer)
-    Expected: 95% cache hit rate, 3.8x speedup on tasks 2-10
+    Scenario: 10 tasks with frontend-engineer agent type.
+    Expected: 95% cache hit rate, 3.8x speedup on tasks 2-10.
     """
-    print("=== Example 1: Single Agent Workflow ===\n")
+    logger.info("=== Example 1: Single Agent Workflow ===\n")
 
-    # Initialize LLM interface
     llm = LLMInterface()
 
     agent_type = "frontend-engineer"
     tier = get_agent_tier(agent_type)
     cache_rate = get_cache_hit_expectation(agent_type)
 
-    print(f"Agent: {agent_type}")
-    print(f"Tier: {tier.name}")
-    print(f"Expected Cache Hit Rate: {cache_rate}\n")
-
-    # Simulate 10 frontend engineering tasks
-    tasks = [
-        "Review this React component for performance issues",
-        "Optimize the Redux store structure",
-        "Add TypeScript types to API client",
-        "Implement responsive design for mobile",
-        "Fix accessibility issues in navigation",
-        "Add unit tests for utility functions",
-        "Optimize bundle size with code splitting",
-        "Implement error boundary components",
-        "Add loading states to async operations",
-        "Review CSS-in-JS performance",
-    ]
+    logger.info(f"Agent: {agent_type}")
+    logger.info(f"Tier: {tier.name}")
+    logger.info(f"Expected Cache Hit Rate: {cache_rate}\n")
 
     start_time = time.time()
+    first_task_time = 0.0
 
-    for i, task in enumerate(tasks, 1):
-        # Get optimized prompt (static prefix + dynamic suffix)
+    for i, task in enumerate(FRONTEND_TASKS, 1):
         prompt = get_optimized_prompt(
             base_prompt_key=get_base_prompt_for_agent(agent_type),
             session_id=f"session_{i}",
             user_name="Alice",
             user_role="Developer",
             available_tools=["file_read", "file_write", "code_review"],
-            recent_context=f"Previous task: {tasks[i-2] if i > 1 else 'None'}",
+            recent_context=(
+                f"Previous task: " f"{FRONTEND_TASKS[i-2] if i > 1 else 'None'}"
+            ),
         )
 
-        # Create LLM request
         request = LLMRequest(
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": task},
             ],
             model_name="meta-llama/Llama-3.2-3B-Instruct",
-            provider="vllm",  # Use vLLM provider with prefix caching
+            provider="vllm",
             max_tokens=512,
         )
 
-        # Execute request
-        print(f"Task {i}: {task[:50]}...")
-
-        try:
-            response = await llm.chat_completion(request)
-
-            # Check cache performance
-            cached_tokens = response.metadata.get("cached_tokens", 0)
-            total_tokens = response.usage.get("prompt_tokens", 0)
-            cache_hit_rate = (
-                (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
-            )
-
-            print(f"  Response: {response.content[:100]}...")
-            print(f"  Cache Hit Rate: {cache_hit_rate:.1f}%")
-            print(f"  Processing Time: {response.processing_time:.2f}s")
-
-            if i == 1:
-                first_task_time = response.processing_time
-            else:
-                speedup = first_task_time / response.processing_time
-                print(f"  Speedup vs First Task: {speedup:.2f}x")
-
-            print()
-
-        except Exception as e:
-            print(f"  Error: {e}\n")
+        logger.info(f"Task {i}: {task[:50]}...")
+        first_task_time = await _execute_task_with_cache_tracking(
+            llm, request, i, first_task_time
+        )
 
     total_time = time.time() - start_time
-    print(f"Total Time: {total_time:.2f}s")
-    print(f"Average Time per Task: {total_time / len(tasks):.2f}s\n")
+    logger.info(f"Total Time: {total_time:.2f}s")
+    logger.info(f"Average Time per Task: " f"{total_time / len(FRONTEND_TASKS):.2f}s\n")
 
 
 async def example_mixed_agent_workflow():
@@ -120,7 +133,7 @@ async def example_mixed_agent_workflow():
     Scenario: User executes tasks with different agent types (same tier)
     Expected: 75% cache hit rate, 3x speedup overall
     """
-    print("=== Example 2: Mixed Agent Workflow ===\n")
+    logger.info("=== Example 2: Mixed Agent Workflow ===\n")
 
     # Initialize LLM interface
     llm = LLMInterface()
@@ -158,7 +171,7 @@ async def example_mixed_agent_workflow():
             max_tokens=512,
         )
 
-        print(f"Task {i} ({agent_type}): {task}")
+        logger.info(f"Task {i} ({agent_type}): {task}")
 
         try:
             response = await llm.chat_completion(request)
@@ -169,14 +182,14 @@ async def example_mixed_agent_workflow():
                 (cached_tokens / total_tokens * 100) if total_tokens > 0 else 0
             )
 
-            print(f"  Cache Hit Rate: {cache_hit_rate:.1f}%")
-            print(f"  Processing Time: {response.processing_time:.2f}s\n")
+            logger.info(f"  Cache Hit Rate: {cache_hit_rate:.1f}%")
+            logger.info(f"  Processing Time: {response.processing_time:.2f}s\n")
 
         except Exception as e:
-            print(f"  Error: {e}\n")
+            logger.error(f"  Error: {e}\n")
 
     total_time = time.time() - start_time
-    print(f"Total Time: {total_time:.2f}s\n")
+    logger.info(f"Total Time: {total_time:.2f}s\n")
 
 
 def example_tier_statistics():
@@ -185,22 +198,22 @@ def example_tier_statistics():
 
     Shows classification of all agents and expected cache performance
     """
-    print("=== Example 3: Agent Tier Statistics ===\n")
+    logger.info("=== Example 3: Agent Tier Statistics ===\n")
 
     stats = get_tier_statistics()
 
     for tier, data in stats.items():
-        print(f"{tier.name}:")
-        print(f"  Agent Count: {data['count']}")
-        print(f"  Cache Hit Rate: {data['cache_hit_rate']}")
-        print(f"  Base Prompt: {data['base_prompt']}")
+        logger.info(f"{tier.name}:")
+        logger.info(f"  Agent Count: {data['count']}")
+        logger.info(f"  Cache Hit Rate: {data['cache_hit_rate']}")
+        logger.info(f"  Base Prompt: {data['base_prompt']}")
 
-        if data['agents']:
-            print("  Agents:")
-            for agent in data['agents']:
-                print(f"    - {agent}")
+        if data["agents"]:
+            logger.info("  Agents:")
+            for agent in data["agents"]:
+                logger.info(f"    - {agent}")
 
-        print()
+        logger.info("")
 
 
 def example_performance_comparison():
@@ -211,28 +224,30 @@ def example_performance_comparison():
     1. Traditional prompts (no caching optimization)
     2. Optimized prompts (prefix caching enabled)
     """
-    print("=== Example 4: Performance Comparison ===\n")
+    logger.info("=== Example 4: Performance Comparison ===\n")
 
     # Example uses frontend-engineer agent type for comparison
-    print("Scenario: 10 sequential frontend engineering tasks\n")
+    logger.info("Scenario: 10 sequential frontend engineering tasks\n")
 
-    print("WITHOUT Optimization:")
-    print("  - Each request processes full prompt (12,800 tokens)")
-    print("  - Processing time: ~6 seconds per request")
-    print("  - Total time: ~60 seconds for 10 tasks")
-    print()
+    logger.info("WITHOUT Optimization:")
+    logger.info("  - Each request processes full prompt (12,800 tokens)")
+    logger.info("  - Processing time: ~6 seconds per request")
+    logger.info("  - Total time: ~60 seconds for 10 tasks")
+    logger.info("")
 
-    print("WITH Optimization (vLLM Prefix Caching):")
-    print("  - First request: Full prompt (12,800 tokens) - 6 seconds")
-    print("  - Requests 2-10: Only dynamic suffix (200 tokens) - 1.7 seconds each")
-    print("  - Total time: ~17 seconds for 10 tasks")
-    print()
+    logger.info("WITH Optimization (vLLM Prefix Caching):")
+    logger.info("  - First request: Full prompt (12,800 tokens) - 6 seconds")
+    logger.info(
+        "  - Requests 2-10: Only dynamic suffix (200 tokens) - 1.7 seconds each"
+    )
+    logger.info("  - Total time: ~17 seconds for 10 tasks")
+    logger.info("")
 
-    print("Performance Improvement:")
-    print("  - 3.5x faster overall")
-    print("  - 95% cache hit rate")
-    print("  - 43 seconds saved per 10-task workflow")
-    print()
+    logger.info("Performance Improvement:")
+    logger.info("  - 3.5x faster overall")
+    logger.info("  - 95% cache hit rate")
+    logger.info("  - 43 seconds saved per 10-task workflow")
+    logger.info("")
 
 
 async def main():
@@ -246,17 +261,17 @@ async def main():
 
     # Examples 1 & 2 require vLLM to be installed and enabled
     try:
-        print("NOTE: Examples 1 & 2 require vLLM to be installed and enabled")
-        print("      Install with: pip install vllm")
-        print("      Enable in config/config.yaml: llm.vllm.enabled = true\n")
+        logger.info("NOTE: Examples 1 & 2 require vLLM to be installed and enabled")
+        logger.info("      Install with: pip install vllm")
+        logger.info("      Enable in config/config.yaml: llm.vllm.enabled = true\n")
 
         # Uncomment to run live examples (requires vLLM setup):
         # await example_single_agent_workflow()
         # await example_mixed_agent_workflow()
 
     except Exception as e:
-        print(f"Could not run live examples: {e}")
-        print("Run examples 1 & 2 after installing vLLM\n")
+        logger.info(f"Could not run live examples: {e}")
+        logger.info("Run examples 1 & 2 after installing vLLM\n")
 
 
 if __name__ == "__main__":
