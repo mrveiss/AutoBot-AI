@@ -9,85 +9,111 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+_SCRIPT_FORMATTER_IMPORT = (
+    "from utils.script_utils import ScriptFormatter"
+)
+
+# Regex pattern for the print_header method body
+_PRINT_HEADER_PATTERN = (
+    r'    def print_header\(self, title: str\):\s*"""[^"]*"""\s*'
+    r'print\(f"\\n\{\'=\' \* 60\}"\)\s*print\(f"  \{title\}"\)\s*'
+    r'print\("=" \* 60\)'
+)
+
+_PRINT_HEADER_REPLACEMENT = (
+    "    def print_header(self, title: str):\n"
+    '        """Print formatted header."""\n'
+    "        ScriptFormatter.print_header(title)"
+)
+
+# Regex pattern for the print_step method body
+_PRINT_STEP_PATTERN = (
+    r'    def print_step\(self, step: str, '
+    r'status: str = "info"\):\s*'
+    r'"""[^"]*"""\s*status_icons = \{[^}]+\}\s*'
+    r'icon = status_icons\.get\(status, "[^"]*"\)\s*'
+    r'print\(f"\{icon\} \{step\}"\)'
+)
+
+_PRINT_STEP_REPLACEMENT = (
+    '    def print_step(self, step: str, status: str = "info"):\n'
+    '        """Print step with status."""\n'
+    "        ScriptFormatter.print_step(step, status)"
+)
+
+
+def _add_formatter_import(content):
+    """Add ScriptFormatter import after existing imports.
+
+    Helper for refactor_print_header_script (#825).
+    """
+    import_pattern = (
+        r"(from src\.utils\.service_registry import [^\n]+)"
+    )
+    if re.search(import_pattern, content):
+        return re.sub(
+            import_pattern,
+            r"\1\n" + _SCRIPT_FORMATTER_IMPORT,
+            content,
+        )
+
+    last_import_match = None
+    for match in re.finditer(
+        r"^(from .+|import .+)$", content, re.MULTILINE
+    ):
+        last_import_match = match
+
+    if last_import_match:
+        end_pos = last_import_match.end()
+        return (
+            content[:end_pos]
+            + "\n" + _SCRIPT_FORMATTER_IMPORT
+            + content[end_pos:]
+        )
+
+    return content
+
+
+def _replace_method_bodies(content):
+    """Replace print_header and print_step method bodies.
+
+    Helper for refactor_print_header_script (#825).
+    """
+    content = re.sub(
+        _PRINT_HEADER_PATTERN,
+        _PRINT_HEADER_REPLACEMENT,
+        content,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    content = re.sub(
+        _PRINT_STEP_PATTERN,
+        _PRINT_STEP_REPLACEMENT,
+        content,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    return content
+
 
 def refactor_print_header_script(file_path: Path):
-    """Refactor a single script to use shared ScriptFormatter"""
+    """Refactor a single script to use shared ScriptFormatter."""
     logger.info(f"🔧 Refactoring {file_path.name}...")
 
     try:
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Check if it already imports ScriptFormatter
-        if "from utils.script_utils import ScriptFormatter" in content:
+        if _SCRIPT_FORMATTER_IMPORT in content:
             logger.info("   ✅ Already refactored")
             return
 
-        # Check if it has the print_header function
         if "def print_header(self, title: str):" not in content:
             logger.info("   ⏭️  No print_header function found")
             return
 
-        # Add import after existing imports
-        import_pattern = r"(from src\.utils\.service_registry import [^\n]+)"
-        if re.search(import_pattern, content):
-            content = re.sub(
-                import_pattern,
-                r"\1\nfrom utils.script_utils import ScriptFormatter",
-                content,
-            )
-        else:
-            # Find last import line and add after it
-            last_import_match = None
-            for match in re.finditer(r"^(from .+|import .+)$", content, re.MULTILINE):
-                last_import_match = match
+        content = _add_formatter_import(content)
+        content = _replace_method_bodies(content)
 
-            if last_import_match:
-                end_pos = last_import_match.end()
-                content = (
-                    content[:end_pos]
-                    + "\nfrom utils.script_utils import ScriptFormatter"
-                    + content[end_pos:]
-                )
-
-        # Replace the print_header method implementation
-        print_header_pattern = (
-            r'    def print_header\(self, title: str\):\s*"""[^"]*"""\s*'
-            r'print\(f"\\n\{\'=\' \* 60\}"\)\s*print\(f"  \{title\}"\)\s*'
-            r'print\("=" \* 60\)'
-        )
-        print_header_replacement = (
-            "    def print_header(self, title: str):\n"
-            '        """Print formatted header."""\n'
-            "        ScriptFormatter.print_header(title)"
-        )
-        content = re.sub(
-            print_header_pattern,
-            print_header_replacement,
-            content,
-            flags=re.MULTILINE | re.DOTALL,
-        )
-
-        # Replace print_step method implementation
-        print_step_pattern = (
-            r'    def print_step\(self, step: str, status: str = "info"\):\s*'
-            r'"""[^"]*"""\s*status_icons = \{[^}]+\}\s*'
-            r'icon = status_icons\.get\(status, "[^"]*"\)\s*print\(f"\{icon\} \{step\}"\)'
-        )
-        print_step_replacement = (
-            '    def print_step(self, step: str, status: str = "info"):\n'
-            '        """Print step with status."""\n'
-            "        ScriptFormatter.print_step(step, status)"
-        )
-        content = re.sub(
-            print_step_pattern,
-            print_step_replacement,
-            content,
-            flags=re.MULTILINE | re.DOTALL,
-        )
-
-        # Write back the modified content
-        with open(file_path, "w") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
         logger.info("   ✅ Successfully refactored")

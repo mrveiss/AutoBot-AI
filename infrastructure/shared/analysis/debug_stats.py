@@ -18,54 +18,61 @@ from config import unified_config_manager
 logger = logging.getLogger(__name__)
 
 
-def test_stats_endpoint():
-    """Test the stats endpoint and show detailed response"""
-    logger.info("=== Testing Knowledge Base Stats Endpoint ===")
+def _get_api_endpoint():
+    """Build API endpoint URL from configuration.
 
-    # Get backend API endpoint from configuration
+    Helper for test_stats_endpoint (#825).
+    """
     backend_config = unified_config_manager.get_backend_config()
 
-    # Build API endpoint from configuration without hardcoded fallback
     host = backend_config.get("host")
     port = backend_config.get("port")
 
     if not host or not port:
-        # Try system defaults as last resort
         system_defaults = (
-            unified_config_manager.get_config_section("service_discovery_defaults")
+            unified_config_manager.get_config_section(
+                "service_discovery_defaults"
+            )
             or {}
         )
         host = host or system_defaults.get("backend_host", "localhost")
         port = port or system_defaults.get("backend_port", 8001)
 
-    api_endpoint = f"http://{host}:{port}"
+    return f"http://{host}:{port}"
 
-    logger.info("Using API endpoint: %s", api_endpoint)
+
+def _test_single_stats_endpoint(api_endpoint, path, label):
+    """Test a single stats endpoint and log the response.
+
+    Helper for test_stats_endpoint (#825).
+    """
+    logger.info("\n=== %s ===", label)
 
     try:
-        # Test the basic stats endpoint
         response = requests.get(
-            f"{api_endpoint}/api/knowledge_base/stats/basic",
+            f"{api_endpoint}{path}",
             headers={"accept": "application/json"},
             timeout=10,
         )
 
         logger.info("Status Code: %s", response.status_code)
-        logger.info("Response Headers: %s", dict(response.headers))
 
         if response.status_code == 200:
             data = response.json()
-            logger.info("\n📊 Current Stats Response:")
+            logger.info("📊 Response:")
             logger.info("%s", json.dumps(data, indent=2))
 
-            # Check if we're getting the expected fields
             total_docs = data.get("total_documents", 0)
-
-            if total_docs > 1000:
-                logger.info("✅ SUCCESS: Showing realistic stats (%s documents)", total_docs)
-            else:
-                logger.error("❌ ISSUE: Still showing low stats (%s documents)", total_docs)
-
+            if total_docs is not None and total_docs > 1000:
+                logger.info(
+                    "✅ SUCCESS: Showing realistic stats "
+                    "(%s documents)", total_docs
+                )
+            elif total_docs is not None:
+                logger.error(
+                    "❌ ISSUE: Still showing low stats "
+                    "(%s documents)", total_docs
+                )
         else:
             logger.error("❌ ERROR: Status %s", response.status_code)
             logger.info("Response: %s", response.text)
@@ -73,25 +80,22 @@ def test_stats_endpoint():
     except Exception as e:
         logger.error("❌ Exception: %s", e)
 
-    # Also test the other stats endpoint
-    logger.info("\n=== Testing Other Stats Endpoint ===")
 
-    try:
-        response = requests.get(
-            f"{api_endpoint}/api/knowledge_base/stats",
-            headers={"accept": "application/json"},
-            timeout=10,
-        )
+def test_stats_endpoint():
+    """Test the stats endpoint and show detailed response."""
+    api_endpoint = _get_api_endpoint()
+    logger.info("Using API endpoint: %s", api_endpoint)
 
-        logger.info("Status Code: %s", response.status_code)
-
-        if response.status_code == 200:
-            data = response.json()
-            logger.info("\n📊 Other Stats Response:")
-            logger.info("%s", json.dumps(data, indent=2))
-
-    except Exception as e:
-        logger.error("❌ Exception on second endpoint: %s", e)
+    _test_single_stats_endpoint(
+        api_endpoint,
+        "/api/knowledge_base/stats/basic",
+        "Testing Knowledge Base Stats Endpoint",
+    )
+    _test_single_stats_endpoint(
+        api_endpoint,
+        "/api/knowledge_base/stats",
+        "Testing Other Stats Endpoint",
+    )
 
 
 if __name__ == "__main__":

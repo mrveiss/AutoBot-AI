@@ -16,8 +16,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
 
-from src.utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
-from src.utils.template_loader import load_css, template_exists
+from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
+from utils.template_loader import load_css, template_exists
 
 
 def _get_additional_dashboard_css() -> str:
@@ -79,121 +79,89 @@ def _get_fallback_css() -> str:
     """
 
 
-def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
+def _build_dashboard_sections(
+    monitoring_data: Dict[str, Any],
+) -> Dict[str, str]:
+    """Build all dashboard section HTML fragments.
+
+    Helper for generate_dashboard_html (#825).
     """
-    Generate comprehensive HTML dashboard.
+    return {
+        "system_overview_html": _generate_system_overview_html(
+            monitoring_data
+        ),
+        "service_status_html": _generate_service_status_html(
+            monitoring_data
+        ),
+        "performance_metrics_html": _generate_performance_metrics_html(
+            monitoring_data
+        ),
+        "health_checks_html": _generate_health_checks_html(
+            monitoring_data
+        ),
+        "alerts_html": _generate_alerts_html(monitoring_data),
+        "system_info_html": _generate_system_info_html(monitoring_data),
+        "chart_script": _generate_chart_script(monitoring_data),
+        "timestamp": monitoring_data.get("timestamp", "Unknown"),
+    }
 
-    Issue #281: Extracted CSS to _get_additional_dashboard_css() to reduce
-    function length from 281 to ~110 lines.
-    """
-    # Generate dashboard components using utility functions
-    light_theme_css = get_light_theme_css()
-    header_html = create_dashboard_header(
-        title="🤖 AutoBot Monitoring Dashboard",
-        subtitle="Real-time system performance and health monitoring",
-        theme="light",
-    )
 
-    # Issue #281: Use extracted helper for additional CSS
-    additional_css = _get_additional_dashboard_css()
-
-    dashboard_html = """
-<!DOCTYPE html>
+_DASHBOARD_HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AutoBot Monitoring Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-{light_theme_css}
-{additional_css}
-    </style>
+    <style>{light_theme_css}{additional_css}</style>
 </head>
 <body>
 {header_html}
-
     <div class="container">
         <div class="refresh-info">
-            📊 Dashboard generated at {timestamp} |
-            🔄 Auto-refresh available via monitoring system
+            Dashboard generated at {timestamp} |
+            Auto-refresh available via monitoring system
         </div>
-
         <div class="dashboard-grid">
-            <!-- System Overview Card -->
-            <div class="card">
-                <h3>⚡ System Overview</h3>
-                {system_overview_html}
-            </div>
-
-            <!-- Service Status Card -->
-            <div class="card">
-                <h3>🔧 Service Status</h3>
-                {service_status_html}
-            </div>
-
-            <!-- Performance Metrics Card -->
-            <div class="card">
-                <h3>📊 Performance Metrics</h3>
-                {performance_metrics_html}
-            </div>
-
-            <!-- Health Checks Card -->
-            <div class="card">
-                <h3>🏥 Health Checks</h3>
-                {health_checks_html}
-            </div>
+            <div class="card"><h3>System Overview</h3>{system_overview_html}</div>
+            <div class="card"><h3>Service Status</h3>{service_status_html}</div>
+            <div class="card"><h3>Performance Metrics</h3>{performance_metrics_html}</div>
+            <div class="card"><h3>Health Checks</h3>{health_checks_html}</div>
         </div>
-
-        <!-- Charts Section -->
         <div class="dashboard-grid">
             <div class="card" style="grid-column: 1 / -1;">
-                <h3>📈 Performance Trends (Last 24 Hours)</h3>
-                <div class="chart-container">
-                    <canvas id="performanceChart"></canvas>
-                </div>
+                <h3>Performance Trends (Last 24 Hours)</h3>
+                <div class="chart-container"><canvas id="performanceChart"></canvas></div>
             </div>
         </div>
-
-        <!-- Alerts Section -->
         <div class="dashboard-grid">
-            <div class="card">
-                <h3>🚨 Recent Alerts</h3>
-                {alerts_html}
-            </div>
-
-            <div class="card">
-                <h3>📋 System Information</h3>
-                {system_info_html}
-            </div>
+            <div class="card"><h3>Recent Alerts</h3>{alerts_html}</div>
+            <div class="card"><h3>System Information</h3>{system_info_html}</div>
         </div>
-
         <div class="footer">
-            <p>🤖 Generated by AutoBot Monitoring System</p>
-            <p>For real-time monitoring, run: <code>python scripts/monitoring_system.py</code></p>
+            <p>Generated by AutoBot Monitoring System</p>
         </div>
     </div>
-
-    <script>
-        // Performance Chart
-        {chart_script}
-    </script>
+    <script>{chart_script}</script>
 </body>
-</html>""".format(
-        light_theme_css=light_theme_css,
-        additional_css=additional_css,
-        header_html=header_html,
-        timestamp=monitoring_data.get("timestamp", "Unknown"),
-        system_overview_html=_generate_system_overview_html(monitoring_data),
-        service_status_html=_generate_service_status_html(monitoring_data),
-        performance_metrics_html=_generate_performance_metrics_html(monitoring_data),
-        health_checks_html=_generate_health_checks_html(monitoring_data),
-        alerts_html=_generate_alerts_html(monitoring_data),
-        system_info_html=_generate_system_info_html(monitoring_data),
-        chart_script=_generate_chart_script(monitoring_data),
-    )
+</html>"""
 
-    return dashboard_html
+
+def generate_dashboard_html(monitoring_data: Dict[str, Any]) -> str:
+    """Generate comprehensive HTML dashboard.
+
+    Issue #281: Extracted CSS to _get_additional_dashboard_css().
+    Issue #825: Extracted template constant and section builder.
+    """
+    sections = _build_dashboard_sections(monitoring_data)
+    sections["light_theme_css"] = get_light_theme_css()
+    sections["additional_css"] = _get_additional_dashboard_css()
+    sections["header_html"] = create_dashboard_header(
+        title="AutoBot Monitoring Dashboard",
+        subtitle="Real-time system performance and health monitoring",
+        theme="light",
+    )
+    return _DASHBOARD_HTML_TEMPLATE.format(**sections)
 
 
 def _generate_system_overview_html(data: Dict[str, Any]) -> str:
@@ -401,98 +369,99 @@ def _generate_system_info_html(data: Dict[str, Any]) -> str:
     """
 
 
+def _generate_mock_trend_data() -> list:
+    """
+    Generate mock performance data for demonstration.
+
+    Helper for _generate_chart_script (#825).
+
+    Returns:
+        List of trend dictionaries with hour, cpu_percent, memory_percent, response_time_ms
+    """
+    trends = []
+    now = datetime.now()
+    for i in range(24):
+        hour = now - timedelta(hours=23 - i)
+        trends.append(
+            {
+                "hour": hour.strftime("%Y-%m-%d %H:00:00"),
+                "cpu_percent": 15 + (i % 10) * 3,
+                "memory_percent": 45 + (i % 8) * 2,
+                "response_time_ms": 200 + (i % 5) * 50,
+            }
+        )
+    return trends
+
+
+def _build_chart_config(
+    labels: list, cpu_data: list, memory_data: list, response_data: list
+) -> str:
+    """
+    Build Chart.js configuration string.
+
+    Helper for _generate_chart_script (#825).
+
+    Args:
+        labels: Time labels for x-axis
+        cpu_data: CPU usage percentages
+        memory_data: Memory usage percentages
+        response_data: Response time data in ms
+
+    Returns:
+        JavaScript Chart.js configuration string
+    """
+    import json
+
+    # Simplified to reduce line count - template externalized if needed
+    return (
+        f"const ctx = document.getElementById('performanceChart').getContext('2d');\n"
+        f"const chart = new Chart(ctx, {{\n"
+        f"  type: 'line',\n"
+        f"  data: {{\n"
+        f"    labels: {json.dumps(labels)},\n"
+        f"    datasets: [{{\n"
+        f"      label: 'CPU Usage (%)', data: {json.dumps(cpu_data)},\n"
+        f"      borderColor: '#667eea', backgroundColor: 'rgba(102, 126, 234, 0.1)',\n"
+        f"      fill: true, tension: 0.4\n"
+        f"    }}, {{\n"
+        f"      label: 'Memory Usage (%)', data: {json.dumps(memory_data)},\n"
+        f"      borderColor: '#f093fb', backgroundColor: 'rgba(240, 147, 251, 0.1)',\n"
+        f"      fill: true, tension: 0.4\n"
+        f"    }}, {{\n"
+        f"      label: 'Response Time (ms)', data: {json.dumps(response_data)},\n"
+        f"      borderColor: '#4ecdc4', backgroundColor: 'rgba(78, 205, 196, 0.1)',\n"
+        f"      fill: true, tension: 0.4, yAxisID: 'y1'\n"
+        f"    }}]\n"
+        f"  }},\n"
+        f"  options: {{\n"
+        f"    responsive: true, maintainAspectRatio: false,\n"
+        f"    plugins: {{ legend: {{ position: 'top' }},\n"
+        f"      title: {{ display: true, text: 'System Performance Over Time' }} }},\n"
+        f"    scales: {{\n"
+        f"      y: {{ type: 'linear', display: true, position: 'left',\n"
+        f"        title: {{ display: true, text: 'Percentage (%)' }} }},\n"
+        f"      y1: {{ type: 'linear', display: true, position: 'right',\n"
+        f"        title: {{ display: true, text: 'Response Time (ms)' }},\n"
+        f"        grid: {{ drawOnChartArea: false }} }}\n"
+        f"    }}\n"
+        f"  }}\n"
+        f"}});"
+    )
+
+
 def _generate_chart_script(data: Dict[str, Any]) -> str:
     """Generate Chart.js script for performance trends"""
     trends = data.get("performance_trends", [])
 
     if not trends:
-        # Generate mock data for demonstration
-        trends = []
-        now = datetime.now()
-        for i in range(24):
-            hour = now - timedelta(hours=23 - i)
-            trends.append(
-                {
-                    "hour": hour.strftime("%Y-%m-%d %H:00:00"),
-                    "cpu_percent": 15 + (i % 10) * 3,
-                    "memory_percent": 45 + (i % 8) * 2,
-                    "response_time_ms": 200 + (i % 5) * 50,
-                }
-            )
+        trends = _generate_mock_trend_data()
 
     labels = [t["hour"][-8:-3] for t in trends]  # Extract HH:MM
-    [t.get("cpu_percent", 0) for t in trends]
-    [t.get("memory_percent", 0) for t in trends]
-    [t.get("response_time_ms", 0) for t in trends]
+    cpu_data = [t.get("cpu_percent", 0) for t in trends]
+    memory_data = [t.get("memory_percent", 0) for t in trends]
+    response_data = [t.get("response_time_ms", 0) for t in trends]
 
-    return """
-        const ctx = document.getElementById('performanceChart').getContext('2d');
-        const chart = new Chart(ctx, {{
-            type: 'line',
-            data: {{
-                labels: {json.dumps(labels)},
-                datasets: [{{
-                    label: 'CPU Usage (%)',
-                    data: {json.dumps(cpu_data)},
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }}, {{
-                    label: 'Memory Usage (%)',
-                    data: {json.dumps(memory_data)},
-                    borderColor: '#f093fb',
-                    backgroundColor: 'rgba(240, 147, 251, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }}, {{
-                    label: 'Response Time (ms)',
-                    data: {json.dumps(response_data)},
-                    borderColor: '#4ecdc4',
-                    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    yAxisID: 'y1'
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {{
-                    legend: {{
-                        position: 'top',
-                    }},
-                    title: {{
-                        display: true,
-                        text: 'System Performance Over Time'
-                    }}
-                }},
-                scales: {{
-                    y: {{
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {{
-                            display: true,
-                            text: 'Percentage (%)'
-                        }}
-                    }},
-                    y1: {{
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {{
-                            display: true,
-                            text: 'Response Time (ms)'
-                        }},
-                        grid: {{
-                            drawOnChartArea: false,
-                        }},
-                    }}
-                }}
-            }}
-        }});
-    """
+    return _build_chart_config(labels, cpu_data, memory_data, response_data)
 
 
 def create_monitoring_dashboard():

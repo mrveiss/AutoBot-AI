@@ -23,8 +23,8 @@ import requests
 
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent))
-from src.constants import ServiceURLs
-from src.utils.redis_client import get_redis_client
+from constants import ServiceURLs
+from utils.redis_client import get_redis_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -428,73 +428,68 @@ class PhaseValidator:
 
         return total_checks, passed_checks
 
-    async def _validate_phase(
-        self, phase_name: str, criteria: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Validate a specific development phase"""
-        results = {
+    def _empty_phase_result(self, phase_name: str) -> Dict[str, Any]:
+        """Create empty phase validation result structure.
+
+        Helper for _validate_phase (#825).
+        """
+        empty_validation = {"passed": 0, "total": 0, "details": []}
+        return {
             "phase_name": phase_name,
             "completion_percentage": 0,
             "status": "incomplete",
             "validations": {
-                "files": {"passed": 0, "total": 0, "details": []},
-                "directories": {"passed": 0, "total": 0, "details": []},
-                "endpoints": {"passed": 0, "total": 0, "details": []},
-                "services": {"passed": 0, "total": 0, "details": []},
-                "features": {"passed": 0, "total": 0, "details": []},
+                k: dict(empty_validation)
+                for k in [
+                    "files", "directories", "endpoints",
+                    "services", "features",
+                ]
             },
             "issues": [],
             "recommendations": [],
         }
 
+    async def _validate_phase(
+        self, phase_name: str, criteria: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Validate a specific development phase."""
+        results = self._empty_phase_result(phase_name)
         total_checks = 0
         passed_checks = 0
 
-        # Validate files
-        if "files" in criteria:
-            file_results = self._validate_files(criteria["files"])
-            results["validations"]["files"] = file_results
-            total_checks += file_results["total"]
-            passed_checks += file_results["passed"]
+        validation_map = {
+            "files": self._validate_files,
+            "directories": self._validate_directories,
+        }
+        for key, validator in validation_map.items():
+            if key in criteria:
+                vr = validator(criteria[key])
+                results["validations"][key] = vr
+                total_checks += vr["total"]
+                passed_checks += vr["passed"]
 
-        # Validate directories
-        if "directories" in criteria:
-            dir_results = self._validate_directories(criteria["directories"])
-            results["validations"]["directories"] = dir_results
-            total_checks += dir_results["total"]
-            passed_checks += dir_results["passed"]
+        async_validation_map = {
+            "endpoints": self._validate_endpoints,
+            "services": self._validate_services,
+        }
+        for key, validator in async_validation_map.items():
+            if key in criteria:
+                vr = await validator(criteria[key])
+                results["validations"][key] = vr
+                total_checks += vr["total"]
+                passed_checks += vr["passed"]
 
-        # Validate API endpoints
-        if "endpoints" in criteria:
-            endpoint_results = await self._validate_endpoints(criteria["endpoints"])
-            results["validations"]["endpoints"] = endpoint_results
-            total_checks += endpoint_results["total"]
-            passed_checks += endpoint_results["passed"]
+        ft, fp = await self._validate_phase_features(criteria, results)
+        total_checks += ft
+        passed_checks += fp
 
-        # Validate services
-        if "services" in criteria:
-            service_results = await self._validate_services(criteria["services"])
-            results["validations"]["services"] = service_results
-            total_checks += service_results["total"]
-            passed_checks += service_results["passed"]
-
-        # Validate features
-        feature_total, feature_passed = await self._validate_phase_features(
-            criteria, results
-        )
-        total_checks += feature_total
-        passed_checks += feature_passed
-
-        # Calculate completion percentage
         if total_checks > 0:
             results["completion_percentage"] = round(
                 (passed_checks / total_checks) * 100, 2
             )
-
         results["status"] = self._determine_phase_status(
             results["completion_percentage"]
         )
-
         return results
 
     def _validate_files(self, files: List[str]) -> Dict[str, Any]:
@@ -740,83 +735,83 @@ class PhaseValidator:
 
         return results
 
-    async def _validate_single_feature(self, feature_type: str, feature: str) -> bool:
-        """Validate a single feature implementation"""
-        # This could be enhanced with specific validation logic per feature
-        # For now, basic validation based on files/endpoints
+    def _get_feature_validators(self) -> Dict[str, Any]:
+        """Build mapping of feature names to validation callables.
 
-        feature_implementations = {
-            # Security features
+        Helper for _validate_single_feature (#825).
+        """
+        root = self.project_root
+        return {
             "dependency_scanning": lambda: (
-                self.project_root / ".github/workflows/security.yml"
+                root / ".github/workflows/security.yml"
             ).exists(),
-            "sast_analysis": lambda: (self.project_root / ".bandit").exists(),
+            "sast_analysis": lambda: (root / ".bandit").exists(),
             "container_security": lambda: any(
-                (self.project_root / "scripts").glob("*security*")
+                (root / "scripts").glob("*security*")
             ),
-            # Monitoring features
             "system_metrics": lambda: (
-                self.project_root / "scripts/monitoring_system.py"
+                root / "scripts/monitoring_system.py"
             ).exists(),
-            "health_checks": lambda: self._check_endpoint_sync("/api/system/health"),
+            "health_checks": lambda: self._check_endpoint_sync(
+                "/api/system/health"
+            ),
             "performance_dashboard": lambda: (
-                self.project_root / "scripts/performance_dashboard.py"
+                root / "scripts/performance_dashboard.py"
             ).exists(),
-            # UI features
             "chat_interface": lambda: (
-                self.project_root / "autobot-vue/src/components"
+                root / "autobot-vue/src/components"
             ).exists(),
             "terminal_interface": lambda: any(
-                (self.project_root / "autobot-vue/src/components").glob("*Terminal*")
+                (root / "autobot-vue/src/components").glob("*Terminal*")
             ),
             "settings_panel": lambda: any(
-                (self.project_root / "autobot-vue/src/components").glob("*Settings*")
+                (root / "autobot-vue/src/components").glob("*Settings*")
             ),
-            # AI features
-            "multimodal_ai": lambda: (self.project_root / "src/agents").exists(),
+            "multimodal_ai": lambda: (root / "src/agents").exists(),
             "code_search": lambda: any(
-                (self.project_root / "src/agents").glob("*code_search*")
+                (root / "src/agents").glob("*code_search*")
             ),
             "advanced_research": lambda: any(
-                (self.project_root / "src/agents").glob("*research*")
+                (root / "src/agents").glob("*research*")
             ),
             "self_awareness": lambda: (
-                self.project_root / "src/llm_self_awareness.py"
+                root / "src/llm_self_awareness.py"
             ).exists(),
             "phase_progression": lambda: (
-                self.project_root / "src/phase_progression_manager.py"
+                root / "src/phase_progression_manager.py"
             ).exists(),
-            # Testing features
-            "unit_testing": lambda: (self.project_root / "tests").exists(),
+            "unit_testing": lambda: (root / "tests").exists(),
             "integration_testing": lambda: (
-                self.project_root / "scripts/automated_testing_procedure.py"
+                root / "scripts/automated_testing_procedure.py"
             ).exists(),
             "performance_testing": lambda: (
-                self.project_root / "scripts/comprehensive_code_profiler.py"
+                root / "scripts/comprehensive_code_profiler.py"
             ).exists(),
             "code_quality_checks": lambda: any(
-                (self.project_root / "scripts").glob("*profile*")
+                (root / "scripts").glob("*profile*")
             ),
-            # Orchestration features
             "task_planning": lambda: any(
-                (self.project_root / "src").glob("*orchestrat*")
+                (root / "src").glob("*orchestrat*")
             ),
             "agent_coordination": lambda: (
-                self.project_root / "src/orchestrator.py"
+                root / "src/orchestrator.py"
             ).exists(),
             "workflow_management": lambda: (
-                self.project_root / "backend/api/orchestration.py"
+                root / "backend/api/orchestration.py"
             ).exists(),
         }
 
-        validator = feature_implementations.get(feature)
+    async def _validate_single_feature(
+        self, feature_type: str, feature: str
+    ) -> bool:
+        """Validate a single feature implementation."""
+        validators = self._get_feature_validators()
+        validator = validators.get(feature)
         if validator:
             try:
                 return validator()
             except Exception:
                 return False
-
-        # Default: assume implemented if no specific validator
         return True
 
     def _check_endpoint_sync(self, endpoint: str) -> bool:
@@ -918,99 +913,106 @@ class PhaseValidator:
         return output_path
 
 
+def _output_json_results(results: Dict[str, Any], output_file: str = None):
+    """Format and output validation results as JSON.
+
+    Helper for main (#825).
+    """
+    output = {
+        "timestamp": datetime.now().isoformat(),
+        "overall_maturity": results.get("overall_maturity", 0),
+        "phases": [],
+        "recommendations": [],
+    }
+
+    for phase_name, phase_data in results.get("phases", {}).items():
+        output["phases"].append({
+            "name": phase_name,
+            "status": phase_data.get("status", "unknown"),
+            "completion_percentage": phase_data.get(
+                "completion_percentage", 0
+            ),
+            "validation_details": phase_data.get(
+                "validation_details", {}
+            ),
+        })
+
+    output["recommendations"] = [
+        {"title": rec, "action": "Review and implement"}
+        for rec in results.get("recommendations", [])
+    ]
+
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(output, f, indent=2)
+        logger.info("Results saved to %s", output_file)
+    else:
+        logger.info(json.dumps(output, indent=2))
+
+
+def _output_summary_results(results: Dict[str, Any]):
+    """Format and output validation results as summary text.
+
+    Helper for main (#825).
+    """
+    logger.info("AutoBot Phase Validation Results")
+    logger.info("==================================")
+    maturity = results.get("overall_maturity", 0)
+    logger.info("Overall System Maturity: %.1f%%", maturity)
+    logger.info("")
+
+    for phase_name, phase_data in results.get("phases", {}).items():
+        status = phase_data.get("status", "unknown")
+        completion = phase_data.get("completion_percentage", 0)
+        logger.info(
+            "[%s] %s: %.1f%% complete", status, phase_name, completion
+        )
+
+    logger.info("")
+    logger.info("Recommendations:")
+    for rec in results.get("recommendations", []):
+        logger.info("  - %s", rec)
+
+
 def main() -> None:
     """Main entry point for CLI phase validation system."""
-    parser = argparse.ArgumentParser(description="AutoBot Phase Validation System")
-    parser.add_argument(
-        "--output-format",
-        choices=["json", "summary"],
-        default="summary",
-        help="Output format for results",
-    )
-    parser.add_argument("--output-file", type=str, help="Output file path for results")
-    parser.add_argument(
-        "--phase-filter", type=str, help="Filter validation to specific phase"
+    parser = argparse.ArgumentParser(
+        description="AutoBot Phase Validation System"
     )
     parser.add_argument(
-        "--ci-mode", action="store_true", help="Run in CI mode with simplified output"
+        "--output-format", choices=["json", "summary"],
+        default="summary", help="Output format for results",
     )
-
+    parser.add_argument(
+        "--output-file", type=str, help="Output file path for results"
+    )
+    parser.add_argument(
+        "--phase-filter", type=str,
+        help="Filter validation to specific phase",
+    )
+    parser.add_argument(
+        "--ci-mode", action="store_true",
+        help="Run in CI mode with simplified output",
+    )
     args = parser.parse_args()
 
-    # Create validator instance
     validator = PhaseValidator()
 
     try:
-        # Run validation
         results = asyncio.run(validator.validate_all_phases())
 
         if args.output_format == "json":
-            # Output JSON results
-            output = {
-                "timestamp": datetime.now().isoformat(),
-                "overall_maturity": results.get("overall_maturity", 0),
-                "phases": [],
-                "recommendations": [],
-            }
-
-            # Extract phase data
-            for phase_name, phase_data in results.get("phases", {}).items():
-                output["phases"].append(
-                    {
-                        "name": phase_name,
-                        "status": phase_data.get("status", "unknown"),
-                        "completion_percentage": phase_data.get(
-                            "completion_percentage", 0
-                        ),
-                        "validation_details": phase_data.get("validation_details", {}),
-                    }
-                )
-
-            # Extract recommendations
-            output["recommendations"] = [
-                {"title": rec, "action": "Review and implement"}
-                for rec in results.get("recommendations", [])
-            ]
-
-            if args.output_file:
-                with open(args.output_file, "w") as f:
-                    json.dump(output, f, indent=2)
-                print(f"Results saved to {args.output_file}")
-            else:
-                print(json.dumps(output, indent=2))
-
+            _output_json_results(results, args.output_file)
         else:
-            # Summary output
-            print("📊 AutoBot Phase Validation Results")
-            print("==================================")
-            print(f"Overall System Maturity: {results.get('overall_maturity', 0):.1f}%")
-            print()
+            _output_summary_results(results)
 
-            phases = results.get("phases", {})
-            for phase_name, phase_data in phases.items():
-                status_emoji = (
-                    "✅"
-                    if phase_data.get("status") == "complete"
-                    else "🔄"
-                    if phase_data.get("status") == "in_progress"
-                    else "❌"
-                )
-                completion = phase_data.get("completion_percentage", 0)
-                print(f"{status_emoji} {phase_name}: {completion:.1f}% complete")
-
-            print()
-            print("📋 Recommendations:")
-            for rec in results.get("recommendations", []):
-                print(f"  - {rec}")
-
-        # Exit with appropriate code based on maturity
         maturity = results.get("overall_maturity", 0)
         if maturity < 50:
-            sys.exit(2)  # Critical - system not ready
+            sys.exit(2)
         elif maturity < 75:
-            sys.exit(1)  # Warning - system needs work
+            sys.exit(1)
         else:
-            sys.exit(0)  # Success - system ready
+            sys.exit(0)
 
     except Exception as e:
         logger.error("Validation failed: %s", e)
