@@ -1,0 +1,75 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication - Key Distribution
+---
+- name: "ServiceAuth | Create configuration directory"
+  ansible.builtin.file:
+    path: "{{ service_auth_config_dir }}"
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: "0750"
+  become: true
+
+- name: "ServiceAuth | Create service keys directory"
+  ansible.builtin.file:
+    path: "{{ service_auth_keys_dir }}"
+    state: directory
+    owner: autobot
+    group: autobot
+    mode: "0700"
+  become: true
+
+- name: "ServiceAuth | Determine this host's service ID"
+  ansible.builtin.set_fact:
+    service_id: >-
+      {%- for svc_name, svc_def in service_auth_services.items() -%}
+        {%- if inventory_hostname in groups.get(svc_def.group, []) -%}
+          {{ svc_name }}
+        {%- endif -%}
+      {%- endfor -%}
+
+- name: "ServiceAuth | Find latest service keys backup"
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/../../infrastructure/shared/config/service-keys"
+    patterns: "service-keys-*.yaml"
+  register: _service_keys_files
+  delegate_to: localhost
+  run_once: true
+
+- name: "ServiceAuth | Select most recent keys file"
+  ansible.builtin.set_fact:
+    _latest_keys_file: "{{ (_service_keys_files.files | sort(attribute='mtime') | last).path }}"
+  run_once: true
+  delegate_to: localhost
+
+- name: "ServiceAuth | Load service keys configuration"
+  ansible.builtin.set_fact:
+    _service_keys_config: "{{ lookup('file', _latest_keys_file) | from_yaml }}"
+  delegate_to: localhost
+
+- name: "ServiceAuth | Deploy service key env file"
+  ansible.builtin.template:
+    src: service-key.env.j2
+    dest: "{{ service_auth_keys_dir }}/{{ service_id }}.env"
+    owner: autobot
+    group: autobot
+    mode: "0600"
+  become: true
+  when: service_id | length > 0
+  vars:
+    service_key: "{{ _service_keys_config.services[service_id].key }}"
+    service_host: "{{ _service_keys_config.services[service_id].host }}"
+
+- name: "ServiceAuth | Verify key deployment"
+  ansible.builtin.stat:
+    path: "{{ service_auth_keys_dir }}/{{ service_id }}.env"
+  register: _key_file_stat
+  when: service_id | length > 0
+
+- name: "ServiceAuth | Report deployment status"
+  ansible.builtin.debug:
+    msg: "Service key for {{ service_id }} deployed: {{ _key_file_stat.stat.exists | default(false) }}"
+  when: service_id | length > 0

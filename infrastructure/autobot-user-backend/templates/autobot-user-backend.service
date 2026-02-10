@@ -12,6 +12,7 @@ WorkingDirectory=/opt/autobot/autobot-user-backend
 Environment="PATH=/opt/autobot/autobot-user-backend/venv/bin:/usr/local/bin:/usr/bin"
 Environment="PYTHONPATH=/opt/autobot/autobot-user-backend"
 EnvironmentFile=-/opt/autobot/autobot-user-backend/.env
+EnvironmentFile=-/etc/autobot/service-keys/main-backend.env
 
 ExecStart=/opt/autobot/autobot-user-backend/venv/bin/uvicorn \
     main:app \
