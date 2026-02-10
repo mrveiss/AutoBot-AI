@@ -14,9 +14,8 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 import yaml
+from constants.path_constants import PATH
 from performance_monitor import PerformanceMonitor
-
-from src.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -241,79 +240,99 @@ class PerformanceOptimizer:
 
         return recommendations
 
+    def _check_resource_threshold(self, value: float, threshold_key: str) -> bool:
+        """Check if a metric exceeds its configured threshold.
+
+        Helper for _analyze_system_metrics (#825).
+        """
+        threshold = self.optimization_config["thresholds"].get(threshold_key, 80)
+        return value > threshold
+
+    def _build_resource_recommendation(
+        self,
+        value: float,
+        threshold_key: str,
+        description: str,
+        impact: str,
+        optimizer: str,
+        services: List[str],
+        severity_fn=None,
+    ) -> Optional[OptimizationRecommendation]:
+        """Build a recommendation if resource exceeds threshold.
+
+        Helper for _analyze_system_metrics (#825).
+        """
+        if not self._check_resource_threshold(value, threshold_key):
+            return None
+        severity = severity_fn(value) if severity_fn else "medium"
+        return OptimizationRecommendation(
+            category="system",
+            severity=severity,
+            description=description,
+            impact_estimate=impact,
+            auto_applicable=True,
+            command=f"python3 {PATH.PROJECT_ROOT}/monitoring/{optimizer}",
+            affected_services=services,
+        )
+
     async def _analyze_system_metrics(
         self, system_metrics
     ) -> List[OptimizationRecommendation]:
         """Analyze system metrics for optimization opportunities."""
         recommendations = []
 
-        cpu_percent = system_metrics.cpu_percent
-        memory_percent = system_metrics.memory_percent
-        disk_percent = system_metrics.disk_percent
+        cpu = system_metrics.cpu_percent
+        mem = system_metrics.memory_percent
+        disk = system_metrics.disk_percent
         load_avg = system_metrics.load_average
 
-        # High CPU usage optimization
-        if cpu_percent > self.optimization_config["thresholds"]["cpu_high_usage"]:
-            severity = (
-                "critical"
-                if cpu_percent > 95
-                else "high"
-                if cpu_percent > 90
-                else "medium"
-            )
-            recommendations.append(
-                OptimizationRecommendation(
-                    category="system",
-                    severity=severity,
-                    description=f"High CPU usage detected: {cpu_percent:.1f}%",
-                    impact_estimate="10-30% CPU reduction",
-                    auto_applicable=True,
-                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/cpu_optimizer.py --optimize",
-                    affected_services=["backend", "ai-stack", "npu-worker"],
-                )
-            )
+        checks = [
+            (
+                cpu,
+                "cpu_high_usage",
+                f"High CPU usage: {cpu:.1f}%",
+                "10-30% CPU reduction",
+                "cpu_optimizer.py --optimize",
+                ["backend", "ai-stack", "npu-worker"],
+                lambda v: "critical" if v > 95 else "high" if v > 90 else "medium",
+            ),
+            (
+                mem,
+                "memory_high_usage",
+                f"High memory usage: {mem:.1f}%",
+                "15-25% memory reduction",
+                "memory_optimizer.py --cleanup",
+                ["backend", "frontend", "ai-stack"],
+                lambda v: "critical" if v > 95 else "high",
+            ),
+            (
+                disk,
+                "disk_high_usage",
+                f"High disk usage: {disk:.1f}%",
+                "5-15% disk space recovery",
+                "disk_optimizer.py --cleanup",
+                ["all"],
+                lambda v: "high" if v > 95 else "medium",
+            ),
+        ]
 
-        # High memory usage optimization
-        if memory_percent > self.optimization_config["thresholds"]["memory_high_usage"]:
-            severity = "critical" if memory_percent > 95 else "high"
-            recommendations.append(
-                OptimizationRecommendation(
-                    category="system",
-                    severity=severity,
-                    description=f"High memory usage detected: {memory_percent:.1f}%",
-                    impact_estimate="15-25% memory reduction",
-                    auto_applicable=True,
-                    command="python3 {PATH.PROJECT_ROOT}/monitoring/memory_optimizer.py --cleanup",
-                    affected_services=["backend", "frontend", "ai-stack"],
-                )
+        for val, key, desc, impact, opt, svcs, sev_fn in checks:
+            rec = self._build_resource_recommendation(
+                val, key, desc, impact, opt, svcs, sev_fn
             )
+            if rec:
+                recommendations.append(rec)
 
-        # High disk usage optimization
-        if disk_percent > self.optimization_config["thresholds"]["disk_high_usage"]:
-            severity = "high" if disk_percent > 95 else "medium"
-            recommendations.append(
-                OptimizationRecommendation(
-                    category="system",
-                    severity=severity,
-                    description=f"High disk usage detected: {disk_percent:.1f}%",
-                    impact_estimate="5-15% disk space recovery",
-                    auto_applicable=True,
-                    command="python3 {PATH.PROJECT_ROOT}/monitoring/disk_optimizer.py --cleanup",
-                    affected_services=["all"],
-                )
-            )
-
-        # Load average optimization
         cpu_cores = psutil.cpu_count()
         if load_avg and max(load_avg) > cpu_cores * 1.5:
             recommendations.append(
                 OptimizationRecommendation(
                     category="system",
                     severity="medium",
-                    description=f"High system load average: {max(load_avg):.2f} (cores: {cpu_cores})",
+                    description=f"High load: {max(load_avg):.2f} (cores: {cpu_cores})",
                     impact_estimate="10-20% load reduction",
                     auto_applicable=True,
-                    command="python3 {PATH.PROJECT_ROOT}/monitoring/load_optimizer.py --balance",
+                    command=f"python3 {PATH.PROJECT_ROOT}/monitoring/load_optimizer.py --balance",
                     affected_services=["all"],
                 )
             )
@@ -381,7 +400,10 @@ class PerformanceOptimizer:
                         description=f"Database {db_type} has {db.error_count} errors",
                         impact_estimate="100% error elimination",
                         auto_applicable=True,
-                        command=f"python3 {PATH.PROJECT_ROOT}/monitoring/database_optimizer.py --db {db_type} --fix-errors",
+                        command=(
+                            f"python3 {PATH.PROJECT_ROOT}/monitoring/"
+                            f"database_optimizer.py --db {db_type} --fix-errors"
+                        ),
                         affected_services=["backend", "ai-stack"],
                     )
                 )
@@ -398,7 +420,10 @@ class PerformanceOptimizer:
                         description=f"Slow connection to {db_type}: {db.connection_time:.3f}s",
                         impact_estimate="40-60% connection speed improvement",
                         auto_applicable=True,
-                        command=f"python3 {PATH.PROJECT_ROOT}/monitoring/database_optimizer.py --db {db_type} --optimize-connections",
+                        command=(
+                            f"python3 {PATH.PROJECT_ROOT}/monitoring/"
+                            f"database_optimizer.py --db {db_type} --optimize-connections"
+                        ),
                         affected_services=["backend"],
                     )
                 )
@@ -412,7 +437,10 @@ class PerformanceOptimizer:
                         description=f"High memory usage for {db_type}: {db.memory_usage_mb:.1f}MB",
                         impact_estimate="20-40% memory optimization",
                         auto_applicable=True,
-                        command=f"python3 {PATH.PROJECT_ROOT}/monitoring/database_optimizer.py --db {db_type} --optimize-memory",
+                        command=(
+                            f"python3 {PATH.PROJECT_ROOT}/monitoring/"
+                            f"database_optimizer.py --db {db_type} --optimize-memory"
+                        ),
                         affected_services=["redis"],
                     )
                 )
@@ -439,7 +467,10 @@ class PerformanceOptimizer:
                         description=f"High latency {source_vm} → {target_vm}: {vm_metric.latency_ms:.1f}ms",
                         impact_estimate="20-40% latency reduction",
                         auto_applicable=True,
-                        command=f"python3 {PATH.PROJECT_ROOT}/monitoring/network_optimizer.py --optimize-route {target_vm}",
+                        command=(
+                            f"python3 {PATH.PROJECT_ROOT}/monitoring/"
+                            f"network_optimizer.py --optimize-route {target_vm}"
+                        ),
                         affected_services=[target_vm],
                     )
                 )
@@ -454,7 +485,10 @@ class PerformanceOptimizer:
                         description=f"Packet loss {source_vm} → {target_vm}: {vm_metric.packet_loss_percent:.1f}%",
                         impact_estimate="90-100% packet loss elimination",
                         auto_applicable=True,
-                        command=f"python3 {PATH.PROJECT_ROOT}/monitoring/network_optimizer.py --fix-connectivity {target_vm}",
+                        command=(
+                            f"python3 {PATH.PROJECT_ROOT}/monitoring/"
+                            f"network_optimizer.py --fix-connectivity {target_vm}"
+                        ),
                         affected_services=[target_vm],
                     )
                 )
@@ -468,7 +502,10 @@ class PerformanceOptimizer:
                         description=f"High network jitter {source_vm} → {target_vm}: {vm_metric.jitter_ms:.1f}ms",
                         impact_estimate="30-50% jitter reduction",
                         auto_applicable=True,
-                        command=f"python3 {PATH.PROJECT_ROOT}/monitoring/network_optimizer.py --stabilize-connection {target_vm}",
+                        command=(
+                            f"python3 {PATH.PROJECT_ROOT}/monitoring/"
+                            f"network_optimizer.py --stabilize-connection {target_vm}"
+                        ),
                         affected_services=[target_vm],
                     )
                 )
@@ -512,15 +549,27 @@ class PerformanceOptimizer:
 
         return recommendations
 
+    async def _measure_optimization_impact(
+        self, result: OptimizationResult, metrics_before: Dict
+    ) -> None:
+        """Measure metrics after optimization and calculate improvement.
+
+        Helper for apply_optimization (#825).
+        """
+        await asyncio.sleep(10)
+        metrics_after = await self.monitor.generate_performance_report()
+        result.metrics_after = metrics_after
+        result.improvement_percentage = self._calculate_improvement(
+            metrics_before, metrics_after, result.recommendation.category
+        )
+
     async def apply_optimization(
         self, recommendation: OptimizationRecommendation
     ) -> OptimizationResult:
         """Apply a specific optimization recommendation."""
-        self.logger.info(f"Applying optimization: {recommendation.description}")
+        self.logger.info("Applying optimization: %s", recommendation.description)
 
-        # Capture metrics before optimization
         metrics_before = await self.monitor.generate_performance_report()
-
         result = OptimizationResult(
             recommendation=recommendation,
             applied=False,
@@ -535,51 +584,33 @@ class PerformanceOptimizer:
             return result
 
         try:
-            # Apply the optimization
             process = await asyncio.create_subprocess_shell(
                 recommendation.command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-
             stdout, stderr = await process.communicate()
             result.applied = True
 
             if process.returncode == 0:
                 result.success = True
-                self.logger.info(
-                    f"Optimization applied successfully: {recommendation.description}"
-                )
-
-                # Wait a moment for the optimization to take effect
-                await asyncio.sleep(10)
-
-                # Capture metrics after optimization
-                metrics_after = await self.monitor.generate_performance_report()
-                result.metrics_after = metrics_after
-
-                # Calculate improvement percentage (simplified)
-                improvement = self._calculate_improvement(
-                    metrics_before, metrics_after, recommendation.category
-                )
-                result.improvement_percentage = improvement
-
+                self.logger.info("Optimization applied: %s", recommendation.description)
+                await self._measure_optimization_impact(result, metrics_before)
             else:
-                result.success = False
                 result.error_message = (
                     stderr.decode() if stderr else "Command failed with no error output"
                 )
                 self.logger.error(
-                    f"Optimization failed: {recommendation.description} - {result.error_message}"
+                    "Optimization failed: %s - %s",
+                    recommendation.description,
+                    result.error_message,
                 )
 
         except Exception as e:
             result.error_message = str(e)
-            self.logger.error(f"Error applying optimization: {e}")
+            self.logger.error("Error applying optimization: %s", e)
 
-        # Store optimization result
         self.optimization_history.append(result)
-
         return result
 
     def _calculate_improvement(
@@ -622,76 +653,72 @@ class PerformanceOptimizer:
 
         return None
 
+    def _filter_applicable_recommendations(
+        self, recommendations: List[OptimizationRecommendation]
+    ) -> List[OptimizationRecommendation]:
+        """Filter recommendations by severity threshold and auto-applicability.
+
+        Helper for run_optimization_cycle (#825).
+        """
+        auto_config = self.optimization_config.get("auto_optimization", {})
+        severity_threshold = auto_config.get("severity_threshold", "medium")
+        max_optimizations = auto_config.get("max_optimizations_per_hour", 3)
+
+        severity_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+        threshold_level = severity_levels.get(severity_threshold, 2)
+
+        applicable = [
+            rec
+            for rec in recommendations
+            if severity_levels.get(rec.severity, 0) >= threshold_level
+            and rec.auto_applicable
+        ]
+        return applicable[:max_optimizations]
+
     async def run_optimization_cycle(self):
         """Run a complete optimization cycle."""
-        self.logger.info("🔧 Starting performance optimization cycle")
+        self.logger.info("Starting performance optimization cycle")
 
         try:
-            # Generate current performance metrics
             metrics = await self.monitor.generate_performance_report()
-
-            # Analyze metrics and get recommendations
             recommendations = await self.analyze_performance_metrics(metrics)
 
             if not recommendations:
-                self.logger.info("✅ No optimizations needed - system performing well")
+                self.logger.info("No optimizations needed - system performing well")
                 return
 
             self.logger.info(
-                f"📋 Found {len(recommendations)} optimization opportunities"
+                "Found %d optimization opportunities", len(recommendations)
             )
 
-            # Filter recommendations by configuration
-            auto_config = self.optimization_config.get("auto_optimization", {})
-            severity_threshold = auto_config.get("severity_threshold", "medium")
-            max_optimizations = auto_config.get("max_optimizations_per_hour", 3)
-
-            # Filter by severity
-            severity_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
-            threshold_level = severity_levels.get(severity_threshold, 2)
-
-            applicable_recommendations = [
-                rec
-                for rec in recommendations
-                if severity_levels.get(rec.severity, 0) >= threshold_level
-                and rec.auto_applicable
-            ]
-
-            # Limit number of optimizations per cycle
-            applicable_recommendations = applicable_recommendations[:max_optimizations]
-
-            if not applicable_recommendations:
-                self.logger.info(
-                    "🚫 No applicable optimizations meet severity threshold"
-                )
+            applicable = self._filter_applicable_recommendations(recommendations)
+            if not applicable:
+                self.logger.info("No applicable optimizations meet severity threshold")
                 return
 
-            # Apply optimizations
             results = []
-            for recommendation in applicable_recommendations:
+            for recommendation in applicable:
                 result = await self.apply_optimization(recommendation)
                 results.append(result)
-
-                # Brief pause between optimizations
                 await asyncio.sleep(5)
 
-            # Summary
-            successful_optimizations = sum(1 for r in results if r.success)
-            total_attempted = len(results)
-
+            successful = sum(1 for r in results if r.success)
             self.logger.info(
-                f"🎯 Optimization cycle complete: {successful_optimizations}/{total_attempted} successful"
+                "Optimization cycle complete: %d/%d successful",
+                successful,
+                len(results),
             )
 
-            # Log improvements
             for result in results:
                 if result.success and result.improvement_percentage:
                     self.logger.info(
-                        f"📈 Improvement: {result.recommendation.description} - {result.improvement_percentage:.1f}%"
+                        "Improvement: %s - %.1f%%",
+                        result.recommendation.description,
+                        result.improvement_percentage,
                     )
 
         except Exception as e:
-            self.logger.error(f"Error in optimization cycle: {e}")
+            self.logger.error("Error in optimization cycle: %s", e)
 
     async def generate_optimization_report(self) -> Dict[str, Any]:
         """Generate comprehensive optimization report."""

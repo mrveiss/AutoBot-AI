@@ -19,53 +19,19 @@ from performance_monitor import PerformanceMonitor
 from autobot_shared.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
-from src.utils.html_dashboard_utils import (
+from utils.html_dashboard_utils import (
     create_dashboard_header,
     create_metric_card,
     get_dark_theme_css,
 )
-from src.utils.template_loader import load_css, template_exists
+from utils.template_loader import load_css, template_exists
 
 # ============================================================================
 # Dashboard Template Helper Functions (Issue #398: extracted)
 # ============================================================================
 
-
-def _get_dashboard_additional_css() -> str:
-    """
-    Return additional CSS styles for the dashboard template.
-
-    Issue #398: Extracted from main template.
-    Issue #515: CSS moved to external template file for better maintainability.
-    """
-    template_path = "dashboards/styles/monitoring_dashboard.css"
-
-    if template_exists(template_path):
-        return load_css("monitoring_dashboard")
-
-    # Fallback for backwards compatibility
-    logger.warning("CSS template not found, using inline fallback: %s", template_path)
-    return _get_fallback_css()
-
-
-def _get_fallback_css() -> str:
-    """Fallback CSS if template file is not available (Issue #515)."""
-    return """
-        .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-        .service-card { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1rem; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .status-up { background: #238636; }
-        .status-down { background: #da3633; }
-        .alerts-section { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1.5rem; }
-        .alert-item { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 0.375rem; background: #3d1a00; border-left: 3px solid #d29922; }
-        .vm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-        .vm-card { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1rem; }
-    """
-
-
-def _get_dashboard_javascript() -> str:
-    """Return JavaScript for the dashboard template (Issue #398: extracted)."""
-    return """    <script>
+# Issue #825: Dashboard JavaScript split into module constants (<65 lines each)
+_JS_DASHBOARD_CLASS_INIT = """    <script>
         class AutoBotDashboard {
             constructor() {
                 this.ws = null;
@@ -119,7 +85,9 @@ def _get_dashboard_javascript() -> str:
                     console.error('Error loading initial data:', error);
                 }
             }
+"""
 
+_JS_DASHBOARD_DATA_HANDLING = """
             handleRealtimeUpdate(data) {
                 if (data.type === 'metrics_update') {
                     this.updateDashboard(data.data);
@@ -140,7 +108,8 @@ def _get_dashboard_javascript() -> str:
                 if (data.system) {
                     document.getElementById('cpu-usage').textContent = `${data.system.cpu_percent.toFixed(1)}%`;
                     document.getElementById('memory-usage').textContent = `${data.system.memory_percent.toFixed(1)}%`;
-                    document.getElementById('memory-available').textContent = `${data.system.memory_available_gb.toFixed(1)}GB`;
+                    const memAvail = data.system.memory_available_gb.toFixed(1);
+                    document.getElementById('memory-available').textContent = `${memAvail}GB`;
 
                     if (data.system.gpu_utilization !== null) {
                         document.getElementById('gpu-usage').textContent = `${data.system.gpu_utilization.toFixed(1)}%`;
@@ -179,6 +148,9 @@ def _get_dashboard_javascript() -> str:
                 this.updateAlerts(alerts);
             }
 
+"""
+
+_JS_DASHBOARD_VM_STATUS = """
             updateVMStatus(data) {
                 const vmGrid = document.getElementById('vm-status-grid');
                 // VM IPs are managed by network_constants.py
@@ -223,7 +195,9 @@ def _get_dashboard_javascript() -> str:
                 }
                 vmGrid.innerHTML = vmHtml;
             }
+"""
 
+_JS_DASHBOARD_SERVICES = """
             updateServices(services) {
                 const servicesGrid = document.getElementById('services-grid');
                 let servicesHtml = '';
@@ -234,7 +208,7 @@ def _get_dashboard_javascript() -> str:
                     const responseTime = service.response_time ? `${(service.response_time * 1000).toFixed(0)}ms` : 'N/A';
 
                     servicesHtml += `
-                        <div class="service-card">
+                        <div class="service-card ${statusClass}">
                             <div class="service-name">${service.service_name}</div>
                             <div class="service-status">
                                 <div class="status-dot ${statusClass}"></div>
@@ -250,7 +224,9 @@ def _get_dashboard_javascript() -> str:
 
                 servicesGrid.innerHTML = servicesHtml;
             }
+"""
 
+_JS_DASHBOARD_ALERTS_CHARTS = """
             updateAlerts(alerts) {
                 const alertsContainer = document.getElementById('alerts-container');
 
@@ -277,6 +253,9 @@ def _get_dashboard_javascript() -> str:
                 alertsContainer.innerHTML = alertsHtml;
             }
 
+"""
+
+_JS_DASHBOARD_CHART_UPDATE = """
             updateCharts() {
                 if (this.performanceHistory.length < 2) return;
 
@@ -328,6 +307,54 @@ def _get_dashboard_javascript() -> str:
             new AutoBotDashboard();
         });
     </script>"""
+
+
+def _get_dashboard_additional_css() -> str:
+    """
+    Return additional CSS styles for the dashboard template.
+
+    Issue #398: Extracted from main template.
+    Issue #515: CSS moved to external template file for better maintainability.
+    """
+    template_path = "dashboards/styles/monitoring_dashboard.css"
+
+    if template_exists(template_path):
+        return load_css("monitoring_dashboard")
+
+    # Fallback for backwards compatibility
+    logger.warning("CSS template not found, using inline fallback: %s", template_path)
+    return _get_fallback_css()
+
+
+def _get_fallback_css() -> str:
+    """Fallback CSS if template file is not available (Issue #515)."""
+    return """
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .service-card { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1rem; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-up { background: #238636; }
+        .status-down { background: #da3633; }
+        .alerts-section { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1.5rem; }
+        .alert-item { padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 0.375rem; background: #3d1a00; border-left: 3px solid #d29922; }
+        .vm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .vm-card { background: #161b22; border: 1px solid #30363d; border-radius: 0.5rem; padding: 1rem; }
+    """
+
+
+def _get_dashboard_javascript() -> str:
+    """
+    Return the complete dashboard JavaScript.
+
+    Helper split into constants for function length (#825).
+    """
+    return (
+        _JS_DASHBOARD_CLASS_INIT
+        + _JS_DASHBOARD_DATA_HANDLING
+        + _JS_DASHBOARD_VM_STATUS
+        + _JS_DASHBOARD_SERVICES
+        + _JS_DASHBOARD_ALERTS_CHARTS
+        + _JS_DASHBOARD_CHART_UPDATE
+    )
 
 
 def _get_dashboard_html_body(header_html: str, metric_cards: str) -> str:
@@ -673,7 +700,8 @@ class PerformanceDashboard:
         # Start the web server
         runner = web.AppRunner(self.app)
         await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", self.port)
+        bind_host = "0.0.0.0"  # nosec B104: dashboard bind
+        site = web.TCPSite(runner, bind_host, self.port)
         await site.start()
 
         logger.info(

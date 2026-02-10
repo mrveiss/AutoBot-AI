@@ -277,6 +277,28 @@ class ServiceOrchestrator:
         self.ssh_user = "autobot"
         self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)
 
+    async def _resolve_target_node(
+        self, db: AsyncSession, service_name: str, node_id: Optional[str]
+    ) -> Tuple[Optional[str], Optional[Any], Optional[str]]:
+        """Resolve target host and node for a service action.
+
+        Helper for start_service (#825).
+
+        Returns:
+            (target_host, node, error_message) - error_message is None on success
+        """
+        if node_id:
+            node = await self._get_node(db, node_id)
+            if not node:
+                return None, None, f"Node not found: {node_id}"
+            return node.ip_address, node, None
+
+        target_host = self.registry.get_service_host(service_name)
+        if not target_host:
+            return None, None, f"No target host for service: {service_name}"
+        node = await self._find_node_by_ip(db, target_host)
+        return target_host, node, None
+
     async def start_service(
         self,
         db: AsyncSession,
@@ -300,18 +322,11 @@ class ServiceOrchestrator:
         if not service_def:
             return False, f"Unknown service: {service_name}"
 
-        # Determine target node
-        if node_id:
-            node = await self._get_node(db, node_id)
-            if not node:
-                return False, f"Node not found: {node_id}"
-            target_host = node.ip_address
-        else:
-            target_host = self.registry.get_service_host(service_name)
-            node = await self._find_node_by_ip(db, target_host)
-
-        if not target_host:
-            return False, f"No target host for service: {service_name}"
+        target_host, node, error = await self._resolve_target_node(
+            db, service_name, node_id
+        )
+        if error:
+            return False, error
 
         # Check if already running (unless force)
         if not force:
