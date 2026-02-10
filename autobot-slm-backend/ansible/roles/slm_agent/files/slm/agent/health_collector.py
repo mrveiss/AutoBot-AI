@@ -165,6 +165,9 @@ class HealthCollector:
 
                 service_name = unit_name.replace(".service", "")
                 load_state = parts[1]  # loaded, not-found, masked
+                # Skip phantom entries with no unit file
+                if load_state in ("not-found", "masked"):
+                    continue
                 active_state = parts[2]  # active, inactive, failed
                 sub_state = parts[3]  # running, dead, exited, failed
 
