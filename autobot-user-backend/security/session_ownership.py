@@ -17,9 +17,8 @@ FEATURE FLAG SUPPORT:
 import logging
 from typing import Dict, Optional
 
-from fastapi import HTTPException, Request
-
 from auth_middleware import auth_middleware
+from fastapi import HTTPException, Request
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +55,33 @@ class SessionOwnershipValidator:
         """Generate Redis key for user's session set."""
         return f"user_chat_sessions:{username}"
 
-    async def set_session_owner(self, session_id: str, username: str) -> bool:
+    def _get_org_sessions_key(self, org_id: str) -> str:
+        """Generate Redis key for organization's session set (#684)."""
+        return f"org_chat_sessions:{org_id}"
+
+    def _get_team_sessions_key(self, team_id: str) -> str:
+        """Generate Redis key for team's session set (#684)."""
+        return f"team_chat_sessions:{team_id}"
+
+    def _get_session_context_key(self, session_id: str) -> str:
+        """Generate Redis key for session org/team context (#684)."""
+        return f"chat_session_context:{session_id}"
+
+    async def set_session_owner(
+        self,
+        session_id: str,
+        username: str,
+        org_id: str | None = None,
+        team_id: str | None = None,
+    ) -> bool:
         """
-        Associate a chat session with its owner.
+        Associate a chat session with its owner and org/team context.
 
         Args:
             session_id: Chat session ID
             username: Owner username
+            org_id: Organization ID (#684)
+            team_id: Team ID for team-scoped sessions (#684)
 
         Returns:
             True if successful
@@ -77,12 +96,46 @@ class SessionOwnershipValidator:
             await self.redis.sadd(user_sessions_key, session_id)
             await self.redis.expire(user_sessions_key, 2592000)  # 30 days
 
+            # Issue #684: Store org/team indices
+            if org_id:
+                await self._store_org_session_index(session_id, org_id)
+            if team_id:
+                await self._store_team_session_index(session_id, team_id)
+            if org_id or team_id:
+                await self._store_session_context(session_id, org_id, team_id)
+
             logger.info("Session %s... assigned to owner %s", session_id[:8], username)
             return True
 
         except Exception as e:
             logger.error("Failed to set session owner: %s", e)
             return False
+
+    async def _store_org_session_index(self, session_id: str, org_id: str) -> None:
+        """Store session in organization's session set (#684)."""
+        org_key = self._get_org_sessions_key(org_id)
+        await self.redis.sadd(org_key, session_id)
+        await self.redis.expire(org_key, 2592000)  # 30 days
+
+    async def _store_team_session_index(self, session_id: str, team_id: str) -> None:
+        """Store session in team's session set (#684)."""
+        team_key = self._get_team_sessions_key(team_id)
+        await self.redis.sadd(team_key, session_id)
+        await self.redis.expire(team_key, 2592000)  # 30 days
+
+    async def _store_session_context(
+        self, session_id: str, org_id: str | None, team_id: str | None
+    ) -> None:
+        """Store org/team context for a session (#684)."""
+        ctx_key = self._get_session_context_key(session_id)
+        context = {}
+        if org_id:
+            context["org_id"] = org_id
+        if team_id:
+            context["team_id"] = team_id
+        if context:
+            await self.redis.hset(ctx_key, mapping=context)
+            await self.redis.expire(ctx_key, self.ownership_ttl)
 
     async def get_session_owner(self, session_id: str) -> Optional[str]:
         """
@@ -150,9 +203,7 @@ class SessionOwnershipValidator:
             mode_enum = await self.feature_flags.get_enforcement_mode()
             return mode_enum.value
         except Exception as e:
-            logger.error(
-                f"Failed to get enforcement mode: {e}, defaulting to disabled"
-            )
+            logger.error(f"Failed to get enforcement mode: {e}, defaulting to disabled")
             return "disabled"
 
     def _audit_log_violation(
@@ -253,6 +304,53 @@ class SessionOwnershipValidator:
             )
         except Exception as e:
             logger.error("Failed to write audit log: %s", e)
+
+    async def _check_ownership_mismatch(
+        self,
+        username: str,
+        session_id: str,
+        stored_owner: str,
+        user_data: Dict,
+        request: Request,
+        enforcement_mode: str,
+    ) -> Dict:
+        """Handle ownership mismatch with org admin bypass.
+
+        Helper for validate_ownership (#684).
+        """
+        # Issue #684: Org admins can access any session in their org
+        if await self._is_org_admin_access(user_data, session_id):
+            logger.info(
+                "Org admin %s accessing session %s... via admin privilege",
+                username,
+                session_id[:8],
+            )
+            self._audit_log_success(username, session_id, request, enforcement_mode)
+            return {
+                "authorized": True,
+                "user_data": user_data,
+                "reason": "org_admin",
+            }
+        return await self._handle_unauthorized_access(
+            username,
+            session_id,
+            stored_owner,
+            user_data,
+            request,
+            enforcement_mode,
+        )
+
+    async def _is_org_admin_access(self, user_data: Dict, session_id: str) -> bool:
+        """Check if user is an org admin accessing a session in their org.
+
+        Helper for validate_ownership (#684).
+        """
+        user_role = user_data.get("role", "")
+        user_org_id = user_data.get("org_id")
+        if user_role not in ("admin", "org_admin") or not user_org_id:
+            return False
+        session_ctx = await self.get_session_context(session_id)
+        return session_ctx.get("org_id") == user_org_id
 
     async def _handle_unauthorized_access(
         self,
@@ -369,23 +467,38 @@ class SessionOwnershipValidator:
 
         # Handle legacy session (no owner stored)
         if not stored_owner:
-            logger.warning("Session %s... has no owner (legacy session)", session_id[:8])
-            await self.set_session_owner(session_id, username)
+            logger.warning(
+                "Session %s... has no owner (legacy session)", session_id[:8]
+            )
+            # Issue #684: Include org context in legacy migration
+            await self.set_session_owner(
+                session_id,
+                username,
+                org_id=user_data.get("org_id"),
+                team_id=None,
+            )
             return {
                 "authorized": True,
                 "user_data": user_data,
                 "reason": "legacy_migration",
             }
 
-        # Check ownership mismatch (Issue #281: uses helper)
+        # Check ownership mismatch (Issue #281, #684)
         if stored_owner != username:
-            return await self._handle_unauthorized_access(
-                username, session_id, stored_owner, user_data, request, enforcement_mode
+            return await self._check_ownership_mismatch(
+                username,
+                session_id,
+                stored_owner,
+                user_data,
+                request,
+                enforcement_mode,
             )
 
         # Authorized access (user owns the session)
         logger.debug(
-            f"Authorized access: user {username} accessing own session {session_id[:8]}..."
+            "Authorized access: user %s accessing own session %s...",
+            username,
+            session_id[:8],
         )
         self._audit_log_success(username, session_id, request, enforcement_mode)
 
@@ -411,6 +524,47 @@ class SessionOwnershipValidator:
         except Exception as e:
             logger.error("Failed to get user sessions: %s", e)
             return []
+
+    async def get_org_sessions(self, org_id: str) -> list[str]:
+        """Get all sessions for an organization (#684)."""
+        try:
+            org_key = self._get_org_sessions_key(org_id)
+            sessions = await self.redis.smembers(org_key)
+            if not sessions:
+                return []
+            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
+        except Exception as e:
+            logger.error("Failed to get org sessions: %s", e)
+            return []
+
+    async def get_team_sessions(self, team_id: str) -> list[str]:
+        """Get all sessions for a team (#684)."""
+        try:
+            team_key = self._get_team_sessions_key(team_id)
+            sessions = await self.redis.smembers(team_key)
+            if not sessions:
+                return []
+            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
+        except Exception as e:
+            logger.error("Failed to get team sessions: %s", e)
+            return []
+
+    async def get_session_context(self, session_id: str) -> dict:
+        """Get org/team context for a session (#684)."""
+        try:
+            ctx_key = self._get_session_context_key(session_id)
+            context = await self.redis.hgetall(ctx_key)
+            if not context:
+                return {}
+            return {
+                (k.decode() if isinstance(k, bytes) else k): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in context.items()
+            }
+        except Exception as e:
+            logger.error("Failed to get session context: %s", e)
+            return {}
 
 
 # Dependency function for FastAPI endpoints
@@ -444,9 +598,9 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     Raises:
         HTTPException: 401 if not authenticated, 403 if not authorized (ENFORCED mode)
     """
+    from autobot_shared.redis_client import get_redis_client as get_redis_manager
     from backend.services.access_control_metrics import get_metrics_service
     from backend.services.feature_flags import get_feature_flags
-    from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
     # Get Redis connection for main database
     redis = await get_redis_manager(async_client=True, database="main")

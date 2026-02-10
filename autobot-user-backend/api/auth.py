@@ -18,6 +18,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.user_management.database import db_session_context
+from backend.user_management.services.user_service import UserService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,6 +28,27 @@ logger = logging.getLogger(__name__)
 # Rate limiting for password change endpoint (stricter limits for security)
 PASSWORD_CHANGE_RATE_WINDOW = 300  # 5 minutes
 PASSWORD_CHANGE_MAX_ATTEMPTS = 5  # max attempts per window
+
+
+async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
+    """Look up user in PostgreSQL to get user_id and org_id.
+
+    Enriches the auth response with organizational hierarchy context.
+    Non-critical: gracefully degrades if DB lookup fails.
+
+    Helper for login (#684).
+    """
+    try:
+        async with db_session_context() as session:
+            user_service = UserService(session)
+            db_user = await user_service.get_user_by_username(user_data["username"])
+            if db_user:
+                user_data["user_id"] = str(db_user.id)
+                if db_user.org_id:
+                    user_data["org_id"] = str(db_user.org_id)
+    except Exception as e:
+        logger.debug("Could not enrich user with org context: %s", e)
+    return user_data
 
 
 class PasswordChangeRateLimiter:
@@ -168,7 +191,10 @@ async def login(request: Request, login_data: LoginRequest):
             # Generic error message to prevent username enumeration
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
-        # Create JWT token
+        # Issue #684: Enrich with org hierarchy from PostgreSQL
+        user_data = await _enrich_user_with_org_context(user_data)
+
+        # Create JWT token (now includes user_id/org_id if available)
         jwt_token = auth_middleware.create_jwt_token(user_data)
 
         # Create session
@@ -527,6 +553,11 @@ async def refresh_token(request: Request):
         "role": payload["role"],
         "email": payload.get("email", ""),
     }
+    # Issue #684: Preserve org hierarchy across token refresh
+    if payload.get("user_id"):
+        user_data["user_id"] = payload["user_id"]
+    if payload.get("org_id"):
+        user_data["org_id"] = payload["org_id"]
     new_token = auth_middleware.create_jwt_token(user_data)
     expiry_seconds = auth_middleware.jwt_expiry_hours * 3600
 
