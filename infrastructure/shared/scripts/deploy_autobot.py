@@ -29,14 +29,17 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+logger = logging.getLogger(__name__)
+
 import yaml
+import logging
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.constants.threshold_constants import TimingConstants
-from src.utils.script_utils import ScriptFormatter
-from src.utils.service_registry import DeploymentMode, get_service_registry
+from constants.threshold_constants import TimingConstants
+from utils.script_utils import ScriptFormatter
+from utils.service_registry import DeploymentMode, get_service_registry
 
 
 class AutoBotDeployer:
@@ -55,10 +58,10 @@ class AutoBotDeployer:
         # Load deployment configuration
         self.service_registry = get_service_registry(config_file)
 
-        print("🚀 AutoBot Deployer initialized")
-        print(f"   Mode: {self.mode.value}")
-        print(f"   Config: {config_file or 'default'}")
-        print(f"   Namespace: {namespace}")
+        logger.info("🚀 AutoBot Deployer initialized")
+        logger.info(f"   Mode: {self.mode.value}")
+        logger.info(f"   Config: {config_file or 'default'}")
+        logger.info(f"   Namespace: {namespace}")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -536,10 +539,10 @@ Examples:
         return 0 if success else 1
 
     except KeyboardInterrupt:
-        print("\n⚠️  Deployment cancelled by user")
+        logger.warning("\n⚠️  Deployment cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Deployment failed: {e}")
+        logger.error(f"\n❌ Deployment failed: {e}")
         return 1
 
 

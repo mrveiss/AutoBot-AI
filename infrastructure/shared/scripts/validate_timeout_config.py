@@ -12,6 +12,9 @@ Part of KB-ASYNC-014: Timeout Configuration Centralization.
 import sys
 from pathlib import Path
 from typing import Any, Dict
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for numeric type checks
 _NUMERIC_TYPES = (int, float)
@@ -20,14 +23,14 @@ _NUMERIC_TYPES = (int, float)
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.config import UnifiedConfigManager
+from config import UnifiedConfigManager
 
 
 def print_section(title: str):
     """Print a section header."""
-    print(f"\n{'=' * 70}")
-    print(f"  {title}")
-    print(f"{'=' * 70}\n")
+    logger.info(f"\n{'=' * 70}")
+    logger.info(f"  {title}")
+    logger.info(f"{'=' * 70}\n")
 
 
 def validate_configuration(config: UnifiedConfigManager) -> bool:
@@ -37,19 +40,19 @@ def validate_configuration(config: UnifiedConfigManager) -> bool:
     validation_result = config.validate_timeouts()
 
     if validation_result["valid"]:
-        print("✅ Configuration is VALID")
+        logger.info("✅ Configuration is VALID")
     else:
-        print("❌ Configuration has ISSUES")
+        logger.error("❌ Configuration has ISSUES")
 
     if validation_result["issues"]:
-        print("\n🔴 Issues found:")
+        logger.info("\n🔴 Issues found:")
         for issue in validation_result["issues"]:
-            print(f"  - {issue}")
+            logger.info(f"  - {issue}")
 
     if validation_result["warnings"]:
-        print("\n⚠️  Warnings:")
+        logger.warning("\n⚠️  Warnings:")
         for warning in validation_result["warnings"]:
-            print(f"  - {warning}")
+            logger.warning(f"  - {warning}")
 
     return validation_result["valid"]
 
@@ -116,13 +119,13 @@ def test_environment_aware_access(config: UnifiedConfigManager):
             all_passed = False
 
         env or "default"
-        print(f"{status} {description}")
-        print(f"   Expected: {expected}s, Got: {actual}s")
+        logger.info(f"{status} {description}")
+        logger.info(f"   Expected: {expected}s, Got: {actual}s")
 
     if all_passed:
-        print("\n✅ All environment-aware access tests PASSED")
+        logger.info("\n✅ All environment-aware access tests PASSED")
     else:
-        print("\n❌ Some environment-aware access tests FAILED")
+        logger.error("\n❌ Some environment-aware access tests FAILED")
 
     return all_passed
 
@@ -141,11 +144,11 @@ def test_timeout_groups(config: UnifiedConfigManager):
         timeouts = config.get_timeout_group(category, env)
         env_str = env or "base"
 
-        print(f"📦 {description} ({env_str}):")
+        logger.info(f"📦 {description} ({env_str}):")
         for key, value in sorted(timeouts.items()):
-            print(f"   {key}: {value}s")
+            logger.info(f"   {key}: {value}s")
 
-    print("\n✅ Timeout group retrieval working correctly")
+    logger.info("\n✅ Timeout group retrieval working correctly")
 
 
 def test_backward_compatibility(config: UnifiedConfigManager):
@@ -180,12 +183,12 @@ def test_backward_compatibility(config: UnifiedConfigManager):
         if actual != expected:
             all_passed = False
 
-        print(f"{status} {path}: Expected {expected}s, Got {actual}s")
+        logger.info(f"{status} {path}: Expected {expected}s, Got {actual}s")
 
     if all_passed:
-        print("\n✅ All backward compatibility checks PASSED")
+        logger.info("\n✅ All backward compatibility checks PASSED")
     else:
-        print("\n❌ Some backward compatibility checks FAILED")
+        logger.error("\n❌ Some backward compatibility checks FAILED")
 
     return all_passed
 
@@ -196,9 +199,9 @@ def display_summary(config: UnifiedConfigManager):
 
     all_timeouts = config.get("timeouts", {})
 
-    print("📊 Configured Timeout Categories:")
+    logger.info("📊 Configured Timeout Categories:")
     for category in all_timeouts:
-        print(f"   - {category}")
+        logger.info(f"   - {category}")
 
     # Count total timeout values
     def count_timeouts(cfg: Dict[str, Any]) -> int:
@@ -212,27 +215,27 @@ def display_summary(config: UnifiedConfigManager):
         return count
 
     total = count_timeouts(all_timeouts)
-    print(f"\n📈 Total timeout values configured: {total}")
+    logger.info(f"\n📈 Total timeout values configured: {total}")
 
     # Environment overrides
     dev_overrides = config.get("environments.development.timeouts", {})
     prod_overrides = config.get("environments.production.timeouts", {})
 
-    print(f"\n🔧 Development overrides: {count_timeouts(dev_overrides)}")
-    print(f"🔧 Production overrides: {count_timeouts(prod_overrides)}")
+    logger.info(f"\n🔧 Development overrides: {count_timeouts(dev_overrides)}")
+    logger.info(f"🔧 Production overrides: {count_timeouts(prod_overrides)}")
 
 
 def main():
     """Main validation routine."""
-    print("\n" + "=" * 70)
-    print("  TIMEOUT CONFIGURATION VALIDATION TOOL")
-    print("  KB-ASYNC-014: Phase 1 Validation")
-    print("=" * 70)
+    logger.info("\n" + "=" * 70)
+    logger.info("  TIMEOUT CONFIGURATION VALIDATION TOOL")
+    logger.info("  KB-ASYNC-014: Phase 1 Validation")
+    logger.info("=" * 70)
 
     try:
         # Load configuration
         config = UnifiedConfigManager()
-        print("\n✅ UnifiedConfigManager loaded successfully")
+        logger.info("\n✅ UnifiedConfigManager loaded successfully")
 
         # Run validation tests
         config_valid = validate_configuration(config)
@@ -247,16 +250,16 @@ def main():
         all_passed = config_valid and env_tests_passed and compat_tests_passed
 
         if all_passed:
-            print("✅ ALL VALIDATION CHECKS PASSED")
-            print("\n✨ Timeout configuration is ready for Phase 2 (code migration)")
+            logger.info("✅ ALL VALIDATION CHECKS PASSED")
+            logger.info("\n✨ Timeout configuration is ready for Phase 2 (code migration)")
             return 0
         else:
-            print("❌ VALIDATION FAILED")
-            print("\n⚠️  Fix configuration issues before proceeding to Phase 2")
+            logger.error("❌ VALIDATION FAILED")
+            logger.warning("\n⚠️  Fix configuration issues before proceeding to Phase 2")
             return 1
 
     except Exception as e:
-        print(f"\n❌ VALIDATION ERROR: {e}")
+        logger.error(f"\n❌ VALIDATION ERROR: {e}")
         import traceback
 
         traceback.print_exc()
