@@ -8,18 +8,23 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 ANSIBLE_DIR="$(dirname "$SCRIPT_DIR")"
 INVENTORY_FILE="$ANSIBLE_DIR/inventory/production.yml"
 BACKUP_BASE_DIR="/opt/autobot/backups"
 LOG_DIR="/var/log/autobot/backup"
 LOG_FILE="$LOG_DIR/backup-$(date +%Y%m%d-%H%M%S).log"
 
-# VM endpoints (#808: use production IPs)
-DATABASE_HOST="172.16.168.23"
-BACKEND_HOST="172.16.168.20"
-AIML_HOST="172.16.168.24"
-FRONTEND_HOST="172.16.168.21"
-BROWSER_HOST="172.16.168.25"
+# VM endpoints (from SSOT config with fallbacks)
+DATABASE_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+AIML_HOST="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+FRONTEND_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+BROWSER_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 
 # Colors for output
 RED='\033[0;31m'

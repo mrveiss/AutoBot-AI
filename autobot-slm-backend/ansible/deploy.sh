@@ -8,6 +8,11 @@ set -euo pipefail
 
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 ANSIBLE_DIR="$SCRIPT_DIR"
 INVENTORY_FILE="$ANSIBLE_DIR/inventory/production.yml"
 PLAYBOOK_DIR="$ANSIBLE_DIR/playbooks"
@@ -84,7 +89,7 @@ check_prerequisites() {
         warn "SSH key not found at ~/.ssh/autobot_key"
         log "INFO" "You may need to generate SSH keys and copy them to VMs:"
         log "INFO" "  ssh-keygen -t rsa -b 4096 -f ~/.ssh/autobot_key -N ''"
-        log "INFO" "  ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@VM_IP"
+        log "INFO" "  ssh-copy-id -i ~/.ssh/autobot_key.pub ${AUTOBOT_SSH_USER:-autobot}@VM_IP"
     fi
 
     success "Prerequisites checked"
@@ -175,41 +180,41 @@ validate_deployment() {
     log "INFO" "Checking individual services..."
 
     # Frontend check
-    if curl -s -f "http://172.16.168.21/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/health" > /dev/null; then
         success "Frontend service is healthy"
     else
         warn "Frontend service health check failed"
     fi
 
     # Backend check
-    if curl -s -f "http://172.16.168.20:8001/api/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:8001/api/health" > /dev/null; then
         success "Backend service is healthy"
     else
         warn "Backend service health check failed"
     fi
 
     # Database check
-    if redis-cli -h 172.16.168.23 ping | grep -q PONG; then
+    if redis-cli -h ${AUTOBOT_REDIS_HOST:-172.16.168.23} ping | grep -q PONG; then
         success "Database service is healthy"
     else
         warn "Database service health check failed"
     fi
 
     # AI/ML services check
-    if curl -s -f "http://172.16.168.24:8080/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8080/health" > /dev/null; then
         success "AI Stack service is healthy"
     else
         warn "AI Stack service health check failed"
     fi
 
-    if curl -s -f "http://172.16.168.22:8081/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:8081/health" > /dev/null; then
         success "NPU Worker service is healthy"
     else
         warn "NPU Worker service health check failed"
     fi
 
     # Browser service check
-    if curl -s -f "http://172.16.168.25:3000/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:3000/health" > /dev/null; then
         success "Browser service is healthy"
     else
         warn "Browser service health check failed"
@@ -222,24 +227,24 @@ show_summary() {
     log "INFO" "=============================="
     log "INFO" ""
     log "INFO" "Service Endpoints:"
-    log "INFO" "  Frontend:    http://172.16.168.21"
-    log "INFO" "  Backend API: http://172.16.168.20:8001"
-    log "INFO" "  Redis:       redis://172.16.168.23:6379"
-    log "INFO" "  RedisInsight: http://172.16.168.23:8002"
-    log "INFO" "  AI Stack:    http://172.16.168.24:8080"
-    log "INFO" "  NPU Worker:  http://172.16.168.22:8081"
-    log "INFO" "  Browser:     http://172.16.168.25:3000"
-    log "INFO" "  VNC Server:  vnc://172.16.168.25:5901"
+    log "INFO" "  Frontend:    http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    log "INFO" "  Backend API: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:8001"
+    log "INFO" "  Redis:       redis://${AUTOBOT_REDIS_HOST:-172.16.168.23}:6379"
+    log "INFO" "  RedisInsight: http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002"
+    log "INFO" "  AI Stack:    http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8080"
+    log "INFO" "  NPU Worker:  http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:8081"
+    log "INFO" "  Browser:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:3000"
+    log "INFO" "  VNC Server:  vnc://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:5901"
     log "INFO" ""
     log "INFO" "Management:"
-    log "INFO" "  SSH Frontend: ssh autobot@172.16.168.21"
-    log "INFO" "  SSH Backend:  ssh autobot@172.16.168.20"
-    log "INFO" "  SSH Database: ssh autobot@172.16.168.23"
-    log "INFO" "  SSH AI/ML:    ssh autobot@172.16.168.24"
-    log "INFO" "  SSH Browser:  ssh autobot@172.16.168.25"
+    log "INFO" "  SSH Frontend: ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    log "INFO" "  SSH Backend:  ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+    log "INFO" "  SSH Database: ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    log "INFO" "  SSH AI/ML:    ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    log "INFO" "  SSH Browser:  ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
     log "INFO" ""
     log "INFO" "Next Steps:"
-    log "INFO" "  1. Access AutoBot at http://172.16.168.21"
+    log "INFO" "  1. Access AutoBot at http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
     log "INFO" "  2. Monitor services with: ./deploy.sh --health-check"
     log "INFO" "  3. View logs: ./utils/view-logs.sh"
     log "INFO" "  4. Create backups: ./utils/backup.sh --full"
@@ -526,7 +531,7 @@ PREREQUISITES:
   1. Ansible installed and configured
   2. SSH key generated and copied to all VMs:
      ssh-keygen -t rsa -b 4096 -f ~/.ssh/autobot_key -N ''
-     ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@VM_IP
+     ssh-copy-id -i ~/.ssh/autobot_key.pub ${AUTOBOT_SSH_USER:-autobot}@VM_IP
   3. Update inventory/production.yml with actual VM IP addresses
   4. VMs running Ubuntu 22.04 LTS with 'autobot' user
   5. (Optional) Run --setup-sudo once to enable passwordless sudo

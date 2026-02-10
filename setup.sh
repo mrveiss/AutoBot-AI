@@ -4,6 +4,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -43,12 +46,12 @@ print_usage() {
     echo "  --help          Show this help"
     echo ""
     echo -e "${BLUE}Distributed Architecture:${NC}"
-    echo "  Main (WSL):     172.16.168.20 - Backend API server"
-    echo "  VM1 Frontend:   172.16.168.21 - Vue.js web interface (Native Vite)"
-    echo "  VM2 NPU Worker: 172.16.168.22 - Hardware AI acceleration"
-    echo "  VM3 Redis:      172.16.168.23 - Database and caching"
-    echo "  VM4 AI Stack:   172.16.168.24 - AI processing services"
-    echo "  VM5 Browser:    172.16.168.25 - Web automation (Playwright)"
+    echo "  Main (WSL):     ${AUTOBOT_BACKEND_HOST:-172.16.168.20} - Backend API server"
+    echo "  VM1 Frontend:   ${AUTOBOT_FRONTEND_HOST:-172.16.168.21} - Vue.js web interface (Native Vite)"
+    echo "  VM2 NPU Worker: ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22} - Hardware AI acceleration"
+    echo "  VM3 Redis:      ${AUTOBOT_REDIS_HOST:-172.16.168.23} - Database and caching"
+    echo "  VM4 AI Stack:   ${AUTOBOT_AI_STACK_HOST:-172.16.168.24} - AI processing services"
+    echo "  VM5 Browser:    ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25} - Web automation (Playwright)"
     echo ""
     echo -e "${CYAN}Examples:${NC}"
     echo "  $0 initial                    # Complete distributed setup"
@@ -243,12 +246,12 @@ setup_configuration() {
         cat > .env << EOF
 # AutoBot Environment Configuration
 NODE_ENV=development
-BACKEND_URL=http://172.16.168.20:8001
-FRONTEND_URL=http://172.16.168.21:5173
-REDIS_URL=redis://172.16.168.23:6379
-NPU_WORKER_URL=http://172.16.168.22:8081
-AI_STACK_URL=http://172.16.168.24:8080
-BROWSER_VM_URL=http://172.16.168.25:3000
+BACKEND_URL=http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}
+FRONTEND_URL=http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}
+REDIS_URL=redis://${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}
+NPU_WORKER_URL=http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}
+AI_STACK_URL=http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}
+BROWSER_VM_URL=http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}
 
 # Security
 SECRET_KEY=your-secret-key-here
@@ -539,7 +542,7 @@ main() {
     echo -e "${CYAN}Next steps:${NC}"
     echo "1. Configure your LLM API keys in config/config.yaml"
     echo "2. Start AutoBot with: bash run_autobot.sh --dev"
-    echo "3. Access the web interface at: http://172.16.168.21:5173"
+    echo "3. Access the web interface at: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}"
     echo "4. Access the desktop via VNC at: http://127.0.0.1:6080/vnc.html"
     echo ""
     echo -e "${YELLOW}For voice features:${NC}"

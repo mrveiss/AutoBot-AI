@@ -4,6 +4,13 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,8 +35,8 @@ fi
 
 # Check for .env file
 # Define centralized defaults (should match defaults.js)
-DEFAULT_BACKEND_HOST="172.16.168.20"
-DEFAULT_BACKEND_PORT="8001"
+DEFAULT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+DEFAULT_BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 
 if [ ! -f ".env" ]; then
     echo -e "${YELLOW}⚠️  Warning: .env file not found. Using centralized defaults.${NC}"
@@ -70,11 +77,11 @@ fi
 echo -e "${GREEN}🚀 Starting Vue.js development server...${NC}"
 echo -e "${GREEN}   Available at:${NC}"
 echo -e "${GREEN}   - http://localhost:5173/${NC}"
-echo -e "${GREEN}   - http://172.16.168.20:5173/${NC}"
+echo -e "${GREEN}   - http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:5173/${NC}"
 echo -e "${GREEN}   - http://192.168.168.17:5173/${NC}"
 echo ""
-echo -e "${BLUE}📱 The desktop interface will be available at:${NC}"
-echo -e "${BLUE}   http://172.16.168.20:5173/desktop${NC}"
+echo -e "${BLUE}The desktop interface will be available at:${NC}"
+echo -e "${BLUE}   http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:5173/desktop${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
 

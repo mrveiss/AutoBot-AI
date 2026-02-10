@@ -12,11 +12,18 @@
 #   bash scripts/service-auth/circuit-breaker-ramp.sh --dry-run  # Show plan only
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-BACKEND_HOST="172.16.168.20"
-BACKEND_PORT="8001"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 HEALTH_ENDPOINT="http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
 ENV_FILE="/home/kali/Desktop/AutoBot/.env"
 HEALTH_CHECK_INTERVAL=30  # seconds between health checks during stage
