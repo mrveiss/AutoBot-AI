@@ -15,16 +15,21 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+from chat_history import ChatHistoryManager
+from chat_workflow import ChatWorkflowManager
 from fastapi import FastAPI
+from security_layer import SecurityLayer
+from utils.background_llm_sync import BackgroundLLMSync
 
+from autobot_shared.tracing import (
+    instrument_aiohttp,
+    instrument_redis,
+    shutdown_tracing,
+)
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.slm_client import init_slm_client, shutdown_slm_client
 from backend.type_defs.common import Metadata
-from chat_history import ChatHistoryManager
-from chat_workflow import ChatWorkflowManager
 from config import UnifiedConfigManager
-from security_layer import SecurityLayer
-from utils.background_llm_sync import BackgroundLLMSync
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -185,6 +190,10 @@ async def initialize_critical_services(app: FastAPI):
         app.state.security_layer = security_layer
         await update_app_state("security_layer", security_layer)
         logger.info("✅ [ 15%] Security: Security layer initialized successfully")
+
+        # Issue #697: Instrument Redis and aiohttp with OpenTelemetry
+        instrument_redis()
+        instrument_aiohttp()
 
         # Redis connections managed centrally via src.utils.redis_client
         logger.info(
@@ -382,9 +391,10 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     """
     logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
     try:
+        from services.graph_rag_service import GraphRAGService
+
         from backend.services.rag_config import RAGConfig
         from backend.services.rag_service import RAGService
-        from services.graph_rag_service import GraphRAGService
 
         if app.state.knowledge_base:
             rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
@@ -609,6 +619,9 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # Issue #697: Flush and shutdown OpenTelemetry tracing
+        await shutdown_tracing()
 
         # Redis connections automatically managed by get_redis_client()
         logger.info("✅ Cleanup completed successfully")

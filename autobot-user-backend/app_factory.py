@@ -10,8 +10,14 @@ from typing import List, Optional
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from constants.network_constants import (  # noqa: F401 - used in docstring example
+    NetworkConstants,
+)
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
+# Issue #697: OpenTelemetry distributed tracing
+from autobot_shared.tracing import init_tracing, instrument_fastapi
 
 # Import initialization modules
 from backend.initialization import (
@@ -20,9 +26,6 @@ from backend.initialization import (
     load_core_routers,
     load_optional_routers,
     register_root_endpoints,
-)
-from constants.network_constants import (  # noqa: F401 - used in docstring example
-    NetworkConstants,
 )
 
 # Store logger for app usage
@@ -113,6 +116,10 @@ class AppFactory:
             lifespan=create_lifespan_manager(),
             redoc_url=None,
         )
+
+        # Issue #697: Initialize OpenTelemetry tracing before middleware
+        init_tracing(service_name="autobot-backend")
+        instrument_fastapi(app)
 
         configure_middleware(app, allow_origins=allow_origins)
         register_root_endpoints(app)
