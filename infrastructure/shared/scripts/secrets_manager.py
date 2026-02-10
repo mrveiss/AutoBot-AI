@@ -37,10 +37,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from src.utils.script_utils import ScriptFormatter
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -90,9 +89,9 @@ class SecretsManager:
         # Load secrets index
         self.secrets_index = self._load_secrets_index()
 
-        print("🔐 AutoBot Secrets Manager initialized")
-        print(f"   Secrets Directory: {self.secrets_dir}")
-        print(f"   Indexed Secrets: {len(self.secrets_index)}")
+        logger.info("🔐 AutoBot Secrets Manager initialized")
+        logger.info(f"   Secrets Directory: {self.secrets_dir}")
+        logger.info(f"   Indexed Secrets: {len(self.secrets_index)}")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -704,7 +703,7 @@ class SecretsManager:
 def _handle_add_command(secrets_manager: SecretsManager, args) -> int:
     """Handle --add command (Issue #315: extracted helper)."""
     if not args.name:
-        print("❌ --name required for add")
+        logger.error("❌ --name required for add")
         return 1
 
     value = args.value
@@ -722,9 +721,9 @@ def _handle_add_command(secrets_manager: SecretsManager, args) -> int:
     )
 
     if args.json:
-        print(json.dumps({"secret_id": secret_id, "status": "created"}))
+        logger.info(json.dumps({"secret_id": secret_id, "status": "created"}))
     else:
-        print(f"✅ Secret created with ID: {secret_id}")
+        logger.info(f"✅ Secret created with ID: {secret_id}")
     return 0
 
 
@@ -735,24 +734,24 @@ def _handle_list_command(secrets_manager: SecretsManager, args) -> int:
     )
 
     if args.json:
-        print(json.dumps({"secrets": secrets}))
+        logger.info(json.dumps({"secrets": secrets}))
         return 0
 
     if not secrets:
-        print("No secrets found")
+        logger.info("No secrets found")
         return 0
 
-    print(f"\n🔐 Found {len(secrets)} secrets:")
-    print("=" * 80)
-    print(f"{'Name':<25} {'Type':<15} {'Scope':<10} {'Chat ID':<15} {'Created':<20}")
-    print("-" * 80)
+    logger.info(f"\n🔐 Found {len(secrets)} secrets:")
+    logger.info("=" * 80)
+    logger.info(f"{'Name':<25} {'Type':<15} {'Scope':<10} {'Chat ID':<15} {'Created':<20}")
+    logger.info("-" * 80)
 
     for secret in secrets:
         created = datetime.fromisoformat(secret["created_at"]).strftime(
             "%Y-%m-%d %H:%M"
         )
         chat_display = secret.get("chat_id", "")[:12] if secret.get("chat_id") else ""
-        print(
+        logger.info(
             f"{secret['name']:<25} {secret['type']:<15} {secret['scope']:<10} "
             f"{chat_display:<15} {created:<20}"
         )
@@ -762,19 +761,19 @@ def _handle_list_command(secrets_manager: SecretsManager, args) -> int:
 def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
     """Handle --get command (Issue #315: extracted helper)."""
     if not args.secret_id:
-        print("❌ --secret-id required")
+        logger.error("❌ --secret-id required")
         return 1
 
     value = secrets_manager.get_secret(args.secret_id, args.chat_id)
 
     if value:
         if args.json:
-            print(json.dumps({"value": value}))
+            logger.info(json.dumps({"value": value}))
         else:
-            print(f"🔐 Secret value: {value}")
+            logger.info(f"🔐 Secret value: {value}")
         return 0
     else:
-        print("❌ Secret not found or access denied")
+        logger.error("❌ Secret not found or access denied")
         return 1
 
 
@@ -785,11 +784,11 @@ def _handle_cleanup_command(secrets_manager: SecretsManager, args) -> int:
     )
 
     if args.json:
-        print(json.dumps(result))
+        logger.info(json.dumps(result))
     else:
-        print("✅ Chat cleanup completed:")
-        print(f"   Transferred: {result['transferred']}")
-        print(f"   Deleted: {result['deleted']}")
+        logger.info("✅ Chat cleanup completed:")
+        logger.info(f"   Transferred: {result['transferred']}")
+        logger.info(f"   Deleted: {result['deleted']}")
     return 0
 
 
@@ -798,27 +797,30 @@ def _handle_security_report_command(secrets_manager: SecretsManager, args) -> in
     report = secrets_manager.get_security_report()
 
     if args.json:
-        print(json.dumps(report, indent=2))
+        logger.info(json.dumps(report, indent=2))
         return 0
 
-    print("\n🔐 Security Report:")
-    print("=" * 50)
-    print(f"Total secrets: {report['total_secrets']}")
-    print(f"General secrets: {report['general_secrets']}")
-    print(f"Chat secrets: {report['chat_secrets']}")
-    print(f"Active chats: {report['active_chats']}")
-    print(f"Encryption: {report['encryption_status']}")
-    print(f"Audit logging: {report['audit_logging']}")
+    logger.info("\n🔐 Security Report:")
+    logger.info("=" * 50)
+    logger.info(f"Total secrets: {report['total_secrets']}")
+    logger.info(f"General secrets: {report['general_secrets']}")
+    logger.info(f"Chat secrets: {report['chat_secrets']}")
+    logger.info(f"Active chats: {report['active_chats']}")
+    logger.info(f"Encryption: {report['encryption_status']}")
+    logger.info(f"Audit logging: {report['audit_logging']}")
 
     if report["secret_types"]:
-        print("\nSecret types:")
+        logger.info("\nSecret types:")
         for secret_type, count in report["secret_types"].items():
-            print(f"  {secret_type}: {count}")
+            logger.info(f"  {secret_type}: {count}")
     return 0
 
 
-def main():
-    """Entry point for AutoBot secrets management CLI."""
+def _create_argument_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser.
+
+    Helper for main (Issue #825).
+    """
     parser = argparse.ArgumentParser(
         description="AutoBot Secrets Management System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -879,6 +881,12 @@ Examples:
     )
     parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
+    return parser
+
+
+def main():
+    """Entry point for AutoBot secrets management CLI."""
+    parser = _create_argument_parser()
     args = parser.parse_args()
 
     if not any(
@@ -898,7 +906,6 @@ Examples:
 
     secrets_manager = SecretsManager(args.secrets_dir)
 
-    # Command dispatch table (Issue #315: reduces nesting)
     command_handlers = {
         "add": (_handle_add_command, args.add),
         "list": (_handle_list_command, args.list),
@@ -914,10 +921,10 @@ Examples:
         return 0
 
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        logger.warning("\n⚠️  Operation cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        logger.error(f"\n❌ Error: {e}")
         return 1
 
 

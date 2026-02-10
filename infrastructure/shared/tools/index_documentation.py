@@ -42,7 +42,7 @@ env_path = PROJECT_ROOT / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
-from src.utils.chromadb_client import get_chromadb_client
+from utils.chromadb_client import get_chromadb_client
 
 # Hash cache file for incremental indexing (Issue #400)
 HASH_CACHE_FILE = PROJECT_ROOT / "data" / ".doc_index_hashes.json"
@@ -299,45 +299,71 @@ def _chunk_large_content(
         )
 
 
-def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
+def _process_h3_subsections(
+    h3_splits: list,
+    section_name: str,
+    file_path: str,
+    doc_type: str,
+    category: str,
+    doc_title: str,
+    chunks: List[Dict[str, Any]],
+) -> None:
+    """Process H3 subsections and add to chunks.
+
+    Helper for chunk_markdown (Issue #825).
     """
-    Chunk markdown content by sections while preserving semantic boundaries.
+    j = 1
+    while j < len(h3_splits):
+        h3_header = h3_splits[j].strip() if j < len(h3_splits) else ""
+        h3_content = h3_splits[j + 1].strip() if j + 1 < len(h3_splits) else ""
+        j += 2
 
-    Args:
-        content: Markdown content
-        file_path: File path for metadata
+        # Extract H3 subsection name
+        h3_match = re.match(r"###\s+(.+)", h3_header)
+        subsection_name = h3_match.group(1) if h3_match else "Subsection"
 
-    Returns:
-        List of chunk dictionaries with content and metadata
+        full_content = f"## {section_name}\n\n### {subsection_name}\n\n{h3_content}"
+        token_count = estimate_tokens(full_content)
+
+        # Only add substantial chunks
+        if token_count > 30:
+            if token_count > 1000:
+                _chunk_large_content(
+                    full_content,
+                    section_name,
+                    subsection_name,
+                    file_path,
+                    doc_type,
+                    category,
+                    doc_title,
+                    chunks,
+                )
+            else:
+                chunks.append(
+                    _create_chunk_dict(
+                        full_content,
+                        section_name,
+                        subsection_name,
+                        file_path,
+                        doc_type,
+                        category,
+                        doc_title,
+                    )
+                )
+
+
+def _process_h2_sections(
+    h2_splits: list,
+    file_path: str,
+    doc_type: str,
+    category: str,
+    doc_title: str,
+    chunks: List[Dict[str, Any]],
+) -> None:
+    """Process H2 sections and add to chunks.
+
+    Helper for chunk_markdown (Issue #825).
     """
-    chunks = []
-    doc_title = extract_title_from_content(content)
-    doc_type = infer_doc_type(file_path)
-    category = infer_category(file_path)
-
-    # Split by H2 sections
-    h2_pattern = r"^(##\s+.+)$"
-    h2_splits = re.split(h2_pattern, content, flags=re.MULTILINE)
-
-    # First element is content before first H2
-    intro_content = h2_splits[0].strip() if h2_splits else ""
-    current_h2 = doc_title  # Use document title for intro section
-
-    # Add intro chunk if substantial
-    if intro_content and estimate_tokens(intro_content) > 50:
-        chunks.append(
-            {
-                "content": intro_content,
-                "section": "Introduction",
-                "subsection": None,
-                "file_path": file_path,
-                "doc_type": doc_type,
-                "category": category,
-                "title": doc_title,
-            }
-        )
-
-    # Process H2 sections
     i = 1
     while i < len(h2_splits):
         h2_header = h2_splits[i].strip() if i < len(h2_splits) else ""
@@ -369,46 +395,52 @@ def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
             )
 
         # Process H3 subsections
-        j = 1
-        while j < len(h3_splits):
-            h3_header = h3_splits[j].strip() if j < len(h3_splits) else ""
-            h3_content = h3_splits[j + 1].strip() if j + 1 < len(h3_splits) else ""
-            j += 2
+        _process_h3_subsections(
+            h3_splits, section_name, file_path, doc_type, category, doc_title, chunks
+        )
 
-            # Extract H3 subsection name
-            h3_match = re.match(r"###\s+(.+)", h3_header)
-            subsection_name = h3_match.group(1) if h3_match else "Subsection"
 
-            full_content = f"## {section_name}\n\n### {subsection_name}\n\n{h3_content}"
-            token_count = estimate_tokens(full_content)
+def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
+    """
+    Chunk markdown content by sections while preserving semantic boundaries.
 
-            # Only add substantial chunks (Issue #315: use helper for large content)
-            if token_count > 30:
-                if token_count > 1000:
-                    _chunk_large_content(
-                        full_content,
-                        section_name,
-                        subsection_name,
-                        file_path,
-                        doc_type,
-                        category,
-                        doc_title,
-                        chunks,
-                    )
-                else:
-                    chunks.append(
-                        _create_chunk_dict(
-                            full_content,
-                            section_name,
-                            subsection_name,
-                            file_path,
-                            doc_type,
-                            category,
-                            doc_title,
-                        )
-                    )
+    Args:
+        content: Markdown content
+        file_path: File path for metadata
 
-    # If no chunks created (no headers), chunk by paragraphs (Issue #315: use helper)
+    Returns:
+        List of chunk dictionaries with content and metadata
+    """
+    chunks = []
+    doc_title = extract_title_from_content(content)
+    doc_type = infer_doc_type(file_path)
+    category = infer_category(file_path)
+
+    # Split by H2 sections
+    h2_pattern = r"^(##\s+.+)$"
+    h2_splits = re.split(h2_pattern, content, flags=re.MULTILINE)
+
+    # First element is content before first H2
+    intro_content = h2_splits[0].strip() if h2_splits else ""
+
+    # Add intro chunk if substantial
+    if intro_content and estimate_tokens(intro_content) > 50:
+        chunks.append(
+            {
+                "content": intro_content,
+                "section": "Introduction",
+                "subsection": None,
+                "file_path": file_path,
+                "doc_type": doc_type,
+                "category": category,
+                "title": doc_title,
+            }
+        )
+
+    # Process H2 sections
+    _process_h2_sections(h2_splits, file_path, doc_type, category, doc_title, chunks)
+
+    # If no chunks created (no headers), chunk by paragraphs
     if not chunks and content.strip():
         _chunk_large_content(
             content, "Content", None, file_path, doc_type, category, doc_title, chunks
@@ -567,6 +599,52 @@ class ChromaDBIndexer:
 # ============================================================================
 
 
+def _index_chunks(indexer, chunks, rel_path, file_tags, tier, priority_map, dry_run):
+    """Index individual chunks from a document.
+
+    Helper for index_file_sync (Issue #825).
+    """
+    indexed_count = 0
+    for i, chunk in enumerate(chunks):
+        chunk_id = hashlib.md5(
+            f"{rel_path}:{chunk['section']}:{i}".encode()
+        ).hexdigest()[:12]
+
+        metadata = {
+            "source": "autobot_documentation",
+            "doc_type": chunk["doc_type"],
+            "category": chunk["category"],
+            "priority": priority_map.get(tier, "low"),
+            "tier": str(tier),
+            "file_path": rel_path,
+            "section": chunk["section"],
+            "subsection": chunk.get("subsection"),
+            "title": chunk["title"],
+            "tags": file_tags,
+            "indexed_at": datetime.now().isoformat(),
+            "chunk_index": i,
+            "total_chunks": len(chunks),
+        }
+
+        if dry_run:
+            logger.info(
+                f"  [DRY-RUN] Would index chunk {i+1}/{len(chunks)}: "
+                f"{chunk['section']}/{chunk.get('subsection', 'N/A')}"
+            )
+            indexed_count += 1
+        else:
+            result = indexer.add_document(
+                content=chunk["content"], metadata=metadata, doc_id=chunk_id
+            )
+            if result.get("status") == "success":
+                indexed_count += 1
+            else:
+                logger.warning(
+                    f"  Failed to index chunk {i+1}: {result.get('message')}"
+                )
+    return indexed_count
+
+
 def index_file_sync(
     indexer: ChromaDBIndexer, file_path: str, tier: int, dry_run: bool = False
 ) -> Dict[str, Any]:
@@ -602,46 +680,9 @@ def index_file_sync(
 
         priority_map = {1: "critical", 2: "high", 3: "medium"}
 
-        indexed_count = 0
-
-        for i, chunk in enumerate(chunks):
-            chunk_id = hashlib.md5(
-                f"{rel_path}:{chunk['section']}:{i}".encode()
-            ).hexdigest()[:12]
-
-            metadata = {
-                "source": "autobot_documentation",
-                "doc_type": chunk["doc_type"],
-                "category": chunk["category"],
-                "priority": priority_map.get(tier, "low"),
-                "tier": str(tier),
-                "file_path": rel_path,
-                "section": chunk["section"],
-                "subsection": chunk.get("subsection"),
-                "title": chunk["title"],
-                "tags": file_tags,
-                "indexed_at": datetime.now().isoformat(),
-                "chunk_index": i,
-                "total_chunks": len(chunks),
-            }
-
-            if dry_run:
-                logger.info(
-                    f"  [DRY-RUN] Would index chunk {i+1}/{len(chunks)}: "
-                    f"{chunk['section']}/{chunk.get('subsection', 'N/A')}"
-                )
-                indexed_count += 1
-            else:
-                result = indexer.add_document(
-                    content=chunk["content"], metadata=metadata, doc_id=chunk_id
-                )
-
-                if result.get("status") == "success":
-                    indexed_count += 1
-                else:
-                    logger.warning(
-                        f"  Failed to index chunk {i+1}: {result.get('message')}"
-                    )
+        indexed_count = _index_chunks(
+            indexer, chunks, rel_path, file_tags, tier, priority_map, dry_run
+        )
 
         return {
             "status": "success" if not dry_run else "dry_run",
@@ -722,100 +763,73 @@ def filter_changed_files(
     return changed_files, new_hashes
 
 
-async def index_documentation(
-    tier: Optional[int] = None,
-    file: Optional[str] = None,
-    incremental: bool = False,
-    dry_run: bool = False,
-) -> Dict[str, Any]:
+def _initialize_indexer(dry_run: bool):
+    """Initialize ChromaDB indexer if not dry run.
+
+    Helper for index_documentation (Issue #825).
     """
-    Main indexing function.
-
-    Args:
-        tier: Tier to index (1-3, or None for all)
-        file: Specific file to index
-        incremental: Only index changed files
-        dry_run: Simulate without indexing
-
-    Returns:
-        Summary of indexing results
-    """
-    start_time = time.time()
-    results = {"success": 0, "failed": 0, "skipped": 0, "files": []}
-
-    # Initialize ChromaDB indexer (no Redis required)
-    indexer = None
     if not dry_run:
         logger.info("Initializing ChromaDB indexer...")
         indexer = ChromaDBIndexer()
         indexer.initialize()
         logger.info("ChromaDB indexer ready")
+        return indexer
     else:
         logger.info("[DRY-RUN] Skipping indexer initialization")
+        return None
 
-    # Discover files
+
+def _discover_index_files(file: Optional[str], tier: Optional[int]) -> list:
+    """Discover files to index.
+
+    Helper for index_documentation (Issue #825).
+    """
     if file:
         file_path = Path(file)
         if not file_path.is_absolute():
             file_path = PROJECT_ROOT / file
         if file_path.exists():
-            files = [(str(file_path), 1)]
+            return [(str(file_path), 1)]
         else:
             logger.error(f"File not found: {file_path}")
-            return {"error": f"File not found: {file_path}"}
+            return None
     else:
-        files = discover_files(PROJECT_ROOT, tier)
+        return discover_files(PROJECT_ROOT, tier)
 
-    logger.info(f"Discovered {len(files)} files to index")
 
-    # Incremental indexing with hash comparison (Issue #400)
-    new_hashes = {}
-    if incremental and not file:  # Skip incremental for single-file mode
-        hash_cache = load_hash_cache()
-        original_count = len(files)
-        files, new_hashes = filter_changed_files(files, hash_cache)
-        unchanged_count = original_count - len(files)
-        logger.info(
-            f"Incremental mode: {len(files)} changed, {unchanged_count} unchanged"
-        )
-        if not files:
-            logger.info("No files have changed - nothing to index")
-            return {
-                "total_files": 0,
-                "success": 0,
-                "failed": 0,
-                "skipped": unchanged_count,
-                "unchanged": unchanged_count,
-                "elapsed_seconds": round(time.time() - start_time, 2),
-                "dry_run": dry_run,
-                "incremental": True,
-            }
+def _handle_incremental_mode(files: list, file: Optional[str], start_time: float, dry_run: bool):
+    """Handle incremental indexing mode.
 
-    # Index each file
-    for file_path, file_tier in files:
-        rel_path = os.path.relpath(file_path, PROJECT_ROOT)
-        logger.info(f"Indexing (Tier {file_tier}): {rel_path}")
+    Helper for index_documentation (Issue #825).
+    Returns (files, new_hashes) or early return dict if no changes.
+    """
+    hash_cache = load_hash_cache()
+    original_count = len(files)
+    files, new_hashes = filter_changed_files(files, hash_cache)
+    unchanged_count = original_count - len(files)
+    logger.info(
+        f"Incremental mode: {len(files)} changed, {unchanged_count} unchanged"
+    )
+    if not files:
+        logger.info("No files have changed - nothing to index")
+        return None, {
+            "total_files": 0,
+            "success": 0,
+            "failed": 0,
+            "skipped": unchanged_count,
+            "unchanged": unchanged_count,
+            "elapsed_seconds": round(time.time() - start_time, 2),
+            "dry_run": dry_run,
+            "incremental": True,
+        }
+    return files, new_hashes
 
-        result = index_file_sync(indexer, file_path, file_tier, dry_run)
-        results["files"].append(result)
 
-        if result["status"] == "success" or result["status"] == "dry_run":
-            results["success"] += 1
-        elif result["status"] == "skipped":
-            results["skipped"] += 1
-        else:
-            results["failed"] += 1
+def _build_indexing_summary(files, results, elapsed, dry_run, incremental):
+    """Build and log indexing summary.
 
-    elapsed = time.time() - start_time
-
-    # Save hash cache for incremental indexing (Issue #400)
-    if not dry_run and new_hashes:
-        # Merge with existing cache (preserve hashes for files not in this run)
-        existing_cache = load_hash_cache()
-        existing_cache.update(new_hashes)
-        save_hash_cache(existing_cache)
-
-    # Summary
+    Helper for index_documentation (Issue #825).
+    """
     summary = {
         "total_files": len(files),
         "success": results["success"],
@@ -840,6 +854,74 @@ async def index_documentation(
         logger.info("MODE: INCREMENTAL (only changed files)")
     logger.info(f"{'='*60}")
 
+    return summary
+
+
+async def index_documentation(
+    tier: Optional[int] = None,
+    file: Optional[str] = None,
+    incremental: bool = False,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """
+    Main indexing function.
+
+    Args:
+        tier: Tier to index (1-3, or None for all)
+        file: Specific file to index
+        incremental: Only index changed files
+        dry_run: Simulate without indexing
+
+    Returns:
+        Summary of indexing results
+    """
+    start_time = time.time()
+    results = {"success": 0, "failed": 0, "skipped": 0, "files": []}
+
+    # Initialize ChromaDB indexer (no Redis required)
+    indexer = _initialize_indexer(dry_run)
+
+    # Discover files
+    files = _discover_index_files(file, tier)
+    if files is None:
+        return {"error": f"File not found: {file}"}
+
+    logger.info(f"Discovered {len(files)} files to index")
+
+    # Incremental indexing with hash comparison (Issue #400)
+    new_hashes = {}
+    if incremental and not file:  # Skip incremental for single-file mode
+        files, result = _handle_incremental_mode(files, file, start_time, dry_run)
+        if files is None:
+            return result
+        new_hashes = result
+
+    # Index each file
+    for file_path, file_tier in files:
+        rel_path = os.path.relpath(file_path, PROJECT_ROOT)
+        logger.info(f"Indexing (Tier {file_tier}): {rel_path}")
+
+        result = index_file_sync(indexer, file_path, file_tier, dry_run)
+        results["files"].append(result)
+
+        if result["status"] == "success" or result["status"] == "dry_run":
+            results["success"] += 1
+        elif result["status"] == "skipped":
+            results["skipped"] += 1
+        else:
+            results["failed"] += 1
+
+    elapsed = time.time() - start_time
+
+    # Save hash cache for incremental indexing (Issue #400)
+    if not dry_run and new_hashes:
+        existing_cache = load_hash_cache()
+        existing_cache.update(new_hashes)
+        save_hash_cache(existing_cache)
+
+    summary = _build_indexing_summary(
+        files, results, elapsed, dry_run, incremental
+    )
     return summary
 
 
@@ -912,8 +994,11 @@ def get_collection_stats() -> None:
                 logger.info(f"  - {cat}: {cnt} chunks")
 
 
-def main():
-    """CLI entry point."""
+def _setup_argument_parser() -> argparse.ArgumentParser:
+    """Setup argument parser for CLI.
+
+    Helper for main (Issue #825).
+    """
     parser = argparse.ArgumentParser(
         description="Index AutoBot documentation into Knowledge Base V2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -968,6 +1053,12 @@ Examples:
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
 
+    return parser
+
+
+def main():
+    """CLI entry point."""
+    parser = _setup_argument_parser()
     args = parser.parse_args()
 
     if args.verbose:
@@ -990,7 +1081,7 @@ Examples:
 
     if not any([args.full, args.tier, args.file]):
         parser.print_help()
-        print(
+        logger.info(
             "\nError: Must specify --full, --tier, --file, --incremental, --search, or --stats"
         )
         sys.exit(1)

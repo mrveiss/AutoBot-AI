@@ -40,10 +40,10 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.pki.config import VM_DEFINITIONS, TLSConfig
-from src.pki.configurator import ServiceConfigurator
-from src.pki.distributor import CertificateDistributor
-from src.pki.generator import CertificateGenerator
+from pki.config import VM_DEFINITIONS, TLSConfig
+from pki.configurator import ServiceConfigurator
+from pki.distributor import CertificateDistributor
+from pki.generator import CertificateGenerator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -447,21 +447,13 @@ class MTLSMigration:
             logger.error(f"Failed to check plain port connections: {e}")
             return -1
 
-    async def phase_disable_password(self, force: bool = False) -> bool:
-        """
-        Phase 6: Disable password authentication (FINAL CUTOVER).
+    async def _run_disable_password_safety_checks(self) -> bool:
+        """Run safety checks before disabling password auth.
 
-        DANGER: This is irreversible without rollback script.
-        Only run after verification confirms 0 connections on port 6379.
+        Helper for phase_disable_password (Issue #825).
         """
-        logger.info("=" * 60)
-        logger.info("Phase 6: Disable Password Authentication (FINAL)")
-        logger.info("=" * 60)
-
-        # Safety checks
         logger.info("\n[1/4] Running safety checks...")
 
-        # Check for plain port connections
         plain_conns = await self._check_plain_port_connections()
         if plain_conns > 0:
             logger.error(f"ABORT: {plain_conns} active connections on port 6379")
@@ -469,7 +461,6 @@ class MTLSMigration:
             return False
         logger.info("  No plain port connections - OK")
 
-        # Confirm TLS is working (with current password - still enabled)
         logger.info("\n[2/4] Confirming TLS connectivity...")
         try:
             await self._test_tls_with_password()
@@ -478,7 +469,13 @@ class MTLSMigration:
             logger.error(f"ABORT: TLS connection failed: {e}")
             return False
 
-        # Get confirmation
+        return True
+
+    def _get_disable_password_confirmation(self, force: bool) -> bool:
+        """Get user confirmation before disabling password auth.
+
+        Helper for phase_disable_password (Issue #825).
+        """
         logger.info("\n[3/4] CONFIRMATION")
         logger.info("=" * 60)
         logger.info("This will:")
@@ -490,14 +487,20 @@ class MTLSMigration:
 
         if force:
             logger.info("--force flag set, proceeding without confirmation")
+            return True
         else:
             logger.info("Type 'CONFIRM' to proceed (or anything else to abort):")
             confirmation = input().strip()
             if confirmation != "CONFIRM":
                 logger.info("Aborted by user")
                 return False
+            return True
 
-        # Execute cutover
+    async def _execute_disable_password_cutover(self) -> bool:
+        """Execute the final cutover to disable password auth.
+
+        Helper for phase_disable_password (Issue #825).
+        """
         logger.info("\n[4/4] Executing final cutover...")
         import asyncssh
 
@@ -511,17 +514,14 @@ class MTLSMigration:
                 known_hosts=None,
                 connect_timeout=10,
             ) as conn:
-                # Issue #725: Use correct config path
                 config_path = "/etc/redis-stack/redis-stack.conf"
 
-                # Backup current config
                 await conn.run(
                     f"sudo cp {config_path} {config_path}.pre-mtls-final",
                     check=True,
                 )
                 logger.info("  Config backed up")
 
-                # Update config: disable plain port, enforce mTLS
                 await conn.run(
                     f"sudo sed -i 's/^port 6379$/port 0/' {config_path}",
                     check=True,
@@ -531,18 +531,15 @@ class MTLSMigration:
                     f"{config_path}",
                     check=True,
                 )
-                # Remove password for default user (admin user ACL still works)
                 await conn.run(
                     f"sudo sed -i '/^requirepass/d' {config_path}",
                     check=True,
                 )
                 logger.info("  Config updated")
 
-                # Restart Redis
                 await conn.run("sudo systemctl restart redis-stack-server", check=True)
                 logger.info("  Redis restarted")
 
-                # Verify TLS-only
                 await asyncio.sleep(2)
                 await self._test_tls_only()
                 logger.info("  TLS-only verification passed")
@@ -573,6 +570,25 @@ class MTLSMigration:
             logger.error("Attempting automatic rollback...")
             await self.rollback_redis_full()
             return False
+
+    async def phase_disable_password(self, force: bool = False) -> bool:
+        """
+        Phase 6: Disable password authentication (FINAL CUTOVER).
+
+        DANGER: This is irreversible without rollback script.
+        Only run after verification confirms 0 connections on port 6379.
+        """
+        logger.info("=" * 60)
+        logger.info("Phase 6: Disable Password Authentication (FINAL)")
+        logger.info("=" * 60)
+
+        if not await self._run_disable_password_safety_checks():
+            return False
+
+        if not self._get_disable_password_confirmation(force):
+            return False
+
+        return await self._execute_disable_password_cutover()
 
     async def _test_tls_with_password(self):
         """Test TLS connection with current password (pre-cutover check)."""
@@ -701,7 +717,11 @@ class MTLSMigration:
             return False
 
 
-async def main():
+def _create_mtls_argument_parser() -> argparse.ArgumentParser:
+    """Create argument parser for mTLS migration.
+
+    Helper for main (Issue #825).
+    """
     parser = argparse.ArgumentParser(
         description="mTLS Migration Tool for AutoBot (Issue #725)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -755,6 +775,34 @@ Examples:
         action="store_true",
         help="Skip confirmation prompt (use with caution)",
     )
+    return parser
+
+
+async def _handle_phase_execution(migration: "MTLSMigration", phase: str, force: bool = False) -> bool:
+    """Execute the specified migration phase.
+
+    Helper for main (Issue #825).
+    """
+    if phase == "redis-dual-auth":
+        return await migration.phase_redis_dual_auth()
+    elif phase == "backend-tls":
+        return await migration.phase_backend_tls()
+    elif phase == "verify":
+        return await migration.phase_verify()
+    elif phase == "disable-password":
+        return await migration.phase_disable_password(force=force)
+    elif phase == "all":
+        success = await migration.phase_redis_dual_auth()
+        if success:
+            success = await migration.phase_backend_tls()
+        if success:
+            success = await migration.phase_verify()
+        return success
+    return False
+
+
+async def main():
+    parser = _create_mtls_argument_parser()
     args = parser.parse_args()
 
     migration = MTLSMigration()
@@ -775,21 +823,7 @@ Examples:
         sys.exit(0 if success else 1)
 
     if args.phase:
-        if args.phase == "redis-dual-auth":
-            success = await migration.phase_redis_dual_auth()
-        elif args.phase == "backend-tls":
-            success = await migration.phase_backend_tls()
-        elif args.phase == "verify":
-            success = await migration.phase_verify()
-        elif args.phase == "disable-password":
-            success = await migration.phase_disable_password(force=args.force)
-        elif args.phase == "all":
-            success = await migration.phase_redis_dual_auth()
-            if success:
-                success = await migration.phase_backend_tls()
-            if success:
-                success = await migration.phase_verify()
-            # Note: disable-password not included in 'all' - requires manual execution
+        success = await _handle_phase_execution(migration, args.phase, args.force)
         sys.exit(0 if success else 1)
 
     parser.print_help()

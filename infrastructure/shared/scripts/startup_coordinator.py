@@ -26,9 +26,9 @@ import psutil
 
 # Import centralized Redis client and network constants
 sys.path.append(str(Path(__file__).parent.parent))
-from src.constants.network_constants import NetworkConstants, ServiceURLs
-from src.constants.threshold_constants import TimingConstants
-from src.utils.redis_client import get_redis_client
+from constants.network_constants import NetworkConstants, ServiceURLs
+from constants.threshold_constants import TimingConstants
+from utils.redis_client import get_redis_client
 
 # Configure logging
 logging.basicConfig(
@@ -457,11 +457,71 @@ class StartupCoordinator:
             self.startup_state_file.unlink()
 
 
+def _show_component_status(coordinator: StartupCoordinator) -> None:
+    """Show current status of all components.
+
+    Helper for main (Issue #825).
+    """
+    coordinator.load_state()
+    logger.info("\n🔍 Component Status:")
+    for name, comp in coordinator.components.items():
+        status_icon = {
+            ComponentState.PENDING: "⏳",
+            ComponentState.STARTING: "🚀",
+            ComponentState.READY: "✅",
+            ComponentState.FAILED: "❌",
+            ComponentState.STOPPED: "🛑",
+        }.get(comp.state, "❓")
+
+        logger.info(
+            f"  {status_icon} {name:<12} {comp.state.value:<8} "
+            f"PID: {comp.pid or 'N/A':<6} "
+            f"Health: {comp.health_status.value}"
+        )
+
+
+def _validate_target_components(coordinator: StartupCoordinator, components: list) -> Optional[set]:
+    """Validate and return target components.
+
+    Helper for main (Issue #825).
+    """
+    if not components:
+        return None
+
+    target_components = set(components)
+    invalid = target_components - set(coordinator.components.keys())
+    if invalid:
+        logger.error("Invalid component names: %s", invalid)
+        logger.info("Available: %s", ", ".join(coordinator.components.keys()))
+        return None
+
+    return target_components
+
+
+async def _run_periodic_health_checks(coordinator: StartupCoordinator) -> None:
+    """Run periodic health checks on ready components.
+
+    Helper for main (Issue #825).
+    """
+    try:
+        while True:
+            await asyncio.sleep(TimingConstants.LONG_DELAY)
+
+            for name, component in coordinator.components.items():
+                if component.state == ComponentState.READY:
+                    healthy = await coordinator.check_health(component)
+                    if not healthy:
+                        logger.warning("⚠️ Component %s health check failed", name)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        coordinator.stop_all()
+
+
 async def main():
     """Main startup coordinator entry point with argument parsing and signal handling."""
     coordinator = StartupCoordinator()
 
-    # Set up signal handling
     def signal_handler(signum, frame):
         """Handle shutdown signals by stopping all components gracefully."""
         logger.info("Received signal %s, shutting down...", signum)
@@ -471,7 +531,6 @@ async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Parse command line arguments
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Startup Coordinator")
@@ -494,38 +553,16 @@ async def main():
     args = parser.parse_args()
 
     if args.status:
-        coordinator.load_state()
-        print("\n🔍 Component Status:")
-        for name, comp in coordinator.components.items():
-            status_icon = {
-                ComponentState.PENDING: "⏳",
-                ComponentState.STARTING: "🚀",
-                ComponentState.READY: "✅",
-                ComponentState.FAILED: "❌",
-                ComponentState.STOPPED: "🛑",
-            }.get(comp.state, "❓")
-
-            print(
-                f"  {status_icon} {name:<12} {comp.state.value:<8} "
-                f"PID: {comp.pid or 'N/A':<6} "
-                f"Health: {comp.health_status.value}"
-            )
+        _show_component_status(coordinator)
         return
 
     if args.stop:
         coordinator.stop_all()
         return
 
-    # Start components
-    target_components = None
-    if args.components:
-        target_components = set(args.components)
-        # Validate component names
-        invalid = target_components - set(coordinator.components.keys())
-        if invalid:
-            logger.error("Invalid component names: %s", invalid)
-            logger.info("Available: %s", ", ".join(coordinator.components.keys()))
-            return
+    target_components = _validate_target_components(coordinator, args.components)
+    if args.components and target_components is None:
+        return
 
     success = await coordinator.startup_sequence(target_components)
     if not success:
@@ -534,21 +571,7 @@ async def main():
 
     logger.info("✅ AutoBot is ready!")
 
-    # Keep running until interrupted
-    try:
-        while True:
-            await asyncio.sleep(TimingConstants.LONG_DELAY)
-
-            # Periodic health checks
-            for name, component in coordinator.components.items():
-                if component.state == ComponentState.READY:
-                    healthy = await coordinator.check_health(component)
-                    if not healthy:
-                        logger.warning("⚠️ Component %s health check failed", name)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        coordinator.stop_all()
+    await _run_periodic_health_checks(coordinator)
 
 
 if __name__ == "__main__":

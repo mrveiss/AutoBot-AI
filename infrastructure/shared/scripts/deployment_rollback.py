@@ -33,15 +33,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.backup_manager import BackupManager
-from src.constants.threshold_constants import TimingConstants
-from src.utils.script_utils import ScriptFormatter
-from src.utils.service_registry import ServiceStatus, get_service_registry
+from constants.threshold_constants import TimingConstants
+from utils.script_utils import ScriptFormatter
+from utils.service_registry import ServiceStatus, get_service_registry
 
 
 class RollbackStrategy:
@@ -71,9 +73,9 @@ class RollbackManager:
         # Version tracking
         self.deployment_info_file = self.project_root / "deployment_info.json"
 
-        print("🔄 AutoBot Rollback Manager initialized")
-        print(f"   Backup Directory: {self.backup_dir}")
-        print(f"   Rollback Directory: {self.rollback_dir}")
+        logger.info("🔄 AutoBot Rollback Manager initialized")
+        logger.info(f"   Backup Directory: {self.backup_dir}")
+        logger.info(f"   Rollback Directory: {self.rollback_dir}")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -266,23 +268,11 @@ class RollbackManager:
         self.print_step(f"Health verification failed after {timeout}s", "error")
         return False
 
-    def create_rollback_plan(
-        self, target_version: str, strategy: str = RollbackStrategy.IMMEDIATE
-    ) -> Dict[str, Any]:
-        """Create detailed rollback plan."""
-        current_info = self.get_current_deployment_info()
+    def _add_pre_rollback_steps(self, plan: Dict) -> None:
+        """Add pre-rollback backup step if configured.
 
-        plan = {
-            "rollback_id": datetime.now().strftime("%Y%m%d-%H%M%S"),
-            "created_at": datetime.now().isoformat(),
-            "current_version": current_info["version"],
-            "target_version": target_version,
-            "strategy": strategy,
-            "estimated_downtime": self._estimate_downtime(strategy),
-            "steps": [],
-        }
-
-        # Pre-rollback steps
+        Helper for create_rollback_plan (Issue #825).
+        """
         if self.rollback_config["pre_rollback_backup"]:
             plan["steps"].append(
                 {
@@ -293,7 +283,13 @@ class RollbackManager:
                 }
             )
 
-        # Strategy-specific steps
+    def _add_strategy_steps(
+        self, plan: Dict, strategy: str, target_version: str
+    ) -> None:
+        """Add strategy-specific rollback steps.
+
+        Helper for create_rollback_plan (Issue #825).
+        """
         if strategy == RollbackStrategy.IMMEDIATE:
             plan["steps"].extend(
                 [
@@ -353,7 +349,11 @@ class RollbackManager:
                     }
                 )
 
-        # Post-rollback steps
+    def _add_post_rollback_steps(self, plan: Dict) -> None:
+        """Add post-rollback verification steps.
+
+        Helper for create_rollback_plan (Issue #825).
+        """
         plan["steps"].extend(
             [
                 {
@@ -370,6 +370,26 @@ class RollbackManager:
                 },
             ]
         )
+
+    def create_rollback_plan(
+        self, target_version: str, strategy: str = RollbackStrategy.IMMEDIATE
+    ) -> Dict[str, Any]:
+        """Create detailed rollback plan."""
+        current_info = self.get_current_deployment_info()
+
+        plan = {
+            "rollback_id": datetime.now().strftime("%Y%m%d-%H%M%S"),
+            "created_at": datetime.now().isoformat(),
+            "current_version": current_info["version"],
+            "target_version": target_version,
+            "strategy": strategy,
+            "estimated_downtime": self._estimate_downtime(strategy),
+            "steps": [],
+        }
+
+        self._add_pre_rollback_steps(plan)
+        self._add_strategy_steps(plan, strategy, target_version)
+        self._add_post_rollback_steps(plan)
 
         return plan
 
@@ -745,8 +765,11 @@ class RollbackManager:
             return False
 
 
-async def main():
-    """Entry point for deployment rollback CLI."""
+def _build_rollback_parser():
+    """Build argument parser for rollback CLI.
+
+    Helper for main (Issue #825).
+    """
     parser = argparse.ArgumentParser(
         description="AutoBot Deployment Rollback System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -765,11 +788,9 @@ Examples:
     parser.add_argument(
         "--list-versions", action="store_true", help="List available versions"
     )
-
     parser.add_argument("--backup-id", help="Backup ID to restore")
     parser.add_argument("--version", help="Version to rollback to")
     parser.add_argument("--target-version", help="Target version for planning")
-
     parser.add_argument(
         "--strategy",
         choices=[
@@ -780,13 +801,81 @@ Examples:
         default=RollbackStrategy.IMMEDIATE,
         help="Rollback strategy",
     )
-
     parser.add_argument("--dry-run", action="store_true", help="Dry run mode")
     parser.add_argument("--backup-dir", default="backups", help="Backup directory")
     parser.add_argument(
         "--rollback-dir", default="rollbacks", help="Rollback directory"
     )
+    return parser
 
+
+def _handle_list_versions(rollback_manager):
+    """Handle list-versions command output.
+
+    Helper for main (Issue #825).
+    """
+    versions = rollback_manager.list_available_versions()
+
+    if not versions:
+        logger.info("No versions available for rollback")
+        return 0
+
+    logger.info("\n📋 Available Versions for Rollback:")
+    logger.info("=" * 80)
+    logger.info(
+        f"{'Version':<20} {'Type':<10} {'Date':<20} {'Method':<20} {'Size':<10}"
+    )
+    logger.info("-" * 80)
+
+    for version in versions:
+        created = datetime.fromisoformat(version["created_at"])
+        size = ""
+        if "size" in version:
+            size_mb = version["size"] / (1024 * 1024)
+            size = f"{size_mb:.1f} MB"
+
+        logger.info(
+            f"{version['version']:<20} "
+            f"{version['type']:<10} "
+            f"{created.strftime('%Y-%m-%d %H:%M'):<20} "
+            f"{version['rollback_method']:<20} "
+            f"{size:<10}"
+        )
+    return 0
+
+
+def _handle_plan(rollback_manager, args):
+    """Handle plan command output.
+
+    Helper for main (Issue #825).
+    """
+    if not args.target_version:
+        logger.error("❌ --target-version required for plan")
+        return 1
+
+    plan = rollback_manager.create_rollback_plan(
+        args.target_version, args.strategy
+    )
+
+    logger.info(f"\n📋 Rollback Plan: {args.target_version}")
+    logger.info("=" * 60)
+    logger.info(f"Strategy: {plan['strategy']}")
+    logger.info(f"Estimated downtime: {plan['estimated_downtime']}")
+    logger.info(f"Current version: {plan['current_version']}")
+    logger.info(f"Target version: {plan['target_version']}")
+    logger.info("\nSteps:")
+
+    for i, step in enumerate(plan["steps"], 1):
+        critical = "⚠️ CRITICAL" if step["critical"] else ""
+        logger.info(
+            f"  {i}. {step['description']} ({step['estimated_time']}) {critical}"
+        )
+    return 0
+
+
+async def main():
+    """Entry point for deployment rollback CLI."""
+    parser = _build_rollback_parser()
     args = parser.parse_args()
 
     if not any([args.rollback, args.plan, args.list_versions]):
@@ -797,70 +886,24 @@ Examples:
 
     try:
         if args.list_versions:
-            versions = rollback_manager.list_available_versions()
-
-            if not versions:
-                print("No versions available for rollback")
-                return 0
-
-            print("\n📋 Available Versions for Rollback:")
-            print("=" * 80)
-            print(
-                f"{'Version':<20} {'Type':<10} {'Date':<20} {'Method':<20} {'Size':<10}"
-            )
-            print("-" * 80)
-
-            for version in versions:
-                created = datetime.fromisoformat(version["created_at"])
-                size = ""
-                if "size" in version:
-                    size_mb = version["size"] / (1024 * 1024)
-                    size = f"{size_mb:.1f} MB"
-
-                print(
-                    f"{version['version']:<20} {version['type']:<10} {created.strftime('%Y-%m-%d %H:%M'):<20} {version['rollback_method']:<20} {size:<10}"
-                )
-
+            return _handle_list_versions(rollback_manager)
         elif args.plan:
-            if not args.target_version:
-                print("❌ --target-version required for plan")
-                return 1
-
-            plan = rollback_manager.create_rollback_plan(
-                args.target_version, args.strategy
-            )
-
-            print(f"\n📋 Rollback Plan: {args.target_version}")
-            print("=" * 60)
-            print(f"Strategy: {plan['strategy']}")
-            print(f"Estimated downtime: {plan['estimated_downtime']}")
-            print(f"Current version: {plan['current_version']}")
-            print(f"Target version: {plan['target_version']}")
-            print("\nSteps:")
-
-            for i, step in enumerate(plan["steps"], 1):
-                critical = "⚠️ CRITICAL" if step["critical"] else ""
-                print(
-                    f"  {i}. {step['description']} ({step['estimated_time']}) {critical}"
-                )
-
+            return _handle_plan(rollback_manager, args)
         elif args.rollback:
             target_version = args.backup_id or args.version
             if not target_version:
-                print("❌ --backup-id or --version required for rollback")
+                logger.error("❌ --backup-id or --version required for rollback")
                 return 1
-
             success = await rollback_manager.execute_rollback(
                 target_version, args.strategy, args.dry_run
             )
-
             return 0 if success else 1
 
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        logger.warning("\n⚠️  Operation cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        logger.error(f"\n❌ Error: {e}")
         return 1
 
 

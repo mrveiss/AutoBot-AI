@@ -14,9 +14,9 @@ import time
 from datetime import datetime
 from typing import Any, Dict
 
-import psutil
-import requests
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _check_cpu_for_npu() -> bool:
@@ -273,6 +273,64 @@ class AutoBotMonitor:
 
         return "General Purpose"
 
+    def _check_library_import(self, lib_name: str, install_cmd: str) -> dict:
+        """Check if a Python library is installed.
+
+        Helper for _check_python_library_statuses (Issue #825).
+        """
+        try:
+            lib = __import__(lib_name.replace("-", "_"))
+            return {
+                "installed": True,
+                "version": getattr(lib, "__version__", "unknown"),
+                "status": "available",
+            }
+        except ImportError:
+            return {
+                "installed": False,
+                "status": "not_installed",
+                "error": install_cmd,
+            }
+
+    def _check_playwright_browsers(self, services: dict) -> None:
+        """Check Playwright browser availability.
+
+        Helper for _check_python_library_statuses (Issue #825).
+        """
+        try:
+            result = subprocess.run(
+                ["playwright", "install-deps"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            services["playwright"]["browsers_available"] = result.returncode == 0
+        except Exception:
+            services["playwright"]["browsers_available"] = False
+
+    def _check_openvino_devices(self) -> dict:
+        """Check OpenVINO installation and devices.
+
+        Helper for _check_python_library_statuses (Issue #825).
+        """
+        try:
+            import openvino
+            from openvino.runtime import Core
+
+            core = Core()
+            return {
+                "installed": True,
+                "version": getattr(openvino, "__version__", "unknown"),
+                "status": "available",
+                "devices": core.available_devices,
+            }
+        except ImportError:
+            return {
+                "installed": False,
+                "status": "not_installed",
+                "error": "pip install openvino",
+            }
+
     def _check_python_library_statuses(self) -> Dict[str, Any]:
         """
         Check status of Python libraries.
@@ -284,98 +342,26 @@ class AutoBotMonitor:
         """
         services = {}
 
-        # LlamaIndex
-        try:
-            import llama_index
+        # Check standard libraries
+        services["llama_index"] = self._check_library_import(
+            "llama_index", "pip install llama-index"
+        )
+        services["langchain"] = self._check_library_import(
+            "langchain", "pip install langchain"
+        )
+        services["chromadb"] = self._check_library_import(
+            "chromadb", "pip install chromadb"
+        )
 
-            services["llama_index"] = {
-                "installed": True,
-                "version": getattr(llama_index, "__version__", "unknown"),
-                "status": "available",
-            }
-        except ImportError:
-            services["llama_index"] = {
-                "installed": False,
-                "status": "not_installed",
-                "error": "pip install llama-index",
-            }
+        # Playwright with browser check
+        services["playwright"] = self._check_library_import(
+            "playwright", "pip install playwright"
+        )
+        if services["playwright"]["installed"]:
+            self._check_playwright_browsers(services)
 
-        # LangChain
-        try:
-            import langchain
-
-            services["langchain"] = {
-                "installed": True,
-                "version": getattr(langchain, "__version__", "unknown"),
-                "status": "available",
-            }
-        except ImportError:
-            services["langchain"] = {
-                "installed": False,
-                "status": "not_installed",
-                "error": "pip install langchain",
-            }
-
-        # Playwright
-        try:
-            import playwright
-
-            services["playwright"] = {
-                "installed": True,
-                "version": getattr(playwright, "__version__", "unknown"),
-                "status": "available",
-            }
-            try:
-                result = subprocess.run(
-                    ["playwright", "install-deps"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                services["playwright"]["browsers_available"] = result.returncode == 0
-            except Exception:
-                services["playwright"]["browsers_available"] = False
-        except ImportError:
-            services["playwright"] = {
-                "installed": False,
-                "status": "not_installed",
-                "error": "pip install playwright",
-            }
-
-        # ChromaDB
-        try:
-            import chromadb
-
-            services["chromadb"] = {
-                "installed": True,
-                "version": getattr(chromadb, "__version__", "unknown"),
-                "status": "available",
-            }
-        except ImportError:
-            services["chromadb"] = {
-                "installed": False,
-                "status": "not_installed",
-                "error": "pip install chromadb",
-            }
-
-        # OpenVINO
-        try:
-            import openvino
-            from openvino.runtime import Core
-
-            core = Core()
-            services["openvino"] = {
-                "installed": True,
-                "version": getattr(openvino, "__version__", "unknown"),
-                "status": "available",
-                "devices": core.available_devices,
-            }
-        except ImportError:
-            services["openvino"] = {
-                "installed": False,
-                "status": "not_installed",
-                "error": "pip install openvino",
-            }
+        # OpenVINO with device detection
+        services["openvino"] = self._check_openvino_devices()
 
         return services
 
@@ -487,39 +473,39 @@ class AutoBotMonitor:
         """
         # GPU Status
         gpu = self.get_gpu_status()
-        print("\n🎮 GPU Status:")
+        logger.info("\n🎮 GPU Status:")
         if gpu.get("available"):
-            print(f"   Device: {gpu['name']}")
-            print(
+            logger.info(f"   Device: {gpu['name']}")
+            logger.info(
                 f"   Memory: {gpu['memory_used_mb']}/{gpu['memory_total_mb']} MB ({(gpu['memory_used_mb']/gpu['memory_total_mb']*100):.1f}%)"
             )
-            print(f"   Utilization: {gpu['utilization_percent']}%")
-            print(f"   Temperature: {gpu['temperature_c']}°C")
+            logger.info(f"   Utilization: {gpu['utilization_percent']}%")
+            logger.info(f"   Temperature: {gpu['temperature_c']}°C")
             if gpu.get("power_draw_w"):
-                print(f"   Power Draw: {gpu['power_draw_w']:.1f}W")
+                logger.info(f"   Power Draw: {gpu['power_draw_w']:.1f}W")
         else:
-            print(f"   Not Available: {gpu.get('error', 'Unknown')}")
+            logger.error(f"   Not Available: {gpu.get('error', 'Unknown')}")
 
         # NPU Status
         npu = self.get_npu_status()
-        print("\n🧠 Intel AI Boost (NPU) Status:")
+        logger.info("\n🧠 Intel AI Boost (NPU) Status:")
         if npu.get("hardware_detected"):
-            print("   Hardware: ✅ Intel Core Ultra NPU detected")
+            logger.info("   Hardware: ✅ Intel Core Ultra NPU detected")
             if npu.get("wsl_limitation"):
-                print("   Status: ⚠️ WSL Environment - NPU drivers not accessible")
-                print("   Note: NPU requires native Linux/Windows for driver access")
+                logger.warning("   Status: ⚠️ WSL Environment - NPU drivers not accessible")
+                logger.info("   Note: NPU requires native Linux/Windows for driver access")
             elif npu.get("driver_available"):
-                print("   Drivers: ✅ Available")
-                print(
+                logger.info("   Drivers: ✅ Available")
+                logger.info(
                     f"   OpenVINO: {'✅' if npu.get('openvino_support') else '❌'} {'Supported' if npu.get('openvino_support') else 'Not detected'}"
                 )
-                print(f"   Utilization: {npu.get('utilization_percent', 0)}%")
+                logger.info(f"   Utilization: {npu.get('utilization_percent', 0)}%")
             else:
-                print("   Drivers: ❌ Not installed or not accessible")
-                print("   Recommendation: Install Intel NPU drivers on native system")
+                logger.error("   Drivers: ❌ Not installed or not accessible")
+                logger.info("   Recommendation: Install Intel NPU drivers on native system")
         else:
-            print("   Hardware: ❌ No Intel NPU detected")
-            print("   Current CPU: Check if NPU-capable processor")
+            logger.error("   Hardware: ❌ No Intel NPU detected")
+            logger.info("   Current CPU: Check if NPU-capable processor")
 
     def _print_service_details(self, services: dict) -> None:
         """
@@ -527,7 +513,7 @@ class AutoBotMonitor:
 
         Issue #281: Extracted from print_status_dashboard to reduce function length.
         """
-        print("\n🔧 Service Status:")
+        logger.info("\n🔧 Service Status:")
         for service_name, service_info in services.items():
             service_display = service_name.replace("_", " ").title()
             status = service_info.get("status", "unknown")
@@ -550,25 +536,25 @@ class AutoBotMonitor:
                 status_icon = "⚠️"
                 extra_info = f"({service_info.get('error', 'Unknown status')})"
 
-            print(
+            logger.info(
                 f"   {status_icon} {service_display}: {status.replace('_', ' ').title()} {extra_info}"
             )
 
             # Show additional details for specific services
             if service_name == "openvino" and service_info.get("devices"):
-                print(f"      Devices: {', '.join(service_info['devices'])}")
+                logger.info(f"      Devices: {', '.join(service_info['devices'])}")
             elif service_name == "redis" and service_info.get("search_module"):
-                print(
+                logger.info(
                     f"      RediSearch: {'✅ Enabled' if service_info['search_module'] else '❌ Disabled'}"
                 )
             elif service_name == "playwright" and "browsers_available" in service_info:
-                print(
+                logger.info(
                     f"      Browsers: {'✅ Installed' if service_info['browsers_available'] else '❌ Missing'}"
                 )
             elif service_name == "vue_frontend" and service_info.get(
                 "response_time_ms"
             ):
-                print(f"      Response Time: {service_info['response_time_ms']}ms")
+                logger.info(f"      Response Time: {service_info['response_time_ms']}ms")
 
     def _print_model_status(self) -> None:
         """
@@ -577,18 +563,18 @@ class AutoBotMonitor:
         Issue #281: Extracted from print_status_dashboard to reduce function length.
         """
         models = self.get_ollama_models()
-        print("\n🤖 LLM Models (Ollama):")
+        logger.info("\n🤖 LLM Models (Ollama):")
         if models.get("available"):
-            print(f"   Total Models: {models.get('count', 0)}")
+            logger.info(f"   Total Models: {models.get('count', 0)}")
             for model in models.get("models", []):
                 accessible_icon = "✅" if model.get("accessible") else "❌"
                 purpose = model.get("purpose", "Unknown")
-                print(f"   {accessible_icon} {model['name']}")
-                print(f"      Size: {model['size_gb']} GB | Purpose: {purpose}")
+                logger.info(f"   {accessible_icon} {model['name']}")
+                logger.info(f"      Size: {model['size_gb']} GB | Purpose: {purpose}")
                 if not model.get("accessible"):
-                    print("      Status: Not responding to test prompts")
+                    logger.info("      Status: Not responding to test prompts")
         else:
-            print(f"   Error: {models.get('error', 'Unknown')}")
+            logger.error(f"   Error: {models.get('error', 'Unknown')}")
 
     def print_status_dashboard(self):
         """
@@ -598,24 +584,24 @@ class AutoBotMonitor:
         _print_hardware_status(), _print_service_details(), and _print_model_status()
         to reduce function length from 140 to ~45 lines.
         """
-        print("\n" + "=" * 80)
-        print(
+        logger.info("\n" + "=" * 80)
+        logger.info(
             f"🚀 AutoBot System Monitor - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        print("=" * 80)
+        logger.info("=" * 80)
 
         # System Health
         health = self.get_system_health()
-        print(f"\n📊 System Health: {health.get('status', 'unknown').upper()}")
+        logger.info(f"\n📊 System Health: {health.get('status', 'unknown').upper()}")
         if health.get("status") == "healthy":
-            print(f"   LLM Model: {health.get('current_model', 'unknown')}")
-            print(
+            logger.info(f"   LLM Model: {health.get('current_model', 'unknown')}")
+            logger.info(
                 f"   Embedding Model: {health.get('current_embedding_model', 'unknown')}"
             )
-            print(f"   Redis: {health.get('redis_status', 'unknown')}")
-            print(f"   Ollama: {health.get('ollama', 'unknown')}")
+            logger.info(f"   Redis: {health.get('redis_status', 'unknown')}")
+            logger.info(f"   Ollama: {health.get('ollama', 'unknown')}")
         else:
-            print(f"   Error: {health.get('message', 'Unknown error')}")
+            logger.error(f"   Error: {health.get('message', 'Unknown error')}")
 
         # Issue #281: Use extracted helpers for hardware, services, and models
         self._print_hardware_status()
@@ -623,42 +609,42 @@ class AutoBotMonitor:
         # System Resources
         resources = self.get_system_resources()
         if "error" not in resources:
-            print("\n💾 System Resources:")
-            print(
+            logger.info("\n💾 System Resources:")
+            logger.info(
                 f"   CPU: {resources['cpu']['percent']:.1f}% ({resources['cpu']['cores']} cores)"
             )
-            print(
+            logger.info(
                 f"   Memory: {resources['memory']['used_gb']:.1f}/{resources['memory']['total_gb']:.1f} GB ({resources['memory']['percent']:.1f}%)"
             )
-            print(
+            logger.info(
                 f"   Disk: {resources['disk']['used_gb']:.1f}/{resources['disk']['total_gb']:.1f} GB ({resources['disk']['percent']:.1f}%)"
             )
 
         # Frontend Status
         frontend = self.check_frontend_status()
-        print(
+        logger.info(
             f"\n🖥️  Frontend: {'✅ Available' if frontend.get('available') else '❌ Unavailable'}"
         )
         if not frontend.get("available") and frontend.get("error"):
-            print(f"   Error: {frontend['error']}")
+            logger.error(f"   Error: {frontend['error']}")
 
         # Issue #281: Use extracted helpers
         services = self.get_service_status()
         self._print_service_details(services)
         self._print_model_status()
 
-        print("\n" + "=" * 80)
+        logger.info("\n" + "=" * 80)
 
     async def monitor_loop(self, interval: int = 10):
         """Continuous monitoring loop."""
-        print("🔄 Starting continuous monitoring (Ctrl+C to stop)")
+        logger.info("🔄 Starting continuous monitoring (Ctrl+C to stop)")
 
         try:
             while True:
                 self.print_status_dashboard()
                 await asyncio.sleep(interval)
         except KeyboardInterrupt:
-            print("\n\n⏹️  Monitor stopped by user")
+            logger.info("\n\n⏹️  Monitor stopped by user")
 
 
 def main():
@@ -671,9 +657,9 @@ def main():
         asyncio.run(monitor.monitor_loop(interval))
     elif len(sys.argv) > 1 and sys.argv[1] == "--test":
         # Run performance test
-        print("🧪 Running inference performance test...")
+        logger.info("🧪 Running inference performance test...")
         result = monitor.test_inference_performance()
-        print(f"Test Result: {result}")
+        logger.info(f"Test Result: {result}")
     else:
         # Single status check
         monitor.print_status_dashboard()
