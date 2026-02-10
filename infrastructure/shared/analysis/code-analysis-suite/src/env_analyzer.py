@@ -1,6 +1,11 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
-Environment Variable Analyzer using Redis and NPU acceleration
-Analyzes codebase for hardcoded values that should be environment variables
+Environment Variable Analyzer using Redis and NPU acceleration.
+
+Analyzes codebase for hardcoded values that should be
+environment variables.
 """
 
 import ast

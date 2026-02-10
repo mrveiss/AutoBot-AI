@@ -434,9 +434,11 @@ class EnvironmentAnalyzer:
         # Issue #642: Add SSOT coverage report if mappings are available
         if _SSOT_MAPPINGS_AVAILABLE and generate_ssot_coverage_report:
             results["ssot_coverage"] = generate_ssot_coverage_report(serialized_values)
+            cov = results["ssot_coverage"]
             logger.info(
-                f"SSOT coverage: {results['ssot_coverage']['ssot_compliance_pct']}%% compliant, "
-                f"{results['ssot_coverage']['with_ssot_equivalent']} violations have SSOT equivalents"
+                "SSOT coverage: %s%% compliant, " "%d violations have SSOT equivalents",
+                cov["ssot_compliance_pct"],
+                cov["with_ssot_equivalent"],
             )
 
         # Cache results
@@ -1027,47 +1029,55 @@ class EnvironmentAnalyzer:
 
         # Service ports (from shell script SSOT_PORTS)
         if value.isdigit():
-            num = int(value)
-            # Common service ports get HIGH severity
-            if num in [
-                80,
-                443,
-                8000,
-                8001,
-                8080,
-                8443,
-                3000,
-                5000,
-                5173,
-                6379,
-                5432,
-                27017,
-                11434,
-            ]:
-                return "port", "high"
-            # Other ports in valid range get MEDIUM
-            elif num in range(1024, 65536):
-                return "port", "medium"
-            # Timeouts are MEDIUM
-            elif num in range(1, 3600):
-                return "timeout", "medium"
-            else:
-                return "numeric", "low"
+            return self._classify_numeric_value(int(value))
 
         # MEDIUM severity: URLs and hostnames (not example domains)
-        if value.startswith(_WEB_PROTOCOL_PREFIXES):
-            # Check for example domains
-            if any(
-                d in value.lower()
-                for d in ["example.com", "example.org", "example.net"]
-            ):
+        return self._classify_non_numeric_value(value, category, _WEB_PROTOCOL_PREFIXES)
+
+    def _classify_numeric_value(self, num: int) -> Tuple[str, str]:
+        """Classify numeric values by severity.
+
+        Helper for _classify_value (#632).
+        """
+        high_ports = {
+            80,
+            443,
+            8000,
+            8001,
+            8080,
+            8443,
+            3000,
+            5000,
+            5173,
+            6379,
+            5432,
+            27017,
+            11434,
+        }
+        if num in high_ports:
+            return "port", "high"
+        if 1024 <= num < 65536:
+            return "port", "medium"
+        if 1 <= num < 3600:
+            return "timeout", "medium"
+        return "numeric", "low"
+
+    def _classify_non_numeric_value(
+        self, value: str, category: Optional[str], web_prefixes: tuple
+    ) -> Tuple[str, str]:
+        """Classify non-numeric string values by severity.
+
+        Helper for _classify_value (#632).
+        """
+        if value.startswith(web_prefixes):
+            example_domains = ("example.com", "example.org", "example.net")
+            if any(d in value.lower() for d in example_domains):
                 return "url", "low"
             return "url", "medium"
 
         if value in ["localhost", "127.0.0.1", "0.0.0.0"]:  # nosec B104
             return "hostname", "medium"
 
-        # LOW severity: Optional externalization
         if value.startswith("/") or value.startswith("./"):
             return "path", "low"
 
@@ -1312,102 +1322,117 @@ class EnvironmentAnalyzer:
         batch_size: int = 100,
         priority_filter: Optional[str] = None,
     ) -> List[HardcodedValue]:
-        """
-        Use LLM to filter out false positives from hardcoded value detection.
-
-        Issue #633: Reduces false positives by 90%+ using simple yes/no classification.
-
-        Args:
-            hardcoded_values: List of detected hardcoded values to filter
-            model: Ollama model to use (default: llama3.2:1b for speed)
-            batch_size: Number of items per LLM call (default: 100)
-            priority_filter: Only filter specific severity ('high', 'medium', 'low')
-
-        Returns:
-            Filtered list containing only true hardcoded values
-        """
+        """Use LLM to filter false positives. Issue #633."""
         import os
 
-        import aiohttp
-
-        # Get Ollama configuration from environment
         ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST", "localhost")
         ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT", "11434")
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/generate"
 
-        # Filter by priority if specified
-        if priority_filter:
-            candidates = [v for v in hardcoded_values if v.severity == priority_filter]
-        else:
-            candidates = hardcoded_values
-
+        candidates = self._select_llm_candidates(hardcoded_values, priority_filter)
         if not candidates:
             logger.info("No candidates to filter with LLM")
             return []
 
         logger.info(
-            f"LLM filtering {len(candidates)} candidates with {model} "
-            f"(batch_size={batch_size})"
+            f"LLM filtering {len(candidates)} candidates "
+            f"with {model} (batch_size={batch_size})"
         )
 
-        # Check if Ollama is available
+        if not await self._check_ollama_health(ollama_host, ollama_port):
+            return candidates
+
+        filtered = await self._process_llm_batches(
+            candidates, ollama_url, model, batch_size
+        )
+        self._log_llm_reduction(len(candidates), len(filtered))
+        return filtered
+
+    def _select_llm_candidates(
+        self,
+        hardcoded_values: List[HardcodedValue],
+        priority_filter: Optional[str],
+    ) -> List[HardcodedValue]:
+        """Select candidates for LLM filtering.
+
+        Helper for llm_filter_hardcoded (#633).
+        """
+        if priority_filter:
+            return [v for v in hardcoded_values if v.severity == priority_filter]
+        return hardcoded_values
+
+    async def _check_ollama_health(self, host: str, port: str) -> bool:
+        """Check if Ollama service is available.
+
+        Helper for llm_filter_hardcoded (#633).
+        """
+        import aiohttp
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    f"http://{ollama_host}:{ollama_port}/api/tags",
+                    f"http://{host}:{port}/api/tags",
                     timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
                     if resp.status != 200:
                         logger.warning(
-                            "Ollama not available, returning unfiltered results"
+                            "Ollama not available, " "returning unfiltered results"
                         )
-                        return candidates
+                        return False
         except Exception as e:
             logger.warning(
-                f"Ollama health check failed: {e}, returning unfiltered results"
+                f"Ollama health check failed: {e}, " "returning unfiltered results"
             )
-            return candidates
+            return False
+        return True
 
+    async def _process_llm_batches(
+        self,
+        candidates: List[HardcodedValue],
+        ollama_url: str,
+        model: str,
+        batch_size: int,
+    ) -> List[HardcodedValue]:
+        """Process candidates through LLM in batches.
+
+        Helper for llm_filter_hardcoded (#633).
+        """
         filtered_results = []
-        total_batches = (len(candidates) + batch_size - 1) // batch_size
+        total = (len(candidates) + batch_size - 1) // batch_size
 
-        for batch_idx in range(total_batches):
-            start_idx = batch_idx * batch_size
-            end_idx = min(start_idx + batch_size, len(candidates))
-            batch = candidates[start_idx:end_idx]
-
-            # Build prompt for this batch
+        for batch_idx in range(total):
+            start = batch_idx * batch_size
+            end = min(start + batch_size, len(candidates))
+            batch = candidates[start:end]
             prompt = self._build_llm_filter_prompt(batch)
 
             try:
                 true_indices = await self._call_ollama_filter(
                     ollama_url, model, prompt, session=None
                 )
-
-                # Map indices back to original items
                 for idx in true_indices:
                     if 0 <= idx < len(batch):
                         filtered_results.append(batch[idx])
-
                 logger.debug(
-                    f"Batch {batch_idx + 1}/{total_batches}: "
-                    f"{len(true_indices)}/{len(batch)} items confirmed as real issues"
+                    f"Batch {batch_idx + 1}/{total}: "
+                    f"{len(true_indices)}/{len(batch)} confirmed"
                 )
-
             except Exception as e:
                 logger.error(f"LLM filter batch {batch_idx + 1} failed: {e}")
-                # On failure, include all items from this batch (fail-safe)
                 filtered_results.extend(batch)
 
-        reduction_pct = (
-            (1 - len(filtered_results) / len(candidates)) * 100 if candidates else 0
-        )
-        logger.info(
-            f"LLM filtering complete: {len(candidates)} → {len(filtered_results)} "
-            f"({reduction_pct:.1f}% reduction)"
-        )
-
         return filtered_results
+
+    def _log_llm_reduction(self, original: int, filtered: int) -> None:
+        """Log LLM filtering reduction statistics.
+
+        Helper for llm_filter_hardcoded (#633).
+        """
+        pct = (1 - filtered / original) * 100 if original else 0
+        logger.info(
+            f"LLM filtering complete: {original} → {filtered} "
+            f"({pct:.1f}% reduction)"
+        )
 
     def _build_llm_filter_prompt(self, batch: List[HardcodedValue]) -> str:
         """
@@ -1433,36 +1458,37 @@ class EnvironmentAnalyzer:
                 f"Context: {context}"
             )
 
-        prompt = f"""You are analyzing code for hardcoded values that should be environment variables.
-
-For each item, determine if it's a TRUE hardcoded value (should be an env var) or a FALSE positive.
-
-TRUE examples (real issues):
-- IP addresses: "172.16.168.23" - network config
-- Hostnames: "localhost", "redis-server.local"
-- Ports: 6379, 8080, 5432 - service ports
-- URLs: "http://api.example.com/v1"
-- API keys: "sk-abc123..."
-- Database URLs: "postgresql://user:pass@host/db"
-- File paths to config: "/etc/myapp/config.yaml"
-
-FALSE positive examples (NOT real issues):
-- Docstrings/comments describing code
-- API route paths: "/api/users", "/health"
-- Log messages: "Processing complete"
-- Error messages: "Connection failed"
-- Test data: mock values in test files
-- Template strings for formatting
-- Version strings: "1.0.0", "v2"
-- HTTP methods: "GET", "POST"
-
-Items to evaluate:
-{chr(10).join(items_text)}
-
-Respond with ONLY the line numbers of TRUE issues (real hardcoded values that need env vars), comma-separated.
-If no items are true issues, respond with "NONE".
-Example response: 1, 3, 7, 12
-"""
+        items_block = chr(10).join(items_text)
+        prompt = (
+            "You are analyzing code for hardcoded values "
+            "that should be environment variables.\n\n"
+            "For each item, determine if it's a TRUE "
+            "hardcoded value (should be an env var) "
+            "or a FALSE positive.\n\n"
+            "TRUE examples (real issues):\n"
+            '- IP addresses: "172.16.168.23"\n'
+            '- Hostnames: "localhost", "redis-server.local"\n'
+            "- Ports: 6379, 8080, 5432 - service ports\n"
+            '- URLs: "http://api.example.com/v1"\n'
+            '- API keys: "sk-abc123..."\n'
+            '- Database URLs: "postgresql://user:pass@host/db"\n'
+            '- File paths: "/etc/myapp/config.yaml"\n\n'
+            "FALSE positive examples (NOT real issues):\n"
+            "- Docstrings/comments describing code\n"
+            '- API route paths: "/api/users", "/health"\n'
+            '- Log messages: "Processing complete"\n'
+            '- Error messages: "Connection failed"\n'
+            "- Test data: mock values in test files\n"
+            "- Template strings for formatting\n"
+            '- Version strings: "1.0.0", "v2"\n'
+            '- HTTP methods: "GET", "POST"\n\n'
+            f"Items to evaluate:\n{items_block}\n\n"
+            "Respond with ONLY the line numbers of TRUE "
+            "issues (real hardcoded values that need "
+            "env vars), comma-separated.\n"
+            'If no items are true issues, respond "NONE".\n'
+            "Example response: 1, 3, 7, 12\n"
+        )
         return prompt
 
     async def _call_ollama_filter(
@@ -1560,95 +1586,103 @@ Example response: 1, 3, 7, 12
         llm_model: str = "llama3.2:1b",
         filter_priority: Optional[str] = "high",
     ) -> Dict[str, Any]:
-        """
-        Analyze codebase and apply LLM filtering to reduce false positives.
-
-        Issue #633: Combined analysis + LLM filtering for cleaner results.
-
-        Args:
-            root_path: Root path to analyze
-            patterns: Glob patterns for files to scan
-            llm_model: Ollama model to use for filtering
-            filter_priority: Priority level to filter ('high', 'medium', 'low', or None for all)
-
-        Returns:
-            Analysis results with LLM-filtered hardcoded values
-        """
-        # Run standard analysis first
+        """Analyze codebase with LLM filtering. Issue #633."""
         results = await self.analyze_codebase(root_path, patterns)
-
-        # Get original hardcoded values
         original_count = results.get("total_hardcoded_values", 0)
+
         if original_count == 0:
-            results["llm_filtering"] = {
-                "enabled": True,
-                "model": llm_model,
-                "original_count": 0,
-                "filtered_count": 0,
-                "reduction_percent": 0,
-                "filter_priority": filter_priority,
-            }
+            results["llm_filtering"] = self._build_llm_metadata(
+                llm_model, 0, 0, filter_priority
+            )
             return results
 
-        # Reconstruct HardcodedValue objects from serialized data
-        hardcoded_details = results.get("hardcoded_details", [])
-        hardcoded_values = []
-        for detail in hardcoded_details:
-            hv = HardcodedValue(
-                file_path=detail.get("file", ""),
-                line_number=detail.get("line", 0),
-                variable_name=detail.get("variable_name"),
-                value=detail.get("value", ""),
-                value_type=detail.get("type", ""),
-                context=detail.get("context", ""),
-                severity=detail.get("severity", "low"),
-                suggestion=detail.get("suggested_env_var", ""),
-                current_usage=detail.get("current_usage", ""),
-            )
-            hardcoded_values.append(hv)
-
-        # Apply LLM filtering
+        hardcoded_values = self._deserialize_hardcoded_details(
+            results.get("hardcoded_details", [])
+        )
         filtered_values = await self.llm_filter_hardcoded(
             hardcoded_values,
             model=llm_model,
             priority_filter=filter_priority,
         )
 
-        # Re-serialize filtered results
-        filtered_details = [self._serialize_hardcoded_value(v) for v in filtered_values]
+        self._apply_filtered_results(
+            results, filtered_values, original_count, llm_model, filter_priority
+        )
+        return results
 
-        # Update results with filtered data
+    def _deserialize_hardcoded_details(
+        self, details: List[Dict[str, Any]]
+    ) -> List[HardcodedValue]:
+        """Reconstruct HardcodedValue objects from serialized data.
+
+        Helper for analyze_codebase_with_llm_filter (#633).
+        """
+        return [
+            HardcodedValue(
+                file_path=d.get("file", ""),
+                line_number=d.get("line", 0),
+                variable_name=d.get("variable_name"),
+                value=d.get("value", ""),
+                value_type=d.get("type", ""),
+                context=d.get("context", ""),
+                severity=d.get("severity", "low"),
+                suggestion=d.get("suggested_env_var", ""),
+                current_usage=d.get("current_usage", ""),
+            )
+            for d in details
+        ]
+
+    def _apply_filtered_results(
+        self,
+        results: Dict[str, Any],
+        filtered_values: List[HardcodedValue],
+        original_count: int,
+        llm_model: str,
+        filter_priority: Optional[str],
+    ) -> None:
+        """Update results dict with LLM-filtered data.
+
+        Helper for analyze_codebase_with_llm_filter (#633).
+        """
+        filtered_details = [self._serialize_hardcoded_value(v) for v in filtered_values]
         results["hardcoded_details"] = filtered_details
         results["total_hardcoded_values"] = len(filtered_values)
         results["high_priority_count"] = len(
             [v for v in filtered_values if v.severity == "high"]
         )
-
-        # Update categories count
         results["categories"] = {}
         for v in filtered_values:
             cat = v.value_type
             results["categories"][cat] = results["categories"].get(cat, 0) + 1
-
-        # Add LLM filtering metadata
-        reduction_pct = (
-            (1 - len(filtered_values) / original_count) * 100 if original_count else 0
+        results["llm_filtering"] = self._build_llm_metadata(
+            llm_model, original_count, len(filtered_values), filter_priority
         )
-        results["llm_filtering"] = {
-            "enabled": True,
-            "model": llm_model,
-            "original_count": original_count,
-            "filtered_count": len(filtered_values),
-            "reduction_percent": round(reduction_pct, 1),
-            "filter_priority": filter_priority,
-        }
-
+        pct = (1 - len(filtered_values) / original_count) * 100 if original_count else 0
         logger.info(
-            f"LLM-filtered analysis: {original_count} → {len(filtered_values)} "
-            f"hardcoded values ({reduction_pct:.1f}% reduction)"
+            f"LLM-filtered: {original_count} → "
+            f"{len(filtered_values)} ({pct:.1f}% reduction)"
         )
 
-        return results
+    def _build_llm_metadata(
+        self,
+        model: str,
+        original: int,
+        filtered: int,
+        priority: Optional[str],
+    ) -> Dict[str, Any]:
+        """Build LLM filtering metadata dict.
+
+        Helper for analyze_codebase_with_llm_filter (#633).
+        """
+        pct = (1 - filtered / original) * 100 if original else 0
+        return {
+            "enabled": True,
+            "model": model,
+            "original_count": original,
+            "filtered_count": filtered,
+            "reduction_percent": round(pct, 1),
+            "filter_priority": priority,
+        }
 
 
 async def main():
@@ -1661,36 +1695,33 @@ async def main():
         root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
     )
 
-    # Print summary
-    print("\n=== Environment Variable Analysis Results ===")
-    print(f"Total hardcoded values found: {results['total_hardcoded_values']}")
-    print(f"High priority issues: {results['high_priority_count']}")
-    print(f"Configuration recommendations: {results['recommendations_count']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    # Log summary
+    logger.info("=== Environment Variable Analysis Results ===")
+    logger.info("Total hardcoded values: %d", results["total_hardcoded_values"])
+    logger.info("High priority issues: %d", results["high_priority_count"])
+    logger.info("Recommendations: %d", results["recommendations_count"])
+    logger.info("Analysis time: %.2fs", results["analysis_time_seconds"])
 
-    # Print category breakdown
-    print("\n=== Categories ===")
+    logger.info("=== Categories ===")
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        logger.info("%s: %d", category, count)
 
-    # Print top recommendations
-    print("\n=== Top Configuration Recommendations ===")
+    logger.info("=== Top Configuration Recommendations ===")
     recommendations = results["configuration_recommendations"]
     high_priority = [r for r in recommendations if r["priority"] == "high"]
 
     for i, rec in enumerate(high_priority[:5], 1):
-        print(f"\n{i}. {rec['env_var_name']} ({rec['priority']} priority)")
-        print(f"   Category: {rec['category']}")
-        print(f"   Default: {rec['default_value']}")
-        print(f"   Description: {rec['description']}")
-        print(f"   Files affected: {len(rec['affected_files'])}")
+        logger.info("%d. %s (%s priority)", i, rec["env_var_name"], rec["priority"])
+        logger.info("   Category: %s", rec["category"])
+        logger.info("   Default: %s", rec["default_value"])
+        logger.info("   Description: %s", rec["description"])
+        logger.info("   Files affected: %d", len(rec["affected_files"]))
 
-    # Print metrics
-    print("\n=== Metrics ===")
+    logger.info("=== Metrics ===")
     metrics = results["metrics"]
-    print(f"Security issues: {metrics['security_issues']}")
-    print(f"Files affected: {metrics['files_affected']}")
-    print(f"Configuration complexity: {metrics['configuration_complexity']}")
+    logger.info("Security issues: %d", metrics["security_issues"])
+    logger.info("Files affected: %d", metrics["files_affected"])
+    logger.info("Configuration complexity: %s", metrics["configuration_complexity"])
 
 
 if __name__ == "__main__":
