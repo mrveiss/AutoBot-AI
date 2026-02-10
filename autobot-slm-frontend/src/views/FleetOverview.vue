@@ -188,13 +188,11 @@ function handleNodeAction(action: string, nodeId: string): void {
     case 'events':
     case 'view':
     case 'certificate':
+    case 'updates':
       openLifecyclePanel(node)
       break
     case 'services':
       openServicesPanel(node)
-      break
-    case 'updates':
-      openLifecyclePanel(node)
       break
     case 'restart':
       handleRestart(nodeId)

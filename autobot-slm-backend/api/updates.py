@@ -405,7 +405,8 @@ async def get_fleet_update_summary(
 
     summaries = _build_node_summaries(nodes, updates_by_node, len(global_updates))
 
-    total_sys = sum(s.system_updates for s in summaries)
+    # Unique total: per-node specific + global (not per-node * global)
+    total_sys = sum(len(v) for v in updates_by_node.values()) + len(global_updates)
     total_code = sum(1 for s in summaries if s.code_update_available)
     needing = sum(1 for s in summaries if s.total_updates > 0)
 
