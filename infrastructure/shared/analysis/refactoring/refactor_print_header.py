@@ -3,26 +3,29 @@
 Script to automatically refactor print_header function duplicates
 """
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def refactor_print_header_script(file_path: Path):
     """Refactor a single script to use shared ScriptFormatter"""
-    print(f"🔧 Refactoring {file_path.name}...")
+    logger.info(f"🔧 Refactoring {file_path.name}...")
 
     try:
         with open(file_path, "r") as f:
             content = f.read()
 
         # Check if it already imports ScriptFormatter
-        if "from src.utils.script_utils import ScriptFormatter" in content:
-            print("   ✅ Already refactored")
+        if "from utils.script_utils import ScriptFormatter" in content:
+            logger.info("   ✅ Already refactored")
             return
 
         # Check if it has the print_header function
         if "def print_header(self, title: str):" not in content:
-            print("   ⏭️  No print_header function found")
+            logger.info("   ⏭️  No print_header function found")
             return
 
         # Add import after existing imports
@@ -30,7 +33,7 @@ def refactor_print_header_script(file_path: Path):
         if re.search(import_pattern, content):
             content = re.sub(
                 import_pattern,
-                r"\1\nfrom src.utils.script_utils import ScriptFormatter",
+                r"\1\nfrom utils.script_utils import ScriptFormatter",
                 content,
             )
         else:
@@ -43,7 +46,7 @@ def refactor_print_header_script(file_path: Path):
                 end_pos = last_import_match.end()
                 content = (
                     content[:end_pos]
-                    + "\nfrom src.utils.script_utils import ScriptFormatter"
+                    + "\nfrom utils.script_utils import ScriptFormatter"
                     + content[end_pos:]
                 )
 
@@ -87,10 +90,10 @@ def refactor_print_header_script(file_path: Path):
         with open(file_path, "w") as f:
             f.write(content)
 
-        print("   ✅ Successfully refactored")
+        logger.info("   ✅ Successfully refactored")
 
     except Exception as e:
-        print(f"   ❌ Error refactoring {file_path}: {e}")
+        logger.error(f"   ❌ Error refactoring {file_path}: {e}")
 
 
 def main():
@@ -103,16 +106,16 @@ def main():
         "/home/kali/Desktop/AutoBot/scripts/metrics_collector.py",
     ]
 
-    print("🚀 Starting print_header refactoring...")
+    logger.info("🚀 Starting print_header refactoring...")
 
     for script_path in scripts_to_refactor:
         file_path = Path(script_path)
         if file_path.exists():
             refactor_print_header_script(file_path)
         else:
-            print(f"   ⚠️  File not found: {script_path}")
+            logger.warning(f"   ⚠️  File not found: {script_path}")
 
-    print("\n✅ Print header refactoring complete!")
+    logger.info("\n✅ Print header refactoring complete!")
 
 
 if __name__ == "__main__":

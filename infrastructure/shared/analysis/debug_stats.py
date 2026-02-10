@@ -4,6 +4,7 @@ Debug script to check what's happening with the stats endpoint
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -12,12 +13,14 @@ import requests
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config import unified_config_manager
+from config import unified_config_manager
+
+logger = logging.getLogger(__name__)
 
 
 def test_stats_endpoint():
     """Test the stats endpoint and show detailed response"""
-    print("=== Testing Knowledge Base Stats Endpoint ===")
+    logger.info("=== Testing Knowledge Base Stats Endpoint ===")
 
     # Get backend API endpoint from configuration
     backend_config = unified_config_manager.get_backend_config()
@@ -37,7 +40,7 @@ def test_stats_endpoint():
 
     api_endpoint = f"http://{host}:{port}"
 
-    print(f"Using API endpoint: {api_endpoint}")
+    logger.info("Using API endpoint: %s", api_endpoint)
 
     try:
         # Test the basic stats endpoint
@@ -47,31 +50,31 @@ def test_stats_endpoint():
             timeout=10,
         )
 
-        print(f"Status Code: {response.status_code}")
-        print(f"Response Headers: {dict(response.headers)}")
+        logger.info("Status Code: %s", response.status_code)
+        logger.info("Response Headers: %s", dict(response.headers))
 
         if response.status_code == 200:
             data = response.json()
-            print("\n📊 Current Stats Response:")
-            print(json.dumps(data, indent=2))
+            logger.info("\n📊 Current Stats Response:")
+            logger.info("%s", json.dumps(data, indent=2))
 
             # Check if we're getting the expected fields
             total_docs = data.get("total_documents", 0)
 
             if total_docs > 1000:
-                print(f"✅ SUCCESS: Showing realistic stats ({total_docs} documents)")
+                logger.info("✅ SUCCESS: Showing realistic stats (%s documents)", total_docs)
             else:
-                print(f"❌ ISSUE: Still showing low stats ({total_docs} documents)")
+                logger.error("❌ ISSUE: Still showing low stats (%s documents)", total_docs)
 
         else:
-            print(f"❌ ERROR: Status {response.status_code}")
-            print(f"Response: {response.text}")
+            logger.error("❌ ERROR: Status %s", response.status_code)
+            logger.info("Response: %s", response.text)
 
     except Exception as e:
-        print(f"❌ Exception: {e}")
+        logger.error("❌ Exception: %s", e)
 
     # Also test the other stats endpoint
-    print("\n=== Testing Other Stats Endpoint ===")
+    logger.info("\n=== Testing Other Stats Endpoint ===")
 
     try:
         response = requests.get(
@@ -80,15 +83,15 @@ def test_stats_endpoint():
             timeout=10,
         )
 
-        print(f"Status Code: {response.status_code}")
+        logger.info("Status Code: %s", response.status_code)
 
         if response.status_code == 200:
             data = response.json()
-            print("\n📊 Other Stats Response:")
-            print(json.dumps(data, indent=2))
+            logger.info("\n📊 Other Stats Response:")
+            logger.info("%s", json.dumps(data, indent=2))
 
     except Exception as e:
-        print(f"❌ Exception on second endpoint: {e}")
+        logger.error("❌ Exception on second endpoint: %s", e)
 
 
 if __name__ == "__main__":

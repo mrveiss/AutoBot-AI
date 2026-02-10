@@ -12,7 +12,9 @@ import os
 import sys
 import time
 
-import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,27 +30,27 @@ def test_endpoint_performance(url, description, params=None):
         duration_ms = (end_time - start_time) * 1000
         status = "✅" if response.status_code == 200 else "❌"
 
-        print(
+        logger.info(
             f"{status} {description}: {duration_ms:.0f}ms (Status: {response.status_code})"
         )
         return duration_ms, response.status_code == 200
 
     except Exception as e:
-        print(f"❌ {description}: FAILED - {str(e)}")
+        logger.error(f"❌ {description}: FAILED - {str(e)}")
         return None, False
 
 
 async def test_api_endpoints():
     """Test all critical API endpoints"""
-    print("🚀 API Endpoint Performance Testing")
-    print("=" * 50)
+    logger.info("🚀 API Endpoint Performance Testing")
+    logger.info("=" * 50)
 
     # Import configuration from centralized source
     import os
     import sys
 
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from src.config import API_BASE_URL
+    from config import API_BASE_URL
 
     base_url = API_BASE_URL
 
@@ -86,9 +88,9 @@ async def test_api_endpoints():
             if success:
                 successful_tests += 1
 
-    print("\n" + "=" * 50)
-    print("📊 PERFORMANCE SUMMARY")
-    print("=" * 50)
+    logger.info("\n" + "=" * 50)
+    logger.info("📊 PERFORMANCE SUMMARY")
+    logger.info("=" * 50)
 
     # Sort by performance (fastest first)
     results.sort(key=lambda x: x[1])
@@ -104,15 +106,15 @@ async def test_api_endpoints():
         else:
             speed_rating = "🐌 VERY SLOW"
 
-        print(f"{status_icon} {desc:<25} {duration:>8.0f}ms {speed_rating}")
+        logger.info(f"{status_icon} {desc:<25} {duration:>8.0f}ms {speed_rating}")
 
-    print(f"\n📈 Total test time: {total_time:.0f}ms")
-    print(f"🎯 Successful tests: {successful_tests}/{len(endpoints)}")
+    logger.info(f"\n📈 Total test time: {total_time:.0f}ms")
+    logger.info(f"🎯 Successful tests: {successful_tests}/{len(endpoints)}")
 
     if successful_tests == len(endpoints):
-        print("🎉 All endpoints are responding!")
+        logger.info("🎉 All endpoints are responding!")
     else:
-        print("⚠️  Some endpoints failed - check if backend is running")
+        logger.error("⚠️  Some endpoints failed - check if backend is running")
 
 
 if __name__ == "__main__":

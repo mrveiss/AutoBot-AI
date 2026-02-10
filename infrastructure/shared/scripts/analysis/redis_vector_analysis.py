@@ -13,7 +13,7 @@ import logging
 import sys
 from typing import Any, Dict, List, Tuple
 
-from src.constants import ServiceURLs
+from constants import ServiceURLs
 
 # Add project root to path
 sys.path.insert(0, "/home/kali/Desktop/AutoBot")
@@ -522,48 +522,48 @@ class RedisVectorStoreAnalyzer:
     ):
         """Print comprehensive analysis report"""
 
-        print("\n" + "=" * 80)
-        print("📊 AUTOBOT REDIS VECTOR STORE ANALYSIS REPORT")
-        print("=" * 80)
+        logger.info("\n" + "=" * 80)
+        logger.info("📊 AUTOBOT REDIS VECTOR STORE ANALYSIS REPORT")
+        logger.info("=" * 80)
 
-        print("\n📈 EXISTING DATA ANALYSIS:")
-        print(f"  • Total Documents: {data_analysis.get('total_documents', 0):,}")
-        print(
+        logger.info("\n📈 EXISTING DATA ANALYSIS:")
+        logger.info(f"  • Total Documents: {data_analysis.get('total_documents', 0):,}")
+        logger.info(
             f"  • Vector Dimensions: {data_analysis.get('vector_dimension', 'unknown')}"
         )
-        print(f"  • Index Size: {data_analysis.get('index_size_mb', 0)} MB")
-        print(f"  • Algorithm: {data_analysis.get('vector_algorithm', 'unknown')}")
+        logger.info(f"  • Index Size: {data_analysis.get('index_size_mb', 0)} MB")
+        logger.info(f"  • Algorithm: {data_analysis.get('vector_algorithm', 'unknown')}")
 
-        print("\n🧪 INTEGRATION TEST RESULTS:")
-        print(
+        logger.info("\n🧪 INTEGRATION TEST RESULTS:")
+        logger.info(
             f"  • Direct Redis Access: {'✅' if direct_results[0] else '❌'} ({direct_results[1]} results) - {direct_results[2]}"
         )
-        print(
+        logger.info(
             f"  • LlamaIndex Integration: {'✅' if llamaindex_results[0] else '❌'} ({llamaindex_results[1]} results) - {llamaindex_results[2]}"
         )
-        print(
+        logger.info(
             f"  • LangChain Integration: {'✅' if langchain_results[0] else '❌'} ({langchain_results[1]} results) - {langchain_results[2]}"
         )
 
-        print(f"\n🎯 FINAL RECOMMENDATION: {recommendation['approach']}")
-        print(f"  • Confidence: {recommendation['confidence']}")
-        print("  • Reasoning:")
+        logger.info(f"\n🎯 FINAL RECOMMENDATION: {recommendation['approach']}")
+        logger.info(f"  • Confidence: {recommendation['confidence']}")
+        logger.info("  • Reasoning:")
         for reason in recommendation["reasoning"]:
-            print(f"    - {reason}")
+            logger.info(f"    - {reason}")
 
         impl = recommendation["implementation"]
-        print("\n📋 IMPLEMENTATION PLAN:")
-        print(f"  • Complexity: {impl.get('complexity', 'unknown')}")
-        print(f"  • Time Estimate: {impl.get('time_estimate', 'unknown')}")
-        print(f"  • Risk Level: {impl.get('risk', 'unknown')}")
-        print(f"  • Data Migration: {impl.get('data_migration', 'unknown')}")
+        logger.info("\n📋 IMPLEMENTATION PLAN:")
+        logger.info(f"  • Complexity: {impl.get('complexity', 'unknown')}")
+        logger.info(f"  • Time Estimate: {impl.get('time_estimate', 'unknown')}")
+        logger.info(f"  • Risk Level: {impl.get('risk', 'unknown')}")
+        logger.info(f"  • Data Migration: {impl.get('data_migration', 'unknown')}")
 
         if "changes_required" in impl:
-            print("  • Required Changes:")
+            logger.info("  • Required Changes:")
             for change in impl["changes_required"]:
-                print(f"    - {change}")
+                logger.info(f"    - {change}")
 
-        print("\n" + "=" * 80)
+        logger.info("\n" + "=" * 80)
 
     async def test_llamaindex_with_existing_data(self) -> Tuple[bool, int, str]:
         """Test LlamaIndex with existing data using correct configuration"""
