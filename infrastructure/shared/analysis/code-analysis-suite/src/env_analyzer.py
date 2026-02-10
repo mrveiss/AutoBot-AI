@@ -57,43 +57,39 @@ class EnvironmentAnalyzer:
         self.HARDCODED_KEY = "env_analysis:hardcoded:{}"
         self.RECOMMENDATIONS_KEY = "env_analysis:recommendations"
 
-        # Patterns to detect hardcoded values
+        # Issue #632: Patterns to detect hardcoded values (focus on actionable items)
+        # Aligned with shell script's priority on security-relevant patterns
         self.patterns = {
-            "file_paths": [
-                r'["\'](/[^"\']+)["\']',  # Absolute paths
-                r'["\'](\./[^"\']+)["\']',  # Relative paths starting with ./
-                r'["\']([^"\']*\.(?:log|db|json|yaml|yml|conf|cfg|ini)[^"\']*)["\']',  # Config files
-            ],
-            "urls": [
-                r'["\']https?://[^"\']+["\']',  # HTTP URLs
-                r'["\']ws://[^"\']+["\']',  # WebSocket URLs
-                r'["\']wss://[^"\']+["\']',  # Secure WebSocket URLs
-            ],
-            "ports": [
-                r"\b(80|443|8000|8001|8080|8443|3000|5000|6379|5432|27017)\b",  # Common ports
-            ],
+            # HIGH priority: Security-relevant patterns
             "database_urls": [
                 r'["\'](?:postgresql|mysql|sqlite|mongodb)://[^"\']+["\']',
                 r'["\'](?:redis://)[^"\']+["\']',
             ],
             "api_keys": [
-                r'["\'](?:sk-|pk_|rk_)[A-Za-z0-9_-]+["\']',  # API key patterns
-                r'["\'][A-Za-z0-9_-]{20,}["\']',  # Long strings that might be keys
+                # Only specific API key prefixes, not generic long strings
+                r'["\'](?:sk-|pk_|rk_|api_|API_|Bearer\s+)[A-Za-z0-9_-]+["\']',
             ],
+            "urls": [
+                # HTTP/WebSocket URLs (not example domains - filtered later)
+                r'["\']https?://[^"\']+["\']',
+                r'["\']wss?://[^"\']+["\']',
+            ],
+            # MEDIUM priority: Network config
             "hostnames": [
                 r'["\']localhost["\']',
                 r'["\']127\.0\.0\.1["\']',
                 r'["\']0\.0\.0\.0["\']',
+                # Issue #632: Add VM IP patterns from shell script
+                r'["\']172\.16\.168\.\d+["\']',
             ],
-            "timeouts": [
-                r"\btimeout\s*=\s*(\d+)",
-                r"\.sleep\s*\(\s*(\d+)",
-                r"TIMEOUT\s*=\s*(\d+)",
+            "ports": [
+                # Only common service ports (not generic numbers)
+                r"\b(80|443|8000|8001|8080|8443|3000|5000|5173|6379|5432|27017|11434)\b",
             ],
-            "limits": [
-                r"max_[a-z_]*\s*=\s*(\d+)",
-                r"limit\s*=\s*(\d+)",
-                r"MAX_[A-Z_]*\s*=\s*(\d+)",
+            # LOW priority: Optional externalization
+            "file_paths": [
+                # Only config file paths (with at least one directory)
+                r'["\'](/[^"\']+/[^"\']+\.(?:log|db|json|yaml|yml|conf|cfg|ini))["\']',
             ],
         }
 
@@ -172,20 +168,48 @@ class EnvironmentAnalyzer:
         return hardcoded_values
 
     def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped"""
-        skip_patterns = [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-            ".pyc",
-        ]
+        """Issue #632: Check if file should be skipped (aligned with shell script)"""
+        # Directory exclusions (from shell script)
+        skip_dirs = (
+            '__pycache__', '.git', 'node_modules', '.venv', 'venv', 'env',
+            'tests', 'test', 'testing', 'benchmark', 'benchmarks',
+            '.pytest_cache', '.mypy_cache', '.tox', 'htmlcov',
+            'dist', 'build', 'egg-info', '.eggs',
+            'migrations', 'fixtures', 'mocks', 'stubs',
+            'templates', 'static', 'assets', 'archive', '__tests__',
+        )
+
+        # File pattern exclusions (from shell script)
+        skip_patterns = (
+            'test_', '_test.py', '_tests.py', '.test.ts', 'conftest.py',
+            'setup.py', 'setup.cfg', 'pyproject.toml', '__init__.py',
+            '_fixture', '_mock', '_stub', 'benchmark_', '_benchmark.py',
+            'constants', 'config', '.env', '.example',
+            'CLAUDE.md', 'HARDCODING_PREVENTION.md', 'SSOT_CONFIG_GUIDE.md',
+            'ssot_config.py', 'ssot-config.ts', 'ssot_mappings.py',
+            'network_constants.py', 'security_constants.py',
+            'detect-hardcoded-values.sh',
+        )
 
         path_str = str(file_path)
-        return any(pattern in path_str for pattern in skip_patterns)
+        file_name = file_path.name
+
+        # Check directory exclusions
+        path_parts = path_str.lower().split('/')
+        for skip_dir in skip_dirs:
+            if skip_dir in path_parts:
+                return True
+
+        # Check file pattern exclusions
+        for pattern in skip_patterns:
+            if pattern in file_name.lower():
+                return True
+
+        # Skip compiled files and markdown
+        if file_name.endswith('.pyc') or file_name.endswith('.md'):
+            return True
+
+        return False
 
     async def _scan_file_for_hardcoded_values(
         self, file_path: str
@@ -222,11 +246,23 @@ class EnvironmentAnalyzer:
     async def _scan_ast_for_hardcoded_values(
         self, file_path: str, tree: ast.AST, lines: List[str]
     ) -> List[HardcodedValue]:
-        """Scan AST for hardcoded values with context"""
+        """Issue #632: Scan AST with line-level filtering (aligned with shell script)"""
 
         hardcoded_values = []
 
+        # Issue #632: Collect docstring lines to filter them out
+        docstring_lines = self._get_docstring_lines(tree)
+
         for node in ast.walk(tree):
+            # Issue #632: Skip nodes on docstring or config access lines
+            if hasattr(node, 'lineno'):
+                if node.lineno in docstring_lines:
+                    continue
+                if node.lineno <= len(lines):
+                    line = lines[node.lineno - 1]
+                    if self._is_config_access_line(line):
+                        continue
+
             # String literals
             if isinstance(node, ast.Str):
                 value = node.s
@@ -270,18 +306,95 @@ class EnvironmentAnalyzer:
 
         return hardcoded_values
 
+    def _get_docstring_lines(self, tree: ast.AST) -> set:
+        """Issue #632: Identify all lines that are part of docstrings."""
+        docstring_lines = set()
+
+        # Check module docstring
+        if tree.body and isinstance(tree.body[0], ast.Expr):
+            expr_value = tree.body[0].value
+            if isinstance(expr_value, (ast.Str, ast.Constant)):
+                node = tree.body[0]
+                start = node.lineno
+                end = getattr(node, 'end_lineno', start) or start
+                for line in range(start, end + 1):
+                    docstring_lines.add(line)
+
+        # Walk tree for function and class definitions
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if node.body and isinstance(node.body[0], ast.Expr):
+                    expr_value = node.body[0].value
+                    is_docstring = (
+                        isinstance(expr_value, ast.Str) or
+                        (isinstance(expr_value, ast.Constant) and isinstance(expr_value.value, str))
+                    )
+                    if is_docstring:
+                        doc_node = node.body[0]
+                        start = doc_node.lineno
+                        end = getattr(doc_node, 'end_lineno', start) or start
+                        for line in range(start, end + 1):
+                            docstring_lines.add(line)
+
+        return docstring_lines
+
+    def _is_config_access_line(self, line: str) -> bool:
+        """Issue #632: Check if line uses config access (from shell script line 199, 238, 279)."""
+        # Skip comments
+        stripped = line.strip()
+        if stripped.startswith('#') or stripped.startswith('//'):
+            return True
+
+        # Skip config access patterns
+        config_patterns = (
+            'os.getenv', 'config.', 'getenv', 'CONFIG[',
+            'NetworkConstants', 'AUTOBOT_',
+        )
+        for pattern in config_patterns:
+            if pattern in line:
+                return True
+
+        # Skip SVG path data
+        svg_patterns = ('<path', 'd="M', 'd="m', 'fill-rule', 'clip-rule')
+        for pattern in svg_patterns:
+            if pattern in line:
+                return True
+
+        return False
+
     async def _regex_scan_file(
         self, file_path: str, content: str, lines: List[str]
     ) -> List[HardcodedValue]:
-        """Scan file using regex patterns"""
+        """Issue #632: Scan file with line-level filtering (aligned with shell script)"""
 
         hardcoded_values = []
+
+        # Pre-compute docstring line ranges
+        docstring_lines = set()
+        try:
+            tree = ast.parse(content, filename=file_path)
+            docstring_lines = self._get_docstring_lines(tree)
+        except SyntaxError:
+            pass
 
         for category, pattern_list in self.patterns.items():
             for pattern in pattern_list:
                 for match in re.finditer(pattern, content):
                     line_num = content[: match.start()].count("\n") + 1
+
+                    # Issue #632: Skip matches in docstrings or config access lines
+                    if line_num in docstring_lines:
+                        continue
+                    if line_num <= len(lines):
+                        line = lines[line_num - 1]
+                        if self._is_config_access_line(line):
+                            continue
+
                     value = match.group(1) if match.groups() else match.group(0)
+
+                    # Skip empty values or docstring content
+                    if not value or '\n' in value or value.startswith(('    ', '\t', '"""', "'''")):
+                        continue
 
                     # Skip if already found by AST scanning
                     if not any(
@@ -334,47 +447,54 @@ class EnvironmentAnalyzer:
         )
 
     def _is_potentially_configurable(self, value: str) -> bool:
-        """Check if a string value is potentially configurable"""
+        """Issue #632: Check if string is configurable (aligned with shell script)"""
 
-        # Skip very short strings or common words
-        if len(value) < 3 or value.lower() in [
-            "get",
-            "post",
-            "put",
-            "delete",
-            "true",
-            "false",
-        ]:
+        if value is None or len(value) < 3:
             return False
 
-        # Check for configuration patterns
+        # Skip common non-configurable strings
+        skip_values = {
+            'get', 'post', 'put', 'delete', 'patch', 'head', 'options',
+            'true', 'false', 'yes', 'no', 'none', 'null',
+            'success', 'error', 'warning', 'info', 'debug',
+            'pending', 'active', 'inactive', 'completed', 'failed',
+            'str', 'int', 'float', 'bool', 'list', 'dict', 'tuple', 'set',
+            'string', 'integer', 'number', 'boolean', 'array', 'object',
+            'init', 'self', 'cls', 'args', 'kwargs',
+        }
+        if value.lower() in skip_values:
+            return False
+
+        # Issue #632: Skip example domains (from shell script line 339)
+        example_domains = ('example.com', 'example.org', 'example.net', 'autobot.local')
+        for domain in example_domains:
+            if domain in value.lower():
+                return False
+
+        # Skip code/documentation
+        if '\n' in value or value.startswith(('    ', '\t', '#', '//', '/*', '"""', "'''")):
+            return False
+
+        # Skip very long strings
+        if len(value) > 200:
+            return False
+
+        # Issue #632: Focus on actionable configuration patterns
         config_indicators = [
-            # Paths
-            value.startswith("/"),
-            value.startswith("./"),
-            value.endswith(
-                (".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini")
-            ),
-            # URLs and network
-            value.startswith(
-                (
-                    "http://",
-                    "https://",
-                    "ws://",
-                    "wss://",
-                    "ftp://",
-                    "redis://",
-                    "postgresql://",
-                    "mysql://",
-                )
-            ),
-            value in ["localhost", "127.0.0.1", "0.0.0.0"],
-            # API keys and tokens (basic heuristics)
-            (
-                len(value) > 15
-                and any(c.isalnum() for c in value)
-                and not value.isdigit()
-            ),
+            # Network config (HIGH priority)
+            value.startswith(("postgresql://", "mysql://", "redis://", "mongodb://")),
+            (value.startswith(("http://", "https://", "ws://", "wss://"))
+             and not any(d in value for d in example_domains)),
+            value in ['localhost', '127.0.0.1', '0.0.0.0'],
+            value.startswith('172.16.168.'),  # VM IPs
+
+            # Security (HIGH priority)
+            value.startswith(('sk-', 'pk_', 'rk_', 'api_', 'API_', 'Bearer ', 'token_')),
+
+            # File paths (MEDIUM priority - must be config files)
+            (value.startswith('/')
+             and value.endswith(('.log', '.db', '.json', '.yaml', '.yml', '.conf', '.cfg', '.ini'))
+             and '/' in value[1:]),
         ]
 
         return any(config_indicators)
@@ -410,41 +530,56 @@ class EnvironmentAnalyzer:
     def _classify_value(
         self, value: str, category: Optional[str], context: str
     ) -> Tuple[str, str]:
-        """Classify the value type and determine severity"""
+        """Issue #632: Classify value and severity (aligned with shell script)"""
 
-        # High severity (security/infrastructure)
-        if any(
-            pattern in value.lower()
-            for pattern in ["key", "token", "password", "secret"]
-        ):
-            return "security", "high"
+        if value is None:
+            return category or "string", "low"
 
-        if value.startswith(("http://", "https://", "ws://", "wss://")):
-            return "url", "high"
-
+        # HIGH severity: Security and infrastructure
+        # Database URLs
         if value.startswith(("postgresql://", "mysql://", "redis://", "mongodb://")):
             return "database_url", "high"
 
-        # Medium severity (configuration)
-        if value.startswith("/") or value.startswith("./"):
-            return "path", "medium"
+        # API keys and credentials
+        if any(p in value.lower() for p in ["key", "token", "password", "secret"]):
+            return "security", "high"
+        if value.startswith(("sk-", "pk_", "rk_", "api_", "API_", "Bearer ")):
+            return "security", "high"
 
-        if value in ["localhost", "127.0.0.1", "0.0.0.0"]:
-            return "hostname", "medium"
+        # VM IPs (from shell script SSOT_VM_IPS)
+        if value.startswith("172.16.168."):
+            return "hostname", "high"
 
+        # Service ports (from shell script SSOT_PORTS)
         if value.isdigit():
             num = int(value)
-            if num in range(1024, 65536):
+            # Common service ports get HIGH severity
+            if num in [80, 443, 8000, 8001, 8080, 8443, 3000, 5000, 5173, 6379, 5432, 27017, 11434]:
+                return "port", "high"
+            # Other ports in valid range get MEDIUM
+            elif num in range(1024, 65536):
                 return "port", "medium"
+            # Timeouts are MEDIUM
             elif num in range(1, 3600):
                 return "timeout", "medium"
             else:
                 return "numeric", "low"
 
-        # Low severity (general configuration)
-        if value.endswith(
-            (".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini")
-        ):
+        # MEDIUM severity: URLs and hostnames
+        if value.startswith(("http://", "https://", "ws://", "wss://")):
+            # Check for example domains
+            if any(d in value.lower() for d in ["example.com", "example.org", "example.net"]):
+                return "url", "low"
+            return "url", "medium"
+
+        if value in ["localhost", "127.0.0.1", "0.0.0.0"]:
+            return "hostname", "medium"
+
+        # LOW severity: Optional externalization
+        if value.startswith("/") or value.startswith("./"):
+            return "path", "low"
+
+        if value.endswith((".log", ".db", ".json", ".yaml", ".yml", ".conf", ".cfg", ".ini")):
             return "config_file", "low"
 
         return category or "string", "low"
@@ -661,19 +796,19 @@ async def main():
     )
 
     # Print summary
-    logger.info(f"\n=== Environment Variable Analysis Results ===")
+    logger.info("\n=== Environment Variable Analysis Results ===")
     logger.info(f"Total hardcoded values found: {results['total_hardcoded_values']}")
     logger.info(f"High priority issues: {results['high_priority_count']}")
     logger.info(f"Configuration recommendations: {results['recommendations_count']}")
     logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print category breakdown
-    logger.info(f"\n=== Categories ===")
+    logger.info("\n=== Categories ===")
     for category, count in results["categories"].items():
         logger.info(f"{category}: {count}")
 
     # Print top recommendations
-    logger.info(f"\n=== Top Configuration Recommendations ===")
+    logger.info("\n=== Top Configuration Recommendations ===")
     recommendations = results["configuration_recommendations"]
     high_priority = [r for r in recommendations if r["priority"] == "high"]
 
@@ -685,7 +820,7 @@ async def main():
         logger.info(f"   Files affected: {len(rec['affected_files'])}")
 
     # Print metrics
-    logger.info(f"\n=== Metrics ===")
+    logger.info("\n=== Metrics ===")
     metrics = results["metrics"]
     logger.info(f"Security issues: {metrics['security_issues']}")
     logger.info(f"Files affected: {metrics['files_affected']}")
