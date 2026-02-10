@@ -30,17 +30,11 @@ log_header() {
 }
 
 # =============================================================================
-# SSOT Configuration - Load from .env file (Single Source of Truth)
-# Issue: #604 - SSOT Phase 4 Cleanup
+# SSOT Configuration - Load centralized config
+# Issue: #604 - SSOT Phase 4 Cleanup, #809 - SSOT migration
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
-fi
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # AutoBot VM configuration - Using SSOT env vars
 declare -A VMS=(
@@ -53,8 +47,8 @@ declare -A VMS=(
     ["slm"]="${AUTOBOT_SLM_HOST:-172.16.168.19}"
 )
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-REMOTE_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 
 # Show usage
 show_usage() {

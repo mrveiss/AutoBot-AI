@@ -5,24 +5,18 @@
 
 set -e
 
-# Load unified configuration system
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
-if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
-    export PATH="$HOME/bin:$PATH"  # Ensure yq is available
-    source "${SCRIPT_DIR}/config/load_config.sh"
-    echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
-else
-    echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
-fi
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-# VM configuration (from unified config)
+# VM configuration (from SSOT)
 declare -A VMS=(
-    ["vm0-backend"]=$(get_config "infrastructure.hosts.backend" 2>/dev/null || echo "172.16.168.20")
-    ["vm1-frontend"]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")
-    ["vm2-npu-worker"]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22")
-    ["vm3-redis"]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
-    ["vm4-ai-stack"]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24")
-    ["vm5-browser"]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25")
+    ["vm0-backend"]="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 # Colors for output
@@ -44,7 +38,7 @@ execute_on_vm() {
 
     echo -e "${YELLOW}[$vm_name] $description${NC}"
 
-    if [ "$vm_ip" == "172.16.168.20" ]; then
+    if [ "$vm_ip" == "${AUTOBOT_BACKEND_HOST:-172.16.168.20}" ]; then
         # Local VM (current)
         echo "  → Executing locally"
         eval "$command"
@@ -63,7 +57,7 @@ check_vm_connectivity() {
     local vm_name="$1"
     local vm_ip="$2"
 
-    if [ "$vm_ip" == "172.16.168.20" ]; then
+    if [ "$vm_ip" == "${AUTOBOT_BACKEND_HOST:-172.16.168.20}" ]; then
         echo -e "${GREEN}  → $vm_name: Local VM (reachable)${NC}"
         return 0
     fi
@@ -84,7 +78,7 @@ get_time_info() {
 
     local time_cmd="date '+%Y-%m-%d %H:%M:%S %Z' && timedatectl status | grep -E '(System clock|NTP service)'"
 
-    if [ "$vm_ip" == "172.16.168.20" ]; then
+    if [ "$vm_ip" == "${AUTOBOT_BACKEND_HOST:-172.16.168.20}" ]; then
         echo "Time: $(date '+%Y-%m-%d %H:%M:%S %Z')"
         timedatectl status | grep -E "(System clock|NTP service)" | sed 's/^/  /'
     else
@@ -121,7 +115,7 @@ server time.google.com iburst
 makestep 1.0 3
 
 # Local network synchronization (VM0 as reference)
-server 172.16.168.20 minpoll 4 maxpoll 6
+server ${AUTOBOT_BACKEND_HOST:-172.16.168.20} minpoll 4 maxpoll 6
 
 # Log directory
 driftfile /var/lib/chrony/chrony.drift
@@ -131,7 +125,7 @@ logdir /var/log/chrony
 rtcsync
 
 # Allow other VMs to sync from this one
-allow 172.16.168.0/24
+allow ${AUTOBOT_NETWORK_CIDR:-172.16.168.0/24}
 
 # Step threshold
 maxupdateskew 100.0

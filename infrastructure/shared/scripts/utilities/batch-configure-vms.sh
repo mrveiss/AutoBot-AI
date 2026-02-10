@@ -4,6 +4,10 @@
 
 set -e
 
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,17 +16,17 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# SSH Configuration
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+# SSH Configuration (from SSOT)
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 
-# VM IP addresses
+# VM IP addresses (from SSOT)
 VMS=(
-    "172.16.168.21:frontend"
-    "172.16.168.22:npu-worker"
-    "172.16.168.23:redis"
-    "172.16.168.24:ai-stack"
-    "172.16.168.25:browser"
+    "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:frontend"
+    "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:npu-worker"
+    "${AUTOBOT_REDIS_HOST:-172.16.168.23}:redis"
+    "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:ai-stack"
+    "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:browser"
 )
 
 log() {

@@ -6,6 +6,10 @@ Enables all enterprise-grade features for AutoBot Phase 4 completion.
 
 set -euo pipefail
 
+# Load SSOT configuration
+SCRIPT_DIR_UTIL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR_UTIL}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -95,8 +99,8 @@ main() {
         print_warning "jq not installed - will use basic parsing"
     fi
 
-    # Backend URL
-    BACKEND_URL="http://172.16.168.20:8001"
+    # Backend URL (from SSOT)
+    BACKEND_URL="${AUTOBOT_BACKEND_URL:-http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}}"
 
     print_status "Checking AutoBot backend availability..."
     if check_service "$BACKEND_URL" "AutoBot Backend"; then
@@ -255,9 +259,9 @@ main() {
     echo
 
     print_status "Enterprise web interface available at:"
-    echo "  🌐 http://172.16.168.21:5173 (Frontend VM)"
-    echo "  🔧 http://172.16.168.20:8001/docs (Backend API docs)"
-    echo "  🖥️  http://172.16.168.20:6080/vnc.html (Desktop access)"
+    echo "  🌐 http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173} (Frontend VM)"
+    echo "  🔧 http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/docs (Backend API docs)"
+    echo "  🖥️  http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_VNC_PORT:-6080}/vnc.html (Desktop access)"
     echo
 
     print_success "AutoBot has been transformed into an enterprise-grade AI platform!"

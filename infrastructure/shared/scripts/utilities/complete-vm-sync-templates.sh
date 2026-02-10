@@ -7,17 +7,20 @@ set -e  # Exit on error
 
 # Configuration
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-AUTOBOT_ROOT="/home/kali/Desktop/AutoBot"
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_OPTS="-i $SSH_KEY"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-# VM Configuration
+AUTOBOT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_OPTS="-i $SSH_KEY"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
+
+# VM Configuration (from SSOT)
 declare -A VM_IPS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 declare -A VM_SERVICES=(
@@ -73,7 +76,7 @@ test_connectivity() {
 
     for vm in "${!VM_IPS[@]}"; do
         ip="${VM_IPS[$vm]}"
-        if ssh $SSH_OPTS autobot@"$ip" "echo 'Connected to $vm'" >/dev/null 2>&1; then
+        if ssh $SSH_OPTS "$SSH_USER@$ip" "echo 'Connected to $vm'" >/dev/null 2>&1; then
             success "$vm ($ip) - Connected"
         else
             error "$vm ($ip) - Connection failed"
@@ -102,12 +105,12 @@ sync_file_to_vm() {
     fi
 
     # Create remote directory if needed
-    ssh $SSH_OPTS autobot@"$vm_ip" "mkdir -p $(dirname "$remote_path")"
+    ssh $SSH_OPTS "$SSH_USER@$vm_ip" "mkdir -p $(dirname "$remote_path")"
 
     # Sync file
     rsync -avz -e "ssh $SSH_OPTS" \
         "$AUTOBOT_ROOT/$local_file" \
-        "autobot@$vm_ip:$remote_path"
+        "$SSH_USER@$vm_ip:$remote_path"
 
     success "Synced $local_file to $vm"
 
@@ -138,12 +141,12 @@ sync_directory_to_vm() {
     fi
 
     # Create remote directory if needed
-    ssh $SSH_OPTS autobot@"$vm_ip" "mkdir -p $remote_dir"
+    ssh $SSH_OPTS "$SSH_USER@$vm_ip" "mkdir -p $remote_dir"
 
     # Sync directory with --delete to remove old files
     rsync -avz --delete -e "ssh $SSH_OPTS" \
         "$AUTOBOT_ROOT/$local_dir/" \
-        "autobot@$vm_ip:$remote_dir/"
+        "$SSH_USER@$vm_ip:$remote_dir/"
 
     success "Synced directory $local_dir to $vm"
 
@@ -161,7 +164,7 @@ restart_vm_service() {
 
     log "Restarting $service on $vm"
 
-    if ssh $SSH_OPTS autobot@"$vm_ip" "sudo systemctl restart $service" 2>/dev/null; then
+    if ssh $SSH_OPTS "$SSH_USER@$vm_ip" "sudo systemctl restart $service" 2>/dev/null; then
         success "Service $service restarted on $vm"
     else
         warn "Failed to restart $service on $vm (service may not exist yet)"
@@ -182,11 +185,11 @@ sync_frontend() {
 
         # Build on remote
         log "Building frontend on VM..."
-        ssh $SSH_OPTS autobot@"${VM_IPS[frontend]}" \
+        ssh $SSH_OPTS "$SSH_USER@${VM_IPS[frontend]}" \
             "cd /home/autobot/autobot-vue && npm install && npm run build"
 
         # Deploy to nginx
-        ssh $SSH_OPTS autobot@"${VM_IPS[frontend]}" \
+        ssh $SSH_OPTS "$SSH_USER@${VM_IPS[frontend]}" \
             "sudo cp -r /home/autobot/autobot-vue/dist/* /var/www/html/"
 
         success "Frontend deployed to nginx"
@@ -251,14 +254,14 @@ check_all_vm_status() {
         echo -e "\n${BLUE}=== $vm ($vm_ip) ===${NC}"
 
         # Check connectivity
-        if ssh $SSH_OPTS autobot@"$vm_ip" "echo 'Connected'" >/dev/null 2>&1; then
+        if ssh $SSH_OPTS "$SSH_USER@$vm_ip" "echo 'Connected'" >/dev/null 2>&1; then
             success "SSH: Connected"
         else
             error "SSH: Failed"
         fi
 
         # Check service status
-        if ssh $SSH_OPTS autobot@"$vm_ip" "systemctl is-active $service" >/dev/null 2>&1; then
+        if ssh $SSH_OPTS "$SSH_USER@$vm_ip" "systemctl is-active $service" >/dev/null 2>&1; then
             success "Service ($service): Running"
         else
             warn "Service ($service): Not running or doesn't exist"
@@ -266,12 +269,12 @@ check_all_vm_status() {
 
         # Check disk space
         local disk_usage
-        disk_usage=$(ssh $SSH_OPTS autobot@"$vm_ip" "df -h / | tail -1 | awk '{print \$5}'")
+        disk_usage=$(ssh $SSH_OPTS "$SSH_USER@$vm_ip" "df -h / | tail -1 | awk '{print \$5}'")
         echo "Disk Usage: $disk_usage"
 
         # Check memory
         local memory_usage
-        memory_usage=$(ssh $SSH_OPTS autobot@"$vm_ip" "free -h | grep Mem | awk '{print \$3\"/\"\$2}'")
+        memory_usage=$(ssh $SSH_OPTS "$SSH_USER@$vm_ip" "free -h | grep Mem | awk '{print \$3\"/\"\$2}'")
         echo "Memory Usage: $memory_usage"
     done
 }

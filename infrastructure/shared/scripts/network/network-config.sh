@@ -3,6 +3,10 @@
 # Centralized network configuration for all network-related scripts
 # Uses environment variables with fallback to NetworkConstants defaults
 
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Backend API (Main Machine - WSL)
 export BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 export BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
@@ -28,8 +32,8 @@ export AI_STACK_PORT="${AUTOBOT_AI_STACK_PORT:-8080}"
 export AI_STACK_URL="http://${AI_STACK_HOST}:${AI_STACK_PORT}"
 
 # Browser Service (VM5)
-export BROWSER_HOST="${AUTOBOT_BROWSER_HOST:-172.16.168.25}"
-export BROWSER_PORT="${AUTOBOT_BROWSER_PORT:-3000}"
+export BROWSER_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+export BROWSER_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
 export BROWSER_URL="http://${BROWSER_HOST}:${BROWSER_PORT}"
 
 # VNC Services (Main Machine - WSL)

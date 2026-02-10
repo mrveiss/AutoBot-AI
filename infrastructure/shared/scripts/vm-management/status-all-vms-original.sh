@@ -4,8 +4,10 @@
 
 set -e
 
-# Source centralized network configuration
+# Load SSOT configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+# Also source network-config for backward compat
 source "${SCRIPT_DIR}/../network/network-config.sh" 2>/dev/null || {
     # Fallback defaults if network-config.sh not available
     export BACKEND_PORT="${BACKEND_PORT:-8001}"
@@ -19,33 +21,33 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# VM Configuration
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+# VM Configuration (from SSOT)
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 declare -A VMS=(
-    ["frontend"]="172.16.168.21"
-    ["npu-worker"]="172.16.168.22"
-    ["redis"]="172.16.168.23"
-    ["ai-stack"]="172.16.168.24"
-    ["browser"]="172.16.168.25"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
-# Service ports
+# Service ports (from SSOT)
 declare -A SERVICE_PORTS=(
-    ["frontend"]="5173"
-    ["npu-worker"]="8081"
-    ["redis"]="6379"
-    ["ai-stack"]="8080"
-    ["browser"]="3000"
+    ["frontend"]="${AUTOBOT_FRONTEND_PORT:-5173}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_PORT:-8081}"
+    ["redis"]="${AUTOBOT_REDIS_PORT:-6379}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_PORT:-8080}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
 )
 
-# Health check URLs
+# Health check URLs (from SSOT)
 declare -A HEALTH_URLS=(
-    ["frontend"]="http://172.16.168.21:5173"
-    ["npu-worker"]="http://172.16.168.22:8081/health"
-    ["redis"]="172.16.168.23:6379"
-    ["ai-stack"]="http://172.16.168.24:8080/health"
-    ["browser"]="http://172.16.168.25:3000/health"
+    ["frontend"]="http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}"
+    ["npu-worker"]="http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}"
+    ["ai-stack"]="http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
+    ["browser"]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
 )
 
 log() {
@@ -76,7 +78,7 @@ check_service_health() {
 
     if [ "$vm_name" = "redis" ]; then
         # Special case for Redis (TCP connection)
-        if echo "PING" | nc -w 2 172.16.168.23 6379 | grep -q "PONG" 2>/dev/null; then
+        if echo "PING" | nc -w 2 "${AUTOBOT_REDIS_HOST:-172.16.168.23}" "${AUTOBOT_REDIS_PORT:-6379}" | grep -q "PONG" 2>/dev/null; then
             echo -e "${GREEN}✅ Healthy${NC}"
             return 0
         else
@@ -152,7 +154,7 @@ get_service_processes() {
 }
 
 check_backend_status() {
-    echo -e "${CYAN}🔧 Backend Service (WSL - 172.16.168.20):${NC}"
+    echo -e "${CYAN}🔧 Backend Service (WSL - ${AUTOBOT_BACKEND_HOST:-172.16.168.20}):${NC}"
 
     # Check if backend is running
     echo -n "  Process Status: "
@@ -168,7 +170,7 @@ check_backend_status() {
     echo -n "  Health Check: "
     if timeout 5 curl -s http://localhost:${BACKEND_PORT}/api/health >/dev/null 2>&1; then
         echo -e "${GREEN}✅ Healthy${NC}"
-        echo "  URL: http://172.16.168.20:${BACKEND_PORT}"
+        echo "  URL: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${BACKEND_PORT}"
     else
         echo -e "${RED}❌ Unhealthy${NC}"
     fi
@@ -213,12 +215,12 @@ main() {
 
     # Show architecture overview
     echo -e "${CYAN}🏗️  Architecture Overview:${NC}"
-    echo "  Main (WSL):     172.16.168.20 - Backend API server"
-    echo "  VM1 Frontend:   172.16.168.21 - Vue.js web interface"
-    echo "  VM2 NPU Worker: 172.16.168.22 - Hardware AI acceleration"
-    echo "  VM3 Redis:      172.16.168.23 - Database and caching"
-    echo "  VM4 AI Stack:   172.16.168.24 - AI processing services"
-    echo "  VM5 Browser:    172.16.168.25 - Web automation (Playwright)"
+    echo "  Main (WSL):     ${AUTOBOT_BACKEND_HOST:-172.16.168.20} - Backend API server"
+    echo "  VM1 Frontend:   ${AUTOBOT_FRONTEND_HOST:-172.16.168.21} - Vue.js web interface"
+    echo "  VM2 NPU Worker: ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22} - Hardware AI acceleration"
+    echo "  VM3 Redis:      ${AUTOBOT_REDIS_HOST:-172.16.168.23} - Database and caching"
+    echo "  VM4 AI Stack:   ${AUTOBOT_AI_STACK_HOST:-172.16.168.24} - AI processing services"
+    echo "  VM5 Browser:    ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25} - Web automation (Playwright)"
     echo ""
 
     # Check backend status (local)

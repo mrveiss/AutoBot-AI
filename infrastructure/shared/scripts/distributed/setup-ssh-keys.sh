@@ -1,23 +1,27 @@
 #!/bin/bash
 # Setup SSH keys for passwordless access to distributed AutoBot VMs
 
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 echo "🔑 Setting up SSH keys for distributed AutoBot access..."
 
 # Generate SSH key for AutoBot distributed access
-SSH_KEY="$HOME/.ssh/autobot_distributed"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_distributed}"
 if [ ! -f "$SSH_KEY" ]; then
     echo "Generating SSH key pair for AutoBot distributed access..."
     ssh-keygen -t rsa -b 4096 -f "$SSH_KEY" -N "" -C "autobot-distributed-$(whoami)@$(hostname)"
     echo "✅ SSH key generated: $SSH_KEY"
 fi
 
-# VM list
+# VM list (from SSOT)
 VMS=(
-    "172.16.168.21:frontend"
-    "172.16.168.22:npu-worker"
-    "172.16.168.23:redis"
-    "172.16.168.24:ai-stack"
-    "172.16.168.25:browser"
+    "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:frontend"
+    "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:npu-worker"
+    "${AUTOBOT_REDIS_HOST:-172.16.168.23}:redis"
+    "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:ai-stack"
+    "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:browser"
 )
 
 echo ""
@@ -54,45 +58,45 @@ SSH_CONFIG="$HOME/.ssh/config"
 [ -f "$SSH_CONFIG" ] && cp "$SSH_CONFIG" "${SSH_CONFIG}.backup.$(date +%s)"
 
 # Add AutoBot distributed access configuration
-cat >> "$SSH_CONFIG" << 'SSHCONFIG'
+cat >> "$SSH_CONFIG" << SSHCONFIG
 
 # AutoBot Distributed Infrastructure
 Host autobot-frontend
-    HostName 172.16.168.21
+    HostName ${AUTOBOT_FRONTEND_HOST:-172.16.168.21}
     User kali
-    IdentityFile ~/.ssh/autobot_distributed
+    IdentityFile ${SSH_KEY}
     StrictHostKeyChecking no
 
 Host autobot-npu-worker
-    HostName 172.16.168.22
+    HostName ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}
     User kali
-    IdentityFile ~/.ssh/autobot_distributed
+    IdentityFile ${SSH_KEY}
     StrictHostKeyChecking no
 
 Host autobot-redis
-    HostName 172.16.168.23
+    HostName ${AUTOBOT_REDIS_HOST:-172.16.168.23}
     User kali
-    IdentityFile ~/.ssh/autobot_distributed
+    IdentityFile ${SSH_KEY}
     StrictHostKeyChecking no
 
 Host autobot-ai-stack
-    HostName 172.16.168.24
+    HostName ${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
     User kali
-    IdentityFile ~/.ssh/autobot_distributed
+    IdentityFile ${SSH_KEY}
     StrictHostKeyChecking no
 
 Host autobot-browser
-    HostName 172.16.168.25
+    HostName ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}
     User kali
-    IdentityFile ~/.ssh/autobot_distributed
+    IdentityFile ${SSH_KEY}
     StrictHostKeyChecking no
 SSHCONFIG
 
 echo "✅ SSH config updated with AutoBot VM aliases"
 echo ""
 echo "🎉 SSH setup complete! You can now access VMs using:"
-echo "  ssh autobot-frontend    # Frontend VM (172.16.168.21)"
-echo "  ssh autobot-npu-worker  # NPU Worker VM (172.16.168.22)"
-echo "  ssh autobot-redis       # Redis VM (172.16.168.23)"
-echo "  ssh autobot-ai-stack    # AI Stack VM (172.16.168.24)"
-echo "  ssh autobot-browser     # Browser VM (172.16.168.25)"
+echo "  ssh autobot-frontend    # Frontend VM (${AUTOBOT_FRONTEND_HOST:-172.16.168.21})"
+echo "  ssh autobot-npu-worker  # NPU Worker VM (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22})"
+echo "  ssh autobot-redis       # Redis VM (${AUTOBOT_REDIS_HOST:-172.16.168.23})"
+echo "  ssh autobot-ai-stack    # AI Stack VM (${AUTOBOT_AI_STACK_HOST:-172.16.168.24})"
+echo "  ssh autobot-browser     # Browser VM (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25})"

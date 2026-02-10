@@ -6,22 +6,16 @@
 set -e
 
 # =============================================================================
-# SSOT Configuration - Load from .env file (Single Source of Truth)
-# Issue: #604 - SSOT Phase 4 Cleanup
+# SSOT Configuration - Load centralized config
+# Issue: #604 - SSOT Phase 4 Cleanup, #809 - SSOT migration
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
-fi
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration - Using SSOT env vars with fallbacks
 REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-REMOTE_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 LOCAL_SRC="$PROJECT_ROOT/autobot-vue/src"
 REMOTE_DEST="/home/autobot/autobot-vue/src"
 FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"

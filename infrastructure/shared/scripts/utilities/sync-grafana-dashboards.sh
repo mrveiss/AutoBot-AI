@@ -22,21 +22,15 @@ error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
 # =============================================================================
-# SSOT Configuration - Load from .env file
+# SSOT Configuration - Load centralized config (#809)
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
-fi
-
-# Configuration
+# Configuration (from SSOT)
 TARGET_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
-TARGET_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+TARGET_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 LOCAL_DASHBOARDS="$PROJECT_ROOT/config/grafana/dashboards"
 REMOTE_DASHBOARDS="/var/lib/grafana/dashboards"
 

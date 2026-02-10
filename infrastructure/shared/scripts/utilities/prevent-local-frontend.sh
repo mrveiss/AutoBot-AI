@@ -7,6 +7,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 AUTOBOT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Colors for output
@@ -20,8 +21,8 @@ echo ""
 echo -e "${YELLOW}CRITICAL ERROR: Attempt to start local frontend server blocked${NC}"
 echo ""
 echo "AutoBot uses a SINGLE FRONTEND SERVER architecture:"
-echo -e "  ✅ ${GREEN}ONLY 172.16.168.21:5173 runs the frontend (Frontend VM)${NC}"
-echo -e "  ❌ ${RED}NO frontend servers on main machine (172.16.168.20)${NC}"
+echo -e "  ✅ ${GREEN}ONLY ${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173} runs the frontend (Frontend VM)${NC}"
+echo -e "  ❌ ${RED}NO frontend servers on main machine (${AUTOBOT_BACKEND_HOST:-172.16.168.20})${NC}"
 echo -e "  ❌ ${RED}NO local development servers (localhost:5173)${NC}"
 echo ""
 echo "FORBIDDEN COMMANDS on main machine:"
