@@ -5,7 +5,33 @@
 # PostgreSQL Database Creation Tasks
 ---
 
-- name: Generate database password
+- name: Check if credentials file already exists
+  ansible.builtin.stat:
+    path: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+  register: _db_creds_stat
+
+- name: Read existing password from credentials file
+  ansible.builtin.shell:
+    cmd: >-
+      grep '^SLM_DB_PASSWORD='
+      {{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
+      | cut -d= -f2
+  register: _existing_db_password
+  changed_when: false
+  no_log: true
+  when:
+    - _db_creds_stat.stat.exists
+    - db_password is not defined
+
+- name: Reuse existing database password
+  ansible.builtin.set_fact:
+    db_password: "{{ _existing_db_password.stdout | trim }}"
+  when:
+    - db_password is not defined
+    - _existing_db_password.stdout | default('') | trim | length > 0
+  no_log: true
+
+- name: Generate new database password
   ansible.builtin.set_fact:
     db_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
   when: db_password is not defined
