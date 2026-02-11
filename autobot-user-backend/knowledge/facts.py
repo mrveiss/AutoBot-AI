@@ -527,6 +527,7 @@ class FactsMixin:
 
         Issue #281: Extracted helper for Redis storage operations.
         Issue #547: Added session-fact relationship tracking for orphan cleanup.
+        Issue #688: Added ownership index management for user-based access.
 
         Args:
             fact_id: Fact identifier
@@ -560,6 +561,16 @@ class FactsMixin:
         source_session_id = metadata.get("source_session_id")
         if source_session_id:
             await self._track_session_fact_relationship(source_session_id, fact_id)
+
+        # Issue #688: Track ownership indexes for user-based access control
+        if hasattr(self, "ownership_manager") and metadata.get("owner_id"):
+            await self.ownership_manager.set_owner(
+                fact_id=fact_id,
+                owner_id=metadata["owner_id"],
+                visibility=metadata.get("visibility", "private"),
+                source_type=metadata.get("source_type", "manual"),
+                shared_with=metadata.get("shared_with", []),
+            )
 
     async def _vectorize_fact_in_chromadb(
         self, fact_id: str, content: str, metadata: Dict[str, Any]
@@ -914,10 +925,10 @@ class FactsMixin:
     async def _cleanup_fact_mappings(
         self, fact_id: str, content: str, metadata: Dict[str, Any]
     ) -> None:
-        """Clean up Redis mappings for a deleted fact. Issue #620.
+        """Clean up Redis mappings for a deleted fact. Issue #620 and #688.
 
-        Removes content hash, unique key, and session tracking mappings
-        to prevent memory leaks.
+        Removes content hash, unique key, session tracking mappings, and
+        ownership indexes to prevent memory leaks.
 
         Args:
             fact_id: ID of the fact being deleted
@@ -939,6 +950,10 @@ class FactsMixin:
         await asyncio.to_thread(
             self.redis_client.delete, "fact:origin:session:%s" % fact_id
         )
+
+        # Issue #688: Clean up ownership indexes
+        if hasattr(self, "ownership_manager"):
+            await self.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
 
     async def _delete_fact_from_vector_store(self, fact_id: str) -> None:
         """Delete fact from ChromaDB vector store. Issue #620.

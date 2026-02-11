@@ -28,6 +28,7 @@ from backend.api.knowledge_categories import router as knowledge_categories_rout
 from backend.api.knowledge_collections import router as knowledge_collections_router
 from backend.api.knowledge_mcp import router as knowledge_mcp_router
 from backend.api.knowledge_metadata import router as knowledge_metadata_router
+from backend.api.knowledge_ownership import router as knowledge_ownership_router
 from backend.api.knowledge_population import router as knowledge_population_router
 from backend.api.knowledge_search import router as knowledge_search_router
 from backend.api.knowledge_suggestions import router as knowledge_suggestions_router
@@ -66,7 +67,7 @@ def _get_system_routers() -> list:
 
 
 def _get_knowledge_routers() -> list:
-    """Get knowledge base routers (Issue #560: extracted)."""
+    """Get knowledge base routers (Issue #560: extracted, #688: ownership added)."""
     return [
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
         (
@@ -111,11 +112,17 @@ def _get_knowledge_routers() -> list:
             ["knowledge-population"],
             "knowledge_population",
         ),
+        (
+            knowledge_ownership_router,
+            "/knowledge_base",
+            ["knowledge-ownership"],
+            "knowledge_ownership",
+        ),
     ]
 
 
 def _get_service_routers() -> list:
-    """Get LLM, Redis, voice, and VNC routers (Issue #560: extracted, Issue #729: infrastructure removed)."""
+    """Get LLM, Redis, voice, and VNC routers (#560: extracted, #729: infra removed)."""
     routers = [
         (llm_router, "/llm", ["llm"], "llm"),
         (llm_providers_router, "/llm", ["llm", "providers"], "llm_providers"),
