@@ -4,6 +4,11 @@
 #
 # LLM Role - Ollama LLM inference server for AutoBot
 ---
+- name: Check if Ollama is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/ollama
+  register: _ollama_binary
+
 - name: Install LLM dependencies
   ansible.builtin.apt:
     name:
@@ -11,19 +16,24 @@
       - ca-certificates
     state: present
     update_cache: true
+  when: not _ollama_binary.stat.exists
 
 - name: Download Ollama installer
   ansible.builtin.get_url:
     url: https://ollama.ai/install.sh
     dest: /tmp/ollama-install.sh
     mode: "0755"
-  when: llm_install_ollama | default(true)
+  when:
+    - llm_install_ollama | default(true)
+    - not _ollama_binary.stat.exists
 
 - name: Install Ollama
   ansible.builtin.shell:
     cmd: /tmp/ollama-install.sh
     creates: /usr/local/bin/ollama
-  when: llm_install_ollama | default(true)
+  when:
+    - llm_install_ollama | default(true)
+    - not _ollama_binary.stat.exists
 
 - name: Create Ollama data directory
   ansible.builtin.file:
