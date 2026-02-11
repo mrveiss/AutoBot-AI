@@ -331,6 +331,22 @@ class SessionOwnershipValidator:
                 "user_data": user_data,
                 "reason": "org_admin",
             }
+
+        # Issue #689: Check if session is shared with this user
+        user_id = user_data.get("user_id", username)
+        if await self.is_shared_with_user(session_id, user_id):
+            logger.info(
+                "User %s accessing shared session %s...",
+                username,
+                session_id[:8],
+            )
+            self._audit_log_success(username, session_id, request, enforcement_mode)
+            return {
+                "authorized": True,
+                "user_data": user_data,
+                "reason": "shared_access",
+            }
+
         return await self._handle_unauthorized_access(
             username,
             session_id,
@@ -547,6 +563,75 @@ class SessionOwnershipValidator:
             return [s.decode() if isinstance(s, bytes) else s for s in sessions]
         except Exception as e:
             logger.error("Failed to get team sessions: %s", e)
+            return []
+
+    # =========================================================================
+    # SESSION SHARING (Issue #689)
+    # =========================================================================
+
+    def _get_shared_session_key(self, session_id: str) -> str:
+        """Redis key for users a session is shared with (#689)."""
+        return "session:shared_with:%s" % session_id
+
+    def _get_user_shared_sessions_key(self, user_id: str) -> str:
+        """Redis key for sessions shared WITH a user (#689)."""
+        return "user:shared_sessions:%s" % user_id
+
+    async def share_session(
+        self,
+        session_id: str,
+        shared_with_ids: list[str],
+        shared_by: str,
+    ) -> bool:
+        """Share a session with other users (#689).
+
+        Args:
+            session_id: Session to share
+            shared_with_ids: User IDs to share with
+            shared_by: Username of the person sharing
+
+        Returns:
+            True if successful
+        """
+        try:
+            shared_key = self._get_shared_session_key(session_id)
+            for user_id in shared_with_ids:
+                await self.redis.sadd(shared_key, user_id)
+                user_key = self._get_user_shared_sessions_key(user_id)
+                await self.redis.sadd(user_key, session_id)
+                await self.redis.expire(user_key, 2592000)  # 30 days
+
+            await self.redis.expire(shared_key, 2592000)  # 30 days
+            logger.info(
+                "Session %s... shared by %s with %d users",
+                session_id[:8],
+                shared_by,
+                len(shared_with_ids),
+            )
+            return True
+        except Exception as e:
+            logger.error("Failed to share session: %s", e)
+            return False
+
+    async def is_shared_with_user(self, session_id: str, user_id: str) -> bool:
+        """Check if a session is shared with a user (#689)."""
+        try:
+            shared_key = self._get_shared_session_key(session_id)
+            return bool(await self.redis.sismember(shared_key, user_id))
+        except Exception as e:
+            logger.error("Failed to check shared status: %s", e)
+            return False
+
+    async def get_shared_sessions(self, user_id: str) -> list[str]:
+        """Get all sessions shared with a user (#689)."""
+        try:
+            key = self._get_user_shared_sessions_key(user_id)
+            sessions = await self.redis.smembers(key)
+            if not sessions:
+                return []
+            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
+        except Exception as e:
+            logger.error("Failed to get shared sessions: %s", e)
             return []
 
     async def get_session_context(self, session_id: str) -> dict:

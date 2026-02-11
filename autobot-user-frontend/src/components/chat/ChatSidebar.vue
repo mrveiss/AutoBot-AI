@@ -83,6 +83,16 @@
                 <BaseButton
                   variant="ghost"
                   size="xs"
+                  class="text-indigo-400 p-1"
+                  @click.stop="openShareDialog(session.id)"
+                  title="Share"
+                  tabindex="-1"
+                >
+                  <i class="fas fa-share-alt text-xs"></i>
+                </BaseButton>
+                <BaseButton
+                  variant="ghost"
+                  size="xs"
                   class="text-blueGray-400 p-1"
                   @click.stop="editSessionName(session)"
                   title="Edit Name"
@@ -233,6 +243,15 @@
     @cancel="handleDeleteCancel"
   />
 
+  <!-- Share Conversation Dialog (Issue #689) -->
+  <ShareConversationDialog
+    :visible="showShareDialog"
+    :session-id="shareTargetSessionId || ''"
+    @update:visible="showShareDialog = $event"
+    @shared="handleShareComplete"
+    @cancel="showShareDialog = false"
+  />
+
   <!-- Edit Session Name Modal -->
   <BaseModal
     v-model="showEditModal"
@@ -273,6 +292,7 @@ import { useChatController } from '@/models/controllers'
 import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
 import type { ChatSession } from '@/stores/useChatStore'
 import DeleteConversationDialog from './DeleteConversationDialog.vue'
+import ShareConversationDialog from './ShareConversationDialog.vue'
 import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import ApiClient from '@/utils/ApiClient'
@@ -376,6 +396,10 @@ const deleteTargetSessionId = ref<string | null>(null)
 const deleteFileStats = ref<FileStats | null>(null)
 const deleteKBFacts = ref<SessionFact[] | null>(null)
 const kbFactsLoading = ref(false)
+
+// Share dialog state (Issue #689)
+const showShareDialog = ref(false)
+const shareTargetSessionId = ref<string | null>(null)
 
 // Toast for notifications (Issue #547)
 const { showToast } = useToast()
@@ -532,6 +556,18 @@ const handleDeleteCancel = () => {
   deleteKBFacts.value = null  // Issue #547
 }
 
+// Share session handlers (Issue #689)
+const openShareDialog = (sessionId: string) => {
+  shareTargetSessionId.value = sessionId
+  showShareDialog.value = true
+}
+
+const handleShareComplete = (result: Record<string, unknown>) => {
+  showShareDialog.value = false
+  shareTargetSessionId.value = null
+  const sharedWith = (result?.shared_with as string[]) || []
+  showToast(`Conversation shared with ${sharedWith.length} user${sharedWith.length > 1 ? 's' : ''}.`, 'success')
+}
 
 // Toggle setting handler
 const toggleSetting = (key: string, value: boolean) => {

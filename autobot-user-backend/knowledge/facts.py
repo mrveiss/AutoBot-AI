@@ -561,6 +561,13 @@ class FactsMixin:
         if source_session_id:
             await self._track_session_fact_relationship(source_session_id, fact_id)
 
+        # Issue #689: Track user-fact ownership for sharing
+        user_id = metadata.get("user_id")
+        if user_id:
+            await asyncio.to_thread(
+                self.redis_client.sadd, "user:facts:%s" % user_id, fact_id
+            )
+
     async def _vectorize_fact_in_chromadb(
         self, fact_id: str, content: str, metadata: Dict[str, Any]
     ) -> None:
@@ -1295,3 +1302,97 @@ class FactsMixin:
             logger.warning(
                 "Failed to cleanup session tracking for %s: %s", session_id, e
             )
+
+    # =========================================================================
+    # FACT SHARING (Issue #689)
+    # =========================================================================
+
+    async def share_facts(
+        self,
+        fact_ids: List[str],
+        shared_with: List[str],
+        shared_by: str,
+    ) -> Dict[str, Any]:
+        """Share specific facts with other users.
+
+        Creates sharing indices and updates fact metadata with
+        shared_with user IDs while preserving original ownership.
+
+        Args:
+            fact_ids: List of fact IDs to share
+            shared_with: List of user IDs to share with
+            shared_by: User ID of the person sharing
+
+        Returns:
+            Dict with sharing results
+        """
+        shared_count = 0
+        errors = []
+
+        for fact_id in fact_ids:
+            try:
+                await self._share_single_fact(fact_id, shared_with, shared_by)
+                shared_count += 1
+            except Exception as e:
+                errors.append({"fact_id": fact_id, "error": str(e)})
+
+        return {
+            "shared_count": shared_count,
+            "errors": errors,
+        }
+
+    async def _share_single_fact(
+        self, fact_id: str, shared_with: List[str], shared_by: str
+    ) -> None:
+        """Share a single fact with users. Helper for share_facts (#689)."""
+        fact_key = "fact:%s" % fact_id
+        raw = await asyncio.to_thread(self.redis_client.hget, fact_key, "metadata")
+        if not raw:
+            raise ValueError("Fact %s not found" % fact_id)
+
+        raw_str = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+        metadata = json.loads(raw_str) if isinstance(raw_str, str) else raw_str
+
+        existing_shared = metadata.get("shared_with", [])
+        merged = list(set(existing_shared + shared_with))
+        metadata["shared_with"] = merged
+        metadata["shared_by"] = shared_by
+        metadata["shared_at"] = datetime.now().isoformat()
+
+        await asyncio.to_thread(
+            self.redis_client.hset, fact_key, "metadata", json.dumps(metadata)
+        )
+
+        for user_id in shared_with:
+            await asyncio.to_thread(
+                self.redis_client.sadd,
+                "user:shared_facts:%s" % user_id,
+                fact_id,
+            )
+
+    async def get_shared_facts(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all facts shared with a user (#689).
+
+        Args:
+            user_id: Recipient user ID
+
+        Returns:
+            List of fact dicts with content and metadata
+        """
+        try:
+            raw_ids = await asyncio.to_thread(
+                self.redis_client.smembers, "user:shared_facts:%s" % user_id
+            )
+            fact_ids = [
+                fid.decode("utf-8") if isinstance(fid, bytes) else fid
+                for fid in (raw_ids or [])
+            ]
+            facts = []
+            for fid in fact_ids:
+                fact = self.get_fact(fid)
+                if fact:
+                    facts.append(fact)
+            return facts
+        except Exception as e:
+            logger.error("Failed to get shared facts for %s: %s", user_id, e)
+            return []
