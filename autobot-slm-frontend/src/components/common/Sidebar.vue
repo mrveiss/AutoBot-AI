@@ -9,6 +9,7 @@
  * Main navigation sidebar for SLM Admin.
  * Includes fleet health summary, navigation items, and user controls.
  * Issue #741: Added Code Sync navigation with update badge.
+ * Issue #754: Added ARIA attributes, keyboard navigation, high contrast toggle.
  */
 
 import { computed, onMounted, onUnmounted } from 'vue'
@@ -16,12 +17,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useCodeSync } from '@/composables/useCodeSync'
+import { useHighContrast } from '@/composables/useAccessibility'
 
 const route = useRoute()
 const router = useRouter()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const codeSync = useCodeSync()
+const highContrast = useHighContrast()
 
 // Polling interval for code sync status (1 minute)
 const CODE_SYNC_POLL_INTERVAL = 60000
@@ -63,11 +66,48 @@ const healthClass = computed(() => {
   }
 })
 
+const healthLabel = computed(() => {
+  return `Fleet health: ${fleetStore.overallHealth || 'unknown'}`
+})
+
 /**
  * Navigate to a path.
  */
 function navigate(path: string): void {
   router.push(path)
+}
+
+/**
+ * Handle keyboard navigation within sidebar nav items.
+ *
+ * Helper for Sidebar keyboard navigation (Issue #754).
+ */
+function handleNavKeydown(event: KeyboardEvent, index: number): void {
+  const items = navItems
+  let targetIndex = -1
+
+  switch (event.key) {
+    case 'ArrowDown':
+      targetIndex = index < items.length - 1 ? index + 1 : 0
+      break
+    case 'ArrowUp':
+      targetIndex = index > 0 ? index - 1 : items.length - 1
+      break
+    case 'Home':
+      targetIndex = 0
+      break
+    case 'End':
+      targetIndex = items.length - 1
+      break
+    default:
+      return
+  }
+
+  event.preventDefault()
+  const navEl = document.querySelector(`[data-nav-index="${targetIndex}"]`)
+  if (navEl instanceof HTMLElement) {
+    navEl.focus()
+  }
 }
 
 /**
@@ -101,11 +141,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <aside class="w-64 bg-gray-900 text-white min-h-screen flex flex-col">
+  <aside
+    class="w-64 bg-gray-900 text-white min-h-screen flex flex-col"
+    role="complementary"
+    aria-label="Sidebar navigation"
+  >
     <!-- Logo & Title -->
     <div class="p-4 border-b border-gray-800">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+        <div
+          class="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center"
+          aria-hidden="true"
+        >
           <span class="text-xl font-bold">S</span>
         </div>
         <div>
@@ -116,9 +163,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Fleet Health Summary -->
-    <div class="p-4 border-b border-gray-800">
+    <div class="p-4 border-b border-gray-800" role="status" :aria-label="healthLabel">
       <div class="flex items-center gap-2 mb-2">
-        <div :class="['w-3 h-3 rounded-full', healthClass]"></div>
+        <div
+          :class="['w-3 h-3 rounded-full', healthClass]"
+          role="img"
+          :aria-label="healthLabel"
+        ></div>
         <span class="text-sm font-medium">Fleet Health</span>
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs">
@@ -142,11 +193,16 @@ onUnmounted(() => {
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 p-4">
-      <ul class="space-y-1">
-        <li v-for="item in navItems" :key="item.path">
+    <nav class="flex-1 p-4" aria-label="Main navigation">
+      <ul class="space-y-1" role="menubar" aria-orientation="vertical">
+        <li v-for="(item, index) in navItems" :key="item.path" role="none">
           <button
             @click="navigate(item.path)"
+            @keydown="handleNavKeydown($event, index)"
+            :data-nav-index="index"
+            :aria-current="currentPath === item.path ? 'page' : undefined"
+            role="menuitem"
+            :tabindex="currentPath === item.path ? 0 : -1"
             :class="[
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
               currentPath === item.path
@@ -154,7 +210,7 @@ onUnmounted(() => {
                 : 'text-gray-300 hover:bg-gray-800 hover:text-white'
             ]"
           >
-            <span class="w-5 h-5 flex items-center justify-center">
+            <span class="w-5 h-5 flex items-center justify-center" aria-hidden="true">
               <!-- Icons -->
               <svg v-if="item.icon === 'grid'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -226,7 +282,8 @@ onUnmounted(() => {
             <span
               v-if="item.showBadge && codeSync.hasOutdatedNodes.value"
               class="nav-badge"
-              :title="`${codeSync.outdatedCount.value} nodes need updates`"
+              :aria-label="`${codeSync.outdatedCount.value} nodes need updates`"
+              role="status"
             >
               {{ codeSync.outdatedCount.value }}
             </span>
@@ -237,9 +294,25 @@ onUnmounted(() => {
 
     <!-- User & Logout -->
     <div class="p-4 border-t border-gray-800">
+      <!-- Issue #754: High contrast toggle -->
+      <button
+        @click="highContrast.toggle()"
+        class="w-full flex items-center gap-2 px-3 py-2 mb-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
+        :aria-pressed="highContrast.enabled.value"
+        aria-label="Toggle high contrast mode"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <span>{{ highContrast.enabled.value ? 'Standard Mode' : 'High Contrast' }}</span>
+      </button>
+
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-medium">
+          <div
+            class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-sm font-medium"
+            aria-hidden="true"
+          >
             {{ authStore.user?.username?.charAt(0).toUpperCase() || 'U' }}
           </div>
           <div>
@@ -250,9 +323,9 @@ onUnmounted(() => {
         <button
           @click="handleLogout"
           class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-          title="Logout"
+          aria-label="Log out"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
         </button>

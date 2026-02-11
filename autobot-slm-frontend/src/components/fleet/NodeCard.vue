@@ -3,6 +3,13 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+/**
+ * NodeCard - Fleet node summary card.
+ *
+ * Issue #754: Added ARIA labels for icon-only buttons, role="listitem",
+ * progress bar accessibility, dropdown menu roles, status labels.
+ */
+
 import { ref, computed } from 'vue'
 import type { SLMNode } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
@@ -83,6 +90,17 @@ function closeMenu(): void {
   showMenu.value = false
 }
 
+/**
+ * Handle keyboard events for dropdown menu items.
+ *
+ * Helper for NodeCard keyboard navigation (Issue #754).
+ */
+function handleMenuKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    showMenu.value = false
+  }
+}
+
 // Update indicators (#682)
 const updateSummary = computed(() => {
   return fleetStore.getNodeUpdateSummary(props.node.node_id)
@@ -94,11 +112,20 @@ const hasUpdates = computed(() => {
 </script>
 
 <template>
-  <div class="card p-4 hover:shadow-md transition-shadow relative" @mouseleave="closeMenu">
+  <div
+    class="card p-4 hover:shadow-md transition-shadow relative"
+    role="listitem"
+    :aria-label="`Node ${node.hostname}, status: ${statusText}`"
+    @mouseleave="closeMenu"
+  >
     <!-- Header -->
     <div class="flex items-start justify-between mb-3">
       <div class="flex items-center gap-2 min-w-0 flex-1">
-        <div :class="['w-3 h-3 rounded-full flex-shrink-0', statusClass]"></div>
+        <div
+          :class="['w-3 h-3 rounded-full flex-shrink-0', statusClass]"
+          role="img"
+          :aria-label="`Status: ${statusText}`"
+        ></div>
         <span class="font-medium text-gray-900 truncate">{{ node.hostname }}</span>
       </div>
       <div class="flex items-center gap-2">
@@ -108,9 +135,11 @@ const hasUpdates = computed(() => {
           <button
             @click.stop="toggleMenu"
             class="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-100"
-            title="Actions"
+            :aria-label="`Actions for ${node.hostname}`"
+            :aria-expanded="showMenu"
+            aria-haspopup="true"
           >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
             </svg>
           </button>
@@ -118,78 +147,55 @@ const hasUpdates = computed(() => {
           <div
             v-if="showMenu"
             class="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+            role="menu"
+            :aria-label="`Actions for ${node.hostname}`"
+            @keydown="handleMenuKeydown"
           >
-            <button
-              @click="handleAction('edit')"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button @click="handleAction('edit')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               Edit Node
             </button>
-            <button
-              @click="handleAction('roles')"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button @click="handleAction('roles')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
               Manage Roles
             </button>
-            <button
-              v-if="canEnroll"
-              @click="handleAction('enroll')"
-              :disabled="isEnrolling"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button v-if="canEnroll" @click="handleAction('enroll')" :disabled="isEnrolling" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {{ isEnrolling ? 'Enrolling...' : 'Enroll Node' }}
             </button>
-            <button
-              @click="handleAction('test')"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button @click="handleAction('test')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
               </svg>
               Test Connection
             </button>
-            <button
-              @click="handleAction('certificate')"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button @click="handleAction('certificate')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               Certificate
             </button>
-            <button
-              @click="handleAction('events')"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button @click="handleAction('events')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               View Events
             </button>
-            <button
-              @click="handleAction('services')"
-              class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button @click="handleAction('services')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
               </svg>
               Services
             </button>
-            <hr class="my-1 border-gray-200" />
-            <button
-              @click="handleAction('delete')"
-              class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <hr class="my-1 border-gray-200" role="separator" />
+            <button @click="handleAction('delete')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
               Delete Node
@@ -205,7 +211,6 @@ const hasUpdates = computed(() => {
         {{ node.ip_address }}
         <span v-if="node.ssh_port && node.ssh_port !== 22" class="text-gray-400">:{{ node.ssh_port }}</span>
       </div>
-      <!-- Auth Method Badge (#722) -->
       <span
         :class="['px-2 py-0.5 text-xs font-medium rounded', authMethodBadge.class]"
         :title="`Authentication: ${authMethodBadge.label}`"
@@ -214,12 +219,14 @@ const hasUpdates = computed(() => {
       </span>
     </div>
 
-    <!-- Enrolling Transition Indicator (#722) -->
+    <!-- Enrolling Transition Indicator -->
     <div
       v-if="isEnrolling"
       class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700"
+      role="status"
+      aria-label="Node is being enrolled"
     >
-      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
@@ -227,7 +234,7 @@ const hasUpdates = computed(() => {
     </div>
 
     <!-- Roles -->
-    <div class="flex flex-wrap gap-1 mb-3">
+    <div class="flex flex-wrap gap-1 mb-3" aria-label="Assigned roles">
       <span
         v-for="role in node.roles"
         :key="role"
@@ -244,36 +251,28 @@ const hasUpdates = computed(() => {
     <div v-if="hasUpdates" class="flex items-center gap-2 mb-3">
       <button
         @click="handleAction('updates')"
+        :aria-label="`${updateSummary?.total_updates} updates available for ${node.hostname}`"
         class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors w-full"
       >
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
         <span v-if="updateSummary?.system_updates" class="whitespace-nowrap">
           {{ updateSummary.system_updates }} pkg{{ updateSummary.system_updates !== 1 ? 's' : '' }}
         </span>
-        <span
-          v-if="updateSummary?.system_updates && updateSummary?.code_update_available"
-          class="text-amber-400"
-        >+</span>
-        <span v-if="updateSummary?.code_update_available" class="whitespace-nowrap">
-          code
-        </span>
+        <span v-if="updateSummary?.system_updates && updateSummary?.code_update_available" class="text-amber-400" aria-hidden="true">+</span>
+        <span v-if="updateSummary?.code_update_available" class="whitespace-nowrap">code</span>
       </button>
     </div>
 
-    <!-- Health Metrics -->
-    <div v-if="node.health" class="space-y-2 mb-3">
+    <!-- Health Metrics (Issue #754: progressbar roles) -->
+    <div v-if="node.health" class="space-y-2 mb-3" aria-label="Health metrics">
       <!-- CPU -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500">CPU</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <span class="w-12 text-gray-500" id="cpu-label">CPU</span>
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.cpu_percent" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cpu-label">
           <div
-            :class="[
-              'h-full rounded-full transition-all',
-              node.health.cpu_percent > 80 ? 'bg-red-500' :
-              node.health.cpu_percent > 60 ? 'bg-yellow-500' : 'bg-green-500'
-            ]"
+            :class="['h-full rounded-full transition-all', node.health.cpu_percent > 80 ? 'bg-red-500' : node.health.cpu_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
             :style="{ width: `${node.health.cpu_percent}%` }"
           ></div>
         </div>
@@ -282,14 +281,10 @@ const hasUpdates = computed(() => {
 
       <!-- Memory -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500">MEM</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <span class="w-12 text-gray-500" id="mem-label">MEM</span>
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.memory_percent" aria-valuemin="0" aria-valuemax="100" aria-labelledby="mem-label">
           <div
-            :class="[
-              'h-full rounded-full transition-all',
-              node.health.memory_percent > 80 ? 'bg-red-500' :
-              node.health.memory_percent > 60 ? 'bg-yellow-500' : 'bg-green-500'
-            ]"
+            :class="['h-full rounded-full transition-all', node.health.memory_percent > 80 ? 'bg-red-500' : node.health.memory_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
             :style="{ width: `${node.health.memory_percent}%` }"
           ></div>
         </div>
@@ -298,14 +293,10 @@ const hasUpdates = computed(() => {
 
       <!-- Disk -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500">DISK</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <span class="w-12 text-gray-500" id="disk-label">DISK</span>
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.disk_percent" aria-valuemin="0" aria-valuemax="100" aria-labelledby="disk-label">
           <div
-            :class="[
-              'h-full rounded-full transition-all',
-              node.health.disk_percent > 80 ? 'bg-red-500' :
-              node.health.disk_percent > 60 ? 'bg-yellow-500' : 'bg-green-500'
-            ]"
+            :class="['h-full rounded-full transition-all', node.health.disk_percent > 80 ? 'bg-red-500' : node.health.disk_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
             :style="{ width: `${node.health.disk_percent}%` }"
           ></div>
         </div>
@@ -325,9 +316,9 @@ const hasUpdates = computed(() => {
         <button
           @click="handleAction('view')"
           class="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors rounded"
-          title="View details"
+          :aria-label="`View details for ${node.hostname}`"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
@@ -335,9 +326,9 @@ const hasUpdates = computed(() => {
         <button
           @click="handleAction('restart')"
           class="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors rounded"
-          title="Restart services"
+          :aria-label="`Restart ${node.hostname}`"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </button>

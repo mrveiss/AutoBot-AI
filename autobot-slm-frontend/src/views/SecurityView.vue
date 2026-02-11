@@ -3,6 +3,17 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+/**
+ * SecurityView - Security analytics and policy management
+ *
+ * Issue #754: Added role="tablist"/role="tab"/aria-selected on tab nav,
+ * role="alert" on error messages, role="status" on loading,
+ * scope="col" on all table headers, role="img" with aria-label on
+ * severity dots, aria-label on filter selects, role="dialog" with
+ * aria-modal/aria-labelledby on upload modal, @keydown.escape on modal,
+ * aria-hidden on decorative icons, accessible button labels.
+ */
+
 import { ref, onMounted, computed } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
@@ -543,17 +554,20 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="mb-4 p-4 bg-error-50 border border-error-200 rounded-lg">
+    <div v-if="error" class="mb-4 p-4 bg-error-50 border border-error-200 rounded-lg" role="alert">
       <p class="text-error-700">{{ error }}</p>
     </div>
 
     <!-- Tab Navigation -->
     <div class="border-b border-gray-200 mb-6">
-      <nav class="flex gap-4">
+      <nav class="flex gap-4" role="tablist" aria-label="Security sections">
         <button
           v-for="tab in tabs"
           :key="tab.id"
           @click="onTabChange(tab.id)"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
+          :aria-current="activeTab === tab.id ? 'page' : undefined"
           :class="[
             'px-1 py-3 text-sm font-medium border-b-2 transition-colors',
             activeTab === tab.id
@@ -567,12 +581,12 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="flex justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+    <div v-if="loading" class="flex justify-center py-12" role="status" aria-label="Loading security data">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" aria-hidden="true"></div>
     </div>
 
     <!-- Security Overview -->
-    <div v-else-if="activeTab === 'overview'">
+    <div v-else-if="activeTab === 'overview'" role="tabpanel" aria-label="Security Overview">
       <template v-if="overview">
         <!-- Security Score -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -615,7 +629,11 @@ const scoreColor = computed(() => {
               class="px-6 py-4 flex items-center justify-between"
             >
               <div class="flex items-center gap-3">
-                <div :class="['w-2 h-2 rounded-full', severityColors[event.severity] || 'bg-gray-500']"></div>
+                <div
+                  :class="['w-2 h-2 rounded-full', severityColors[event.severity] || 'bg-gray-500']"
+                  role="img"
+                  :aria-label="`${event.severity} severity`"
+                ></div>
                 <div>
                   <div class="text-sm font-medium text-gray-900">{{ event.title }}</div>
                   <div class="text-xs text-gray-500">
@@ -632,7 +650,7 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- TLS Settings (Issue #164) -->
-    <div v-else-if="activeTab === 'tls-settings'">
+    <div v-else-if="activeTab === 'tls-settings'" role="tabpanel" aria-label="TLS Settings">
       <!-- Header -->
       <div class="mb-6">
         <h2 class="text-lg font-semibold text-gray-900">TLS/HTTPS Configuration</h2>
@@ -642,12 +660,16 @@ const scoreColor = computed(() => {
       </div>
 
       <!-- Result Alert -->
-      <div v-if="tlsEnableResult" :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-success-50 border-success-200' : 'bg-error-50 border-error-200']">
+      <div
+        v-if="tlsEnableResult"
+        :class="['mb-6 p-4 rounded-lg border', tlsEnableResult.success ? 'bg-success-50 border-success-200' : 'bg-error-50 border-error-200']"
+        :role="tlsEnableResult.success ? 'status' : 'alert'"
+      >
         <div class="flex items-start gap-3">
-          <svg v-if="tlsEnableResult.success" class="w-5 h-5 text-success-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg v-if="tlsEnableResult.success" class="w-5 h-5 text-success-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <svg v-else class="w-5 h-5 text-error-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg v-else class="w-5 h-5 text-error-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
@@ -659,8 +681,8 @@ const scoreColor = computed(() => {
               <pre class="mt-2 text-xs bg-white p-3 rounded border overflow-x-auto max-h-48">{{ tlsEnableResult.details }}</pre>
             </details>
           </div>
-          <button @click="tlsEnableResult = null" class="ml-auto text-gray-400 hover:text-gray-600">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button @click="tlsEnableResult = null" class="ml-auto text-gray-400 hover:text-gray-600" aria-label="Dismiss TLS result">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -673,7 +695,7 @@ const scoreColor = computed(() => {
           <h3 class="text-base font-semibold">Select Services to Enable TLS</h3>
         </div>
         <div class="p-6">
-          <div class="space-y-4">
+          <div class="space-y-4" role="group" aria-label="TLS service selection">
             <div
               v-for="service in tlsServices"
               :key="service.name"
@@ -686,6 +708,7 @@ const scoreColor = computed(() => {
                   type="checkbox"
                   :checked="selectedTlsServices.includes(service.name)"
                   class="h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                  :aria-label="`Enable TLS for ${service.displayName}`"
                   @click.stop
                   @change="toggleTlsService(service.name)"
                 />
@@ -744,11 +767,11 @@ const scoreColor = computed(() => {
               : 'bg-primary-600 hover:bg-primary-700'
           ]"
         >
-          <svg v-if="tlsEnabling" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+          <svg v-if="tlsEnabling" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
           {{ tlsEnabling ? 'Enabling TLS...' : `Enable TLS on ${selectedTlsServices.length} Service${selectedTlsServices.length !== 1 ? 's' : ''}` }}
@@ -758,7 +781,7 @@ const scoreColor = computed(() => {
       <!-- Help Section -->
       <div class="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
         <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div class="text-sm text-blue-800">
@@ -777,7 +800,7 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- TLS Certificates (Issue #725) -->
-    <div v-else-if="activeTab === 'certificates'">
+    <div v-else-if="activeTab === 'certificates'" role="tabpanel" aria-label="TLS Certificates">
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="card p-4">
@@ -824,12 +847,12 @@ const scoreColor = computed(() => {
         <table v-else class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Node</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Common Name</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expiry</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Node</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Common Name</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expiry</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -870,7 +893,7 @@ const scoreColor = computed(() => {
                     @click="renewTlsCertificate(endpoint.credential_id)"
                     :disabled="renewingCredentialId === endpoint.credential_id"
                     class="px-2 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
-                    title="Renew certificate (same keys)"
+                    :aria-label="`Renew certificate for ${endpoint.hostname}`"
                   >
                     {{ renewingCredentialId === endpoint.credential_id ? '...' : 'Renew' }}
                   </button>
@@ -878,7 +901,7 @@ const scoreColor = computed(() => {
                     @click="rotateTlsCertificate(endpoint.credential_id)"
                     :disabled="rotatingCredentialId === endpoint.credential_id"
                     class="px-2 py-1 rounded text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
-                    title="Rotate certificate (new keys)"
+                    :aria-label="`Rotate certificate for ${endpoint.hostname}`"
                   >
                     {{ rotatingCredentialId === endpoint.credential_id ? '...' : 'Rotate' }}
                   </button>
@@ -890,12 +913,14 @@ const scoreColor = computed(() => {
                         ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                         : 'bg-success-100 hover:bg-success-200 text-success-700'
                     ]"
+                    :aria-label="`${endpoint.is_active ? 'Disable' : 'Enable'} certificate for ${endpoint.hostname}`"
                   >
                     {{ endpoint.is_active ? 'Disable' : 'Enable' }}
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
                     class="px-2 py-1 rounded text-xs bg-error-100 hover:bg-error-200 text-error-700"
+                    :aria-label="`Delete certificate for ${endpoint.hostname}`"
                   >
                     Delete
                   </button>
@@ -908,10 +933,12 @@ const scoreColor = computed(() => {
     </div>
 
     <!-- Audit Logs -->
-    <div v-else-if="activeTab === 'audit'">
+    <div v-else-if="activeTab === 'audit'" role="tabpanel" aria-label="Audit Logs">
       <!-- Filters -->
       <div class="mb-4 flex gap-4">
+        <label for="audit-category-filter" class="sr-only">Filter by category</label>
         <select
+          id="audit-category-filter"
           v-model="auditCategoryFilter"
           @change="fetchAuditLogs()"
           class="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
@@ -935,12 +962,12 @@ const scoreColor = computed(() => {
         <table v-else class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resource</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -975,14 +1002,14 @@ const scoreColor = computed(() => {
             </tr>
           </tbody>
         </table>
-        <div v-if="auditLogsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500">
+        <div v-if="auditLogsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">
           Showing {{ auditLogs.length }} of {{ auditLogsTotal }} logs
         </div>
       </div>
     </div>
 
     <!-- Threat Detection -->
-    <div v-else-if="activeTab === 'threats'">
+    <div v-else-if="activeTab === 'threats'" role="tabpanel" aria-label="Threat Detection">
       <!-- Summary Cards -->
       <div v-if="threatSummary" class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div class="card p-4">
@@ -1009,7 +1036,9 @@ const scoreColor = computed(() => {
 
       <!-- Filters -->
       <div class="mb-4 flex gap-4">
+        <label for="event-severity-filter" class="sr-only">Filter by severity</label>
         <select
+          id="event-severity-filter"
           v-model="eventSeverityFilter"
           @change="fetchSecurityEvents()"
           class="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
@@ -1035,7 +1064,11 @@ const scoreColor = computed(() => {
           >
             <div class="flex items-start justify-between">
               <div class="flex items-start gap-3">
-                <div :class="['w-3 h-3 mt-1 rounded-full', severityColors[event.severity]]"></div>
+                <div
+                  :class="['w-3 h-3 mt-1 rounded-full', severityColors[event.severity]]"
+                  role="img"
+                  :aria-label="`${event.severity} severity`"
+                ></div>
                 <div>
                   <div class="font-medium text-gray-900">{{ event.title }}</div>
                   <div class="text-sm text-gray-500 mt-1">{{ event.description || 'No description' }}</div>
@@ -1064,12 +1097,14 @@ const scoreColor = computed(() => {
                     v-if="!event.is_acknowledged"
                     @click="acknowledgeEvent(event.event_id)"
                     class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+                    :aria-label="`Acknowledge event: ${event.title}`"
                   >
                     Ack
                   </button>
                   <button
                     @click="resolveEvent(event.event_id)"
                     class="px-2 py-1 text-xs bg-success-100 hover:bg-success-200 text-success-700 rounded"
+                    :aria-label="`Resolve event: ${event.title}`"
                   >
                     Resolve
                   </button>
@@ -1078,14 +1113,14 @@ const scoreColor = computed(() => {
             </div>
           </div>
         </div>
-        <div v-if="eventsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500">
+        <div v-if="eventsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">
           Showing {{ securityEvents.length }} of {{ eventsTotal }} events
         </div>
       </div>
     </div>
 
     <!-- Security Policies -->
-    <div v-else-if="activeTab === 'policies'">
+    <div v-else-if="activeTab === 'policies'" role="tabpanel" aria-label="Security Policies">
       <!-- Policies List -->
       <div class="card">
         <div v-if="policies.length === 0" class="p-6 text-center text-gray-500">
@@ -1132,6 +1167,7 @@ const scoreColor = computed(() => {
                       ? 'bg-error-100 hover:bg-error-200 text-error-700'
                       : 'bg-success-100 hover:bg-success-200 text-success-700'
                   ]"
+                  :aria-label="`${policy.is_enforced ? 'Disable' : 'Enable'} policy: ${policy.name}`"
                 >
                   {{ policy.is_enforced ? 'Disable' : 'Enable' }}
                 </button>
@@ -1139,7 +1175,7 @@ const scoreColor = computed(() => {
             </div>
           </div>
         </div>
-        <div v-if="policiesTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500">
+        <div v-if="policiesTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">
           Showing {{ policies.length }} of {{ policiesTotal }} policies
         </div>
       </div>
@@ -1152,16 +1188,30 @@ const scoreColor = computed(() => {
           v-if="showUploadModal"
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
           @click.self="showUploadModal = false"
+          @keydown.escape="showUploadModal = false"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-cert-title"
         >
           <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="px-6 py-4 border-b border-gray-200">
-              <h3 class="text-lg font-semibold text-gray-900">Upload TLS Certificate</h3>
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 id="upload-cert-title" class="text-lg font-semibold text-gray-900">Upload TLS Certificate</h3>
+              <button
+                @click="showUploadModal = false"
+                class="text-gray-400 hover:text-gray-600"
+                aria-label="Close upload dialog"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
             <div class="p-6 space-y-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Node ID</label>
+                <label for="cert-node-id" class="block text-sm font-medium text-gray-700 mb-1">Node ID</label>
                 <input
+                  id="cert-node-id"
                   v-model="selectedNodeId"
                   type="text"
                   placeholder="Enter node ID"
@@ -1170,8 +1220,9 @@ const scoreColor = computed(() => {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Certificate Name (optional)</label>
+                <label for="cert-name" class="block text-sm font-medium text-gray-700 mb-1">Certificate Name (optional)</label>
                 <input
+                  id="cert-name"
                   v-model="uploadForm.name"
                   type="text"
                   placeholder="e.g., redis-server, api-client"
@@ -1180,8 +1231,9 @@ const scoreColor = computed(() => {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">CA Certificate (PEM)</label>
+                <label for="cert-ca" class="block text-sm font-medium text-gray-700 mb-1">CA Certificate (PEM)</label>
                 <textarea
+                  id="cert-ca"
                   v-model="uploadForm.ca_cert"
                   rows="4"
                   placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
@@ -1190,8 +1242,9 @@ const scoreColor = computed(() => {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Server Certificate (PEM)</label>
+                <label for="cert-server" class="block text-sm font-medium text-gray-700 mb-1">Server Certificate (PEM)</label>
                 <textarea
+                  id="cert-server"
                   v-model="uploadForm.server_cert"
                   rows="4"
                   placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
@@ -1200,8 +1253,9 @@ const scoreColor = computed(() => {
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Private Key (PEM)</label>
+                <label for="cert-key" class="block text-sm font-medium text-gray-700 mb-1">Private Key (PEM)</label>
                 <textarea
+                  id="cert-key"
                   v-model="uploadForm.server_key"
                   rows="4"
                   placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
@@ -1231,3 +1285,18 @@ const scoreColor = computed(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* Screen reader only utility (Issue #754) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+</style>
