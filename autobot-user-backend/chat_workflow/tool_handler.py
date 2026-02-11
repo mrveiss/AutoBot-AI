@@ -27,6 +27,11 @@ _TOOL_CALL_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Issue #260: Security tool detection pattern for auto-parsing
+_SECURITY_TOOL_PATTERN = re.compile(
+    r"(nmap|nikto|gobuster|ffuf|masscan|nuclei|searchsploit)\b", re.IGNORECASE
+)
+
 # Issue #665: Error classification patterns for _classify_command_error
 # Format: (pattern_list, message_template, suggestion)
 # pattern_list contains strings to check in combined error/stderr
@@ -75,6 +80,61 @@ _REPAIRABLE_ERROR_PATTERNS = (
 
 # Critical error patterns that should NOT be repairable
 _CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
+
+
+def _detect_and_store_security_output(
+    command: str, output: str, session_id: str
+) -> None:
+    """
+    Detect security tool output and auto-parse findings.
+
+    Issue #260: Automatically parses output from security tools (nmap, nikto, etc.)
+    and stores findings in active assessments.
+
+    Args:
+        command: The executed command
+        output: Command output
+        session_id: Chat session ID
+    """
+    try:
+        if not _SECURITY_TOOL_PATTERN.search(command):
+            return
+
+        from services.security_tool_parsers import parse_tool_output
+        from services.security_workflow_manager import get_security_workflow_manager
+
+        parsed = parse_tool_output(output)
+        if not parsed or not parsed.get("hosts"):
+            return
+
+        workflow_mgr = get_security_workflow_manager()
+        active_assessments = workflow_mgr.list_active_assessments()
+        if not active_assessments:
+            logger.debug(
+                "Security tool detected but no active assessment for session %s",
+                session_id,
+            )
+            return
+
+        assessment_id = active_assessments[0].get("id")
+        host_count = len(parsed.get("hosts", []))
+        vuln_count = sum(len(h.get("vulnerabilities", [])) for h in parsed["hosts"])
+
+        workflow_mgr.record_action(
+            assessment_id=assessment_id,
+            action_type="tool_execution",
+            action_data={"command": command, "parsed_summary": parsed.get("summary")},
+        )
+
+        logger.info(
+            "Auto-parsed %s output: %d hosts, %d vulns for assessment %s",
+            _SECURITY_TOOL_PATTERN.search(command).group(1),
+            host_count,
+            vuln_count,
+            assessment_id,
+        )
+    except Exception as e:
+        logger.debug("Failed to auto-parse security output: %s", e)
 
 
 def _match_repairable_error(
@@ -566,6 +626,7 @@ class ToolHandlerMixin:
         approval_result: Dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
+        session_id: str = "",
     ):
         """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
 
@@ -603,6 +664,16 @@ class ToolHandlerMixin:
             yield interp_chunk
             if hasattr(interp_chunk, "content"):
                 additional_text += interp_chunk.content
+
+        if session_id and approval_result.get("stdout"):
+            asyncio.create_task(
+                asyncio.to_thread(
+                    _detect_and_store_security_output,
+                    command,
+                    approval_result["stdout"],
+                    session_id,
+                )
+            )
 
         yield (exec_result, additional_text)
 
@@ -664,7 +735,12 @@ class ToolHandlerMixin:
 
         if approval_result and approval_result.get("status") == "success":
             async for msg in self._handle_approved_command(
-                command, host, approval_result, ollama_endpoint, selected_model
+                command,
+                host,
+                approval_result,
+                ollama_endpoint,
+                selected_model,
+                session_id,
             ):
                 yield msg
         else:
@@ -681,6 +757,7 @@ class ToolHandlerMixin:
         result: Dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
+        session_id: str = "",
     ):
         """Handle direct command execution without approval (Issue #315: extracted).
 
@@ -703,6 +780,16 @@ class ToolHandlerMixin:
             if hasattr(msg, "content"):
                 interpretation += msg.content
             yield msg
+
+        if session_id and result.get("stdout"):
+            asyncio.create_task(
+                asyncio.to_thread(
+                    _detect_and_store_security_output,
+                    command,
+                    result["stdout"],
+                    session_id,
+                )
+            )
 
         # Issue #651: Removed duplicate WorkflowMessage yield - interpretation was already
         # yielded in the loop above. Only yield the tuple for the continuation loop.
@@ -778,10 +865,11 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: List,
         additional_response_parts: List,
+        session_id: str = "",
     ):
         """Handle successful direct command execution. Issue #620."""
         workflow_gen = self._handle_direct_execution(
-            command, host, result, ollama_endpoint, selected_model
+            command, host, result, ollama_endpoint, selected_model, session_id
         )
         async for msg in self._collect_workflow_results(
             workflow_gen, execution_results, additional_response_parts
@@ -835,6 +923,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                session_id,
             ):
                 yield msg
         elif status == "error":

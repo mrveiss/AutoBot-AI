@@ -95,6 +95,45 @@ SECURITY_RELATION_TYPES = {
 }
 
 
+class SecurityFindingsIndex:
+    """ChromaDB index for semantic search over security findings."""
+
+    COLLECTION_NAME = "security_findings"
+
+    def __init__(self):
+        self._collection = None
+        self._initialized = False
+
+    async def initialize(self):
+        """Initialize ChromaDB collection."""
+        if self._initialized:
+            return
+        from utils.async_chromadb_client import get_async_chromadb_client
+
+        client = await get_async_chromadb_client(db_path="data/chromadb")
+        self._collection = await client.get_or_create_collection(
+            name=self.COLLECTION_NAME,
+            metadata={"description": "Security assessment findings"},
+        )
+        self._initialized = True
+
+    async def index_finding(self, finding_id, text, metadata):
+        """Index a finding for semantic search."""
+        await self.initialize()
+        await self._collection.upsert(
+            ids=[finding_id], documents=[text], metadatas=[metadata]
+        )
+
+    async def search_findings(self, query, n_results=10, where=None):
+        """Search findings by semantic similarity."""
+        await self.initialize()
+        kwargs = {"query_texts": [query], "n_results": n_results}
+        if where:
+            kwargs["where"] = where
+        results = await self._collection.query(**kwargs)
+        return results
+
+
 class SecurityMemoryIntegration:
     """
     Integrates security assessment data with Memory MCP.
@@ -124,6 +163,7 @@ class SecurityMemoryIntegration:
             memory_graph: Optional existing memory graph instance
         """
         self._memory_graph = memory_graph
+        self._findings_index = SecurityFindingsIndex()
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -321,6 +361,9 @@ class SecurityMemoryIntegration:
             to_entity=f"Host: {ip}",
             relation_type="contains",
         )
+        await self._index_host_finding(
+            assessment_id, ip, hostname, status, os_guess, metadata
+        )
         logger.info("Created host entity: %s for assessment %s", ip, assessment_id)
         return entity
 
@@ -433,6 +476,9 @@ class SecurityMemoryIntegration:
             from_entity=f"Host: {host_ip}",
             to_entity=entity_name,
             relation_type="runs",
+        )
+        await self._index_service_finding(
+            assessment_id, host_ip, port, protocol, service_name, version, product
         )
         logger.info("Created service entity: %s", entity_name)
         return entity
@@ -605,6 +651,15 @@ class SecurityMemoryIntegration:
         )
         await self._create_vuln_relations(
             req.host_ip, entity_name, req.affected_port, req.affected_service
+        )
+        await self._index_vulnerability_finding(
+            req.assessment_id,
+            req.host_ip,
+            vuln_name,
+            req.severity,
+            req.description,
+            req.affected_port,
+            req.affected_service,
         )
         logger.info("Created vulnerability entity: %s", entity_name)
         return entity
@@ -843,6 +898,121 @@ class SecurityMemoryIntegration:
             "severity_distribution": severity_counts,
             "critical_vulns": critical_vulns,
         }
+
+    async def _index_host_finding(
+        self,
+        assessment_id: str,
+        ip: str,
+        hostname: Optional[str],
+        status: str,
+        os_guess: Optional[str],
+        metadata: Optional[dict[str, Any]],
+    ) -> None:
+        """Index host finding in ChromaDB for semantic search. Issue #260."""
+        try:
+            text = f"Host {ip} ({hostname or 'unknown'}) status={status}"
+            if os_guess:
+                text += f" os={os_guess}"
+            finding_metadata = {
+                "type": "host",
+                "assessment_id": assessment_id,
+                "ip": ip,
+            }
+            await self._findings_index.index_finding(
+                finding_id=f"host_{assessment_id}_{ip}",
+                text=text,
+                metadata=finding_metadata,
+            )
+        except Exception as e:
+            logger.warning("Failed to index host finding in ChromaDB: %s", e)
+
+    async def _index_service_finding(
+        self,
+        assessment_id: str,
+        host_ip: str,
+        port: int,
+        protocol: str,
+        service_name: Optional[str],
+        version: Optional[str],
+        product: Optional[str],
+    ) -> None:
+        """Index service finding in ChromaDB. Issue #260."""
+        try:
+            svc = service_name or "unknown"
+            text = f"Service {svc} on {host_ip}:{port}/{protocol}"
+            if version:
+                text += f" version={version}"
+            if product:
+                text += f" product={product}"
+            finding_metadata = {
+                "type": "service",
+                "assessment_id": assessment_id,
+                "host_ip": host_ip,
+                "port": port,
+            }
+            finding_id = f"service_{assessment_id}_{host_ip}_{port}_{protocol}"
+            await self._findings_index.index_finding(finding_id, text, finding_metadata)
+        except Exception as e:
+            logger.warning("Failed to index service in ChromaDB: %s", e)
+
+    async def _index_vulnerability_finding(
+        self,
+        assessment_id: str,
+        host_ip: str,
+        vuln_name: str,
+        severity: str,
+        description: str,
+        affected_port: Optional[int],
+        affected_service: Optional[str],
+    ) -> None:
+        """Index vulnerability finding in ChromaDB. Issue #260."""
+        try:
+            text = f"Vulnerability {vuln_name} severity={severity.upper()} on {host_ip}"
+            if description:
+                text += f" - {description}"
+            if affected_port and affected_service:
+                text += f" affects {affected_service}:{affected_port}"
+            finding_metadata = {
+                "type": "vulnerability",
+                "assessment_id": assessment_id,
+                "host_ip": host_ip,
+                "severity": severity,
+            }
+            finding_id = f"vuln_{assessment_id}_{host_ip}_{vuln_name}"
+            await self._findings_index.index_finding(finding_id, text, finding_metadata)
+        except Exception as e:
+            logger.warning("Failed to index vulnerability in ChromaDB: %s", e)
+
+    async def search_findings_semantic(
+        self,
+        query: str,
+        severity: Optional[str] = None,
+        entity_type: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Search security findings using semantic similarity.
+
+        Args:
+            query: Search query
+            severity: Optional severity filter (critical/high/medium/low)
+            entity_type: Optional type filter (host/service/vulnerability)
+
+        Returns:
+            ChromaDB query results
+        """
+        where = {}
+        if severity:
+            where["severity"] = severity
+        if entity_type:
+            where["type"] = entity_type
+        try:
+            results = await self._findings_index.search_findings(
+                query=query, n_results=10, where=where if where else None
+            )
+            return results
+        except Exception as e:
+            logger.error("Failed to search findings in ChromaDB: %s", e)
+            return {"ids": [], "documents": [], "metadatas": [], "distances": []}
 
 
 # Singleton instance (thread-safe)

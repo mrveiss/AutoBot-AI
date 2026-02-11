@@ -13,7 +13,6 @@ Provides structured, resumable security assessments with:
 Issue: #260
 """
 
-import ast
 import asyncio
 import json
 import logging
@@ -23,9 +22,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, List, Optional
 
-from redis.exceptions import RedisError
-
 from autobot_shared.redis_client import get_redis_client
+from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
@@ -457,43 +455,6 @@ class SecurityWorkflowManager:
             logger.error("Failed to get assessment %s: %s", assessment_id, e)
             raise RuntimeError(f"Failed to get assessment: {e}")
 
-    def _parse_assessment_data(
-        self, aid: str, data: dict
-    ) -> Optional[SecurityAssessment]:
-        """Parse raw Redis data into SecurityAssessment (Issue #315: extracted helper).
-
-        Args:
-            aid: Assessment ID
-            data: Raw Redis hash data
-
-        Returns:
-            SecurityAssessment or None on error
-        """
-        if not data:
-            return None
-
-        try:
-            # Decode bytes if needed
-            decoded = {}
-            for k, v in data.items():
-                key = k if isinstance(k, str) else k.decode("utf-8")
-                val = v if isinstance(v, str) else v.decode("utf-8")
-                decoded[key] = val
-
-            return SecurityAssessment(
-                assessment_id=decoded["assessment_id"],
-                session_id=decoded["session_id"],
-                phase=decoded["phase"],
-                status=decoded["status"],
-                created_at=decoded["created_at"],
-                updated_at=decoded["updated_at"],
-                findings=ast.literal_eval(decoded.get("findings", "[]")),
-                metadata=ast.literal_eval(decoded.get("metadata", "{}")),
-            )
-        except Exception as e:
-            logger.error("Error parsing assessment %s: %s", aid, e)
-            return None
-
     async def list_active_assessments(self) -> list[SecurityAssessment]:
         """List all active (non-complete) assessments."""
         try:
@@ -506,17 +467,24 @@ class SecurityWorkflowManager:
             # Batch fetch assessments using pipeline
             pipe = redis.pipeline()
             for aid in assessment_ids:
-                key = f"{self.REDIS_KEY_PREFIX}{aid}"
-                pipe.hgetall(key)
+                key = self._assessment_key(aid)
+                pipe.get(key)
 
             results = await pipe.execute()
 
-            # Parse results using helper (Issue #315: reduced nesting)
+            # Parse JSON results
             assessments = []
             for aid, data in zip(assessment_ids, results):
-                assessment = self._parse_assessment_data(aid, data)
-                if assessment:
+                if not data:
+                    logger.warning("Assessment %s not found in Redis", aid)
+                    continue
+
+                try:
+                    assessment = SecurityAssessment.from_dict(json.loads(data))
                     assessments.append(assessment)
+                except Exception as e:
+                    logger.error("Error parsing assessment %s: %s", aid, e)
+                    continue
 
             return sorted(assessments, key=lambda a: a.updated_at, reverse=True)
         except RedisError as e:
