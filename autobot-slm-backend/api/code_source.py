@@ -44,7 +44,7 @@ class CodeSourceAssign(BaseModel):
     """Assign code-source to a node."""
 
     node_id: str
-    repo_path: str = "/home/kali/Desktop/AutoBot"
+    repo_path: str = "/opt/autobot"
     branch: str = "main"
 
 
