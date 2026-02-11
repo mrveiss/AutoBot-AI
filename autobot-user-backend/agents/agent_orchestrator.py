@@ -87,6 +87,31 @@ try:
 except ImportError as e:
     logger.debug("Distributed agents not available: %s", e)
 
+# Issue #60: Import specialized agents
+_SPECIALIZED_AGENT_GETTERS = {}
+try:
+    from .audio_processing_agent import get_audio_processing_agent
+    from .code_generation_agent import get_code_generation_agent
+    from .data_analysis_agent import get_data_analysis_agent
+    from .image_analysis_agent import get_image_analysis_agent
+    from .sentiment_analysis_agent import get_sentiment_analysis_agent
+    from .summarization_agent import get_summarization_agent
+    from .translation_agent import get_translation_agent
+
+    _SPECIALIZED_AGENT_GETTERS = {
+        "data_analysis": get_data_analysis_agent,
+        "code_generation": get_code_generation_agent,
+        "translation": get_translation_agent,
+        "summarization": get_summarization_agent,
+        "sentiment_analysis": get_sentiment_analysis_agent,
+        "image_analysis": get_image_analysis_agent,
+        "audio_processing": get_audio_processing_agent,
+    }
+    SPECIALIZED_AGENTS_AVAILABLE = True
+except ImportError as e:
+    SPECIALIZED_AGENTS_AVAILABLE = False
+    logger.debug("Some specialized agents not available: %s", e)
+
 
 __all__ = [
     # Types
@@ -180,6 +205,7 @@ class AgentOrchestrator:
             get_rag_agent=self._get_rag_agent,
             get_kb_librarian=self._get_kb_librarian,
             get_research_agent=self._get_research_agent,
+            specialized_agent_getters=_SPECIALIZED_AGENT_GETTERS,
         )
 
     def _init_communication(self) -> None:
