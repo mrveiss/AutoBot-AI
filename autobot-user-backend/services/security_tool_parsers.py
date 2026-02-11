@@ -5,7 +5,7 @@
 Security Tool Output Parsers
 
 Parses output from security tools into structured data for storage in Memory MCP.
-Supports: nmap, masscan, nuclei, nikto (extensible)
+Supports: nmap, masscan, nuclei, nikto, gobuster, searchsploit (extensible)
 
 Issue: #260
 """
@@ -546,6 +546,258 @@ class NucleiParser(BaseToolParser):
         return result
 
 
+class NiktoParser(BaseToolParser):
+    """Parser for nikto web vulnerability scanner output."""
+
+    TOOL_NAME = "nikto"
+
+    # Pattern for nikto findings
+    FINDING_PATTERN = re.compile(r"^\+\s+(.+)$")
+    TARGET_IP_PATTERN = re.compile(r"Target IP:\s+(\S+)")
+    TARGET_HOSTNAME_PATTERN = re.compile(r"Target Hostname:\s+(\S+)")
+    TARGET_PORT_PATTERN = re.compile(r"Target Port:\s+(\d+)")
+    SERVER_PATTERN = re.compile(r"Server:\s+(.+)")
+    OSVDB_PATTERN = re.compile(r"OSVDB-(\d+)")
+
+    def can_parse(self, output: str) -> bool:
+        """Check if output is from nikto."""
+        return "nikto" in output.lower() or "Target IP:" in output
+
+    def parse(self, output: str) -> ParsedToolOutput:
+        """Parse nikto output."""
+        result = self._create_output(scan_type="nikto")
+
+        host = None
+        port = None
+        server = None
+
+        for line in output.split("\n"):
+            line = line.strip()
+
+            # Extract target info
+            ip_match = self.TARGET_IP_PATTERN.search(line)
+            if ip_match:
+                host = ip_match.group(1)
+                continue
+
+            hostname_match = self.TARGET_HOSTNAME_PATTERN.search(line)
+            if hostname_match and host:
+                result.hosts.append(
+                    ParsedHost(ip=host, hostname=hostname_match.group(1), status="up")
+                )
+                continue
+
+            port_match = self.TARGET_PORT_PATTERN.search(line)
+            if port_match:
+                port = int(port_match.group(1))
+                continue
+
+            server_match = self.SERVER_PATTERN.search(line)
+            if server_match:
+                server = server_match.group(1)
+                continue
+
+            # Parse findings (lines starting with +)
+            finding_match = self.FINDING_PATTERN.match(line)
+            if finding_match and host:
+                finding_text = finding_match.group(1)
+                severity = self._determine_severity(finding_text)
+
+                vuln = ParsedVulnerability(
+                    host=host,
+                    port=port,
+                    title=finding_text[:100],
+                    severity=severity,
+                    description=finding_text,
+                    metadata={"server": server} if server else {},
+                )
+                result.vulnerabilities.append(vuln)
+
+        return result
+
+    def _determine_severity(self, finding: str) -> str:
+        """Determine severity based on finding content (Issue #260)."""
+        finding_lower = finding.lower()
+
+        if "OSVDB" in finding:
+            return "medium"
+        elif "directory listing" in finding_lower or "indexing" in finding_lower:
+            return "low"
+        elif "default file" in finding_lower or "readme" in finding_lower:
+            return "info"
+        elif "sql" in finding_lower or "injection" in finding_lower:
+            return "high"
+        elif "xss" in finding_lower or "script" in finding_lower:
+            return "high"
+        else:
+            return "medium"
+
+
+class GobusterParser(BaseToolParser):
+    """Parser for gobuster directory enumeration output."""
+
+    TOOL_NAME = "gobuster"
+
+    # Pattern for gobuster findings
+    URL_PATTERN = re.compile(r"\[?\+\]?\s*Url:\s+(\S+)")
+    PATH_PATTERN = re.compile(r"^(/\S*)\s+\(Status:\s+(\d+)\)\s+\[Size:\s+(\d+)\]")
+
+    def can_parse(self, output: str) -> bool:
+        """Check if output is from gobuster."""
+        return "gobuster" in output.lower() or "[+] Url:" in output
+
+    def parse(self, output: str) -> ParsedToolOutput:
+        """Parse gobuster output."""
+        result = self._create_output(scan_type="gobuster")
+
+        base_url = None
+        host = None
+
+        for line in output.split("\n"):
+            line = line.strip()
+
+            # Extract base URL
+            url_match = self.URL_PATTERN.search(line)
+            if url_match:
+                base_url = url_match.group(1)
+                host_match = _URL_HOST_RE.search(base_url)
+                if host_match:
+                    host = host_match.group(1)
+                continue
+
+            # Parse discovered paths
+            path_match = self.PATH_PATTERN.match(line)
+            if path_match and host:
+                path = path_match.group(1)
+                status = int(path_match.group(2))
+                size = int(path_match.group(3))
+
+                # Determine severity based on path and status
+                severity = self._classify_finding(path, status)
+
+                vuln = ParsedVulnerability(
+                    host=host,
+                    title=f"Discovered path: {path}",
+                    severity=severity,
+                    description=f"Status: {status}, Size: {size} bytes",
+                    metadata={
+                        "path": path,
+                        "status_code": status,
+                        "size": size,
+                        "url": f"{base_url}{path}" if base_url else path,
+                    },
+                )
+                result.vulnerabilities.append(vuln)
+
+        if host:
+            result.hosts.append(ParsedHost(ip=host, status="up"))
+
+        return result
+
+    def _classify_finding(self, path: str, status: int) -> str:
+        """Classify finding severity (Issue #260)."""
+        path_lower = path.lower()
+
+        # Sensitive paths
+        if any(
+            sensitive in path_lower
+            for sensitive in [".git", "backup", "admin", ".env", "config"]
+        ):
+            if status == 200:
+                return "high"
+            elif status == 403:
+                return "medium"
+
+        # Status-based classification
+        if status == 200:
+            return "info"
+        elif status == 403:
+            return "low"
+        elif status == 301:
+            return "info"
+        else:
+            return "low"
+
+
+class SearchsploitParser(BaseToolParser):
+    """Parser for searchsploit exploit database output."""
+
+    TOOL_NAME = "searchsploit"
+
+    # Pattern for searchsploit table rows
+    EXPLOIT_PATTERN = re.compile(r"^(.+?)\s+\|\s+(.+)$")
+
+    def can_parse(self, output: str) -> bool:
+        """Check if output is from searchsploit."""
+        return (
+            "searchsploit" in output.lower()
+            or "Exploit Title" in output
+            and "Path" in output
+        )
+
+    def parse(self, output: str) -> ParsedToolOutput:
+        """Parse searchsploit output."""
+        result = self._create_output(scan_type="searchsploit")
+
+        in_results = False
+        for line in output.split("\n"):
+            line = line.strip()
+
+            # Skip header and separator lines
+            if "Exploit Title" in line or line.startswith("---"):
+                in_results = True
+                continue
+
+            if not in_results or not line:
+                continue
+
+            # Parse exploit entries
+            match = self.EXPLOIT_PATTERN.match(line)
+            if match:
+                title = match.group(1).strip()
+                path = match.group(2).strip()
+
+                # Skip if it's just dashes or empty
+                if not title or title.startswith("---"):
+                    continue
+
+                severity = self._determine_severity(title)
+
+                vuln = ParsedVulnerability(
+                    host="N/A",
+                    title=title,
+                    severity=severity,
+                    description=f"Exploit available: {path}",
+                    metadata={"exploit_path": path, "exploit_title": title},
+                )
+                result.vulnerabilities.append(vuln)
+
+        return result
+
+    def _determine_severity(self, title: str) -> str:
+        """Determine severity based on exploit type (Issue #260)."""
+        title_lower = title.lower()
+
+        if any(
+            keyword in title_lower
+            for keyword in ["remote code execution", "rce", "arbitrary code"]
+        ):
+            return "critical"
+        elif any(
+            keyword in title_lower
+            for keyword in ["buffer overflow", "overflow", "privilege escalation"]
+        ):
+            return "high"
+        elif any(keyword in title_lower for keyword in ["dos", "denial of service"]):
+            return "medium"
+        elif any(
+            keyword in title_lower for keyword in ["information disclosure", "info"]
+        ):
+            return "low"
+        else:
+            return "medium"
+
+
 class ToolParserRegistry:
     """Registry of available tool parsers with auto-detection."""
 
@@ -555,6 +807,9 @@ class ToolParserRegistry:
             NmapParser(),
             MasscanParser(),
             NucleiParser(),
+            NiktoParser(),
+            GobusterParser(),
+            SearchsploitParser(),
         ]
 
     def register(self, parser: BaseToolParser) -> None:
