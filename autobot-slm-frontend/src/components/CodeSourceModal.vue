@@ -11,12 +11,21 @@
 
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
 import { getBackendUrl } from '@/config/ssot-config'
+
+const props = defineProps<{
+  currentNodeId?: string
+  currentRepoPath?: string
+  currentBranch?: string
+}>()
 
 const emit = defineEmits<{
   close: []
   saved: []
 }>()
+
+const isEditing = Boolean(props.currentNodeId)
 
 interface Node {
   node_id: string
@@ -25,18 +34,28 @@ interface Node {
 }
 
 const nodes = ref<Node[]>([])
-const selectedNodeId = ref('')
-const repoPath = ref('/opt/autobot')
-const branch = ref('main')
+const selectedNodeId = ref(props.currentNodeId ?? '')
+const repoPath = ref(props.currentRepoPath ?? '/opt/autobot')
+const branch = ref(props.currentBranch ?? 'main')
 const isLoading = ref(true)
 const isSaving = ref(false)
 const error = ref<string | null>(null)
 
 const API_BASE = getBackendUrl()
+const authStore = useAuthStore()
+
+const api = axios.create({ baseURL: API_BASE, timeout: 15000 })
+api.interceptors.request.use((config) => {
+  const token = authStore.token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
 
 onMounted(async () => {
   try {
-    const response = await axios.get<{ nodes: Node[] }>(`${API_BASE}/api/nodes`)
+    const response = await api.get<{ nodes: Node[] }>('/api/nodes')
     nodes.value = response.data.nodes
   } catch {
     error.value = 'Failed to load nodes'
@@ -52,7 +71,7 @@ async function handleAssign(): Promise<void> {
   error.value = null
 
   try {
-    await axios.post(`${API_BASE}/api/code-source/assign`, {
+    await api.post('/api/code-source/assign', {
       node_id: selectedNodeId.value,
       repo_path: repoPath.value,
       branch: branch.value,
@@ -74,7 +93,9 @@ async function handleAssign(): Promise<void> {
     @click.self="emit('close')"
   >
     <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">Assign Code Source</h3>
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">
+        {{ isEditing ? 'Edit Code Source' : 'Assign Code Source' }}
+      </h3>
 
       <div v-if="isLoading" class="text-gray-500">Loading nodes...</div>
 
@@ -122,7 +143,7 @@ async function handleAssign(): Promise<void> {
           :disabled="!selectedNodeId || isSaving"
           class="btn btn-primary"
         >
-          {{ isSaving ? 'Assigning...' : 'Assign' }}
+          {{ isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Assign') }}
         </button>
       </div>
     </div>

@@ -369,11 +369,10 @@ onMounted(async () => {
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-900">Code Source</h2>
         <button
-          v-if="!codeSourceData"
           @click="showCodeSourceModal = true"
           class="btn btn-primary text-sm"
         >
-          Configure
+          {{ codeSourceData ? 'Edit' : 'Configure' }}
         </button>
       </div>
 
@@ -718,6 +717,9 @@ onMounted(async () => {
     <!-- Code Source Modal (Issue #779) -->
     <CodeSourceModal
       v-if="showCodeSourceModal"
+      :current-node-id="codeSourceData?.node_id"
+      :current-repo-path="codeSourceData?.repo_path"
+      :current-branch="codeSourceData?.branch"
       @close="showCodeSourceModal = false"
       @saved="handleCodeSourceSaved"
     />
