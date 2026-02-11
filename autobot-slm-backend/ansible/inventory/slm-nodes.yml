@@ -29,6 +29,7 @@ all:
           slm_node_role: "backend"
           slm_services_to_monitor:
             - autobot-backend
+            - ollama
             - slm-agent
 
         # Frontend server
@@ -49,8 +50,7 @@ all:
         03-AI-Stack:
           ansible_host: 172.16.168.24
           slm_node_id: "03-AI-Stack"
-          slm_services_to_monitor:
-            - ollama
+          slm_services_to_monitor: []
 
         # Databases
         04-Databases:
