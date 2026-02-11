@@ -126,9 +126,11 @@ async def lifespan(app: FastAPI):
 
 
 async def _ensure_admin_user():
-    """Create default admin user if none exists.
+    """Create or sync the admin user.
 
-    Reads SLM_ADMIN_PASSWORD env var; generates random if not set.
+    When SLM_ADMIN_PASSWORD is set (Ansible-managed), ensures the
+    admin password always matches. This makes the secrets file the
+    single source of truth for the admin credential.
     """
     import os
     import secrets
@@ -137,12 +139,20 @@ async def _ensure_admin_user():
     from services.auth import auth_service
     from sqlalchemy import select
 
+    env_password = os.getenv("SLM_ADMIN_PASSWORD", "")
+
     async with db_service.session() as db:
-        result = await db.execute(select(User).where(User.is_admin.is_(True)))
-        if result.scalar_one_or_none():
+        result = await db.execute(select(User).where(User.username == "admin"))
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            if env_password:
+                existing.password_hash = auth_service.hash_password(env_password)
+                await db.commit()
+                logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
             return
 
-        password = os.getenv("SLM_ADMIN_PASSWORD", "")
+        password = env_password
         if not password:
             password = secrets.token_urlsafe(16)
             logger.critical(
