@@ -3,6 +3,7 @@
 # Author: mrveiss
 ---
 # Frontend configuration defaults
+network_subnet: "172.16.168.0/24"
 frontend_user: autobot
 frontend_group: autobot
 frontend_install_dir: /opt/autobot

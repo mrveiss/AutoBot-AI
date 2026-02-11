@@ -3,6 +3,7 @@
 # Author: mrveiss
 ---
 # Redis configuration defaults
+network_subnet: "172.16.168.0/24"
 redis_port: 6379
 redis_bind: "0.0.0.0"
 redis_password: ""

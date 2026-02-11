@@ -10,5 +10,5 @@ redis_timeout: 300
 redis_tcp_keepalive: 60
 redis_backup_retention_days: 30
 
-# Authentication - references vault password
-redis_password: "{{ vault_redis_password }}"
+# Authentication - vault password with safe fallback
+redis_password: "{{ vault_redis_password | default('') }}"
