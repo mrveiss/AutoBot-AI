@@ -87,7 +87,6 @@ onMounted(async () => {
         <main
           id="main-content"
           class="flex-1 overflow-auto"
-          role="main"
           aria-label="Main content"
         >
           <RouterView />

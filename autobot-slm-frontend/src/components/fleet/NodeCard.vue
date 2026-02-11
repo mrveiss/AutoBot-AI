@@ -269,8 +269,8 @@ const hasUpdates = computed(() => {
     <div v-if="node.health" class="space-y-2 mb-3" aria-label="Health metrics">
       <!-- CPU -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" id="cpu-label">CPU</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.cpu_percent" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cpu-label">
+        <span class="w-12 text-gray-500" :id="`cpu-label-${node.node_id}`">CPU</span>
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.cpu_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`cpu-label-${node.node_id}`">
           <div
             :class="['h-full rounded-full transition-all', node.health.cpu_percent > 80 ? 'bg-red-500' : node.health.cpu_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
             :style="{ width: `${node.health.cpu_percent}%` }"
@@ -281,8 +281,8 @@ const hasUpdates = computed(() => {
 
       <!-- Memory -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" id="mem-label">MEM</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.memory_percent" aria-valuemin="0" aria-valuemax="100" aria-labelledby="mem-label">
+        <span class="w-12 text-gray-500" :id="`mem-label-${node.node_id}`">MEM</span>
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.memory_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`mem-label-${node.node_id}`">
           <div
             :class="['h-full rounded-full transition-all', node.health.memory_percent > 80 ? 'bg-red-500' : node.health.memory_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
             :style="{ width: `${node.health.memory_percent}%` }"
@@ -293,8 +293,8 @@ const hasUpdates = computed(() => {
 
       <!-- Disk -->
       <div class="flex items-center gap-2 text-xs">
-        <span class="w-12 text-gray-500" id="disk-label">DISK</span>
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.disk_percent" aria-valuemin="0" aria-valuemax="100" aria-labelledby="disk-label">
+        <span class="w-12 text-gray-500" :id="`disk-label-${node.node_id}`">DISK</span>
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden" role="progressbar" :aria-valuenow="node.health.disk_percent" aria-valuemin="0" aria-valuemax="100" :aria-labelledby="`disk-label-${node.node_id}`">
           <div
             :class="['h-full rounded-full transition-all', node.health.disk_percent > 80 ? 'bg-red-500' : node.health.disk_percent > 60 ? 'bg-yellow-500' : 'bg-green-500']"
             :style="{ width: `${node.health.disk_percent}%` }"

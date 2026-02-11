@@ -77,9 +77,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div
+  <main
     class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
-    role="main"
     aria-label="Login page"
   >
     <div class="w-full max-w-md">
@@ -284,5 +283,5 @@ onMounted(async () => {
         SLM Admin v1.0.0
       </p>
     </div>
-  </div>
+  </main>
 </template>

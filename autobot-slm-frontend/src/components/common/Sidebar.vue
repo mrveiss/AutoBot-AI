@@ -145,7 +145,6 @@ onUnmounted(() => {
 <template>
   <aside
     class="w-64 bg-gray-900 text-white min-h-screen flex flex-col"
-    role="complementary"
     aria-label="Sidebar navigation"
   >
     <!-- Logo & Title -->

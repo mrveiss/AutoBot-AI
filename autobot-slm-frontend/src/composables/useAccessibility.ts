@@ -70,6 +70,16 @@ export function useHighContrast() {
 
 // ─── Focus Trap ───────────────────────────────────────────────
 
+/** Selector for all focusable elements within a container. */
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
 /**
  * Trap focus within a container element (for modals/dialogs).
  *
@@ -77,15 +87,6 @@ export function useHighContrast() {
  */
 export function useFocusTrap(containerRef: Ref<HTMLElement | null>) {
   let previousFocus: HTMLElement | null = null
-
-  const FOCUSABLE_SELECTOR = [
-    'a[href]',
-    'button:not([disabled])',
-    'input:not([disabled])',
-    'select:not([disabled])',
-    'textarea:not([disabled])',
-    '[tabindex]:not([tabindex="-1"])',
-  ].join(', ')
 
   function getFocusableElements(): HTMLElement[] {
     if (!containerRef.value) return []
