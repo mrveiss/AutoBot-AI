@@ -171,11 +171,50 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'graph',
         name: 'knowledge-graph',
-        component: () => import('@/components/knowledge/KnowledgeGraph.vue'),
+        component: () => import('@/components/knowledge/KnowledgeGraphView.vue'),
         meta: {
           title: 'Knowledge Graph',
           parent: 'knowledge'
-        }
+        },
+        children: [
+          {
+            // Issue #759: Knowledge Graph Pipeline
+            path: 'pipeline',
+            name: 'knowledge-graph-pipeline',
+            component: () => import('@/components/knowledge/pipeline/PipelineRunner.vue'),
+            meta: {
+              title: 'Pipeline Runner',
+              parent: 'knowledge'
+            }
+          },
+          {
+            path: 'entities',
+            name: 'knowledge-graph-entities',
+            component: () => import('@/components/knowledge/graph/KnowledgeGraphExplorer.vue'),
+            meta: {
+              title: 'Entity Explorer',
+              parent: 'knowledge'
+            }
+          },
+          {
+            path: 'timeline',
+            name: 'knowledge-graph-timeline',
+            component: () => import('@/components/knowledge/temporal/TimelinePage.vue'),
+            meta: {
+              title: 'Event Timeline',
+              parent: 'knowledge'
+            }
+          },
+          {
+            path: 'summaries',
+            name: 'knowledge-graph-summaries',
+            component: () => import('@/components/knowledge/summaries/SummariesPage.vue'),
+            meta: {
+              title: 'Summary Search',
+              parent: 'knowledge'
+            }
+          }
+        ]
       },
       {
         // Issue #586: Entity Extraction & Graph RAG Manager

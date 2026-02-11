@@ -293,6 +293,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Skills system (Issue #731)
     ("backend.api.skills", "/skills", ["skills"], "skills"),
+    # Knowledge graph pipeline (Issue #759)
+    (
+        "backend.api.knowledge_graph_routes",
+        "/knowledge-graph",
+        ["knowledge-graph", "ecl-pipeline"],
+        "knowledge_graph",
+    ),
 ]
 
 
