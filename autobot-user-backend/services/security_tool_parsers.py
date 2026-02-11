@@ -558,6 +558,7 @@ class NiktoParser(BaseToolParser):
     TARGET_PORT_PATTERN = re.compile(r"Target Port:\s+(\d+)")
     SERVER_PATTERN = re.compile(r"Server:\s+(.+)")
     OSVDB_PATTERN = re.compile(r"OSVDB-(\d+)")
+    SUMMARY_PATTERN = re.compile(r"^\d+\s+requests?:\s+\d+\s+error")
 
     def can_parse(self, output: str) -> bool:
         """Check if output is from nikto."""
@@ -597,10 +598,12 @@ class NiktoParser(BaseToolParser):
                 server = server_match.group(1)
                 continue
 
-            # Parse findings (lines starting with +)
+            # Parse findings (lines starting with +), skip summary lines
             finding_match = self.FINDING_PATTERN.match(line)
             if finding_match and host:
                 finding_text = finding_match.group(1)
+                if self.SUMMARY_PATTERN.match(finding_text):
+                    continue
                 severity = self._determine_severity(finding_text)
 
                 vuln = ParsedVulnerability(

@@ -12,7 +12,18 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from services.security_memory_integration import SecurityMemoryIntegration
+
+try:
+    from services.security_memory_integration import SecurityMemoryIntegration
+
+    HAS_MEMORY_GRAPH = True
+except ImportError:
+    HAS_MEMORY_GRAPH = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_MEMORY_GRAPH,
+    reason="autobot_memory_graph.core not available",
+)
 
 
 class TestSecurityMemoryIntegration(unittest.IsolatedAsyncioTestCase):
