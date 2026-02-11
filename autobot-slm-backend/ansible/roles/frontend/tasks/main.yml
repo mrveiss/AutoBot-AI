@@ -76,6 +76,12 @@
   become: yes
   tags: ['frontend', 'directories']
 
+- name: "Frontend | Check if package.json exists"
+  stat:
+    path: /home/autobot/autobot-vue/package.json
+  register: package_json_path
+  tags: ['frontend', 'npm']
+
 - name: "Frontend | Install npm dependencies (if package.json exists)"
   npm:
     path: /home/autobot/autobot-vue
@@ -186,9 +192,3 @@
       - "Service: autobot-frontend (configured)"
       - "Note: Service will start when code is synced"
   tags: ['frontend', 'report']
-
-- name: "Frontend | Check if package.json exists"
-  stat:
-    path: /home/autobot/autobot-vue/package.json
-  register: package_json_path
-  tags: ['frontend', 'validation']
