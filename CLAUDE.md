@@ -54,6 +54,45 @@
   3. Is there already code that partially implements this? Quick grep/glob search
 - Show brief status summary before proceeding with implementation
 
+**Implementation Approach:**
+
+- For large features spanning backend + frontend, complete and commit backend fully before starting frontend
+- When a session is getting long, commit completed work incrementally rather than waiting until everything is done
+- If implementation has 10+ tasks, commit after each logical group (e.g., every 2-3 tasks)
+- Incremental commits protect progress and simplify recovery if sessions need to end
+
+---
+
+## GIT WORKFLOW (MANDATORY)
+
+**Branch Strategy:**
+
+- Always target `Dev_new_gui` branch for PRs and merges unless explicitly told otherwise
+- Before merging or integrating branches, verify the target branch is `Dev_new_gui`, not `main`
+- After completing work, clean up: delete remote feature branches and prune stale branches
+
+**Pre-Flight Checks (run BEFORE making ANY code changes):**
+
+1. Verify current branch: `git branch --show-current`
+2. Check for uncommitted work: `git status`
+3. Check for stashes: `git stash list` - if present, ask user how to handle
+4. Verify target merge branch exists and is up to date:
+   ```bash
+   git fetch origin Dev_new_gui
+   git log --oneline origin/Dev_new_gui -3
+   ```
+5. Confirm the working branch is correct for this issue
+
+**Post-Commit Verification:**
+
+- After EVERY commit, immediately verify it landed correctly:
+  ```bash
+  git log --oneline -1        # Verify commit message and branch
+  git diff --staged           # Ensure nothing unexpectedly left staged
+  ```
+
+**If anything looks wrong, STOP and notify user immediately**
+
 ---
 
 ## SESSION BOUNDARIES (MANDATORY)
@@ -208,6 +247,23 @@ Let me fix that real quick...
 
 ---
 
+## EDIT STRATEGY (MANDATORY)
+
+**Incremental Edits Only:**
+
+- Prefer incremental `Edit` operations over full file `Write` for files longer than 50 lines
+- Never rewrite entire files when only a few sections need changes
+- If an edit is interrupted/rejected, switch to smaller, targeted edits rather than retrying the same large change
+- Large file rewrites are the #1 cause of user interruptions - avoid them
+
+**When to Use Write vs Edit:**
+
+- `Write`: New files, files under 50 lines, complete file generation
+- `Edit`: Existing files over 50 lines, targeted changes, refactoring
+- If unsure, default to `Edit` for existing files
+
+---
+
 ## CRITICAL POLICIES
 
 ### No Temporary Fixes (ZERO TOLERANCE)
@@ -242,6 +298,7 @@ When merging duplicate code: **Preserve ALL features** + **Choose BEST implement
 
 **Pre-commit hooks may revert your edits:**
 
+- Be aware that pre-commit hooks (linters, formatters) run on every commit and may revert or modify staged changes
 - After ANY commit attempt, verify changes were actually committed:
   ```bash
   git log -1 --stat  # Check what was committed
@@ -250,6 +307,9 @@ When merging duplicate code: **Preserve ALL features** + **Choose BEST implement
 
 - If hooks revert edits, fix the underlying issue (don't retry blindly)
 - Common hook failures: line length (E501), trailing whitespace, hardcoded values
+- Always run `git diff --staged` after staging to verify changes survive hook processing
+- If hooks keep reverting changes, investigate the hook config before retrying - do not blindly retry commits
+- Never mix unrelated staged files; stage and commit in focused batches
 
 **Line length enforcement:**
 
@@ -368,6 +428,15 @@ import { getBackendUrl } from '@/config/ssot-config'
 
 Pre-commit hook enforces this. Guide: [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md)
 
+### Network Configuration
+
+**Never assume or hardcode IP subnets:**
+
+- Always check existing configuration files for the correct network ranges before making changes
+- Never hardcode IP addresses - use environment variables or SSOT config
+- The project is actively removing hardcoded IPs in favor of environment variables and dynamic configuration
+- If you see hardcoded IPs in legacy code, flag them for removal
+
 ### Redis Client
 
 ```python
@@ -442,6 +511,10 @@ No `console.*` or `print()` - pre-commit blocks these.
 - The frontend is in `autobot-slm-frontend/`, NOT `autobot-vue`
 - Worktrees should be created in `../worktrees/issue-<number>/` (check existing pattern first)
 - Never assume directory structure - verify with `ls` before creating paths
+- Ansible playbooks and roles are in `autobot-slm-backend/ansible/`, NOT `infrastructure/ansible/`
+- The primary working branch is `Dev_new_gui`
+- Test files are colocated next to their source files, not in a separate `tests/` directory
+- Import paths use the colocated structure - never use stale `from src.` imports for migrated modules
 
 ### Infrastructure Directory Structure
 

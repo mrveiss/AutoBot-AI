@@ -5,5 +5,33 @@
       "Bash(sshpass:*)",
       "Bash(sshpass -p 'slm123' ssh -o StrictHostKeyChecking=no root@172.16.168.19 \"chown -R slm:slm /home/slm/slm-admin/src/\")"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$TOOL_ARGS\" == *\".py\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" && \"$FILE\" == *.py ]]; then python -m py_compile \"$FILE\" 2>&1 | head -5 || echo \"✓ Syntax OK\"; fi; fi",
+            "statusMessage": "Checking Python syntax...",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$TOOL_ARGS\" == *\"git commit\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && echo '📋 Staged files:' && git diff --staged --name-only 2>/dev/null | head -20 && echo '' && echo '🌿 Branch:' $(git branch --show-current 2>/dev/null) '→ Dev_new_gui' && echo ''; fi",
+            "statusMessage": "Verifying git state...",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
   }
 }
