@@ -8,6 +8,7 @@ AI analytics, business intelligence, and APM systems.
 import asyncio
 import json
 import logging
+import os
 import signal
 import time
 from datetime import datetime, timezone
@@ -49,7 +50,8 @@ class ComprehensiveMonitoringController:
 
         # Results storage
         self.monitoring_results = {}
-        self.reports_path = Path("/home/kali/Desktop/AutoBot/reports/performance")
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        self.reports_path = Path(_base) / "reports" / "performance"
         self.reports_path.mkdir(parents=True, exist_ok=True)
 
         # Setup signal handlers for graceful shutdown
@@ -64,7 +66,10 @@ class ComprehensiveMonitoringController:
             handlers=[
                 logging.StreamHandler(),
                 logging.FileHandler(
-                    "/home/kali/Desktop/AutoBot/logs/monitoring_controller.log"
+                    os.path.join(
+                        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+                        "logs/monitoring_controller.log",
+                    )
                 ),
             ],
         )
@@ -577,7 +582,7 @@ async def main():
         print("⚡ Generating instant comprehensive report...")
         report = await controller.generate_instant_report()
         print("✅ Instant report generated")
-        print(f"📊 Summary:")
+        print("📊 Summary:")
         print(f"  Timestamp: {report.get('timestamp')}")
         print(
             f"  Performance: {'✅' if 'error' not in report.get('performance_data', {}) else '❌'}"

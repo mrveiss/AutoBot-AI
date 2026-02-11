@@ -84,6 +84,8 @@ for file in $PY_FILES; do
             continue ;;
         *"script_utils.py")  # Script formatting utilities with intentional print()
             continue ;;
+        *"monitoring/"*)  # Monitoring CLI tools use print() for terminal reports
+            continue ;;
         *"cleanup_redis_metrics.py")  # Phase 5 CLI tool for Redis cleanup
             continue ;;
         *"test_phase5_cleanup.py")  # Phase 5 test script

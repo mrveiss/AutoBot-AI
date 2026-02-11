@@ -7,6 +7,7 @@ Provides unified interface for monitoring, optimization, benchmarking, and alert
 
 import asyncio
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -229,7 +230,8 @@ class MonitorControl:
 
     def setup_logging(self):
         """Configure logging for the monitoring system."""
-        log_dir = Path("/home/kali/Desktop/AutoBot/logs")
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        log_dir = Path(_base) / "logs"
         log_dir.mkdir(exist_ok=True)
 
         logging.basicConfig(
@@ -574,6 +576,29 @@ class MonitorControl:
 
         self.logger.info("✅ All monitoring components stopped")
 
+    def _log_monitored_vms(self):
+        """Log monitored VM addresses and paths. Helper for _print_startup_summary."""
+        logger.info("\n🎯 Monitoring AutoBot distributed system:")
+        logger.info(
+            f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API"
+        )
+        logger.info(
+            f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface"
+        )
+        logger.info(
+            f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration"
+        )
+        logger.info(f"   • Redis VM: {NetworkConstants.REDIS_VM_IP} - Data Layer")
+        logger.info(
+            f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing"
+        )
+        logger.info(
+            f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation"
+        )
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        logger.info("\n💾 Logs: %s/logs/", _base)
+        logger.info("📊 Results: %s/logs/benchmarks/", _base)
+
     async def _print_startup_summary(self):
         """Print startup summary information."""
         logger.info("\n" + "=" * 80)
@@ -622,30 +647,17 @@ class MonitorControl:
 
         recs = status["recommendations"]
         if recs["total_count"] > 0:
+            total = recs["total_count"]
+            crit = recs["critical"]
+            high = recs["high"]
             logger.info(
-                f"   📋 Optimization Opportunities: {recs['total_count']} (Critical: {recs['critical']}, High: {recs['high']})"
+                "   📋 Optimization Opportunities: %s " "(Critical: %s, High: %s)",
+                total,
+                crit,
+                high,
             )
 
-        logger.info("\n🎯 Monitoring AutoBot distributed system:")
-        logger.info(
-            f"   • Main (WSL): {NetworkConstants.MAIN_MACHINE_IP} - Backend API"
-        )
-        logger.info(
-            f"   • Frontend VM: {NetworkConstants.FRONTEND_VM_IP} - Web Interface"
-        )
-        logger.info(
-            f"   • NPU Worker VM: {NetworkConstants.NPU_WORKER_VM_IP} - AI Acceleration"
-        )
-        logger.info(f"   • Redis VM: {NetworkConstants.REDIS_VM_IP} - Data Layer")
-        logger.info(
-            f"   • AI Stack VM: {NetworkConstants.AI_STACK_VM_IP} - AI Processing"
-        )
-        logger.info(
-            f"   • Browser VM: {NetworkConstants.BROWSER_VM_IP} - Web Automation"
-        )
-
-        logger.info("\n💾 Logs: /home/kali/Desktop/AutoBot/logs/")
-        logger.info("📊 Results: /home/kali/Desktop/AutoBot/logs/benchmarks/")
+        self._log_monitored_vms()
 
         logger.info("\n🔧 Control Commands:")
         logger.info("   • Press Ctrl+C to stop monitoring")
@@ -655,13 +667,12 @@ class MonitorControl:
         logger.info("=" * 80)
 
 
-async def main():
-    """Main function for monitor control."""
+def _create_argument_parser():
+    """Create and configure argument parser. Helper for main."""
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Monitor Control System")
 
-    # Main actions
     parser.add_argument(
         "--start", action="store_true", help="Start all monitoring components"
     )
@@ -674,8 +685,6 @@ async def main():
     parser.add_argument(
         "--restart", action="store_true", help="Restart all monitoring components"
     )
-
-    # Specific component controls
     parser.add_argument(
         "--dashboard-only", action="store_true", help="Start only the dashboard"
     )
@@ -687,8 +696,6 @@ async def main():
     parser.add_argument(
         "--optimize-once", action="store_true", help="Run single optimization cycle"
     )
-
-    # Benchmark controls
     parser.add_argument(
         "--benchmark",
         choices=["comprehensive", "api", "database", "network", "system"],
@@ -700,39 +707,44 @@ async def main():
         default=60,
         help="Benchmark duration in seconds",
     )
-
-    # Configuration
     parser.add_argument("--config", help="Configuration file path")
     parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
     )
 
-    args = parser.parse_args()
+    return parser
 
-    # Initialize monitor control
+
+async def _dispatch_command(monitor_control, args, parser):
+    """Dispatch to appropriate command handler. Helper for main."""
+    if args.status:
+        await _handle_status_command(monitor_control, args)
+    elif args.benchmark:
+        await _handle_benchmark_command(monitor_control, args)
+    elif args.optimize_once:
+        await _handle_optimize_once_command(monitor_control, args)
+    elif args.dashboard_only:
+        await _handle_dashboard_only_command(monitor_control, args)
+    elif args.monitor_only:
+        await _handle_monitor_only_command(monitor_control, args)
+    elif args.stop:
+        await _handle_stop_command(monitor_control, args)
+    elif args.restart:
+        await _handle_restart_command(monitor_control, args)
+    elif args.start or len(sys.argv) == 1:
+        await _handle_start_command(monitor_control, args)
+    else:
+        parser.print_help()
+
+
+async def main():
+    """Main function for monitor control."""
+    parser = _create_argument_parser()
+    args = parser.parse_args()
     monitor_control = MonitorControl(config_path=args.config)
 
-    # Issue #339: Refactored to use extracted command handlers, reducing depth from 11 to 3
     try:
-        if args.status:
-            await _handle_status_command(monitor_control, args)
-        elif args.benchmark:
-            await _handle_benchmark_command(monitor_control, args)
-        elif args.optimize_once:
-            await _handle_optimize_once_command(monitor_control, args)
-        elif args.dashboard_only:
-            await _handle_dashboard_only_command(monitor_control, args)
-        elif args.monitor_only:
-            await _handle_monitor_only_command(monitor_control, args)
-        elif args.stop:
-            await _handle_stop_command(monitor_control, args)
-        elif args.restart:
-            await _handle_restart_command(monitor_control, args)
-        elif args.start or len(sys.argv) == 1:
-            await _handle_start_command(monitor_control, args)
-        else:
-            parser.print_help()
-
+        await _dispatch_command(monitor_control, args, parser)
     except KeyboardInterrupt:
         logger.info("Monitoring stopped by user")
         await monitor_control.stop_all()

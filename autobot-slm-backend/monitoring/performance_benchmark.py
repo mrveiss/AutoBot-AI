@@ -23,8 +23,8 @@ import aiohttp
 import matplotlib.pyplot as plt
 import numpy as np
 from performance_monitor import VMS
-
 from src.constants.model_constants import ModelConstants
+
 from autobot_shared.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
@@ -120,8 +120,11 @@ class SystemBenchmark:
 class PerformanceBenchmark:
     """Comprehensive performance benchmarking suite for AutoBot."""
 
-    def __init__(self, output_dir: str = "/home/kali/Desktop/AutoBot/logs/benchmarks"):
+    def __init__(self, output_dir: str = None):
         self.logger = logging.getLogger(__name__)
+        if output_dir is None:
+            _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+            output_dir = f"{_base}/logs/benchmarks"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.results = []
@@ -362,94 +365,11 @@ class PerformanceBenchmark:
             metadata={"database": f"Redis_DB_{db_num}", "operation": "connection"},
         )
 
-    async def _benchmark_redis_operations(
-        self, db_num: int, duration_seconds: int
-    ) -> BenchmarkResult:
-        """Benchmark Redis read/write operations using canonical utility.
+    def _calculate_latency_stats(self, latencies: List[float]) -> tuple:
+        """Calculate latency statistics.
 
-        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
-        Maps DB numbers to named databases for benchmarking.
+        Helper for _benchmark_redis_operations.
         """
-        from autobot_shared.redis_client import get_redis_client
-
-        # Map DB numbers to database names for canonical utility
-        db_name_map = {
-            0: "main",
-            1: "knowledge",
-            4: "metrics",
-            7: "workflows",
-            8: "vectors",
-        }
-
-        latencies = []
-        success_count = 0
-        error_count = 0
-        start_time = time.time()
-
-        try:
-            # Get client using canonical utility with named database
-            db_name = db_name_map.get(db_num, "main")
-            client = get_redis_client(database=db_name)
-            if client is None:
-                raise Exception(
-                    f"Redis client initialization returned None for DB {db_num}"
-                )
-
-            operation_counter = 0
-
-            while time.time() - start_time < duration_seconds:
-                op_start = time.time()
-
-                try:
-                    # Alternate between read and write operations
-                    key = f"benchmark_key_{operation_counter % 1000}"
-
-                    if operation_counter % 2 == 0:
-                        # Write operation
-                        client.set(key, f"benchmark_value_{operation_counter}")
-                    else:
-                        # Read operation
-                        client.get(key)
-
-                    op_time = (time.time() - op_start) * 1000  # Convert to ms
-                    latencies.append(op_time)
-                    success_count += 1
-
-                except Exception as e:
-                    error_count += 1
-                    self.logger.debug(f"Redis operation error: {e}")
-
-                operation_counter += 1
-
-                # Brief pause to avoid overwhelming Redis
-                await asyncio.sleep(0.01)
-
-            client.close()
-
-        except Exception as e:
-            self.logger.error(f"Redis benchmark setup error for DB {db_num}: {e}")
-            return BenchmarkResult(
-                test_name=f"Redis_DB{db_num}_Operations",
-                category="database",
-                duration_seconds=0,
-                operations_count=0,
-                operations_per_second=0,
-                average_latency_ms=0,
-                p95_latency_ms=0,
-                p99_latency_ms=0,
-                success_rate=0,
-                error_count=1,
-                timestamp=datetime.now().isoformat(),
-                metadata={
-                    "database": f"Redis_DB_{db_num}",
-                    "operation": "read_write",
-                    "error": str(e),
-                },
-            )
-
-        total_operations = success_count + error_count
-        actual_duration = time.time() - start_time
-
         if latencies:
             avg_latency = statistics.mean(latencies)
             p95_latency = (
@@ -460,6 +380,114 @@ class PerformanceBenchmark:
             )
         else:
             avg_latency = p95_latency = p99_latency = 0.0
+        return avg_latency, p95_latency, p99_latency
+
+    def _create_error_benchmark_result(
+        self, db_num: int, error: Exception
+    ) -> BenchmarkResult:
+        """Create error benchmark result for Redis operations.
+
+        Helper for _benchmark_redis_operations.
+        """
+        return BenchmarkResult(
+            test_name=f"Redis_DB{db_num}_Operations",
+            category="database",
+            duration_seconds=0,
+            operations_count=0,
+            operations_per_second=0,
+            average_latency_ms=0,
+            p95_latency_ms=0,
+            p99_latency_ms=0,
+            success_rate=0,
+            error_count=1,
+            timestamp=datetime.now().isoformat(),
+            metadata={
+                "database": f"Redis_DB_{db_num}",
+                "operation": "read_write",
+                "error": str(error),
+            },
+        )
+
+    async def _execute_redis_operations(
+        self, client, duration_seconds: int, start_time: float
+    ) -> tuple:
+        """Execute Redis read/write operations loop.
+
+        Helper for _benchmark_redis_operations.
+        """
+        latencies = []
+        success_count = 0
+        error_count = 0
+        operation_counter = 0
+
+        while time.time() - start_time < duration_seconds:
+            op_start = time.time()
+
+            try:
+                key = f"benchmark_key_{operation_counter % 1000}"
+
+                if operation_counter % 2 == 0:
+                    client.set(key, f"benchmark_value_{operation_counter}")
+                else:
+                    client.get(key)
+
+                op_time = (time.time() - op_start) * 1000
+                latencies.append(op_time)
+                success_count += 1
+
+            except Exception as e:
+                error_count += 1
+                self.logger.debug(f"Redis operation error: {e}")
+
+            operation_counter += 1
+            await asyncio.sleep(0.01)
+
+        return latencies, success_count, error_count
+
+    async def _benchmark_redis_operations(
+        self, db_num: int, duration_seconds: int
+    ) -> BenchmarkResult:
+        """Benchmark Redis read/write operations using canonical utility.
+
+        This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
+        Maps DB numbers to named databases for benchmarking.
+        """
+        from autobot_shared.redis_client import get_redis_client
+
+        db_name_map = {
+            0: "main",
+            1: "knowledge",
+            4: "metrics",
+            7: "workflows",
+            8: "vectors",
+        }
+
+        start_time = time.time()
+
+        try:
+            db_name = db_name_map.get(db_num, "main")
+            client = get_redis_client(database=db_name)
+            if client is None:
+                raise Exception(
+                    f"Redis client initialization returned None for DB {db_num}"
+                )
+
+            (
+                latencies,
+                success_count,
+                error_count,
+            ) = await self._execute_redis_operations(
+                client, duration_seconds, start_time
+            )
+            client.close()
+
+        except Exception as e:
+            self.logger.error(f"Redis benchmark setup error for DB {db_num}: {e}")
+            return self._create_error_benchmark_result(db_num, e)
+
+        total_operations = success_count + error_count
+        actual_duration = time.time() - start_time
+        avg_latency, p95_latency, p99_latency = self._calculate_latency_stats(latencies)
 
         return BenchmarkResult(
             test_name=f"Redis_DB{db_num}_Operations",
@@ -673,7 +701,7 @@ class PerformanceBenchmark:
     async def _benchmark_disk_io(self) -> float:
         """Benchmark disk I/O performance."""
         try:
-            test_file = Path("/tmp/autobot_disk_benchmark.tmp")
+            test_file = Path("/tmp/autobot_disk_benchmark.tmp")  # nosec B108
             data_size = 50 * 1024 * 1024  # 50MB
             test_data = os.urandom(data_size)
 
@@ -1049,6 +1077,72 @@ class PerformanceBenchmark:
             self.logger.error(f"Error generating performance charts: {e}")
 
 
+def _log_comprehensive_results(results: Dict[str, Any]):
+    """Log comprehensive benchmark results.
+
+    Helper for main.
+    """
+    logger.info("\n📊 Comprehensive Benchmark Results:")
+    logger.info("=" * 60)
+
+    summary = results["summary"]
+    logger.info(
+        f"Overall System Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})"
+    )
+    logger.info(f"Total Tests: {summary['total_tests']}")
+    logger.info("")
+
+    logger.info("Category Performance:")
+    for category, stats in summary["category_summaries"].items():
+        logger.info(f"  {category.title()}:")
+        logger.info(f"    Avg Ops/Sec: {stats['average_ops_per_second']:.1f}")
+        logger.info(f"    Avg Latency: {stats['average_latency_ms']:.1f}ms")
+        logger.info(f"    Success Rate: {stats['average_success_rate']:.1f}%")
+        logger.info(f"    Errors: {stats['total_errors']}")
+        logger.info("")
+
+    logger.info("Hardware Performance:")
+    hw = summary["system_hardware"]
+    logger.info(f"  CPU Score: {hw['cpu_score']:.1f}")
+    logger.info(f"  Memory Bandwidth: {hw['memory_bandwidth_mbps']:.1f} MB/s")
+    logger.info(f"  Disk I/O: {hw['disk_io_mbps']:.1f} MB/s")
+    logger.info(f"  Network Throughput: {hw['network_throughput_mbps']:.1f} MB/s")
+    logger.info(f"  GPU Available: {'Yes' if hw['gpu_available'] else 'No'}")
+    logger.info(f"  NPU Available: {'Yes' if hw['npu_available'] else 'No'}")
+
+
+async def _run_specific_benchmark(
+    benchmark: PerformanceBenchmark, test_type: str, duration: int
+):
+    """Run specific benchmark type and log results.
+
+    Helper for main.
+    """
+    if test_type == "api":
+        results = await benchmark.run_api_benchmark(duration_seconds=duration)
+        logger.info(f"\n📡 API Benchmark Results ({len(results)} tests):")
+        for result in results:
+            logger.info(f"  {result.get_summary_line()}")
+
+    elif test_type == "database":
+        results = await benchmark.run_database_benchmark(duration_seconds=duration)
+        logger.info(f"\n🗄️ Database Benchmark Results ({len(results)} tests):")
+        for result in results:
+            logger.info(f"  {result.get_summary_line()}")
+
+    elif test_type == "network":
+        results = await benchmark.run_network_benchmark(duration_seconds=duration)
+        logger.info(f"\n🔗 Network Benchmark Results ({len(results)} tests):")
+        for result in results:
+            logger.info(f"  {result.get_latency_only_line()}")
+
+    elif test_type == "system":
+        result = await benchmark.run_system_benchmark()
+        logger.info("\n🖥️ System Benchmark Results:")
+        for line in result.get_summary_lines():
+            logger.info(line)
+
+
 async def main():
     """Main function for performance benchmarking."""
     import argparse
@@ -1065,7 +1159,10 @@ async def main():
     )
     parser.add_argument(
         "--output-dir",
-        default="/home/kali/Desktop/AutoBot/logs/benchmarks",
+        default=os.path.join(
+            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+            "logs/benchmarks",
+        ),
         help="Output directory for results",
     )
     parser.add_argument(
@@ -1074,7 +1171,6 @@ async def main():
 
     args = parser.parse_args()
 
-    # Setup logging
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -1087,62 +1183,9 @@ async def main():
 
     if args.test == "comprehensive":
         results = await benchmark.run_comprehensive_benchmark()
-
-        logger.info("\n📊 Comprehensive Benchmark Results:")
-        logger.info("=" * 60)
-
-        summary = results["summary"]
-        logger.info(
-            f"Overall System Score: {summary['overall_system_score']:.1f}/100 (Grade: {summary['performance_grade']})"
-        )
-        logger.info(f"Total Tests: {summary['total_tests']}")
-        logger.info("")
-
-        logger.info("Category Performance:")
-        for category, stats in summary["category_summaries"].items():
-            logger.info(f"  {category.title()}:")
-            logger.info(f"    Avg Ops/Sec: {stats['average_ops_per_second']:.1f}")
-            logger.info(f"    Avg Latency: {stats['average_latency_ms']:.1f}ms")
-            logger.info(f"    Success Rate: {stats['average_success_rate']:.1f}%")
-            logger.info(f"    Errors: {stats['total_errors']}")
-            logger.info("")
-
-        logger.info("Hardware Performance:")
-        hw = summary["system_hardware"]
-        logger.info(f"  CPU Score: {hw['cpu_score']:.1f}")
-        logger.info(f"  Memory Bandwidth: {hw['memory_bandwidth_mbps']:.1f} MB/s")
-        logger.info(f"  Disk I/O: {hw['disk_io_mbps']:.1f} MB/s")
-        logger.info(f"  Network Throughput: {hw['network_throughput_mbps']:.1f} MB/s")
-        logger.info(f"  GPU Available: {'Yes' if hw['gpu_available'] else 'No'}")
-        logger.info(f"  NPU Available: {'Yes' if hw['npu_available'] else 'No'}")
-
-    elif args.test == "api":
-        results = await benchmark.run_api_benchmark(duration_seconds=args.duration)
-        logger.info(f"\n📡 API Benchmark Results ({len(results)} tests):")
-        # Issue #372: Use model method to reduce feature envy
-        for result in results:
-            logger.info(f"  {result.get_summary_line()}")
-
-    elif args.test == "database":
-        results = await benchmark.run_database_benchmark(duration_seconds=args.duration)
-        logger.info(f"\n🗄️ Database Benchmark Results ({len(results)} tests):")
-        # Issue #372: Use model method to reduce feature envy
-        for result in results:
-            logger.info(f"  {result.get_summary_line()}")
-
-    elif args.test == "network":
-        results = await benchmark.run_network_benchmark(duration_seconds=args.duration)
-        logger.info(f"\n🔗 Network Benchmark Results ({len(results)} tests):")
-        # Issue #372: Use model method for latency-focused output
-        for result in results:
-            logger.info(f"  {result.get_latency_only_line()}")
-
-    elif args.test == "system":
-        result = await benchmark.run_system_benchmark()
-        logger.info("\n🖥️ System Benchmark Results:")
-        # Issue #372: Use model method to reduce feature envy
-        for line in result.get_summary_lines():
-            logger.info(line)
+        _log_comprehensive_results(results)
+    else:
+        await _run_specific_benchmark(benchmark, args.test, args.duration)
 
 
 if __name__ == "__main__":

@@ -22,9 +22,9 @@ import aiofiles
 import aiohttp
 import psutil
 
-from config import UnifiedConfigManager
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -137,7 +137,8 @@ class PerformanceMonitor:
         self.metrics_history = []
         self.alert_history = []
         self.redis_client = None
-        self.performance_data_path = Path("/home/kali/Desktop/AutoBot/logs/performance")
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        self.performance_data_path = Path(_base) / "logs" / "performance"
         self.performance_data_path.mkdir(parents=True, exist_ok=True)
 
     def setup_logging(self, log_level: str):
@@ -148,7 +149,10 @@ class PerformanceMonitor:
             handlers=[
                 logging.StreamHandler(),
                 logging.FileHandler(
-                    "/home/kali/Desktop/AutoBot/logs/performance_monitor.log"
+                    os.path.join(
+                        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+                        "logs/performance_monitor.log",
+                    )
                 ),
             ],
         )
@@ -259,7 +263,7 @@ class PerformanceMonitor:
                 process.kill()
                 await process.wait()
         except Exception:
-            pass  # NPU check failed, likely not available
+            pass  # nosec B110 - NPU check failed, likely not available
         return None
 
     async def test_service_performance(
@@ -388,63 +392,83 @@ class PerformanceMonitor:
 
         return db_metrics
 
+    def _parse_packet_loss(self, ping_output: str) -> float:
+        """Parse packet loss percentage from ping output.
+
+        Helper for test_inter_vm_performance.
+        """
+        lines = ping_output.split("\n")
+        for line in lines:
+            if "packet loss" in line:
+                return float(line.split("%")[0].split()[-1])
+        return 0.0
+
+    def _parse_latency_stats(self, ping_output: str) -> tuple[float, float]:
+        """Parse latency and jitter from ping output.
+
+        Helper for test_inter_vm_performance.
+        """
+        lines = ping_output.split("\n")
+        for line in lines:
+            if "rtt min/avg/max/mdev" in line:
+                stats = line.split("=")[1].strip().split("/")
+                latency_ms = float(stats[1])
+                jitter_ms = float(stats[3])
+                return latency_ms, jitter_ms
+        return 0.0, 0.0
+
+    def _create_failed_vm_metric(self, vm_name: str) -> InterVMMetrics:
+        """Create metric for failed ping test.
+
+        Helper for test_inter_vm_performance.
+        """
+        return InterVMMetrics(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            source_vm="main",
+            target_vm=vm_name,
+            latency_ms=999.0,
+            throughput_mbps=0.0,
+            packet_loss_percent=100.0,
+            jitter_ms=0.0,
+        )
+
+    async def _execute_ping_test(self, vm_ip: str) -> tuple[int, str]:
+        """Execute ping test and return returncode and stdout.
+
+        Helper for test_inter_vm_performance.
+        """
+        process = await asyncio.create_subprocess_exec(
+            "ping",
+            "-c",
+            "5",
+            "-W",
+            "3",
+            vm_ip,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20.0)
+            return process.returncode, stdout.decode("utf-8")
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return 1, ""
+
     async def test_inter_vm_performance(self) -> List[InterVMMetrics]:
         """Test inter-VM communication performance."""
         inter_vm_metrics = []
-
-        # Test communication between main machine and all VMs
-        NetworkConstants.MAIN_MACHINE_IP
 
         for vm_name, vm_ip in VMS.items():
             if vm_name == "main":
                 continue
 
             try:
-                # Ping test for latency and packet loss using async subprocess
-                process = await asyncio.create_subprocess_exec(
-                    "ping",
-                    "-c",
-                    "5",
-                    "-W",
-                    "3",
-                    vm_ip,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                try:
-                    stdout, _ = await asyncio.wait_for(
-                        process.communicate(), timeout=20.0
-                    )
-                    ping_returncode = process.returncode
-                    ping_stdout = stdout.decode("utf-8")
-                except asyncio.TimeoutError:
-                    process.kill()
-                    await process.wait()
-                    ping_returncode = 1
-                    ping_stdout = ""
+                ping_returncode, ping_stdout = await self._execute_ping_test(vm_ip)
 
                 if ping_returncode == 0:
-                    # Parse ping output
-                    lines = ping_stdout.split("\n")
-
-                    # Extract packet loss
-                    packet_loss = 0.0
-                    for line in lines:
-                        if "packet loss" in line:
-                            packet_loss = float(line.split("%")[0].split()[-1])
-                            break
-
-                    # Extract latency stats
-                    latency_ms = 0.0
-                    jitter_ms = 0.0
-                    for line in lines:
-                        if "rtt min/avg/max/mdev" in line:
-                            stats = line.split("=")[1].strip().split("/")
-                            latency_ms = float(stats[1])  # avg
-                            jitter_ms = float(stats[3])  # mdev
-                            break
-
-                    # Rough throughput estimation (placeholder)
+                    packet_loss = self._parse_packet_loss(ping_stdout)
+                    latency_ms, jitter_ms = self._parse_latency_stats(ping_stdout)
                     throughput_mbps = max(100.0 - (latency_ms * 2), 10.0)
 
                     inter_vm_metrics.append(
@@ -459,18 +483,7 @@ class PerformanceMonitor:
                         )
                     )
                 else:
-                    # Failed ping
-                    inter_vm_metrics.append(
-                        InterVMMetrics(
-                            timestamp=datetime.now(timezone.utc).isoformat(),
-                            source_vm="main",
-                            target_vm=vm_name,
-                            latency_ms=999.0,  # High latency indicates failure
-                            throughput_mbps=0.0,
-                            packet_loss_percent=100.0,
-                            jitter_ms=0.0,
-                        )
-                    )
+                    inter_vm_metrics.append(self._create_failed_vm_metric(vm_name))
 
             except Exception as e:
                 self.logger.error(
@@ -691,6 +704,73 @@ class PerformanceMonitor:
         self.logger.info("🛑 Stopping performance monitoring")
 
 
+def _print_performance_report(metrics: dict) -> None:
+    """Print a formatted performance report to stdout.
+
+    Helper for main (#832).
+    """
+    print("\n" + "=" * 80)
+    print("AutoBot Performance Report")
+    print("=" * 80)
+
+    # System metrics
+    sys_metrics = metrics.get("system")
+    if sys_metrics:
+        print("\n🖥️  System Metrics:")
+        print(f"   CPU Usage: {sys_metrics.cpu_percent:.1f}%")
+        mem_pct = sys_metrics.memory_percent
+        mem_avail = sys_metrics.memory_available_gb
+        print(f"   Memory Usage: {mem_pct:.1f}% ({mem_avail:.1f}GB available)")
+        disk_pct = sys_metrics.disk_percent
+        disk_free = sys_metrics.disk_free_gb
+        print(f"   Disk Usage: {disk_pct:.1f}% ({disk_free:.1f}GB free)")
+        print(f"   Load Average: {sys_metrics.load_average}")
+        print(f"   Process Count: {sys_metrics.process_count}")
+        if sys_metrics.gpu_utilization is not None:
+            print(f"   GPU Utilization: {sys_metrics.gpu_utilization:.1f}%")
+        if sys_metrics.npu_utilization is not None:
+            print(f"   NPU Utilization: {sys_metrics.npu_utilization:.1f}%")
+
+    # Service status
+    services = metrics.get("services", [])
+    if services:
+        print("\n🔧 Service Status:")
+        for service in services:
+            status = "✅ UP" if service.is_healthy else "❌ DOWN"
+            print(f"   {service.service_name}: {status} ({service.response_time:.3f}s)")
+
+    # Database performance
+    databases = metrics.get("databases", [])
+    if databases:
+        print("\n🗄️  Database Performance:")
+        for db in databases:
+            conn = db.connection_time
+            ops = db.operations_per_second
+            print(f"   {db.database_type}: {conn:.3f}s connection, {ops:.1f} ops/s")
+
+    # Inter-VM performance
+    inter_vm = metrics.get("inter_vm", [])
+    if inter_vm:
+        print("\n🔗 Inter-VM Communication:")
+        for vm in inter_vm:
+            lat = vm.latency_ms
+            loss = vm.packet_loss_percent
+            print(
+                f"   {vm.source_vm} → {vm.target_vm}: {lat:.1f}ms latency, {loss:.1f}% loss"
+            )
+
+    # Alerts
+    alerts = metrics.get("alerts", [])
+    if alerts:
+        print("\n🚨 Alerts:")
+        for alert in alerts:
+            print(f"   {alert}")
+    else:
+        print("\n✅ No performance alerts")
+
+    print("\n" + "=" * 80)
+
+
 async def main():
     """Main function for standalone performance monitoring."""
     import argparse
@@ -709,70 +789,9 @@ async def main():
     monitor = PerformanceMonitor(log_level=args.log_level)
 
     if args.once:
-        # Single performance report
         metrics = await monitor.generate_performance_report()
-        print("\n" + "=" * 80)
-        print("AutoBot Performance Report")
-        print("=" * 80)
-
-        # System metrics
-        sys_metrics = metrics.get("system")
-        if sys_metrics:
-            print(f"\n🖥️  System Metrics:")
-            print(f"   CPU Usage: {sys_metrics.cpu_percent:.1f}%")
-            print(
-                f"   Memory Usage: {sys_metrics.memory_percent:.1f}% ({sys_metrics.memory_available_gb:.1f}GB available)"
-            )
-            print(
-                f"   Disk Usage: {sys_metrics.disk_percent:.1f}% ({sys_metrics.disk_free_gb:.1f}GB free)"
-            )
-            print(f"   Load Average: {sys_metrics.load_average}")
-            print(f"   Process Count: {sys_metrics.process_count}")
-            if sys_metrics.gpu_utilization is not None:
-                print(f"   GPU Utilization: {sys_metrics.gpu_utilization:.1f}%")
-            if sys_metrics.npu_utilization is not None:
-                print(f"   NPU Utilization: {sys_metrics.npu_utilization:.1f}%")
-
-        # Service status
-        services = metrics.get("services", [])
-        if services:
-            print(f"\n🔧 Service Status:")
-            for service in services:
-                status = "✅ UP" if service.is_healthy else "❌ DOWN"
-                print(
-                    f"   {service.service_name}: {status} ({service.response_time:.3f}s)"
-                )
-
-        # Database performance
-        databases = metrics.get("databases", [])
-        if databases:
-            print(f"\n🗄️  Database Performance:")
-            for db in databases:
-                print(
-                    f"   {db.database_type}: {db.connection_time:.3f}s connection, {db.operations_per_second:.1f} ops/s"
-                )
-
-        # Inter-VM performance
-        inter_vm = metrics.get("inter_vm", [])
-        if inter_vm:
-            print(f"\n🔗 Inter-VM Communication:")
-            for vm in inter_vm:
-                print(
-                    f"   {vm.source_vm} → {vm.target_vm}: {vm.latency_ms:.1f}ms latency, {vm.packet_loss_percent:.1f}% loss"
-                )
-
-        # Alerts
-        alerts = metrics.get("alerts", [])
-        if alerts:
-            print(f"\n🚨 Alerts:")
-            for alert in alerts:
-                print(f"   {alert}")
-        else:
-            print(f"\n✅ No performance alerts")
-
-        print("\n" + "=" * 80)
+        _print_performance_report(metrics)
     else:
-        # Continuous monitoring
         await monitor.start_continuous_monitoring(interval=args.interval)
 
 

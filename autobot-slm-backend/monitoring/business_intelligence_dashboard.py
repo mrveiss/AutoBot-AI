@@ -7,6 +7,7 @@ Advanced analytics, ROI tracking, and performance insights for the distributed s
 import asyncio
 import json
 import logging
+import os
 import statistics
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -25,6 +26,112 @@ from autobot_shared.network_constants import NetworkConstants
 
 # Issue #380: Module-level tuple for numeric type checks
 _NUMERIC_TYPES = (int, float)
+
+# HTML template for visual dashboard
+_DASHBOARD_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AutoBot Business Intelligence Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .dashboard { max-width: 1200px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .metrics-grid { display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px; margin-bottom: 20px; }
+        .metric-card { background: white; padding: 20px; border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .metric-title { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #333; }
+        .health-score { font-size: 36px; font-weight: bold; color: {{ health_color }}; }
+        .improvement-area { background: #fff3cd; padding: 5px 10px; margin: 5px 0;
+            border-radius: 5px; border-left: 4px solid #ffc107; }
+        .roi-positive { color: #28a745; }
+        .roi-negative { color: #dc3545; }
+        .chart-placeholder { height: 200px; background: #e9ecef; border-radius: 5px;
+            display: flex; align-items: center; justify-content: center; color: #6c757d; }
+        .timestamp { font-size: 12px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🤖 AutoBot Business Intelligence Dashboard</h1>
+            <p>Distributed System Performance & ROI Analytics</p>
+            <p class="timestamp">Generated: {{ timestamp }}</p>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Overall System Health</div>
+                <div class="health-score">{{ health_score }}/100</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Total ROI</div>
+                <div class="metric-value {{ roi_class }}">{{ roi_percent }}%</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Break Even Period</div>
+                <div class="metric-value">{{ break_even_months }} months</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Monthly Operational Cost</div>
+                <div class="metric-value">${{ monthly_cost }}</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Optimization Potential</div>
+                <div class="metric-value">${{ optimization_potential }}/month</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Hardware Investment</div>
+                <div class="metric-value">${{ hardware_investment }}</div>
+            </div>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h3>System Health Breakdown</h3>
+                <p>Availability: {{ availability_score }}/100</p>
+                <p>Performance: {{ performance_score }}/100</p>
+                <p>Security: {{ security_score }}/100</p>
+                <p>Efficiency: {{ efficiency_score }}/100</p>
+                <p>User Satisfaction: {{ user_satisfaction_score }}/100</p>
+            </div>
+
+            <div class="metric-card">
+                <h3>Cost Efficiency Analysis</h3>
+                {% for cost in cost_analysis %}
+                <p>{{ cost.component }}: {{ cost.efficiency_score }}% efficient</p>
+                {% endfor %}
+            </div>
+
+            <div class="metric-card">
+                <h3>Performance Predictions</h3>
+                {% for pred in predictions %}
+                <p>{{ pred.metric_name }}: {{ pred.trend_direction }}</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if improvement_areas %}
+        <div class="metric-card">
+            <h3>Improvement Areas</h3>
+            {% for area in improvement_areas %}
+            <div class="improvement-area">{{ area }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
+"""
 
 
 @dataclass
@@ -92,9 +199,8 @@ class BusinessIntelligenceDashboard:
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.redis_client = None
-        self.dashboard_data_path = Path(
-            "/home/kali/Desktop/AutoBot/reports/performance"
-        )
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        self.dashboard_data_path = Path(_base) / "reports" / "performance"
         self.dashboard_data_path.mkdir(parents=True, exist_ok=True)
 
         # Hardware investment tracking
@@ -257,7 +363,7 @@ class BusinessIntelligenceDashboard:
                             )
 
                 except Exception:
-                    continue
+                    continue  # nosec B112
 
             return performance_data
 
@@ -580,16 +686,91 @@ class BusinessIntelligenceDashboard:
 
         return "Continue monitoring"
 
+    def _calculate_availability_score(self, services_data: List) -> float:
+        """Calculate availability score from services data.
+
+        Helper for calculate_system_health_score.
+        """
+        healthy_services = sum(
+            1 for s in services_data if getattr(s, "is_healthy", False)
+        )
+        total_services = max(len(services_data), 1)
+        return (healthy_services / total_services) * 100
+
+    def _calculate_performance_score(self, utilization_data: Dict[str, float]) -> float:
+        """Calculate performance score from utilization data.
+
+        Helper for calculate_system_health_score.
+        """
+        cpu_util = utilization_data.get("cpu", 0)
+        memory_util = utilization_data.get("memory", 0)
+        cpu_performance = 100 - abs(cpu_util - 60)
+        memory_performance = 100 - abs(memory_util - 70)
+        return statistics.mean([max(0, cpu_performance), max(0, memory_performance)])
+
+    def _calculate_efficiency_score(self, utilization_data: Dict[str, float]) -> float:
+        """Calculate efficiency score from utilization data.
+
+        Helper for calculate_system_health_score.
+        """
+        gpu_util = utilization_data.get("gpu", 0)
+        npu_util = utilization_data.get("npu", 0)
+        cpu_util = utilization_data.get("cpu", 0)
+        efficiency_components = [
+            min(cpu_util / 60 * 100, 100),
+            min(gpu_util / 70 * 100, 100),
+            min(npu_util / 50 * 100, 100),
+        ]
+        return statistics.mean([max(c, 0) for c in efficiency_components])
+
+    def _calculate_user_satisfaction_score(
+        self, performance_data: Dict[str, List[float]]
+    ) -> float:
+        """Calculate user satisfaction score from response times.
+
+        Helper for calculate_system_health_score.
+        """
+        api_times = performance_data.get("api_response_times", [])
+        if api_times:
+            avg_response_time = (
+                statistics.mean(api_times[-10:])
+                if len(api_times) >= 10
+                else statistics.mean(api_times)
+            )
+            return max(0, 100 - (avg_response_time - 1.0) * 20)
+        return 80.0
+
+    def _identify_improvement_areas(
+        self,
+        availability_score: float,
+        performance_score: float,
+        efficiency_score: float,
+        security_score: float,
+        user_satisfaction: float,
+    ) -> List[str]:
+        """Identify areas needing improvement.
+
+        Helper for calculate_system_health_score.
+        """
+        improvement_areas = []
+        if availability_score < 90:
+            improvement_areas.append("Service Availability")
+        if performance_score < 70:
+            improvement_areas.append("System Performance")
+        if efficiency_score < 60:
+            improvement_areas.append("Resource Efficiency")
+        if security_score < 80:
+            improvement_areas.append("Security Posture")
+        if user_satisfaction < 75:
+            improvement_areas.append("User Experience")
+        return improvement_areas
+
     async def calculate_system_health_score(self) -> SystemHealthScore:
         """Calculate comprehensive system health score."""
         try:
-            # Get current metrics
             utilization_data = await self._get_current_utilization()
             performance_data = await self._get_historical_performance_data()
 
-            # Calculate component scores (0-100)
-
-            # Availability Score
             services_data = []
             if self.redis_client:
                 latest_data = self.redis_client.hget(
@@ -599,53 +780,14 @@ class BusinessIntelligenceDashboard:
                     metrics = json.loads(latest_data)
                     services_data = metrics.get("services", [])
 
-            healthy_services = sum(
-                1 for s in services_data if getattr(s, "is_healthy", False)
-            )
-            total_services = max(len(services_data), 1)
-            availability_score = (healthy_services / total_services) * 100
-
-            # Performance Score
-            cpu_util = utilization_data.get("cpu", 0)
-            memory_util = utilization_data.get("memory", 0)
-
-            # Performance is better when utilization is moderate (not too low, not too high)
-            cpu_performance = 100 - abs(cpu_util - 60)  # Optimal around 60%
-            memory_performance = 100 - abs(memory_util - 70)  # Optimal around 70%
-            performance_score = statistics.mean(
-                [max(0, cpu_performance), max(0, memory_performance)]
+            availability_score = self._calculate_availability_score(services_data)
+            performance_score = self._calculate_performance_score(utilization_data)
+            efficiency_score = self._calculate_efficiency_score(utilization_data)
+            security_score = 85.0
+            user_satisfaction = self._calculate_user_satisfaction_score(
+                performance_data
             )
 
-            # Efficiency Score
-            gpu_util = utilization_data.get("gpu", 0)
-            npu_util = utilization_data.get("npu", 0)
-            efficiency_components = [
-                min(cpu_util / 60 * 100, 100),  # CPU efficiency
-                min(gpu_util / 70 * 100, 100),  # GPU efficiency
-                min(npu_util / 50 * 100, 100),  # NPU efficiency
-            ]
-            efficiency_score = statistics.mean(
-                [max(c, 0) for c in efficiency_components]
-            )
-
-            # Security Score (placeholder - would integrate with security monitoring)
-            security_score = 85.0  # Baseline security score
-
-            # User Satisfaction Score (based on response times)
-            api_times = performance_data.get("api_response_times", [])
-            if api_times:
-                avg_response_time = (
-                    statistics.mean(api_times[-10:])
-                    if len(api_times) >= 10
-                    else statistics.mean(api_times)
-                )
-                user_satisfaction = max(
-                    0, 100 - (avg_response_time - 1.0) * 20
-                )  # Penalize slow responses
-            else:
-                user_satisfaction = 80.0  # Default
-
-            # Overall Score
             scores = [
                 availability_score,
                 performance_score,
@@ -655,18 +797,13 @@ class BusinessIntelligenceDashboard:
             ]
             overall_score = statistics.mean(scores)
 
-            # Identify improvement areas
-            improvement_areas = []
-            if availability_score < 90:
-                improvement_areas.append("Service Availability")
-            if performance_score < 70:
-                improvement_areas.append("System Performance")
-            if efficiency_score < 60:
-                improvement_areas.append("Resource Efficiency")
-            if security_score < 80:
-                improvement_areas.append("Security Posture")
-            if user_satisfaction < 75:
-                improvement_areas.append("User Experience")
+            improvement_areas = self._identify_improvement_areas(
+                availability_score,
+                performance_score,
+                efficiency_score,
+                security_score,
+                user_satisfaction,
+            )
 
             return SystemHealthScore(
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -773,167 +910,78 @@ class BusinessIntelligenceDashboard:
         except Exception as e:
             self.logger.error(f"Error storing dashboard report to file: {e}")
 
+    def _prepare_dashboard_template_vars(
+        self, report: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Prepare template variables for dashboard rendering.
+
+        Helper for _generate_visual_dashboard.
+        """
+        summary = report.get("summary", {})
+        health = report.get("system_health", {})
+
+        health_score = round(health.get("overall_score", 0), 1)
+        health_color = (
+            "#28a745"
+            if health_score >= 80
+            else "#ffc107"
+            if health_score >= 60
+            else "#dc3545"
+        )
+
+        roi_percent = round(summary.get("total_roi_percent", 0), 1)
+        roi_class = "roi-positive" if roi_percent > 0 else "roi-negative"
+
+        return {
+            "timestamp": report.get("timestamp", ""),
+            "health_score": health_score,
+            "health_color": health_color,
+            "roi_percent": roi_percent,
+            "roi_class": roi_class,
+            "break_even_months": round(summary.get("break_even_months", 0), 1),
+            "monthly_cost": round(summary.get("monthly_operational_cost", 0)),
+            "optimization_potential": round(
+                summary.get("total_optimization_potential", 0)
+            ),
+            "hardware_investment": round(
+                report.get("roi_analysis", {}).get("hardware_investment_usd", 0)
+            ),
+            "availability_score": round(health.get("availability_score", 0), 1),
+            "performance_score": round(health.get("performance_score", 0), 1),
+            "security_score": round(health.get("security_score", 0), 1),
+            "efficiency_score": round(health.get("efficiency_score", 0), 1),
+            "user_satisfaction_score": round(
+                health.get("user_satisfaction_score", 0), 1
+            ),
+            "cost_analysis": report.get("cost_efficiency", []),
+            "predictions": report.get("performance_predictions", []),
+            "improvement_areas": health.get("improvement_areas", []),
+        }
+
+    async def _save_dashboard_html(self, dashboard_html: str, dashboard_file: Path):
+        """Save dashboard HTML to file.
+
+        Helper for _generate_visual_dashboard.
+        """
+        try:
+            async with aiofiles.open(dashboard_file, "w", encoding="utf-8") as f:
+                await f.write(dashboard_html)
+            self.logger.info(f"📊 Dashboard saved to: {dashboard_file}")
+        except OSError as e:
+            self.logger.error(f"Failed to save dashboard HTML to {dashboard_file}: {e}")
+
     async def _generate_visual_dashboard(self, report: Dict[str, Any]):
         """Generate HTML visual dashboard."""
         try:
-            # Create dashboard HTML template
-            dashboard_template = Template(
-                """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>AutoBot Business Intelligence Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .dashboard { max-width: 1200px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .metric-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .metric-title { font-size: 14px; color: #666; margin-bottom: 10px; }
-        .metric-value { font-size: 24px; font-weight: bold; color: #333; }
-        .health-score { font-size: 36px; font-weight: bold; color: {{ health_color }}; }
-        .improvement-area { background: #fff3cd; padding: 5px 10px; margin: 5px 0; border-radius: 5px; border-left: 4px solid #ffc107; }
-        .roi-positive { color: #28a745; }
-        .roi-negative { color: #dc3545; }
-        .chart-placeholder { height: 200px; background: #e9ecef; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #6c757d; }
-        .timestamp { font-size: 12px; color: #999; }
-    </style>
-</head>
-<body>
-    <div class="dashboard">
-        <div class="header">
-            <h1>🤖 AutoBot Business Intelligence Dashboard</h1>
-            <p>Distributed System Performance & ROI Analytics</p>
-            <p class="timestamp">Generated: {{ timestamp }}</p>
-        </div>
+            dashboard_template = Template(_DASHBOARD_HTML_TEMPLATE)
+            template_vars = self._prepare_dashboard_template_vars(report)
+            dashboard_html = dashboard_template.render(**template_vars)
 
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-title">Overall System Health</div>
-                <div class="health-score">{{ health_score }}/100</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-title">Total ROI</div>
-                <div class="metric-value {{ roi_class }}">{{ roi_percent }}%</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-title">Break Even Period</div>
-                <div class="metric-value">{{ break_even_months }} months</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-title">Monthly Operational Cost</div>
-                <div class="metric-value">${{ monthly_cost }}</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-title">Optimization Potential</div>
-                <div class="metric-value">${{ optimization_potential }}/month</div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-title">Hardware Investment</div>
-                <div class="metric-value">${{ hardware_investment }}</div>
-            </div>
-        </div>
-
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <h3>System Health Breakdown</h3>
-                <p>Availability: {{ availability_score }}/100</p>
-                <p>Performance: {{ performance_score }}/100</p>
-                <p>Security: {{ security_score }}/100</p>
-                <p>Efficiency: {{ efficiency_score }}/100</p>
-                <p>User Satisfaction: {{ user_satisfaction_score }}/100</p>
-            </div>
-
-            <div class="metric-card">
-                <h3>Cost Efficiency Analysis</h3>
-                {% for cost in cost_analysis %}
-                <p>{{ cost.component }}: {{ cost.efficiency_score }}% efficient</p>
-                {% endfor %}
-            </div>
-
-            <div class="metric-card">
-                <h3>Performance Predictions</h3>
-                {% for pred in predictions %}
-                <p>{{ pred.metric_name }}: {{ pred.trend_direction }}</p>
-                {% endfor %}
-            </div>
-        </div>
-
-        {% if improvement_areas %}
-        <div class="metric-card">
-            <h3>Improvement Areas</h3>
-            {% for area in improvement_areas %}
-            <div class="improvement-area">{{ area }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </div>
-</body>
-</html>
-            """
-            )
-
-            # Prepare template variables
-            summary = report.get("summary", {})
-            health = report.get("system_health", {})
-
-            health_score = round(health.get("overall_score", 0), 1)
-            health_color = (
-                "#28a745"
-                if health_score >= 80
-                else "#ffc107"
-                if health_score >= 60
-                else "#dc3545"
-            )
-
-            roi_percent = round(summary.get("total_roi_percent", 0), 1)
-            roi_class = "roi-positive" if roi_percent > 0 else "roi-negative"
-
-            # Render dashboard HTML
-            dashboard_html = dashboard_template.render(
-                timestamp=report.get("timestamp", ""),
-                health_score=health_score,
-                health_color=health_color,
-                roi_percent=roi_percent,
-                roi_class=roi_class,
-                break_even_months=round(summary.get("break_even_months", 0), 1),
-                monthly_cost=round(summary.get("monthly_operational_cost", 0)),
-                optimization_potential=round(
-                    summary.get("total_optimization_potential", 0)
-                ),
-                hardware_investment=round(
-                    report.get("roi_analysis", {}).get("hardware_investment_usd", 0)
-                ),
-                availability_score=round(health.get("availability_score", 0), 1),
-                performance_score=round(health.get("performance_score", 0), 1),
-                security_score=round(health.get("security_score", 0), 1),
-                efficiency_score=round(health.get("efficiency_score", 0), 1),
-                user_satisfaction_score=round(
-                    health.get("user_satisfaction_score", 0), 1
-                ),
-                cost_analysis=report.get("cost_efficiency", []),
-                predictions=report.get("performance_predictions", []),
-                improvement_areas=health.get("improvement_areas", []),
-            )
-
-            # Save dashboard HTML
             dashboard_file = (
                 self.dashboard_data_path
                 / f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
             )
-            try:
-                async with aiofiles.open(dashboard_file, "w", encoding="utf-8") as f:
-                    await f.write(dashboard_html)
-                self.logger.info(f"📊 Dashboard saved to: {dashboard_file}")
-            except OSError as e:
-                self.logger.error(
-                    f"Failed to save dashboard HTML to {dashboard_file}: {e}"
-                )
+            await self._save_dashboard_html(dashboard_html, dashboard_file)
 
         except Exception as e:
             self.logger.error(f"Error generating visual dashboard: {e}")
@@ -988,13 +1036,12 @@ if __name__ == "__main__":
             print("🚀 Generating comprehensive BI dashboard...")
             report = await bi_dashboard.generate_comprehensive_dashboard_report()
             print("✅ Dashboard generated successfully!")
-            print(f"📊 Report summary:")
+            print("📊 Report summary:")
             summary = report.get("summary", {})
             print(f"  Overall Health: {summary.get('overall_health_score', 0):.1f}/100")
             print(f"  Total ROI: {summary.get('total_roi_percent', 0):.1f}%")
             print(f"  Monthly Cost: ${summary.get('monthly_operational_cost', 0):.2f}")
-            print(
-                f"  Optimization Potential: ${summary.get('total_optimization_potential', 0):.2f}/month"
-            )
+            optimization_potential = summary.get("total_optimization_potential", 0)
+            print(f"  Optimization Potential: ${optimization_potential:.2f}/month")
 
     asyncio.run(main())
