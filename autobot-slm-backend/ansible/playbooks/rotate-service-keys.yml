@@ -21,7 +21,7 @@
   connection: local
 
   vars:
-    autobot_root: /home/kali/Desktop/AutoBot
+    autobot_root: /opt/autobot
     key_generator: "{{ autobot_root }}/infrastructure/shared/scripts/generate_service_keys.py"
     keys_backup_dir: "{{ autobot_root }}/config/service-keys"
     redis_host: 172.16.168.23
@@ -140,7 +140,7 @@
       ansible.builtin.shell: |
         pkill -f "uvicorn.*8001" || true
         sleep 1
-        cd /home/kali/Desktop/AutoBot
+        cd /opt/autobot/autobot-user-backend
         nohup python -m uvicorn autobot_user_backend.main:app \
           --host 0.0.0.0 --port 8001 \
           > /tmp/autobot-backend-keyrotate.log 2>&1 &
@@ -244,7 +244,7 @@
   connection: local
 
   vars:
-    keys_backup_dir: /home/kali/Desktop/AutoBot/config/service-keys
+    keys_backup_dir: /opt/autobot/config/service-keys
 
   tasks:
     - name: Find latest backup file
@@ -269,5 +269,5 @@
           - ""
           - "Next rotation due: ~80 days (before 90-day TTL)"
           - "Schedule: crontab -e"
-          - "  0 2 1 */3 * cd /home/kali/Desktop/AutoBot/autobot-slm-backend/ansible && ansible-playbook playbooks/rotate-service-keys.yml"
+          - "  0 2 1 */3 * cd /opt/autobot/autobot-slm-backend/ansible && ansible-playbook playbooks/rotate-service-keys.yml"
       tags: [summary]

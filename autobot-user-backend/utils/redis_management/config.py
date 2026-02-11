@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import yaml
-
 from constants.network_constants import NetworkConstants
 from constants.redis_constants import REDIS_CONFIG
 from constants.threshold_constants import RetryConfig
@@ -113,7 +112,10 @@ class RedisConfigLoader:
         possible_paths = [
             "/app/config/redis-databases.yaml",  # Container
             "./config/redis-databases.yaml",  # Host relative
-            "/home/kali/Desktop/AutoBot/config/redis-databases.yaml",  # Host absolute
+            os.path.join(
+                os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+                "config/redis-databases.yaml",
+            ),  # Host absolute
         ]
 
         for path in possible_paths:

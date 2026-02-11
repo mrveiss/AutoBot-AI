@@ -18,6 +18,7 @@ Key Features:
 import ast
 import asyncio
 import logging
+import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -27,10 +28,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-
-from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -468,8 +468,10 @@ class ArchitectureAnalyzer:
     - Architecture visualization
     """
 
-    def __init__(self, base_path: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(self, base_path: str = None):
         """Initialize architecture analyzer with base path."""
+        if base_path is None:
+            base_path = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         self.base_path = Path(base_path)
         self.file_analyses: Dict[str, FileAnalysis] = {}
         self.pattern_matches: List[PatternMatch] = []

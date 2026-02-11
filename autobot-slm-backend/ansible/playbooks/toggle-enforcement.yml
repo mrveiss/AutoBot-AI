@@ -16,7 +16,7 @@
 
   vars:
     enforcement_mode: true
-    env_file: /home/kali/Desktop/AutoBot/.env
+    env_file: /opt/autobot/.env
     backend_health_url: "http://172.16.168.20:8001/api/health"
     startup_delay: 5
 
@@ -97,7 +97,7 @@
       ansible.builtin.shell: |
         pkill -f "uvicorn.*8001" || true
         sleep 1
-        cd /home/kali/Desktop/AutoBot
+        cd /opt/autobot/autobot-user-backend
         nohup python -m uvicorn autobot_user_backend.main:app \
           --host 0.0.0.0 --port 8001 \
           > /tmp/autobot-backend-toggle.log 2>&1 &

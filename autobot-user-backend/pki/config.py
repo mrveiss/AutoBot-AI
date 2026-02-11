@@ -26,7 +26,7 @@ def _find_project_root() -> Path:
     for parent in [current] + list(current.parents):
         if (parent / ".env").exists():
             return parent
-    return Path("/home/kali/Desktop/AutoBot")
+    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
 
 
 PROJECT_ROOT = _find_project_root()

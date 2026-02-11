@@ -198,9 +198,9 @@ storage:
   alert_retention_days: 60
 
   # Paths
-  log_directory: "/home/kali/Desktop/AutoBot/logs"
-  metrics_directory: "/home/kali/Desktop/AutoBot/logs/metrics"
-  benchmark_directory: "/home/kali/Desktop/AutoBot/logs/benchmarks"
+  log_directory: "/opt/autobot/logs"
+  metrics_directory: "/opt/autobot/logs/metrics"
+  benchmark_directory: "/opt/autobot/logs/benchmarks"
 
   # Data export
   export_enabled: true

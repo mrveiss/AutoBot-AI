@@ -72,7 +72,7 @@ _SERVICE_DEFINITIONS = {
         default_host="172.16.168.20",
         default_port=8001,
         start_command=(
-            "cd /home/kali/Desktop/AutoBot && "
+            "cd /opt/autobot/autobot-user-backend && "
             "source venv/bin/activate && "
             "nohup python backend/main.py > logs/backend.log 2>&1 &"
         ),
@@ -80,7 +80,7 @@ _SERVICE_DEFINITIONS = {
         health_check_path="/api/health",
         health_check_type="http",
         requires_sudo=False,
-        working_dir="/home/kali/Desktop/AutoBot",
+        working_dir="/opt/autobot/autobot-user-backend",
         description="FastAPI backend API server",
     ),
     # Frontend (Vue.js on frontend VM)

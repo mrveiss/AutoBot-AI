@@ -30,7 +30,7 @@ class BaseTerminalWebSocket(ABC):
         self.process: Optional[subprocess.Popen] = None
         self.reader_thread: Optional[threading.Thread] = None
         self.active = False
-        self.current_dir = "/home/kali"
+        self.current_dir = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         self.env = os.environ.copy()
 
     @abstractmethod

@@ -55,8 +55,8 @@ def _find_project_root() -> Path:
     for parent in [current] + list(current.parents):
         if (parent / ".env").exists():
             return parent
-    # Fallback to expected location
-    return Path("/home/kali/Desktop/AutoBot")
+    # Fallback to runtime location (env var or /opt/autobot)
+    return Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
 
 
 PROJECT_ROOT = _find_project_root()
