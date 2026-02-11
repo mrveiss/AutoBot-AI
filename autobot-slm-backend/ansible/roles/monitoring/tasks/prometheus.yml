@@ -13,6 +13,11 @@
     shell: /usr/sbin/nologin
     create_home: false
 
+- name: Check if Prometheus binary exists
+  ansible.builtin.stat:
+    path: "{{ prometheus_install_dir }}/prometheus"
+  register: _prometheus_binary
+
 - name: Create prometheus directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -30,6 +35,7 @@
     url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
     dest: "/tmp/prometheus-{{ prometheus_version }}.tar.gz"
     mode: "0644"
+  when: not _prometheus_binary.stat.exists
 
 - name: Extract Prometheus
   ansible.builtin.unarchive:
@@ -40,6 +46,7 @@
       - --strip-components=1
     owner: "{{ prometheus_user }}"
     group: "{{ prometheus_group }}"
+  when: not _prometheus_binary.stat.exists
 
 - name: Create Prometheus config
   ansible.builtin.template:

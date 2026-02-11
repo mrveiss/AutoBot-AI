@@ -12,11 +12,17 @@
     shell: /usr/sbin/nologin
     create_home: false
 
+- name: Check if node_exporter binary exists
+  ansible.builtin.stat:
+    path: /opt/node_exporter/node_exporter
+  register: _node_exporter_binary
+
 - name: Download Node Exporter
   ansible.builtin.get_url:
     url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
     dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
     mode: "0644"
+  when: not _node_exporter_binary.stat.exists
 
 - name: Create node_exporter directory
   ansible.builtin.file:
@@ -35,6 +41,7 @@
       - --strip-components=1
     owner: node_exporter
     group: node_exporter
+  when: not _node_exporter_binary.stat.exists
 
 - name: Create Node Exporter systemd service
   ansible.builtin.template:

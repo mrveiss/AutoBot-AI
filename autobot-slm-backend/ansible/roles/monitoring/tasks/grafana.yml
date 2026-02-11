@@ -5,11 +5,21 @@
 # Ansible Monitoring Role - Grafana Installation
 ---
 
+- name: Check if Grafana is already installed
+  ansible.builtin.command:
+    cmd: dpkg -l grafana
+  register: _grafana_installed
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family == "Debian"
+
 - name: Remove legacy Grafana APT key from trusted keyring
   ansible.builtin.apt_key:
     url: https://apt.grafana.com/gpg.key
     state: absent
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - _grafana_installed.rc != 0
   failed_when: false
 
 - name: Remove conflicting Grafana repo entries
@@ -19,28 +29,36 @@
   loop:
     - /etc/apt/sources.list.d/grafana.list
     - /etc/apt/sources.list.d/grafana.sources
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - _grafana_installed.rc != 0
 
 - name: Add Grafana APT signing key
   ansible.builtin.get_url:
     url: https://apt.grafana.com/gpg.key
     dest: /usr/share/keyrings/grafana.key
     mode: "0644"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - _grafana_installed.rc != 0
 
 - name: Add Grafana repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
     state: present
     filename: grafana
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - _grafana_installed.rc != 0
 
 - name: Install Grafana
   ansible.builtin.apt:
     name: grafana
     state: present
     update_cache: true
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - _grafana_installed.rc != 0
 
 - name: Configure Grafana
   ansible.builtin.template:

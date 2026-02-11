@@ -5,6 +5,13 @@
 # PostgreSQL Installation Tasks
 ---
 
+- name: Check if PostgreSQL is already installed
+  ansible.builtin.command:
+    cmd: "dpkg -l postgresql-{{ postgresql_version }}"
+  register: _pg_installed
+  changed_when: false
+  failed_when: false
+
 - name: Determine PostgreSQL APT release codename
   ansible.builtin.set_fact:
     _pgdg_release: >-
@@ -16,6 +23,7 @@
   vars:
     _pgdg_codename_map:
       kali-rolling: "bookworm"
+  when: _pg_installed.rc != 0
 
 - name: Fail if OS is too old for PostgreSQL 16
   ansible.builtin.fail:
@@ -25,6 +33,7 @@
       ({{ ansible_distribution_release }}).
       Either upgrade the VM OS or set postgresql_version to "14".
   when:
+    - _pg_installed.rc != 0
     - ansible_distribution_release in ['focal', 'bionic', 'xenial', 'buster']
     - postgresql_apt_release | default('', true) | length == 0
 
@@ -34,6 +43,7 @@
     dest: /usr/share/keyrings/pgdg.asc
     mode: "0644"
   become: true
+  when: _pg_installed.rc != 0
 
 - name: Add PostgreSQL APT repository
   ansible.builtin.apt_repository:
@@ -41,12 +51,14 @@
     state: present
     filename: pgdg
   become: true
+  when: _pg_installed.rc != 0
 
 - name: Update APT cache
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
   become: true
+  when: _pg_installed.rc != 0
 
 - name: Install PostgreSQL packages
   ansible.builtin.apt:
@@ -58,6 +70,7 @@
       - libpq-dev
     state: present
   become: true
+  when: _pg_installed.rc != 0
 
 - name: Ensure PostgreSQL service is enabled
   ansible.builtin.systemd:
