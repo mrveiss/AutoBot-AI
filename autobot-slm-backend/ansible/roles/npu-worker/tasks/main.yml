@@ -38,6 +38,13 @@
     group: "{{ npu_group }}"
     recurse: true
 
+- name: Upgrade pip in venv
+  ansible.builtin.pip:
+    name: pip
+    virtualenv: "{{ npu_install_dir }}/venv"
+    state: latest
+  become_user: "{{ npu_user }}"
+
 - name: Check if OpenVINO is already installed
   ansible.builtin.command:
     cmd: "{{ npu_install_dir }}/venv/bin/pip show openvino"

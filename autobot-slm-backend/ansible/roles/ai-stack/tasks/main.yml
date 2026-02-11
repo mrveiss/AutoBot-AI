@@ -40,6 +40,13 @@
     group: "{{ ai_group }}"
     recurse: true
 
+- name: Upgrade pip in venv
+  ansible.builtin.pip:
+    name: pip
+    virtualenv: "{{ ai_install_dir }}/venv"
+    state: latest
+  become_user: "{{ ai_user }}"
+
 - name: Check if AI packages are already installed
   ansible.builtin.command:
     cmd: "{{ ai_install_dir }}/venv/bin/pip show chromadb"
