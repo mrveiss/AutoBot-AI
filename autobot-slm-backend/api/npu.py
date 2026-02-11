@@ -12,8 +12,6 @@ from datetime import datetime
 from typing import Optional
 
 import httpx
-
-logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.database import Node, Setting
 from models.schemas import (
