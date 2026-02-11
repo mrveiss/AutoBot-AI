@@ -38,6 +38,9 @@ import type {
   MaintenanceWindowListResponse,
   NPUNodeStatus,
   NPULoadBalancingConfig,
+  NPUFleetMetrics,
+  NPUWorkerMetrics,
+  NPUWorkerConfig,
   FleetUpdateSummary,
 } from '@/types/slm'
 
@@ -1222,6 +1225,36 @@ export function useSlmApi() {
     await client.post('/npu/load-balancing', config)
   }
 
+  // NPU Metrics & Config (Issue #590 - NPU Dashboard Improvements)
+
+  async function getNpuFleetMetrics(): Promise<NPUFleetMetrics> {
+    const response = await client.get<NPUFleetMetrics>('/npu/metrics')
+    return response.data
+  }
+
+  async function getNpuNodeMetrics(nodeId: string): Promise<NPUWorkerMetrics> {
+    const response = await client.get<NPUWorkerMetrics>(`/npu/nodes/${nodeId}/metrics`)
+    return response.data
+  }
+
+  async function getNpuWorkerConfig(nodeId: string): Promise<NPUWorkerConfig> {
+    const response = await client.get<NPUWorkerConfig>(`/npu/nodes/${nodeId}/config`)
+    return response.data
+  }
+
+  async function updateNpuWorkerConfig(
+    nodeId: string,
+    config: NPUWorkerConfig
+  ): Promise<{ success: boolean; message: string; config: NPUWorkerConfig }> {
+    const response = await client.put<{
+      success: boolean
+      message: string
+      node_id: string
+      config: NPUWorkerConfig
+    }>(`/npu/nodes/${nodeId}/config`, config)
+    return response.data
+  }
+
   // =============================================================================
   // Error Monitoring API (Issue #563)
   // =============================================================================
@@ -1629,6 +1662,10 @@ export function useSlmApi() {
     removeNpuRole,
     getNpuLoadBalancing,
     updateNpuLoadBalancing,
+    getNpuFleetMetrics,
+    getNpuNodeMetrics,
+    getNpuWorkerConfig,
+    updateNpuWorkerConfig,
     // Error Monitoring (Issue #563)
     getErrorStatistics,
     getRecentErrors,

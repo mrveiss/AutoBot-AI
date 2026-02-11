@@ -6,10 +6,10 @@
 /**
  * NPUWorkersTab - NPU Workers management as a Fleet tab
  *
- * Provides NPU worker management, status monitoring, and load balancing configuration.
- * NPU workers are fleet nodes with the 'npu-worker' role.
+ * Provides NPU worker management with sub-tab navigation:
+ * Overview, Monitor, Performance, Load Balancing.
  *
- * Related to Issue #255 (Service Authentication) and Issue #729 (Layer Separation).
+ * Related to Issue #255 (Service Authentication), enhanced in Issue #590.
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
@@ -17,19 +17,29 @@ import { useFleetStore } from '@/stores/fleet'
 import NPUNodeCard from './NPUNodeCard.vue'
 import NPUDetailsPanel from './NPUDetailsPanel.vue'
 import AssignNPURoleModal from './AssignNPURoleModal.vue'
-import type { SLMNode, NPUNodeStatus, NPULoadBalancingStrategy } from '@/types/slm'
+import NPUWorkerMonitor from './NPUWorkerMonitor.vue'
+import NPUPerformanceMetrics from './NPUPerformanceMetrics.vue'
+import LoadBalancingView from './LoadBalancingView.vue'
+import type { SLMNode } from '@/types/slm'
 
 const fleetStore = useFleetStore()
+
+// Sub-tab navigation (Issue #590)
+type SubTab = 'overview' | 'monitor' | 'performance' | 'load-balancing'
+const activeTab = ref<SubTab>('overview')
+
+const tabs: { key: SubTab; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'monitor', label: 'Monitor' },
+  { key: 'performance', label: 'Performance' },
+  { key: 'load-balancing', label: 'Load Balancing' },
+]
 
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selectedNpuNode = ref<SLMNode | null>(null)
 const showAssignModal = ref(false)
-const showLoadBalancingConfig = ref(false)
-
-// Load balancing configuration
-const loadBalancingStrategy = ref<NPULoadBalancingStrategy>('round-robin')
 
 // Computed
 const npuNodes = computed(() => fleetStore.npuNodes)
@@ -75,13 +85,8 @@ async function refreshAll(): Promise<void> {
 
   try {
     await fleetStore.fetchNodes()
-    // Use fetchNpuNodes for efficiency - single API call for all NPU status
     await fleetStore.fetchNpuNodes()
     await fleetStore.fetchNpuLoadBalancing()
-
-    if (fleetStore.npuLoadBalancingConfig) {
-      loadBalancingStrategy.value = fleetStore.npuLoadBalancingConfig.strategy as NPULoadBalancingStrategy
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to refresh NPU status'
   } finally {
@@ -102,18 +107,6 @@ async function handleRoleAssigned(): Promise<void> {
   await refreshAll()
 }
 
-async function updateLoadBalancing(): Promise<void> {
-  try {
-    await fleetStore.updateNpuLoadBalancing({
-      strategy: loadBalancingStrategy.value,
-      modelAffinity: fleetStore.npuLoadBalancingConfig?.modelAffinity || {},
-    })
-    showLoadBalancingConfig.value = false
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to update load balancing'
-  }
-}
-
 // Load data on mount
 onMounted(() => {
   refreshAll()
@@ -121,7 +114,6 @@ onMounted(() => {
 
 // Watch for node list changes
 watch(() => fleetStore.nodeList, () => {
-  // Refresh NPU status when node list changes
   fleetStore.fetchNpuNodes()
 }, { deep: true })
 </script>
@@ -187,13 +179,30 @@ watch(() => fleetStore.nodeList, () => {
       </div>
     </div>
 
-    <!-- Actions Bar -->
+    <!-- Sub-Tab Navigation (Issue #590) -->
     <div class="flex items-center justify-between mb-6">
+      <div class="flex border-b border-gray-200">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          @click="activeTab = tab.key"
+          :class="[
+            'px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+            activeTab === tab.key
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
       <div class="flex items-center gap-3">
         <button
+          v-if="activeTab === 'overview'"
           @click="showAssignModal = true"
           :disabled="nonNpuNodes.length === 0"
-          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -202,68 +211,18 @@ watch(() => fleetStore.nodeList, () => {
         </button>
 
         <button
-          @click="showLoadBalancingConfig = !showLoadBalancingConfig"
-          class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+          @click="refreshAll"
+          :disabled="loading"
+          class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg
+            :class="['w-4 h-4', loading ? 'animate-spin' : '']"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Load Balancing
+          {{ loading ? 'Refreshing...' : 'Refresh' }}
         </button>
-      </div>
-
-      <button
-        @click="refreshAll"
-        :disabled="loading"
-        class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-      >
-        <svg
-          :class="['w-4 h-4', loading ? 'animate-spin' : '']"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        {{ loading ? 'Refreshing...' : 'Refresh All' }}
-      </button>
-    </div>
-
-    <!-- Load Balancing Config Panel -->
-    <div v-if="showLoadBalancingConfig" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">Load Balancing Configuration</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Strategy</label>
-          <select
-            v-model="loadBalancingStrategy"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            <option value="round-robin">Round Robin</option>
-            <option value="least-loaded">Least Loaded</option>
-            <option value="model-affinity">Model Affinity</option>
-          </select>
-          <p class="text-xs text-gray-500 mt-1">
-            <template v-if="loadBalancingStrategy === 'round-robin'">
-              Distribute requests evenly across all NPU nodes
-            </template>
-            <template v-else-if="loadBalancingStrategy === 'least-loaded'">
-              Route requests to the node with lowest utilization
-            </template>
-            <template v-else>
-              Route requests based on which node has the model loaded
-            </template>
-          </p>
-        </div>
-        <div class="flex items-end">
-          <button
-            @click="updateLoadBalancing"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            Save Configuration
-          </button>
-        </div>
       </div>
     </div>
 
@@ -272,38 +231,55 @@ watch(() => fleetStore.nodeList, () => {
       {{ error }}
     </div>
 
-    <!-- Empty State -->
-    <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-      <div class="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-        </svg>
+    <!-- Tab Content -->
+
+    <!-- Overview Tab (original content) -->
+    <template v-if="activeTab === 'overview'">
+      <!-- Empty State -->
+      <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+        <div class="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No NPU Workers</h3>
+        <p class="text-gray-500 mb-4">
+          Assign the NPU Worker role to a node to enable hardware-accelerated AI inference.
+        </p>
+        <button
+          @click="showAssignModal = true"
+          :disabled="nonNpuNodes.length === 0"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+        >
+          Assign NPU Role
+        </button>
       </div>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No NPU Workers</h3>
-      <p class="text-gray-500 mb-4">
-        Assign the NPU Worker role to a node to enable hardware-accelerated AI inference.
-      </p>
-      <button
-        @click="showAssignModal = true"
-        :disabled="nonNpuNodes.length === 0"
-        class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
-      >
-        Assign NPU Role
-      </button>
-    </div>
 
-    <!-- NPU Nodes Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <NPUNodeCard
-        v-for="node in npuNodes"
-        :key="node.node_id"
-        :node="node"
-        :npu-status="fleetStore.getNpuStatus(node.node_id)"
-        @select="selectNode(node)"
-      />
-    </div>
+      <!-- NPU Nodes Grid -->
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <NPUNodeCard
+          v-for="node in npuNodes"
+          :key="node.node_id"
+          :node="node"
+          :npu-status="fleetStore.getNpuStatus(node.node_id)"
+          @select="selectNode(node)"
+        />
+      </div>
+    </template>
 
-    <!-- Details Panel -->
+    <!-- Monitor Tab (Issue #590) -->
+    <NPUWorkerMonitor
+      v-if="activeTab === 'monitor'"
+      @select-node="selectNode"
+    />
+
+    <!-- Performance Tab (Issue #590) -->
+    <NPUPerformanceMetrics v-if="activeTab === 'performance'" />
+
+    <!-- Load Balancing Tab (Issue #590) -->
+    <LoadBalancingView v-if="activeTab === 'load-balancing'" />
+
+    <!-- Details Panel (shared across tabs) -->
     <NPUDetailsPanel
       v-if="selectedNpuNode"
       :node="selectedNpuNode"

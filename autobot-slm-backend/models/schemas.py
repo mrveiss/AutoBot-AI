@@ -1876,3 +1876,59 @@ class NPURoleAssignResponse(BaseModel):
     message: str
     node_id: str
     detection_triggered: bool = False
+
+
+class NPUWorkerMetrics(BaseModel):
+    """Performance metrics for an NPU worker node."""
+
+    node_id: str
+    utilization: float = 0.0
+    temperature_celsius: Optional[float] = None
+    inference_count: int = 0
+    avg_latency_ms: float = 0.0
+    throughput_rps: float = 0.0
+    queue_depth: int = 0
+    memory_used_gb: float = 0.0
+    memory_total_gb: float = 0.0
+    uptime_seconds: int = 0
+    error_count: int = 0
+    timestamp: Optional[datetime] = None
+
+    model_config = {"populate_by_name": True}
+
+
+class NPUFleetMetricsResponse(BaseModel):
+    """Aggregate NPU fleet performance metrics."""
+
+    total_nodes: int = 0
+    online_nodes: int = 0
+    total_inference_count: int = 0
+    avg_utilization: float = 0.0
+    avg_latency_ms: float = 0.0
+    total_throughput_rps: float = 0.0
+    total_queue_depth: int = 0
+    node_metrics: List[NPUWorkerMetrics] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class NPUWorkerConfig(BaseModel):
+    """Configuration for an individual NPU worker."""
+
+    priority: int = Field(default=1, ge=1, le=10)
+    weight: int = Field(default=1, ge=1, le=100)
+    max_concurrent: int = Field(default=1, ge=1)
+    failure_action: str = Field(default="retry")
+    max_retries: int = Field(default=3, ge=0, le=10)
+    assigned_models: List[str] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class NPUWorkerConfigResponse(BaseModel):
+    """Response after updating worker config."""
+
+    success: bool
+    message: str
+    node_id: str
+    config: NPUWorkerConfig

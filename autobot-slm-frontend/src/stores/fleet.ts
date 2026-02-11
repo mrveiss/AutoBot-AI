@@ -30,6 +30,9 @@ import type {
   RoleInfo,
   NPUNodeStatus,
   NPULoadBalancingConfig,
+  NPUFleetMetrics,
+  NPUWorkerMetrics,
+  NPUWorkerConfig,
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
 
@@ -758,6 +761,72 @@ export const useFleetStore = defineStore('fleet', () => {
     }
   }
 
+  // Actions - NPU Metrics & Config (Issue #590)
+
+  /** Cached fleet-level metrics */
+  const npuFleetMetrics = ref<NPUFleetMetrics | null>(null)
+  /** Per-node config cache */
+  const npuWorkerConfigs = ref<Map<string, NPUWorkerConfig>>(new Map())
+
+  async function fetchNpuFleetMetrics(): Promise<NPUFleetMetrics | null> {
+    try {
+      const metrics = await api.getNpuFleetMetrics()
+      npuFleetMetrics.value = metrics
+      return metrics
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : 'Failed to fetch NPU fleet metrics'
+      return null
+    }
+  }
+
+  async function fetchNpuNodeMetrics(
+    nodeId: string
+  ): Promise<NPUWorkerMetrics | null> {
+    try {
+      return await api.getNpuNodeMetrics(nodeId)
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to fetch metrics for node ${nodeId}`
+      return null
+    }
+  }
+
+  async function fetchNpuWorkerConfig(
+    nodeId: string
+  ): Promise<NPUWorkerConfig | null> {
+    try {
+      const config = await api.getNpuWorkerConfig(nodeId)
+      npuWorkerConfigs.value.set(nodeId, config)
+      return config
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to fetch config for node ${nodeId}`
+      return null
+    }
+  }
+
+  async function updateNpuWorkerConfig(
+    nodeId: string,
+    config: NPUWorkerConfig
+  ): Promise<boolean> {
+    try {
+      const result = await api.updateNpuWorkerConfig(nodeId, config)
+      if (result.success) {
+        npuWorkerConfigs.value.set(nodeId, result.config)
+      }
+      return result.success
+    } catch (err) {
+      error.value = err instanceof Error
+        ? err.message
+        : `Failed to update config for node ${nodeId}`
+      return false
+    }
+  }
+
   // ============================================================
   // Actions - Cache Management
   // ============================================================
@@ -871,6 +940,14 @@ export const useFleetStore = defineStore('fleet', () => {
     removeNpuRole,
     updateNpuLoadBalancing,
     fetchNpuLoadBalancing,
+
+    // Actions - NPU Metrics & Config (Issue #590)
+    npuFleetMetrics,
+    npuWorkerConfigs,
+    fetchNpuFleetMetrics,
+    fetchNpuNodeMetrics,
+    fetchNpuWorkerConfig,
+    updateNpuWorkerConfig,
 
     // Actions - Cache Management
     clearNodeCache,

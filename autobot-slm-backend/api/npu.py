@@ -12,16 +12,22 @@ from datetime import datetime
 from typing import Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.database import Node, Setting
 from models.schemas import (
     NPUCapabilities,
     NPUDetectionRequest,
     NPUDetectionResponse,
+    NPUFleetMetricsResponse,
     NPULoadBalancingConfig,
     NPUNodeListResponse,
     NPUNodeStatusResponse,
     NPURoleAssignResponse,
+    NPUWorkerConfig,
+    NPUWorkerConfigResponse,
+    NPUWorkerMetrics,
 )
 from services.auth import get_current_user
 from services.database import get_db
@@ -419,3 +425,187 @@ async def remove_npu_role(
         "message": "NPU worker role removed",
         "node_id": node_id,
     }
+
+
+# --- Metrics & Configuration Endpoints (Issue #590) ---
+
+
+async def _build_node_metrics(
+    node: Node, ip_address: str, port: int
+) -> NPUWorkerMetrics:
+    """Query NPU worker for live metrics, fall back to stored data.
+
+    Helper for get_fleet_metrics / get_node_metrics (Issue #590).
+    """
+    extra = node.extra_data or {}
+    npu_data = extra.get("npu", {})
+    caps = npu_data.get("capabilities", {})
+
+    # Try live metrics from worker health endpoint
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"http://{ip_address}:{port}/health")
+            if resp.status_code == 200:
+                data = resp.json()
+                return NPUWorkerMetrics(
+                    node_id=node.node_id,
+                    utilization=data.get("utilization", 0.0),
+                    temperature_celsius=data.get("temperature"),
+                    inference_count=data.get("inferenceCount", 0),
+                    avg_latency_ms=data.get("avgLatencyMs", 0.0),
+                    throughput_rps=data.get("throughputRps", 0.0),
+                    queue_depth=npu_data.get("queue_depth", 0),
+                    memory_used_gb=data.get("memoryUsedGB", 0.0),
+                    memory_total_gb=caps.get("memory_gb", 0.0),
+                    uptime_seconds=data.get("uptimeSeconds", 0),
+                    error_count=data.get("errorCount", 0),
+                    timestamp=datetime.utcnow(),
+                )
+    except Exception:
+        logger.debug("Live metrics unavailable for %s, using stored data", node.node_id)
+
+    # Fallback to stored data
+    return NPUWorkerMetrics(
+        node_id=node.node_id,
+        utilization=caps.get("utilization", 0.0),
+        queue_depth=npu_data.get("queue_depth", 0),
+        memory_total_gb=caps.get("memory_gb", 0.0),
+        timestamp=datetime.utcnow(),
+    )
+
+
+@router.get("/metrics", response_model=NPUFleetMetricsResponse)
+async def get_fleet_metrics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NPUFleetMetricsResponse:
+    """
+    Get aggregate performance metrics for all NPU workers.
+
+    Queries live health data from each NPU worker and returns
+    fleet-wide aggregated metrics (Issue #590).
+    """
+    npu_nodes = await _get_npu_nodes(db)
+
+    node_metrics = []
+    online_count = 0
+    for node in npu_nodes:
+        port = node.ssh_port or 8081
+        metrics = await _build_node_metrics(node, node.ip_address, port)
+        node_metrics.append(metrics)
+        if metrics.uptime_seconds > 0 or metrics.inference_count > 0:
+            online_count += 1
+
+    total = len(node_metrics)
+    avg_util = sum(m.utilization for m in node_metrics) / total if total else 0.0
+    avg_latency = sum(m.avg_latency_ms for m in node_metrics) / total if total else 0.0
+
+    return NPUFleetMetricsResponse(
+        total_nodes=total,
+        online_nodes=online_count,
+        total_inference_count=sum(m.inference_count for m in node_metrics),
+        avg_utilization=round(avg_util, 1),
+        avg_latency_ms=round(avg_latency, 2),
+        total_throughput_rps=round(sum(m.throughput_rps for m in node_metrics), 2),
+        total_queue_depth=sum(m.queue_depth for m in node_metrics),
+        node_metrics=node_metrics,
+    )
+
+
+@router.get("/nodes/{node_id}/metrics", response_model=NPUWorkerMetrics)
+async def get_node_metrics(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NPUWorkerMetrics:
+    """
+    Get live performance metrics for a specific NPU worker (Issue #590).
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+    if not node.roles or "npu-worker" not in node.roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node does not have npu-worker role",
+        )
+
+    port = node.ssh_port or 8081
+    return await _build_node_metrics(node, node.ip_address, port)
+
+
+@router.get("/nodes/{node_id}/config", response_model=NPUWorkerConfig)
+async def get_worker_config(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NPUWorkerConfig:
+    """Get worker-level configuration (priority, weight, models) (Issue #590)."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+    if not node.roles or "npu-worker" not in node.roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node does not have npu-worker role",
+        )
+
+    extra = node.extra_data or {}
+    cfg = extra.get("npu", {}).get("config", {})
+    return NPUWorkerConfig(**cfg)
+
+
+@router.put(
+    "/nodes/{node_id}/config",
+    response_model=NPUWorkerConfigResponse,
+)
+async def update_worker_config(
+    node_id: str,
+    config: NPUWorkerConfig,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NPUWorkerConfigResponse:
+    """Update worker-level configuration (Issue #590)."""
+    valid_actions = ["retry", "failover", "skip", "alert"]
+    if config.failure_action not in valid_actions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid failure_action. Must be one of: {valid_actions}",
+        )
+
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+    if not node.roles or "npu-worker" not in node.roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Node does not have npu-worker role",
+        )
+
+    extra = node.extra_data or {}
+    npu_data = extra.get("npu", {})
+    npu_data["config"] = config.model_dump()
+    extra["npu"] = npu_data
+    node.extra_data = extra
+    await db.commit()
+
+    logger.info("NPU worker config updated for %s", node_id)
+
+    return NPUWorkerConfigResponse(
+        success=True,
+        message="Worker configuration updated",
+        node_id=node_id,
+        config=config,
+    )

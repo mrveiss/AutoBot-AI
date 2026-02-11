@@ -529,3 +529,40 @@ export interface NPUModelInfo {
   inference_time_ms: number | null
   total_requests: number
 }
+
+// NPU Metrics & Config Types (Issue #590 - NPU Dashboard Improvements)
+
+export interface NPUWorkerMetrics {
+  node_id: string
+  utilization: number
+  temperature_celsius: number | null
+  inference_count: number
+  avg_latency_ms: number
+  throughput_rps: number
+  queue_depth: number
+  memory_used_gb: number
+  memory_total_gb: number
+  uptime_seconds: number
+  error_count: number
+  timestamp: string | null
+}
+
+export interface NPUFleetMetrics {
+  total_nodes: number
+  online_nodes: number
+  total_inference_count: number
+  avg_utilization: number
+  avg_latency_ms: number
+  total_throughput_rps: number
+  total_queue_depth: number
+  node_metrics: NPUWorkerMetrics[]
+}
+
+export interface NPUWorkerConfig {
+  priority: number
+  weight: number
+  max_concurrent: number
+  failure_action: 'retry' | 'failover' | 'skip' | 'alert'
+  max_retries: number
+  assigned_models: string[]
+}
