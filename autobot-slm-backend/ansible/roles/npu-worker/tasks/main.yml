@@ -29,6 +29,21 @@
   ansible.builtin.command:
     cmd: python3 -m venv {{ npu_install_dir }}/venv
     creates: "{{ npu_install_dir }}/venv/bin/python"
+
+- name: Fix venv ownership
+  ansible.builtin.file:
+    path: "{{ npu_install_dir }}/venv"
+    state: directory
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+    recurse: true
+
+- name: Check if OpenVINO is already installed
+  ansible.builtin.command:
+    cmd: "{{ npu_install_dir }}/venv/bin/pip show openvino"
+  register: _openvino_check
+  changed_when: false
+  failed_when: false
   become_user: "{{ npu_user }}"
 
 - name: Install OpenVINO and dependencies
@@ -43,7 +58,9 @@
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
   become_user: "{{ npu_user }}"
-  when: npu_install_openvino | default(true)
+  when:
+    - npu_install_openvino | default(true)
+    - _openvino_check.rc != 0
 
 - name: Deploy NPU worker script
   ansible.builtin.template:

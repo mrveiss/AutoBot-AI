@@ -62,10 +62,11 @@
 # -------------------------------------------------------------------
 # Phase 4: Application layer (Backend, Frontend)
 # -------------------------------------------------------------------
-- name: "Provision Phase 4a: Backend"
+- name: "Provision Phase 4a: Backend (Code-Source / WSL)"
   hosts: 01-Code-Source
   become: true
   gather_facts: true
+  ignore_unreachable: true
 
   tasks:
     - name: "App | Deploy backend role"
