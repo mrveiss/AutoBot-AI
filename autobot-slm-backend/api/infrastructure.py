@@ -179,6 +179,46 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         estimated_duration="5-10 minutes",
         requires_confirmation=True,
     ),
+    PlaybookInfo(
+        id="provision-fleet",
+        name="Auto-Provision Fleet Nodes",
+        description="Provision all fleet nodes with their assigned roles. "
+        "Deploys common baseline, SLM agent, and role-specific "
+        "configuration (redis, backend, frontend, AI, NPU, browser) "
+        "in dependency order.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="provision-fleet-roles.yml",
+        target_hosts=["slm_nodes"],
+        variables={},
+        estimated_duration="20-30 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="seed-fleet",
+        name="Seed Fleet Nodes",
+        description="Register all inventory nodes in the SLM database "
+        "via the REST API. Assigns roles for heartbeat acceptance "
+        "and fleet dashboard visibility.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="seed-fleet-nodes.yml",
+        target_hosts=["localhost"],
+        variables={},
+        estimated_duration="1-2 minutes",
+        requires_confirmation=False,
+    ),
+    PlaybookInfo(
+        id="full-slm-deploy",
+        name="Full SLM Deployment",
+        description="Complete SLM setup pipeline: PostgreSQL, backend, "
+        "frontend, nginx, TLS, monitoring, seed nodes, and "
+        "auto-provision all fleet roles.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="deploy-slm-manager.yml",
+        target_hosts=["00-SLM-Manager", "slm_nodes"],
+        variables={},
+        estimated_duration="30-45 minutes",
+        requires_confirmation=True,
+    ),
 ]
 
 # In-memory storage for executions (in production, use database)

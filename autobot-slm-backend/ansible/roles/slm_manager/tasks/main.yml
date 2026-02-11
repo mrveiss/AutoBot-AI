@@ -316,6 +316,47 @@
   ignore_errors: true
   tags: ['slm', 'service']
 
+- name: "SLM | Flush handlers to apply pending restarts"
+  ansible.builtin.meta: flush_handlers
+  tags: ['slm', 'service']
+
+- name: "SLM | Wait for backend port to be ready"
+  ansible.builtin.wait_for:
+    host: "{{ slm_backend_host }}"
+    port: "{{ slm_backend_port }}"
+    delay: 3
+    timeout: 60
+    state: started
+  tags: ['slm', 'service']
+
+- name: "SLM | Verify backend health via API"
+  ansible.builtin.uri:
+    url: "http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/health"
+    method: GET
+    status_code: 200
+  register: _slm_health
+  retries: 10
+  delay: 3
+  until: _slm_health.status == 200
+  tags: ['slm', 'service']
+
+- name: "SLM | Export admin password for downstream plays"
+  ansible.builtin.shell:
+    cmd: >-
+      grep '^SLM_ADMIN_PASSWORD='
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+      | cut -d= -f2
+  register: _slm_admin_password_result
+  changed_when: false
+  no_log: true
+  tags: ['slm', 'service']
+
+- name: "SLM | Set admin password fact for seed play"
+  ansible.builtin.set_fact:
+    slm_admin_password: "{{ _slm_admin_password_result.stdout }}"
+  no_log: true
+  tags: ['slm', 'service']
+
 - name: "SLM | Display deployment summary"
   ansible.builtin.debug:
     msg:

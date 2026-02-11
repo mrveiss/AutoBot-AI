@@ -30,7 +30,11 @@
   vars:
     slm_api_url: "https://172.16.168.19"
     slm_admin_user: "admin"
-    slm_admin_password: "admin"
+    # Password comes from hostvars (set by slm_manager role) or override
+    slm_admin_password: >-
+      {{ hostvars['00-SLM-Manager']['slm_admin_password']
+         | default(lookup('env', 'SLM_ADMIN_PASSWORD'))
+         | default('admin') }}
 
     # Map inventory hostnames to SLM deployment roles.
     # Role names must match AVAILABLE_ROLES in api/deployments.py.
@@ -72,10 +76,13 @@
         body_format: json
         body:
           username: "{{ slm_admin_user }}"
-          password: "{{ slm_admin_password }}"
+          password: "{{ slm_admin_password | trim }}"
         status_code: 200
         validate_certs: false
       register: auth_result
+      retries: 5
+      delay: 5
+      until: auth_result.status == 200
 
     - name: "Register fleet nodes"
       ansible.builtin.uri:
