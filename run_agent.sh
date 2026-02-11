@@ -302,8 +302,8 @@ echo "Existing Vite server terminated."
 # Start frontend (Vite with Vue)
 echo "Starting Vite frontend server..."
 echo "Cleaning frontend build artifacts and cache..."
-rm -rf /home/kali/Desktop/AutoBot/autobot-vue/node_modules /home/kali/Desktop/AutoBot/autobot-vue/.vite
-cd /home/kali/Desktop/AutoBot/autobot-vue && npm install --force && npm run build && npm run dev &
+rm -rf /home/kali/Desktop/AutoBot/autobot-slm-frontend/node_modules /home/kali/Desktop/AutoBot/autobot-slm-frontend/.vite
+cd /home/kali/Desktop/AutoBot/autobot-slm-frontend && npm install --force && npm run build && npm run dev &
 FRONTEND_PID=$!
 cd /home/kali/Desktop/AutoBot
 

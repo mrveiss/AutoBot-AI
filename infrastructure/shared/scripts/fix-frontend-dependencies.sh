@@ -33,7 +33,7 @@ print_error() {
 }
 
 # Check if we're in the AutoBot directory
-if [ ! -f "docker-compose.yml" ] || [ ! -d "autobot-vue" ]; then
+if [ ! -f "docker-compose.yml" ] || [ ! -d "autobot-slm-frontend" ]; then
     print_error "This script must be run from the AutoBot root directory"
     exit 1
 fi
@@ -73,7 +73,7 @@ if docker volume ls | grep -q "autobot_frontend_node_modules"; then
             print_success "Volume removed. Fresh install will occur on next container start."
         else
             print_status "Attempting to repair existing volume..."
-            docker run --rm -v autobot_frontend_node_modules:/app/node_modules -v "$(pwd)/autobot-vue:/workspace" -w /workspace node:20 bash -c "
+            docker run --rm -v autobot_frontend_node_modules:/app/node_modules -v "$(pwd)/autobot-slm-frontend:/workspace" -w /workspace node:20 bash -c "
                 echo 'Copying package files...'
                 cp package*.json /app/
                 cd /app
@@ -106,7 +106,7 @@ cat > docker-compose.override.yml << EOF
 services:
   frontend:
     build:
-      context: ./autobot-vue
+      context: ./autobot-slm-frontend
       dockerfile: ../docker/frontend/Dockerfile.dev  # Use development Dockerfile
       args:
         - NODE_VERSION=\${NODE_VERSION:-20}
@@ -125,7 +125,7 @@ services:
       start_period: 90s
       timeout: 15s
     volumes:
-      - ./autobot-vue:/app
+      - ./autobot-slm-frontend:/app
       - frontend_node_modules:/app/node_modules  # Managed by entrypoint script
       - ./logs:/shared/logs
 EOF

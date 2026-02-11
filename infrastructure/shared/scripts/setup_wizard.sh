@@ -198,7 +198,7 @@ check_prerequisites() {
 
     # Check if running from correct directory
     print_step "Checking AutoBot directory..."
-    if [ -d "$AUTOBOT_ROOT/backend" ] && [ -d "$AUTOBOT_ROOT/autobot-vue" ]; then
+    if [ -d "$AUTOBOT_ROOT/autobot-user-backend" ] && [ -d "$AUTOBOT_ROOT/autobot-slm-frontend" ]; then
         print_success "AutoBot directory structure valid"
     else
         print_error "Invalid AutoBot directory structure"

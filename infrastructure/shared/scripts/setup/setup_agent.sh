@@ -77,7 +77,7 @@ RUN_OPENVINO_SCRIPT="run_with_openvino.sh"
 LOGS_DIR="logs"
 DOCS_DIR="docs"
 STATIC_DIR="frontend/static"
-FRONTEND_DIR="autobot-vue"
+FRONTEND_DIR="autobot-slm-frontend"
 
 echo "🔧 Starting AutoBot setup..."
 

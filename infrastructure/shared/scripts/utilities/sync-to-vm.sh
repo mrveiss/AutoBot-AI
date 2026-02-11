@@ -60,8 +60,8 @@ show_usage() {
     done
     echo
     echo "Examples:"
-    echo "  $0 frontend autobot-vue/src/components/ /home/autobot/autobot-vue/src/components/"
-    echo "  $0 frontend autobot-vue/src/components/App.vue /home/autobot/autobot-vue/src/components/"
+    echo "  $0 frontend autobot-slm-frontend/src/components/ /home/autobot/autobot-slm-frontend/src/components/"
+    echo "  $0 frontend autobot-slm-frontend/src/components/App.vue /home/autobot/autobot-slm-frontend/src/components/"
     echo "  $0 all scripts/setup.sh /home/autobot/scripts/"
     echo
     echo "Special VM Names:"

@@ -213,7 +213,7 @@ get_service_startup_command() {
 
     case "$vm_name" in
         "frontend")
-            echo "ssh $SSH_USER@${VMS[$vm_name]} 'cd ~/AutoBot/autobot-vue && npm run dev -- --host 0.0.0.0 --port $AUTOBOT_FRONTEND_PORT'"
+            echo "ssh $SSH_USER@${VMS[$vm_name]} 'cd ~/AutoBot/autobot-slm-frontend && npm run dev -- --host 0.0.0.0 --port $AUTOBOT_FRONTEND_PORT'"
             ;;
         "redis")
             echo "bash scripts/vm-management/start-redis.sh"
@@ -330,7 +330,7 @@ main() {
                     echo -e "${CYAN}  Fix NPU Worker: bash scripts/vm-management/start-npu-worker.sh${NC}"
                     ;;
                 "frontend")
-                    echo -e "${CYAN}  Fix Frontend:   ssh $SSH_USER@${VMS["frontend"]} 'cd ~/AutoBot/autobot-vue && npm run dev -- --host 0.0.0.0'${NC}"
+                    echo -e "${CYAN}  Fix Frontend:   ssh $SSH_USER@${VMS["frontend"]} 'cd ~/AutoBot/autobot-slm-frontend && npm run dev -- --host 0.0.0.0'${NC}"
                     ;;
                 "ai-stack")
                     echo -e "${CYAN}  Fix AI Stack:   ssh $SSH_USER@${VMS["ai-stack"]} 'cd ~/AutoBot && python -m http.server $AUTOBOT_AI_STACK_PORT'${NC}"

@@ -113,13 +113,13 @@ test_deployment_architecture() {
 
     ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Check if service directory exists and is correct
-        if [ ! -d "/opt/autobot/src/autobot-vue" ]; then
+        if [ ! -d "/opt/autobot/src/autobot-slm-frontend" ]; then
             echo "ERROR: Service directory missing"
             exit 1
         fi
 
         # Check ownership
-        owner=$(stat -c '%U' /opt/autobot/src/autobot-vue)
+        owner=$(stat -c '%U' /opt/autobot/src/autobot-slm-frontend)
         if [ "$owner" != "autobot-service" ]; then
             echo "ERROR: Incorrect ownership (expected: autobot-service, got: $owner)"
             exit 1
@@ -128,7 +128,7 @@ test_deployment_architecture() {
         # Check critical files
         critical_files=("package.json" "vite.config.ts" "src/App.vue")
         for file in "${critical_files[@]}"; do
-            if [ ! -f "/opt/autobot/src/autobot-vue/$file" ]; then
+            if [ ! -f "/opt/autobot/src/autobot-slm-frontend/$file" ]; then
                 echo "ERROR: Critical file missing: $file"
                 exit 1
             fi
@@ -259,7 +259,7 @@ test_service_restart_recovery() {
         sleep 3
 
         # Start service again
-        cd /opt/autobot/src/autobot-vue
+        cd /opt/autobot/src/autobot-slm-frontend
         export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
         export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
@@ -338,12 +338,12 @@ test_file_sync_integrity() {
     local local_hash=""
     local remote_hash=""
 
-    if [ -f "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue" ]; then
-        local_hash=$(sha256sum "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue" | cut -d' ' -f1)
+    if [ -f "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/App.vue" ]; then
+        local_hash=$(sha256sum "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/App.vue" | cut -d' ' -f1)
     fi
 
     remote_hash=$(ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \
-        "sha256sum /opt/autobot/src/autobot-vue/src/App.vue 2>/dev/null | cut -d' ' -f1" || echo "")
+        "sha256sum /opt/autobot/src/autobot-slm-frontend/src/App.vue 2>/dev/null | cut -d' ' -f1" || echo "")
 
     if [ -n "$local_hash" ] && [ -n "$remote_hash" ] && [ "$local_hash" = "$remote_hash" ]; then
         return 0

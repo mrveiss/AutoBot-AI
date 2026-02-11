@@ -13,7 +13,7 @@ echo "📡 Checking system status..."
 FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
 if [ "$FRONTEND_STATUS" != "200" ]; then
     echo "❌ Frontend not accessible at http://localhost:3000 (status: $FRONTEND_STATUS)"
-    echo "   Please start the frontend with 'npm run dev' in autobot-vue/"
+    echo "   Please start the frontend with 'npm run dev' in autobot-slm-frontend/"
     echo ""
 fi
 
@@ -32,7 +32,7 @@ if [ "$FRONTEND_STATUS" = "200" ] && [ "$BACKEND_STATUS" = "200" ]; then
     echo "🎯 Running terminal input consistency test..."
     echo ""
 
-    cd autobot-vue
+    cd autobot-slm-frontend
 
     # Run only our specific test
     npx playwright test tests/gui/test_terminal_input_consistency.js --headed --workers=1
@@ -55,7 +55,7 @@ else
     echo ""
     echo "To test the terminal input fixes:"
     echo "1. Start the backend: ./run_agent.sh"
-    echo "2. Start the frontend: cd autobot-vue && npm run dev"
+    echo "2. Start the frontend: cd autobot-slm-frontend && npm run dev"
     echo "3. Re-run this test script"
 fi
 

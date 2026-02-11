@@ -1,4 +1,8 @@
 #!/bin/bash
+# =============================================================================
+# DEV/SANDBOX ONLY - This script assumes Docker containers.
+# Production uses native deployments. See Ansible roles for equivalent.
+# =============================================================================
 # Start Seq with Comprehensive AutoBot Analytics
 # ============================================
 # Starts Seq with proper configuration and starts log forwarding.

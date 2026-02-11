@@ -55,7 +55,7 @@ BRIDGES=(
 )
 
 for bridge in "${BRIDGES[@]}"; do
-    FILE="backend/api/${bridge}.py"
+    FILE="autobot-user-backend/api/${bridge}.py"
     if [ -f "$FILE" ]; then
         echo -e "  ${GREEN}✅ Found: ${FILE}${NC}"
     else
@@ -84,7 +84,7 @@ echo ""
 echo -e "${BLUE}Step 3: Verifying MCP Registry Entries${NC}"
 
 for bridge in "${BRIDGES[@]}"; do
-    if grep -q "\"${bridge}\"" backend/api/mcp_registry.py; then
+    if grep -q "\"${bridge}\"" autobot-user-backend/api/mcp_registry.py; then
         echo -e "  ${GREEN}✅ Registry entry: ${bridge}${NC}"
     else
         echo -e "  ${RED}❌ Missing registry entry: ${bridge}${NC}"

@@ -23,7 +23,7 @@ echo -e "${BLUE}======================================${NC}"
 
 # Check if we're in the correct directory
 if [ ! -f "package.json" ]; then
-    echo -e "${RED}❌ Error: package.json not found. Please run this script from the autobot-vue directory.${NC}"
+    echo -e "${RED}❌ Error: package.json not found. Run from autobot-user-frontend/.${NC}"
     exit 1
 fi
 

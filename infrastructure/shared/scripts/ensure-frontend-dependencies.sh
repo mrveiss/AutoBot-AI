@@ -21,7 +21,7 @@ print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Check if we're in the AutoBot directory
-if [ ! -f "docker-compose.yml" ] || [ ! -d "autobot-vue" ]; then
+if [ ! -f "docker-compose.yml" ] || [ ! -d "autobot-slm-frontend" ]; then
     print_error "This script must be run from the AutoBot root directory"
     exit 1
 fi

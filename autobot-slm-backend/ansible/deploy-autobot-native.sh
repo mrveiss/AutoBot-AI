@@ -152,7 +152,7 @@ deploy_services() {
 
     # Copy essential files for each service type
     log "INFO" "Preparing frontend sources..."
-    cp -r ../autobot-vue /tmp/autobot-deployment/
+    cp -r ../autobot-slm-frontend /tmp/autobot-deployment/
 
     log "INFO" "Preparing backend sources..."
     cp -r ../src /tmp/autobot-deployment/

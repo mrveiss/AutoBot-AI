@@ -8,7 +8,7 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-vue"
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-slm-frontend"
 
 # Remote Configuration
 FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
@@ -16,8 +16,8 @@ FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Blue-Green Deployment Configuration
-PRIMARY_DIR="/opt/autobot/src/autobot-vue"
-SECONDARY_DIR="/opt/autobot/src/autobot-vue-staging"
+PRIMARY_DIR="/opt/autobot/src/autobot-slm-frontend"
+SECONDARY_DIR="/opt/autobot/src/autobot-slm-frontend-staging"
 PROXY_CONFIG="/opt/autobot/config/nginx-proxy.conf"
 
 # Colors
@@ -91,24 +91,24 @@ setup_blue_green_environment() {
         sudo chown -R autobot-service:autobot-service /opt/autobot
 
         # Determine current and next directories
-        if [ -d "/opt/autobot/src/autobot-vue" ] && [ ! -L "/opt/autobot/src/autobot-vue" ]; then
+        if [ -d "/opt/autobot/src/autobot-slm-frontend" ] && [ ! -L "/opt/autobot/src/autobot-slm-frontend" ]; then
             # First time setup - current is primary
             echo "PRIMARY" > /tmp/current-deployment
-            next_dir="/opt/autobot/src/autobot-vue-staging"
-        elif [ -L "/opt/autobot/src/autobot-vue" ]; then
+            next_dir="/opt/autobot/src/autobot-slm-frontend-staging"
+        elif [ -L "/opt/autobot/src/autobot-slm-frontend" ]; then
             # Symbolic link exists, determine target
-            current_target=$(readlink /opt/autobot/src/autobot-vue)
+            current_target=$(readlink /opt/autobot/src/autobot-slm-frontend)
             if echo "$current_target" | grep -q "staging"; then
                 echo "SECONDARY" > /tmp/current-deployment
-                next_dir="/opt/autobot/src/autobot-vue-primary"
+                next_dir="/opt/autobot/src/autobot-slm-frontend-primary"
             else
                 echo "PRIMARY" > /tmp/current-deployment
-                next_dir="/opt/autobot/src/autobot-vue-staging"
+                next_dir="/opt/autobot/src/autobot-slm-frontend-staging"
             fi
         else
             # No current deployment
             echo "NONE" > /tmp/current-deployment
-            next_dir="/opt/autobot/src/autobot-vue-primary"
+            next_dir="/opt/autobot/src/autobot-slm-frontend-primary"
         fi
 
         echo "$next_dir" > /tmp/next-deployment-dir
@@ -311,22 +311,22 @@ perform_zero_downtime_swap() {
         fi
 
         # Create symbolic link for seamless swap
-        if [ -L "/opt/autobot/src/autobot-vue" ]; then
+        if [ -L "/opt/autobot/src/autobot-slm-frontend" ]; then
             # Remove existing link
-            sudo rm -f "/opt/autobot/src/autobot-vue"
-        elif [ -d "/opt/autobot/src/autobot-vue" ] && [ ! -L "/opt/autobot/src/autobot-vue" ]; then
+            sudo rm -f "/opt/autobot/src/autobot-slm-frontend"
+        elif [ -d "/opt/autobot/src/autobot-slm-frontend" ] && [ ! -L "/opt/autobot/src/autobot-slm-frontend" ]; then
             # Move existing directory to backup
-            backup_name="autobot-vue-backup-\$(date +%Y%m%d_%H%M%S)"
-            sudo mv "/opt/autobot/src/autobot-vue" "/opt/autobot/backups/\$backup_name"
+            backup_name="autobot-slm-frontend-backup-\$(date +%Y%m%d_%H%M%S)"
+            sudo mv "/opt/autobot/src/autobot-slm-frontend" "/opt/autobot/backups/\$backup_name"
         fi
 
         # Create new symbolic link pointing to staging
-        sudo ln -sf "\$next_dir" "/opt/autobot/src/autobot-vue"
+        sudo ln -sf "\$next_dir" "/opt/autobot/src/autobot-slm-frontend"
 
-        echo "Symbolic link created: /opt/autobot/src/autobot-vue -> \$next_dir"
+        echo "Symbolic link created: /opt/autobot/src/autobot-slm-frontend -> \$next_dir"
 
         # Update service configuration to use primary port
-        cd "/opt/autobot/src/autobot-vue"
+        cd "/opt/autobot/src/autobot-slm-frontend"
 
         # Stop staging service
         staging_pid=\$(cat /tmp/staging-frontend.pid 2>/dev/null || echo "")
@@ -439,7 +439,7 @@ rollback_deployment() {
 
         # Find most recent backup
         if [ -d "/opt/autobot/backups" ]; then
-            latest_backup=\$(ls -t /opt/autobot/backups/ | grep "autobot-vue" | head -1)
+            latest_backup=\$(ls -t /opt/autobot/backups/ | grep "autobot-slm-frontend" | head -1)
 
             if [ -n "\$latest_backup" ]; then
                 echo "Rolling back to: \$latest_backup"
@@ -449,14 +449,14 @@ rollback_deployment() {
                 sleep 2
 
                 # Remove current symlink/directory
-                sudo rm -rf "/opt/autobot/src/autobot-vue"
+                sudo rm -rf "/opt/autobot/src/autobot-slm-frontend"
 
                 # Restore backup
-                sudo mv "/opt/autobot/backups/\$latest_backup" "/opt/autobot/src/autobot-vue"
-                sudo chown -R autobot-service:autobot-service "/opt/autobot/src/autobot-vue"
+                sudo mv "/opt/autobot/backups/\$latest_backup" "/opt/autobot/src/autobot-slm-frontend"
+                sudo chown -R autobot-service:autobot-service "/opt/autobot/src/autobot-slm-frontend"
 
                 # Restart service
-                cd "/opt/autobot/src/autobot-vue"
+                cd "/opt/autobot/src/autobot-slm-frontend"
                 export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
                 export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
                 export NODE_ENV=development
@@ -518,9 +518,9 @@ $(cat "$DEPLOYMENT_STATUS" 2>/dev/null || echo "No status log available")
 
 ## Service Information
 - **Deployment Method:** Blue-Green Zero-Downtime
-- **Target Directory:** /opt/autobot/src/autobot-vue
+- **Target Directory:** /opt/autobot/src/autobot-slm-frontend
 - **Backup Location:** /opt/autobot/backups/
-- **Log Location:** /opt/autobot/src/autobot-vue/logs/frontend.log
+- **Log Location:** /opt/autobot/src/autobot-slm-frontend/logs/frontend.log
 
 ## Verification Results
 - Service responding: $(curl -s -f "http://$FRONTEND_VM:5173" >/dev/null 2>&1 && echo "✓ YES" || echo "✗ NO")

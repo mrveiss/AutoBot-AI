@@ -8,13 +8,13 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-vue"
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-slm-frontend"
 
 # Remote Configuration
 FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
 FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
-SERVICE_DIR="/opt/autobot/src/autobot-vue"
+SERVICE_DIR="/opt/autobot/src/autobot-slm-frontend"
 
 # Colors
 RED='\033[0;31m'
@@ -285,7 +285,7 @@ restart_and_verify_service() {
 
         # Start new service
         echo "Starting frontend service..."
-        cd /opt/autobot/src/autobot-vue
+        cd /opt/autobot/src/autobot-slm-frontend
 
         # Set environment
         export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}

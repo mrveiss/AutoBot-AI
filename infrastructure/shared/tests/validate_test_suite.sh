@@ -65,8 +65,8 @@ count_python_tests "/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_vectori
 echo ""
 echo "Checking Frontend Unit Tests..."
 echo "------------------------------"
-check_file "/home/kali/Desktop/AutoBot/autobot-vue/src/composables/__tests__/useKnowledgeVectorization.test.ts"
-count_ts_tests "/home/kali/Desktop/AutoBot/autobot-vue/src/composables/__tests__/useKnowledgeVectorization.test.ts"
+check_file "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
+count_ts_tests "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
 
 echo ""
 echo "Checking Integration Tests..."
@@ -93,7 +93,7 @@ if [ $FAILED_CHECKS -eq 0 ]; then
     echo ""
     echo "Next Steps:"
     echo "1. Run backend tests: pytest tests/unit/test_knowledge_*.py -v"
-    echo "2. Run frontend tests: cd autobot-vue && npm run test:unit"
+    echo "2. Run frontend tests: cd autobot-slm-frontend && npm run test:unit"
     echo "3. Run integration tests: pytest tests/integration/test_knowledge_*.py -v"
     exit 0
 else

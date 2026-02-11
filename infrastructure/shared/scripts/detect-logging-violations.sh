@@ -157,7 +157,7 @@ echo -e "${CYAN}📝 Checking Frontend files for console.* statements...${NC}"
 if [[ "$STAGED_ONLY" == "true" ]]; then
     FE_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.(ts|vue)$' || true)
 else
-    FE_FILES=$(find "$PROJECT_ROOT/autobot-vue/src" -type f \( -name "*.ts" -o -name "*.vue" \) 2>/dev/null || true)
+    FE_FILES=$(find "$PROJECT_ROOT/autobot-slm-frontend/src" -type f \( -name "*.ts" -o -name "*.vue" \) 2>/dev/null || true)
 fi
 
 for file in $FE_FILES; do

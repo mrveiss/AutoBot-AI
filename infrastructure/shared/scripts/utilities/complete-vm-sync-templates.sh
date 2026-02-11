@@ -177,20 +177,20 @@ sync_frontend() {
 
     if [[ -n "$component" ]]; then
         # Sync specific component
-        sync_file_to_vm "frontend" "autobot-vue/src/components/$component" \
-            "/home/autobot/autobot-vue/src/components/$component"
+        sync_file_to_vm "frontend" "autobot-slm-frontend/src/components/$component" \
+            "/home/autobot/autobot-slm-frontend/src/components/$component"
     else
         # Sync entire frontend
-        sync_directory_to_vm "frontend" "autobot-vue" "/home/autobot/autobot-vue"
+        sync_directory_to_vm "frontend" "autobot-slm-frontend" "/home/autobot/autobot-slm-frontend"
 
         # Build on remote
         log "Building frontend on VM..."
         ssh $SSH_OPTS "$SSH_USER@${VM_IPS[frontend]}" \
-            "cd /home/autobot/autobot-vue && npm install && npm run build"
+            "cd /home/autobot/autobot-slm-frontend && npm install && npm run build"
 
         # Deploy to nginx
         ssh $SSH_OPTS "$SSH_USER@${VM_IPS[frontend]}" \
-            "sudo cp -r /home/autobot/autobot-vue/dist/* /var/www/html/"
+            "sudo cp -r /home/autobot/autobot-slm-frontend/dist/* /var/www/html/"
 
         success "Frontend deployed to nginx"
     fi
@@ -201,11 +201,12 @@ sync_backend() {
 
     if [[ -n "$api_module" ]]; then
         # Sync specific API module
-        sync_file_to_vm "ai-stack" "backend/api/$api_module" \
-            "/home/autobot/backend/api/$api_module" true
+        sync_file_to_vm "ai-stack" "autobot-user-backend/api/$api_module" \
+            "/home/autobot/autobot-user-backend/api/$api_module" true
     else
         # Sync entire backend
-        sync_directory_to_vm "ai-stack" "backend" "/home/autobot/backend" true
+        sync_directory_to_vm "ai-stack" "autobot-user-backend" \
+            "/home/autobot/autobot-user-backend" true
     fi
 }
 

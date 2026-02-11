@@ -82,9 +82,9 @@ error() {
 
 # Check if we're running in the correct directory
 check_autobot_directory() {
-    if [ ! -f "config/config.yaml.template" ] || [ ! -d "backend" ] || [ ! -d "autobot-vue" ]; then
+    if [ ! -f "config/config.yaml.template" ] || [ ! -d "autobot-user-backend" ] || [ ! -d "autobot-slm-frontend" ]; then
         error "Please run this script from the AutoBot root directory"
-        error "Required files: config/config.yaml.template, backend/, autobot-vue/"
+        error "Required: config/config.yaml.template, autobot-user-backend/, autobot-slm-frontend/"
         exit 1
     fi
 }
@@ -179,9 +179,9 @@ setup_python_environment() {
     fi
 
     # Setup Node.js dependencies for frontend (if present)
-    if [ -d "autobot-vue" ] && command -v npm &> /dev/null; then
+    if [ -d "autobot-slm-frontend" ] && command -v npm &> /dev/null; then
         log "Setting up Node.js dependencies for Vue frontend..."
-        cd autobot-vue
+        cd autobot-slm-frontend
         if [ ! -d "node_modules" ] || [ "$FORCE_SETUP" = true ]; then
             npm install
             success "Node.js dependencies installed"

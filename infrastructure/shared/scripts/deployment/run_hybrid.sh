@@ -1,4 +1,8 @@
 #!/bin/bash
+# =============================================================================
+# DEV/SANDBOX ONLY - This script assumes Docker containers.
+# Production uses native deployments. See Ansible roles for equivalent.
+# =============================================================================
 
 # Script to run AutoBot in hybrid mode (local orchestrator + containerized AI stack)
 
@@ -151,7 +155,7 @@ echo "✅ Backend started successfully (PID: $BACKEND_PID)"
 
 # Start frontend (Vue)
 echo "Starting Vue frontend server..."
-cd autobot-vue
+cd autobot-slm-frontend
 npm run dev &
 FRONTEND_PID=$!
 cd ..

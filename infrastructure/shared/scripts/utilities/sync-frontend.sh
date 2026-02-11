@@ -16,8 +16,8 @@ source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
-LOCAL_SRC="$PROJECT_ROOT/autobot-vue/src"
-REMOTE_DEST="/home/autobot/autobot-vue/src"
+LOCAL_SRC="$PROJECT_ROOT/autobot-slm-frontend/src"
+REMOTE_DEST="/home/autobot/autobot-slm-frontend/src"
 FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
@@ -64,7 +64,7 @@ log_info "Vite dev server stopped ✓"
 # Step 2: Clean caches and temp files on remote (while Vite is stopped)
 log_info "Cleaning Vite caches and temp files on remote..."
 timeout 15 ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
-    "cd /home/autobot/autobot-vue && rm -rf .vite node_modules/.cache node_modules/.vite dist .vite-temp && echo 'Caches cleared'" || log_warn "Cache cleanup timed out"
+    "cd /home/autobot/autobot-slm-frontend && rm -rf .vite node_modules/.cache node_modules/.vite dist .vite-temp && echo 'Caches cleared'" || log_warn "Cache cleanup timed out"
 log_info "Remote caches cleaned ✓"
 
 # Step 3: Sync specific component or all
@@ -82,7 +82,7 @@ case "$SYNC_TARGET" in
             --exclude 'node_modules' \
             --exclude '.DS_Store' \
             --exclude '*.log' \
-            "$LOCAL_SRC/" "$REMOTE_USER@$REMOTE_HOST:/home/autobot/autobot-vue/src/"
+            "$LOCAL_SRC/" "$REMOTE_USER@$REMOTE_HOST:/home/autobot/autobot-slm-frontend/src/"
         ;;
     *)
         log_info "Syncing specific file/directory: $SYNC_TARGET"
@@ -106,7 +106,7 @@ log_info "Sync completed successfully! ✓"
 # Step 4: Start Vite dev server with clean cache and fresh files
 log_info "Starting Vite dev server..."
 timeout 10 ssh -i "$SSH_KEY" "$REMOTE_USER@$REMOTE_HOST" \
-    "cd /home/autobot/autobot-vue && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null &" || log_warn "Vite startup command may have timed out"
+    "cd /home/autobot/autobot-slm-frontend && VITE_BACKEND_HOST=$BACKEND_HOST VITE_BACKEND_PORT=$BACKEND_PORT nohup npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT > /tmp/vite.log 2>&1 < /dev/null &" || log_warn "Vite startup command may have timed out"
 sleep 3
 log_info "Vite dev server started ✓"
 log_info "Frontend sync complete - all caches cleared, files synced, server restarted ✓"
