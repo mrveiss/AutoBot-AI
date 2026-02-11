@@ -39,10 +39,9 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, validator
-
 from backend.type_defs.common import Metadata
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from pydantic import BaseModel, Field, validator
 from utils.path_validation import contains_path_traversal
 
 # Issue #380: Module-level frozenset for tag operations
@@ -400,17 +399,48 @@ class PaginationRequest(BaseModel):
 
 
 class AddTextRequest(BaseModel):
-    """Request model for adding text to knowledge base"""
+    """Request model for adding text to knowledge base (Issue #688: enhanced)."""
 
     text: str = Field(..., min_length=1, max_length=1000000)
     metadata: Optional[Metadata] = Field(default=None)
     category: Optional[str] = Field(default=CategoryDefaults.GENERAL, max_length=100)
+    # Issue #688: Ownership fields
+    owner_id: Optional[str] = Field(default=None, max_length=100)
+    visibility: str = Field(
+        default="private",
+        description="Visibility level: private, shared, public",
+    )
+    source_type: str = Field(
+        default="manual",
+        description="Source type: chat, manual, import, system",
+    )
+    shared_with: Optional[List[str]] = Field(
+        default=None,
+        max_items=50,
+        description="List of user IDs to share with",
+    )
 
     @validator("metadata")
     def validate_metadata(cls, v):
         """Validate metadata structure"""
         if v is not None and not isinstance(v, dict):
             raise ValueError("Metadata must be a dictionary")
+        return v
+
+    @validator("visibility")
+    def validate_visibility(cls, v):
+        """Validate visibility level."""
+        valid_levels = {"private", "shared", "public"}
+        if v not in valid_levels:
+            raise ValueError(f"Invalid visibility: {v}. Must be one of: {valid_levels}")
+        return v
+
+    @validator("source_type")
+    def validate_source_type(cls, v):
+        """Validate source type."""
+        valid_types = {"chat", "manual", "import", "system"}
+        if v not in valid_types:
+            raise ValueError(f"Invalid source_type: {v}. Must be one of: {valid_types}")
         return v
 
 
@@ -1745,6 +1775,82 @@ class UpdateFactRequest(BaseModel):
         return v
 
 
+# ===== OWNERSHIP AND SHARING MODELS (Issue #688) =====
+
+
+class ShareFactRequest(BaseModel):
+    """Request model for sharing a fact with users (Issue #688)."""
+
+    user_ids: List[str] = Field(
+        ...,
+        min_items=1,
+        max_items=50,
+        description="List of user IDs to share with",
+    )
+
+    @validator("user_ids", each_item=True)
+    def validate_user_id(cls, v):
+        """Validate user ID format."""
+        if not v or len(v) > 100:
+            raise ValueError("Invalid user_id: must be 1-100 characters")
+        return v
+
+
+class UnshareFactRequest(BaseModel):
+    """Request model for removing users from fact sharing (Issue #688)."""
+
+    user_ids: List[str] = Field(
+        ...,
+        min_items=1,
+        max_items=50,
+        description="List of user IDs to remove from sharing",
+    )
+
+    @validator("user_ids", each_item=True)
+    def validate_user_id(cls, v):
+        """Validate user ID format."""
+        if not v or len(v) > 100:
+            raise ValueError("Invalid user_id: must be 1-100 characters")
+        return v
+
+
+class UpdateVisibilityRequest(BaseModel):
+    """Request model for changing fact visibility (Issue #688)."""
+
+    visibility: str = Field(
+        ...,
+        description="Visibility level: private, shared, public",
+    )
+
+    @validator("visibility")
+    def validate_visibility(cls, v):
+        """Validate visibility level."""
+        valid_levels = {"private", "shared", "public"}
+        if v not in valid_levels:
+            raise ValueError(f"Invalid visibility: {v}. Must be one of: {valid_levels}")
+        return v
+
+
+class GetUserFactsRequest(BaseModel):
+    """Request model for getting user's facts with pagination (Issue #688)."""
+
+    limit: int = Field(
+        default=QueryDefaults.DEFAULT_PAGE_SIZE,
+        ge=1,
+        le=500,
+        description="Maximum number of facts to return",
+    )
+    offset: int = Field(
+        default=QueryDefaults.DEFAULT_OFFSET,
+        ge=0,
+        description="Pagination offset",
+    )
+    include_shared: bool = Field(
+        default=False,
+        description="Include facts shared with user in addition to owned facts",
+    )
+
+
 # ===== MODULE EXPORTS =====
 
 __all__ = [
@@ -1810,4 +1916,9 @@ __all__ = [
     "BackupRequest",
     "RestoreRequest",
     "DeleteBackupRequest",
+    # Ownership and sharing (Issue #688)
+    "ShareFactRequest",
+    "UnshareFactRequest",
+    "UpdateVisibilityRequest",
+    "GetUserFactsRequest",
 ]

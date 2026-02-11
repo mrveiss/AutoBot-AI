@@ -16,16 +16,15 @@ from typing import TYPE_CHECKING, List, Optional
 
 import aioredis
 import redis
+from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from config import UnifiedConfigManager
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
-
-from config import UnifiedConfigManager
 from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from utils.chromadb_client import wrap_collection_async
-from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
@@ -109,6 +108,8 @@ class KnowledgeBaseCore:
         self.embedding_dimensions: Optional[int] = None
         self._redis_initialized = False
         self._stats_key = "kb:stats"
+        # Issue #688: Initialize ownership manager (lazy loaded)
+        self.ownership_manager = None
 
     def __init__(self):
         """Initialize instance variables only (Issue #398: refactored)."""
@@ -156,6 +157,9 @@ class KnowledgeBaseCore:
                 # Step 4: Initialize stats counters (Issue #71 - O(1) stats)
                 # Note: This will be called from StatsMixin when it's composed
                 # For now, we'll assume it's handled by the composed class
+
+                # Step 5: Initialize ownership manager (Issue #688)
+                await self._init_ownership_manager()
 
                 self.initialized = True
                 self._redis_initialized = True  # V1 compatibility flag
@@ -442,6 +446,24 @@ class KnowledgeBaseCore:
             logger.error(traceback.format_exc())
             # Don't fail initialization - just log the error
             self.vector_index = None
+
+    async def _init_ownership_manager(self):
+        """Initialize knowledge ownership manager (Issue #688)."""
+        try:
+            if not self.redis_client:
+                logger.warning(
+                    "Cannot initialize ownership manager - Redis not available"
+                )
+                return
+
+            from knowledge.ownership import KnowledgeOwnership
+
+            self.ownership_manager = KnowledgeOwnership(self.redis_client)
+            logger.info("Knowledge ownership manager initialized successfully")
+
+        except Exception as e:
+            logger.error("Failed to initialize ownership manager: %s", e)
+            self.ownership_manager = None
 
     async def _cleanup_on_failure(self):
         """Cleanup resources on initialization failure"""

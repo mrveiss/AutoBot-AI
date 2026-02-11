@@ -17,16 +17,15 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel
-
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.type_defs.common import Metadata
 from chat_history import ChatHistoryManager
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 # Import existing components
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ DOCUMENTATION_KEYWORDS = {"config", "setup", "install", "guide"}
 
 
 async def get_chat_knowledge_manager_instance(request: Request = None):
-    """PERFORMANCE OPTIMIZATION: Get chat knowledge manager instance, preferring pre-initialized app.state"""
+    """Get chat knowledge manager (preferring pre-initialized app.state)."""
     # Try to use pre-initialized manager from app state first
     if request is not None:
         app_manager = getattr(request.app.state, "chat_knowledge_manager", None)
@@ -84,7 +83,7 @@ class FileAssociationType(str, Enum):
 
 @dataclass
 class ChatKnowledgeContext:
-    """Knowledge context for a specific chat session"""
+    """Knowledge context for a specific chat session (Issue #688: added user_id)."""
 
     chat_id: str
     topic: Optional[str] = None
@@ -96,6 +95,8 @@ class ChatKnowledgeContext:
     persistent_knowledge_ids: List[str] = field(default_factory=list)
     file_associations: List[Metadata] = field(default_factory=list)
     metadata: Metadata = field(default_factory=dict)
+    # Issue #688: Track user ownership for chat-derived facts
+    user_id: Optional[str] = None
 
 
 @dataclass
@@ -141,8 +142,9 @@ class ChatKnowledgeManager:
         chat_id: str,
         topic: Optional[str] = None,
         keywords: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
     ) -> ChatKnowledgeContext:
-        """Create or update knowledge context for a chat"""
+        """Create or update knowledge context for a chat (Issue #688: added user_id)."""
         if chat_id in self.chat_contexts:
             context = self.chat_contexts[chat_id]
             if topic:
@@ -150,15 +152,24 @@ class ChatKnowledgeManager:
             if keywords:
                 context.keywords.extend(keywords)
                 context.keywords = list(set(context.keywords))  # Remove duplicates
+            if user_id:
+                context.user_id = user_id
             context.updated_at = datetime.now()
         else:
             context = ChatKnowledgeContext(
-                chat_id=chat_id, topic=topic, keywords=keywords or []
+                chat_id=chat_id,
+                topic=topic,
+                keywords=keywords or [],
+                user_id=user_id,
             )
             self.chat_contexts[chat_id] = context
 
         logger.info(
-            f"Context updated for chat {chat_id}: topic='{topic}', keywords={keywords}"
+            "Context updated for chat %s: topic='%s', keywords=%s, user_id=%s",
+            chat_id,
+            topic,
+            keywords,
+            user_id,
         )
         return context
 
@@ -300,14 +311,24 @@ class ChatKnowledgeManager:
             # Add to permanent knowledge base
             try:
                 # Issue #547: Include source_session_id for orphan cleanup
+                # Issue #688: Include ownership metadata for chat-derived facts
+                metadata = {
+                    **item.get("metadata", {}),
+                    "source": f"chat_{chat_id}",
+                    "source_session_id": chat_id,  # Issue #547: Track source session
+                    "original_id": knowledge_id,
+                    "source_type": "chat",  # Issue #688: Mark as chat-derived
+                    "category": "chat_knowledge",  # Issue #688: Category for chat facts
+                }
+
+                # Issue #688: Add user ownership if available from context
+                if hasattr(context, "user_id") and context.user_id:
+                    metadata["owner_id"] = context.user_id
+                    metadata["visibility"] = "private"  # Default visibility
+
                 kb_id = await self.knowledge_base.add_content(
                     content=item["content"],
-                    metadata={
-                        **item.get("metadata", {}),
-                        "source": f"chat_{chat_id}",
-                        "source_session_id": chat_id,  # Issue #547: Track source session
-                        "original_id": knowledge_id,
-                    },
+                    metadata=metadata,
                 )
 
                 # Track in context
@@ -393,10 +414,20 @@ class ChatKnowledgeManager:
 
         # Add to knowledge base
         # Issue #547: Include source_session_id for orphan cleanup
+        # Issue #688: Include ownership metadata for chat-compiled knowledge
         kb_metadata = {
             **compiled_knowledge["metadata"],
             "source_session_id": chat_id,  # Issue #547: Track source session
+            "source_type": "chat",  # Issue #688: Mark as chat-derived
+            "category": "chat_knowledge",  # Issue #688: Category for chat facts
         }
+
+        # Issue #688: Add user ownership if available from context
+        context = self.chat_contexts.get(chat_id)
+        if context and hasattr(context, "user_id") and context.user_id:
+            kb_metadata["owner_id"] = context.user_id
+            kb_metadata["visibility"] = "private"  # Default visibility
+
         kb_id = await self.knowledge_base.add_content(
             content=summary, metadata=kb_metadata
         )
@@ -467,9 +498,12 @@ chat_knowledge_manager = None
 
 
 class CreateContextRequest(BaseModel):
+    """Create chat context request (Issue #688: added user_id)."""
+
     chat_id: str
     topic: Optional[str] = None
     keywords: Optional[List[str]] = None
+    user_id: Optional[str] = None  # Issue #688: Track user ownership
 
 
 @with_error_handling(
@@ -479,13 +513,14 @@ class CreateContextRequest(BaseModel):
 )
 @router.post("/context/create")
 async def create_chat_context(request_data: CreateContextRequest, request: Request):
-    """Create or update knowledge context for a chat"""
+    """Create or update knowledge context for a chat (Issue #688: added user_id)."""
     try:
         manager = await get_chat_knowledge_manager_instance(request)
         context = await manager.create_or_update_context(
             chat_id=request_data.chat_id,
             topic=request_data.topic,
             keywords=request_data.keywords,
+            user_id=request_data.user_id,
         )
 
         return {
@@ -494,6 +529,7 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
                 "chat_id": context.chat_id,
                 "topic": context.topic,
                 "keywords": context.keywords,
+                "user_id": context.user_id,
                 "created_at": context.created_at.isoformat(),
                 "updated_at": context.updated_at.isoformat(),
             },
