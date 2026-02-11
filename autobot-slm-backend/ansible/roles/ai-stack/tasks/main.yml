@@ -63,6 +63,7 @@
       - anthropic
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
+    extra_args: "--timeout 120"
   become_user: "{{ ai_user }}"
   when: _ai_packages_check.rc != 0
 

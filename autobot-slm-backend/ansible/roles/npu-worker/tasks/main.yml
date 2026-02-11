@@ -57,6 +57,7 @@
       - optimum[openvino]
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
+    extra_args: "--timeout 120"
   become_user: "{{ npu_user }}"
   when:
     - npu_install_openvino | default(true)
