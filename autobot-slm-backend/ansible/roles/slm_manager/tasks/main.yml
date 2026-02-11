@@ -186,7 +186,10 @@
   ansible.builtin.set_fact:
     slm_secret_key: "{{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}"
     slm_encryption_key: "{{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}"
-    slm_admin_password: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
+    slm_admin_password: >-
+      {{ slm_admin_password
+         if (slm_admin_password | default('') | length > 0)
+         else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
