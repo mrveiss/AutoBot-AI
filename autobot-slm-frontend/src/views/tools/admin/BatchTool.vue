@@ -108,8 +108,9 @@ async function loadJobs(): Promise<void> {
   error.value = null
 
   try {
-    const data = await api.get('/batch/jobs')
-    jobs.value = data.jobs || []
+    // Issue #835 - use named function from useAutobotApi
+    const data = await api.listBatchJobs()
+    jobs.value = (data.jobs as BatchJob[]) || []
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load jobs'
   } finally {
@@ -119,8 +120,9 @@ async function loadJobs(): Promise<void> {
 
 async function loadStats(): Promise<void> {
   try {
-    const data = await api.get('/batch/stats')
-    stats.value = data || { total_jobs: 0, running_jobs: 0, completed_jobs: 0, failed_jobs: 0 }
+    // Issue #835 - use named function from useAutobotApi
+    const data = await api.getBatchJobHealth()
+    stats.value = (data as unknown as BatchStats) || { total_jobs: 0, running_jobs: 0, completed_jobs: 0, failed_jobs: 0 }
   } catch (e) {
     logger.error('Failed to load stats:', e)
   }
@@ -138,7 +140,8 @@ async function createJob(): Promise<void> {
 
   loading.value = true
   try {
-    await api.post('/batch/jobs', newJob.value)
+    // Issue #835 - use named function from useAutobotApi
+    await api.createBatchJob(newJob.value)
     showCreateModal.value = false
     newJob.value = { name: '', type: 'file_processing', items: [], options: {} }
     await loadJobs()
@@ -151,7 +154,8 @@ async function createJob(): Promise<void> {
 
 async function cancelJob(jobId: string): Promise<void> {
   try {
-    await api.post(`/batch/jobs/${jobId}/cancel`)
+    // Issue #835 - use named function from useAutobotApi
+    await api.cancelBatchJob(jobId)
     await loadJobs()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to cancel job'
@@ -160,7 +164,11 @@ async function cancelJob(jobId: string): Promise<void> {
 
 async function retryJob(jobId: string): Promise<void> {
   try {
-    await api.post(`/batch/jobs/${jobId}/retry`)
+    // Issue #835 - no retry endpoint in backend, re-create the job
+    const job = jobs.value.find(j => j.id === jobId)
+    if (job) {
+      await api.createBatchJob({ name: job.name, type: job.type })
+    }
     await loadJobs()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to retry job'
@@ -171,7 +179,8 @@ async function deleteJob(jobId: string): Promise<void> {
   if (!confirm('Are you sure you want to delete this job?')) return
 
   try {
-    await api.delete(`/batch/jobs/${jobId}`)
+    // Issue #835 - use cancelBatchJob (DELETE endpoint)
+    await api.cancelBatchJob(jobId)
     if (selectedJob.value?.id === jobId) {
       selectedJob.value = null
     }

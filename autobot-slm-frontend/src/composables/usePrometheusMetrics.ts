@@ -265,7 +265,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   }
 
   async function fetchGPUDetails(): Promise<void> {
-    // GPU metrics not available in SLM - would need to aggregate from nodes
+    // No GPU metrics endpoint in SLM backend - no GPU nodes in fleet
     gpuDetails.value = {
       available: false,
       utilization_percent: 0,
@@ -276,7 +276,30 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   }
 
   async function fetchNPUDetails(): Promise<void> {
-    // NPU metrics not available in SLM - would need to aggregate from nodes
+    // Issue #835 - query actual NPU node status from SLM backend
+    try {
+      const response = await fetch(`${API_BASE}/npu/nodes`, {
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const nodes = data.nodes || []
+        if (nodes.length > 0) {
+          const activeNodes = nodes.filter(
+            (n: Record<string, unknown>) => n.status === 'online'
+          )
+          npuDetails.value = {
+            available: activeNodes.length > 0,
+            utilization_percent: 0,
+            acceleration_ratio: 0,
+            inference_count: activeNodes.length,
+          }
+          return
+        }
+      }
+    } catch (err) {
+      logger.error('Failed to fetch NPU details:', err)
+    }
     npuDetails.value = {
       available: false,
       utilization_percent: 0,

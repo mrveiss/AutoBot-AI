@@ -60,8 +60,20 @@ async function captureScreen(): Promise<void> {
   error.value = null
 
   try {
-    const data = await api.get('/vision/capture-screen')
-    capturedImage.value = `data:image/png;base64,${data.screenshot}`
+    // Issue #835 - use browser getDisplayMedia API (no backend capture endpoint)
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+    const video = document.createElement('video')
+    video.srcObject = stream
+    await video.play()
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx?.drawImage(video, 0, 0)
+
+    capturedImage.value = canvas.toDataURL('image/png')
+    stream.getTracks().forEach(track => track.stop())
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to capture screen'
   } finally {
@@ -102,13 +114,11 @@ async function analyzeImage(): Promise<void> {
   analysisResult.value = null
 
   try {
+    // Issue #835 - use named function from useAutobotApi
     const base64 = capturedImage.value.split(',')[1] || capturedImage.value
-    const data = await api.post('/vision/analyze', {
-      image: base64,
-      prompt: analysisPrompt.value
-    })
+    const data = await api.analyzeScreen({ image_base64: base64 })
 
-    analysisResult.value = data.analysis || data.description || 'No analysis available'
+    analysisResult.value = (data.analysis as string) || (data.description as string) || 'No analysis available'
 
     // Add to history
     history.value.unshift({

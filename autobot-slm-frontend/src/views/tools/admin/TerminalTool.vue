@@ -89,18 +89,22 @@ async function connect(): Promise<void> {
       text: `Connecting to ${currentHost.value?.name} (${currentHost.value?.ip})...`
     })
 
-    // Simulate connection - full WebSocket integration would require terminal service
-    await new Promise(resolve => setTimeout(resolve, 500))
-    isConnected.value = true
+    // Issue #835 - verify connection with real command instead of fake setTimeout
+    const result = await api.executeTerminalCommand('echo connected', currentHost.value?.ip || '')
 
-    output.value.push({
-      type: 'output',
-      text: `Connected to ${currentHost.value?.name}`
-    })
-    output.value.push({
-      type: 'output',
-      text: `Session started. Type 'help' for available commands.`
-    })
+    if (result.stdout?.includes('connected') || result.exit_code === 0) {
+      isConnected.value = true
+      output.value.push({
+        type: 'output',
+        text: `Connected to ${currentHost.value?.name}`
+      })
+      output.value.push({
+        type: 'output',
+        text: `Session started. Type 'help' for available commands.`
+      })
+    } else {
+      throw new Error(result.stderr || 'Connection test failed')
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Connection failed'
     output.value.push({

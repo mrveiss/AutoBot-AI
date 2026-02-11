@@ -481,6 +481,26 @@ export function useAutobotApi() {
     return response.data
   }
 
+  async function getMCPBridges(): Promise<Record<string, unknown>[]> {
+    const response = await client.get<{ bridges: Record<string, unknown>[] }>('/mcp/bridges')
+    return response.data.bridges
+  }
+
+  async function getMCPTools(): Promise<Record<string, unknown>[]> {
+    const response = await client.get<{ tools: Record<string, unknown>[] }>('/mcp/tools')
+    return response.data.tools
+  }
+
+  async function getMCPHealth(): Promise<Record<string, unknown>> {
+    const response = await client.get('/mcp/health')
+    return response.data
+  }
+
+  async function getMCPStats(): Promise<Record<string, unknown>> {
+    const response = await client.get('/mcp/stats')
+    return response.data
+  }
+
   // =============================================================================
   // Agents API
   // =============================================================================
@@ -497,6 +517,31 @@ export function useAutobotApi() {
 
   async function updateAgent(id: string, data: Partial<Agent>): Promise<Agent> {
     const response = await client.patch<Agent>(`/agents/${id}`, data)
+    return response.data
+  }
+
+  async function getAvailableAgents(): Promise<Record<string, unknown>[]> {
+    const response = await client.get('/agent/agents/available')
+    return response.data
+  }
+
+  async function getAgentsStatus(): Promise<Record<string, unknown>> {
+    const response = await client.get('/agent/agents/status')
+    return response.data
+  }
+
+  async function pauseAgent(): Promise<Record<string, unknown>> {
+    const response = await client.post('/agent/pause')
+    return response.data
+  }
+
+  async function resumeAgent(): Promise<Record<string, unknown>> {
+    const response = await client.post('/agent/resume')
+    return response.data
+  }
+
+  async function executeAgentGoal(goal: string): Promise<Record<string, unknown>> {
+    const response = await client.post('/agent/goal', { goal })
     return response.data
   }
 
@@ -528,6 +573,25 @@ export function useAutobotApi() {
 
   async function updateVoiceConfig(config: Record<string, unknown>): Promise<void> {
     await client.put('/voice/config', config)
+  }
+
+  async function voiceListen(userRole: string = 'admin'): Promise<Record<string, unknown>> {
+    const formData = new FormData()
+    formData.append('user_role', userRole)
+    const response = await client.post('/voice/listen', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  }
+
+  async function voiceSpeak(text: string, userRole: string = 'admin'): Promise<Record<string, unknown>> {
+    const formData = new FormData()
+    formData.append('text', text)
+    formData.append('user_role', userRole)
+    const response = await client.post('/voice/speak', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
   }
 
   // =============================================================================
@@ -635,6 +699,129 @@ export function useAutobotApi() {
   }
 
   // =============================================================================
+  // Browser MCP API (Issue #835 - browser automation via MCP protocol)
+  // =============================================================================
+
+  async function getBrowserStatus(): Promise<Record<string, unknown>> {
+    const response = await client.get('/browser/mcp/status')
+    return response.data
+  }
+
+  async function browserNavigate(url: string): Promise<Record<string, unknown>> {
+    const response = await client.post('/browser/mcp/navigate', { url })
+    return response.data
+  }
+
+  async function browserScreenshot(): Promise<Record<string, unknown>> {
+    const response = await client.post('/browser/mcp/screenshot', {})
+    return response.data
+  }
+
+  async function browserClick(selector: string): Promise<Record<string, unknown>> {
+    const response = await client.post('/browser/mcp/click', { selector })
+    return response.data
+  }
+
+  async function browserFill(selector: string, value: string): Promise<Record<string, unknown>> {
+    const response = await client.post('/browser/mcp/fill', { selector, value })
+    return response.data
+  }
+
+  async function browserEvaluate(script: string): Promise<Record<string, unknown>> {
+    const response = await client.post('/browser/mcp/evaluate', { script })
+    return response.data
+  }
+
+  async function browserGoBack(sessionId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/browser/mcp/navigate`, { url: 'javascript:history.back()' })
+    void sessionId
+    return response.data
+  }
+
+  async function browserGoForward(sessionId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/browser/mcp/navigate`, { url: 'javascript:history.forward()' })
+    void sessionId
+    return response.data
+  }
+
+  async function browserRefresh(sessionId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/browser/mcp/navigate`, { url: 'javascript:location.reload()' })
+    void sessionId
+    return response.data
+  }
+
+  // =============================================================================
+  // Vision API (Issue #835)
+  // =============================================================================
+
+  async function getVisionStatus(): Promise<Record<string, unknown>> {
+    const response = await client.get('/vision/status')
+    return response.data
+  }
+
+  async function getVisionHealth(): Promise<Record<string, unknown>> {
+    const response = await client.get('/vision/health')
+    return response.data
+  }
+
+  async function analyzeScreen(
+    data: { image_base64?: string; url?: string }
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post('/vision/analyze', data)
+    return response.data
+  }
+
+  async function detectElements(
+    data: { image_base64?: string; url?: string }
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post('/vision/elements', data)
+    return response.data
+  }
+
+  async function extractTextOCR(
+    data: { image_base64?: string; url?: string }
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post('/vision/ocr', data)
+    return response.data
+  }
+
+  // =============================================================================
+  // Batch Jobs API (Issue #835 - at /batch-jobs prefix)
+  // =============================================================================
+
+  async function listBatchJobs(): Promise<Record<string, unknown>> {
+    const response = await client.get('/batch-jobs')
+    return response.data
+  }
+
+  async function createBatchJob(
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post('/batch-jobs', data)
+    return response.data
+  }
+
+  async function getBatchJob(jobId: string): Promise<Record<string, unknown>> {
+    const response = await client.get(`/batch-jobs/${jobId}`)
+    return response.data
+  }
+
+  async function cancelBatchJob(jobId: string): Promise<Record<string, unknown>> {
+    const response = await client.delete(`/batch-jobs/${jobId}`)
+    return response.data
+  }
+
+  async function getBatchJobHealth(): Promise<Record<string, unknown>> {
+    const response = await client.get('/batch-jobs/health')
+    return response.data
+  }
+
+  async function getBatchStatus(): Promise<Record<string, unknown>> {
+    const response = await client.get('/batch/status')
+    return response.data
+  }
+
+  // =============================================================================
   // Terminal API (Issue #729 - for TerminalTool)
   // =============================================================================
 
@@ -737,21 +924,32 @@ export function useAutobotApi() {
     writeFile,
     deleteFile,
     uploadFile,
-    // MCP
+    // MCP Registry (Issue #835)
     getMCPServers,
     getMCPServer,
     startMCPServer,
     stopMCPServer,
     restartMCPServer,
-    // Agents
+    getMCPBridges,
+    getMCPTools,
+    getMCPHealth,
+    getMCPStats,
+    // Agents (Issue #835)
     getAgents,
     getAgent,
     updateAgent,
+    getAvailableAgents,
+    getAgentsStatus,
+    pauseAgent,
+    resumeAgent,
+    executeAgentGoal,
     // RUM
     getRUMMetrics,
-    // Voice
+    // Voice (Issue #835)
     getVoiceConfig,
     updateVoiceConfig,
+    voiceListen,
+    voiceSpeak,
     // LLM
     getLLMConfig,
     updateLLMConfig,
@@ -765,6 +963,29 @@ export function useAutobotApi() {
     getErrorStatistics,
     getRecentErrors,
     getMetricsSummary,
+    // Browser MCP (Issue #835)
+    getBrowserStatus,
+    browserNavigate,
+    browserScreenshot,
+    browserClick,
+    browserFill,
+    browserEvaluate,
+    browserGoBack,
+    browserGoForward,
+    browserRefresh,
+    // Vision (Issue #835)
+    getVisionStatus,
+    getVisionHealth,
+    analyzeScreen,
+    detectElements,
+    extractTextOCR,
+    // Batch Jobs (Issue #835)
+    listBatchJobs,
+    createBatchJob,
+    getBatchJob,
+    cancelBatchJob,
+    getBatchJobHealth,
+    getBatchStatus,
     // Terminal (Issue #729)
     executeTerminalCommand,
     // Log Forwarding Control (Issue #729)

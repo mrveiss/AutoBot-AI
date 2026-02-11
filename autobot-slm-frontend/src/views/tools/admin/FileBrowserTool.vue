@@ -84,8 +84,8 @@ async function loadDirectory(path: string): Promise<void> {
   error.value = null
 
   try {
-    const data = await api.get('/files/list', { path })
-    files.value = data.files || []
+    const filesList = await api.listFiles(path)
+    files.value = (filesList || []) as FileEntry[]
     currentPath.value = path
     pathInput.value = path
     selectedFile.value = null
@@ -116,8 +116,8 @@ async function loadFileContent(entry: FileEntry): Promise<void> {
     const filePath = currentPath.value === '/'
       ? `/${entry.name}`
       : `${currentPath.value}/${entry.name}`
-    const data = await api.get('/files/content', { path: filePath })
-    fileContent.value = data.content || ''
+    const content = await api.readFile(filePath)
+    fileContent.value = content || ''
     showEditor.value = true
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load file'
@@ -149,10 +149,10 @@ async function downloadFile(entry: FileEntry): Promise<void> {
     const filePath = currentPath.value === '/'
       ? `/${entry.name}`
       : `${currentPath.value}/${entry.name}`
-    const data = await api.get('/files/download', { path: filePath })
+    const content = await api.readFile(filePath)
 
     // Create download link
-    const blob = new Blob([data.content], { type: 'application/octet-stream' })
+    const blob = new Blob([content], { type: 'application/octet-stream' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

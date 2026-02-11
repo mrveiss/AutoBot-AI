@@ -96,8 +96,8 @@ async function handleRestore(backupId: string): Promise<void> {
   try {
     await api.restoreBackup(backupId)
     await fetchBackups()
-  } catch {
-    // Handle error silently - could add toast notification
+  } catch (e) {
+    alert(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 
@@ -144,8 +144,8 @@ async function handlePromoteReplica(replicationId: string): Promise<void> {
   try {
     await api.promoteReplica(replicationId)
     await fetchReplications()
-  } catch {
-    // Handle error silently
+  } catch (e) {
+    alert(`Promote failed: ${e instanceof Error ? e.message : 'Unknown error'}`)
   }
 }
 

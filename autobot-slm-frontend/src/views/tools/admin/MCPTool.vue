@@ -132,37 +132,38 @@ function toggleToolSchema(toolName: string): void {
 
 async function fetchBridges(): Promise<void> {
   try {
-    const data = await api.get('/mcp/bridges')
-    bridges.value = data.bridges || []
-  } catch (error) {
-    logger.error('Failed to fetch MCP bridges:', error)
+    // Issue #835 - use named function from useAutobotApi
+    bridges.value = (await api.getMCPBridges()) as MCPBridge[]
+  } catch (e) {
+    logger.error('Failed to fetch MCP bridges:', e)
   }
 }
 
 async function fetchTools(): Promise<void> {
   try {
-    const data = await api.get('/mcp/tools')
-    tools.value = data.tools || []
-  } catch (error) {
-    logger.error('Failed to fetch MCP tools:', error)
+    // Issue #835 - use named function from useAutobotApi
+    tools.value = (await api.getMCPTools()) as MCPTool[]
+  } catch (e) {
+    logger.error('Failed to fetch MCP tools:', e)
   }
 }
 
 async function fetchHealth(): Promise<void> {
   try {
-    const data = await api.get('/mcp/health')
-    healthData.value = data
-  } catch (error) {
-    logger.error('Failed to fetch MCP health:', error)
+    // Issue #835 - use named function from useAutobotApi
+    healthData.value = (await api.getMCPHealth()) as HealthData
+  } catch (e) {
+    logger.error('Failed to fetch MCP health:', e)
   }
 }
 
 async function fetchStats(): Promise<void> {
   try {
-    const data = await api.get('/mcp/stats')
-    stats.value = data.overview || { total_tools: 0, total_bridges: 0, healthy_bridges: 0 }
-  } catch (error) {
-    logger.error('Failed to fetch MCP stats:', error)
+    // Issue #835 - use named function from useAutobotApi
+    const data = await api.getMCPStats()
+    stats.value = ((data.overview || data) as unknown as MCPStats) || { total_tools: 0, total_bridges: 0, healthy_bridges: 0 }
+  } catch (e) {
+    logger.error('Failed to fetch MCP stats:', e)
   }
 }
 
