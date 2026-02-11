@@ -176,6 +176,13 @@ const router = createRouter({
           component: () => import('@/views/settings/admin/NPUWorkersSettings.vue'),
           meta: { title: 'NPU Workers', parent: 'settings', admin: true }
         },
+        {
+          // Issue #839: Config Defaults management
+          path: 'admin/config-defaults',
+          name: 'settings-admin-config-defaults',
+          component: () => import('@/views/settings/admin/ConfigDefaultsSettings.vue'),
+          meta: { title: 'Config Defaults', parent: 'settings', admin: true }
+        },
       ]
     },
     {
@@ -271,6 +278,27 @@ const router = createRouter({
           meta: { title: 'Alert Rules', parent: 'performance' }
         },
       ]
+    },
+    {
+      // Issue #838: Service Orchestration management
+      path: '/orchestration',
+      name: 'orchestration',
+      component: () => import('@/views/OrchestrationView.vue'),
+      meta: { title: 'Orchestration' }
+    },
+    {
+      // Issue #840: Update job tracking and checking
+      path: '/updates',
+      name: 'updates',
+      component: () => import('@/views/UpdatesView.vue'),
+      meta: { title: 'Updates' }
+    },
+    {
+      // Issue #841: Role Registry management
+      path: '/roles',
+      name: 'roles',
+      component: () => import('@/views/RolesView.vue'),
+      meta: { title: 'Role Registry' }
     },
     {
       path: '/security',

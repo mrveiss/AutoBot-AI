@@ -38,6 +38,12 @@ const navItems = [
   { name: 'Code Sync', path: '/code-sync', icon: 'download', showBadge: true },
   // Issue #760: Agent LLM configuration management
   { name: 'Agent Config', path: '/agent-config', icon: 'agents' },
+  // Issue #838: Service Orchestration page
+  { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
+  // Issue #840: Updates management page
+  { name: 'Updates', path: '/updates', icon: 'updates' },
+  // Issue #841: Role Registry management page
+  { name: 'Roles', path: '/roles', icon: 'roles' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
   { name: 'Settings', path: '/settings', icon: 'cog' },
   { name: 'Performance', path: '/performance', icon: 'performance' },
@@ -179,6 +185,19 @@ onUnmounted(() => {
               <!-- Issue #786: Infrastructure setup wizard icon -->
               <svg v-else-if="item.icon === 'infra'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              <!-- Issue #838: Orchestration icon (play/network) -->
+              <svg v-else-if="item.icon === 'orchestration'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <!-- Issue #840: Updates icon (arrow-up-circle) -->
+              <svg v-else-if="item.icon === 'updates'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" />
+              </svg>
+              <!-- Issue #841: Roles icon (identification/tag) -->
+              <svg v-else-if="item.icon === 'roles'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
               <svg v-else-if="item.icon === 'wrench'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
