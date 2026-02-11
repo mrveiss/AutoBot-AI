@@ -477,9 +477,9 @@ No `console.*` or `print()` - pre-commit blocks these.
 
 | Service | IP:Port | Component | Purpose |
 |---------|---------|-----------|---------|
-| SLM Server | 172.16.168.19:8000 | `autobot-slm-backend/` | System Lifecycle Manager |
+| SLM Server | 172.16.168.19:443 | `autobot-slm-backend/` + `autobot-slm-frontend/` | SLM backend + admin UI (nginx+SSL) |
 | Main (WSL) | 172.16.168.20:8001 | `autobot-user-backend/` | Backend API + VNC (6080) |
-| Frontend VM | 172.16.168.21:5173 | `autobot-slm-frontend/` | SLM Admin UI (ONLY frontend server) |
+| Frontend VM | 172.16.168.21:443 | `autobot-user-frontend/` | User frontend (nginx+SSL, production build) |
 | NPU VM | 172.16.168.22:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
 | Redis VM | 172.16.168.23:6379 | - | Data layer (Redis Stack) |
 | AI Stack VM | 172.16.168.24:8080 | - | AI processing |
@@ -492,9 +492,9 @@ No `console.*` or `print()` - pre-commit blocks these.
 | Directory | Deploys To | Description |
 |-----------|------------|-------------|
 | `autobot-user-backend/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
-| `autobot-user-frontend/` | 172.16.168.20 (Main) | Main AutoBot chat interface (Vue 3) |
+| `autobot-user-frontend/` | 172.16.168.21 (Frontend VM) | User chat interface (Vue 3, nginx+SSL) |
 | `autobot-slm-backend/` | 172.16.168.19 (SLM) | **SLM backend** - Fleet management, monitoring |
-| `autobot-slm-frontend/` | 172.16.168.21 (Frontend VM) | **SLM admin dashboard** - Vue 3 UI for fleet |
+| `autobot-slm-frontend/` | 172.16.168.19 (SLM) | **SLM admin dashboard** - Vue 3 UI (nginx+SSL) |
 | `autobot-npu-worker/` | 172.16.168.22 (NPU) | NPU acceleration worker |
 | `autobot-browser-worker/` | 172.16.168.25 (Browser) | Playwright automation worker |
 | `autobot-shared/` | All backends | Common utilities (redis, config, logging) |
@@ -545,14 +545,12 @@ infrastructure/
 # User backend to Main server
 ./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
 
-# User frontend to Main server
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-frontend/
+# User frontend to Frontend VM
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/
 
-# SLM backend to SLM server
+# SLM backend + frontend to SLM server
 ./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
-
-# SLM frontend to Frontend VM
-./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/
+./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-frontend/
 
 # NPU worker to NPU VM
 ./infrastructure/shared/scripts/sync-to-vm.sh npu autobot-npu-worker/
@@ -561,11 +559,13 @@ infrastructure/
 ./infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
 ```
 
-### Single Frontend Server (CRITICAL)
+### Frontend Deployment (CRITICAL)
 
-- **ONLY** `172.16.168.21:5173` runs SLM Admin frontend
-- **FORBIDDEN**: `npm run dev` on main machine, any local frontend server
-- Edit locally then sync with `./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/`
+- `.19` serves SLM admin frontend via nginx+SSL (production build)
+- `.21` serves User frontend via nginx+SSL (production build)
+- **FORBIDDEN**: `npm run dev` on any VM — production builds only
+- Sync user frontend: `./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/`
+- Sync SLM frontend: `./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-frontend/`
 
 ### Local-Only Development (ZERO TOLERANCE)
 

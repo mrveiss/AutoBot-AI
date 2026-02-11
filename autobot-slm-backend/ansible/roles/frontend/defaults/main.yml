@@ -19,17 +19,17 @@ frontend_build_production: false
 nodejs_version: "20.x"
 
 # Server settings
-frontend_host: "0.0.0.0"
-frontend_port: 5173
+frontend_port: 443
+nginx_http_port: 80
 
-# Backend connection
+# Backend connection (user backend on main machine)
 backend_host: "172.16.168.20"
 backend_port: 8001
-frontend_backend_url: "http://{{ backend_host }}:{{ backend_port }}"
 
-# TLS Configuration (Issue #164)
-frontend_tls_enabled: false
-frontend_tls_port: 443
+# TLS Configuration
 frontend_tls_cert_dir: /etc/autobot/certs
 frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
 frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
+
+# Frontend app directory
+frontend_dist_dir: "{{ frontend_install_dir }}/autobot-user-frontend/dist"
