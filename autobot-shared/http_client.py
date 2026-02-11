@@ -223,6 +223,16 @@ class HTTPClientManager:
             self._request_count += 1
             self._active_requests += 1
 
+        # Issue #697: Inject W3C trace context into outgoing headers
+        try:
+            from opentelemetry.propagate import inject
+
+            headers = kwargs.pop("headers", {}) or {}
+            inject(headers)
+            kwargs["headers"] = headers
+        except ImportError:
+            pass  # OTel not installed, skip propagation
+
         try:
             response = await session.request(method, url, **kwargs)
             return response

@@ -16,8 +16,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from src.config import config
-from src.utils.redis_client import get_redis_client
+from config import config
+from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -431,7 +431,7 @@ class CodeAnalyzer:
 {func.source_code}
 
 # In original files, replace with:
-from src.utils.{module_name}_utils import {func.name}
+from utils.{module_name}_utils import {func.name}
 """
 
         return example.strip()
@@ -597,30 +597,30 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Code Analysis Results ===")
-    print(f"Total functions analyzed: {results['total_functions']}")
-    print(f"Duplicate groups found: {results['duplicate_groups']}")
-    print(f"Total duplicate functions: {results['total_duplicates']}")
-    print(f"Lines that could be saved: {results['lines_that_could_be_saved']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info(f"\n=== Code Analysis Results ===")
+    logger.info(f"Total functions analyzed: {results['total_functions']}")
+    logger.info(f"Duplicate groups found: {results['duplicate_groups']}")
+    logger.info(f"Total duplicate functions: {results['total_duplicates']}")
+    logger.info(f"Lines that could be saved: {results['lines_that_could_be_saved']}")
+    logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print top duplicates
-    print(f"\n=== Top Duplicate Groups ===")
+    logger.info(f"\n=== Top Duplicate Groups ===")
     for i, group in enumerate(results["duplicate_details"][:5], 1):
-        print(f"\n{i}. Similarity: {group['similarity_score']:.0%}")
-        print(f"   Suggestion: {group['refactoring_suggestion']}")
-        print(f"   Lines saved: {group['estimated_lines_saved']}")
-        print("   Functions:")
+        logger.info(f"\n{i}. Similarity: {group['similarity_score']:.0%}")
+        logger.info(f"   Suggestion: {group['refactoring_suggestion']}")
+        logger.info(f"   Lines saved: {group['estimated_lines_saved']}")
+        logger.info("   Functions:")
         for func in group["functions"]:
-            print(f"   - {func['file']}:{func['line_range']} - {func['name']}")
+            logger.info(f"   - {func['file']}:{func['line_range']} - {func['name']}")
 
     # Print refactoring suggestions
-    print(f"\n=== Refactoring Suggestions ===")
+    logger.info(f"\n=== Refactoring Suggestions ===")
     for i, suggestion in enumerate(results["refactoring_suggestions"][:5], 1):
-        print(f"\n{i}. {suggestion['type']} ({suggestion['priority']} priority)")
-        print(f"   {suggestion['description']}")
-        print(f"   Action: {suggestion['action']}")
-        print(f"   Files: {', '.join(suggestion['affected_files'])}")
+        logger.info(f"\n{i}. {suggestion['type']} ({suggestion['priority']} priority)")
+        logger.info(f"   {suggestion['description']}")
+        logger.info(f"   Action: {suggestion['action']}")
+        logger.info(f"   Files: {', '.join(suggestion['affected_files'])}")
 
 
 if __name__ == "__main__":

@@ -9,47 +9,50 @@ Validates deployment mode detection and service URL resolution
 
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, ".")
 
 
 async def test_service_registry():
     """Test service registry functionality"""
-    print("🧪 Testing AutoBot Service Registry")
-    print("=" * 50)
+    logger.info("🧪 Testing AutoBot Service Registry")
+    logger.info("=" * 50)
 
     # Test 1: Import and basic functionality
     try:
-        from src.utils.service_registry import get_service_registry, get_service_url
+        from utils.service_registry import get_service_registry, get_service_url
 
-        print("✅ Service registry import successful")
+        logger.info("✅ Service registry import successful")
     except ImportError as e:
-        print(f"❌ Import failed: {e}")
+        logger.error(f"❌ Import failed: {e}")
         return False
 
     # Test 2: Registry initialization
     try:
         registry = get_service_registry()
-        print(f"✅ Registry initialized in {registry.deployment_mode.value} mode")
-        print(f"   Domain: {registry.domain}")
-        print(f"   Services: {len(registry.services)}")
+        logger.info(f"✅ Registry initialized in {registry.deployment_mode.value} mode")
+        logger.info(f"   Domain: {registry.domain}")
+        logger.info(f"   Services: {len(registry.services)}")
     except Exception as e:
-        print(f"❌ Registry initialization failed: {e}")
+        logger.error(f"❌ Registry initialization failed: {e}")
         return False
 
     # Test 3: Service URL resolution
-    print("\n🔗 Service URL Resolution:")
+    logger.info("\n🔗 Service URL Resolution:")
     services = ["redis", "backend", "ai-stack", "npu-worker", "playwright-vnc"]
 
     for service in services:
         try:
             url = get_service_url(service)
-            print(f"✅ {service:15} → {url}")
+            logger.info(f"✅ {service:15} → {url}")
         except Exception as e:
-            print(f"❌ {service:15} → Error: {e}")
+            logger.error(f"❌ {service:15} → Error: {e}")
 
     # Test 4: Service health checks
-    print("\n🏥 Service Health Checks:")
+    logger.info("\n🏥 Service Health Checks:")
     try:
         health_results = await registry.check_all_services_health()
         for service, health in health_results.items():
@@ -60,40 +63,40 @@ async def test_service_registry():
                 if health.status.value == "unknown"
                 else "❌"
             )
-            print(f"{status_emoji} {service:15} → {health.status.value}")
+            logger.info(f"{status_emoji} {service:15} → {health.status.value}")
             if hasattr(health, "response_time") and health.response_time > 0:
-                print(f"   └── Response time: {health.response_time:.3f}s")
+                logger.info(f"   └── Response time: {health.response_time:.3f}s")
     except Exception as e:
-        print(f"❌ Health checks failed: {e}")
+        logger.error(f"❌ Health checks failed: {e}")
 
     # Test 5: Deployment info
-    print("\n📊 Deployment Information:")
+    logger.info("\n📊 Deployment Information:")
     try:
         info = registry.get_deployment_info()
-        print(f"✅ Mode: {info['deployment_mode']}")
-        print(f"✅ Domain: {info['domain']}")
-        print(f"✅ Services: {info['services_count']}")
+        logger.info(f"✅ Mode: {info['deployment_mode']}")
+        logger.info(f"✅ Domain: {info['domain']}")
+        logger.info(f"✅ Services: {info['services_count']}")
 
         for service, details in info["services"].items():
-            print(f"   • {service}: {details['url']} ({details['health']})")
+            logger.info(f"   • {service}: {details['url']} ({details['health']})")
     except Exception as e:
-        print(f"❌ Deployment info failed: {e}")
+        logger.error(f"❌ Deployment info failed: {e}")
 
     # Test 6: Different deployment modes
-    print("\n🌍 Testing Deployment Mode Detection:")
+    logger.info("\n🌍 Testing Deployment Mode Detection:")
 
     # Test local mode
     original_mode = os.getenv("AUTOBOT_DEPLOYMENT_MODE")
     os.environ["AUTOBOT_DEPLOYMENT_MODE"] = "local"
 
     try:
-        from src.utils.service_registry import ServiceRegistry
+        from utils.service_registry import ServiceRegistry
 
         local_registry = ServiceRegistry()
         redis_url_local = local_registry.get_service_url("redis")
-        print(f"✅ Local mode: redis → {redis_url_local}")
+        logger.info(f"✅ Local mode: redis → {redis_url_local}")
     except Exception as e:
-        print(f"❌ Local mode test failed: {e}")
+        logger.error(f"❌ Local mode test failed: {e}")
 
     # Test distributed mode
     os.environ["AUTOBOT_DEPLOYMENT_MODE"] = "distributed"
@@ -102,9 +105,9 @@ async def test_service_registry():
     try:
         distributed_registry = ServiceRegistry()
         redis_url_distributed = distributed_registry.get_service_url("redis")
-        print(f"✅ Distributed mode: redis → {redis_url_distributed}")
+        logger.info(f"✅ Distributed mode: redis → {redis_url_distributed}")
     except Exception as e:
-        print(f"❌ Distributed mode test failed: {e}")
+        logger.error(f"❌ Distributed mode test failed: {e}")
 
     # Restore original environment
     if original_mode:
@@ -112,29 +115,29 @@ async def test_service_registry():
     else:
         os.environ.pop("AUTOBOT_DEPLOYMENT_MODE", None)
 
-    print("\n🎉 Service Registry Testing Complete!")
+    logger.info("\n🎉 Service Registry Testing Complete!")
     return True
 
 
 if __name__ == "__main__":
     import asyncio
 
-    print("AutoBot Service Registry Test Suite")
-    print("=" * 50)
+    logger.info("AutoBot Service Registry Test Suite")
+    logger.info("=" * 50)
 
     try:
         success = asyncio.run(test_service_registry())
         if success:
-            print("\n✅ All tests completed successfully!")
+            logger.info("\n✅ All tests completed successfully!")
             sys.exit(0)
         else:
-            print("\n❌ Some tests failed!")
+            logger.error("\n❌ Some tests failed!")
             sys.exit(1)
     except KeyboardInterrupt:
-        print("\n⚠️ Tests interrupted by user")
+        logger.warning("\n⚠️ Tests interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n💥 Test suite crashed: {e}")
+        logger.info(f"\n💥 Test suite crashed: {e}")
         import traceback
 
         traceback.print_exc()

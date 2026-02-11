@@ -61,91 +61,107 @@ def _should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
     return False
 
 
+def _gather_documentation_files(project_root: Path) -> list:
+    """Gather and filter documentation files.
+
+    Helper for populate_docs_knowledge (Issue #825).
+    """
+    docs_patterns = ["docs/**/*.md", "CLAUDE.md", "README.md"]
+
+    exclude_patterns = [
+        "**/node_modules/**",
+        "**/venv/**",
+        "**/test-results/**",
+        "**/playwright-report/**",
+        "**/.pytest_cache/**",
+        "**/system-state.md",
+    ]
+
+    all_files = []
+    for pattern in docs_patterns:
+        files = glob.glob(str(project_root / pattern), recursive=True)
+        all_files.extend(files)
+
+    unique_files = set(all_files)
+    filtered_files = [
+        fp
+        for fp in unique_files
+        if not _should_exclude_file(fp, exclude_patterns) and os.path.isfile(fp)
+    ]
+
+    return sorted(filtered_files)
+
+
+async def _process_documentation_files(kb, files: list, project_root: Path) -> tuple:
+    """Process documentation files and add to knowledge base.
+
+    Helper for populate_docs_knowledge (Issue #825).
+
+    Returns:
+        Tuple of (successful_adds, failed_adds)
+    """
+    successful_adds = 0
+    failed_adds = 0
+
+    for file_path in files:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            if not content.strip():
+                logger.warning("Skipping empty file: %s", file_path)
+                continue
+
+            rel_path = os.path.relpath(file_path, project_root)
+            category = _get_document_category(rel_path)
+
+            await kb.add_document(
+                content=content,
+                metadata={
+                    "source": rel_path,
+                    "category": category,
+                    "file_type": "markdown",
+                    "indexed_by": "populate_docs_knowledge.py",
+                },
+            )
+
+            logger.info("✓ Added: %s (category: %s)", rel_path, category)
+            successful_adds += 1
+
+        except Exception as e:
+            logger.error("Failed to add %s: %s", file_path, e)
+            failed_adds += 1
+
+    return successful_adds, failed_adds
+
+
 async def populate_docs_knowledge():
     """Populate knowledge base with documentation from docs/ folder."""
 
     logger.info("=== Populating Knowledge Base with AutoBot Documentation ===")
 
-    # Import knowledge base (will use current Redis setup)
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
     try:
         kb = KnowledgeBase()
         logger.info("✓ Knowledge base initialized")
 
-        # Wait for initialization
         await asyncio.sleep(2)
 
-        # Find all documentation files in docs folder
         project_root = Path("/home/kali/Desktop/AutoBot")
-        docs_patterns = ["docs/**/*.md", "CLAUDE.md", "README.md"]
-
-        exclude_patterns = [
-            "**/node_modules/**",
-            "**/venv/**",
-            "**/test-results/**",
-            "**/playwright-report/**",
-            "**/.pytest_cache/**",
-            "**/system-state.md",  # Skip this as it's status updates, not docs
-        ]
-
-        all_files = []
-        for pattern in docs_patterns:
-            files = glob.glob(str(project_root / pattern), recursive=True)
-            all_files.extend(files)
-
-        unique_files = set(all_files)
-        # Issue #338: Use helper for file exclusion check
-        filtered_files = [
-            fp
-            for fp in unique_files
-            if not _should_exclude_file(fp, exclude_patterns) and os.path.isfile(fp)
-        ]
+        filtered_files = _gather_documentation_files(project_root)
 
         logger.info("Found %s documentation files to index", len(filtered_files))
 
-        # Process each documentation file
-        successful_adds = 0
-        failed_adds = 0
-
-        for file_path in sorted(filtered_files):
-            try:
-                # Read file content
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-                if not content.strip():
-                    logger.warning("Skipping empty file: %s", file_path)
-                    continue
-
-                # Issue #338: Use helper for category determination
-                rel_path = os.path.relpath(file_path, project_root)
-                category = _get_document_category(rel_path)
-
-                # Add to knowledge base
-                await kb.add_document(
-                    content=content,
-                    metadata={
-                        "source": rel_path,
-                        "category": category,
-                        "file_type": "markdown",
-                        "indexed_by": "populate_docs_knowledge.py",
-                    },
-                )
-
-                logger.info("✓ Added: %s (category: %s)", rel_path, category)
-                successful_adds += 1
-
-            except Exception as e:
-                logger.error("Failed to add %s: %s", file_path, e)
-                failed_adds += 1
+        successful_adds, failed_adds = await _process_documentation_files(
+            kb, filtered_files, project_root
+        )
 
         logger.info("=== Documentation Population Complete ===")
         logger.info("✓ Successfully added: %s documents", successful_adds)
         if failed_adds > 0:
             logger.error("Failed to add: %s documents", failed_adds)
 
-        # Get updated stats
         stats = await kb.get_stats()
         logger.info(
             "Total documents in knowledge base: %s",

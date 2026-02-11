@@ -129,7 +129,7 @@ echo ""
 if [ -z "$SPECIFIC_VM" ] || [ "$SPECIFIC_VM" = "frontend" ]; then
     log_header "Syncing Frontend VM (${VMS[frontend]})"
     if test_vm "frontend" "${VMS[frontend]}" 2>/dev/null; then
-        sync_to_vm "frontend" "${VMS[frontend]}" "autobot-vue/" "/home/autobot/autobot-vue" "node_modules"
+        sync_to_vm "frontend" "${VMS[frontend]}" "autobot-slm-frontend/" "/home/autobot/autobot-slm-frontend" "node_modules"
     fi
 fi
 

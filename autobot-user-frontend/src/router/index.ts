@@ -39,6 +39,7 @@ import ChatView from '@/views/ChatView.vue'
 import KnowledgeView from '@/views/KnowledgeView.vue'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
+import VisionView from '@/views/VisionView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
@@ -69,7 +70,7 @@ const routes: RouteRecordRaw[] = [
       title: 'AI Assistant',
       icon: 'fas fa-robot',
       description: 'Chat with AI assistant',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -97,7 +98,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Knowledge Base',
       icon: 'fas fa-database',
       description: 'Manage knowledge and documents',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -205,7 +206,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Workflow Automation',
       icon: 'fas fa-project-diagram',
       description: 'Visual workflow builder and automation (Issue #585)',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   {
@@ -216,7 +217,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Analytics',
       icon: 'fas fa-chart-pie',
       description: 'Codebase analytics and business intelligence',
-      requiresAuth: false
+      requiresAuth: true
     },
     children: [
       {
@@ -274,6 +275,52 @@ const routes: RouteRecordRaw[] = [
       },
     ]
   },
+  // Issue #777: Vision & Multimodal AI Features
+  {
+    path: '/vision',
+    name: 'vision',
+    component: VisionView,
+    meta: {
+      title: 'Vision & AI',
+      icon: 'fas fa-eye',
+      description: 'Vision analysis and multimodal AI features',
+      requiresAuth: true
+    },
+    children: [
+      {
+        path: '',
+        name: 'vision-default',
+        redirect: '/vision/analyze'
+      },
+      {
+        path: 'analyze',
+        name: 'vision-analyze',
+        component: () => import('@/components/vision/ScreenCaptureViewer.vue'),
+        meta: {
+          title: 'Screen Analysis',
+          parent: 'vision'
+        }
+      },
+      {
+        path: 'image',
+        name: 'vision-image',
+        component: () => import('@/components/vision/ImageAnalyzer.vue'),
+        meta: {
+          title: 'Image Processing',
+          parent: 'vision'
+        }
+      },
+      {
+        path: 'automation',
+        name: 'vision-automation',
+        component: () => import('@/components/vision/VisionAutomationPage.vue'),
+        meta: {
+          title: 'GUI Automation',
+          parent: 'vision'
+        }
+      }
+    ]
+  },
   // Issue #753: User preferences (appearance, font size, colors, etc.)
   {
     path: '/preferences',
@@ -283,7 +330,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Preferences',
       icon: 'fas fa-sliders-h',
       description: 'Customize your AutoBot experience',
-      requiresAuth: false
+      requiresAuth: true
     }
   },
   // Issue #729: Infrastructure routes redirected to slm-admin
@@ -558,7 +605,7 @@ router.beforeEach(async (to, from, next) => {
     // Issue #729: Updated valid tabs for business-only routes
     if (to.name && typeof to.name === 'string' && appStore && typeof appStore.updateRoute === 'function') {
       const tabName = to.name.split('-')[0] // Extract main section
-      const validTabs = ['chat', 'knowledge', 'automation', 'analytics'] as const
+      const validTabs = ['chat', 'knowledge', 'automation', 'analytics', 'vision'] as const
       type ValidTab = typeof validTabs[number]
 
       if ((validTabs as readonly string[]).includes(tabName)) {

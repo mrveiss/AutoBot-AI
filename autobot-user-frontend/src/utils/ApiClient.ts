@@ -151,6 +151,40 @@ export class ApiClient {
   }
 
   // ==================================================================================
+  // AUTH TOKEN — retrieves JWT from localStorage (#827)
+  // ==================================================================================
+
+  private _getAuthToken(): string | null {
+    try {
+      const stored = localStorage.getItem('autobot_auth');
+      if (!stored) return null;
+      const auth = JSON.parse(stored);
+      if (auth.token && auth.token !== 'single_user_mode') {
+        return auth.token;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Handle 401 — clear stored auth and redirect to login (#827)
+  private _handleUnauthorized(endpoint: string): void {
+    logger.warn('401 Unauthorized, clearing auth:', endpoint);
+    localStorage.removeItem('autobot_auth');
+    localStorage.removeItem('autobot_user');
+    if (
+      typeof window !== 'undefined' &&
+      !window.location.pathname.includes('/login')
+    ) {
+      const redirect = encodeURIComponent(
+        window.location.pathname
+      );
+      window.location.href = `/login?redirect=${redirect}`;
+    }
+  }
+
+  // ==================================================================================
   // RAW REQUEST — returns Response object (for streaming, blobs, etc.)
   // ==================================================================================
 
@@ -169,7 +203,9 @@ export class ApiClient {
     const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), timeout);
+    const timeoutId = window.setTimeout(
+      () => controller.abort(), timeout
+    );
 
     try {
       const fetchOptions: RequestInit = {
@@ -177,6 +213,13 @@ export class ApiClient {
         headers: { ...this.defaultHeaders, ...headers },
         signal: controller.signal,
       };
+
+      // Inject auth token if available (#827)
+      const authToken = this._getAuthToken();
+      if (authToken) {
+        const hdrs = fetchOptions.headers as Record<string, string>;
+        hdrs['Authorization'] = `Bearer ${authToken}`;
+      }
 
       // Handle body — support FormData (don't stringify, remove Content-Type)
       if (body instanceof FormData) {
@@ -189,6 +232,15 @@ export class ApiClient {
 
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
+
+      // Handle 401 — redirect to login (skip for auth endpoints)
+      if (
+        response.status === 401 &&
+        !endpoint.includes('/api/auth/')
+      ) {
+        this._handleUnauthorized(endpoint);
+      }
+
       return response;
     } catch (error) {
       clearTimeout(timeoutId);

@@ -4,11 +4,15 @@
 
 set -e
 
-# Load unified configuration system
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
-if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
+# Load unified configuration system (legacy)
+_NATIVE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
+if [[ -f "${_NATIVE_SCRIPT_DIR}/config/load_config.sh" ]]; then
     export PATH="$HOME/bin:$PATH"  # Ensure yq is available
-    source "${SCRIPT_DIR}/config/load_config.sh"
+    source "${_NATIVE_SCRIPT_DIR}/config/load_config.sh"
     echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
 else
     echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
@@ -22,13 +26,13 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# VM Configuration (from unified config)
+# VM Configuration (from unified config, with SSOT fallback)
 declare -A VMS
-VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")
-VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22")
-VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
-VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24")
-VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25")
+VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}")
+VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}")
+VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "${AUTOBOT_REDIS_HOST:-172.16.168.23}")
+VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}")
+VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}")
 
 # Service Configuration
 declare -A SERVICES
@@ -38,8 +42,8 @@ SERVICES[redis]="redis-stack-server"
 SERVICES[ai-stack]="autobot-ai-stack.service"
 SERVICES[browser]="autobot-browser-service.service"
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 
 # Default options
 FORCE_STOP=false

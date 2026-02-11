@@ -26,70 +26,50 @@ const screenshot = ref<string | null>(null)
 const browserStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 const consoleOutput = ref<{ type: string; text: string }[]>([])
 
-interface BrowserSession {
-  id: string
-  status: string
-  url: string
-  title: string
-  created_at: string
-}
+const isConnected = ref(false)
 
-const sessions = ref<BrowserSession[]>([])
-const activeSession = ref<string | null>(null)
-
-async function loadSessions(): Promise<void> {
+async function checkStatus(): Promise<void> {
   try {
-    const data = await api.get('/browser/sessions')
-    sessions.value = data.sessions || []
+    const data = await api.getBrowserStatus()
+    isConnected.value = data.status === 'connected' || data.status === 'ready'
   } catch (e) {
-    logger.error('Failed to load sessions:', e)
+    logger.error('Failed to check browser status:', e)
+    isConnected.value = false
   }
 }
 
-async function createSession(): Promise<void> {
+async function startBrowser(): Promise<void> {
   loading.value = true
   error.value = null
   browserStatus.value = 'connecting'
 
   try {
-    const data = await api.post('/browser/sessions', { url: url.value })
-    activeSession.value = data.session_id
+    await api.browserNavigate(url.value)
+    isConnected.value = true
     browserStatus.value = 'connected'
-    await loadSessions()
     await takeScreenshot()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create session'
+    error.value = e instanceof Error ? e.message : 'Failed to start browser'
     browserStatus.value = 'disconnected'
   } finally {
     loading.value = false
   }
 }
 
-async function closeSession(): Promise<void> {
-  if (!activeSession.value) return
-
-  loading.value = true
-  try {
-    await api.delete(`/browser/sessions/${activeSession.value}`)
-    activeSession.value = null
-    screenshot.value = null
-    browserStatus.value = 'disconnected'
-    await loadSessions()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to close session'
-  } finally {
-    loading.value = false
-  }
+function closeBrowser(): void {
+  isConnected.value = false
+  screenshot.value = null
+  browserStatus.value = 'disconnected'
 }
 
 async function navigate(): Promise<void> {
-  if (!activeSession.value || !url.value) return
+  if (!isConnected.value || !url.value) return
 
   loading.value = true
   error.value = null
 
   try {
-    await api.post(`/browser/sessions/${activeSession.value}/navigate`, { url: url.value })
+    await api.browserNavigate(url.value)
     await takeScreenshot()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Navigation failed'
@@ -99,20 +79,20 @@ async function navigate(): Promise<void> {
 }
 
 async function takeScreenshot(): Promise<void> {
-  if (!activeSession.value) return
+  if (!isConnected.value) return
 
   try {
-    const data = await api.get(`/browser/sessions/${activeSession.value}/screenshot`)
-    screenshot.value = data.screenshot || null
+    const data = await api.browserScreenshot()
+    screenshot.value = (data.screenshot as string) || null
   } catch (e) {
     logger.error('Failed to take screenshot:', e)
   }
 }
 
 async function goBack(): Promise<void> {
-  if (!activeSession.value) return
+  if (!isConnected.value) return
   try {
-    await api.post(`/browser/sessions/${activeSession.value}/back`)
+    await api.browserGoBack('')
     await takeScreenshot()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to go back'
@@ -120,9 +100,9 @@ async function goBack(): Promise<void> {
 }
 
 async function goForward(): Promise<void> {
-  if (!activeSession.value) return
+  if (!isConnected.value) return
   try {
-    await api.post(`/browser/sessions/${activeSession.value}/forward`)
+    await api.browserGoForward('')
     await takeScreenshot()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to go forward'
@@ -130,9 +110,9 @@ async function goForward(): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
-  if (!activeSession.value) return
+  if (!isConnected.value) return
   try {
-    await api.post(`/browser/sessions/${activeSession.value}/refresh`)
+    await api.browserRefresh('')
     await takeScreenshot()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to refresh'
@@ -146,7 +126,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
-  loadSessions()
+  checkStatus()
 })
 </script>
 
@@ -172,7 +152,7 @@ onMounted(() => {
 
           <button
             v-if="browserStatus === 'disconnected'"
-            @click="createSession"
+            @click="startBrowser"
             :disabled="loading"
             class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
           >
@@ -180,7 +160,7 @@ onMounted(() => {
           </button>
           <button
             v-else
-            @click="closeSession"
+            @click="closeBrowser"
             :disabled="loading"
             class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
           >
@@ -194,7 +174,7 @@ onMounted(() => {
           <div class="flex items-center gap-1">
             <button
               @click="goBack"
-              :disabled="!activeSession || loading"
+              :disabled="!isConnected || loading"
               class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
               title="Back"
             >
@@ -204,7 +184,7 @@ onMounted(() => {
             </button>
             <button
               @click="goForward"
-              :disabled="!activeSession || loading"
+              :disabled="!isConnected || loading"
               class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
               title="Forward"
             >
@@ -214,7 +194,7 @@ onMounted(() => {
             </button>
             <button
               @click="refresh"
-              :disabled="!activeSession || loading"
+              :disabled="!isConnected || loading"
               class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
               title="Refresh"
             >
@@ -240,7 +220,7 @@ onMounted(() => {
             </div>
             <button
               @click="navigate"
-              :disabled="!activeSession || loading"
+              :disabled="!isConnected || loading"
               class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 text-sm"
             >
               Go
@@ -250,7 +230,7 @@ onMounted(() => {
           <!-- Screenshot -->
           <button
             @click="takeScreenshot"
-            :disabled="!activeSession || loading"
+            :disabled="!isConnected || loading"
             class="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
             title="Take Screenshot"
           >
@@ -277,7 +257,7 @@ onMounted(() => {
           <p class="mt-4 text-gray-400">Loading...</p>
         </div>
 
-        <div v-else-if="!activeSession" class="text-center p-8">
+        <div v-else-if="!isConnected" class="text-center p-8">
           <svg class="w-16 h-16 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
@@ -304,25 +284,5 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Sessions Panel -->
-    <div v-if="sessions.length > 0" class="mt-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-      <h3 class="text-sm font-medium text-gray-900 mb-3">Active Sessions</h3>
-      <div class="flex flex-wrap gap-2">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          :class="[
-            'px-3 py-2 rounded-lg text-sm',
-            session.id === activeSession
-              ? 'bg-primary-100 text-primary-800 border border-primary-300'
-              : 'bg-gray-100 text-gray-700'
-          ]"
-        >
-          <span class="font-mono text-xs">{{ session.id.slice(0, 8) }}</span>
-          <span class="mx-2">-</span>
-          <span>{{ session.title || session.url }}</span>
-        </div>
-      </div>
-    </div>
   </div>
 </template>

@@ -1,11 +1,20 @@
 ---
 # Redis role - Redis Stack deployment for AutoBot database layer
 
+- name: "Redis | Check if Redis Stack is already installed"
+  ansible.builtin.command:
+    cmd: dpkg -l redis-stack-server
+  register: _redis_installed
+  changed_when: false
+  failed_when: false
+  tags: ['redis', 'packages']
+
 - name: "Redis | Add Redis GPG key"
   apt_key:
     url: https://packages.redis.io/gpg
     state: present
   become: yes
+  when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
 - name: "Redis | Add Redis Stack repository"
@@ -14,12 +23,14 @@
     state: present
     filename: redis
   become: yes
+  when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
 - name: "Redis | Update apt cache"
   apt:
     update_cache: yes
   become: yes
+  when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
 - name: "Redis | Install Redis Stack"
@@ -28,6 +39,7 @@
       - redis-stack-server
     state: present
   become: yes
+  when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
 - name: "Redis | Create Redis data directory"

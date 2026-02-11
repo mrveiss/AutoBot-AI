@@ -36,6 +36,7 @@ class AgentExecutor:
         get_rag_agent: Callable,
         get_kb_librarian: Callable,
         get_research_agent: Callable,
+        specialized_agent_getters: Optional[Dict[str, Callable]] = None,
     ):
         """
         Initialize the agent executor.
@@ -44,6 +45,7 @@ class AgentExecutor:
             distributed_manager: Manager for distributed agents
             router: Agent router for routing decisions
             get_*_agent: Lazy-loading getters for legacy agents
+            specialized_agent_getters: Issue #60 - getters for specialized agents
         """
         self.distributed_manager = distributed_manager
         self.router = router
@@ -52,6 +54,7 @@ class AgentExecutor:
         self._get_rag_agent = get_rag_agent
         self._get_kb_librarian = get_kb_librarian
         self._get_research_agent = get_research_agent
+        self._specialized_getters = specialized_agent_getters or {}
 
     def _create_agent_request(
         self,
@@ -238,6 +241,26 @@ class AgentExecutor:
                 request, context, chat_history
             )
 
+    def _register_specialized_handlers(
+        self, handlers: Dict, request: str, context: Optional[Dict]
+    ) -> None:
+        """Register specialized agent handlers (Issue #60)."""
+        agent_type_map = {
+            AgentType.DATA_ANALYSIS: "data_analysis",
+            AgentType.CODE_GENERATION: "code_generation",
+            AgentType.TRANSLATION: "translation",
+            AgentType.SUMMARIZATION: "summarization",
+            AgentType.SENTIMENT_ANALYSIS: "sentiment_analysis",
+            AgentType.IMAGE_ANALYSIS: "image_analysis",
+            AgentType.AUDIO_PROCESSING: "audio_processing",
+        }
+        for agent_type, getter_key in agent_type_map.items():
+            getter = self._specialized_getters.get(getter_key)
+            if getter:
+                handlers[agent_type] = lambda g=getter: g().process_query(
+                    request, context
+                )
+
     async def _execute_chat_agent(
         self, request: str, context: Optional[Dict], chat_history: Optional[List]
     ) -> Dict[str, Any]:
@@ -287,6 +310,9 @@ class AgentExecutor:
                     request
                 ),
             }
+
+            # Issue #60: Add specialized agent handlers
+            self._register_specialized_handlers(agent_handlers, request, context)
 
             handler = agent_handlers.get(agent_type)
             if handler is None:

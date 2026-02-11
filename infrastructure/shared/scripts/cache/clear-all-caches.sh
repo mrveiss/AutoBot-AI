@@ -146,7 +146,7 @@ echo ""
 
 # Frontend cache clearing
 if [ "$FRONTEND_CACHE" = true ]; then
-    run_cache_script "./autobot-vue/clear-cache.sh" "Frontend Cache Clearing" ""
+    run_cache_script "./autobot-slm-frontend/clear-cache.sh" "Frontend Cache Clearing" ""
 fi
 
 # Backend cache clearing

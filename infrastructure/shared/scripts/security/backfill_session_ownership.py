@@ -39,7 +39,7 @@ from typing import List, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from backend.security.session_ownership import SessionOwnershipValidator
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -291,22 +291,22 @@ async def main():
 
         # Confirmation prompt (unless forced or dry-run)
         if not args.force and not args.dry_run:
-            print()
-            print("⚠️  WARNING: This will modify session ownership in Redis DB 0")
-            print(f"   All unowned sessions will be assigned to: {args.default_owner}")
-            print()
+            logger.info("")
+            logger.warning("⚠️  WARNING: This will modify session ownership in Redis DB 0")
+            logger.info(f"   All unowned sessions will be assigned to: {args.default_owner}")
+            logger.info("")
             response = input("Continue? [y/N]: ")
             if response.lower() not in ("y", "yes"):
-                print("Cancelled by user")
+                logger.info("Cancelled by user")
                 sys.exit(0)
-            print()
+            logger.info("")
 
         # Run backfill
         await backfill.backfill_all_sessions()
 
         # Verify if not dry-run
         if not args.dry_run:
-            print()
+            logger.info("")
             success = await backfill.verify_backfill()
             sys.exit(0 if success else 1)
 

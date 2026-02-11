@@ -16,10 +16,117 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
-from src.constants import ServiceURLs
+from constants import ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+# Browser fix script template (Issue #825: Moved to module level to reduce function length)
+BROWSER_FIX_SCRIPT = """
+// AutoBot Settings Fix Script
+// Run this in your browser console (F12 -> Console)
+
+// Import debugging utilities
+import {
+  log,
+  getStorageJson,
+  setStorageJson,
+  validateStorageJson,
+  runDiagnostics
+} from '../utils/debugUtils';
+
+log('info', '🔧 AutoBot Settings Fix Script loaded');
+
+// Function to reset settings to defaults
+function resetSettings() {
+    const defaultSettings = {
+        message_display: {
+            show_thoughts: true,
+            show_json: false,
+            show_utility: false,
+            show_planning: true,
+            show_debug: false
+        },
+        chat: {
+            auto_scroll: true,
+            max_messages: 100,
+            default_welcome_message: "Hello! How can I assist you today?"
+        },
+        backend: {
+            use_phi2: false,
+            api_endpoint: ServiceURLs.BACKEND_LOCAL,
+            ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
+            ollama_model: 'mistral:7b-instruct',
+            streaming: false
+        },
+        ui: {
+            theme: 'light',
+            font_size: 'medium'
+        }
+    };
+
+    setStorageJson('chat_settings', defaultSettings);
+    log('info', '✅ Settings reset to defaults');
+    return defaultSettings;
+}
+
+// Function to check current settings
+function checkSettings() {
+    const result = validateStorageJson('chat_settings');
+
+    if (!result.isValid) {
+        log('error', '❌ Invalid settings in localStorage', result.error);
+        return null;
+    }
+
+    log('info', '📋 Current settings valid');
+    console.log(result.value);
+    return result.value;
+}
+
+// Function to fix common issues
+function fixCommonIssues() {
+    const settings = getStorageJson('chat_settings', null);
+
+    if (!settings) {
+        log('warn', '🔄 No valid settings found, resetting...');
+        resetSettings();
+    } else {
+        // Ensure backend endpoint is correct
+        if (settings.backend && settings.backend.api_endpoint !== ServiceURLs.BACKEND_LOCAL) {
+            log('info', '🔧 Fixing backend endpoint...');
+            settings.backend.api_endpoint = ServiceURLs.BACKEND_LOCAL;
+            setStorageJson('chat_settings', settings);
+        }
+
+        log('info', '✅ Settings validated and fixed');
+    }
+
+    // Reload the page to apply changes
+    if (confirm('Settings have been fixed. Reload the page to apply changes?')) {
+        location.reload();
+    }
+}
+
+// Run diagnostics
+log('info', '🔍 Running diagnostics...');
+runDiagnostics();
+
+// Provide options
+console.log('\\n📋 Available commands:');
+console.log('  resetSettings()     - Reset all settings to defaults');
+console.log('  checkSettings()     - View current settings');
+console.log('  fixCommonIssues()  - Fix common configuration issues');
+console.log('  runDiagnostics()   - Run full system diagnostics');
+console.log('\\nRun any command to proceed.');
+
+// Auto-fix if settings are missing
+const validation = validateStorageJson('chat_settings');
+if (!validation.isValid) {
+    log('warn', '⚠️ No valid settings found, auto-fixing...');
+    fixCommonIssues();
+}
+"""
 
 
 class SettingsLoadingFixer:
@@ -187,122 +294,23 @@ class SettingsLoadingFixer:
             logger.error("❌ Error restarting backend: %s", e)
             return False
 
-    def generate_browser_fix_script(self):
-        """Generate JavaScript to fix settings in browser"""
-        logger.info("📝 Generating browser fix script...")
+    def _generate_browser_script_content(self) -> str:
+        """
+        Generate JavaScript content for browser fix script.
 
-        script = """
-// AutoBot Settings Fix Script
-// Run this in your browser console (F12 -> Console)
+        Helper for generate_browser_fix_script (#825).
 
-// Import debugging utilities
-import {
-  log,
-  getStorageJson,
-  setStorageJson,
-  validateStorageJson,
-  runDiagnostics
-} from '../utils/debugUtils';
+        Returns:
+            JavaScript code string
+        """
+        return BROWSER_FIX_SCRIPT
 
-log('info', '🔧 AutoBot Settings Fix Script loaded');
+    def _display_browser_instructions(self):
+        """
+        Display browser fix instructions.
 
-// Function to reset settings to defaults
-function resetSettings() {
-    const defaultSettings = {
-        message_display: {
-            show_thoughts: true,
-            show_json: false,
-            show_utility: false,
-            show_planning: true,
-            show_debug: false
-        },
-        chat: {
-            auto_scroll: true,
-            max_messages: 100,
-            default_welcome_message: "Hello! How can I assist you today?"
-        },
-        backend: {
-            use_phi2: false,
-            api_endpoint: ServiceURLs.BACKEND_LOCAL,
-            ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
-            ollama_model: 'mistral:7b-instruct',
-            streaming: false
-        },
-        ui: {
-            theme: 'light',
-            font_size: 'medium'
-        }
-    };
-
-    setStorageJson('chat_settings', defaultSettings);
-    log('info', '✅ Settings reset to defaults');
-    return defaultSettings;
-}
-
-// Function to check current settings
-function checkSettings() {
-    const result = validateStorageJson('chat_settings');
-
-    if (!result.isValid) {
-        log('error', '❌ Invalid settings in localStorage', result.error);
-        return null;
-    }
-
-    log('info', '📋 Current settings valid');
-    console.log(result.value);
-    return result.value;
-}
-
-// Function to fix common issues
-function fixCommonIssues() {
-    const settings = getStorageJson('chat_settings', null);
-
-    if (!settings) {
-        log('warn', '🔄 No valid settings found, resetting...');
-        resetSettings();
-    } else {
-        // Ensure backend endpoint is correct
-        if (settings.backend && settings.backend.api_endpoint !== ServiceURLs.BACKEND_LOCAL) {
-            log('info', '🔧 Fixing backend endpoint...');
-            settings.backend.api_endpoint = ServiceURLs.BACKEND_LOCAL;
-            setStorageJson('chat_settings', settings);
-        }
-
-        log('info', '✅ Settings validated and fixed');
-    }
-
-    // Reload the page to apply changes
-    if (confirm('Settings have been fixed. Reload the page to apply changes?')) {
-        location.reload();
-    }
-}
-
-// Run diagnostics
-log('info', '🔍 Running diagnostics...');
-runDiagnostics();
-
-// Provide options
-console.log('\\n📋 Available commands:');
-console.log('  resetSettings()     - Reset all settings to defaults');
-console.log('  checkSettings()     - View current settings');
-console.log('  fixCommonIssues()  - Fix common configuration issues');
-console.log('  runDiagnostics()   - Run full system diagnostics');
-console.log('\\nRun any command to proceed.');
-
-// Auto-fix if settings are missing
-const validation = validateStorageJson('chat_settings');
-if (!validation.isValid) {
-    log('warn', '⚠️ No valid settings found, auto-fixing...');
-    fixCommonIssues();
-}
-"""
-
-        # Save script to file
-        script_file = Path("scripts/utilities/browser_settings_utility.js")
-        script_file.write_text(script)
-        logger.info("✅ Browser fix script saved to: %s", script_file)
-
-        # Also display instructions
+        Helper for generate_browser_fix_script (#825).
+        """
         logger.info("\n" + "=" * 70)
         logger.info("🌐 BROWSER FIX INSTRUCTIONS:")
         logger.info("=" * 70)
@@ -315,6 +323,20 @@ if (!validation.isValid) {
         logger.info("5. Press Enter to run the script")
         logger.info("6. Follow the on-screen instructions")
         logger.info("=" * 70)
+
+    def generate_browser_fix_script(self):
+        """Generate JavaScript to fix settings in browser"""
+        logger.info("📝 Generating browser fix script...")
+
+        script = self._generate_browser_script_content()
+
+        # Save script to file
+        script_file = Path("scripts/utilities/browser_settings_utility.js")
+        script_file.write_text(script)
+        logger.info("✅ Browser fix script saved to: %s", script_file)
+
+        # Display instructions
+        self._display_browser_instructions()
 
     def run_diagnostics(self) -> bool:
         """Run complete diagnostics"""

@@ -11,11 +11,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Optional
 
+logger = logging.getLogger(__name__)
+
 import requests
+import logging
 
 # Import configuration from centralized source
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.config import API_BASE_URL, OLLAMA_URL
+from config import API_BASE_URL, OLLAMA_URL
 
 
 @dataclass
@@ -79,7 +82,7 @@ def check_endpoints_batch(endpoints: list) -> list:
     return results
 
 
-print("🔍 Checking backend health...")
+logger.info("🔍 Checking backend health...")
 
 # Test endpoints
 endpoints = [
@@ -96,31 +99,31 @@ endpoint_order = {url: i for i, (url, _) in enumerate(endpoints)}
 results.sort(key=lambda r: endpoint_order.get(r.url, 999))
 
 for result in results:
-    print(f"\n📍 Testing {result.name}: {result.url}")
+    logger.info(f"\n📍 Testing {result.name}: {result.url}")
     if result.error:
-        print(f"   ❌ {result.error}")
+        logger.error(f"   ❌ {result.error}")
     else:
-        print(f"   ✅ Status: {result.status_code} (took {result.elapsed:.2f}s)")
+        logger.info(f"   ✅ Status: {result.status_code} (took {result.elapsed:.2f}s)")
         if result.response_text:
-            print(f"   📄 Response: {result.response_text}...")
+            logger.info(f"   📄 Response: {result.response_text}...")
 
 # Check Ollama
-print("\n🤖 Checking Ollama...")
+logger.info("\n🤖 Checking Ollama...")
 try:
     response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
     if response.status_code == 200:
         models = response.json().get("models", [])
-        print(f"   ✅ Ollama is running with {len(models)} models")
+        logger.info(f"   ✅ Ollama is running with {len(models)} models")
         for model in models[:3]:  # Show first 3
-            print(f"      - {model['name']}")
+            logger.info(f"      - {model['name']}")
     else:
-        print(f"   ❌ Ollama returned status {response.status_code}")
+        logger.error(f"   ❌ Ollama returned status {response.status_code}")
 except Exception as e:
-    print(f"   ❌ Cannot connect to Ollama: {e}")
+    logger.error(f"   ❌ Cannot connect to Ollama: {e}")
 
-print("\n💡 Diagnosis Summary:")
-print(
+logger.info("\n💡 Diagnosis Summary:")
+logger.info(
     "   - If all endpoints timeout, the backend is likely stuck during initialization"
 )
-print("   - Check the backend logs for LLM initialization errors")
-print("   - Try restarting the backend with: pkill -f uvicorn && ./run_agent.sh")
+logger.error("   - Check the backend logs for LLM initialization errors")
+logger.info("   - Try restarting the backend with: pkill -f uvicorn && ./run_agent.sh")

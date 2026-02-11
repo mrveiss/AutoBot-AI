@@ -149,7 +149,7 @@ class AutoBotMonitor:
 
         # Test command validator if available
         try:
-            from src.security.command_validator import get_command_validator
+            from security.command_validator import get_command_validator
 
             validator = get_command_validator()
 

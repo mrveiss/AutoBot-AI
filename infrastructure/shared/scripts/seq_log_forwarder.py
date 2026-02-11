@@ -20,12 +20,15 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 import aiohttp
+import logging
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 
 class SeqLogForwarder:
@@ -72,15 +75,15 @@ class SeqLogForwarder:
                     if response.status == 201:
                         return True
                     else:
-                        print(f"Failed to send log to Seq: {response.status}")
+                        logger.error(f"Failed to send log to Seq: {response.status}")
                         return False
         except Exception as e:
-            print(f"Error sending log to Seq: {e}")
+            logger.error(f"Error sending log to Seq: {e}")
             return False
 
     async def send_test_logs(self):
         """Send test logs to verify Seq connection."""
-        print("🧪 Sending test logs to Seq...")
+        logger.info("🧪 Sending test logs to Seq...")
 
         test_logs = [
             {
@@ -119,9 +122,9 @@ class SeqLogForwarder:
                 {"TestRun": True, "Timestamp": datetime.now().isoformat()},
             )
             if success:
-                print(f"✅ Sent: {log['message']}")
+                logger.info(f"✅ Sent: {log['message']}")
             else:
-                print(f"❌ Failed: {log['message']}")
+                logger.error(f"❌ Failed: {log['message']}")
 
             await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
@@ -153,13 +156,13 @@ class SeqLogForwarder:
 
     async def tail_and_forward_logs(self):
         """Tail log files and forward to Seq (Issue #315: refactored)."""
-        print("📡 Starting log forwarding to Seq...")
-        print(f"   Seq URL: {self.seq_url}")
-        print(f"   Logs Directory: {self.logs_dir}")
+        logger.info("📡 Starting log forwarding to Seq...")
+        logger.info(f"   Seq URL: {self.seq_url}")
+        logger.info(f"   Logs Directory: {self.logs_dir}")
 
         # Check if logs directory exists
         if not self.logs_dir.exists():
-            print("⚠️  Logs directory doesn't exist. Creating test logs...")
+            logger.warning("⚠️  Logs directory doesn't exist. Creating test logs...")
             self.logs_dir.mkdir(exist_ok=True)
             await self.create_sample_logs()
 
@@ -182,10 +185,10 @@ class SeqLogForwarder:
                 await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             except KeyboardInterrupt:
-                print("\n👋 Stopping log forwarder...")
+                logger.info("\n👋 Stopping log forwarder...")
                 break
             except Exception as e:
-                print(f"❌ Error in log forwarding: {e}")
+                logger.error(f"❌ Error in log forwarding: {e}")
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
@@ -223,11 +226,11 @@ class SeqLogForwarder:
                 line, "Information", source, {"ParseError": True}
             )
         except Exception as e:
-            print(f"Error parsing log line: {e}")
+            logger.error(f"Error parsing log line: {e}")
 
     async def create_sample_logs(self):
         """Create sample log files for demonstration."""
-        print("📝 Creating sample logs...")
+        logger.info("📝 Creating sample logs...")
 
         # Backend logs
         backend_log = self.logs_dir / "backend.log"
@@ -265,7 +268,7 @@ class SeqLogForwarder:
                 f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "service": "docker", "message": "All containers are running"}}\n'
             )
 
-        print("✅ Sample logs created")
+        logger.info("✅ Sample logs created")
 
     async def check_seq_connection(self):
         """Check if Seq is accessible."""
@@ -273,14 +276,14 @@ class SeqLogForwarder:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.seq_url}/api") as response:
                     if response.status == 200:
-                        print("✅ Seq is accessible")
+                        logger.info("✅ Seq is accessible")
                         return True
                     else:
-                        print(f"⚠️  Seq returned status: {response.status}")
+                        logger.warning(f"⚠️  Seq returned status: {response.status}")
                         return False
         except Exception as e:
-            print(f"❌ Cannot connect to Seq: {e}")
-            print(f"   Make sure Seq is running at {self.seq_url}")
+            logger.error(f"❌ Cannot connect to Seq: {e}")
+            logger.info(f"   Make sure Seq is running at {self.seq_url}")
             return False
 
 
@@ -320,23 +323,23 @@ async def main() -> int:
             connection_ok = await forwarder.check_seq_connection()
             if connection_ok:
                 await forwarder.send_test_logs()
-                print(f"\n🌐 Check Seq at: {args.seq_url}")
-                print("   Username: admin")
-                print("   Password: autobot123")
+                logger.info(f"\n🌐 Check Seq at: {args.seq_url}")
+                logger.info("   Username: admin")
+                logger.info("   Password: autobot123")
 
         if args.tail_and_forward:
             connection_ok = await forwarder.check_seq_connection()
             if connection_ok:
                 await forwarder.tail_and_forward_logs()
             else:
-                print("Cannot start log forwarding without Seq connection")
+                logger.info("Cannot start log forwarding without Seq connection")
                 return 1
 
     except KeyboardInterrupt:
-        print("\n👋 Stopped")
+        logger.info("\n👋 Stopped")
         return 0
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         return 1
 
     return 0

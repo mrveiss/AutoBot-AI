@@ -12,7 +12,7 @@ import logging
 import sys
 import time
 
-from src.constants import ServiceURLs
+from constants import ServiceURLs
 
 # Add the project root to the Python path
 sys.path.insert(0, "/home/kali/Desktop/AutoBot")
@@ -112,6 +112,75 @@ async def test_llamaindex_redis():
         return False, 0
 
 
+def _create_vector_store(modern_langchain: bool, embeddings):
+    """
+    Create LangChain Redis vector store.
+
+    Helper for test_langchain_redis (#825).
+
+    Args:
+        modern_langchain: Whether to use modern langchain-redis package
+        embeddings: Embeddings instance
+
+    Returns:
+        Vector store instance
+    """
+    try:
+        from langchain_redis import RedisVectorStore as LangChainRedisStore
+    except ImportError:
+        from langchain_community.vectorstores.redis import (
+            Redis as LangChainRedisStore,
+        )
+
+    if modern_langchain:
+        return LangChainRedisStore(
+            index_name="autobot_langchain",
+            embedding=embeddings,
+            redis_url="redis://localhost:6379/2",
+        )
+    else:
+        return LangChainRedisStore(
+            redis_url="redis://localhost:6379",
+            index_name="autobot_langchain_legacy",
+            embedding_function=embeddings.embed_query,
+            content_key="text",
+            metadata_key="metadata",
+            vector_key="vector",
+        )
+
+
+async def _test_existing_data_access(embeddings):
+    """
+    Try to access existing LlamaIndex data.
+
+    Helper for test_langchain_redis (#825).
+
+    Args:
+        embeddings: Embeddings instance
+
+    Returns:
+        Tuple of (success, count)
+    """
+    try:
+        from langchain_redis import RedisVectorStore as LangChainRedisStore
+
+        existing_store = LangChainRedisStore(
+            index_name="llama_index",
+            embedding=embeddings,
+            redis_url="redis://localhost:6379/2",
+        )
+
+        existing_results = await asyncio.to_thread(
+            existing_store.similarity_search, "deployment configuration", k=3
+        )
+        logger.info(f"✅ Accessed existing data: {len(existing_results)} results")
+        return True, len(existing_results)
+
+    except Exception as e:
+        logger.warning(f"Could not access existing data: {e}")
+        return False, 0
+
+
 async def test_langchain_redis():
     """Test LangChain Redis integration with existing data"""
     logger.info("\n=== Testing LangChain Redis Integration ===")
@@ -123,7 +192,6 @@ async def test_langchain_redis():
             logger.info("Using new langchain-redis package")
             modern_langchain = True
         except ImportError:
-            # Fallback to community package
             from langchain_community.vectorstores.redis import (
                 Redis as LangChainRedisStore,
             )
@@ -138,23 +206,7 @@ async def test_langchain_redis():
             model="nomic-embed-text:latest", base_url=ServiceURLs.OLLAMA_LOCAL
         )
 
-        if modern_langchain:
-            # New langchain-redis implementation
-            vector_store = LangChainRedisStore(
-                index_name="autobot_langchain",  # Use different index to avoid conflicts
-                embedding=embeddings,
-                redis_url="redis://localhost:6379/2",
-            )
-        else:
-            # Legacy community implementation
-            vector_store = LangChainRedisStore(
-                redis_url="redis://localhost:6379",
-                index_name="autobot_langchain_legacy",
-                embedding_function=embeddings.embed_query,
-                content_key="text",
-                metadata_key="metadata",
-                vector_key="vector",
-            )
+        vector_store = _create_vector_store(modern_langchain, embeddings)
 
         # Test with a simple document to see if it can connect
         test_docs = ["This is a test document for LangChain Redis integration"]
@@ -177,25 +229,10 @@ async def test_langchain_redis():
 
         # Try to access existing LlamaIndex data by changing index
         if modern_langchain:
-            try:
-                # Try to create vector store pointing to existing index
-                existing_store = LangChainRedisStore(
-                    index_name="llama_index",  # Existing index
-                    embedding=embeddings,
-                    redis_url="redis://localhost:6379/2",
-                )
-
-                existing_results = await asyncio.to_thread(
-                    existing_store.similarity_search, "deployment configuration", k=3
-                )
-                logger.info(
-                    f"✅ Accessed existing data: {len(existing_results)} results"
-                )
-                return True, len(existing_results)
-
-            except Exception as e:
-                logger.warning(f"Could not access existing data: {e}")
-                return True, len(results)
+            success, count = await _test_existing_data_access(embeddings)
+            if success:
+                return True, count
+            return True, len(results)
 
         return True, len(results)
 

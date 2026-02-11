@@ -11,6 +11,8 @@ import logging
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -20,13 +22,13 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_research_dialogue():
     """Test the research dialogue workflow"""
-    from src.chat_workflow import process_chat_message
+    from chat_workflow import process_chat_message
 
-    print("=== Testing Research Dialogue Workflow ===\n")
+    logger.info("=== Testing Research Dialogue Workflow ===\n")
 
     # Test 1: Unknown topic that should trigger research question
     try:
-        print("1. Testing unknown topic (should ask for research)...")
+        logger.info("1. Testing unknown topic (should ask for research)...")
         result = await asyncio.wait_for(
             process_chat_message(
                 "tell me about quantum computing in 2024", "test-chat"
@@ -34,38 +36,38 @@ async def test_research_dialogue():
             timeout=15.0,
         )
 
-        print(f"✅ Response: {result.response}")
-        print(f"   Knowledge Status: {result.knowledge_status.value}")
-        print(f"   Processing Time: {result.processing_time:.2f}s\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s", result.knowledge_status.value)
+        logger.info("   Processing Time: %.2fs\n", result.processing_time)
 
     except Exception as e:
-        print(f"❌ Test 1 failed: {e}\n")
+        logger.error("❌ Test 1 failed: %s\n", e)
 
     # Test 2: "Yes" response
     try:
-        print("2. Testing 'yes' response...")
+        logger.info("2. Testing 'yes' response...")
         result = await asyncio.wait_for(
             process_chat_message("yes", "test-chat"), timeout=10.0
         )
 
-        print(f"✅ Response: {result.response}")
-        print(f"   Knowledge Status: {result.knowledge_status.value}\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s\n", result.knowledge_status.value)
 
     except Exception as e:
-        print(f"❌ Test 2 failed: {e}\n")
+        logger.error("❌ Test 2 failed: %s\n", e)
 
     # Test 3: "No" response
     try:
-        print("3. Testing 'no' response...")
+        logger.info("3. Testing 'no' response...")
         result = await asyncio.wait_for(
             process_chat_message("no", "test-chat"), timeout=10.0
         )
 
-        print(f"✅ Response: {result.response}")
-        print(f"   Knowledge Status: {result.knowledge_status.value}\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s\n", result.knowledge_status.value)
 
     except Exception as e:
-        print(f"❌ Test 3 failed: {e}\n")
+        logger.error("❌ Test 3 failed: %s\n", e)
 
 
 if __name__ == "__main__":

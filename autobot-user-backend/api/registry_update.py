@@ -1,4 +1,5 @@
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,8 @@ import re
 def add_phase9_monitoring_to_registry():
     """Add Phase 9 monitoring router to the registry"""
 
-    registry_file = "/home/kali/Desktop/AutoBot/backend/api/registry.py"
+    base_dir = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+    registry_file = f"{base_dir}/backend/api/registry.py"
 
     # Read the current file
     with open(registry_file, "r") as f:

@@ -15,10 +15,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -33,6 +29,10 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -170,9 +170,8 @@ class ReconcilerService:
 
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats and network reachability."""
-        from sqlalchemy import or_
-
         from services.database import db_service
+        from sqlalchemy import or_
 
         async with db_service.session() as db:
             timeout_setting = await db.execute(
@@ -420,8 +419,10 @@ class ReconcilerService:
         can_proceed, skip_reason, tracker = self._check_remediation_limits(node_id, now)
 
         if not can_proceed:
-            if skip_reason == "max_attempts":
+            if skip_reason == "max_attempts" and not tracker.get("exhausted"):
                 await self._create_max_attempts_event(db, node, tracker)
+                tracker["exhausted"] = True
+                self._remediation_tracker[node_id] = tracker
             return False
 
         # Log remediation attempt
@@ -734,7 +735,12 @@ class ReconcilerService:
 
         # Check attempt limit
         if tracker["count"] >= MAX_SERVICE_RESTART_ATTEMPTS:
-            await self._create_max_attempts_service_event(db, node, service, tracker)
+            if not tracker.get("exhausted"):
+                await self._create_max_attempts_service_event(
+                    db, node, service, tracker
+                )
+                tracker["exhausted"] = True
+                self._service_remediation_tracker[key] = tracker
             return False
 
         # Attempt restart

@@ -184,7 +184,11 @@ class HealthCollector:
             return None
 
         service_name = unit_name.replace(".service", "")
-        active_state, sub_state, load_state = parts[2], parts[3], parts[1]
+        load_state = parts[1]
+        # Skip phantom entries with no unit file (not-found/masked)
+        if load_state in ("not-found", "masked"):
+            return None
+        active_state, sub_state = parts[2], parts[3]
         status = self._map_status_from_states(active_state, sub_state)
 
         return {

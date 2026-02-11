@@ -46,7 +46,14 @@
   ansible.builtin.command:
     cmd: python3 -m venv {{ backend_install_dir }}/venv
     creates: "{{ backend_install_dir }}/venv/bin/python"
-  become_user: "{{ backend_user }}"
+
+- name: Fix venv ownership
+  ansible.builtin.file:
+    path: "{{ backend_install_dir }}/venv"
+    state: directory
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
 
 - name: Install Python requirements
   ansible.builtin.pip:

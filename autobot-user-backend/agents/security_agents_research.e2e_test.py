@@ -8,7 +8,7 @@ import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.agents.security_scanner_agent import security_scanner_agent
+from agents.security_scanner_agent import security_scanner_agent
 
 
 async def test_tool_research_workflow():

@@ -100,8 +100,9 @@ async function loadAgents(): Promise<void> {
   error.value = null
 
   try {
-    const data = await api.get('/agents')
-    agents.value = data.agents || []
+    // Issue #835 - use named function from useAutobotApi
+    const data = await api.getAvailableAgents() as Record<string, unknown>[]
+    agents.value = (Array.isArray(data) ? data : []) as Agent[]
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load agents'
   } finally {
@@ -111,8 +112,9 @@ async function loadAgents(): Promise<void> {
 
 async function loadStats(): Promise<void> {
   try {
-    const data = await api.get('/agents/stats')
-    stats.value = data || { total_agents: 0, active_agents: 0, total_tasks: 0, avg_success_rate: 0 }
+    // Issue #835 - use named function from useAutobotApi
+    const data = await api.getAgentsStatus()
+    stats.value = (data as unknown as AgentStats) || { total_agents: 0, active_agents: 0, total_tasks: 0, avg_success_rate: 0 }
   } catch (e) {
     logger.error('Failed to load stats:', e)
   }
@@ -122,27 +124,31 @@ async function refreshData(): Promise<void> {
   await Promise.all([loadAgents(), loadStats()])
 }
 
-async function startAgent(agentId: string): Promise<void> {
+async function startAgent(_agentId: string): Promise<void> {
   try {
-    await api.post(`/agents/${agentId}/start`)
+    // Issue #835 - backend has global pause/resume, not per-agent
+    await api.resumeAgent()
     await loadAgents()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to start agent'
   }
 }
 
-async function stopAgent(agentId: string): Promise<void> {
+async function stopAgent(_agentId: string): Promise<void> {
   try {
-    await api.post(`/agents/${agentId}/stop`)
+    // Issue #835 - backend has global pause/resume, not per-agent
+    await api.pauseAgent()
     await loadAgents()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to stop agent'
   }
 }
 
-async function restartAgent(agentId: string): Promise<void> {
+async function restartAgent(_agentId: string): Promise<void> {
   try {
-    await api.post(`/agents/${agentId}/restart`)
+    // Issue #835 - pause then resume as restart
+    await api.pauseAgent()
+    await api.resumeAgent()
     await loadAgents()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to restart agent'

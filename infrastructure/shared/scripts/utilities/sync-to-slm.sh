@@ -15,19 +15,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-# Load SSOT config if available
-if [ -f "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
-fi
-
-# Configuration
+# Configuration (from SSOT)
 REMOTE_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
-REMOTE_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
 
 # Local paths

@@ -4,11 +4,15 @@
 
 set -e
 
-# Load unified configuration system
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
-if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
+# Load unified configuration system (legacy)
+_NATIVE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
+if [[ -f "${_NATIVE_SCRIPT_DIR}/config/load_config.sh" ]]; then
     export PATH="$HOME/bin:$PATH"  # Ensure yq is available
-    source "${SCRIPT_DIR}/config/load_config.sh"
+    source "${_NATIVE_SCRIPT_DIR}/config/load_config.sh"
     echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
 else
     echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
@@ -22,13 +26,13 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# VM Configuration (from unified config)
+# VM Configuration (from unified config, with SSOT fallback)
 declare -A VMS
-VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")
-VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22")
-VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
-VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24")
-VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25")
+VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}")
+VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}")
+VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "${AUTOBOT_REDIS_HOST:-172.16.168.23}")
+VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}")
+VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}")
 
 # Service Configuration
 declare -A SERVICES
@@ -40,14 +44,14 @@ SERVICES[browser]="autobot-browser-service.service"
 
 # Health Check URLs
 declare -A HEALTH_URLS
-HEALTH_URLS[frontend]="http://172.16.168.21/"
-HEALTH_URLS[npu-worker]="http://172.16.168.22:8081/health"
-HEALTH_URLS[redis]="172.16.168.23:6379"
-HEALTH_URLS[ai-stack]="http://172.16.168.24:8080/health"
-HEALTH_URLS[browser]="http://172.16.168.25:3000/health"
+HEALTH_URLS[frontend]="http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/"
+HEALTH_URLS[npu-worker]="http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
+HEALTH_URLS[redis]="${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}"
+HEALTH_URLS[ai-stack]="http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
+HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 BACKEND_PID=""
 BROWSER_PID=""
 
@@ -69,12 +73,12 @@ print_usage() {
     echo "  --help          Show this help"
     echo ""
     echo -e "${BLUE}VM Architecture:${NC}"
-    echo "  Frontend:   172.16.168.21 (VM1) - Nginx + Vue.js"
-    echo "  NPU Worker: 172.16.168.22 (VM2) - Hardware detection"
-    echo "  Redis:      172.16.168.23 (VM3) - Data layer"
-    echo "  AI Stack:   172.16.168.24 (VM4) - AI processing"
-    echo "  Browser:    172.16.168.25 (VM5) - Web automation"
-    echo "  Backend:    172.16.168.20 (WSL) - API server"
+    echo "  Frontend:   ${AUTOBOT_FRONTEND_HOST:-172.16.168.21} (VM1) - Nginx + Vue.js"
+    echo "  NPU Worker: ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22} (VM2) - Hardware detection"
+    echo "  Redis:      ${AUTOBOT_REDIS_HOST:-172.16.168.23} (VM3) - Data layer"
+    echo "  AI Stack:   ${AUTOBOT_AI_STACK_HOST:-172.16.168.24} (VM4) - AI processing"
+    echo "  Browser:    ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25} (VM5) - Web automation"
+    echo "  Backend:    ${AUTOBOT_BACKEND_HOST:-172.16.168.20} (WSL) - API server"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -196,7 +200,7 @@ test_service_health() {
 
     if [ "$vm_name" = "redis" ]; then
         # Special case for Redis (TCP connection)
-        if echo "PING" | nc -w 2 172.16.168.23 6379 | grep -q "PONG" 2>/dev/null; then
+        if echo "PING" | nc -w 2 "${AUTOBOT_REDIS_HOST:-172.16.168.23}" "${AUTOBOT_REDIS_PORT:-6379}" | grep -q "PONG" 2>/dev/null; then
             echo -e "${GREEN}✅ Healthy${NC}"
             return 0
         else
@@ -287,15 +291,15 @@ launch_browser() {
         sleep 2  # Give services a moment to fully initialize
 
         if command -v firefox >/dev/null 2>&1; then
-            firefox "http://172.16.168.21/" >/dev/null 2>&1 &
+            firefox "http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/" >/dev/null 2>&1 &
             BROWSER_PID=$!
             echo -e "${GREEN}✅ Firefox launched${NC}"
         elif command -v google-chrome >/dev/null 2>&1; then
-            google-chrome "http://172.16.168.21/" >/dev/null 2>&1 &
+            google-chrome "http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/" >/dev/null 2>&1 &
             BROWSER_PID=$!
             echo -e "${GREEN}✅ Chrome launched${NC}"
         else
-            echo -e "${YELLOW}⚠️  No browser found. Please open http://172.16.168.21/ manually${NC}"
+            echo -e "${YELLOW}⚠️  No browser found. Please open http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/ manually${NC}"
         fi
     fi
 }
@@ -373,11 +377,11 @@ launch_browser
 echo ""
 echo -e "${GREEN}🎉 AutoBot Native VM Deployment Started Successfully!${NC}"
 echo -e "${BLUE}🌐 Access Points:${NC}"
-echo "  Frontend:   http://172.16.168.21/"
-echo "  Backend:    http://172.16.168.20:8001/"
-echo "  AI Stack:   http://172.16.168.24:8080/health"
-echo "  NPU Worker: http://172.16.168.22:8081/health"
-echo "  Browser:    http://172.16.168.25:3000/health"
+echo "  Frontend:   http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/"
+echo "  Backend:    http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/"
+echo "  AI Stack:   http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
+echo "  NPU Worker: http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
+echo "  Browser:    http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
 echo ""
 echo -e "${CYAN}ℹ️  VM services will continue running even after you stop this script${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop WSL backend (VM services will keep running)${NC}"

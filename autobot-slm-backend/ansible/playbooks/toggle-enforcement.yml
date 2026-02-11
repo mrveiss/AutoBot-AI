@@ -1,0 +1,136 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Toggle Service Authentication Enforcement Mode
+# Usage: ansible-playbook playbooks/toggle-enforcement.yml -e "enforcement_mode=true"
+#        ansible-playbook playbooks/toggle-enforcement.yml -e "enforcement_mode=false"
+#
+# Run from: autobot-slm-backend/ansible/
+
+- name: "Toggle Service Authentication Enforcement"
+  hosts: backend
+  gather_facts: false
+  become: false  # backend host is local WSL
+
+  vars:
+    enforcement_mode: true
+    env_file: /opt/autobot/.env
+    backend_health_url: "http://172.16.168.20:8001/api/health"
+    startup_delay: 5
+
+  pre_tasks:
+    - name: Validate enforcement_mode value
+      ansible.builtin.assert:
+        that:
+          - enforcement_mode | string in ['true', 'false', 'True', 'False']
+        fail_msg: >-
+          enforcement_mode must be 'true' or 'false',
+          got '{{ enforcement_mode }}'
+      tags: always
+
+    - name: Display toggle information
+      ansible.builtin.debug:
+        msg:
+          - "Service Auth Enforcement Toggle"
+          - "Target mode: {{ enforcement_mode }}"
+          - "Env file: {{ env_file }}"
+          - "Backend: {{ backend_health_url }}"
+      tags: always
+
+  tasks:
+    # ------------------------------------------------------------------
+    # Step 1: Update .env file
+    # ------------------------------------------------------------------
+    - name: Check if enforcement variable exists in .env
+      ansible.builtin.lineinfile:
+        path: "{{ env_file }}"
+        regexp: "^SERVICE_AUTH_ENFORCEMENT_MODE="
+        state: absent
+      check_mode: true
+      register: env_var_check
+      changed_when: false
+      tags: [config]
+
+    - name: Update existing enforcement mode variable
+      ansible.builtin.lineinfile:
+        path: "{{ env_file }}"
+        regexp: "^SERVICE_AUTH_ENFORCEMENT_MODE=.*"
+        line: "SERVICE_AUTH_ENFORCEMENT_MODE={{ enforcement_mode | lower }}"
+      when: env_var_check.found is defined and env_var_check.found > 0
+      tags: [config]
+
+    - name: Add enforcement mode variable if missing
+      ansible.builtin.lineinfile:
+        path: "{{ env_file }}"
+        line: "SERVICE_AUTH_ENFORCEMENT_MODE={{ enforcement_mode | lower }}"
+        insertafter: EOF
+      when: env_var_check.found is not defined or env_var_check.found == 0
+      tags: [config]
+
+    - name: Verify .env was updated
+      ansible.builtin.shell: >
+        grep "^SERVICE_AUTH_ENFORCEMENT_MODE="
+        {{ env_file }}
+      register: env_verify
+      changed_when: false
+      tags: [config]
+
+    - name: Display updated value
+      ansible.builtin.debug:
+        msg: "Updated: {{ env_verify.stdout }}"
+      tags: [config]
+
+    # ------------------------------------------------------------------
+    # Step 2: Restart backend service
+    # ------------------------------------------------------------------
+    - name: Restart backend via systemctl
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted
+      register: systemd_restart
+      ignore_errors: true
+      tags: [restart]
+
+    - name: Fallback restart via process signal
+      ansible.builtin.shell: |
+        pkill -f "uvicorn.*8001" || true
+        sleep 1
+        cd /opt/autobot/autobot-user-backend
+        nohup python -m uvicorn autobot_user_backend.main:app \
+          --host 0.0.0.0 --port 8001 \
+          > /tmp/autobot-backend-toggle.log 2>&1 &
+        echo "Started PID: $!"
+      when: systemd_restart is failed
+      register: fallback_restart
+      tags: [restart]
+
+    - name: Wait for backend startup
+      ansible.builtin.pause:
+        seconds: "{{ startup_delay }}"
+      tags: [restart]
+
+    # ------------------------------------------------------------------
+    # Step 3: Verify health
+    # ------------------------------------------------------------------
+    - name: Check backend health
+      ansible.builtin.uri:
+        url: "{{ backend_health_url }}"
+        method: GET
+        timeout: 15
+        status_code: 200
+      register: health_check
+      retries: 3
+      delay: 5
+      until: health_check.status == 200
+      tags: [verify]
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "Toggle Complete"
+          - "Enforcement mode: {{ enforcement_mode | lower }}"
+          - "Backend health: HTTP {{ health_check.status }}"
+          - "Status: {{ 'ACTIVE - requests will be blocked without auth' if enforcement_mode | lower == 'true' else 'INACTIVE - logging only, no blocking' }}"
+      tags: [verify]

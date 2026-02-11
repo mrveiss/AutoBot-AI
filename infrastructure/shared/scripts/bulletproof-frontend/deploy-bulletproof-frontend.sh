@@ -7,18 +7,18 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="/home/kali/Desktop/AutoBot"
-LOCAL_FRONTEND_DIR="$PROJECT_ROOT/autobot-vue"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-slm-frontend"
 
 # Remote Configuration
-FRONTEND_VM="172.16.168.21"
-FRONTEND_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Service Directory Mapping (CRITICAL FIX)
-SERVICE_DIR="/opt/autobot/src/autobot-vue"
-BACKUP_DIR="/opt/autobot/backups/autobot-vue"
-STAGING_DIR="/opt/autobot/staging/autobot-vue"
+SERVICE_DIR="/opt/autobot/src/autobot-slm-frontend"
+BACKUP_DIR="/opt/autobot/backups/autobot-slm-frontend"
+STAGING_DIR="/opt/autobot/staging/autobot-slm-frontend"
 
 # Colors
 RED='\033[0;31m'
@@ -186,7 +186,7 @@ EOF
 restart_frontend_service() {
     log_info "Restarting frontend service..."
 
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         set -euo pipefail
 
         # Kill existing Vite processes
@@ -199,19 +199,19 @@ restart_frontend_service() {
 
         # Start new frontend service
         echo "Starting frontend service..."
-        cd /opt/autobot/src/autobot-vue
+        cd /opt/autobot/src/autobot-slm-frontend
 
         # Set environment variables
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
         # Start with logging
-        nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
+        nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
 
-        echo $! > /tmp/frontend.pid
+        echo \$! > /tmp/frontend.pid
 
-        echo "Frontend service started with PID: $(cat /tmp/frontend.pid)"
+        echo "Frontend service started with PID: \$(cat /tmp/frontend.pid)"
 EOF
 
     if [ $? -eq 0 ]; then
@@ -274,8 +274,8 @@ cleanup_old_backups() {
 
     ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Keep only last 5 backups
-        if [ -d "/opt/autobot/backups/autobot-vue" ]; then
-            cd /opt/autobot/backups/autobot-vue
+        if [ -d "/opt/autobot/backups/autobot-slm-frontend" ]; then
+            cd /opt/autobot/backups/autobot-slm-frontend
             ls -t | tail -n +6 | xargs -r rm -rf
             echo "Old backups cleaned up"
         fi
@@ -288,13 +288,13 @@ rollback_deployment() {
     ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         set -euo pipefail
 
-        if [ -d "/opt/autobot/backups/autobot-vue" ]; then
-            latest_backup=$(ls -t /opt/autobot/backups/autobot-vue | head -1)
+        if [ -d "/opt/autobot/backups/autobot-slm-frontend" ]; then
+            latest_backup=$(ls -t /opt/autobot/backups/autobot-slm-frontend | head -1)
             if [ -n "$latest_backup" ]; then
                 echo "Rolling back to: $latest_backup"
-                sudo rm -rf /opt/autobot/src/autobot-vue
-                sudo mv "/opt/autobot/backups/autobot-vue/$latest_backup" /opt/autobot/src/autobot-vue
-                sudo chown -R autobot-service:autobot-service /opt/autobot/src/autobot-vue
+                sudo rm -rf /opt/autobot/src/autobot-slm-frontend
+                sudo mv "/opt/autobot/backups/autobot-slm-frontend/$latest_backup" /opt/autobot/src/autobot-slm-frontend
+                sudo chown -R autobot-service:autobot-service /opt/autobot/src/autobot-slm-frontend
                 echo "Rollback completed"
             else
                 echo "No backup found for rollback"

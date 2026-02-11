@@ -12,13 +12,16 @@ import sqlite3
 import traceback
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 import aioredis
 import redis
+import logging
 
 
 def test_redis_basic():
     """Test basic Redis connectivity to all databases"""
-    print("=== REDIS BASIC CONNECTIVITY TEST ===")
+    logger.info("=== REDIS BASIC CONNECTIVITY TEST ===")
 
     try:
         # Test direct connection
@@ -26,7 +29,7 @@ def test_redis_basic():
             host="localhost", port=6379, decode_responses=True, socket_timeout=2
         )
         response = client.ping()
-        print(f"✅ Basic Redis connection: {response}")
+        logger.info("✅ Basic Redis connection: %s", response)
 
         # Check all 16 databases
         for db_num in range(16):
@@ -40,25 +43,25 @@ def test_redis_basic():
                 )
                 key_count = db_client.dbsize()
                 if key_count > 0:
-                    print(f"✅ DB {db_num}: {key_count} keys")
+                    logger.info("✅ DB {db_num}: %s keys", key_count)
                     # Show sample keys
                     keys = db_client.keys("*")[:5]
                     for key in keys:
                         key_type = db_client.type(key)
-                        print(f"    - {key} ({key_type})")
+                        logger.info("    - {key} (%s)", key_type)
                 else:
-                    print(f"⚪ DB {db_num}: empty")
+                    logger.info("⚪ DB %s: empty", db_num)
             except Exception as e:
-                print(f"❌ DB {db_num}: {e}")
+                logger.error("❌ DB {db_num}: %s", e)
 
     except Exception as e:
-        print(f"❌ Redis connection failed: {e}")
-        print(traceback.format_exc())
+        logger.error("❌ Redis connection failed: %s", e)
+        logger.info(traceback.format_exc())
 
 
 def test_vector_database():
     """Test vector database in Redis DB 8"""
-    print("\n=== VECTOR DATABASE TEST (Redis DB 8) ===")
+    logger.info("\n=== VECTOR DATABASE TEST (Redis DB 8) ===")
 
     try:
         client = redis.Redis(
@@ -67,50 +70,50 @@ def test_vector_database():
 
         # Check for LlamaIndex keys
         keys = client.keys("llama_index:*")
-        print(f"LlamaIndex keys found: {len(keys)}")
+        logger.info("LlamaIndex keys found: %s", len(keys))
 
         # Check for FT indexes
         try:
             indexes = client.execute_command("FT._LIST")
-            print(f"RedisSearch indexes: {indexes}")
+            logger.info("RedisSearch indexes: %s", indexes)
 
             # Get index info if any exist
             for index_name in indexes:
                 try:
                     info = client.execute_command("FT.INFO", index_name)
-                    print(f"Index {index_name} info: {info}")
+                    logger.info("Index {index_name} info: %s", info)
                 except Exception as e:
-                    print(f"Could not get info for index {index_name}: {e}")
+                    logger.info("Could not get info for index {index_name}: %s", e)
 
         except Exception as e:
-            print(f"No RedisSearch indexes found: {e}")
+            logger.info("No RedisSearch indexes found: %s", e)
 
         # Check for any vector-like keys
         all_keys = client.keys("*")
-        print(f"Total keys in DB 8: {len(all_keys)}")
+        logger.info("Total keys in DB 8: %s", len(all_keys))
         for key in all_keys[:10]:  # Show first 10
             key_type = client.type(key)
-            print(f"    - {key} ({key_type})")
+            logger.info("    - {key} (%s)", key_type)
 
     except Exception as e:
-        print(f"❌ Vector database test failed: {e}")
-        print(traceback.format_exc())
+        logger.error("❌ Vector database test failed: %s", e)
+        logger.info(traceback.format_exc())
 
 
 def test_sqlite_databases():
     """Test SQLite database files"""
-    print("\n=== SQLITE DATABASES TEST ===")
+    logger.info("\n=== SQLITE DATABASES TEST ===")
 
     data_dir = Path("data")
     if not data_dir.exists():
-        print("❌ Data directory doesn't exist")
+        logger.error("❌ Data directory doesn't exist")
         return
 
     sqlite_files = list(data_dir.glob("*.db"))
-    print(f"Found {len(sqlite_files)} SQLite files:")
+    logger.info("Found %s SQLite files:", len(sqlite_files))
 
     for db_file in sqlite_files:
-        print(f"\n--- {db_file.name} ---")
+        logger.info("\n--- %s ---", db_file.name)
         try:
             conn = sqlite3.connect(str(db_file))
             cursor = conn.cursor()
@@ -119,21 +122,21 @@ def test_sqlite_databases():
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = cursor.fetchall()
 
-            print(f"Tables: {[t[0] for t in tables]}")
+            logger.info("Tables: %s", [t[0] for t in tables])
 
             # Get row counts for each table
             for (table_name,) in tables:
                 try:
                     cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                     count = cursor.fetchone()[0]
-                    print(f"  {table_name}: {count} rows")
+                    logger.info("  {table_name}: %s rows", count)
                 except Exception as e:
-                    print(f"  {table_name}: Error counting - {e}")
+                    logger.error("  {table_name}: Error counting - %s", e)
 
             conn.close()
 
         except Exception as e:
-            print(f"❌ Error reading {db_file}: {e}")
+            logger.error("❌ Error reading {db_file}: %s", e)
 
 
 def _inspect_sqlite_file(file: Path) -> None:
@@ -143,16 +146,16 @@ def _inspect_sqlite_file(file: Path) -> None:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
-        print(f"    SQLite tables: {[t[0] for t in tables]}")
+        logger.info("    SQLite tables: %s", [t[0] for t in tables])
         conn.close()
     except Exception as e:
-        print(f"    SQLite error: {e}")
+        logger.error("    SQLite error: %s", e)
 
 
 def _process_chromadb_file(file: Path, chroma_path: Path) -> None:
     """Process a single ChromaDB file (Issue #315: extracted helper)."""
     size_mb = file.stat().st_size / 1024 / 1024
-    print(f"  {file.relative_to(chroma_path)}: {size_mb:.1f} MB")
+    logger.info("  %s: %.1f MB", file.relative_to(chroma_path), size_mb)
 
     if file.name.endswith(".sqlite3"):
         _inspect_sqlite_file(file)
@@ -160,17 +163,17 @@ def _process_chromadb_file(file: Path, chroma_path: Path) -> None:
 
 def test_chromadb():
     """Test ChromaDB files (Issue #315: refactored)."""
-    print("\n=== CHROMADB TEST ===")
+    logger.info("\n=== CHROMADB TEST ===")
 
     chromadb_dirs = ["data/chromadb", "data/chromadb_kb"]
 
     for chroma_dir in chromadb_dirs:
         path = Path(chroma_dir)
         if not path.exists():
-            print(f"⚪ {chroma_dir} doesn't exist")
+            logger.info("⚪ %s doesn't exist", chroma_dir)
             continue
 
-        print(f"\n--- {chroma_dir} ---")
+        logger.info("\n--- %s ---", chroma_dir)
         files = list(path.rglob("*"))
         for file in files:
             if file.is_file():
@@ -179,7 +182,7 @@ def test_chromadb():
 
 def test_backend_errors():
     """Test for backend configuration errors"""
-    print("\n=== BACKEND CONFIGURATION TEST ===")
+    logger.info("\n=== BACKEND CONFIGURATION TEST ===")
 
     try:
         # Test Redis database manager import
@@ -187,42 +190,42 @@ def test_backend_errors():
 
         sys.path.append("/home/kali/Desktop/AutoBot")
 
-        from src.utils.redis_database_manager import RedisDatabaseManager
+        from utils.redis_database_manager import RedisDatabaseManager
 
         manager = RedisDatabaseManager()
-        print("✅ RedisDatabaseManager imported successfully")
+        logger.info("✅ RedisDatabaseManager imported successfully")
 
         # Test database validation
         validation = manager.validate_database_separation()
-        print(f"Database separation validation: {'✅' if validation else '❌'}")
+        logger.error("Database separation validation: %s", '✅' if validation else '❌')
 
         # Test connections
         try:
             manager.get_connection("main")
-            print("✅ Main connection works")
+            logger.info("✅ Main connection works")
         except Exception as e:
-            print(f"❌ Main connection failed: {e}")
+            logger.error("❌ Main connection failed: %s", e)
 
         try:
             manager.get_connection("vectors")
-            print("✅ Vectors connection works")
+            logger.info("✅ Vectors connection works")
         except Exception as e:
-            print(f"❌ Vectors connection failed: {e}")
+            logger.error("❌ Vectors connection failed: %s", e)
 
         # Show database mapping
         db_info = manager.get_database_info()
-        print("\nDatabase mapping:")
+        logger.info("\nDatabase mapping:")
         for name, config in db_info.items():
-            print(f"  {name}: DB {config.get('db')} - {config.get('description')}")
+            logger.info("  {name}: DB {config.get('db')} - %s", config.get('description'))
 
     except Exception as e:
-        print(f"❌ Backend configuration test failed: {e}")
-        print(traceback.format_exc())
+        logger.error("❌ Backend configuration test failed: %s", e)
+        logger.info(traceback.format_exc())
 
 
 async def test_async_redis():
     """Test async Redis connections"""
-    print("\n=== ASYNC REDIS TEST ===")
+    logger.info("\n=== ASYNC REDIS TEST ===")
 
     try:
         # Test async connection
@@ -230,7 +233,7 @@ async def test_async_redis():
             "redis://localhost:6379/0", decode_responses=True
         )
         result = await redis_client.ping()
-        print(f"✅ Async Redis ping: {result}")
+        logger.info("✅ Async Redis ping: %s", result)
 
         # Test different databases async
         for db_num in [0, 1, 8]:
@@ -239,21 +242,21 @@ async def test_async_redis():
                     f"redis://localhost:6379/{db_num}", decode_responses=True
                 )
                 key_count = await db_client.dbsize()
-                print(f"✅ Async DB {db_num}: {key_count} keys")
+                logger.info("✅ Async DB {db_num}: %s keys", key_count)
                 await db_client.close()
             except Exception as e:
-                print(f"❌ Async DB {db_num}: {e}")
+                logger.error("❌ Async DB {db_num}: %s", e)
 
         await redis_client.close()
 
     except Exception as e:
-        print(f"❌ Async Redis test failed: {e}")
-        print(traceback.format_exc())
+        logger.error("❌ Async Redis test failed: %s", e)
+        logger.info(traceback.format_exc())
 
 
 def test_environment_variables():
     """Test environment variables affecting database connections"""
-    print("\n=== ENVIRONMENT VARIABLES TEST ===")
+    logger.info("\n=== ENVIRONMENT VARIABLES TEST ===")
 
     redis_env_vars = [
         "AUTOBOT_REDIS_HOST",
@@ -267,21 +270,21 @@ def test_environment_variables():
     for var in redis_env_vars:
         value = os.getenv(var)
         if value:
-            print(f"✅ {var}={value}")
+            logger.info("✅ {var}=%s", value)
         else:
-            print(f"⚪ {var} not set")
+            logger.info("⚪ %s not set", var)
 
     # Check docker environment detection
     if os.path.exists("/.dockerenv"):
-        print("🐳 Running inside Docker container")
+        logger.info("🐳 Running inside Docker container")
     else:
-        print("🖥️ Running on host system")
+        logger.info("🖥️ Running on host system")
 
 
 def main():
     """Run all diagnostic tests"""
-    print("AutoBot Data Layer Diagnostic Report")
-    print("=" * 50)
+    logger.info("AutoBot Data Layer Diagnostic Report")
+    logger.info("=" * 50)
 
     test_redis_basic()
     test_vector_database()
@@ -293,9 +296,10 @@ def main():
     # Run async tests
     asyncio.run(test_async_redis())
 
-    print("\n" + "=" * 50)
-    print("DIAGNOSIS COMPLETE")
+    logger.info("\n" + "=" * 50)
+    logger.info("DIAGNOSIS COMPLETE")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()

@@ -5,6 +5,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -19,15 +22,15 @@ echo ""
 
 # AutoBot VM configuration
 declare -A AUTOBOT_HOSTS=(
-    ["WSL-Host"]="172.16.168.20"
-    ["Frontend-VM"]="172.16.168.21"
-    ["NPU-Worker-VM"]="172.16.168.22"
-    ["Redis-VM"]="172.16.168.23"
-    ["AI-Stack-VM"]="172.16.168.24"
-    ["Browser-VM"]="172.16.168.25"
+    ["WSL-Host"]="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+    ["Frontend-VM"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["NPU-Worker-VM"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["Redis-VM"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["AI-Stack-VM"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["Browser-VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 SSH_CONFIG="$HOME/.ssh/config"
 
@@ -129,7 +132,7 @@ test_ssh_connections() {
 
         # Test SSH connection
         if timeout 5 ssh -i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=3 \
-            "autobot@$host_ip" "echo 'SSH OK'" >/dev/null 2>&1; then
+            "${AUTOBOT_SSH_USER:-autobot}@$host_ip" "echo 'SSH OK'" >/dev/null 2>&1; then
             log_success "$host_name ($host_ip): Connection successful with host key verification"
             ((PASSED_TESTS++))
             ((test_passed++))

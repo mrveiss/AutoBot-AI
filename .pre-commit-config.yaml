@@ -71,7 +71,8 @@ repos:
       - id: debug-statements  # Check for debugger imports
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
-        exclude: ^(tests/|infrastructure/.*/tests/)(results/.*|benchmarks/.*|fixtures/.*|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py)$
+        # Exclude colocated tests (*_test.py convention) and special test files
+        exclude: (_test\.py$|^(tests/|infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py))
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit

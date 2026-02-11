@@ -10,111 +10,138 @@ Manage workflow classification keywords and rules in Redis
 import json
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
 # Add project root for terminal input handler
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from src.utils.terminal_input_handler import safe_input
-from src.workflow_classifier import WorkflowClassifier
+from utils.terminal_input_handler import safe_input
+from workflow_classifier import WorkflowClassifier
+
+
+def _show_initial_stats(classifier: WorkflowClassifier) -> None:
+    """Show initial classification statistics.
+
+    Helper for main (Issue #825).
+    """
+    stats = classifier.get_classification_stats()
+    logger.info("📊 Current Statistics:")
+    logger.info(f"   Categories: {stats.get('total_categories', 0)}")
+    logger.info(f"   Keywords: {stats.get('total_keywords', 0)}")
+    logger.info(f"   Rules: {stats.get('total_rules', 0)}")
+    logger.info("")
+
+    logger.info("📝 Categories and Keywords:")
+    for category, count in stats.get("categories", {}).items():
+        keywords = classifier.get_keywords(category)
+        logger.info(f"   {category}: {keywords}")
+    logger.info("")
+
+
+def _handle_add_keywords(classifier: WorkflowClassifier) -> None:
+    """Handle adding keywords to category.
+
+    Helper for main (Issue #825).
+    """
+    category = safe_input("Enter category: ", default="test").strip()
+    keywords_input = safe_input(
+        "Enter keywords (comma-separated): ", default="test,example"
+    ).strip()
+    if category and keywords_input:
+        keywords = [kw.strip() for kw in keywords_input.split(",")]
+        classifier.add_keywords(category, keywords)
+        logger.info(f"✅ Added {len(keywords)} keywords to {category}")
+
+
+def _handle_test_classification(classifier: WorkflowClassifier) -> None:
+    """Handle testing message classification.
+
+    Helper for main (Issue #825).
+    """
+    message = safe_input(
+        "Enter message to classify: ", default="test message"
+    ).strip()
+    if message:
+        complexity = classifier.classify_request(message)
+        logger.info(f"📋 Classification: {complexity.value}")
+
+
+def _handle_add_security_keywords(classifier: WorkflowClassifier) -> None:
+    """Handle adding security keywords.
+
+    Helper for main (Issue #825).
+    """
+    security_keywords = [
+        "pentest",
+        "vulnerability",
+        "malware",
+        "threat",
+        "attack",
+        "breach",
+        "intrusion",
+        "forensics",
+        "hardening",
+        "compliance",
+    ]
+    classifier.add_keywords("security", security_keywords)
+
+    network_keywords = [
+        "subnet",
+        "vlan",
+        "dns",
+        "dhcp",
+        "proxy",
+        "gateway",
+        "switch",
+        "hub",
+        "wireless",
+        "ethernet",
+    ]
+    classifier.add_keywords("network", network_keywords)
+
+    logger.info("✅ Added extended security and network keywords")
 
 
 def main():
     """Entry point for workflow classification management utility."""
     classifier = WorkflowClassifier()
 
-    print("🤖 AutoBot Classification Management")
-    print("=" * 50)
+    logger.info("🤖 AutoBot Classification Management")
+    logger.info("=" * 50)
 
-    # Show current statistics
-    stats = classifier.get_classification_stats()
-    print("📊 Current Statistics:")
-    print(f"   Categories: {stats.get('total_categories', 0)}")
-    print(f"   Keywords: {stats.get('total_keywords', 0)}")
-    print(f"   Rules: {stats.get('total_rules', 0)}")
-    print()
-
-    # Show categories and keywords
-    print("📝 Categories and Keywords:")
-    for category, count in stats.get("categories", {}).items():
-        keywords = classifier.get_keywords(category)
-        print(f"   {category}: {keywords}")
-    print()
+    _show_initial_stats(classifier)
 
     # Interactive management
     while True:
-        print("Actions:")
-        print("1. Add keywords to category")
-        print("2. Test message classification")
-        print("3. Show statistics")
-        print("4. Add security keywords")
-        print("5. Exit")
+        logger.info("Actions:")
+        logger.info("1. Add keywords to category")
+        logger.info("2. Test message classification")
+        logger.info("3. Show statistics")
+        logger.info("4. Add security keywords")
+        logger.info("5. Exit")
 
         choice = safe_input("\nChoice (1-5): ", default="5").strip()
 
         if choice == "1":
-            category = safe_input("Enter category: ", default="test").strip()
-            keywords_input = safe_input(
-                "Enter keywords (comma-separated): ", default="test,example"
-            ).strip()
-            if category and keywords_input:
-                keywords = [kw.strip() for kw in keywords_input.split(",")]
-                classifier.add_keywords(category, keywords)
-                print(f"✅ Added {len(keywords)} keywords to {category}")
-
+            _handle_add_keywords(classifier)
         elif choice == "2":
-            message = safe_input(
-                "Enter message to classify: ", default="test message"
-            ).strip()
-            if message:
-                complexity = classifier.classify_request(message)
-                print(f"📋 Classification: {complexity.value}")
-
+            _handle_test_classification(classifier)
         elif choice == "3":
             stats = classifier.get_classification_stats()
-            print(json.dumps(stats, indent=2))
-
+            logger.info(json.dumps(stats, indent=2))
         elif choice == "4":
-            # Add common security keywords
-            security_keywords = [
-                "pentest",
-                "vulnerability",
-                "malware",
-                "threat",
-                "attack",
-                "breach",
-                "intrusion",
-                "forensics",
-                "hardening",
-                "compliance",
-            ]
-            classifier.add_keywords("security", security_keywords)
-
-            network_keywords = [
-                "subnet",
-                "vlan",
-                "dns",
-                "dhcp",
-                "proxy",
-                "gateway",
-                "switch",
-                "hub",
-                "wireless",
-                "ethernet",
-            ]
-            classifier.add_keywords("network", network_keywords)
-
-            print("✅ Added extended security and network keywords")
-
+            _handle_add_security_keywords(classifier)
         elif choice == "5":
-            print("👋 Goodbye!")
+            logger.info("👋 Goodbye!")
             break
-
         else:
-            print("❌ Invalid choice")
+            logger.error("❌ Invalid choice")
 
-        print()
+        logger.info("")
 
 
 if __name__ == "__main__":

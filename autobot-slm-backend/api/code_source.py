@@ -12,14 +12,13 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from models.database import CodeSource, CodeStatus, Node, NodeRole, RoleStatus, Setting
 from pydantic import BaseModel
+from services.auth import get_current_user
+from services.database import get_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
-
-from models.database import CodeSource, Node, NodeRole, RoleStatus
-from services.auth import get_current_user
-from services.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-source", tags=["code-source"])
@@ -45,7 +44,7 @@ class CodeSourceAssign(BaseModel):
     """Assign code-source to a node."""
 
     node_id: str
-    repo_path: str = "/home/kali/Desktop/AutoBot"
+    repo_path: str = "/opt/autobot"
     branch: str = "main"
 
 
@@ -96,23 +95,11 @@ async def get_active_code_source(
     )
 
 
-@router.post("/assign", response_model=CodeSourceResponse)
-async def assign_code_source(
-    data: CodeSourceAssign,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> CodeSourceResponse:
-    """Assign a node as code-source."""
-    # Verify node exists
-    node_result = await db.execute(select(Node).where(Node.node_id == data.node_id))
-    node = node_result.scalar_one_or_none()
+async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> CodeSource:
+    """Deactivate existing sources and create/update the target source.
 
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Node not found: {data.node_id}",
-        )
-
+    Helper for assign_code_source (#829).
+    """
     # Deactivate any existing code-source
     existing_result = await db.execute(
         select(CodeSource).where(CodeSource.is_active.is_(True))
@@ -139,23 +126,49 @@ async def assign_code_source(
         )
         db.add(source)
 
-    # Add code-source role to node
+    return source
+
+
+async def _ensure_code_source_role(db: AsyncSession, node_id: str) -> None:
+    """Ensure the node has the code-source role assigned.
+
+    Helper for assign_code_source (#829).
+    """
     role_result = await db.execute(
         select(NodeRole).where(
-            NodeRole.node_id == data.node_id,
+            NodeRole.node_id == node_id,
             NodeRole.role_name == "code-source",
         )
     )
-    node_role = role_result.scalar_one_or_none()
-
-    if not node_role:
-        node_role = NodeRole(
-            node_id=data.node_id,
-            role_name="code-source",
-            assignment_type="manual",
-            status=RoleStatus.ACTIVE.value,
+    if not role_result.scalar_one_or_none():
+        db.add(
+            NodeRole(
+                node_id=node_id,
+                role_name="code-source",
+                assignment_type="manual",
+                status=RoleStatus.ACTIVE.value,
+            )
         )
-        db.add(node_role)
+
+
+@router.post("/assign", response_model=CodeSourceResponse)
+async def assign_code_source(
+    data: CodeSourceAssign,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> CodeSourceResponse:
+    """Assign a node as code-source."""
+    node_result = await db.execute(select(Node).where(Node.node_id == data.node_id))
+    node = node_result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Node not found: {data.node_id}",
+        )
+
+    source = await _upsert_code_source(db, data)
+    await _ensure_code_source_role(db, data.node_id)
 
     await db.commit()
     await db.refresh(source)
@@ -196,6 +209,67 @@ async def remove_code_source(
     return {"success": True, "message": "Code-source removed"}
 
 
+async def _update_code_sync_state(db: AsyncSession, node_id: str, commit: str) -> int:
+    """Update latest version setting and mark other nodes outdated.
+
+    Helper for notify_new_commit (#829).
+
+    Returns:
+        Number of nodes marked as outdated.
+    """
+    # Update slm_agent_latest_commit setting so /code-sync/status
+    # reflects the new version
+    setting_result = await db.execute(
+        select(Setting).where(Setting.key == "slm_agent_latest_commit")
+    )
+    setting = setting_result.scalar_one_or_none()
+    if setting:
+        setting.value = commit
+    else:
+        db.add(Setting(key="slm_agent_latest_commit", value=commit))
+
+    # Mark all other nodes as outdated so /code-sync/pending
+    # shows them as needing updates
+    outdated_result = await db.execute(
+        select(Node).where(
+            Node.node_id != node_id,
+            Node.code_version != commit,
+        )
+    )
+    outdated_nodes = outdated_result.scalars().all()
+    for outdated_node in outdated_nodes:
+        outdated_node.code_status = CodeStatus.OUTDATED.value
+
+    return len(outdated_nodes)
+
+
+async def _broadcast_commit_notification(
+    notification: CodeNotification, outdated_count: int
+) -> None:
+    """Broadcast new commit via WebSocket.
+
+    Helper for notify_new_commit (#829).
+    """
+    try:
+        from api.websocket import ws_manager
+
+        await ws_manager.broadcast(
+            {
+                "type": "code_source.new_commit",
+                "data": {
+                    "commit": notification.commit,
+                    "branch": notification.branch,
+                    "message": notification.message,
+                    "node_id": notification.node_id,
+                    "outdated_nodes": outdated_count,
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            }
+        )
+    except Exception as e:
+        logger.debug("Failed to broadcast commit notification: %s", e)
+
+
 @router.post("/notify", response_model=CodeNotificationResponse)
 async def notify_new_commit(
     notification: CodeNotification,
@@ -225,44 +299,35 @@ async def notify_new_commit(
     source.last_known_commit = notification.commit
     source.last_notified_at = datetime.utcnow()
 
-    # Update node's code_version
+    # Update source node's code_version and mark as up-to-date
     node_result = await db.execute(
         select(Node).where(Node.node_id == notification.node_id)
     )
     node = node_result.scalar_one_or_none()
     if node:
         node.code_version = notification.commit
+        node.code_status = CodeStatus.UP_TO_DATE.value
+
+    # Update code-sync status and mark fleet nodes outdated (#829)
+    outdated_count = await _update_code_sync_state(
+        db, notification.node_id, notification.commit
+    )
 
     await db.commit()
 
     logger.info(
-        "Code notification received: commit=%s from node=%s",
+        "Code notification received: commit=%s from node=%s, "
+        "%d nodes marked outdated",
         notification.commit[:12],
         notification.node_id,
+        outdated_count,
     )
 
-    # Broadcast via WebSocket
-    try:
-        from api.websocket import ws_manager
-
-        await ws_manager.broadcast(
-            {
-                "type": "code_source.new_commit",
-                "data": {
-                    "commit": notification.commit,
-                    "branch": notification.branch,
-                    "message": notification.message,
-                    "node_id": notification.node_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-            }
-        )
-    except Exception as e:
-        logger.debug("Failed to broadcast commit notification: %s", e)
+    await _broadcast_commit_notification(notification, outdated_count)
 
     return CodeNotificationResponse(
         success=True,
         message=f"Commit {notification.commit[:12]} recorded",
         commit=notification.commit,
-        outdated_nodes=0,
+        outdated_nodes=outdated_count,
     )

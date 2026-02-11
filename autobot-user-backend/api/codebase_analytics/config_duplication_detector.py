@@ -539,7 +539,11 @@ if __name__ == "__main__":
     # Test the detector
     import sys
 
-    project_root = sys.argv[1] if len(sys.argv) > 1 else "/home/kali/Desktop/AutoBot"
+    project_root = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+    )
     result = detect_config_duplicates(project_root)
 
     logger.info(result["report"])

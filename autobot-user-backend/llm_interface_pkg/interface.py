@@ -22,6 +22,7 @@ from constants.model_constants import ModelConstants
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
+from autobot_shared.tracing import get_tracer
 from config import UnifiedConfigManager
 
 from .cache import CachedResponse, get_llm_cache
@@ -84,6 +85,9 @@ except ImportError:
     logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
 
 config = UnifiedConfigManager()
+
+# Issue #697: OpenTelemetry tracer for LLM operations
+_llm_tracer = get_tracer("autobot.llm")
 
 
 class LLMInterface:
@@ -934,24 +938,36 @@ class LLMInterface:
         request_id = kwargs.get("request_id", str(uuid.uuid4()))
         skip_cache = kwargs.pop("skip_cache", False)
 
-        try:
-            self._metrics["total_requests"] += 1
-            return await self._execute_chat_request(
-                messages, llm_type, request_id, start_time, skip_cache, **kwargs
-            )
-        except Exception as e:
-            processing_time = time.time() - start_time
-            self._update_metrics("unknown", processing_time, success=False)
-            logger.error("Chat completion error: %s", e)
+        # Issue #697: Trace the full chat completion lifecycle
+        with _llm_tracer.start_as_current_span("llm.chat_completion") as span:
+            span.set_attribute("llm.type", llm_type)
+            span.set_attribute("llm.request_id", request_id)
+            span.set_attribute("llm.message_count", len(messages))
 
-            return LLMResponse(
-                content=f"Error: {str(e)}",
-                model="error",
-                provider="error",
-                processing_time=processing_time,
-                request_id=request_id,
-                error=str(e),
-            )
+            try:
+                self._metrics["total_requests"] += 1
+                response = await self._execute_chat_request(
+                    messages, llm_type, request_id, start_time, skip_cache, **kwargs
+                )
+                span.set_attribute("llm.model", response.model or "unknown")
+                span.set_attribute("llm.provider", response.provider or "unknown")
+                span.set_attribute("llm.cached", getattr(response, "cached", False))
+                span.set_attribute("llm.error", bool(response.error))
+                return response
+            except Exception as e:
+                processing_time = time.time() - start_time
+                self._update_metrics("unknown", processing_time, success=False)
+                logger.error("Chat completion error: %s", e)
+                span.record_exception(e)
+
+                return LLMResponse(
+                    content=f"Error: {str(e)}",
+                    model="error",
+                    provider="error",
+                    processing_time=processing_time,
+                    request_id=request_id,
+                    error=str(e),
+                )
 
     def _mark_fallback_response(
         self, response: LLMResponse, provider_name: str, primary_provider: str
@@ -1059,17 +1075,23 @@ class LLMInterface:
 
         Issue #717: Rate limit handling for cloud providers.
         Issue #620: Extracted from _execute_with_fallback.
+        Issue #697: Added OpenTelemetry span for provider-level tracing.
         """
-        handler = self.provider_routing[provider_name]
-        provider_type = self._get_provider_type_enum(provider_name)
-        if self._optimization_router.should_apply(
-            OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
-        ):
-            return await self._rate_limiter.execute_with_retry(
-                lambda h=handler, r=request: h(r),
-                provider=provider_name,
-            )
-        return await handler(request)
+        # Issue #697: Trace individual provider execution
+        with _llm_tracer.start_as_current_span(f"llm.provider.{provider_name}") as span:
+            span.set_attribute("llm.provider", provider_name)
+            span.set_attribute("llm.model", request.model_name or "")
+
+            handler = self.provider_routing[provider_name]
+            provider_type = self._get_provider_type_enum(provider_name)
+            if self._optimization_router.should_apply(
+                OptimizationCategory.RATE_LIMIT_HANDLING, provider_type
+            ):
+                return await self._rate_limiter.execute_with_retry(
+                    lambda h=handler, r=request: h(r),
+                    provider=provider_name,
+                )
+            return await handler(request)
 
     def _determine_provider_and_model(self, llm_type: str, **kwargs) -> tuple[str, str]:
         """Determine the best provider and model for the request."""

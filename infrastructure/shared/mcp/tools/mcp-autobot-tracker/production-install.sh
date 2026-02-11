@@ -5,7 +5,14 @@
 
 set -e
 
-echo "🚀 Installing MCP AutoBot Tracker for Production..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
+echo "Installing MCP AutoBot Tracker for Production..."
 
 # Check if we're in the right directory
 if [[ ! -f "package.json" ]]; then
@@ -25,7 +32,7 @@ node -e "
 const { createClient } = require('redis');
 (async () => {
     try {
-        const redis = createClient({ socket: { host: '172.16.168.23', port: 6379 } });
+        const redis = createClient({ socket: { host: process.env.REDIS_HOST || '${AUTOBOT_REDIS_HOST:-172.16.168.23}', port: parseInt(process.env.REDIS_PORT || '${AUTOBOT_REDIS_PORT:-6379}') } });
         await redis.connect();
         await redis.ping();
         await redis.quit();
@@ -135,6 +142,6 @@ echo "   • Insights: Use 'get_insights' MCP tool"
 echo ""
 echo "📊 Monitoring:"
 echo "   • Check logs with: journalctl -u mcp-autobot-tracker -f"
-echo "   • Monitor Redis: redis-cli -h 172.16.168.23 monitor"
+echo "   • Monitor Redis: redis-cli -h ${AUTOBOT_REDIS_HOST:-172.16.168.23} monitor"
 echo ""
 echo "✨ Your AutoBot system now has comprehensive chat tracking and task correlation!"

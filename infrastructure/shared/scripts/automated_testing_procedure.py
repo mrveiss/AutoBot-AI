@@ -10,6 +10,7 @@ Implements comprehensive testing across the entire AutoBot codebase
 import asyncio
 import importlib
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -22,6 +23,10 @@ import aiohttp
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,13 +58,13 @@ class AutomatedTestingSuite:
             "api_tests": [],
         }
         # Import configuration from centralized source
-        from src.config import API_BASE_URL
+        from config import API_BASE_URL
 
         self.backend_url = API_BASE_URL
 
     def run_unit_tests(self) -> List[TestResult]:
         """Run Python unit tests"""
-        print("🧪 Running unit tests...")
+        logger.info("Running unit tests...")
 
         unit_results = []
         test_dirs = ["tests/", "src/", "backend/"]
@@ -69,7 +74,7 @@ class AutomatedTestingSuite:
             if not test_path.exists():
                 continue
 
-            print(f"  Scanning {test_dir} for unit tests...")
+            logger.info("  Scanning %s for unit tests...", test_dir)
 
             # Find test files
             test_files = list(test_path.rglob("test_*.py"))
@@ -144,7 +149,7 @@ class AutomatedTestingSuite:
 
     def run_integration_tests(self) -> List[TestResult]:
         """Run integration tests"""
-        print("🔗 Running integration tests...")
+        logger.info("🔗 Running integration tests...")
 
         integration_results = []
 
@@ -272,7 +277,7 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from src.config import global_config_manager
+            from config import global_config_manager
 
             # Test basic config access
             global_config_manager.get("backend", {})
@@ -296,7 +301,7 @@ class AutomatedTestingSuite:
 
     async def run_api_tests(self) -> List[TestResult]:
         """Run API endpoint tests"""
-        print("🌐 Running API tests...")
+        logger.info("🌐 Running API tests...")
 
         api_results = []
 
@@ -361,7 +366,7 @@ class AutomatedTestingSuite:
 
     def run_performance_tests(self) -> List[TestResult]:
         """Run performance tests"""
-        print("⚡ Running performance tests...")
+        logger.info("⚡ Running performance tests...")
 
         perf_results = []
 
@@ -416,7 +421,7 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from src.config import global_config_manager
+            from config import global_config_manager
 
             # Measure config access time
             for _ in range(100):
@@ -446,7 +451,7 @@ class AutomatedTestingSuite:
 
     def run_security_tests(self) -> List[TestResult]:
         """Run security tests"""
-        print("🔒 Running security tests...")
+        logger.info("🔒 Running security tests...")
 
         security_results = []
 
@@ -466,7 +471,7 @@ class AutomatedTestingSuite:
         start_time = time.time()
 
         try:
-            from src.security.command_validator import get_command_validator
+            from security.command_validator import get_command_validator
 
             validator = get_command_validator()
 
@@ -554,7 +559,7 @@ class AutomatedTestingSuite:
 
     def run_code_quality_tests(self) -> List[TestResult]:
         """Run code quality tests"""
-        print("✨ Running code quality tests...")
+        logger.info("✨ Running code quality tests...")
 
         quality_results = []
 
@@ -660,8 +665,8 @@ class AutomatedTestingSuite:
 
     async def run_comprehensive_tests(self) -> Dict[str, Any]:
         """Run all test suites"""
-        print("🚀 Starting comprehensive testing procedure...")
-        print("=" * 60)
+        logger.info("🚀 Starting comprehensive testing procedure...")
+        logger.info("=" * 60)
 
         start_time = time.time()
 
@@ -696,22 +701,22 @@ class AutomatedTestingSuite:
 
         self.results["summary"] = summary
 
-        print("\n" + "=" * 60)
-        print("📊 TESTING SUMMARY")
-        print("=" * 60)
-        print(f"Total tests: {summary['total_tests']}")
-        print(f"✅ Passed: {summary['passed']}")
-        print(f"❌ Failed: {summary['failed']}")
-        print(f"🔥 Errors: {summary['errors']}")
-        print(f"⏭️  Skipped: {summary['skipped']}")
-        print(f"⏱️  Duration: {summary['total_duration']:.2f}s")
+        logger.info("\n" + "=" * 60)
+        logger.info("📊 TESTING SUMMARY")
+        logger.info("=" * 60)
+        logger.info(f"Total tests: {summary['total_tests']}")
+        logger.info(f"✅ Passed: {summary['passed']}")
+        logger.error(f"❌ Failed: {summary['failed']}")
+        logger.error(f"🔥 Errors: {summary['errors']}")
+        logger.info(f"⏭️  Skipped: {summary['skipped']}")
+        logger.info(f"⏱️  Duration: {summary['total_duration']:.2f}s")
 
         success_rate = (
             (summary["passed"] / summary["total_tests"]) * 100
             if summary["total_tests"] > 0
             else 0
         )
-        print(f"📈 Success rate: {success_rate:.1f}%")
+        logger.info(f"📈 Success rate: {success_rate:.1f}%")
 
         return self.results
 
@@ -725,7 +730,7 @@ class AutomatedTestingSuite:
         with open(output_file, "w") as f:
             json.dump(self.results, f, indent=2, default=str)
 
-        print(f"\n📁 Test results saved to: {output_file}")
+        logger.info(f"\n📁 Test results saved to: {output_file}")
 
 
 async def main():
@@ -751,11 +756,11 @@ async def main():
                 failed_tests.append(test)
 
     if failed_tests:
-        print("\n" + "=" * 60)
-        print("❌ FAILED TESTS DETAILS")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.error("❌ FAILED TESTS DETAILS")
+        logger.info("=" * 60)
         for test in failed_tests[:10]:  # Show first 10 failures
-            print(f"• {test['name']}: {test['message']}")
+            logger.info(f"• {test['name']}: {test['message']}")
 
 
 if __name__ == "__main__":

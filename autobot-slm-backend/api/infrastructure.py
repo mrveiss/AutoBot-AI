@@ -179,6 +179,46 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         estimated_duration="5-10 minutes",
         requires_confirmation=True,
     ),
+    PlaybookInfo(
+        id="provision-fleet",
+        name="Auto-Provision Fleet Nodes",
+        description="Provision all fleet nodes with their assigned roles. "
+        "Deploys common baseline, SLM agent, and role-specific "
+        "configuration (redis, backend, frontend, AI, NPU, browser) "
+        "in dependency order.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="provision-fleet-roles.yml",
+        target_hosts=["slm_nodes"],
+        variables={},
+        estimated_duration="20-30 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="seed-fleet",
+        name="Seed Fleet Nodes",
+        description="Register all inventory nodes in the SLM database "
+        "via the REST API. Assigns roles for heartbeat acceptance "
+        "and fleet dashboard visibility.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="seed-fleet-nodes.yml",
+        target_hosts=["localhost"],
+        variables={},
+        estimated_duration="1-2 minutes",
+        requires_confirmation=False,
+    ),
+    PlaybookInfo(
+        id="full-slm-deploy",
+        name="Full SLM Deployment",
+        description="Complete SLM setup pipeline: PostgreSQL, backend, "
+        "frontend, nginx, TLS, monitoring, seed nodes, and "
+        "auto-provision all fleet roles.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="deploy-slm-manager.yml",
+        target_hosts=["00-SLM-Manager", "slm_nodes"],
+        variables={},
+        estimated_duration="30-45 minutes",
+        requires_confirmation=True,
+    ),
 ]
 
 # In-memory storage for executions (in production, use database)
@@ -318,13 +358,13 @@ async def _run_playbook(
 
         # Check if playbook exists
         if not os.path.exists(playbook_path):
+            execution.status = PlaybookStatus.FAILED
+            execution.completed_at = datetime.now(timezone.utc)
             execution.output.append(
-                f"[WARNING] Playbook file not found: {playbook_path}"
+                f"[ERROR] Playbook not found: {playbook_path}. "
+                "Deploy playbooks via Ansible first."
             )
-            execution.output.append("[INFO] Using simulation mode for demonstration")
-
-            # Simulate playbook execution for demo purposes
-            await _simulate_playbook_execution(execution, playbook)
+            logger.error("Playbook file missing: %s", playbook_path)
             return
 
         inventory_dir = os.path.join(os.path.dirname(PLAYBOOKS_DIR), "inventory")
@@ -384,100 +424,3 @@ async def _run_playbook(
 
     finally:
         execution.completed_at = datetime.now(timezone.utc)
-
-
-def _get_user_management_db_steps() -> list[str]:
-    """Get simulation steps for user-management-db playbook (#786)."""
-    return [
-        "",
-        "TASK [Install PostgreSQL 16] *****",
-        "changed: [slm]",
-        "changed: [redis]",
-        "",
-        "TASK [Configure postgresql.conf] *****",
-        "changed: [slm]",
-        "changed: [redis]",
-        "",
-        "TASK [Configure pg_hba.conf] *****",
-        "changed: [slm]",
-        "changed: [redis]",
-        "",
-        "TASK [Create database user] *****",
-        "changed: [slm]",
-        "changed: [redis]",
-        "",
-        "TASK [Create databases] *****",
-        "changed: [slm] => (item=slm)",
-        "changed: [slm] => (item=slm_users)",
-        "changed: [redis] => (item=autobot_users)",
-        "",
-        "TASK [Save credentials] *****",
-        "changed: [slm]",
-        "changed: [redis]",
-        "",
-        "TASK [Verify connectivity] *****",
-        "ok: [slm]",
-        "",
-        "PLAY RECAP *****",
-        "slm                        : ok=8    changed=6    unreachable=0    failed=0",
-        "redis                      : ok=7    changed=5    unreachable=0    failed=0",
-    ]
-
-
-def _get_generic_playbook_steps(hosts: list[str]) -> list[str]:
-    """Get simulation steps for generic playbook (#786)."""
-    return [
-        "",
-        "TASK [Install dependencies] *****",
-        *[f"changed: [{host}]" for host in hosts],
-        "",
-        "TASK [Configure service] *****",
-        *[f"changed: [{host}]" for host in hosts],
-        "",
-        "TASK [Start service] *****",
-        *[f"ok: [{host}]" for host in hosts],
-        "",
-        "PLAY RECAP *****",
-        *[
-            f"{host:24} : ok=4    changed=2    unreachable=0    failed=0"
-            for host in hosts
-        ],
-    ]
-
-
-async def _stream_simulation_output(
-    execution: PlaybookExecution,
-    steps: list[str],
-) -> None:
-    """Stream simulation output with delays (#786)."""
-    for line in steps:
-        if execution.status == PlaybookStatus.CANCELLED:
-            return
-        execution.output.append(line)
-        await asyncio.sleep(0.3)
-
-    execution.status = PlaybookStatus.COMPLETED
-    execution.output.append("")
-    execution.output.append(
-        "[SUCCESS] Playbook completed successfully (simulation mode)"
-    )
-
-
-async def _simulate_playbook_execution(
-    execution: PlaybookExecution,
-    playbook: PlaybookInfo,
-) -> None:
-    """Simulate playbook execution for demonstration when playbook file not found."""
-    steps = [
-        f"PLAY [{playbook.name}]",
-        "",
-        "TASK [Gathering Facts] *****",
-        *[f"ok: [{host}]" for host in playbook.target_hosts],
-    ]
-
-    if playbook.id == "user-management-db":
-        steps.extend(_get_user_management_db_steps())
-    else:
-        steps.extend(_get_generic_playbook_steps(playbook.target_hosts))
-
-    await _stream_simulation_output(execution, steps)

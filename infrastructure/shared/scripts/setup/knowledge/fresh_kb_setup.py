@@ -9,34 +9,37 @@ Fresh knowledge base setup - let llama_index create everything from scratch.
 import asyncio
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 
-async def fresh_setup():
-    """Complete fresh setup of knowledge base."""
+def _clean_redis_indexes(r) -> None:
+    """Clean Redis indexes.
 
-    print("=== Fresh Knowledge Base Setup ===")
-
-    # Step 1: Clean Redis completely
-    print("\n1. Cleaning Redis...")
-    r = get_redis_client(database="main")
-
-    # Drop any existing indexes
+    Helper for fresh_setup (Issue #825).
+    """
     try:
         indexes = r.execute_command("FT._LIST")
         for idx in indexes:
             idx_name = idx.decode() if isinstance(idx, bytes) else idx
             r.execute_command("FT.DROPINDEX", idx_name, "DD")
-            print(f"   Dropped index: {idx_name}")
+            logger.info(f"   Dropped index: {idx_name}")
     except Exception as e:
-        print(f"   No indexes to drop: {e}")
+        logger.info(f"   No indexes to drop: {e}")
 
-    # Clean specific databases using centralized client
+
+def _clean_redis_databases() -> None:
+    """Clean Redis databases.
+
+    Helper for fresh_setup (Issue #825).
+    """
     database_names = [
         "main",
         "knowledge",
@@ -55,30 +58,16 @@ async def fresh_setup():
             r_db = get_redis_client(database=db_name)
             if r_db is not None:
                 r_db.flushdb()
-                print(f"   Flushed {db_name} database")
+                logger.info(f"   Flushed {db_name} database")
         except Exception as e:
-            print(f"   Could not flush {db_name}: {e}")
+            logger.info(f"   Could not flush {db_name}: {e}")
 
-    print("   Redis cleaned!")
 
-    # Step 2: Initialize knowledge base fresh
-    print("\n2. Initializing fresh knowledge base...")
+def _create_test_document() -> str:
+    """Create a test document for knowledge base.
 
-    # Import after cleaning
-    from src.knowledge_base import KnowledgeBase
-
-    kb = KnowledgeBase()
-    print(f"   Will use embedding model: {kb.embedding_model_name}")
-    print(f"   Will use Redis DB: {kb.redis_db}")
-    print(f"   Will use index name: {kb.redis_index_name}")
-
-    # Initialize
-    await kb.ainit()
-    print("   Knowledge base initialized!")
-
-    # Step 3: Test with a simple document
-    print("\n3. Testing with sample document...")
-
+    Helper for fresh_setup (Issue #825).
+    """
     test_file = "/tmp/test_kb_doc.md"
     with open(test_file, "w") as f:
         f.write(
@@ -98,6 +87,17 @@ AutoBot is an autonomous AI agent platform designed for enterprise use.
 To install AutoBot, follow the setup guide in the README.
 """
         )
+    return test_file
+
+
+async def _test_knowledge_base(kb, r) -> bool:
+    """Test knowledge base with sample document.
+
+    Helper for fresh_setup (Issue #825).
+    """
+    logger.info("\n3. Testing with sample document...")
+
+    test_file = _create_test_document()
 
     result = await kb.add_file(
         file_path=test_file,
@@ -105,20 +105,18 @@ To install AutoBot, follow the setup guide in the README.
         metadata={"source": "test", "category": "documentation"},
     )
 
-    print(f"   Add result: {result}")
+    logger.info(f"   Add result: {result}")
 
     if result["status"] == "success":
-        # Test search
         results = await kb.search("AutoBot features", n_results=2)
-        print(f"\n4. Search test results: {len(results)} found")
+        logger.info(f"\n4. Search test results: {len(results)} found")
         if results:
-            print(f"   First result score: {results[0].get('score', 0)}")
-            print(f"   Content preview: {results[0].get('content', '')[:100]}...")
+            logger.info(f"   First result score: {results[0].get('score', 0)}")
+            logger.info(f"   Content preview: {results[0].get('content', '')[:100]}...")
 
-        # Check the index
-        print("\n5. Checking created index...")
+        logger.info("\n5. Checking created index...")
         indexes = r.execute_command("FT._LIST")
-        print(f"   Indexes: {indexes}")
+        logger.info(f"   Indexes: {indexes}")
 
         if indexes:
             idx_name = (
@@ -131,19 +129,47 @@ To install AutoBot, follow the setup guide in the README.
                 if b"vector" in attr:
                     for i, item in enumerate(attr):
                         if item == b"dim":
-                            print(f"   Vector dimension: {attr[i+1]}")
+                            logger.info(f"   Vector dimension: {attr[i+1]}")
                             break
 
         return True
     else:
-        print(f"\n   Error: {result.get('message', 'Unknown error')}")
+        logger.error(f"\n   Error: {result.get('message', 'Unknown error')}")
         return False
+
+
+async def fresh_setup():
+    """Complete fresh setup of knowledge base."""
+
+    logger.info("=== Fresh Knowledge Base Setup ===")
+
+    logger.info("\n1. Cleaning Redis...")
+    r = get_redis_client(database="main")
+
+    _clean_redis_indexes(r)
+    _clean_redis_databases()
+
+    logger.info("   Redis cleaned!")
+
+    logger.info("\n2. Initializing fresh knowledge base...")
+
+    from knowledge_base import KnowledgeBase
+
+    kb = KnowledgeBase()
+    logger.info(f"   Will use embedding model: {kb.embedding_model_name}")
+    logger.info(f"   Will use Redis DB: {kb.redis_db}")
+    logger.info(f"   Will use index name: {kb.redis_index_name}")
+
+    await kb.ainit()
+    logger.info("   Knowledge base initialized!")
+
+    return await _test_knowledge_base(kb, r)
 
 
 if __name__ == "__main__":
     success = asyncio.run(fresh_setup())
     if success:
-        print("\n✓ Knowledge base setup successful!")
-        print("You can now run populate_knowledge_base.py")
+        logger.info("\n✓ Knowledge base setup successful!")
+        logger.info("You can now run populate_knowledge_base.py")
     else:
-        print("\n✗ Knowledge base setup failed!")
+        logger.error("\n✗ Knowledge base setup failed!")

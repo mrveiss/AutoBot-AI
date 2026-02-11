@@ -18,8 +18,7 @@ These tests verify:
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi import Request
-from src.auth_rbac import (
+from auth_rbac import (
     ROLE_PERMISSIONS,
     Permission,
     Role,
@@ -29,6 +28,7 @@ from src.auth_rbac import (
     require_permission,
     require_role,
 )
+from fastapi import Request
 
 
 class TestPermissionEnum:
@@ -192,7 +192,7 @@ class TestRequirePermissionDecorator:
     @patch("src.user_management.config.get_deployment_config")
     def test_single_user_mode_bypass(self, mock_config):
         """Should bypass permission check in single-user mode."""
-        from src.user_management.config import DeploymentMode
+        from user_management.config import DeploymentMode
 
         mock_deployment = Mock()
         mock_deployment.mode = DeploymentMode.SINGLE_USER
@@ -222,7 +222,7 @@ class TestRequireRoleDecorator:
     @patch("src.user_management.config.get_deployment_config")
     def test_single_user_mode_bypass(self, mock_config):
         """Should bypass role check in single-user mode."""
-        from src.user_management.config import DeploymentMode
+        from user_management.config import DeploymentMode
 
         mock_deployment = Mock()
         mock_deployment.mode = DeploymentMode.SINGLE_USER
@@ -252,7 +252,7 @@ class TestRequireAnyPermission:
     @patch("src.user_management.config.get_deployment_config")
     def test_single_user_mode_bypass(self, mock_config):
         """Should bypass permission check in single-user mode."""
-        from src.user_management.config import DeploymentMode
+        from user_management.config import DeploymentMode
 
         mock_deployment = Mock()
         mock_deployment.mode = DeploymentMode.SINGLE_USER

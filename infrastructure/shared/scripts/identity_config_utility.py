@@ -18,10 +18,84 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+async def _add_identity_to_kb(kb, content: str, metadata: dict) -> bool:
+    """
+    Add identity document to knowledge base.
+
+    Helper for main (#825).
+
+    Args:
+        kb: KnowledgeBase instance
+        content: Document content
+        metadata: Document metadata
+
+    Returns:
+        True if successful, False otherwise
+    """
+    # Method 1: Try direct addition if method exists
+    if hasattr(kb, "add_document"):
+        await kb.add_document(content, metadata)
+        logger.info("Successfully added AutoBot identity using add_document method")
+        return True
+
+    if hasattr(kb, "add_documents"):
+        await kb.add_documents([{"content": content, "metadata": metadata}])
+        logger.info("Successfully added AutoBot identity using add_documents method")
+        return True
+
+    logger.warning(
+        "Knowledge base doesn't have standard add methods, trying alternative approach..."
+    )
+
+    # Method 2: Try through vector store if available
+    if hasattr(kb, "vector_store") and kb.vector_store:
+        from llama_index.core import Document
+
+        doc = Document(text=content, metadata=metadata)
+        kb.vector_store.add([doc])
+        logger.info("Successfully added AutoBot identity through vector store")
+        return True
+
+    logger.error("Could not find suitable method to add document to knowledge base")
+    return False
+
+
+async def _test_kb_search(kb) -> None:
+    """
+    Test knowledge base search functionality.
+
+    Helper for main (#825).
+
+    Args:
+        kb: KnowledgeBase instance
+    """
+    logger.info("Testing knowledge base search for 'what is autobot'...")
+
+    if hasattr(kb, "search"):
+        results = await kb.search("what is autobot", limit=5)
+    elif hasattr(kb, "query"):
+        results = await kb.query("what is autobot", limit=5)
+    else:
+        logger.warning("Could not test search - no search method found")
+        return
+
+    if results:
+        logger.info("Search returned %s results", len(results))
+        for i, result in enumerate(results[:2], 1):
+            logger.info(
+                "Result %s: %s (score: %s)",
+                i,
+                result.get("title", "No title"),
+                result.get("score", "N/A"),
+            )
+    else:
+        logger.warning("Search returned no results - identity may not be indexed yet")
 
 
 async def main():
@@ -67,66 +141,15 @@ async def main():
         # Add to knowledge base with high priority
         logger.info("Adding AutoBot identity to knowledge base...")
         try:
-            # Method 1: Try direct addition if method exists
-            if hasattr(kb, "add_document"):
-                await kb.add_document(content, metadata)
-                logger.info(
-                    "Successfully added AutoBot identity using add_document method"
-                )
-            elif hasattr(kb, "add_documents"):
-                await kb.add_documents([{"content": content, "metadata": metadata}])
-                logger.info(
-                    "Successfully added AutoBot identity using add_documents method"
-                )
-            else:
-                logger.warning(
-                    "Knowledge base doesn't have standard add methods, trying alternative approach..."
-                )
-
-                # Method 2: Try through vector store if available
-                if hasattr(kb, "vector_store") and kb.vector_store:
-                    from llama_index.core import Document
-
-                    doc = Document(text=content, metadata=metadata)
-                    kb.vector_store.add([doc])
-                    logger.info(
-                        "Successfully added AutoBot identity through vector store"
-                    )
-                else:
-                    logger.error(
-                        "Could not find suitable method to add document to knowledge base"
-                    )
-                    return
-
+            if not await _add_identity_to_kb(kb, content, metadata):
+                return
         except Exception as e:
             logger.error("Error adding document to knowledge base: %s", e)
             return
 
         # Test search to verify
-        logger.info("Testing knowledge base search for 'what is autobot'...")
         try:
-            if hasattr(kb, "search"):
-                results = await kb.search("what is autobot", limit=5)
-            elif hasattr(kb, "query"):
-                results = await kb.query("what is autobot", limit=5)
-            else:
-                logger.warning("Could not test search - no search method found")
-                results = []
-
-            if results:
-                logger.info("Search returned %s results", len(results))
-                for i, result in enumerate(results[:2], 1):
-                    logger.info(
-                        "Result %s: %s (score: %s)",
-                        i,
-                        result.get("title", "No title"),
-                        result.get("score", "N/A"),
-                    )
-            else:
-                logger.warning(
-                    "Search returned no results - identity may not be indexed yet"
-                )
-
+            await _test_kb_search(kb)
         except Exception as e:
             logger.error("Error testing search: %s", e)
 

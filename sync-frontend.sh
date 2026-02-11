@@ -45,7 +45,7 @@ else
 fi
 
 # Check if we're in the right directory
-if [[ ! -f "autobot-vue/package.json" ]]; then
+if [[ ! -f "autobot-slm-frontend/package.json" ]]; then
     echo -e "${RED}❌ Error: Must run from AutoBot root directory${NC}"
     echo "Current directory: $(pwd)"
     echo "Expected: /home/kali/Desktop/AutoBot"
@@ -71,7 +71,7 @@ if [[ "$DEV_MODE" == "true" ]]; then
     echo -e "${YELLOW}📁 Syncing source files to frontend VM...${NC}"
     start_time=$(date +%s)
 
-    if ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/src/ /home/autobot/autobot-vue/src/; then
+    if ./scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/src/ /home/autobot/autobot-slm-frontend/src/; then
         end_time=$(date +%s)
         sync_time=$((end_time - start_time))
         echo -e "${GREEN}✅ Source sync completed in ${sync_time}s${NC}"
@@ -82,11 +82,11 @@ if [[ "$DEV_MODE" == "true" ]]; then
 
     # Check if dependencies need repopulation
     echo -e "${YELLOW}🔍 Checking dependencies status...${NC}"
-    if ssh -i ~/.ssh/autobot_key autobot@"${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "test -f /home/autobot/autobot-vue/node_modules/.vite/deps/vue.js" 2>/dev/null; then
+    if ssh -i ~/.ssh/autobot_key autobot@"${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "test -f /home/autobot/autobot-slm-frontend/node_modules/.vite/deps/vue.js" 2>/dev/null; then
         echo -e "${GREEN}✅ Dependencies are current, skipping sync${NC}"
     else
         echo -e "${YELLOW}📦 Dependencies missing or outdated, syncing...${NC}"
-        if ./scripts/utilities/sync-to-vm.sh frontend autobot-vue/node_modules/ /home/autobot/autobot-vue/node_modules/; then
+        if ./scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/node_modules/ /home/autobot/autobot-slm-frontend/node_modules/; then
             echo -e "${GREEN}✅ Dependencies sync completed${NC}"
         else
             echo -e "${RED}❌ Dependencies sync failed${NC}"
@@ -110,7 +110,7 @@ if [[ "$DEV_MODE" == "true" ]]; then
 else
     # Production mode: Build and deploy
     echo -e "${YELLOW}📦 Building frontend...${NC}"
-    cd autobot-vue
+    cd autobot-slm-frontend
 
     # Build with timing
     start_time=$(date +%s)
@@ -155,7 +155,7 @@ fi
 
 # Copy new files
 echo "  📂 Copying new build..."
-if ansible frontend -i ansible/inventory/production.yml -m copy -a "src=autobot-vue/dist/ dest=/var/www/html/ directory_mode=0755 mode=0644 owner=www-data group=www-data" &>/dev/null; then
+if ansible frontend -i ansible/inventory/production.yml -m copy -a "src=autobot-slm-frontend/dist/ dest=/var/www/html/ directory_mode=0755 mode=0644 owner=www-data group=www-data" &>/dev/null; then
     echo -e "${GREEN}  ✅ Files copied successfully${NC}"
 else
     echo -e "${RED}  ❌ Failed to copy files${NC}"

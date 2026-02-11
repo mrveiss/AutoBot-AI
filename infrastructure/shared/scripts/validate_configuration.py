@@ -31,7 +31,7 @@ def test_default_configuration():
     logger.info("Testing Default Configuration...")
 
     try:
-        from src.config import (
+        from config import (
             API_BASE_URL,
             BACKEND_PORT,
             HTTP_PROTOCOL,
@@ -93,7 +93,7 @@ def test_custom_configuration():
 
         importlib.reload(src.config)
 
-        from src.config import (
+        from config import (
             API_BASE_URL,
             BACKEND_PORT,
             HTTP_PROTOCOL,

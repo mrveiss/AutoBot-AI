@@ -9,8 +9,8 @@
  * Displays logs from all services with real-time updates and filtering.
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LogViewer')
@@ -20,10 +20,11 @@ interface LogEntry {
   level: 'debug' | 'info' | 'warning' | 'error' | 'critical'
   source: string
   message: string
-  metadata?: Record<string, unknown>
+  event_id?: string
+  node_id?: string
 }
 
-const backendUrl = getBackendUrl()
+const { getMonitoringLogs } = useSlmApi()
 
 // State
 const logs = ref<LogEntry[]>([])
@@ -95,55 +96,32 @@ function formatDate(ts: string): string {
   })
 }
 
+const severityToLevel: Record<string, LogEntry['level']> = {
+  debug: 'debug',
+  info: 'info',
+  warning: 'warning',
+  error: 'error',
+  critical: 'critical',
+}
+
 async function fetchLogs() {
   isLoading.value = true
   try {
-    const response = await fetch(`${backendUrl}/monitoring/logs?limit=500`)
-    if (response.ok) {
-      const data = await response.json()
-      logs.value = data.logs ?? []
-    } else {
-      // Generate mock logs for demo
-      logs.value = generateMockLogs()
-    }
+    const data = await getMonitoringLogs({ per_page: 200 })
+    logs.value = (data.logs ?? []).map(entry => ({
+      timestamp: entry.timestamp,
+      level: severityToLevel[entry.severity] ?? 'info',
+      source: entry.hostname || entry.event_type,
+      message: entry.message,
+      event_id: entry.event_id,
+      node_id: entry.node_id,
+    }))
   } catch (err) {
     logger.error('Failed to fetch logs:', err)
-    // Use mock logs on failure
-    logs.value = generateMockLogs()
+    logs.value = []
   } finally {
     isLoading.value = false
   }
-}
-
-function generateMockLogs(): LogEntry[] {
-  const sources = ['slm-backend', 'fleet-manager', 'agent-worker', 'prometheus', 'grafana']
-  const levels: LogEntry['level'][] = ['debug', 'info', 'warning', 'error']
-  const messages = [
-    'Service health check completed',
-    'Node heartbeat received',
-    'Task execution started',
-    'Configuration reloaded',
-    'Connection pool refreshed',
-    'Metrics scraped successfully',
-    'Dashboard provisioning complete',
-    'Agent registered with fleet',
-    'Database connection established',
-    'WebSocket connection opened',
-  ]
-
-  const mockLogs: LogEntry[] = []
-  const now = Date.now()
-
-  for (let i = 0; i < 50; i++) {
-    mockLogs.push({
-      timestamp: new Date(now - i * 60000).toISOString(),
-      level: levels[Math.floor(Math.random() * levels.length)],
-      source: sources[Math.floor(Math.random() * sources.length)],
-      message: messages[Math.floor(Math.random() * messages.length)],
-    })
-  }
-
-  return mockLogs
 }
 
 function clearLogs() {

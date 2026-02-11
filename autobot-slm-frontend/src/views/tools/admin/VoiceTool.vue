@@ -129,13 +129,10 @@ async function processVoiceInput(): Promise<void> {
   loading.value = true
 
   try {
-    // Send to AI backend
-    const response = await api.post('/voice/process', {
-      text: transcript.value,
-      language: settings.value.language
-    })
+    // Send to AI backend - Issue #835
+    const response = await api.voiceSpeak(transcript.value)
 
-    aiResponse.value = response.response || 'No response received'
+    aiResponse.value = (response.response as string) || (response.text as string) || 'No response received'
 
     // Add AI response to history
     conversationHistory.value.push({

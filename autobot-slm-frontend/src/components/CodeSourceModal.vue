@@ -26,7 +26,7 @@ interface Node {
 
 const nodes = ref<Node[]>([])
 const selectedNodeId = ref('')
-const repoPath = ref('/home/kali/Desktop/AutoBot')
+const repoPath = ref('/opt/autobot')
 const branch = ref('main')
 const isLoading = ref(true)
 const isSaving = ref(false)

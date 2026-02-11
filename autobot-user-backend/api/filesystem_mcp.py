@@ -60,10 +60,10 @@ async def _get_file_lock(filepath: str) -> asyncio.Lock:
         return _file_locks[filepath]
 
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
@@ -71,10 +71,10 @@ router = APIRouter(tags=["filesystem_mcp", "mcp"])
 
 # Security Configuration: Allowed Directories
 # Only paths within these directories are accessible
+_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
 ALLOWED_DIRECTORIES = [
-    "/home/kali/Desktop/AutoBot/",  # Project root
+    f"{_BASE_DIR}/",  # Project root
     "/tmp/autobot/",  # Temporary files  # nosec B108
-    "/home/kali/Desktop/",  # User workspace
 ]
 
 # Maximum file size for read operations (10MB)

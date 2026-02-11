@@ -6,16 +6,20 @@ Authentication API endpoints for AutoBot
 Provides login, logout, and session management functionality
 """
 
+import datetime
 import logging
 from collections import defaultdict
 from time import time
 from typing import Dict, List, Optional
 
+import jwt as pyjwt
+from auth_middleware import auth_middleware
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
-from auth_middleware import auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.user_management.database import db_session_context
+from backend.user_management.services.user_service import UserService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -24,6 +28,27 @@ logger = logging.getLogger(__name__)
 # Rate limiting for password change endpoint (stricter limits for security)
 PASSWORD_CHANGE_RATE_WINDOW = 300  # 5 minutes
 PASSWORD_CHANGE_MAX_ATTEMPTS = 5  # max attempts per window
+
+
+async def _enrich_user_with_org_context(user_data: Dict) -> Dict:
+    """Look up user in PostgreSQL to get user_id and org_id.
+
+    Enriches the auth response with organizational hierarchy context.
+    Non-critical: gracefully degrades if DB lookup fails.
+
+    Helper for login (#684).
+    """
+    try:
+        async with db_session_context() as session:
+            user_service = UserService(session)
+            db_user = await user_service.get_user_by_username(user_data["username"])
+            if db_user:
+                user_data["user_id"] = str(db_user.id)
+                if db_user.org_id:
+                    user_data["org_id"] = str(db_user.org_id)
+    except Exception as e:
+        logger.debug("Could not enrich user with org context: %s", e)
+    return user_data
 
 
 class PasswordChangeRateLimiter:
@@ -166,7 +191,10 @@ async def login(request: Request, login_data: LoginRequest):
             # Generic error message to prevent username enumeration
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
-        # Create JWT token
+        # Issue #684: Enrich with org hierarchy from PostgreSQL
+        user_data = await _enrich_user_with_org_context(user_data)
+
+        # Create JWT token (now includes user_id/org_id if available)
         jwt_token = auth_middleware.create_jwt_token(user_data)
 
         # Create session
@@ -462,3 +490,79 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
         raise HTTPException(
             status_code=500, detail="Failed to change password. Please try again."
         )
+
+
+def _decode_refresh_token(token: str) -> Dict:
+    """Decode JWT for refresh, allowing recently expired tokens (1h grace).
+
+    Helper for refresh_token (#827).
+    """
+    try:
+        payload = pyjwt.decode(
+            token,
+            auth_middleware.jwt_secret,
+            algorithms=[auth_middleware.jwt_algorithm],
+            options={"verify_exp": False},
+        )
+    except pyjwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
+
+    exp = payload.get("exp")
+    if exp:
+        exp_time = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc)
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        if now > exp_time + datetime.timedelta(hours=1):
+            raise HTTPException(
+                status_code=401,
+                detail="Token expired beyond refresh window",
+            )
+    return payload
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="refresh_token",
+    error_code_prefix="AUTH",
+)
+@router.post("/refresh")
+async def refresh_token(request: Request):
+    """Refresh an existing JWT token before or shortly after expiry.
+
+    Accepts a valid (or recently expired within 1h) JWT and returns
+    a fresh token with a new expiry window.
+    """
+    from user_management.config import DeploymentMode, get_deployment_config
+
+    config = get_deployment_config()
+    if config.mode == DeploymentMode.SINGLE_USER:
+        return {
+            "success": True,
+            "token": "single_user_mode",
+            "expiresIn": 86400,
+        }
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="No token provided")
+
+    token = auth_header.split(" ")[1]
+    payload = _decode_refresh_token(token)
+
+    user_data = {
+        "username": payload["username"],
+        "role": payload["role"],
+        "email": payload.get("email", ""),
+    }
+    # Issue #684: Preserve org hierarchy across token refresh
+    if payload.get("user_id"):
+        user_data["user_id"] = payload["user_id"]
+    if payload.get("org_id"):
+        user_data["org_id"] = payload["org_id"]
+    new_token = auth_middleware.create_jwt_token(user_data)
+    expiry_seconds = auth_middleware.jwt_expiry_hours * 3600
+
+    return {
+        "success": True,
+        "token": new_token,
+        "expiresIn": expiry_seconds,
+    }

@@ -238,6 +238,51 @@ Use permanent, descriptive names. Version control handles versions.
 
 When merging duplicate code: **Preserve ALL features** + **Choose BEST implementation**. Never drop features for convenience.
 
+### Pre-commit & Linting (Critical)
+
+**Pre-commit hooks may revert your edits:**
+
+- After ANY commit attempt, verify changes were actually committed:
+  ```bash
+  git log -1 --stat  # Check what was committed
+  git diff           # Verify no uncommitted changes remain
+  ```
+
+- If hooks revert edits, fix the underlying issue (don't retry blindly)
+- Common hook failures: line length (E501), trailing whitespace, hardcoded values
+
+**Line length enforcement:**
+
+- Maximum line length: 100 characters (enforced by flake8)
+- Hook will reject commits with E501 violations
+- Use the PostToolUse hook (auto-lint after edits) to catch before commit
+
+**Bulk operations (linting, imports, refactoring):**
+
+- Commit in small batches (10-15 files max)
+- Verify each batch passes hooks before continuing
+- Never attempt "fix all violations" in one commit
+- Pattern: Fix → Verify → Commit → Repeat
+
+**If pre-commit hook fails:**
+
+```bash
+# See what failed
+git status
+
+# Fix the specific issue (don't skip hooks with --no-verify)
+# Re-stage and re-commit
+
+# Verify success
+git log -1 --stat
+```
+
+**Red flags (STOP if you see these):**
+- Attempting `git commit --no-verify` (bypassing hooks)
+- Bulk commit of 50+ files without verification
+- Re-committing same files repeatedly (hook is rejecting them)
+- "I'll fix the linting in a follow-up commit" (fix it NOW)
+
 ---
 
 ## GITHUB ISSUE TRACKING

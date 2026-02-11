@@ -16,10 +16,10 @@ from typing import Dict, Optional, Tuple
 import bcrypt
 import jwt
 from fastapi import Request
-
-from config import UnifiedConfigManager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
+
+from config import UnifiedConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +263,7 @@ class AuthenticationMiddleware:
         return self._build_successful_auth_response(username, user_config, ip_address)
 
     def create_jwt_token(self, user_data: Dict) -> str:
-        """Create JWT token for authenticated user"""
+        """Create JWT token for authenticated user."""
         payload = {
             "username": user_data["username"],
             "role": user_data["role"],
@@ -274,6 +274,12 @@ class AuthenticationMiddleware:
                 + datetime.timedelta(hours=self.jwt_expiry_hours)
             ),
         }
+
+        # Issue #684: Include org/user hierarchy in token
+        if user_data.get("user_id"):
+            payload["user_id"] = str(user_data["user_id"])
+        if user_data.get("org_id"):
+            payload["org_id"] = str(user_data["org_id"])
 
         return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
 
@@ -405,7 +411,7 @@ class AuthenticationMiddleware:
         Extract user from JWT token in Authorization header.
 
         Returns user dict if valid JWT found, None otherwise.
-        Issue #620.
+        Issue #620, #684: Includes org hierarchy context.
         """
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -416,12 +422,20 @@ class AuthenticationMiddleware:
         if not token_data:
             return None
 
-        return {
+        user = {
             "username": token_data["username"],
             "role": token_data["role"],
             "email": token_data.get("email", ""),
             "auth_method": "jwt",
         }
+
+        # Issue #684: Include org hierarchy from token
+        if token_data.get("user_id"):
+            user["user_id"] = token_data["user_id"]
+        if token_data.get("org_id"):
+            user["org_id"] = token_data["org_id"]
+
+        return user
 
     def _extract_user_from_session(self, request: Request) -> Optional[Dict]:
         """

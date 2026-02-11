@@ -23,7 +23,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -207,7 +208,7 @@ scan_ssot_ips() {
             report_ssot_violation "$file" "$line_num" "$ip" "$ssot_config" "$line_content"
 
         done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
-            -F "$ip" "$PROJECT_ROOT/src" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/autobot-vue/src" 2>/dev/null || true)
+            -F "$ip" "$PROJECT_ROOT/src" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/autobot-slm-frontend/src" 2>/dev/null || true)
     done
 }
 
@@ -245,7 +246,7 @@ scan_ssot_ports() {
             report_ssot_violation "$file" "$line_num" ":$port" "$ssot_config" "$line_content"
 
         done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
-            -E ":${port}[^0-9]" "$PROJECT_ROOT/src" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/autobot-vue/src" 2>/dev/null | head -30 || true)
+            -E ":${port}[^0-9]" "$PROJECT_ROOT/src" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/autobot-slm-frontend/src" 2>/dev/null | head -30 || true)
     done
 }
 
@@ -351,7 +352,7 @@ scan_urls() {
             "Use SSOT config URLs (config.backend_url, config.redis_url, etc.)"
 
     done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
-        -E 'https?://[a-zA-Z0-9]' "$PROJECT_ROOT/src" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/autobot-vue/src" 2>/dev/null | \
+        -E 'https?://[a-zA-Z0-9]' "$PROJECT_ROOT/src" "$PROJECT_ROOT/backend" "$PROJECT_ROOT/autobot-slm-frontend/src" 2>/dev/null | \
         grep -v "archive/" | grep -v "__pycache__" | head -30 || true)
 }
 
@@ -377,7 +378,7 @@ generate_report() {
     echo "Files scanned in:"
     echo "  - $PROJECT_ROOT/src"
     echo "  - $PROJECT_ROOT/backend"
-    echo "  - $PROJECT_ROOT/autobot-vue/src"
+    echo "  - $PROJECT_ROOT/autobot-slm-frontend/src"
     echo ""
 
     if [[ $SSOT_VIOLATIONS -gt 0 ]]; then

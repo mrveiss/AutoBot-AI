@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 
 import yaml
-from src.constants import ServiceURLs
+from constants import ServiceURLs
 
 # Configure logging
 logging.basicConfig(
@@ -324,8 +324,8 @@ def main():
 if __name__ == "__main__":
     success = main()
     if success:
-        print("\n🚀 To apply GPU optimization:")
-        print("   1. source gpu_env_config.sh")
-        print("   2. ./run_agent.sh")
-        print("   3. Monitor with: watch nvidia-smi")
+        logger.info("\n🚀 To apply GPU optimization:")
+        logger.info("   1. source gpu_env_config.sh")
+        logger.info("   2. ./run_agent.sh")
+        logger.info("   3. Monitor with: watch nvidia-smi")
     exit(0 if success else 1)

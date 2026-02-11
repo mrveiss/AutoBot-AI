@@ -2,7 +2,11 @@
 # AutoBot VM Discovery Script (Linux/WSL version)
 # Discovers AutoBot VMs and updates Ansible inventory
 
-NETWORK_RANGE="172.16.168.0/24"
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
+NETWORK_RANGE="${AUTOBOT_NETWORK_CIDR:-172.16.168.0/24}"
 INVENTORY_PATH="../../ansible/inventory/hosts.yml"
 UPDATE_INVENTORY=false
 SHOW_ALL=false

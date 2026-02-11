@@ -16,11 +16,72 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _process_single_query(kb, query: str, results_found: int) -> int:
+    """
+    Process a single documentation search query.
+
+    Helper for test_documentation_search (#825).
+
+    Args:
+        kb: KnowledgeBase instance
+        query: Search query string
+        results_found: Current count of results
+
+    Returns:
+        Updated count of results found
+    """
+    logger.info(f"\n=== Searching for: '{query}' ===")
+    try:
+        results = asyncio.run(kb.search(query, top_k=3))
+        logger.info(f"Results: {len(results)}")
+
+        if results:
+            results_found += len(results)
+            for i, result in enumerate(results[:2], 1):
+                content_preview = (
+                    result["content"][:200] + "..."
+                    if len(result["content"]) > 200
+                    else result["content"]
+                )
+                logger.info(f"Result {i}: {content_preview}")
+                logger.info(f"Score: {result.get('score', 'N/A')}")
+                logger.info(
+                    f"Source: {result.get('metadata', {}).get('source', 'Unknown')}"
+                )
+        else:
+            logger.warning(f"No results found for '{query}'")
+
+    except Exception as e:
+        logger.error(f"Search failed for '{query}': {e}")
+
+    return results_found
+
+
+async def _log_kb_stats(kb):
+    """
+    Log knowledge base statistics.
+
+    Helper for test_documentation_search (#825).
+
+    Args:
+        kb: KnowledgeBase instance
+    """
+    try:
+        stats = await kb.get_stats()
+        logger.info("\n=== Knowledge Base Stats ===")
+        logger.info(f"Total documents: {stats.get('total_documents', 0)}")
+        logger.info(f"Total chunks: {stats.get('total_chunks', 0)}")
+        logger.info(f"Total facts: {stats.get('total_facts', 0)}")
+        logger.info(f"Categories: {stats.get('categories', [])}")
+    except Exception as e:
+        logger.error(f"Failed to get stats: {e}")
+
+
 async def test_documentation_search():
     """Test searching for documentation in knowledge base"""
     try:
-        from src.config import config as global_config
-        from src.knowledge_base import KnowledgeBase
+        from config import config as global_config
+        from knowledge_base import KnowledgeBase
 
         # Initialize knowledge base
         kb = KnowledgeBase(config_manager=global_config)
@@ -44,40 +105,10 @@ async def test_documentation_search():
         results_found = 0
 
         for query in documentation_queries:
-            logger.info(f"\n=== Searching for: '{query}' ===")
-            try:
-                results = await kb.search(query, top_k=3)
-                logger.info(f"Results: {len(results)}")
-
-                if results:
-                    results_found += len(results)
-                    for i, result in enumerate(results[:2], 1):
-                        content_preview = (
-                            result["content"][:200] + "..."
-                            if len(result["content"]) > 200
-                            else result["content"]
-                        )
-                        logger.info(f"Result {i}: {content_preview}")
-                        logger.info(f"Score: {result.get('score', 'N/A')}")
-                        logger.info(
-                            f"Source: {result.get('metadata', {}).get('source', 'Unknown')}"
-                        )
-                else:
-                    logger.warning(f"No results found for '{query}'")
-
-            except Exception as e:
-                logger.error(f"Search failed for '{query}': {e}")
+            results_found = _process_single_query(kb, query, results_found)
 
         # Get overall stats
-        try:
-            stats = await kb.get_stats()
-            logger.info("\n=== Knowledge Base Stats ===")
-            logger.info(f"Total documents: {stats.get('total_documents', 0)}")
-            logger.info(f"Total chunks: {stats.get('total_chunks', 0)}")
-            logger.info(f"Total facts: {stats.get('total_facts', 0)}")
-            logger.info(f"Categories: {stats.get('categories', [])}")
-        except Exception as e:
-            logger.error(f"Failed to get stats: {e}")
+        await _log_kb_stats(kb)
 
         logger.info("\n=== SUMMARY ===")
         logger.info(f"Total results found across all queries: {results_found}")
@@ -102,8 +133,8 @@ async def test_documentation_search():
 async def test_specific_autobot_docs():
     """Test searching for specific AutoBot documentation"""
     try:
-        from src.config import config as global_config
-        from src.knowledge_base import KnowledgeBase
+        from config import config as global_config
+        from knowledge_base import KnowledgeBase
 
         kb = KnowledgeBase(config_manager=global_config)
         await kb.ainit()

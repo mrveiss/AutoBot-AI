@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent))
 
-from src.orchestrator import Orchestrator, TaskComplexity
+from orchestrator import Orchestrator, TaskComplexity
 
 
 def test_plan_workflow_steps():

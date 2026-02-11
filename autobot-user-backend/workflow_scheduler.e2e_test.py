@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
+from workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
 
 
 async def test_workflow_scheduling():
@@ -288,7 +288,7 @@ async def test_persistence():
     print("\n📝 Test 2: Load Workflows from Storage...")
 
     # Import a fresh scheduler instance
-    from src.workflow_scheduler import WorkflowScheduler
+    from workflow_scheduler import WorkflowScheduler
 
     new_scheduler = WorkflowScheduler(storage_path="data/scheduled_workflows.json")
     loaded_count = len(new_scheduler.scheduled_workflows)

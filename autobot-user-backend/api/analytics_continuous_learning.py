@@ -18,6 +18,7 @@ Key Features:
 import asyncio
 import hashlib
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -25,10 +26,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel, Field
-
-from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -647,8 +647,10 @@ class FileMonitor:
     Uses polling-based monitoring for cross-platform compatibility.
     """
 
-    def __init__(self, base_path: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(self, base_path: str = None):
         """Initialize file monitor with base path and tracking state."""
+        if base_path is None:
+            base_path = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         self.base_path = Path(base_path)
         self.state = MonitoringState.STOPPED
         self.started_at: Optional[datetime] = None

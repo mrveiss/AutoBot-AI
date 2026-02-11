@@ -34,16 +34,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-import aiohttp
-import yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.backup_manager import BackupManager
-from src.constants.threshold_constants import TimingConstants
-from src.utils.script_utils import ScriptFormatter
-from src.utils.service_registry import get_service_registry
+from constants.threshold_constants import TimingConstants
+from utils.script_utils import ScriptFormatter
+from utils.service_registry import get_service_registry
 
 
 class DeploymentStrategy:
@@ -85,9 +86,9 @@ class ZeroDowntimeDeployer:
         # Track deployment state
         self.current_deployment = None
 
-        print("🚀 AutoBot Zero-Downtime Deployer initialized")
-        print(f"   Deployment Directory: {self.deployment_dir}")
-        print("   Strategy Support: Blue-Green, Rolling, Canary")
+        logger.info("🚀 AutoBot Zero-Downtime Deployer initialized")
+        logger.info(f"   Deployment Directory: {self.deployment_dir}")
+        logger.info("   Strategy Support: Blue-Green, Rolling, Canary")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -162,8 +163,8 @@ class ZeroDowntimeDeployer:
         deployment_id = self.generate_deployment_id()
 
         self.print_header(f"Zero-Downtime Deployment: {strategy.upper()}")
-        print(f"Deployment ID: {deployment_id}")
-        print(f"Target Version: {version or 'current'}")
+        logger.info(f"Deployment ID: {deployment_id}")
+        logger.info(f"Target Version: {version or 'current'}")
 
         # Create deployment record
         deployment_record = {
@@ -827,7 +828,7 @@ async def _handle_deploy_action(deployer: ZeroDowntimeDeployer, args) -> int:
         Exit code (0 for success, 1 for failure).
     """
     if not args.strategy:
-        print("❌ --strategy required for deployment")
+        logger.error("❌ --strategy required for deployment")
         return 1
 
     kwargs = {}
@@ -854,12 +855,12 @@ async def _handle_rollback_action(deployer: ZeroDowntimeDeployer, args) -> int:
         Exit code (0 for success, 1 for failure).
     """
     if not args.deployment_id:
-        print("❌ --deployment-id required for rollback")
+        logger.error("❌ --deployment-id required for rollback")
         return 1
 
     deployment_file = deployer.deployment_dir / f"deployment_{args.deployment_id}.json"
     if not deployment_file.exists():
-        print(f"❌ Deployment {args.deployment_id} not found")
+        logger.error(f"❌ Deployment {args.deployment_id} not found")
         return 1
 
     with open(deployment_file, "r") as f:
@@ -884,19 +885,19 @@ def _handle_list_action(deployer: ZeroDowntimeDeployer) -> int:
     deployments = deployer.list_deployments()
 
     if not deployments:
-        print("No deployments found")
+        logger.info("No deployments found")
         return 0
 
-    print("\n🚀 Recent Deployments:")
-    print("=" * 80)
-    print(f"{'ID':<20} {'Strategy':<12} {'Version':<15} {'Status':<12} {'Date':<20}")
-    print("-" * 80)
+    logger.info("\n🚀 Recent Deployments:")
+    logger.info("=" * 80)
+    logger.info(f"{'ID':<20} {'Strategy':<12} {'Version':<15} {'Status':<12} {'Date':<20}")
+    logger.info("-" * 80)
 
     for deployment in deployments:
         started = datetime.fromisoformat(deployment["started_at"])
         version = deployment.get("version", "unknown")[:14]
 
-        print(
+        logger.info(
             f"{deployment['deployment_id']:<20} "
             f"{deployment['strategy']:<12} "
             f"{version:<15} "
@@ -935,10 +936,10 @@ async def main():
             return _handle_list_action(deployer)
 
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        logger.warning("\n⚠️  Operation cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        logger.error(f"\n❌ Error: {e}")
         return 1
 
     return 0

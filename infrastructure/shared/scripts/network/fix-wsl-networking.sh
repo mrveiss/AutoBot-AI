@@ -54,8 +54,8 @@ echo -e "${YELLOW}🔍 Checking WSL port forwarding...${NC}"
 netstat -tlnp | grep ${BACKEND_PORT} && echo -e "${GREEN}✅ Port ${BACKEND_PORT} is listening${NC}"
 
 # Update frontend configuration to use localhost
-ENV_FILE="/home/kali/Desktop/AutoBot/autobot-vue/.env"
-VITE_CONFIG="/home/kali/Desktop/AutoBot/autobot-vue/vite.config.ts"
+ENV_FILE="/home/kali/Desktop/AutoBot/autobot-slm-frontend/.env"
+VITE_CONFIG="/home/kali/Desktop/AutoBot/autobot-slm-frontend/vite.config.ts"
 
 echo -e "${YELLOW}🔧 Updating frontend configuration...${NC}"
 
@@ -79,11 +79,11 @@ echo -e "${GREEN}✅ Updated vite.config.ts to use localhost${NC}"
 # Check for any remaining hardcoded IPs in source files
 echo -e "${YELLOW}🔍 Checking for hardcoded network references...${NC}"
 
-HARDCODED_COUNT=$(find /home/kali/Desktop/AutoBot/autobot-vue/src -type f -name "*.ts" -o -name "*.js" -o -name "*.vue" | xargs grep -l "host\.docker\.internal\|192\.168\.168\." 2>/dev/null | wc -l)
+HARDCODED_COUNT=$(find /home/kali/Desktop/AutoBot/autobot-slm-frontend/src -type f -name "*.ts" -o -name "*.js" -o -name "*.vue" | xargs grep -l "host\.docker\.internal\|192\.168\.168\." 2>/dev/null | wc -l)
 
 if [ "$HARDCODED_COUNT" -gt 0 ]; then
     echo -e "${YELLOW}⚠️  Found $HARDCODED_COUNT files with hardcoded network references:${NC}"
-    find /home/kali/Desktop/AutoBot/autobot-vue/src -type f -name "*.ts" -o -name "*.js" -o -name "*.vue" | xargs grep -l "host\.docker\.internal\|192\.168\.168\." 2>/dev/null
+    find /home/kali/Desktop/AutoBot/autobot-slm-frontend/src -type f -name "*.ts" -o -name "*.js" -o -name "*.vue" | xargs grep -l "host\.docker\.internal\|192\.168\.168\." 2>/dev/null
     echo -e "${YELLOW}💡 These should be updated to use environment configuration${NC}"
 else
     echo -e "${GREEN}✅ No hardcoded network references found${NC}"
@@ -91,7 +91,7 @@ fi
 
 # Instructions
 echo -e "${BLUE}📋 Next Steps:${NC}"
-echo "1. Restart Vite dev server: cd autobot-vue && npm run dev"
+echo "1. Restart Vite dev server: cd autobot-slm-frontend && npm run dev"
 echo "2. Access frontend from Windows browser at: http://localhost:${FRONTEND_PORT}"
 echo "3. Frontend will proxy API calls to WSL backend via localhost:${BACKEND_PORT}"
 echo ""

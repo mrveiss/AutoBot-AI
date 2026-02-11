@@ -1,4 +1,8 @@
 #!/bin/bash
+# =============================================================================
+# DEV/SANDBOX ONLY - This script assumes Docker containers.
+# Production uses native deployments. See Ansible roles for equivalent.
+# =============================================================================
 # Build the secure sandbox Docker image for AutoBot
 # This script creates the enhanced security sandbox container
 

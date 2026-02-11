@@ -78,6 +78,9 @@ const availableRoles = computed(() =>
 onMounted(async () => {
   await refreshFleet()
 
+  // Fetch update summary for fleet update badges (#682)
+  fleetStore.fetchFleetUpdateSummary()
+
   // Connect WebSocket for real-time updates
   ws.connect()
 
@@ -185,6 +188,7 @@ function handleNodeAction(action: string, nodeId: string): void {
     case 'events':
     case 'view':
     case 'certificate':
+    case 'updates':
       openLifecyclePanel(node)
       break
     case 'services':

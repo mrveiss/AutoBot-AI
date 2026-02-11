@@ -32,9 +32,10 @@ NC='\033[0m'
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
-REDIS_HOST="172.16.168.23"
-REDIS_PORT="6379"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../../../.." && pwd)}"
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 
 # Options
 ROLLBACK_REASON=""

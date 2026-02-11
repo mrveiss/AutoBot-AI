@@ -7,17 +7,86 @@ import asyncio
 import json
 from pathlib import Path
 
-from src.env_analyzer import EnvironmentAnalyzer
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _log_analysis_summary(results):
+    """Log the analysis summary section.
+
+    Helper for analyze_environment_variables (#825).
+    """
+    logger.info("\n=== Environment Variable Analysis Results ===\n")
+    logger.info("Analysis Summary:")
+    logger.info("   - Total hardcoded values: %s", results['total_hardcoded_values'])
+    logger.info("   - High priority issues: %s", results['high_priority_count'])
+    logger.info(
+        "   - Configuration recommendations: %s", results['recommendations_count']
+    )
+    logger.info("   - Files affected: %s", results['metrics']['files_affected'])
+    logger.info("   - Analysis time: %.2fs\n", results['analysis_time_seconds'])
+
+    logger.info("Categories Found:")
+    for category, count in results["categories"].items():
+        logger.info("   - %s: %s instances", category, count)
+    logger.info("")
+
+
+def _log_high_priority_issues(results):
+    """Log high priority hardcoded value issues.
+
+    Helper for analyze_environment_variables (#825).
+    """
+    high_priority = [
+        item for item in results["hardcoded_details"] if item["severity"] == "high"
+    ]
+    if high_priority:
+        logger.info("High Priority Issues (Security/Infrastructure):")
+        for item in high_priority[:10]:
+            logger.info(
+                "   - %s:%s - %s: '%s'",
+                item['file'], item['line'], item['type'], item['value'],
+            )
+            logger.info("     Suggested env var: %s", item['suggested_env_var'])
+        logger.info("")
+
+
+def _log_priority_recommendations(recommendations):
+    """Log high and medium priority configuration recommendations.
+
+    Helper for analyze_environment_variables (#825).
+    """
+    high_priority_recs = [r for r in recommendations if r["priority"] == "high"]
+    medium_priority_recs = [r for r in recommendations if r["priority"] == "medium"]
+
+    if high_priority_recs:
+        logger.info("High Priority Configuration Recommendations:")
+        for rec in high_priority_recs:
+            logger.info("   - %s", rec['env_var_name'])
+            logger.info("     Category: %s", rec['category'])
+            logger.info("     Default: '%s'", rec['default_value'])
+            logger.info("     Files: %s", len(rec['affected_files']))
+        logger.info("")
+
+    if medium_priority_recs:
+        logger.info("Medium Priority Configuration Recommendations:")
+        for rec in medium_priority_recs[:5]:
+            logger.info("   - %s: '%s'", rec['env_var_name'], rec['default_value'])
+            logger.info(
+                "     Category: %s, Files: %s",
+                rec['category'], len(rec['affected_files']),
+            )
+        logger.info("")
 
 
 async def analyze_environment_variables():
     """Analyze codebase for hardcoded values that should be environment variables"""
 
-    print("Starting environment variable analysis...")
+    logger.info("Starting environment variable analysis...")
 
     analyzer = EnvironmentAnalyzer()
 
-    # Run analysis
     results = await analyzer.analyze_codebase(
         root_path=".",
         patterns=[
@@ -28,150 +97,113 @@ async def analyze_environment_variables():
         ],
     )
 
-    print("\n=== Environment Variable Analysis Results ===\n")
+    _log_analysis_summary(results)
+    _log_high_priority_issues(results)
 
-    # Summary
-    print(f"📊 **Analysis Summary:**")
-    print(f"   - Total hardcoded values: {results['total_hardcoded_values']}")
-    print(f"   - High priority issues: {results['high_priority_count']}")
-    print(f"   - Configuration recommendations: {results['recommendations_count']}")
-    print(f"   - Files affected: {results['metrics']['files_affected']}")
-    print(f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n")
-
-    # Category breakdown
-    print("🏷️  **Categories Found:**")
-    for category, count in results["categories"].items():
-        print(f"   - {category}: {count} instances")
-    print()
-
-    # High priority issues
-    high_priority = [
-        item for item in results["hardcoded_details"] if item["severity"] == "high"
-    ]
-    if high_priority:
-        print("🚨 **High Priority Issues (Security/Infrastructure):**")
-        for item in high_priority[:10]:  # Show top 10
-            print(
-                f"   - {item['file']}:{item['line']} - {item['type']}: '{item['value']}'"
-            )
-            print(f"     → Suggested env var: {item['suggested_env_var']}")
-        print()
-
-    # Configuration recommendations
     recommendations = results["configuration_recommendations"]
-    high_priority_recs = [r for r in recommendations if r["priority"] == "high"]
-    medium_priority_recs = [r for r in recommendations if r["priority"] == "medium"]
+    _log_priority_recommendations(recommendations)
 
-    if high_priority_recs:
-        print("🔧 **High Priority Configuration Recommendations:**")
-        for rec in high_priority_recs:
-            print(f"   - {rec['env_var_name']}")
-            print(f"     Category: {rec['category']}")
-            print(f"     Default: '{rec['default_value']}'")
-            print(f"     Files: {len(rec['affected_files'])}")
-        print()
-
-    if medium_priority_recs:
-        print("⚙️  **Medium Priority Configuration Recommendations:**")
-        for rec in medium_priority_recs[:5]:  # Show top 5
-            print(f"   - {rec['env_var_name']}: '{rec['default_value']}'")
-            print(
-                f"     Category: {rec['category']}, Files: {len(rec['affected_files'])}"
-            )
-        print()
-
-    # Save detailed report
     report_path = Path("env_analysis_report.json")
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, default=str)
 
-    print(f"📋 Detailed report saved to: {report_path}")
+    logger.info("Detailed report saved to: %s", report_path)
 
-    # Generate configuration updates
     await generate_config_updates(recommendations)
 
     return results
 
 
-async def generate_config_updates(recommendations):
-    """Generate suggested configuration updates"""
+def _group_recommendations_by_category(recommendations):
+    """Group recommendations by their category field.
 
-    print("\n=== Suggested Configuration Updates ===\n")
-
-    # Group by category
+    Helper for generate_config_updates (#825).
+    """
     by_category = {}
     for rec in recommendations:
         category = rec["category"]
         if category not in by_category:
             by_category[category] = []
         by_category[category].append(rec)
+    return by_category
 
-    # Generate config.py additions
-    config_additions = []
 
-    print("🔨 **Add to src/config.py:**")
-    print("```python")
-    print("# Environment variable additions from analysis")
+def _format_config_line(env_var, default):
+    """Format a single config.py line from an env var recommendation.
 
-    for category, recs in by_category.items():
-        print(f"\n# {category.title()} Configuration")
-        for rec in recs:
-            env_var = rec["env_var_name"]
-            default = rec["default_value"]
-            desc = rec["description"]
+    Helper for generate_config_updates (#825).
+    """
+    if default.isdigit():
+        return (
+            f'        "{env_var.lower()}":'
+            f' int(os.getenv("{env_var}", {default})),'
+        )
+    if default.lower() in ["true", "false"]:
+        return (
+            f'        "{env_var.lower()}":'
+            f' os.getenv("{env_var}", "{default}").lower() == "true",'
+        )
+    return (
+        f'        "{env_var.lower()}":'
+        f' os.getenv("{env_var}", "{default}"),'
+    )
 
-            # Format for config.py
-            if default.isdigit():
-                config_line = f'        "{env_var.lower()}": int(os.getenv("{env_var}", {default})),'
-            elif default.lower() in ["true", "false"]:
-                config_line = f'        "{env_var.lower()}": os.getenv("{env_var}", "{default}").lower() == "true",'
-            else:
-                config_line = (
-                    f'        "{env_var.lower()}": os.getenv("{env_var}", "{default}"),'
-                )
 
-            config_additions.append(config_line)
-            print(f"        # {desc}")
-            print(config_line)
+def _save_env_template(by_category):
+    """Save the .env template file to disk.
 
-    print("```\n")
-
-    # Generate .env template
-    print("🌍 **Add to .env template:**")
-    print("```bash")
-    print("# Environment variables for AutoBot configuration")
-
-    for category, recs in by_category.items():
-        print(f"\n# {category.title()} settings")
-        for rec in recs:
-            env_var = rec["env_var_name"]
-            default = rec["default_value"]
-            desc = rec["description"]
-            print(f"# {desc}")
-            print(f"{env_var}={default}")
-
-    print("```\n")
-
-    # Save configuration template
+    Helper for generate_config_updates (#825).
+    """
     env_template_path = Path("env_template.txt")
-    with open(env_template_path, "w") as f:
+    with open(env_template_path, "w", encoding="utf-8") as f:
         f.write("# Environment variables for AutoBot configuration\n")
         for category, recs in by_category.items():
             f.write(f"\n# {category.title()} settings\n")
             for rec in recs:
-                env_var = rec["env_var_name"]
-                default = rec["default_value"]
-                desc = rec["description"]
-                f.write(f"# {desc}\n")
-                f.write(f"{env_var}={default}\n")
+                f.write(f"# {rec['description']}\n")
+                f.write(f"{rec['env_var_name']}={rec['default_value']}\n")
+    logger.info("Environment template saved to: %s", env_template_path)
 
-    print(f"📄 Environment template saved to: {env_template_path}")
+
+async def generate_config_updates(recommendations):
+    """Generate suggested configuration updates"""
+
+    logger.info("\n=== Suggested Configuration Updates ===\n")
+
+    by_category = _group_recommendations_by_category(recommendations)
+
+    logger.info("Add to src/config.py:")
+    logger.info("# Environment variable additions from analysis")
+
+    for category, recs in by_category.items():
+        logger.info("\n# %s Configuration", category.title())
+        for rec in recs:
+            config_line = _format_config_line(
+                rec["env_var_name"], rec["default_value"],
+            )
+            logger.info("        # %s", rec["description"])
+            logger.info(config_line)
+
+    logger.info("")
+
+    logger.info("Add to .env template:")
+    logger.info("# Environment variables for AutoBot configuration")
+
+    for category, recs in by_category.items():
+        logger.info("\n# %s settings", category.title())
+        for rec in recs:
+            logger.info("# %s", rec["description"])
+            logger.info("%s=%s", rec["env_var_name"], rec["default_value"])
+
+    logger.info("")
+
+    _save_env_template(by_category)
 
 
 async def demonstrate_specific_fixes():
     """Demonstrate how to fix specific hardcoded values"""
 
-    print("\n=== Example Refactoring Demonstrations ===\n")
+    logger.info("\n=== Example Refactoring Demonstrations ===\n")
 
     examples = [
         {
@@ -201,11 +233,11 @@ async def demonstrate_specific_fixes():
     ]
 
     for example in examples:
-        print(f"**{example['title']}:**")
-        print(f"   Before: `{example['before']}`")
-        print(f"   After:  `{example['after']}`")
-        print(f"   Env:    `{example['env_var']}`")
-        print()
+        logger.info(f"**{example['title']}:**")
+        logger.info(f"   Before: `{example['before']}`")
+        logger.info(f"   After:  `{example['after']}`")
+        logger.info(f"   Env:    `{example['env_var']}`")
+        logger.info("")
 
 
 async def main():
@@ -217,13 +249,13 @@ async def main():
     # Show example refactorings
     await demonstrate_specific_fixes()
 
-    print("\n=== Analysis Complete ===")
-    print("Next steps:")
-    print("1. Review env_analysis_report.json for detailed findings")
-    print("2. Update src/config.py with high-priority environment variables")
-    print("3. Create/update .env file with new variables")
-    print("4. Refactor hardcoded values to use config system")
-    print("5. Test configuration changes in different environments")
+    logger.info("\n=== Analysis Complete ===")
+    logger.info("Next steps:")
+    logger.info("1. Review env_analysis_report.json for detailed findings")
+    logger.info("2. Update src/config.py with high-priority environment variables")
+    logger.info("3. Create/update .env file with new variables")
+    logger.info("4. Refactor hardcoded values to use config system")
+    logger.info("5. Test configuration changes in different environments")
 
 
 if __name__ == "__main__":

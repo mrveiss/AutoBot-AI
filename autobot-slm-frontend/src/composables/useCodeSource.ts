@@ -60,12 +60,12 @@ export function useCodeSource() {
    * Assign a node as the code source.
    *
    * @param nodeId - The ID of the node to assign as code source
-   * @param repoPath - The repository path on the node (default: /home/kali/Desktop/AutoBot)
+   * @param repoPath - The repository path on the node (default: /opt/autobot)
    * @param branch - The git branch to track (default: main)
    */
   async function assignCodeSource(
     nodeId: string,
-    repoPath: string = '/home/kali/Desktop/AutoBot',
+    repoPath: string = '/opt/autobot',
     branch: string = 'main'
   ): Promise<CodeSource | null> {
     isLoading.value = true

@@ -6,9 +6,13 @@ import json
 import logging
 from typing import Dict, List, Optional
 
+from auth_middleware import auth_middleware
+from autobot_memory_graph import AutoBotMemoryGraph
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from backend.security.session_ownership import validate_session_ownership
@@ -26,9 +30,6 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from auth_middleware import auth_middleware
-from autobot_memory_graph import AutoBotMemoryGraph
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # ====================================================================
 # Router Configuration
@@ -128,6 +129,9 @@ class SessionCreate(BaseModel):
     """Session creation model"""
 
     title: Optional[str] = Field(None, max_length=200, description="Session title")
+    team_id: Optional[str] = Field(
+        None, description="Team ID for team-scoped sessions (#684)"
+    )
     metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Session metadata"
     )
@@ -383,8 +387,17 @@ async def get_session_messages(
     error_code_prefix="CHAT",
 )
 @router.get("/chat/sessions")
-async def list_sessions(request: Request):
-    """List all available chat sessions (REST-compliant endpoint)"""
+async def list_sessions(
+    request: Request,
+    scope: Optional[str] = None,
+    team_id: Optional[str] = None,
+):
+    """List chat sessions with optional org/team scope filtering (#684).
+
+    Query params:
+        scope: "user" (default) | "org" | "team"
+        team_id: required when scope=team
+    """
     request_id = generate_request_id()
     chat_history_manager = get_chat_history_manager(request)
 
@@ -401,15 +414,204 @@ async def list_sessions(request: Request):
             details={"component": "chat_history_manager"},
         )
 
-    # Use fast mode for listing (no decryption)
-    # list_sessions_fast is async (uses asyncio.to_thread internally)
+    # Issue #684: Scoped session listing
+    if scope in ("org", "team"):
+        return await _list_scoped_sessions(
+            request, request_id, chat_history_manager, scope, team_id
+        )
+
+    # Default: list all sessions (fast mode, no decryption)
     sessions = await chat_history_manager.list_sessions_fast()
+
+    # Issue #684: Filter to user's own sessions when authenticated
+    user_data = auth_middleware.get_user_from_request(request)
+    if user_data and user_data.get("username"):
+        sessions = await _filter_user_sessions(sessions, user_data["username"])
 
     return create_success_response(
         data={"sessions": sessions, "count": len(sessions)},
         message="Sessions retrieved successfully",
         request_id=request_id,
     )
+
+
+async def _filter_user_sessions(sessions: list, username: str) -> list:
+    """Filter sessions to those owned by the user.
+
+    Uses Redis ownership data. Falls back to all sessions
+    if Redis is unavailable.
+
+    Helper for list_sessions (#684).
+    """
+    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+
+    try:
+        redis = await get_redis_mgr(async_client=True, database="main")
+        validator = _build_ownership_validator(redis)
+        user_session_ids = set(await validator.get_user_sessions(username))
+        if not user_session_ids:
+            return sessions  # No ownership data yet; return all
+        return [s for s in sessions if s.get("id") in user_session_ids]
+    except Exception as e:
+        logger.debug("Could not filter by user ownership: %s", e)
+        return sessions
+
+
+def _build_ownership_validator(redis):
+    """Build a SessionOwnershipValidator instance (#684)."""
+    from backend.security.session_ownership import SessionOwnershipValidator
+
+    return SessionOwnershipValidator(redis)
+
+
+async def _list_scoped_sessions(
+    request: Request,
+    request_id: str,
+    chat_history_manager,
+    scope: str,
+    team_id: Optional[str],
+):
+    """List sessions scoped to org or team.
+
+    Requires admin role for org scope.
+
+    Helper for list_sessions (#684).
+    """
+    user_data = auth_middleware.get_user_from_request(request)
+    if not user_data:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Authentication required for scoped listing")
+
+    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+
+    redis = await get_redis_mgr(async_client=True, database="main")
+    validator = _build_ownership_validator(redis)
+
+    if scope == "org":
+        return await _list_org_sessions(
+            user_data, validator, chat_history_manager, request_id
+        )
+
+    # scope == "team"
+    if not team_id:
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("team_id required for team scope")
+
+    return await _list_team_sessions(
+        team_id, validator, chat_history_manager, request_id
+    )
+
+
+async def _list_org_sessions(
+    user_data: dict,
+    validator,
+    chat_history_manager,
+    request_id: str,
+):
+    """List all sessions in the user's organization.
+
+    Requires admin or org_admin role.
+
+    Helper for _list_scoped_sessions (#684).
+    """
+    org_id = user_data.get("org_id")
+    user_role = user_data.get("role", "")
+    if not org_id:
+        return create_success_response(
+            data={"sessions": [], "count": 0, "scope": "org"},
+            message="User has no organization",
+            request_id=request_id,
+        )
+    if user_role not in ("admin", "org_admin"):
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Admin role required for org-scoped listing")
+
+    session_ids = set(await validator.get_org_sessions(org_id))
+    all_sessions = await chat_history_manager.list_sessions_fast()
+    filtered = [s for s in all_sessions if s.get("id") in session_ids]
+    filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
+
+    return create_success_response(
+        data={
+            "sessions": filtered,
+            "count": len(filtered),
+            "scope": "org",
+            "org_id": org_id,
+        },
+        message="Organization sessions retrieved",
+        request_id=request_id,
+    )
+
+
+async def _list_team_sessions(
+    team_id: str,
+    validator,
+    chat_history_manager,
+    request_id: str,
+):
+    """List all sessions for a specific team.
+
+    Helper for _list_scoped_sessions (#684).
+    """
+    session_ids = set(await validator.get_team_sessions(team_id))
+    all_sessions = await chat_history_manager.list_sessions_fast()
+    filtered = [s for s in all_sessions if s.get("id") in session_ids]
+    filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
+
+    return create_success_response(
+        data={
+            "sessions": filtered,
+            "count": len(filtered),
+            "scope": "team",
+            "team_id": team_id,
+        },
+        message="Team sessions retrieved",
+        request_id=request_id,
+    )
+
+
+async def _register_session_ownership(
+    user_data: Optional[dict],
+    session_id: str,
+    team_id: Optional[str],
+) -> None:
+    """Register session ownership with org/team indices in Redis.
+
+    Helper for create_session (#684).
+    """
+    if not user_data or not user_data.get("username"):
+        return
+    try:
+        from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+
+        redis = await get_redis_mgr(async_client=True, database="main")
+        validator = _build_ownership_validator(redis)
+        await validator.set_session_owner(
+            session_id=session_id,
+            username=user_data["username"],
+            org_id=user_data.get("org_id"),
+            team_id=team_id,
+        )
+    except Exception as e:
+        logger.warning("Failed to register session ownership: %s", e)
 
 
 async def _track_session_in_memory_graph(
@@ -498,8 +700,18 @@ async def create_session(session_data: SessionCreate, request: Request):
     if user_data and user_data.get("username"):
         metadata["owner"] = user_data["username"]
         metadata["username"] = user_data["username"]  # For backward compatibility
+        # Issue #684: Capture org/team hierarchy in session metadata
+        if user_data.get("user_id"):
+            metadata["user_id"] = user_data["user_id"]
+        if user_data.get("org_id"):
+            metadata["org_id"] = user_data["org_id"]
+        if session_data.team_id:
+            metadata["team_id"] = session_data.team_id
         logger.info(
-            "Session %s created with owner: %s", session_id, user_data["username"]
+            "Session %s created with owner: %s (org: %s)",
+            session_id,
+            user_data["username"],
+            user_data.get("org_id", "none"),
         )
 
     session = await chat_history_manager.create_session(
@@ -513,6 +725,9 @@ async def create_session(session_data: SessionCreate, request: Request):
         session_id,
         {"title": session_title, "request_id": request_id},
     )
+
+    # Issue #684: Register session ownership with org/team context
+    await _register_session_ownership(user_data, session_id, session_data.team_id)
 
     # Issue #665: Use helper for memory graph tracking
     await _track_session_in_memory_graph(

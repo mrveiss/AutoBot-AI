@@ -42,7 +42,7 @@ import redis
 from redis.commands.search.field import NumericField, TagField, TextField, VectorField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 # Configure logging
 logging.basicConfig(
@@ -401,6 +401,96 @@ class MemoryGraphInitializer:
             logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
 
+    def _extract_observations_and_topics(self, messages: list) -> tuple:
+        """Extract observations and topics from conversation messages.
+
+        Helper for _conversation_to_entity (Issue #825).
+
+        Returns:
+            Tuple of (observations, topics)
+        """
+        observations = []
+        topics = set()
+
+        topic_keywords = [
+            "redis",
+            "database",
+            "frontend",
+            "backend",
+            "api",
+            "vue",
+            "python",
+            "docker",
+            "chromadb",
+            "npu",
+            "deployment",
+            "security",
+            "training",
+            "knowledge base",
+            "autobot",
+            "vm",
+            "distributed",
+            "memory graph",
+        ]
+
+        decision_markers = [
+            "DECISION:",
+            "FIX:",
+            "IMPLEMENTED:",
+            "RESOLVED:",
+            "CONFIGURED:",
+        ]
+
+        for msg in messages:
+            content = msg.get("assistant", "") or msg.get("user", "")
+
+            if any(marker in content for marker in decision_markers):
+                observations.append(content[:200])
+
+            content_lower = content.lower()
+            for keyword in topic_keywords:
+                if keyword in content_lower:
+                    topics.add(keyword.title())
+
+        return observations, topics
+
+    def _create_entity_from_transcript(
+        self, conv_id: str, messages: list, observations: list, topics: set, transcript: dict, transcript_path: Path
+    ) -> Dict[str, Any]:
+        """Create entity dictionary from transcript data.
+
+        Helper for _conversation_to_entity (Issue #825).
+        """
+        created_at = transcript.get("created_at", datetime.now().isoformat())
+        updated_at = transcript.get("updated_at", created_at)
+
+        try:
+            created_ts = int(datetime.fromisoformat(created_at).timestamp() * 1000)
+            updated_ts = int(datetime.fromisoformat(updated_at).timestamp() * 1000)
+        except Exception:
+            created_ts = int(time.time() * 1000)
+            updated_ts = created_ts
+
+        return {
+            "id": conv_id,
+            "type": "conversation",
+            "name": f"Conversation {conv_id[:8]}...",
+            "created_at": created_ts,
+            "updated_at": updated_ts,
+            "observations": observations[:10],
+            "metadata": {
+                "session_id": conv_id,
+                "user_id": "autobot",
+                "message_count": len(messages),
+                "topics": list(topics),
+                "status": "archived",
+                "priority": "low",
+                "tags": list(topics)[:5],
+                "migrated_from": "transcript",
+                "original_file": transcript_path.name,
+            },
+        }
+
     def _conversation_to_entity(
         self, transcript_path: Path
     ) -> Optional[Dict[str, Any]]:
@@ -416,88 +506,14 @@ class MemoryGraphInitializer:
             with open(transcript_path, "r") as f:
                 transcript = json.load(f)
 
-            # Extract conversation ID from filename
             conv_id = transcript.get("session_id", transcript_path.stem)
-
-            # Analyze messages to extract observations and topics
             messages = transcript.get("messages", [])
-            observations = []
-            topics = set()
 
-            # Keywords to identify topics
-            topic_keywords = [
-                "redis",
-                "database",
-                "frontend",
-                "backend",
-                "api",
-                "vue",
-                "python",
-                "docker",
-                "chromadb",
-                "npu",
-                "deployment",
-                "security",
-                "training",
-                "knowledge base",
-                "autobot",
-                "vm",
-                "distributed",
-                "memory graph",
-            ]
+            observations, topics = self._extract_observations_and_topics(messages)
 
-            for msg in messages:
-                content = msg.get("assistant", "") or msg.get("user", "")
-
-                # Extract key observations (decisions, fixes, implementations)
-                decision_markers = [
-                    "DECISION:",
-                    "FIX:",
-                    "IMPLEMENTED:",
-                    "RESOLVED:",
-                    "CONFIGURED:",
-                ]
-                if any(marker in content for marker in decision_markers):
-                    # Truncate to 200 chars for observations
-                    observations.append(content[:200])
-
-                # Extract topics from content
-                content_lower = content.lower()
-                for keyword in topic_keywords:
-                    if keyword in content_lower:
-                        topics.add(keyword.title())
-
-            # Create entity
-            created_at = transcript.get("created_at", datetime.now().isoformat())
-            updated_at = transcript.get("updated_at", created_at)
-
-            # Convert ISO timestamps to Unix milliseconds
-            try:
-                created_ts = int(datetime.fromisoformat(created_at).timestamp() * 1000)
-                updated_ts = int(datetime.fromisoformat(updated_at).timestamp() * 1000)
-            except Exception:
-                created_ts = int(time.time() * 1000)
-                updated_ts = created_ts
-
-            entity = {
-                "id": conv_id,
-                "type": "conversation",
-                "name": f"Conversation {conv_id[:8]}...",
-                "created_at": created_ts,
-                "updated_at": updated_ts,
-                "observations": observations[:10],  # Limit to top 10
-                "metadata": {
-                    "session_id": conv_id,
-                    "user_id": "autobot",
-                    "message_count": len(messages),
-                    "topics": list(topics),
-                    "status": "archived",
-                    "priority": "low",
-                    "tags": list(topics)[:5],  # Limit tags
-                    "migrated_from": "transcript",
-                    "original_file": transcript_path.name,
-                },
-            }
+            entity = self._create_entity_from_transcript(
+                conv_id, messages, observations, topics, transcript, transcript_path
+            )
 
             return entity
 
@@ -848,8 +864,11 @@ class MemoryGraphInitializer:
             logger.warning("Error during cleanup: %s", e)
 
 
-def main():
-    """Main execution function"""
+def _create_memory_graph_argument_parser() -> argparse.ArgumentParser:
+    """Create argument parser for memory graph initialization.
+
+    Helper for main (Issue #825).
+    """
     parser = argparse.ArgumentParser(
         description="Initialize Redis Memory Graph infrastructure for AutoBot"
     )
@@ -871,19 +890,59 @@ def main():
         action="store_true",
         help="Rollback changes (drop created indexes)",
     )
+    return parser
 
+
+def _execute_memory_graph_phases(initializer: MemoryGraphInitializer, args) -> bool:
+    """Execute the specified phases of memory graph initialization.
+
+    Helper for main (Issue #825).
+    """
+    if args.validate:
+        logger.info("=" * 80)
+        logger.info("PHASE 2: Index Validation")
+        logger.info("=" * 80)
+
+        validation = initializer.validate_indexes()
+        logger.info("\nValidation Results:")
+        logger.info(json.dumps(validation, indent=2))
+
+    if args.migrate:
+        logger.info("=" * 80)
+        logger.info("PHASE 3: Conversation Migration")
+        logger.info("=" * 80)
+
+        transcript_dir = Path(
+            "/home/kali/Desktop/AutoBot/data/conversation_transcripts"
+        )
+        migration_stats = initializer.migrate_conversations(transcript_dir)
+        logger.info("\nMigration Results:")
+        logger.info(json.dumps(migration_stats, indent=2))
+
+    if args.benchmark:
+        logger.info("=" * 80)
+        logger.info("PHASE 4: Performance Benchmarking")
+        logger.info("=" * 80)
+
+        benchmarks = initializer.benchmark_performance()
+        logger.info("\nPerformance Benchmarks:")
+        logger.info(json.dumps(benchmarks, indent=2))
+
+    return True
+
+
+def main():
+    """Main execution function"""
+    parser = _create_memory_graph_argument_parser()
     args = parser.parse_args()
 
-    # Initialize
     initializer = MemoryGraphInitializer()
 
     try:
-        # Connect to Redis
         if not initializer.connect():
             logger.error("Failed to connect to Redis, aborting")
             sys.exit(1)
 
-        # Handle rollback
         if args.rollback:
             if initializer.rollback():
                 logger.info("✓ Rollback completed successfully")
@@ -892,7 +951,6 @@ def main():
                 logger.error("Rollback failed")
                 sys.exit(1)
 
-        # Create indexes
         logger.info("=" * 80)
         logger.info("PHASE 1: Index Creation")
         logger.info("=" * 80)
@@ -901,38 +959,7 @@ def main():
             logger.error("Index creation failed, aborting")
             sys.exit(1)
 
-        # Validate indexes
-        if args.validate:
-            logger.info("=" * 80)
-            logger.info("PHASE 2: Index Validation")
-            logger.info("=" * 80)
-
-            validation = initializer.validate_indexes()
-            print("\nValidation Results:")
-            print(json.dumps(validation, indent=2))
-
-        # Migrate conversations
-        if args.migrate:
-            logger.info("=" * 80)
-            logger.info("PHASE 3: Conversation Migration")
-            logger.info("=" * 80)
-
-            transcript_dir = Path(
-                "/home/kali/Desktop/AutoBot/data/conversation_transcripts"
-            )
-            migration_stats = initializer.migrate_conversations(transcript_dir)
-            print("\nMigration Results:")
-            print(json.dumps(migration_stats, indent=2))
-
-        # Benchmark performance
-        if args.benchmark:
-            logger.info("=" * 80)
-            logger.info("PHASE 4: Performance Benchmarking")
-            logger.info("=" * 80)
-
-            benchmarks = initializer.benchmark_performance()
-            print("\nPerformance Benchmarks:")
-            print(json.dumps(benchmarks, indent=2))
+        _execute_memory_graph_phases(initializer, args)
 
         logger.info("=" * 80)
         logger.info("✓ Memory Graph initialization completed successfully")

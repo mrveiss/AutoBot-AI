@@ -26,9 +26,9 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 # Import AutoBot modules after path setup
-from src.chat_history_manager import ChatHistoryManager  # noqa: E402
-from src.config import config as global_config_manager  # noqa: E402
-from src.encryption_service import (  # noqa: E402
+from chat_history_manager import ChatHistoryManager  # noqa: E402
+from config import config as global_config_manager  # noqa: E402
+from encryption_service import (  # noqa: E402
     get_encryption_service,
     is_encryption_enabled,
 )
@@ -192,27 +192,27 @@ class ChatEncryptionMigrator:
 
     def print_statistics(self):
         """Print migration statistics."""
-        print("\n" + "=" * 60)
-        print("CHAT HISTORY ENCRYPTION MIGRATION RESULTS")
-        print("=" * 60)
-        print(f"Total files found: {self.stats['total_files']}")
-        print(f"Successfully migrated: {self.stats['migrated']}")
-        print(f"Skipped (already encrypted): {self.stats['skipped']}")
-        print(f"Errors: {self.stats['errors']}")
+        logger.info("\n" + "=" * 60)
+        logger.info("CHAT HISTORY ENCRYPTION MIGRATION RESULTS")
+        logger.info("=" * 60)
+        logger.info(f"Total files found: {self.stats['total_files']}")
+        logger.info(f"Successfully migrated: {self.stats['migrated']}")
+        logger.info(f"Skipped (already encrypted): {self.stats['skipped']}")
+        logger.error(f"Errors: {self.stats['errors']}")
 
         if self.stats["total_files"] > 0:
             success_rate = (
                 (self.stats["migrated"] + self.stats["skipped"])
                 / self.stats["total_files"]
             ) * 100
-            print(f"Success rate: {success_rate:.1f}%")
+            logger.info(f"Success rate: {success_rate:.1f}%")
 
         if self.dry_run:
-            print("\nNOTE: This was a DRY RUN - no files were actually modified")
+            logger.info("\nNOTE: This was a DRY RUN - no files were actually modified")
         elif self.create_backup:
-            print("\nOriginal files have been backed up")
+            logger.info("\nOriginal files have been backed up")
 
-        print("=" * 60)
+        logger.info("=" * 60)
 
 
 def main():
@@ -238,22 +238,22 @@ def main():
 
     # Check if encryption is enabled
     if not is_encryption_enabled() and not args.force:
-        print("❌ Encryption is not enabled in configuration")
-        print("To enable encryption:")
-        print("1. Set AUTOBOT_ENCRYPTION_KEY environment variable")
-        print("2. Set security.enable_encryption to true in config")
-        print("3. Or use --force to migrate anyway")
+        logger.error("❌ Encryption is not enabled in configuration")
+        logger.info("To enable encryption:")
+        logger.info("1. Set AUTOBOT_ENCRYPTION_KEY environment variable")
+        logger.info("2. Set security.enable_encryption to true in config")
+        logger.info("3. Or use --force to migrate anyway")
         sys.exit(1)
 
     # Check if encryption key is available
     try:
         encryption_service = get_encryption_service()
         key_info = encryption_service.get_key_info()
-        print(f"✅ Encryption service available: {key_info['algorithm']}")
+        logger.info(f"✅ Encryption service available: {key_info['algorithm']}")
     except Exception as e:
-        print(f"❌ Encryption service not available: {e}")
+        logger.error(f"❌ Encryption service not available: {e}")
         if not args.force:
-            print("Use --force to proceed anyway (not recommended)")
+            logger.info("Use --force to proceed anyway (not recommended)")
             sys.exit(1)
 
     # Initialize migrator
@@ -262,19 +262,19 @@ def main():
     )
 
     # Perform migration
-    print("🔒 Starting chat history encryption migration...")
+    logger.info("🔒 Starting chat history encryption migration...")
 
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No files will be modified")
+        logger.info("🔍 DRY RUN MODE - No files will be modified")
 
     success = migrator.migrate_all_chats()
     migrator.print_statistics()
 
     if success:
-        print("✅ Migration completed successfully!")
+        logger.info("✅ Migration completed successfully!")
         sys.exit(0)
     else:
-        print("❌ Migration completed with errors")
+        logger.error("❌ Migration completed with errors")
         sys.exit(1)
 
 

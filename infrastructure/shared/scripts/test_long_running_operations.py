@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # Import our framework
 try:
-    from src.utils.long_running_operations_framework import (
+    from utils.long_running_operations_framework import (
         LongRunningOperationManager,
         OperationPriority,
         OperationStatus,
@@ -47,7 +47,7 @@ try:
         execute_codebase_indexing,
         execute_comprehensive_test_suite,
     )
-    from src.utils.timeout_migration_examples import ExistingOperationMigrator
+    from utils.timeout_migration_examples import ExistingOperationMigrator
 
     FRAMEWORK_AVAILABLE = True
 except ImportError as e:
@@ -90,9 +90,9 @@ class LongRunningOperationsDemo:
         timeout becomes robust with dynamic timeouts, checkpointing, and
         progress tracking.
         """
-        print("\n" + "=" * 60)
-        print("DEMO: Codebase Indexing with Intelligent Timeouts")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("DEMO: Codebase Indexing with Intelligent Timeouts")
+        logger.info("=" * 60)
 
         print(
             """
@@ -113,8 +113,8 @@ class LongRunningOperationsDemo:
         # Start enhanced indexing operation
         operation_id = await self.migrator.migrate_knowledge_base_indexing()
 
-        print(f"\nStarted enhanced codebase indexing: {operation_id}")
-        print("Monitoring progress...")
+        logger.info(f"\nStarted enhanced codebase indexing: {operation_id}")
+        logger.info("Monitoring progress...")
 
         # Monitor operation progress
         await self._monitor_operation(operation_id, "Codebase Indexing")
@@ -129,9 +129,9 @@ class LongRunningOperationsDemo:
         adapt to the actual number of tests and can resume from
         the last completed test.
         """
-        print("\n" + "=" * 60)
-        print("DEMO: Comprehensive Test Suite with Checkpoint/Resume")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("DEMO: Comprehensive Test Suite with Checkpoint/Resume")
+        logger.info("=" * 60)
 
         print(
             """
@@ -152,8 +152,8 @@ class LongRunningOperationsDemo:
         # Start enhanced test suite
         operation_id = await self.migrator.migrate_comprehensive_test_suite()
 
-        print(f"\nStarted enhanced test suite: {operation_id}")
-        print("Monitoring test progress...")
+        logger.info(f"\nStarted enhanced test suite: {operation_id}")
+        logger.info("Monitoring test progress...")
 
         # Monitor operation progress
         await self._monitor_operation(operation_id, "Test Suite")
@@ -167,9 +167,9 @@ class LongRunningOperationsDemo:
         Shows how security scans adapt to codebase size and can
         resume from the last scanned file.
         """
-        print("\n" + "=" * 60)
-        print("DEMO: Security Scanning with Incremental Progress")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("DEMO: Security Scanning with Incremental Progress")
+        logger.info("=" * 60)
 
         print(
             """
@@ -190,8 +190,8 @@ class LongRunningOperationsDemo:
         # Start enhanced security scan
         operation_id = await self.migrator.migrate_security_scan_operation()
 
-        print(f"\nStarted enhanced security scan: {operation_id}")
-        print("Monitoring scan progress...")
+        logger.info(f"\nStarted enhanced security scan: {operation_id}")
+        logger.info("Monitoring scan progress...")
 
         # Monitor operation progress
         await self._monitor_operation(operation_id, "Security Scan")
@@ -205,11 +205,11 @@ class LongRunningOperationsDemo:
         This shows how operations can be interrupted and resumed
         from the exact point where they left off.
         """
-        print("\n" + "=" * 60)
-        print("DEMO: Checkpoint and Resume Capabilities")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("DEMO: Checkpoint and Resume Capabilities")
+        logger.info("=" * 60)
 
-        print("Creating a long-running operation that we'll interrupt...")
+        logger.info("Creating a long-running operation that we'll interrupt...")
 
         # Create a long operation that we can interrupt
         async def interruptible_operation(context):
@@ -267,7 +267,7 @@ class LongRunningOperationsDemo:
             execute_immediately=True,
         )
 
-        print(f"Started interruptible operation: {operation_id}")
+        logger.info(f"Started interruptible operation: {operation_id}")
 
         # Wait for it to fail
         while True:
@@ -277,7 +277,7 @@ class LongRunningOperationsDemo:
             await asyncio.sleep(1)
 
         if operation.status == OperationStatus.FAILED:
-            print(f"Operation failed as expected: {operation.error_info}")
+            logger.error(f"Operation failed as expected: {operation.error_info}")
 
             # Find the latest checkpoint
             checkpoints = await self.manager.checkpoint_manager.list_checkpoints(
@@ -290,21 +290,21 @@ class LongRunningOperationsDemo:
                 )
 
                 # Resume from checkpoint
-                print("Resuming operation from checkpoint...")
+                logger.info("Resuming operation from checkpoint...")
                 new_operation_id = await self.manager.resume_operation(
                     latest_checkpoint.checkpoint_id
                 )
 
-                print(f"Resumed as new operation: {new_operation_id}")
+                logger.info(f"Resumed as new operation: {new_operation_id}")
 
                 # Monitor the resumed operation
                 await self._monitor_operation(new_operation_id, "Resumed Operation")
 
                 return new_operation_id
             else:
-                print("No checkpoints found!")
+                logger.info("No checkpoints found!")
         else:
-            print("Operation completed without interruption")
+            logger.info("Operation completed without interruption")
 
         return operation_id
 
@@ -315,11 +315,11 @@ class LongRunningOperationsDemo:
         Shows how the framework manages multiple long-running operations
         concurrently with proper resource control.
         """
-        print("\n" + "=" * 60)
-        print("DEMO: Concurrent Operation Management")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("DEMO: Concurrent Operation Management")
+        logger.info("=" * 60)
 
-        print("Starting multiple operations concurrently...")
+        logger.info("Starting multiple operations concurrently...")
 
         # Start multiple operations
         operations = []
@@ -355,12 +355,12 @@ class LongRunningOperationsDemo:
         )
         operations.append(("Analysis", analysis_op))
 
-        print(f"Started {len(operations)} concurrent operations:")
+        logger.info(f"Started {len(operations)} concurrent operations:")
         for name, op_id in operations:
-            print(f"  - {name}: {op_id}")
+            logger.info(f"  - {name}: {op_id}")
 
         # Monitor all operations
-        print("\nMonitoring concurrent operations...")
+        logger.info("\nMonitoring concurrent operations...")
 
         while True:
             all_completed = True
@@ -378,19 +378,19 @@ class LongRunningOperationsDemo:
                 ]:
                     all_completed = False
 
-            print(f"\rProgress - {' | '.join(status_line)}", end="", flush=True)
+            logger.info(f"\rProgress - {' | '.join(status_line)}", end="", flush=True)
 
             if all_completed:
                 break
 
             await asyncio.sleep(2)
 
-        print("\nAll concurrent operations completed!")
+        logger.info("\nAll concurrent operations completed!")
 
         # Show final results
         for name, op_id in operations:
             operation = self.manager.get_operation(op_id)
-            print(f"{name}: {operation.status.value}")
+            logger.info(f"{name}: {operation.status.value}")
 
         return operations
 
@@ -432,7 +432,7 @@ class LongRunningOperationsDemo:
         elapsed = (datetime.now() - start_time).total_seconds()
 
         if operation.status == OperationStatus.COMPLETED:
-            print(f"✅ {operation_name} completed successfully in {elapsed:.1f}s")
+            logger.info(f"✅ {operation_name} completed successfully in {elapsed:.1f}s")
             if operation.result:
                 # Show key metrics from result
                 result = operation.result
@@ -446,21 +446,21 @@ class LongRunningOperationsDemo:
                             "total_vulnerabilities",
                             "success_rate",
                         ]:
-                            print(f"   {key}: {value}")
+                            logger.info(f"   {key}: {value}")
         else:
-            print(f"❌ {operation_name} failed: {operation.status.value}")
+            logger.error(f"❌ {operation_name} failed: {operation.status.value}")
             if operation.error_info:
-                print(f"   Error: {operation.error_info}")
+                logger.error(f"   Error: {operation.error_info}")
 
     async def run_demo(self, demo_type: str = "all"):
         """Run the specified demonstration"""
 
-        print("AutoBot Long-Running Operations Framework Demo")
-        print("=" * 50)
-        print(f"Framework available: {FRAMEWORK_AVAILABLE}")
+        logger.info("AutoBot Long-Running Operations Framework Demo")
+        logger.info("=" * 50)
+        logger.info(f"Framework available: {FRAMEWORK_AVAILABLE}")
 
         if not FRAMEWORK_AVAILABLE:
-            print("Framework not available - please check imports")
+            logger.info("Framework not available - please check imports")
             return
 
         await self.initialize()
@@ -481,9 +481,9 @@ class LongRunningOperationsDemo:
             if demo_type in ["all", "concurrent"]:
                 await self.demo_concurrent_operations()
 
-            print("\n" + "=" * 60)
-            print("DEMONSTRATION COMPLETE")
-            print("=" * 60)
+            logger.info("\n" + "=" * 60)
+            logger.info("DEMONSTRATION COMPLETE")
+            logger.info("=" * 60)
             print(
                 """
             Key Benefits Demonstrated:

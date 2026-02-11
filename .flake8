@@ -76,6 +76,9 @@ per-file-ignores =
     src/middleware/llm_awareness_middleware.py:E501
     src/planner/planner.py:E501
     src/prompt_manager.py:E501
+    # Dashboard/monitoring files with long command strings and JS templates
+    autobot-slm-backend/monitoring/performance_dashboard.py:E501
+    autobot-slm-backend/monitoring/performance_optimizer.py:E501
 
 # Statistics and verbosity
 statistics = True

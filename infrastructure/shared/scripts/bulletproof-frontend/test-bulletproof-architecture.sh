@@ -7,9 +7,10 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FRONTEND_VM="172.16.168.21"
-FRONTEND_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 TEST_RESULTS_DIR="/tmp/bulletproof-test-results"
 
 # Colors
@@ -112,13 +113,13 @@ test_deployment_architecture() {
 
     ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
         # Check if service directory exists and is correct
-        if [ ! -d "/opt/autobot/src/autobot-vue" ]; then
+        if [ ! -d "/opt/autobot/src/autobot-slm-frontend" ]; then
             echo "ERROR: Service directory missing"
             exit 1
         fi
 
         # Check ownership
-        owner=$(stat -c '%U' /opt/autobot/src/autobot-vue)
+        owner=$(stat -c '%U' /opt/autobot/src/autobot-slm-frontend)
         if [ "$owner" != "autobot-service" ]; then
             echo "ERROR: Incorrect ownership (expected: autobot-service, got: $owner)"
             exit 1
@@ -127,7 +128,7 @@ test_deployment_architecture() {
         # Check critical files
         critical_files=("package.json" "vite.config.ts" "src/App.vue")
         for file in "${critical_files[@]}"; do
-            if [ ! -f "/opt/autobot/src/autobot-vue/$file" ]; then
+            if [ ! -f "/opt/autobot/src/autobot-slm-frontend/$file" ]; then
                 echo "ERROR: Critical file missing: $file"
                 exit 1
             fi
@@ -252,19 +253,19 @@ test_service_restart_recovery() {
     log_debug "Testing service restart recovery..."
 
     # Kill the service and check if it recovers
-    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << 'EOF'
+    ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" << EOF
         echo "Killing frontend service for restart test..."
         pkill -f "vite.*5173" || true
         sleep 3
 
         # Start service again
-        cd /opt/autobot/src/autobot-vue
-        export VITE_BACKEND_HOST=172.16.168.20
-        export VITE_BACKEND_PORT=8001
+        cd /opt/autobot/src/autobot-slm-frontend
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 
-        nohup npm run dev -- --host 0.0.0.0 --port 5173 > logs/frontend.log 2>&1 &
-        echo $! > /tmp/frontend.pid
+        nohup npm run dev -- --host 0.0.0.0 --port ${AUTOBOT_FRONTEND_PORT:-5173} > logs/frontend.log 2>&1 &
+        echo \$! > /tmp/frontend.pid
 
         echo "Service restarted"
 EOF
@@ -337,12 +338,12 @@ test_file_sync_integrity() {
     local local_hash=""
     local remote_hash=""
 
-    if [ -f "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue" ]; then
-        local_hash=$(sha256sum "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue" | cut -d' ' -f1)
+    if [ -f "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/App.vue" ]; then
+        local_hash=$(sha256sum "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/App.vue" | cut -d' ' -f1)
     fi
 
     remote_hash=$(ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \
-        "sha256sum /opt/autobot/src/autobot-vue/src/App.vue 2>/dev/null | cut -d' ' -f1" || echo "")
+        "sha256sum /opt/autobot/src/autobot-slm-frontend/src/App.vue 2>/dev/null | cut -d' ' -f1" || echo "")
 
     if [ -n "$local_hash" ] && [ -n "$remote_hash" ] && [ "$local_hash" = "$remote_hash" ]; then
         return 0

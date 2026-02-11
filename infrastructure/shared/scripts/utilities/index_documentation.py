@@ -44,7 +44,7 @@ from dotenv import load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-from src.knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase
 
 # Configure logging
 logging.basicConfig(
@@ -408,47 +408,42 @@ async def discover_documentation_files(
     return discovered_files
 
 
-async def index_all_documentation(
-    reindex: bool = False, category_filter: Optional[str] = None, dry_run: bool = False
-) -> Dict[str, Any]:
+async def _handle_dry_run(discovered_files: List[Tuple]) -> Dict[str, Any]:
     """
-    Index all AutoBot documentation into knowledge base.
+    Handle dry run mode for documentation indexing.
+
+    Helper for index_all_documentation (#825).
 
     Args:
-        reindex: Force reindex all documentation
-        category_filter: Only index specific category
-        dry_run: Preview without actually indexing
+        discovered_files: List of (file_path, category) tuples
 
     Returns:
-        Summary of indexing operation
+        Dry run result dictionary
     """
-    logger.info("Starting documentation indexing...")
+    logger.info("DRY RUN - Preview of files to be indexed:")
+    for file_path, category in discovered_files:
+        logger.info("  [%15s] %s", category, file_path.relative_to(PROJECT_ROOT))
+    return {
+        "status": "dry_run",
+        "total_files": len(discovered_files),
+        "files": [str(f[0].relative_to(PROJECT_ROOT)) for f in discovered_files],
+    }
 
-    # Initialize knowledge base
-    kb = KnowledgeBase()
-    await kb.initialize()
 
-    if not kb.initialized:
-        logger.error("Failed to initialize knowledge base")
-        return {"status": "error", "message": "Knowledge base initialization failed"}
+async def _index_files(kb, discovered_files: List[Tuple], reindex: bool) -> Dict[str, Any]:
+    """
+    Index discovered documentation files.
 
-    # Discover documentation files
-    docs_dir = PROJECT_ROOT / "docs"
-    discovered_files = await discover_documentation_files(docs_dir, category_filter)
+    Helper for index_all_documentation (#825).
 
-    logger.info("Discovered %s documentation files", len(discovered_files))
+    Args:
+        kb: KnowledgeBase instance
+        discovered_files: List of (file_path, category) tuples
+        reindex: Whether to force reindex
 
-    if dry_run:
-        logger.info("DRY RUN - Preview of files to be indexed:")
-        for file_path, category in discovered_files:
-            logger.info("  [%15s] %s", category, file_path.relative_to(PROJECT_ROOT))
-        return {
-            "status": "dry_run",
-            "total_files": len(discovered_files),
-            "files": [str(f[0].relative_to(PROJECT_ROOT)) for f in discovered_files],
-        }
-
-    # Index each document
+    Returns:
+        Results dictionary
+    """
     results = {
         "total_files": len(discovered_files),
         "indexed": 0,
@@ -481,6 +476,45 @@ async def index_all_documentation(
         # Progress update every 10 files
         if i % 10 == 0:
             logger.info("Progress: %s/%s files processed", i, len(discovered_files))
+
+    return results
+
+
+async def index_all_documentation(
+    reindex: bool = False, category_filter: Optional[str] = None, dry_run: bool = False
+) -> Dict[str, Any]:
+    """
+    Index all AutoBot documentation into knowledge base.
+
+    Args:
+        reindex: Force reindex all documentation
+        category_filter: Only index specific category
+        dry_run: Preview without actually indexing
+
+    Returns:
+        Summary of indexing operation
+    """
+    logger.info("Starting documentation indexing...")
+
+    # Initialize knowledge base
+    kb = KnowledgeBase()
+    await kb.initialize()
+
+    if not kb.initialized:
+        logger.error("Failed to initialize knowledge base")
+        return {"status": "error", "message": "Knowledge base initialization failed"}
+
+    # Discover documentation files
+    docs_dir = PROJECT_ROOT / "docs"
+    discovered_files = await discover_documentation_files(docs_dir, category_filter)
+
+    logger.info("Discovered %s documentation files", len(discovered_files))
+
+    if dry_run:
+        return await _handle_dry_run(discovered_files)
+
+    # Index each document
+    results = await _index_files(kb, discovered_files, reindex)
 
     # Close knowledge base
     await kb.close()

@@ -12,50 +12,34 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.frontend_analyzer import FrontendAnalyzer
+import logging
 
 
-async def analyze_frontend_code():
-    """Run comprehensive frontend code analysis"""
 
-    print("🎨 Starting frontend code analysis...")
-    print(
-        "Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files..."
-    )
-    print()
+logger = logging.getLogger(__name__)
 
-    analyzer = FrontendAnalyzer()
+async def _display_summary_and_framework_usage(results):
+    """Display summary and framework usage breakdown.
 
-    # Analyze frontend code
-    results = await analyzer.analyze_frontend_code(
-        root_path="..",
-        patterns=[
-            "autobot-vue/src/**/*.js",
-            "autobot-vue/src/**/*.ts",
-            "autobot-vue/src/**/*.jsx",
-            "autobot-vue/src/**/*.tsx",
-            "autobot-vue/src/**/*.vue",
-            "autobot-vue/src/**/*.svelte",
-            "autobot-vue/index.html",
-        ],
-    )
-
-    print("=== Frontend Code Analysis Results ===\n")
+    Helper for analyze_frontend_code (Issue #825).
+    """
+    logger.info("=== Frontend Code Analysis Results ===\n")
 
     # Summary
-    print(f"📊 **Analysis Summary:**")
-    print(f"   • Total components analyzed: {results['total_components']}")
-    print(f"   • Total issues found: {results['total_issues']}")
-    print(f"   • Frameworks detected: {', '.join(results['frameworks_detected'])}")
-    print(f"   • Overall quality score: {results['quality_score']:.1f}/100")
-    print(f"   • Analysis time: {results['analysis_time_seconds']:.2f} seconds")
-    print()
+    logger.info(f"📊 **Analysis Summary:**")
+    logger.info(f"   • Total components analyzed: {results['total_components']}")
+    logger.info(f"   • Total issues found: {results['total_issues']}")
+    logger.info(f"   • Frameworks detected: {', '.join(results['frameworks_detected'])}")
+    logger.info(f"   • Overall quality score: {results['quality_score']:.1f}/100")
+    logger.info(f"   • Analysis time: {results['analysis_time_seconds']:.2f} seconds")
+    logger.info()
 
     # Framework breakdown
     if results["framework_usage"]:
-        print("🏗️ **Framework Usage:**")
+        logger.info("🏗️ **Framework Usage:**")
         for framework, usage in results["framework_usage"].items():
             framework_name = framework.title()
-            print(
+            logger.info(
                 f"   • {framework_name}: {usage['count']} components ({usage['percentage']:.1f}%)"
             )
 
@@ -63,12 +47,17 @@ async def analyze_frontend_code():
                 hooks = ", ".join(usage["lifecycle_hooks"][:5])
                 if len(usage["lifecycle_hooks"]) > 5:
                     hooks += f" +{len(usage['lifecycle_hooks']) - 5} more"
-                print(f"     Common hooks/patterns: {hooks}")
-        print()
+                logger.info(f"     Common hooks/patterns: {hooks}")
+        logger.info()
 
-    # Component analysis
+
+async def _display_component_analysis(results):
+    """Display component analysis and complexity.
+
+    Helper for analyze_frontend_code (Issue #825).
+    """
     if results["components"]:
-        print("🧩 **Component Analysis:**")
+        logger.info("🧩 **Component Analysis:**")
 
         components_with_tests = len(
             [c for c in results["components"] if c["has_tests"]]
@@ -79,7 +68,7 @@ async def analyze_frontend_code():
             else 0
         )
 
-        print(
+        logger.info(
             f"   • Components with tests: {components_with_tests}/{len(results['components'])} ({test_coverage:.1f}%)"
         )
 
@@ -91,72 +80,83 @@ async def analyze_frontend_code():
         )[:3]
 
         if complex_components:
-            print("   • Most complex components:")
+            logger.info("   • Most complex components:")
             for comp in complex_components:
                 complexity = len(comp["methods"]) + len(comp["props"])
-                print(
+                logger.info(
                     f"     - {comp['name']} ({comp['component_type']}): {complexity} methods+props"
                 )
-        print()
+        logger.info()
 
+
+async def _display_security_performance_accessibility(results):
+    """Display security, performance, and accessibility analyses.
+
+    Helper for analyze_frontend_code (Issue #825).
+    """
     # Security analysis
     security_analysis = results["security_analysis"]
-    print(f"🛡️ **Security Analysis:**")
-    print(f"   • Total security issues: {security_analysis['total_security_issues']}")
-    print(f"   • Critical issues: {security_analysis['critical_issues']}")
-    print(f"   • High priority issues: {security_analysis['high_priority_issues']}")
-    print(f"   • Security score: {security_analysis['security_score']:.1f}/100")
+    logger.info(f"🛡️ **Security Analysis:**")
+    logger.info(f"   • Total security issues: {security_analysis['total_security_issues']}")
+    logger.info(f"   • Critical issues: {security_analysis['critical_issues']}")
+    logger.info(f"   • High priority issues: {security_analysis['high_priority_issues']}")
+    logger.info(f"   • Security score: {security_analysis['security_score']:.1f}/100")
 
     if security_analysis["total_security_issues"] > 0:
         security_issues = [
             i for i in results["issues"] if i["issue_type"] == "security"
         ]
-        print("   • Top security issues:")
+        logger.info("   • Top security issues:")
         for issue in security_issues[:3]:  # Show top 3
             severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
             emoji = severity_emoji.get(issue["severity"], "⚪")
-            print(
+            logger.info(
                 f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})"
             )
-    print()
+    logger.info()
 
     # Performance analysis
     performance_analysis = results["performance_analysis"]
-    print(f"⚡ **Performance Analysis:**")
-    print(
+    logger.info(f"⚡ **Performance Analysis:**")
+    logger.info(
         f"   • Total performance issues: {performance_analysis['total_performance_issues']}"
     )
-    print(
+    logger.info(
         f"   • Components with issues: {performance_analysis['components_with_issues']}"
     )
 
     if performance_analysis["issues_by_type"]:
-        print("   • Issue breakdown:")
+        logger.info("   • Issue breakdown:")
         for issue_desc, count in list(performance_analysis["issues_by_type"].items())[
             :5
         ]:
-            print(f"     - {issue_desc}: {count}")
-    print()
+            logger.info(f"     - {issue_desc}: {count}")
+    logger.info()
 
     # Accessibility analysis
     accessibility_analysis = results["accessibility_analysis"]
-    print(f"♿ **Accessibility Analysis:**")
-    print(
+    logger.info(f"♿ **Accessibility Analysis:**")
+    logger.info(
         f"   • Total accessibility issues: {accessibility_analysis['total_accessibility_issues']}"
     )
-    print(
+    logger.info(
         f"   • WCAG compliance score: {accessibility_analysis['wcag_compliance_score']:.1f}/100"
     )
 
     if accessibility_analysis.get("issues_by_severity"):
-        print("   • Issues by severity:")
+        logger.info("   • Issues by severity:")
         for severity, count in accessibility_analysis["issues_by_severity"].items():
-            print(f"     - {severity.title()}: {count}")
-    print()
+            logger.info(f"     - {severity.title()}: {count}")
+    logger.info()
 
-    # Detailed issue analysis
+
+async def _display_detailed_issues(results):
+    """Display detailed issue analysis grouped by type.
+
+    Helper for analyze_frontend_code (Issue #825).
+    """
     if results["issues"]:
-        print("🔍 **Detailed Issue Analysis:**")
+        logger.info("🔍 **Detailed Issue Analysis:**")
 
         # Group issues by type
         issues_by_type = {}
@@ -173,7 +173,7 @@ async def analyze_frontend_code():
             else:
                 category_name = issue_type.replace("_", " ").title()
 
-            print(f"\n📋 **{category_name} ({len(type_issues)} issues):**")
+            logger.info(f"\n📋 **{category_name} ({len(type_issues)} issues):**")
 
             # Show top issues by severity
             sorted_issues = sorted(
@@ -193,142 +193,210 @@ async def analyze_frontend_code():
                 }
                 emoji = severity_emoji.get(issue["severity"], "⚪")
 
-                print(f"   {emoji} {issue['description']}")
-                print(
+                logger.info(f"   {emoji} {issue['description']}")
+                logger.info(
                     f"      📄 {issue['file_path']}:{issue['line_number']} ({issue['framework']})"
                 )
-                print(f"      💡 Suggestion: {issue['suggestion']}")
+                logger.info(f"      💡 Suggestion: {issue['suggestion']}")
 
+
+async def _display_recommendations_and_best_practices(results):
+    """Display recommendations and framework-specific best practices.
+
+    Helper for analyze_frontend_code (Issue #825).
+    """
     # Framework-specific recommendations
-    print(f"\n💡 **Improvement Recommendations:**")
+    logger.info(f"\n💡 **Improvement Recommendations:**")
     for i, recommendation in enumerate(results["recommendations"], 1):
-        print(f"{i}. {recommendation}")
+        logger.info(f"{i}. {recommendation}")
 
     # Best practices by framework
     if "vue" in results["frameworks_detected"]:
-        print(f"\n🔧 **Vue.js Best Practices:**")
-        print("   • Use Composition API for better code organization")
-        print("   • Avoid direct DOM manipulation with $refs")
-        print("   • Use proper key attributes in v-for loops")
-        print("   • Sanitize content before using v-html")
+        logger.info(f"\n🔧 **Vue.js Best Practices:**")
+        logger.info("   • Use Composition API for better code organization")
+        logger.info("   • Avoid direct DOM manipulation with $refs")
+        logger.info("   • Use proper key attributes in v-for loops")
+        logger.info("   • Sanitize content before using v-html")
 
     if "react" in results["frameworks_detected"]:
-        print(f"\n🔧 **React Best Practices:**")
-        print("   • Use React Hooks instead of class components")
-        print("   • Avoid deprecated lifecycle methods")
-        print("   • Sanitize content before using dangerouslySetInnerHTML")
-        print("   • Use proper keys for list items")
+        logger.info(f"\n🔧 **React Best Practices:**")
+        logger.info("   • Use React Hooks instead of class components")
+        logger.info("   • Avoid deprecated lifecycle methods")
+        logger.info("   • Sanitize content before using dangerouslySetInnerHTML")
+        logger.info("   • Use proper keys for list items")
 
     if "javascript" in results["frameworks_detected"]:
-        print(f"\n🔧 **JavaScript Best Practices:**")
-        print("   • Use const/let instead of var")
-        print("   • Use strict equality (===) instead of ==")
-        print("   • Handle async operations properly")
-        print("   • Remove console.log statements from production")
+        logger.info(f"\n🔧 **JavaScript Best Practices:**")
+        logger.info("   • Use const/let instead of var")
+        logger.info("   • Use strict equality (===) instead of ==")
+        logger.info("   • Handle async operations properly")
+        logger.info("   • Remove console.log statements from production")
 
+
+async def _display_critical_issues_report(results):
+    """Display critical issues that need immediate attention.
+
+    Helper for analyze_frontend_code (Issue #825).
+    """
     # Save detailed report
     report_path = Path("frontend_analysis_report.json")
     with open(report_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
 
-    print(f"\n📋 **Report Generated:**")
-    print(f"   • Detailed analysis: {report_path}")
+    logger.info(f"\n📋 **Report Generated:**")
+    logger.info(f"   • Detailed analysis: {report_path}")
 
     # Generate fix suggestions for critical issues
     critical_issues = [i for i in results["issues"] if i["severity"] == "critical"]
     if critical_issues:
-        print(f"\n🚨 **CRITICAL ISSUES - IMMEDIATE ACTION REQUIRED:**")
-        print(
+        logger.info(f"\n🚨 **CRITICAL ISSUES - IMMEDIATE ACTION REQUIRED:**")
+        logger.info(
             f"Found {len(critical_issues)} critical issues that need immediate attention:"
         )
 
         for issue in critical_issues:
-            print(f"\n🔴 **{issue['description']}**")
-            print(f"   📄 File: {issue['file_path']}:{issue['line_number']}")
-            print(f"   🏗️ Framework: {issue['framework'].title()}")
-            print(f"   💡 Fix: {issue['suggestion']}")
+            logger.info(f"\n🔴 **{issue['description']}**")
+            logger.info(f"   📄 File: {issue['file_path']}:{issue['line_number']}")
+            logger.info(f"   🏗️ Framework: {issue['framework'].title()}")
+            logger.info(f"   💡 Fix: {issue['suggestion']}")
+
+
+async def analyze_frontend_code():
+    """Run comprehensive frontend code analysis"""
+
+    logger.info("🎨 Starting frontend code analysis...")
+    logger.info(
+        "Analyzing JavaScript, TypeScript, Vue, React, Angular, and other frontend files..."
+    )
+    logger.info()
+
+    analyzer = FrontendAnalyzer()
+
+    # Analyze frontend code
+    results = await analyzer.analyze_frontend_code(
+        root_path="..",
+        patterns=[
+            "autobot-vue/src/**/*.js",
+            "autobot-vue/src/**/*.ts",
+            "autobot-vue/src/**/*.jsx",
+            "autobot-vue/src/**/*.tsx",
+            "autobot-vue/src/**/*.vue",
+            "autobot-vue/src/**/*.svelte",
+            "autobot-vue/index.html",
+        ],
+    )
+
+    await _display_summary_and_framework_usage(results)
+    await _display_component_analysis(results)
+    await _display_security_performance_accessibility(results)
+    await _display_detailed_issues(results)
+    await _display_recommendations_and_best_practices(results)
+    await _display_critical_issues_report(results)
 
     return results
+
+
+async def _display_xss_and_performance_examples():
+    """Display XSS prevention and performance examples.
+
+    Helper for generate_frontend_fix_examples (Issue #825).
+    """
+    logger.info("\n=== 🛠️ Common Frontend Fix Examples ===\n")
+
+    logger.info("**1. XSS Prevention:**")
+    logger.info("```javascript")
+    logger.info("// ❌ Dangerous - XSS vulnerability")
+    logger.info("element.innerHTML = userInput;")
+    logger.info()
+    logger.info("// ✅ Safe - Sanitized content")
+    logger.info("element.textContent = userInput;")
+    logger.info("// or use a sanitization library")
+    logger.info("element.innerHTML = DOMPurify.sanitize(userInput);")
+    logger.info("```")
+    logger.info()
+
+    logger.info("**2. Performance - DOM Query Optimization:**")
+    logger.info("```javascript")
+    logger.info("// ❌ Inefficient - DOM query in loop")
+    logger.info("for (let i = 0; i < items.length; i++) {")
+    logger.info("    document.querySelector('.container').appendChild(items[i]);")
+    logger.info("}")
+    logger.info()
+    logger.info("// ✅ Efficient - Cache DOM query")
+    logger.info("const container = document.querySelector('.container');")
+    logger.info("for (let i = 0; i < items.length; i++) {")
+    logger.info("    container.appendChild(items[i]);")
+    logger.info("}")
+    logger.info("```")
+    logger.info()
+
+
+async def _display_accessibility_and_vue_examples():
+    """Display accessibility and Vue.js examples.
+
+    Helper for generate_frontend_fix_examples (Issue #825).
+    """
+    logger.info("**3. Accessibility - Image Alt Text:**")
+    logger.info("```html")
+    logger.info("<!-- ❌ Missing alt attribute -->")
+    logger.info('<img src="chart.png">')
+    logger.info()
+    logger.info("<!-- ✅ Descriptive alt text -->")
+    logger.info('<img src="chart.png" alt="Sales chart showing 25% growth in Q3 2024">')
+    logger.info("```")
+    logger.info()
+
+    logger.info("**4. Vue.js - Safe v-html Usage:**")
+    logger.info("```vue")
+    logger.info("<!-- ❌ Dangerous - Direct HTML binding -->")
+    logger.info('<div v-html="userContent"></div>')
+    logger.info()
+    logger.info("<!-- ✅ Safe - Sanitized content -->")
+    logger.info('<div v-html="$sanitize(userContent)"></div>')
+    logger.info("```")
+    logger.info()
+
+
+async def _display_react_and_cleanup_examples():
+    """Display React and event cleanup examples.
+
+    Helper for generate_frontend_fix_examples (Issue #825).
+    """
+    logger.info("**5. React - Safe dangerouslySetInnerHTML:**")
+    logger.info("```jsx")
+    logger.info("// ❌ Dangerous - Unsanitized content")
+    logger.info("function Component({ userContent }) {")
+    logger.info("    return <div dangerouslySetInnerHTML={{__html: userContent}} />;")
+    logger.info("}")
+    logger.info()
+    logger.info("// ✅ Safe - Sanitized content")
+    logger.info("import DOMPurify from 'dompurify';")
+    logger.info("function Component({ userContent }) {")
+    logger.info("    const sanitized = DOMPurify.sanitize(userContent);")
+    logger.info("    return <div dangerouslySetInnerHTML={{__html: sanitized}} />;")
+    logger.info("}")
+    logger.info("```")
+    logger.info()
+
+    logger.info("**6. Event Listener Cleanup:**")
+    logger.info("```javascript")
+    logger.info("// ❌ Memory leak - No cleanup")
+    logger.info("window.addEventListener('resize', handler);")
+    logger.info()
+    logger.info("// ✅ Proper cleanup")
+    logger.info("window.addEventListener('resize', handler);")
+    logger.info("// Later, when component unmounts:")
+    logger.info("window.removeEventListener('resize', handler);")
+    logger.info("```")
 
 
 async def generate_frontend_fix_examples():
     """Generate examples of common frontend fixes"""
 
-    print("\n=== 🛠️ Common Frontend Fix Examples ===\n")
+    await _display_xss_and_performance_examples()
+    await _display_accessibility_and_vue_examples()
+    await _display_react_and_cleanup_examples()
 
-    print("**1. XSS Prevention:**")
-    print("```javascript")
-    print("// ❌ Dangerous - XSS vulnerability")
-    print("element.innerHTML = userInput;")
-    print()
-    print("// ✅ Safe - Sanitized content")
-    print("element.textContent = userInput;")
-    print("// or use a sanitization library")
-    print("element.innerHTML = DOMPurify.sanitize(userInput);")
-    print("```")
-    print()
-
-    print("**2. Performance - DOM Query Optimization:**")
-    print("```javascript")
-    print("// ❌ Inefficient - DOM query in loop")
-    print("for (let i = 0; i < items.length; i++) {")
-    print("    document.querySelector('.container').appendChild(items[i]);")
-    print("}")
-    print()
-    print("// ✅ Efficient - Cache DOM query")
-    print("const container = document.querySelector('.container');")
-    print("for (let i = 0; i < items.length; i++) {")
-    print("    container.appendChild(items[i]);")
-    print("}")
-    print("```")
-    print()
-
-    print("**3. Accessibility - Image Alt Text:**")
-    print("```html")
-    print("<!-- ❌ Missing alt attribute -->")
-    print('<img src="chart.png">')
-    print()
-    print("<!-- ✅ Descriptive alt text -->")
-    print('<img src="chart.png" alt="Sales chart showing 25% growth in Q3 2024">')
-    print("```")
-    print()
-
-    print("**4. Vue.js - Safe v-html Usage:**")
-    print("```vue")
-    print("<!-- ❌ Dangerous - Direct HTML binding -->")
-    print('<div v-html="userContent"></div>')
-    print()
-    print("<!-- ✅ Safe - Sanitized content -->")
-    print('<div v-html="$sanitize(userContent)"></div>')
-    print("```")
-    print()
-
-    print("**5. React - Safe dangerouslySetInnerHTML:**")
-    print("```jsx")
-    print("// ❌ Dangerous - Unsanitized content")
-    print("function Component({ userContent }) {")
-    print("    return <div dangerouslySetInnerHTML={{__html: userContent}} />;")
-    print("}")
-    print()
-    print("// ✅ Safe - Sanitized content")
-    print("import DOMPurify from 'dompurify';")
-    print("function Component({ userContent }) {")
-    print("    const sanitized = DOMPurify.sanitize(userContent);")
-    print("    return <div dangerouslySetInnerHTML={{__html: sanitized}} />;")
-    print("}")
-    print("```")
-    print()
-
-    print("**6. Event Listener Cleanup:**")
-    print("```javascript")
-    print("// ❌ Memory leak - No cleanup")
-    print("window.addEventListener('resize', handler);")
-    print()
-    print("// ✅ Proper cleanup")
-    print("window.addEventListener('resize', handler);")
-    print("// Later, when component unmounts:")
-    print("window.removeEventListener('resize', handler);")
-    print("```")
 
 
 async def main():
@@ -336,8 +404,8 @@ async def main():
 
     # Check if we're in the right directory
     if not Path("src").exists():
-        print("❌ Please run this script from the code-analysis-suite directory")
-        print("Usage: cd code-analysis-suite && python scripts/analyze_frontend.py")
+        logger.info("❌ Please run this script from the code-analysis-suite directory")
+        logger.info("Usage: cd code-analysis-suite && python scripts/analyze_frontend.py")
         return
 
     # Run analysis
@@ -346,14 +414,14 @@ async def main():
     # Show fix examples
     await generate_frontend_fix_examples()
 
-    print("\n=== 🎯 Frontend Analysis Complete ===")
-    print("Next steps:")
-    print("1. Review frontend_analysis_report.json for detailed findings")
-    print("2. Address critical security issues immediately")
-    print("3. Fix performance issues affecting user experience")
-    print("4. Improve accessibility for better inclusion")
-    print("5. Add missing tests for untested components")
-    print("6. Set up ESLint and Prettier for consistent code quality")
+    logger.info("\n=== Frontend Analysis Complete ===")
+    logger.info("Next steps:")
+    logger.info("1. Review frontend_analysis_report.json for detailed findings")
+    logger.info("2. Address critical security issues immediately")
+    logger.info("3. Fix performance issues affecting user experience")
+    logger.info("4. Improve accessibility for better inclusion")
+    logger.info("5. Add missing tests for untested components")
+    logger.info("6. Set up ESLint and Prettier for consistent code quality")
 
 
 if __name__ == "__main__":

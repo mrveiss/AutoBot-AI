@@ -31,6 +31,28 @@
   ansible.builtin.command:
     cmd: python3 -m venv {{ ai_install_dir }}/venv
     creates: "{{ ai_install_dir }}/venv/bin/python"
+
+- name: Fix venv ownership
+  ansible.builtin.file:
+    path: "{{ ai_install_dir }}/venv"
+    state: directory
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    recurse: true
+
+- name: Upgrade pip in venv
+  ansible.builtin.pip:
+    name: pip
+    virtualenv: "{{ ai_install_dir }}/venv"
+    state: latest
+  become_user: "{{ ai_user }}"
+
+- name: Check if AI packages are already installed
+  ansible.builtin.command:
+    cmd: "{{ ai_install_dir }}/venv/bin/pip show chromadb"
+  register: _ai_packages_check
+  changed_when: false
+  failed_when: false
   become_user: "{{ ai_user }}"
 
 - name: Install AI Python packages
@@ -48,7 +70,9 @@
       - anthropic
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
+    extra_args: "--timeout 120"
   become_user: "{{ ai_user }}"
+  when: _ai_packages_check.rc != 0
 
 - name: Deploy AI stack environment file
   ansible.builtin.template:

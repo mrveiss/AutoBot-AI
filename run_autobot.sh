@@ -55,6 +55,7 @@ if [ -f ".env" ]; then
 else
     warning ".env file not found - using fallback defaults"
 fi
+source "${SCRIPT_DIR}/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 
 # Default configuration
 DEV_MODE=false
@@ -64,8 +65,8 @@ DESKTOP_ACCESS=true  # Enable by default per CLAUDE.md guidelines
 VNC_PID=""
 
 # VM Configuration (Distributed Architecture) - Using SSOT env vars
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 declare -A VMS=(
     ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
     ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
@@ -88,17 +89,17 @@ print_usage() {
 ${GREEN}AutoBot - Distributed VM Startup Script (Performance Optimized)${NC}
 
 ${YELLOW}DISTRIBUTED ARCHITECTURE:${NC}
-  This script ONLY starts the backend locally on WSL (172.16.168.20:8001)
+  This script ONLY starts the backend locally on WSL (${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001})
   All other services run on separate VMs and must be started separately.
 
 ${YELLOW}VM Services:${NC}
-  Frontend:   172.16.168.21:5173 (Vue.js)
-  NPU Worker: 172.16.168.22:8081 (Hardware AI)
-  Redis:      172.16.168.23:6379 (Database)
-  Browser:    172.16.168.25:3000 (Web Automation)
+  Frontend:   ${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173} (Vue.js)
+  NPU Worker: ${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081} (Hardware AI)
+  Redis:      ${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379} (Database)
+  Browser:    ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000} (Web Automation)
 
 ${YELLOW}Local Services (Main Machine):${NC}
-  Backend:    172.16.168.20:8001 (FastAPI)
+  Backend:    ${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001} (FastAPI)
   Ollama:     localhost:11434 (AI LLM)
 
 Usage: $0 [MODE] [OPTIONS]
@@ -285,7 +286,7 @@ check_vm_health() {
     if timeout 3 curl -s "http://${VMS["npu-worker"]}:$NPU_WORKER_PORT" >/dev/null 2>&1; then
         echo -e "${GREEN}✅${NC}"
     else
-        echo -e "${CYAN}ℹ️ Add via http://172.16.168.21:5173/settings/infrastructure (NPU Workers tab)${NC}"
+        echo -e "${CYAN}ℹ️ Add via http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}/settings/infrastructure (NPU Workers tab)${NC}"
     fi
 
     local health_percentage=$((healthy_vms * 100 / total_required_vms))
@@ -392,7 +393,7 @@ show_system_status() {
     echo ""
 
     # Backend Status (Local WSL)
-    echo -e "${CYAN}🔧 Backend Service (WSL - 172.16.168.20):${NC}"
+    echo -e "${CYAN}🔧 Backend Service (WSL - ${AUTOBOT_BACKEND_HOST:-172.16.168.20}):${NC}"
     if curl -s http://$BACKEND_HOST:$BACKEND_PORT/api/health &> /dev/null; then
         echo -e "${GREEN}  ✅ Backend Running${NC}"
         echo -e "${BLUE}    URL: http://$BACKEND_HOST:$BACKEND_PORT${NC}"
@@ -411,7 +412,7 @@ show_system_status() {
     # Access Points
     echo -e "${CYAN}🌐 Access Points:${NC}"
     echo -e "${BLUE}  Frontend:   http://${VMS["frontend"]}:$FRONTEND_PORT${NC}"
-    echo -e "${BLUE}  Backend:    http://172.16.168.20:$BACKEND_PORT${NC}"
+    echo -e "${BLUE}  Backend:    http://${BACKEND_HOST}:$BACKEND_PORT${NC}"
     echo -e "${BLUE}  Redis:      ${VMS["redis"]}:$REDIS_PORT${NC}"
     echo -e "${BLUE}  Ollama:     http://localhost:11434 (Local AI)${NC}"
     echo -e "${BLUE}  NPU Worker: http://${VMS["npu-worker"]}:$NPU_WORKER_PORT${NC}"
@@ -542,7 +543,7 @@ smart_restart() {
 
 # Optimized backend startup
 start_backend_optimized() {
-    log "Starting AutoBot backend (172.16.168.20:8001)..."
+    log "Starting AutoBot backend (${BACKEND_HOST}:${BACKEND_PORT})..."
 
     # Set up Python environment (project root + backend dir for module resolution)
     export PYTHONPATH="$PWD:$PWD/backend"
@@ -961,7 +962,7 @@ EOF
         echo ""
         error "Redis failed to complete loading after $max_retries seconds"
         error "Backend startup ABORTED - Redis must be fully loaded"
-        echo -e "${YELLOW}Check Redis status: ssh autobot@${VMS["redis"]} 'redis-cli INFO persistence'${NC}"
+        echo -e "${YELLOW}Check Redis status: ssh ${SSH_USER}@${VMS["redis"]} 'redis-cli INFO persistence'${NC}"
         exit 1
     else
         error "Redis Stack auto-start failed"
@@ -998,15 +999,15 @@ start_frontend_dev() {
         sleep 3
 
         # Check if frontend is now running with reduced timeout
-        if timeout 10 bash -c 'while ! curl -s "http://172.16.168.21:5173" >/dev/null 2>&1; do sleep 0.5; done'; then
+        if timeout 10 bash -c "while ! curl -s \"http://${VMS["frontend"]}:${FRONTEND_PORT}\" >/dev/null 2>&1; do sleep 0.5; done"; then
             echo -e "${GREEN}  ✅ Frontend development server started successfully${NC}"
-            echo -e "${BLUE}  🌐 Frontend URL: http://172.16.168.21:5173${NC}"
+            echo -e "${BLUE}  🌐 Frontend URL: http://${VMS["frontend"]}:${FRONTEND_PORT}${NC}"
             echo -e "${CYAN}  🔧 Native Vite dev server with hot reload enabled${NC}"
-            echo -e "${CYAN}  📝 Logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
+            echo -e "${CYAN}  📝 Logs: ssh ${SSH_USER}@${VMS["frontend"]} 'tail -f /tmp/vite.log'${NC}"
         else
             echo -e "${RED}  ❌ Frontend failed to start${NC}"
-            echo -e "${YELLOW}  💡 Check logs: ssh autobot@172.16.168.21 'tail -f /tmp/vite.log'${NC}"
-            echo -e "${YELLOW}  💡 Manual start: ssh autobot@172.16.168.21 'cd autobot-slm-frontend && npm run dev -- --host 0.0.0.0 --port 5173'${NC}"
+            echo -e "${YELLOW}  💡 Check logs: ssh ${SSH_USER}@${VMS["frontend"]} 'tail -f /tmp/vite.log'${NC}"
+            echo -e "${YELLOW}  💡 Manual start: ssh ${SSH_USER}@${VMS["frontend"]} 'cd autobot-slm-frontend && npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT}'${NC}"
         fi
     else
         log "Frontend managed by Docker Compose"
@@ -1128,7 +1129,7 @@ EOF
 }
 
 start_backend() {
-    log "Starting AutoBot backend (172.16.168.20:8001)..."
+    log "Starting AutoBot backend (${BACKEND_HOST}:${BACKEND_PORT})..."
 
     # Check if backend is already running and kill if needed
     if pgrep -f "python.*backend" > /dev/null || pgrep -f "python -m backend.main" > /dev/null; then
@@ -1172,7 +1173,7 @@ main() {
     log "Configuration:"
     log "  Mode: $([ "$DEV_MODE" = true ] && echo "Development" || echo "Production")"
     log "  Architecture: Distributed VM"
-    log "  Backend: 172.16.168.20:$BACKEND_PORT (Local WSL)"
+    log "  Backend: ${BACKEND_HOST}:$BACKEND_PORT (Local WSL)"
     log "  Desktop: $([ "$DESKTOP_ACCESS" = true ] && echo "Enabled" || echo "Disabled")"
     log "  Performance: Optimized startup with reduced wait times"
     echo ""
@@ -1226,7 +1227,7 @@ main() {
     echo ""
     echo -e "${BLUE}🌐 Access Points:${NC}"
     echo -e "${CYAN}  Frontend:   http://${VMS["frontend"]}:$FRONTEND_PORT${NC}"
-    echo -e "${CYAN}  Backend:    http://172.16.168.20:$BACKEND_PORT${NC}"
+    echo -e "${CYAN}  Backend:    http://${BACKEND_HOST}:$BACKEND_PORT${NC}"
     echo ""
 
     if [ "$DESKTOP_ACCESS" = true ] && systemctl is-active --quiet novnc; then

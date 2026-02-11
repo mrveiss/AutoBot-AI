@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 """
 AutoBot Advanced Application Performance Monitoring (APM) System
 Detailed API tracking, cache analytics, database monitoring, and real-time alerting.
@@ -9,6 +12,7 @@ import hashlib
 import inspect
 import json
 import logging
+import os
 import statistics
 import threading
 import time
@@ -193,7 +197,7 @@ class PerformanceTracker:
 
     def _generate_trace_id(self) -> str:
         """Generate unique trace ID for request correlation."""
-        return hashlib.md5(
+        return hashlib.md5(  # nosec B324 - not used for security
             f"{time.time()}{threading.current_thread().ident}".encode()
         ).hexdigest()[:16]
 
@@ -208,7 +212,8 @@ class AdvancedAPMSystem:
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.redis_client = None
-        self.apm_data_path = Path("/home/kali/Desktop/AutoBot/logs/apm")
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        self.apm_data_path = Path(_base) / "logs" / "apm"
         self.apm_data_path.mkdir(parents=True, exist_ok=True)
 
         # Performance tracking
@@ -419,7 +424,7 @@ class AdvancedAPMSystem:
                 complexity = "complex"
 
             # Generate query hash for tracking
-            query_hash = hashlib.md5(
+            query_hash = hashlib.md5(  # nosec B324 - not used for security
                 f"{database}:{operation}:{table}".encode()
             ).hexdigest()[:12]
 
@@ -453,7 +458,7 @@ class AdvancedAPMSystem:
 
             process = psutil.Process()
             return process.memory_info().rss / (1024 * 1024)
-        except:
+        except Exception:
             return 0.0
 
     def _get_cache_memory_usage(self, cache_type: str) -> float:
@@ -464,7 +469,7 @@ class AdvancedAPMSystem:
                 return info.get("used_memory", 0) / (1024 * 1024)
             else:
                 return self.cache_stats[cache_type]["total_size"] / (1024 * 1024)
-        except:
+        except Exception:
             return 0.0
 
     async def _store_api_metrics(self, metric: APIMetrics):
@@ -624,11 +629,15 @@ class AdvancedAPMSystem:
                 return
 
             # Create new alert
+            msg = (
+                f"{rule.name}: {context} - "
+                f"Value: {metric_value:.2f}, Threshold: {rule.threshold_value:.2f}"
+            )
             alert = Alert(
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 rule_name=rule.name,
                 severity=rule.severity,
-                message=f"{rule.name}: {context} - Value: {metric_value:.2f}, Threshold: {rule.threshold_value:.2f}",
+                message=msg,
                 metric_value=metric_value,
                 threshold_value=rule.threshold_value,
             )
@@ -678,77 +687,94 @@ class AdvancedAPMSystem:
         except Exception as e:
             self.logger.error("Error sending alert notifications: %s", e)
 
+    def _compute_api_summary(self, api_metrics: List[APIMetrics]) -> Dict[str, Any]:
+        """Compute API performance summary.
+
+        Helper for get_performance_summary.
+        """
+        response_times = [m.response_time_ms for m in api_metrics]
+        error_count = sum(1 for m in api_metrics if m.status_code >= 400)
+
+        return {
+            "total_requests": len(api_metrics),
+            "average_response_time": statistics.mean(response_times),
+            "p95_response_time": sorted(response_times)[int(len(response_times) * 0.95)]
+            if response_times
+            else 0,
+            "error_rate": (error_count / len(api_metrics)) * 100,
+            "requests_per_minute": len(
+                [
+                    m
+                    for m in api_metrics
+                    if (
+                        datetime.now(timezone.utc)
+                        - datetime.fromisoformat(m.timestamp.replace("Z", "+00:00"))
+                    ).seconds
+                    < 60
+                ]
+            ),
+        }
+
+    def _compute_cache_summary(self) -> Dict[str, Any]:
+        """Compute cache performance summary.
+
+        Helper for get_performance_summary.
+        """
+        cache_summary = {}
+        for cache_type, stats in self.cache_stats.items():
+            total_ops = stats["hits"] + stats["misses"]
+            if total_ops > 0:
+                cache_summary[cache_type] = {
+                    "hit_rate": (stats["hits"] / total_ops) * 100,
+                    "total_operations": total_ops,
+                    "total_size_mb": stats["total_size"] / (1024 * 1024),
+                }
+        return cache_summary
+
+    def _compute_db_summary(self, db_metrics: List[DatabaseMetrics]) -> Dict[str, Any]:
+        """Compute database performance summary.
+
+        Helper for get_performance_summary.
+        """
+        execution_times = [m.execution_time_ms for m in db_metrics]
+        slow_queries = sum(1 for m in db_metrics if m.execution_time_ms > 1000)
+
+        return {
+            "total_queries": len(db_metrics),
+            "average_execution_time": statistics.mean(execution_times),
+            "slow_query_count": slow_queries,
+            "slow_query_rate": (slow_queries / len(db_metrics)) * 100,
+        }
+
+    def _compute_alerts_summary(self) -> Dict[str, Any]:
+        """Compute active alerts summary.
+
+        Helper for get_performance_summary.
+        """
+        return {
+            "active_alerts": len(self.active_alerts),
+            "critical_alerts": len(
+                [a for a in self.active_alerts.values() if a.severity == "critical"]
+            ),
+            "high_alerts": len(
+                [a for a in self.active_alerts.values() if a.severity == "high"]
+            ),
+            "total_alert_rules": len(self.alert_rules),
+            "enabled_rules": len([r for r in self.alert_rules if r.enabled]),
+        }
+
     async def get_performance_summary(self) -> Dict[str, Any]:
         """Get comprehensive performance summary."""
         try:
-            # API performance summary
             api_metrics = list(self.api_metrics_buffer)
-            api_summary = {}
-            if api_metrics:
-                response_times = [m.response_time_ms for m in api_metrics]
-                error_count = sum(1 for m in api_metrics if m.status_code >= 400)
+            api_summary = self._compute_api_summary(api_metrics) if api_metrics else {}
 
-                api_summary = {
-                    "total_requests": len(api_metrics),
-                    "average_response_time": statistics.mean(response_times),
-                    "p95_response_time": sorted(response_times)[
-                        int(len(response_times) * 0.95)
-                    ]
-                    if response_times
-                    else 0,
-                    "error_rate": (error_count / len(api_metrics)) * 100,
-                    "requests_per_minute": len(
-                        [
-                            m
-                            for m in api_metrics
-                            if (
-                                datetime.now(timezone.utc)
-                                - datetime.fromisoformat(
-                                    m.timestamp.replace("Z", "+00:00")
-                                )
-                            ).seconds
-                            < 60
-                        ]
-                    ),
-                }
+            cache_summary = self._compute_cache_summary()
 
-            # Cache performance summary
-            cache_summary = {}
-            for cache_type, stats in self.cache_stats.items():
-                total_ops = stats["hits"] + stats["misses"]
-                if total_ops > 0:
-                    cache_summary[cache_type] = {
-                        "hit_rate": (stats["hits"] / total_ops) * 100,
-                        "total_operations": total_ops,
-                        "total_size_mb": stats["total_size"] / (1024 * 1024),
-                    }
-
-            # Database performance summary
             db_metrics = list(self.database_metrics_buffer)
-            db_summary = {}
-            if db_metrics:
-                execution_times = [m.execution_time_ms for m in db_metrics]
-                slow_queries = sum(1 for m in db_metrics if m.execution_time_ms > 1000)
+            db_summary = self._compute_db_summary(db_metrics) if db_metrics else {}
 
-                db_summary = {
-                    "total_queries": len(db_metrics),
-                    "average_execution_time": statistics.mean(execution_times),
-                    "slow_query_count": slow_queries,
-                    "slow_query_rate": (slow_queries / len(db_metrics)) * 100,
-                }
-
-            # Active alerts summary
-            alerts_summary = {
-                "active_alerts": len(self.active_alerts),
-                "critical_alerts": len(
-                    [a for a in self.active_alerts.values() if a.severity == "critical"]
-                ),
-                "high_alerts": len(
-                    [a for a in self.active_alerts.values() if a.severity == "high"]
-                ),
-                "total_alert_rules": len(self.alert_rules),
-                "enabled_rules": len([r for r in self.alert_rules if r.enabled]),
-            }
+            alerts_summary = self._compute_alerts_summary()
 
             return {
                 "timestamp": datetime.now(timezone.utc).isoformat(),

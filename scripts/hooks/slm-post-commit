@@ -18,8 +18,8 @@ SLM_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
 SLM_PORT="${AUTOBOT_SLM_PORT:-8000}"
 SLM_URL="https://${SLM_HOST}:${SLM_PORT}"
 
-# Code-source node ID (dev machine in Ansible inventory)
-CODE_SOURCE_NODE_ID="${AUTOBOT_CODE_SOURCE_NODE:-01-Code-Source}"
+# Code-source node ID (whichever node has the code-source role assigned)
+CODE_SOURCE_NODE_ID="${AUTOBOT_CODE_SOURCE_NODE:-01-Backend}"
 
 # Get commit info from git
 COMMIT_HASH=$(git rev-parse HEAD)

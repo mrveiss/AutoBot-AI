@@ -30,7 +30,7 @@ def test_system_metrics_cleanup():
     """Test that SystemMetricsCollector has been cleaned up."""
     print("\n✓ SystemMetricsCollector Cleanup:")
 
-    from src.utils.system_metrics import SystemMetricsCollector
+    from utils.system_metrics import SystemMetricsCollector
 
     collector = SystemMetricsCollector()
 
@@ -88,7 +88,7 @@ def test_error_metrics_cleanup():
     """Test that ErrorMetricsCollector has been cleaned up."""
     print("\n✓ ErrorMetricsCollector Cleanup:")
 
-    from src.utils.error_metrics import ErrorMetricsCollector
+    from utils.error_metrics import ErrorMetricsCollector
 
     collector = ErrorMetricsCollector()
 
@@ -151,7 +151,7 @@ def test_claude_api_monitor_deprecation():
     # Check get_api_monitor deprecation warning
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        from src.monitoring.claude_api_monitor import get_api_monitor
+        from monitoring.claude_api_monitor import get_api_monitor
 
         _ = get_api_monitor()
         deprecation_warnings = [
@@ -166,7 +166,7 @@ def test_claude_api_monitor_deprecation():
     # Check record_api_call deprecation warning
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        from src.monitoring.claude_api_monitor import record_api_call
+        from monitoring.claude_api_monitor import record_api_call
 
         record_api_call(payload_size=100)
         deprecation_warnings = [

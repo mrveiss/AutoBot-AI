@@ -36,14 +36,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
+logger = logging.getLogger(__name__)
+
 import aiofiles
 import yaml
+import logging
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.script_utils import ScriptFormatter  # noqa: E402
-from src.utils.service_registry import get_service_registry  # noqa: E402
+from utils.script_utils import ScriptFormatter  # noqa: E402
+from utils.service_registry import get_service_registry  # noqa: E402
 
 
 class LogLevel:
@@ -122,9 +125,9 @@ class LogAggregator:
             },
         ]
 
-        print("📊 AutoBot Log Aggregator initialized")
-        print(f"   Logs Directory: {self.logs_dir}")
-        print(f"   Archive Directory: {self.archive_dir}")
+        logger.info("📊 AutoBot Log Aggregator initialized")
+        logger.info(f"   Logs Directory: {self.logs_dir}")
+        logger.info(f"   Archive Directory: {self.archive_dir}")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -408,7 +411,7 @@ class LogAggregator:
 
         color = level_colors.get(level, "")
 
-        print(f"{timestamp} [{source}] {color}{level:<8}{reset_color} {message}")
+        logger.info(f"{timestamp} [{source}] {color}{level:<8}{reset_color} {message}")
 
         # Check for alerts
         self._check_alerts(source, parsed)
@@ -455,7 +458,7 @@ class LogAggregator:
                 json.dump(alerts, f, indent=2)
 
         # Print alert notification
-        print(f"\n🚨 ALERT: {alert_config['description']} in {source}")
+        logger.info(f"\n🚨 ALERT: {alert_config['description']} in {source}")
 
     async def search_logs(
         self,
@@ -882,7 +885,7 @@ async def _handle_search_command(
     if args.output:
         with open(args.output, "w") as f:
             json.dump({"results": results}, f, indent=2)
-        print(f"✅ Search results saved to: {args.output}")
+        logger.info(f"✅ Search results saved to: {args.output}")
     else:
         _print_search_results(log_aggregator, results)
 
@@ -895,7 +898,7 @@ def _print_search_results(
         log_aggregator._print_log_line(result.get("source", "unknown"), result)
 
     if len(results) > 50:
-        print(f"\n... and {len(results) - 50} more results")
+        logger.info(f"\n... and {len(results) - 50} more results")
 
 
 def _handle_analyze_command(
@@ -907,19 +910,19 @@ def _handle_analyze_command(
     if args.output:
         with open(args.output, "w") as f:
             json.dump(analysis, f, indent=2)
-        print(f"✅ Analysis saved to: {args.output}")
+        logger.info(f"✅ Analysis saved to: {args.output}")
     else:
         _print_analysis_summary(analysis)
 
 
 def _print_analysis_summary(analysis: Dict[str, Any]) -> None:
     """Print analysis summary to console. (Issue #315 - extracted)"""
-    print("\n📊 Log Analysis Summary:")
-    print(f"   Total entries: {analysis['statistics']['total_entries']}")
-    print("   Log levels:")
+    logger.info("\n📊 Log Analysis Summary:")
+    logger.info(f"   Total entries: {analysis['statistics']['total_entries']}")
+    logger.info("   Log levels:")
     for level, count in analysis["statistics"]["by_level"].items():
-        print(f"     {level}: {count}")
-    print(f"   Recent alerts: {len(analysis['alerts'])}")
+        logger.info(f"     {level}: {count}")
+    logger.info(f"   Recent alerts: {len(analysis['alerts'])}")
 
 
 def _handle_export_command(
@@ -934,15 +937,15 @@ def _handle_export_command(
     )
 
     if not args.output:
-        print(output)
+        logger.info(output)
 
 
 def _handle_setup_command(log_aggregator: LogAggregator) -> None:
     """Handle setup command. (Issue #315 - extracted)"""
     result = log_aggregator.setup_centralized_logging()
-    print("\n✅ Centralized logging configured:")
+    logger.info("\n✅ Centralized logging configured:")
     for key, value in result.items():
-        print(f"   {key}: {value}")
+        logger.info(f"   {key}: {value}")
 
 
 async def main():
@@ -979,10 +982,10 @@ async def main():
             _handle_setup_command(log_aggregator)
 
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        logger.warning("\n⚠️  Operation cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        logger.error(f"\n❌ Error: {e}")
         return 1
 
     return 0

@@ -11,8 +11,9 @@ import sys
 import time
 from urllib.parse import urljoin
 
-import requests
-from src.constants import ServiceURLs
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BackendStatusChecker:
@@ -64,10 +65,24 @@ class BackendStatusChecker:
         except Exception as e:
             return {"endpoint": endpoint, "url": url, "error": str(e), "success": False}
 
+        def _run_comprehensive_check_section_1(self):
+            """Display Section of run_comprehensive_check.
+
+            Helper for run_comprehensive_check (Issue #825).
+            """
+            return {
+                "status": status,
+                "successful": successful,
+                "failed": failed,
+                "total": len(critical_endpoints),
+                "results": results,
+            }
+
+
     def run_comprehensive_check(self):
         """Run comprehensive backend status check"""
-        print(f"🔍 Checking backend status at {self.base_url}")
-        print("=" * 60)
+        logger.info(f"🔍 Checking backend status at {self.base_url}")
+        logger.info("=" * 60)
 
         # Define critical endpoints to test
         critical_endpoints = [
@@ -86,84 +101,79 @@ class BackendStatusChecker:
         failed = 0
 
         for endpoint in critical_endpoints:
-            print(f"Testing {endpoint}...", end=" ")
+            logger.info(f"Testing {endpoint}...", end=" ")
             result = self.check_endpoint(endpoint)
             results.append(result)
 
             if result["success"]:
-                print(
+                logger.info(
                     f"✅ {result['status_code']} ({result.get('response_time_ms', 'N/A')}ms)"
                 )
                 successful += 1
             else:
-                print(f"❌ {result['error']}")
+                logger.error(f"❌ {result['error']}")
                 failed += 1
 
-        print("\n" + "=" * 60)
-        print(f"📊 Results: {successful} successful, {failed} failed")
+        logger.info("\n" + "=" * 60)
+        logger.error(f"📊 Results: {successful} successful, {failed} failed")
 
         # Overall assessment
         if successful == len(critical_endpoints):
-            print("🟢 Backend Status: HEALTHY")
+            logger.info("🟢 Backend Status: HEALTHY")
             status = "healthy"
         elif successful >= len(critical_endpoints) * 0.7:
-            print("🟡 Backend Status: DEGRADED")
+            logger.info("🟡 Backend Status: DEGRADED")
             status = "degraded"
         else:
-            print("🔴 Backend Status: UNHEALTHY")
+            logger.info("🔴 Backend Status: UNHEALTHY")
             status = "unhealthy"
 
         # Generate recommendations
-        print("\n📋 Recommendations:")
+        logger.info("\n📋 Recommendations:")
         if failed > 0:
             if any(
                 result.get("error", "").startswith("Connection refused")
                 for result in results
             ):
-                print("  • Start the backend server: ./run_agent.sh")
+                logger.info("  • Start the backend server: ./run_agent.sh")
 
             timeout_failures = [
                 r for r in results if "timeout" in r.get("error", "").lower()
             ]
             if timeout_failures:
-                print(
+                logger.info(
                     f"  • {len(timeout_failures)} endpoints timing out - check server performance"
                 )
 
             not_found_failures = [r for r in results if r.get("status_code") == 404]
             if not_found_failures:
-                print(
+                logger.info(
                     f"  • {len(not_found_failures)} endpoints not found - verify API routes"
                 )
 
         if successful > 0:
-            print("  • Some endpoints working - partial functionality available")
+            logger.info("  • Some endpoints working - partial functionality available")
 
-        return {
-            "status": status,
-            "successful": successful,
-            "failed": failed,
-            "total": len(critical_endpoints),
-            "results": results,
-        }
+        self._run_comprehensive_check_section_1()
+
 
     def quick_health_check(self):
         """Quick health check - just test if backend is running"""
-        print("⚡ Quick health check...", end=" ")
+        logger.info("⚡ Quick health check...", end=" ")
 
         # Try the simplest endpoint first
         result = self.check_endpoint("/api/hello")
         if result["success"]:
-            print(f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)")
+            logger.info(f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)")
             return True
 
         # Try health endpoint as fallback
         result = self.check_endpoint("/api/system/health")
         if result["success"]:
-            print(f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)")
+            logger.info(f"✅ Backend is running ({result.get('response_time_ms', 'N/A')}ms)")
             return True
 
-        print(f"❌ Backend not responding: {result['error']}")
+        logger.error(f"❌ Backend not responding: {result['error']}")
         return False
 
 
@@ -171,7 +181,7 @@ def main():
     """Main function for command line usage"""
     import argparse
 
-    from src.constants import ServiceURLs
+    from constants import ServiceURLs
 
     parser = argparse.ArgumentParser(description="Check AutoBot backend API status")
     parser.add_argument(
@@ -193,12 +203,12 @@ def main():
     if args.quick:
         result = checker.quick_health_check()
         if args.json:
-            print(json.dumps({"healthy": result}))
+            logger.info(json.dumps({"healthy": result}))
         sys.exit(0 if result else 1)
     else:
         results = checker.run_comprehensive_check()
         if args.json:
-            print(json.dumps(results, indent=2))
+            logger.info(json.dumps(results, indent=2))
         sys.exit(0 if results["status"] != "unhealthy" else 1)
 
 

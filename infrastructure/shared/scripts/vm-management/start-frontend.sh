@@ -46,7 +46,7 @@ main() {
     log "Connecting to Frontend VM..."
 
     ssh -i "$SSH_KEY" "$SSH_USER@$FRONTEND_IP" << 'EOF'
-        cd ~/AutoBot/autobot-vue || {
+        cd ~/AutoBot/autobot-slm-frontend || {
             echo "Error: AutoBot frontend directory not found"
             exit 1
         }
@@ -85,7 +85,7 @@ EOF
         success "Frontend service started on $FRONTEND_IP:5173"
         echo ""
         echo -e "${CYAN}Access URL: http://$FRONTEND_IP:5173${NC}"
-        echo -e "${BLUE}Check logs: ssh $SSH_USER@$FRONTEND_IP 'tail -f ~/AutoBot/autobot-vue/logs/frontend.log'${NC}"
+        echo -e "${BLUE}Check logs: ssh $SSH_USER@$FRONTEND_IP 'tail -f ~/AutoBot/autobot-slm-frontend/logs/frontend.log'${NC}"
     else
         error "Failed to start frontend service"
         exit 1

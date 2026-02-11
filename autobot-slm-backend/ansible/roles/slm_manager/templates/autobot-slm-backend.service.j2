@@ -9,6 +9,8 @@ User={{ slm_user }}
 Group={{ slm_group }}
 WorkingDirectory={{ slm_backend_dir }}
 Environment="PATH={{ slm_backend_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=-{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
+EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 ExecStart={{ slm_backend_dir }}/venv/bin/uvicorn main:app --host {{ slm_backend_host }} --port {{ slm_backend_port }}
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
@@ -20,7 +22,7 @@ StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ReadWritePaths={{ slm_base_dir }}
 
 [Install]

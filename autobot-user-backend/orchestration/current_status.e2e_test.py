@@ -10,8 +10,8 @@ from pathlib import Path
 # Add AutoBot to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from src.orchestrator import Orchestrator
-from src.type_definitions import TaskComplexity
+from orchestrator import Orchestrator
+from type_definitions import TaskComplexity
 
 
 async def test_current_status():

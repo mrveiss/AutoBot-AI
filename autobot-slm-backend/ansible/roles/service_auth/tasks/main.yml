@@ -1,0 +1,29 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication Role - Task Orchestrator
+---
+- name: "ServiceAuth | Deploy service keys"
+  ansible.builtin.include_tasks: deploy-keys.yml
+  when: service_auth_enabled | bool
+  tags: ['service_auth', 'keys']
+
+- name: "ServiceAuth | Configure enforcement mode"
+  ansible.builtin.include_tasks: configure-enforcement.yml
+  when:
+    - service_auth_enabled | bool
+    - inventory_hostname in groups['backend']
+  tags: ['service_auth', 'enforcement']
+
+- name: "ServiceAuth | Configure systemd integration"
+  ansible.builtin.include_tasks: configure-systemd.yml
+  when:
+    - service_auth_enabled | bool
+    - inventory_hostname in groups['backend']
+  tags: ['service_auth', 'systemd']
+
+- name: "ServiceAuth | Configure monitoring"
+  ansible.builtin.include_tasks: configure-monitoring.yml
+  when: service_auth_enabled | bool
+  tags: ['service_auth', 'monitoring']

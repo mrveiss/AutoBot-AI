@@ -4,17 +4,20 @@ Terminal Output Capture Utility for AutoBot
 Captures and logs all output from AutoBot processes
 """
 
+import logging
+import os
+import queue
 import subprocess
 import sys
-import os
-from datetime import datetime
 import threading
-import queue
+from datetime import datetime
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.utils.terminal_input_handler import safe_input
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
+from utils.terminal_input_handler import safe_input
+
+logger = logging.getLogger(__name__)
 
 # Build URLs from centralized configuration
 BASE_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
@@ -27,9 +30,13 @@ class OutputCapture:
         if log_file is None:
             # Use proper logs directory
             from pathlib import Path
+
             logs_dir = Path(__file__).parent.parent / "logs" / "debug"
             logs_dir.mkdir(parents=True, exist_ok=True)
-            self.log_file = str(logs_dir / f"autobot_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+            self.log_file = str(
+                logs_dir
+                / f"autobot_output_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            )
         else:
             self.log_file = log_file
         self.output_queue = queue.Queue()
@@ -61,13 +68,13 @@ class OutputCapture:
                 except queue.Empty:
                     continue
                 except Exception as e:
-                    print(f"Logging error: {e}")
+                    logger.error("Logging error: %s", e)
 
     def run_command(self, command, shell=True):
         """Run command and capture output."""
-        print(f"🚀 Starting command: {command}")
-        print(f"📝 Logging to: {self.log_file}")
-        print("=" * 60)
+        logger.info("Starting command: %s", command)
+        logger.info("Logging to: %s", self.log_file)
+        logger.info("=" * 60)
 
         # Start logging thread
         log_thread = threading.Thread(target=self.log_output, daemon=True)
@@ -100,9 +107,9 @@ class OutputCapture:
         stdout_thread.join()
         stderr_thread.join()
 
-        print("=" * 60)
-        print(f"✅ Command completed with return code: {return_code}")
-        print(f"📄 Output saved to: {self.log_file}")
+        logger.info("=" * 60)
+        logger.info("Command completed with return code: %s", return_code)
+        logger.info("Output saved to: %s", self.log_file)
 
         return return_code
 
@@ -112,9 +119,8 @@ def capture_autobot_output():
     capture = OutputCapture("autobot_full_output.log")
 
     # Example: Capture AutoBot startup
-    print("🤖 AutoBot Output Capture Utility")
-    print("This will capture all terminal output from AutoBot")
-    print()
+    logger.info("AutoBot Output Capture Utility")
+    logger.info("This will capture all terminal output from AutoBot")
 
     commands = {
         "1": ("Run AutoBot", "./run_agent.sh"),
@@ -127,9 +133,9 @@ def capture_autobot_output():
         "5": ("Custom command", None),
     }
 
-    print("Select what to capture:")
+    logger.info("Select what to capture:")
     for key, (desc, _) in commands.items():
-        print(f"  {key}. {desc}")
+        logger.info("  %s. %s", key, desc)
 
     choice = safe_input("\nEnter your choice (1-5): ", default="1").strip()
 
@@ -137,12 +143,14 @@ def capture_autobot_output():
         desc, command = commands[choice]
 
         if command is None:
-            command = safe_input("Enter custom command: ", default="./run_agent.sh").strip()
+            command = safe_input(
+                "Enter custom command: ", default="./run_agent.sh"
+            ).strip()
 
         if command:
             capture.run_command(command)
     else:
-        print("Invalid choice")
+        logger.warning("Invalid choice")
 
 
 def capture_specific_test():
@@ -165,13 +173,14 @@ def capture_specific_test():
         capture.run_command(args.command)
 
         if args.tail and os.path.exists(capture.log_file):
-            print(f"\n📜 Tailing log file: {capture.log_file}")
-            print("Press Ctrl+C to stop")
+            logger.info("Tailing log file: %s", capture.log_file)
+            logger.info("Press Ctrl+C to stop")
             try:
                 subprocess.run(["tail", "-f", capture.log_file])
             except KeyboardInterrupt:
-                print("\n✋ Stopped tailing")
+                logger.info("Stopped tailing")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     capture_specific_test()

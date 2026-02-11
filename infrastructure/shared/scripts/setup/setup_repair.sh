@@ -290,8 +290,8 @@ check_node_env() {
     fi
 
     # Check frontend dependencies
-    if [ -d "autobot-vue" ]; then
-        if [ ! -d "autobot-vue/node_modules" ]; then
+    if [ -d "autobot-slm-frontend" ]; then
+        if [ ! -d "autobot-slm-frontend/node_modules" ]; then
             log_warning "Frontend dependencies not installed"
             ISSUES_FOUND["frontend_deps_missing"]=true
         elif [ "$UPDATE_DEPS" = true ]; then
@@ -447,7 +447,7 @@ run_repairs() {
     # Fix Node.js environment
     if [ "${ISSUES_FOUND[frontend_deps_missing]}" = true ] || [ "${ISSUES_FOUND[frontend_deps_need_update]}" = true ]; then
         log_info "Installing/updating frontend dependencies..."
-        cd autobot-vue
+        cd autobot-slm-frontend
         npm install
         cd ..
     fi

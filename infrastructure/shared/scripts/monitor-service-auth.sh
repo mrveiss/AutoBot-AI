@@ -5,7 +5,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 LOG_FILE="$PROJECT_ROOT/logs/backend.log"
 REPORT_DIR="$PROJECT_ROOT/reports/service-auth"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -155,8 +156,8 @@ check_service_keys() {
     echo ""
 
     # Check if Redis is accessible
-    if ! redis-cli -h 172.16.168.23 -p 6379 ping > /dev/null 2>&1; then
-        echo -e "${RED}❌ Cannot connect to Redis at 172.16.168.23:6379${NC}"
+    if ! redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping > /dev/null 2>&1; then
+        echo -e "${RED}❌ Cannot connect to Redis at ${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}${NC}"
         return 1
     fi
 
@@ -164,7 +165,7 @@ check_service_keys() {
     local services=("main-backend" "frontend" "npu-worker" "redis-stack" "ai-stack" "browser-service")
 
     for service in "${services[@]}"; do
-        local key_exists=$(redis-cli -h 172.16.168.23 -p 6379 exists "service:key:$service")
+        local key_exists=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" exists "service:key:$service")
         if [ "$key_exists" -eq 1 ]; then
             echo -e "${GREEN}✅ $service: Key exists${NC}"
         else
@@ -173,14 +174,48 @@ check_service_keys() {
     done
 }
 
+# Function to check auth logs across all VMs (merged from monitor-service-auth-logs.sh)
+check_vm_auth_logs() {
+    echo -e "${YELLOW}🔍 Checking auth logs across all VMs${NC}"
+    echo ""
+
+    # Check local backend logs
+    echo -e "${BLUE}=== Main Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}) ===${NC}"
+    if [ -f /var/log/autobot/backend.log ]; then
+        tail -20 /var/log/autobot/backend.log | grep -i "auth" || echo "No auth logs yet"
+    elif [ -f "$PROJECT_ROOT/logs/backend.log" ]; then
+        tail -20 "$PROJECT_ROOT/logs/backend.log" | grep -i "auth" || echo "No auth logs yet"
+    else
+        echo "No backend logs found"
+    fi
+    echo ""
+
+    # Check each remote VM
+    local ssh_key="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+    local ssh_user="${AUTOBOT_SSH_USER:-autobot}"
+    for vm in "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" \
+              "npu:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" \
+              "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}" \
+              "aiml:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" \
+              "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"; do
+        IFS=':' read -r name ip <<< "$vm"
+        echo -e "${BLUE}=== ${name^} ($ip) ===${NC}"
+        ssh -i "$ssh_key" "$ssh_user@$ip" \
+            "tail -20 /var/log/autobot/*.log 2>/dev/null | grep -i auth || echo 'No auth logs yet'" \
+            2>/dev/null || echo "Cannot connect to $name"
+        echo ""
+    done
+}
+
 # Main menu
 echo "Select monitoring mode:"
 echo "  1) Generate analysis report (recommended)"
 echo "  2) Real-time monitoring"
 echo "  3) Check service keys in Redis"
-echo "  4) Run all checks"
+echo "  4) Check auth logs across all VMs"
+echo "  5) Run all checks"
 echo ""
-read -p "Enter choice [1-4]: " choice
+read -p "Enter choice [1-5]: " choice
 
 case $choice in
     1)
@@ -193,7 +228,12 @@ case $choice in
         check_service_keys
         ;;
     4)
+        check_vm_auth_logs
+        ;;
+    5)
         check_service_keys
+        echo ""
+        check_vm_auth_logs
         echo ""
         analyze_auth_logs
         echo ""

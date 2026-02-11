@@ -315,7 +315,7 @@ class TestJudgeIntegration:
     @pytest.mark.asyncio
     async def test_multi_criteria_evaluation(self, mock_judges):
         """Test that judges evaluate multiple criteria"""
-        from src.judges import CriterionScore, JudgmentConfidence, JudgmentDimension
+        from judges import CriterionScore, JudgmentConfidence, JudgmentDimension
 
         # Create detailed criterion scores
         criterion_scores = [
@@ -389,8 +389,8 @@ class TestJudgeIntegration:
 
     def test_judge_configuration(self):
         """Test judge configuration and customization"""
-        from src.judges.security_risk_judge import SecurityRiskJudge
-        from src.judges.workflow_step_judge import WorkflowStepJudge
+        from judges.security_risk_judge import SecurityRiskJudge
+        from judges.workflow_step_judge import WorkflowStepJudge
 
         # Test custom threshold configuration
         workflow_judge = WorkflowStepJudge()

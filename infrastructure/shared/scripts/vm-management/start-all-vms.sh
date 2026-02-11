@@ -83,9 +83,9 @@ start_frontend_vm() {
             echo "Run: bash scripts/utilities/sync-to-vm.sh frontend"
         fi
 
-        cd ~/autobot-vue 2>/dev/null || {
+        cd ~/AutoBot/autobot-slm-frontend 2>/dev/null || {
             echo "AutoBot frontend directory not found. Creating placeholder..."
-            mkdir -p ~/autobot-vue
+            mkdir -p ~/AutoBot/autobot-slm-frontend
             echo "Run sync script to deploy frontend: bash scripts/utilities/sync-to-vm.sh frontend"
             exit 1
         }

@@ -8,6 +8,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -20,9 +23,9 @@ PROMETHEUS_VERSION="2.47.0"
 ALERTMANAGER_VERSION="0.26.0"
 GRAFANA_VERSION="10.2.0"
 
-TARGET_HOST="172.16.168.23"
-TARGET_USER="autobot"
-SSH_KEY="$HOME/.ssh/autobot_key"
+TARGET_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+TARGET_USER="${AUTOBOT_SSH_USER:-autobot}"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Logging functions
 log() { echo -e "${BLUE}[$(date +'%H:%M:%S')]${NC} $1"; }
@@ -320,7 +323,7 @@ main() {
     echo "Next steps:"
     echo "  1. Access Grafana at http://$TARGET_HOST:3000"
     echo "  2. Import AutoBot dashboards from config/grafana/"
-    echo "  3. Access dashboards in AutoBot UI: http://172.16.168.21:5173/monitoring/dashboards"
+    echo "  3. Access dashboards in AutoBot UI: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}/monitoring/dashboards"
     echo ""
 }
 

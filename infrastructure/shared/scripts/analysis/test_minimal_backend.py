@@ -10,7 +10,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.constants import ServiceURLs
+from constants import ServiceURLs
 
 # Set up minimal logging
 logging.basicConfig(level=logging.INFO)

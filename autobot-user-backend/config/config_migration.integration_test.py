@@ -7,7 +7,7 @@ import os
 from unittest.mock import patch
 
 import pytest
-from src.utils.config_manager import ConfigManager, config_manager
+from utils.config_manager import ConfigManager, config_manager
 
 
 class TestConfigurationMigration:
@@ -15,7 +15,7 @@ class TestConfigurationMigration:
 
     def test_llm_interface_config_migration(self):
         """Test that LLM interface uses centralized configuration"""
-        from src.llm_interface import LLMInterface
+        from llm_interface import LLMInterface
 
         # Create test config manager
         test_config = ConfigManager()
@@ -32,7 +32,7 @@ class TestConfigurationMigration:
 
     def test_llm_interface_environment_fallback(self):
         """Test that LLM interface falls back to environment variables"""
-        from src.llm_interface import LLMInterface
+        from llm_interface import LLMInterface
 
         # Create config manager without API key set
         test_config = ConfigManager()
@@ -47,7 +47,7 @@ class TestConfigurationMigration:
 
     def test_hardware_acceleration_config_usage(self):
         """Test that hardware acceleration uses centralized configuration"""
-        from src.hardware_acceleration import HardwareAccelerationManager
+        from hardware_acceleration import HardwareAccelerationManager
 
         # Create test config with custom hardware settings
         test_config = ConfigManager()
@@ -70,7 +70,7 @@ class TestConfigurationMigration:
 
     def test_desktop_streaming_environment_config(self):
         """Test that desktop streaming manager uses config for environment"""
-        from src.desktop_streaming_manager import DesktopStreamingManager
+        from desktop_streaming_manager import DesktopStreamingManager
 
         # Create test config with system environment
         test_config = ConfigManager()
@@ -159,7 +159,7 @@ class TestConfigurationMigration:
 
     def test_unified_multimodal_processor_config_usage(self):
         """Test that unified multimodal processor uses centralized config"""
-        from src.multimodal_processor import VisionProcessor
+        from multimodal_processor import VisionProcessor
 
         # Create test config with vision settings
         test_config = ConfigManager()
@@ -237,7 +237,7 @@ class TestConfigurationMigration:
     def test_config_migration_backward_compatibility(self):
         """Test that migration maintains backward compatibility"""
         # Test that old config patterns still work during transition period
-        from src.utils.config_manager import config
+        from utils.config_manager import config
 
         # The backward compatibility wrapper should work
         assert hasattr(config, "config")  # Old interface

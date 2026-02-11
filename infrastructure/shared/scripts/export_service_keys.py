@@ -11,13 +11,16 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from backend.security.service_auth import ServiceAuthManager
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 logger = structlog.get_logger()
 
@@ -60,12 +63,12 @@ SERVICES = [
 async def export_service_configs():
     """Export service keys from Redis to .env files"""
 
-    print("🔐 AutoBot Service Key Export")
-    print("=" * 60)
-    print(f"Timestamp: {datetime.now().isoformat()}")
-    print("Redis Host: 172.16.168.23:6379")
-    print("Export Directory: /tmp/service-keys/")
-    print()
+    logger.info("🔐 AutoBot Service Key Export")
+    logger.info("=" * 60)
+    logger.info(f"Timestamp: {datetime.now().isoformat()}")
+    logger.info("Redis Host: 172.16.168.23:6379")
+    logger.info("Export Directory: /tmp/service-keys/")
+    logger.info("")
 
     # Create export directory
     export_dir = Path("/tmp/service-keys")
@@ -84,13 +87,13 @@ async def export_service_configs():
     for service in SERVICES:
         service_id = service["id"]
 
-        print(f"Exporting {service_id}...", end=" ")
+        logger.info(f"Exporting {service_id}...", end=" ")
 
         # Retrieve key from Redis
         service_key = await auth_manager.get_service_key(service_id)
 
         if not service_key:
-            print("❌ FAILED - Key not found in Redis")
+            logger.error("❌ FAILED - Key not found in Redis")
             failed_exports.append(service_id)
             continue
 
@@ -113,30 +116,30 @@ async def export_service_configs():
         # Set restrictive permissions (owner read/write only)
         env_file.chmod(0o600)
 
-        print(f"✅ {env_file}")
+        logger.info(f"✅ {env_file}")
         exported_count += 1
 
-    print()
-    print(f"✅ Exported {exported_count}/{len(SERVICES)} service configurations")
+    logger.info("")
+    logger.info(f"✅ Exported {exported_count}/{len(SERVICES)} service configurations")
 
     if failed_exports:
-        print(f"❌ Failed exports: {', '.join(failed_exports)}")
+        logger.error(f"❌ Failed exports: {', '.join(failed_exports)}")
         return False
 
-    print()
-    print("📋 Export Summary:")
+    logger.info("")
+    logger.info("📋 Export Summary:")
     for service in SERVICES:
         env_file = export_dir / f"{service['id']}.env"
         if env_file.exists():
             size = env_file.stat().st_size
             perms = oct(env_file.stat().st_mode)[-3:]
-            print(f"  ✅ {env_file.name:<25} {size:>4} bytes, perms: {perms}")
+            logger.info(f"  ✅ {env_file.name:<25} {size:>4} bytes, perms: {perms}")
 
-    print()
-    print("=" * 60)
-    print("✅ Service keys ready for Ansible deployment")
-    print(f"📁 Export location: {export_dir}")
-    print()
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("✅ Service keys ready for Ansible deployment")
+    logger.info(f"📁 Export location: {export_dir}")
+    logger.info("")
 
     return True
 
@@ -144,13 +147,13 @@ async def export_service_configs():
 async def verify_exports():
     """Verify exported .env files match Redis keys"""
 
-    print("🔍 Verifying Exported Configurations")
-    print("=" * 60)
+    logger.info("🔍 Verifying Exported Configurations")
+    logger.info("=" * 60)
 
     export_dir = Path("/tmp/service-keys")
 
     if not export_dir.exists():
-        print("❌ Export directory not found!")
+        logger.error("❌ Export directory not found!")
         return False
 
     # Get Redis client for main database
@@ -166,7 +169,7 @@ async def verify_exports():
         env_file = export_dir / f"{service_id}.env"
 
         if not env_file.exists():
-            print(f"  ❌ {service_id}: File not found")
+            logger.error(f"  ❌ {service_id}: File not found")
             all_valid = False
             continue
 
@@ -183,19 +186,19 @@ async def verify_exports():
         redis_key = await auth_manager.get_service_key(service_id)
 
         if exported_key == redis_key:
-            print(f"  ✅ {service_id}: Key matches Redis")
+            logger.info(f"  ✅ {service_id}: Key matches Redis")
         else:
-            print(f"  ❌ {service_id}: Key MISMATCH with Redis!")
+            logger.error(f"  ❌ {service_id}: Key MISMATCH with Redis!")
             all_valid = False
 
-    print()
+    logger.info("")
     if all_valid:
-        print("✅ All exports verified successfully")
+        logger.info("✅ All exports verified successfully")
     else:
-        print("❌ Verification failed - some keys don't match!")
+        logger.error("❌ Verification failed - some keys don't match!")
 
-    print("=" * 60)
-    print()
+    logger.info("=" * 60)
+    logger.info("")
 
     return all_valid
 
@@ -207,18 +210,18 @@ async def main():
     export_success = await export_service_configs()
 
     if not export_success:
-        print("❌ Export failed!")
+        logger.error("❌ Export failed!")
         sys.exit(1)
 
     # Verify exports
     verify_success = await verify_exports()
 
     if not verify_success:
-        print("❌ Verification failed!")
+        logger.error("❌ Verification failed!")
         sys.exit(1)
 
-    print("✅ Service key export completed successfully")
-    print("Ready for Ansible deployment to VMs")
+    logger.info("✅ Service key export completed successfully")
+    logger.info("Ready for Ansible deployment to VMs")
 
 
 if __name__ == "__main__":

@@ -84,6 +84,8 @@ for file in $PY_FILES; do
             continue ;;
         *"script_utils.py")  # Script formatting utilities with intentional print()
             continue ;;
+        *"monitoring/"*)  # Monitoring CLI tools use print() for terminal reports
+            continue ;;
         *"cleanup_redis_metrics.py")  # Phase 5 CLI tool for Redis cleanup
             continue ;;
         *"test_phase5_cleanup.py")  # Phase 5 test script
@@ -157,7 +159,7 @@ echo -e "${CYAN}📝 Checking Frontend files for console.* statements...${NC}"
 if [[ "$STAGED_ONLY" == "true" ]]; then
     FE_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '\.(ts|vue)$' || true)
 else
-    FE_FILES=$(find "$PROJECT_ROOT/autobot-vue/src" -type f \( -name "*.ts" -o -name "*.vue" \) 2>/dev/null || true)
+    FE_FILES=$(find "$PROJECT_ROOT/autobot-slm-frontend/src" -type f \( -name "*.ts" -o -name "*.vue" \) 2>/dev/null || true)
 fi
 
 for file in $FE_FILES; do

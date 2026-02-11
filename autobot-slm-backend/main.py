@@ -50,6 +50,7 @@ from api import (
     websocket_router,
 )
 from api.code_source import router as code_source_router
+from api.performance import router as performance_router
 from api.roles import router as roles_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -93,10 +94,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
 
-    # Run database migrations before initializing SQLAlchemy
-    await _run_migrations()
-
+    # Create base tables first, then apply incremental migrations
     await db_service.initialize()
+    await _run_migrations()
     await _ensure_admin_user()
     await _seed_default_roles()
     await reconciler_service.start()
@@ -126,25 +126,48 @@ async def lifespan(app: FastAPI):
 
 
 async def _ensure_admin_user():
-    """Create default admin user if none exists."""
+    """Create or sync the admin user.
+
+    When SLM_ADMIN_PASSWORD is set (Ansible-managed), ensures the
+    admin password always matches. This makes the secrets file the
+    single source of truth for the admin credential.
+    """
+    import os
+    import secrets
+
     from models.database import User
     from services.auth import auth_service
     from sqlalchemy import select
 
+    env_password = os.getenv("SLM_ADMIN_PASSWORD", "")
+
     async with db_service.session() as db:
-        result = await db.execute(select(User).where(User.is_admin.is_(True)))
-        if result.scalar_one_or_none():
+        result = await db.execute(select(User).where(User.username == "admin"))
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            if env_password:
+                existing.password_hash = auth_service.hash_password(env_password)
+                await db.commit()
+                logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
             return
+
+        password = env_password
+        if not password:
+            password = secrets.token_urlsafe(16)
+            logger.critical(
+                "Initial admin password: %s — CHANGE IMMEDIATELY",
+                password,
+            )
 
         admin_user = User(
             username="admin",
-            password_hash=auth_service.hash_password("admin"),
+            password_hash=auth_service.hash_password(password),
             is_admin=True,
         )
         db.add(admin_user)
         await db.commit()
-        logger.warning("Created default admin user (username: admin, password: admin)")
-        logger.warning("CHANGE THE DEFAULT PASSWORD IMMEDIATELY!")
+        logger.warning("Created default admin user (username: admin)")
 
 
 async def _seed_default_roles():
@@ -187,6 +210,7 @@ app.include_router(stateful_router, prefix="/api")
 app.include_router(updates_router, prefix="/api")
 app.include_router(maintenance_router, prefix="/api")
 app.include_router(monitoring_router, prefix="/api")
+app.include_router(performance_router, prefix="/api")
 app.include_router(errors_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")

@@ -3,6 +3,9 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
+
+logger = logging.getLogger(__name__)
+
 Test LLM interface with a simplified version bypassing retry mechanism
 """
 
@@ -12,6 +15,7 @@ import sys
 from pathlib import Path
 
 import aiohttp
+import logging
 
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -19,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 async def test_llm_interface_simplified():
     """Test LLM interface logic without retry mechanism"""
-    print("🤖 Testing simplified LLM interface logic...")
+    logger.info("🤖 Testing simplified LLM interface logic...")
 
     # Mimic the exact data structure AutoBot uses
     url = "http://127.0.0.1:11434/api/chat"
@@ -33,9 +37,9 @@ async def test_llm_interface_simplified():
         "format": "",
     }
 
-    print(f"Ollama Request URL: {url}")
-    print(f"Ollama Request Headers: {headers}")
-    print(f"Ollama Request Data: {json.dumps(data, indent=2)}")
+    logger.info("Ollama Request URL: %s", url)
+    logger.info("Ollama Request Headers: %s", headers)
+    logger.info("Ollama Request Data: %s", json.dumps(data, indent=2))
 
     try:
         # This is exactly the same logic as in LLM interface but without retry wrapper
@@ -45,14 +49,14 @@ async def test_llm_interface_simplified():
                 response.raise_for_status()
                 response_json = await response.json()
 
-                print(f"Ollama Raw Response Status: {response.status}")
-                print(f"Ollama Raw Response Headers: {response.headers}")
-                print(f"Ollama Raw Response JSON: {response_json}")
+                logger.info("Ollama Raw Response Status: %s", response.status)
+                logger.info("Ollama Raw Response Headers: %s", response.headers)
+                logger.info("Ollama Raw Response JSON: %s", response_json)
 
                 return response_json
 
     except Exception as e:
-        print(f"❌ Simplified LLM interface failed: {e}")
+        logger.info("❌ Simplified LLM interface failed: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -61,10 +65,10 @@ async def test_llm_interface_simplified():
 
 async def test_with_retry_mechanism():
     """Test the same logic but using the retry mechanism"""
-    print("\n🔄 Testing with retry mechanism...")
+    logger.info("\n🔄 Testing with retry mechanism...")
 
     # Import the retry mechanism
-    from src.retry_mechanism import retry_network_operation
+    from retry_mechanism import retry_network_operation
 
     async def make_llm_request():
         url = "http://127.0.0.1:11434/api/chat"
@@ -84,17 +88,17 @@ async def test_with_retry_mechanism():
                 response.raise_for_status()
                 response_json = await response.json()
 
-                print(
+                logger.info(
                     f"   Retry mechanism response: {response_json.get('message', {}).get('content', 'No content')}"
                 )
                 return response_json
 
     try:
         result = await retry_network_operation(make_llm_request)
-        print("✅ Retry mechanism test successful!")
+        logger.info("✅ Retry mechanism test successful!")
         return result
     except Exception as e:
-        print(f"❌ Retry mechanism test failed: {e}")
+        logger.info("❌ Retry mechanism test failed: %s", e)
         import traceback
 
         traceback.print_exc()
@@ -103,8 +107,8 @@ async def test_with_retry_mechanism():
 
 async def main():
     """Run tests to isolate the issue"""
-    print("🚀 LLM Interface Direct Test")
-    print("=" * 40)
+    logger.info("🚀 LLM Interface Direct Test")
+    logger.info("=" * 40)
 
     # Test without retry
     simple_result = await test_llm_interface_simplified()
@@ -113,13 +117,14 @@ async def main():
     retry_result = await test_with_retry_mechanism()
 
     if simple_result and retry_result:
-        print("\n✅ Both simplified and retry tests work!")
-        print("   The issue must be elsewhere in the AutoBot code.")
+        logger.info("\n✅ Both simplified and retry tests work!")
+        logger.info("   The issue must be elsewhere in the AutoBot code.")
     elif simple_result and not retry_result:
-        print("\n🚨 Retry mechanism is the problem!")
+        logger.info("\n🚨 Retry mechanism is the problem!")
     elif not simple_result:
-        print("\n🚨 Basic aiohttp logic is the problem!")
+        logger.info("\n🚨 Basic aiohttp logic is the problem!")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

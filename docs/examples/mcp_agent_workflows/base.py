@@ -21,16 +21,14 @@ import aiohttp
 
 # Import NetworkConstants to avoid hardcoding
 try:
-    from src.utils.network_constants import NetworkConstants
+    from utils.network_constants import NetworkConstants
 
     AUTOBOT_BACKEND_URL = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     )
 except ImportError:
     # Fallback for standalone usage - use environment variable
-    AUTOBOT_BACKEND_URL = os.getenv(
-        "AUTOBOT_BACKEND_URL", "http://172.16.168.20:8001"
-    )
+    AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "http://172.16.168.20:8001")
 
 # Configure logging
 logging.basicConfig(
@@ -87,14 +85,89 @@ class MCPClient:
 
         logger.info(f"MCPClient initialized with backend: {self.backend_url}")
 
+    def _raise_client_error(self, bridge, tool, status, text):
+        """Raise MCPToolError for non-retryable client error codes.
+
+        Helper for call_tool (#825).
+        """
+        error_map = {
+            400: f"Validation error: {text}",
+            403: "Access denied",
+            404: f"Tool not found: {tool}",
+            422: f"Invalid request: {text}",
+        }
+        msg = error_map.get(status, f"Unexpected response: {text}")
+        raise MCPToolError(bridge, tool, status, msg)
+
+    async def _retry_or_raise(self, bridge, tool, attempt, label, msg):
+        """Retry with backoff or raise MCPToolError on final attempt.
+
+        Helper for call_tool (#825).
+        """
+        if attempt < self.max_retries - 1:
+            wait_time = 2**attempt
+            logger.warning(
+                f"{label}, retrying in {wait_time}s... " f"(attempt {attempt + 1})"
+            )
+            await asyncio.sleep(wait_time)
+            return
+        raise MCPToolError(bridge, tool, 0, msg)
+
+    async def _execute_request(self, url, params, bridge, tool, attempt):
+        """Execute a single HTTP POST to the MCP tool endpoint.
+
+        Helper for call_tool (#825).
+
+        Returns:
+            Parsed result dict on success, None if should retry.
+        """
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=params, timeout=self.timeout) as response:
+                response_text = await response.text()
+
+                if response.status == 200:
+                    result = json.loads(response_text)
+                    if self.log_requests:
+                        logger.debug(f"  Response: {str(result)[:200]}...")
+                    return result
+
+                if response.status in (400, 403, 404, 422):
+                    self._raise_client_error(
+                        bridge, tool, response.status, response_text
+                    )
+
+                if response.status >= 500:
+                    if attempt < self.max_retries - 1:
+                        wait_time = 2**attempt
+                        logger.warning(
+                            f"Server error {response.status}, "
+                            f"retrying in {wait_time}s... "
+                            f"(attempt {attempt + 1})"
+                        )
+                        await asyncio.sleep(wait_time)
+                        return None
+
+                    raise MCPToolError(
+                        bridge,
+                        tool,
+                        response.status,
+                        f"Server error: {response_text}",
+                    )
+
+                raise MCPToolError(
+                    bridge,
+                    tool,
+                    response.status,
+                    f"Unexpected response: {response_text}",
+                )
+
     async def call_tool(
         self, bridge_name: str, tool_name: str, params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """
-        Call an AutoBot MCP tool via HTTP API.
+        """Call an AutoBot MCP tool via HTTP API.
 
         Args:
-            bridge_name: MCP bridge name (e.g., 'filesystem_mcp' or 'filesystem')
+            bridge_name: MCP bridge name
             tool_name: Tool name within the bridge
             params: Tool parameters (default: empty dict)
 
@@ -104,123 +177,44 @@ class MCPClient:
         Raises:
             MCPToolError: When tool call fails after retries
         """
-        # Normalize bridge name (remove _mcp suffix if present)
-        bridge_short = bridge_name.replace("_mcp", "")
-        url = f"{self.backend_url}/api/{bridge_short}/mcp/{tool_name}"
+        bridge = bridge_name.replace("_mcp", "")
+        url = f"{self.backend_url}/api/{bridge}/mcp/{tool_name}"
         params = params or {}
 
         if self.log_requests:
-            logger.debug(f"Calling MCP tool: {bridge_short}/{tool_name}")
+            logger.debug(f"Calling MCP tool: {bridge}/{tool_name}")
             logger.debug(f"  URL: {url}")
             logger.debug(f"  Params: {json.dumps(params)[:200]}")
 
         for attempt in range(self.max_retries):
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        url, json=params, timeout=self.timeout
-                    ) as response:
-                        response_text = await response.text()
-
-                        if response.status == 200:
-                            result = json.loads(response_text)
-                            if self.log_requests:
-                                logger.debug(f"  Response: {str(result)[:200]}...")
-                            return result
-
-                        elif response.status == 400:
-                            # Validation error - don't retry
-                            raise MCPToolError(
-                                bridge_short,
-                                tool_name,
-                                400,
-                                f"Validation error: {response_text}",
-                            )
-
-                        elif response.status == 403:
-                            # Access denied - don't retry
-                            raise MCPToolError(
-                                bridge_short, tool_name, 403, "Access denied"
-                            )
-
-                        elif response.status == 404:
-                            # Tool not found - don't retry
-                            raise MCPToolError(
-                                bridge_short, tool_name, 404, f"Tool not found: {tool_name}"
-                            )
-
-                        elif response.status == 422:
-                            # Unprocessable entity - don't retry
-                            raise MCPToolError(
-                                bridge_short,
-                                tool_name,
-                                422,
-                                f"Invalid request: {response_text}",
-                            )
-
-                        elif response.status >= 500:
-                            # Server error - retry with backoff
-                            if attempt < self.max_retries - 1:
-                                wait_time = 2**attempt
-                                logger.warning(
-                                    f"Server error {response.status}, "
-                                    f"retrying in {wait_time}s... (attempt {attempt + 1})"
-                                )
-                                await asyncio.sleep(wait_time)
-                                continue
-
-                            raise MCPToolError(
-                                bridge_short,
-                                tool_name,
-                                response.status,
-                                f"Server error: {response_text}",
-                            )
-
-                        else:
-                            raise MCPToolError(
-                                bridge_short,
-                                tool_name,
-                                response.status,
-                                f"Unexpected response: {response_text}",
-                            )
-
+                result = await self._execute_request(
+                    url, params, bridge, tool_name, attempt
+                )
+                if result is not None:
+                    return result
             except asyncio.TimeoutError:
-                if attempt < self.max_retries - 1:
-                    wait_time = 2**attempt
-                    logger.warning(
-                        f"Request timeout, retrying in {wait_time}s... (attempt {attempt + 1})"
-                    )
-                    await asyncio.sleep(wait_time)
-                    continue
-
-                raise MCPToolError(
-                    bridge_short,
+                await self._retry_or_raise(
+                    bridge,
                     tool_name,
-                    0,
-                    f"Request timed out after {self.timeout.total}s",
+                    attempt,
+                    "Request timeout",
+                    f"Timed out after {self.timeout.total}s",
                 )
-
             except aiohttp.ClientError as e:
-                if attempt < self.max_retries - 1:
-                    wait_time = 2**attempt
-                    logger.warning(
-                        f"Connection error, retrying in {wait_time}s... (attempt {attempt + 1})"
-                    )
-                    await asyncio.sleep(wait_time)
-                    continue
-
-                raise MCPToolError(
-                    bridge_short, tool_name, 0, f"Connection error: {str(e)}"
+                await self._retry_or_raise(
+                    bridge,
+                    tool_name,
+                    attempt,
+                    "Connection error",
+                    f"Connection error: {str(e)}",
                 )
-
             except json.JSONDecodeError as e:
                 raise MCPToolError(
-                    bridge_short, tool_name, 0, f"Invalid JSON response: {str(e)}"
+                    bridge, tool_name, 0, f"Invalid JSON response: {str(e)}"
                 )
 
-        raise MCPToolError(
-            bridge_short, tool_name, 0, "Max retries exceeded"
-        )
+        raise MCPToolError(bridge, tool_name, 0, "Max retries exceeded")
 
     async def call_tool_safe(
         self, bridge_name: str, tool_name: str, params: Optional[Dict[str, Any]] = None
@@ -330,7 +324,9 @@ async def write_file_safe(path: str, content: str) -> bool:
         True on success, False on failure
     """
     try:
-        await call_mcp_tool("filesystem_mcp", "write_file", {"path": path, "content": content})
+        await call_mcp_tool(
+            "filesystem_mcp", "write_file", {"path": path, "content": content}
+        )
         logger.info(f"File written: {path}")
         return True
     except MCPToolError as e:
@@ -367,7 +363,9 @@ class WorkflowResult:
         self.success = True
         self.error: Optional[str] = None
 
-    def add_step(self, step_name: str, status: str, data: Any = None, error: str = None):
+    def add_step(
+        self, step_name: str, status: str, data: Any = None, error: str = None
+    ):
         """Add step result to workflow"""
         step = {
             "step": step_name,

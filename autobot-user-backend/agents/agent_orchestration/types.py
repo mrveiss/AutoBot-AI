@@ -32,8 +32,89 @@ SYSTEM_COMMAND_PATTERNS = {
     "ls",
     "df",
 }
-RESEARCH_PATTERNS = {"search web", "research", "find online", "latest", "current", "recent"}
+RESEARCH_PATTERNS = {
+    "search web",
+    "research",
+    "find online",
+    "latest",
+    "current",
+    "recent",
+}
 KNOWLEDGE_PATTERNS = {"according to", "based on documents", "analyze", "summarize"}
+
+# Issue #60: Routing patterns for specialized agents
+DATA_ANALYSIS_PATTERNS = {
+    "analyze data",
+    "statistics",
+    "statistical",
+    "data analysis",
+    "dataset",
+    "correlation",
+    "trend",
+    "pattern detection",
+    "metrics",
+}
+CODE_GENERATION_PATTERNS = {
+    "generate code",
+    "write code",
+    "code for",
+    "implement",
+    "programming",
+    "function that",
+    "class that",
+    "algorithm",
+}
+TRANSLATION_PATTERNS = {
+    "translate",
+    "translation",
+    "in spanish",
+    "in french",
+    "in german",
+    "in chinese",
+    "in japanese",
+    "to english",
+    "language",
+}
+SUMMARIZATION_PATTERNS = {
+    "summarize",
+    "summary",
+    "summarization",
+    "key points",
+    "tldr",
+    "condense",
+    "brief overview",
+    "main ideas",
+}
+SENTIMENT_PATTERNS = {
+    "sentiment",
+    "emotion",
+    "feeling",
+    "tone",
+    "opinion",
+    "positive or negative",
+    "mood",
+    "sentiment analysis",
+}
+IMAGE_ANALYSIS_PATTERNS = {
+    "image",
+    "picture",
+    "photo",
+    "visual",
+    "describe image",
+    "what is in this",
+    "object detection",
+    "scene",
+}
+AUDIO_PROCESSING_PATTERNS = {
+    "audio",
+    "transcribe",
+    "transcription",
+    "speech",
+    "recording",
+    "voice",
+    "sound",
+    "podcast",
+}
 
 
 class AgentType(Enum):
@@ -45,6 +126,13 @@ class AgentType(Enum):
     KNOWLEDGE_RETRIEVAL = "knowledge_retrieval"
     RESEARCH = "research"
     ORCHESTRATOR = "orchestrator"
+    DATA_ANALYSIS = "data_analysis"
+    CODE_GENERATION = "code_generation"
+    TRANSLATION = "translation"
+    SUMMARIZATION = "summarization"
+    SENTIMENT_ANALYSIS = "sentiment_analysis"
+    IMAGE_ANALYSIS = "image_analysis"
+    AUDIO_PROCESSING = "audio_processing"
 
 
 @dataclass
@@ -139,5 +227,70 @@ DEFAULT_AGENT_CAPABILITIES = {
         ],
         limitations=["Private data", "Real-time interaction"],
         resource_usage="High",
+    ),
+    # Issue #60: Specialized agent capabilities
+    AgentType.DATA_ANALYSIS: AgentCapability(
+        agent_type=AgentType.DATA_ANALYSIS,
+        model_size="3B",
+        specialization="Data analysis and pattern detection",
+        strengths=["Statistical analysis", "Pattern detection", "Trend identification"],
+        limitations=["Large dataset processing", "Real-time streaming data"],
+        resource_usage="Medium",
+    ),
+    AgentType.CODE_GENERATION: AgentCapability(
+        agent_type=AgentType.CODE_GENERATION,
+        model_size="3B",
+        specialization="Programming assistance and code generation",
+        strengths=["Code generation", "Code explanation", "Multi-language support"],
+        limitations=["Complex system architecture", "Runtime debugging"],
+        resource_usage="Medium",
+    ),
+    AgentType.TRANSLATION: AgentCapability(
+        agent_type=AgentType.TRANSLATION,
+        model_size="1B",
+        specialization="Multi-language translation",
+        strengths=[
+            "Accurate translation",
+            "Language detection",
+            "Context preservation",
+        ],
+        limitations=["Rare languages", "Highly specialized jargon"],
+        resource_usage="Low",
+    ),
+    AgentType.SUMMARIZATION: AgentCapability(
+        agent_type=AgentType.SUMMARIZATION,
+        model_size="3B",
+        specialization="Text and document summarization",
+        strengths=[
+            "Concise summaries",
+            "Key point extraction",
+            "Document condensation",
+        ],
+        limitations=["Very long documents", "Technical precision"],
+        resource_usage="Medium",
+    ),
+    AgentType.SENTIMENT_ANALYSIS: AgentCapability(
+        agent_type=AgentType.SENTIMENT_ANALYSIS,
+        model_size="1B",
+        specialization="Sentiment and emotion classification",
+        strengths=["Sentiment detection", "Emotion classification", "Tone analysis"],
+        limitations=["Sarcasm detection", "Cultural nuance"],
+        resource_usage="Low",
+    ),
+    AgentType.IMAGE_ANALYSIS: AgentCapability(
+        agent_type=AgentType.IMAGE_ANALYSIS,
+        model_size="3B",
+        specialization="Image analysis and vision tasks",
+        strengths=["Object detection", "Scene description", "Image classification"],
+        limitations=["Video processing", "3D reconstruction"],
+        resource_usage="Medium-High",
+    ),
+    AgentType.AUDIO_PROCESSING: AgentCapability(
+        agent_type=AgentType.AUDIO_PROCESSING,
+        model_size="3B",
+        specialization="Audio transcription and analysis",
+        strengths=["Transcription", "Speaker identification", "Audio classification"],
+        limitations=["Real-time streaming", "Music transcription"],
+        resource_usage="Medium-High",
     ),
 }

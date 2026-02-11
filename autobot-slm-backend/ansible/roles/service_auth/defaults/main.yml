@@ -1,0 +1,45 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Authentication Role - Default Variables
+---
+# Feature toggles
+service_auth_enabled: true
+service_auth_enforcement_mode: true
+service_auth_override_token: ""
+service_auth_circuit_breaker_enabled: false
+service_auth_circuit_breaker_percentage: 100
+service_auth_rate_limit_window: 300
+service_auth_rate_limit_max_failures: 10
+service_auth_timestamp_window: 300
+service_auth_key_ttl_days: 90
+
+# Key storage paths
+service_auth_keys_dir: /etc/autobot/service-keys
+service_auth_config_dir: /etc/autobot
+
+# Service definitions - maps inventory groups to service IDs
+service_auth_services:
+  main-backend:
+    group: backend
+    host: "172.16.168.20"
+  frontend:
+    group: frontend
+    host: "172.16.168.21"
+  npu-worker:
+    group: npu
+    host: "172.16.168.22"
+  redis-stack:
+    group: database
+    host: "172.16.168.23"
+  ai-stack:
+    group: aiml
+    host: "172.16.168.24"
+  browser-service:
+    group: browser
+    host: "172.16.168.25"
+
+# Redis connection for key storage
+service_auth_redis_host: "172.16.168.23"
+service_auth_redis_port: 6379

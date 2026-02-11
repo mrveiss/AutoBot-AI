@@ -160,6 +160,8 @@ class NodeResponse(BaseModel):
     last_heartbeat: Optional[datetime] = None
     agent_version: Optional[str] = None
     os_info: Optional[str] = None
+    code_version: Optional[str] = None
+    code_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -318,6 +320,7 @@ class RoleInfo(BaseModel):
     name: str
     description: str
     category: str
+    ansible_role: str = ""
     dependencies: List[str] = Field(default_factory=list)
     variables: Dict = Field(default_factory=dict)
     tools: List[str] = Field(default_factory=list)
@@ -509,6 +512,26 @@ class UpdateJobListResponse(BaseModel):
 
     jobs: List[UpdateJobResponse]
     total: int
+
+
+class NodeUpdateSummary(BaseModel):
+    """Per-node update summary for fleet overview (#682)."""
+
+    node_id: str
+    hostname: str
+    system_updates: int = 0
+    code_update_available: bool = False
+    code_status: str = "unknown"
+    total_updates: int = 0
+
+
+class FleetUpdateSummaryResponse(BaseModel):
+    """Fleet-wide update summary (#682)."""
+
+    nodes: List[NodeUpdateSummary]
+    total_system_updates: int = 0
+    total_code_updates: int = 0
+    nodes_needing_updates: int = 0
 
 
 # =============================================================================

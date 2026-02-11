@@ -7,12 +7,15 @@
 import asyncio
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.security.service_auth import ServiceAuthManager
-from src.utils.redis_client import get_redis_client as get_redis_manager
+from utils.redis_client import get_redis_client as get_redis_manager
 
 # All 6 services that should have keys
 SERVICES = [
@@ -27,9 +30,9 @@ SERVICES = [
 
 async def verify():
     """Verify service authentication infrastructure."""
-    print("🔐 Service Authentication Verification")
-    print("=" * 50)
-    print("")
+    logger.info("🔐 Service Authentication Verification")
+    logger.info("=" * 50)
+    logger.info("")
 
     try:
         # Get Redis connection
@@ -37,26 +40,26 @@ async def verify():
         redis = await redis_mgr.main()
         auth_mgr = ServiceAuthManager(redis)
 
-        print("✅ ServiceAuthManager initialized successfully")
-        print("")
+        logger.info("✅ ServiceAuthManager initialized successfully")
+        logger.info("")
 
         # Verify all service keys
-        print("Checking service keys:")
-        print("-" * 50)
+        logger.info("Checking service keys:")
+        logger.info("-" * 50)
         all_present = True
         for service_id in SERVICES:
             key = await auth_mgr.get_service_key(service_id)
             status = "✅" if key else "❌"
             key_preview = f"{key[:16]}..." if key else "MISSING"
-            print(f"{status} {service_id:<20} {key_preview}")
+            logger.info(f"{status} {service_id:<20} {key_preview}")
             if not key:
                 all_present = False
 
-        print("")
+        logger.info("")
 
         # Test signature generation
-        print("Testing signature generation:")
-        print("-" * 50)
+        logger.info("Testing signature generation:")
+        logger.info("-" * 50)
         try:
             test_sig = auth_mgr.generate_signature(
                 "test-service",
@@ -65,41 +68,41 @@ async def verify():
                 "/api/test",
                 1234567890,
             )
-            print(f"✅ Signature generated: {test_sig[:32]}...")
-            print(f"   Full length: {len(test_sig)} chars")
-            print("")
+            logger.info(f"✅ Signature generated: {test_sig[:32]}...")
+            logger.info(f"   Full length: {len(test_sig)} chars")
+            logger.info("")
         except Exception as e:
-            print(f"❌ Signature generation failed: {e}")
-            print("")
+            logger.error(f"❌ Signature generation failed: {e}")
+            logger.info("")
             all_present = False
 
         # Summary
-        print("=" * 50)
+        logger.info("=" * 50)
         if all_present:
-            print("✅ Service authentication ready for deployment")
-            print("")
-            print("All checks passed:")
-            print("  • All 6 service keys present")
-            print("  • Signature generation working")
-            print("  • ServiceAuthManager operational")
+            logger.info("✅ Service authentication ready for deployment")
+            logger.info("")
+            logger.info("All checks passed:")
+            logger.info("  • All 6 service keys present")
+            logger.info("  • Signature generation working")
+            logger.info("  • ServiceAuthManager operational")
             return 0
         else:
-            print("❌ Service authentication NOT ready")
-            print("")
-            print("Issues detected:")
+            logger.error("❌ Service authentication NOT ready")
+            logger.info("")
+            logger.info("Issues detected:")
             missing_count = sum(
                 1 for svc in SERVICES if not await auth_mgr.get_service_key(svc)
             )
             if missing_count > 0:
-                print(f"  • {missing_count} service key(s) missing")
-            print("")
-            print("Action required:")
-            print("  Run: python3 scripts/generate_service_keys.py")
+                logger.info(f"  • {missing_count} service key(s) missing")
+            logger.info("")
+            logger.info("Action required:")
+            logger.info("  Run: python3 scripts/generate_service_keys.py")
             return 1
 
     except Exception as e:
-        print(f"❌ Fatal error during verification: {e}")
-        print("")
+        logger.error(f"❌ Fatal error during verification: {e}")
+        logger.info("")
         import traceback
 
         traceback.print_exc()

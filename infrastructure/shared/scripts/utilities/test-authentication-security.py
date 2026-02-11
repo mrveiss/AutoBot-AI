@@ -10,6 +10,9 @@ Tests the newly implemented authentication and authorization system
 import os
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -18,7 +21,7 @@ sys.path.insert(0, str(project_root))
 from unittest.mock import Mock
 
 from fastapi import Request
-from src.auth_middleware import AuthenticationMiddleware
+from auth_middleware import AuthenticationMiddleware
 
 
 class SecurityTester:
@@ -40,7 +43,7 @@ class SecurityTester:
 
     def test_password_hashing(self):
         """Test password hashing functionality"""
-        print("🧪 Testing password hashing...")
+        logger.info("🧪 Testing password hashing...")
 
         password = os.urandom(16).hex()  # Generate secure random password
         hash1 = self.auth_middleware.hash_password(password)
@@ -48,31 +51,31 @@ class SecurityTester:
 
         # Hashes should be different (salt)
         if hash1 != hash2:
-            print("  ✅ Password hashing generates unique salts")
+            logger.info("  ✅ Password hashing generates unique salts")
             self.passed += 1
         else:
-            print("  ❌ Password hashing not using unique salts")
+            logger.error("  ❌ Password hashing not using unique salts")
             self.failed += 1
 
         # Verification should work
         if self.auth_middleware.verify_password(password, hash1):
-            print("  ✅ Password verification works correctly")
+            logger.info("  ✅ Password verification works correctly")
             self.passed += 1
         else:
-            print("  ❌ Password verification failed")
+            logger.error("  ❌ Password verification failed")
             self.failed += 1
 
         # Wrong password should fail
         if not self.auth_middleware.verify_password("wrongpass", hash1):
-            print("  ✅ Wrong password correctly rejected")
+            logger.info("  ✅ Wrong password correctly rejected")
             self.passed += 1
         else:
-            print("  ❌ Wrong password incorrectly accepted")
+            logger.error("  ❌ Wrong password incorrectly accepted")
             self.failed += 1
 
     def test_jwt_tokens(self):
         """Test JWT token creation and validation"""
-        print("\n🧪 Testing JWT tokens...")
+        logger.info("\n🧪 Testing JWT tokens...")
 
         user_data = {
             "username": "testuser",
@@ -83,33 +86,33 @@ class SecurityTester:
         # Create token
         token = self.auth_middleware.create_jwt_token(user_data)
         if token and len(token) > 50:  # JWT tokens are long
-            print("  ✅ JWT token creation successful")
+            logger.info("  ✅ JWT token creation successful")
             self.passed += 1
         else:
-            print("  ❌ JWT token creation failed")
+            logger.error("  ❌ JWT token creation failed")
             self.failed += 1
 
         # Verify token
         payload = self.auth_middleware.verify_jwt_token(token)
         if payload and payload.get("username") == "testuser":
-            print("  ✅ JWT token verification successful")
+            logger.info("  ✅ JWT token verification successful")
             self.passed += 1
         else:
-            print("  ❌ JWT token verification failed")
+            logger.error("  ❌ JWT token verification failed")
             self.failed += 1
 
         # Invalid token should fail
         invalid_payload = self.auth_middleware.verify_jwt_token("invalid.token.here")
         if not invalid_payload:
-            print("  ✅ Invalid JWT token correctly rejected")
+            logger.info("  ✅ Invalid JWT token correctly rejected")
             self.passed += 1
         else:
-            print("  ❌ Invalid JWT token incorrectly accepted")
+            logger.error("  ❌ Invalid JWT token incorrectly accepted")
             self.failed += 1
 
     def test_authentication_disabled(self):
         """Test behavior when authentication is disabled"""
-        print("\n🧪 Testing authentication disabled mode...")
+        logger.info("\n🧪 Testing authentication disabled mode...")
 
         # Temporarily disable auth
         original_enable_auth = self.auth_middleware.enable_auth
@@ -119,10 +122,10 @@ class SecurityTester:
         user_data = self.auth_middleware.get_user_from_request(request)
 
         if user_data and user_data.get("role") == "admin":
-            print("  ✅ Auth disabled returns admin user")
+            logger.info("  ✅ Auth disabled returns admin user")
             self.passed += 1
         else:
-            print("  ❌ Auth disabled not working correctly")
+            logger.error("  ❌ Auth disabled not working correctly")
             self.failed += 1
 
         # Restore original setting
@@ -130,7 +133,7 @@ class SecurityTester:
 
     def test_jwt_authentication(self):
         """Test JWT-based authentication"""
-        print("\n🧪 Testing JWT authentication...")
+        logger.info("\n🧪 Testing JWT authentication...")
 
         # Create user and token
         user_data = {"username": "jwttest", "role": "user", "email": "jwt@test.com"}
@@ -142,15 +145,15 @@ class SecurityTester:
 
         authenticated_user = self.auth_middleware.get_user_from_request(request)
         if authenticated_user and authenticated_user.get("username") == "jwttest":
-            print("  ✅ JWT authentication successful")
+            logger.info("  ✅ JWT authentication successful")
             self.passed += 1
         else:
-            print("  ❌ JWT authentication failed")
+            logger.error("  ❌ JWT authentication failed")
             self.failed += 1
 
     def test_file_permissions(self):
         """Test file operation permissions"""
-        print("\n🧪 Testing file permissions...")
+        logger.info("\n🧪 Testing file permissions...")
 
         # Test with admin role
         admin_data = {"username": "admin", "role": "admin", "email": "admin@test.com"}
@@ -162,10 +165,10 @@ class SecurityTester:
             request, "delete"
         )
         if has_permission and user_data.get("role") == "admin":
-            print("  ✅ Admin has delete permission")
+            logger.info("  ✅ Admin has delete permission")
             self.passed += 1
         else:
-            print("  ❌ Admin delete permission failed")
+            logger.error("  ❌ Admin delete permission failed")
             self.failed += 1
 
         # Test with readonly role
@@ -182,25 +185,25 @@ class SecurityTester:
             request, "delete"
         )
         if not has_permission and user_data.get("role") == "readonly":
-            print("  ✅ Readonly role correctly denied delete permission")
+            logger.info("  ✅ Readonly role correctly denied delete permission")
             self.passed += 1
         else:
-            print("  ❌ Readonly role incorrectly granted delete permission")
+            logger.error("  ❌ Readonly role incorrectly granted delete permission")
             self.failed += 1
 
     def test_account_lockout(self):
         """Test account lockout functionality"""
-        print("\n🧪 Testing account lockout...")
+        logger.info("\n🧪 Testing account lockout...")
 
         username = "lockouttest"
         ip = "192.168.1.100"
 
         # Initially not locked
         if not self.auth_middleware.is_account_locked(username):
-            print("  ✅ Account initially not locked")
+            logger.info("  ✅ Account initially not locked")
             self.passed += 1
         else:
-            print("  ❌ Account incorrectly shows as locked initially")
+            logger.error("  ❌ Account incorrectly shows as locked initially")
             self.failed += 1
 
         # Record failed attempts
@@ -209,16 +212,16 @@ class SecurityTester:
 
         # Should be locked now
         if self.auth_middleware.is_account_locked(username):
-            print("  ✅ Account correctly locked after failed attempts")
+            logger.error("  ✅ Account correctly locked after failed attempts")
             self.passed += 1
         else:
-            print("  ❌ Account not locked after failed attempts")
+            logger.error("  ❌ Account not locked after failed attempts")
             self.failed += 1
 
     def run_all_tests(self):
         """Run all security tests"""
-        print("🔐 AutoBot Authentication Security Test Suite")
-        print("=" * 50)
+        logger.info("🔐 AutoBot Authentication Security Test Suite")
+        logger.info("=" * 50)
 
         # Run all tests
         self.test_password_hashing()
@@ -229,14 +232,14 @@ class SecurityTester:
         self.test_account_lockout()
 
         # Summary
-        print("\n" + "=" * 50)
-        print(f"📊 Test Results: {self.passed} passed, {self.failed} failed")
+        logger.info("\n" + "=" * 50)
+        logger.error(f"📊 Test Results: {self.passed} passed, {self.failed} failed")
 
         if self.failed == 0:
-            print("🎉 All security tests passed! System is secure.")
+            logger.info("🎉 All security tests passed! System is secure.")
             return True
         else:
-            print(f"⚠️  {self.failed} security tests failed. Review implementation.")
+            logger.error(f"⚠️  {self.failed} security tests failed. Review implementation.")
             return False
 
 
@@ -247,7 +250,7 @@ def main():
         success = tester.run_all_tests()
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"❌ Test execution failed: {e}")
+        logger.error(f"❌ Test execution failed: {e}")
         sys.exit(1)
 
 

@@ -39,14 +39,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import psutil
-import yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.script_utils import ScriptFormatter
-from src.utils.service_registry import get_service_registry
+from utils.script_utils import ScriptFormatter
+from utils.service_registry import get_service_registry
 
 
 @dataclass
@@ -126,9 +127,9 @@ class MetricsCollector:
         self._alerts_file_lock = threading.Lock()
         self._metrics_file_lock = threading.Lock()
 
-        print("📊 AutoBot Metrics Collector initialized")
-        print(f"   Storage Directory: {self.storage_dir}")
-        print(f"   Retention: {retention_days} days")
+        logger.info("📊 AutoBot Metrics Collector initialized")
+        logger.info(f"   Storage Directory: {self.storage_dir}")
+        logger.info(f"   Retention: {retention_days} days")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -138,98 +139,88 @@ class MetricsCollector:
         """Print step with status."""
         ScriptFormatter.print_step(step, status)
 
+    def _collect_cpu_and_memory_metrics(
+        self, timestamp: float
+    ) -> List[Metric]:
+        """Collect CPU and memory metrics.
+
+        Helper for collect_system_metrics (#825).
+        """
+        host = os.uname().nodename
+        metrics = []
+
+        cpu_percent = psutil.cpu_percent(interval=1)
+        metrics.append(Metric(
+            name="system_cpu_usage", value=cpu_percent,
+            timestamp=timestamp, labels={"host": host}, unit="percent",
+        ))
+
+        memory = psutil.virtual_memory()
+        metrics.append(Metric(
+            name="system_memory_usage", value=memory.percent,
+            timestamp=timestamp, labels={"host": host}, unit="percent",
+        ))
+        metrics.append(Metric(
+            name="system_memory_available",
+            value=memory.available / (1024 * 1024 * 1024),
+            timestamp=timestamp, labels={"host": host}, unit="gigabytes",
+        ))
+        return metrics
+
+    def _collect_disk_and_network_metrics(
+        self, timestamp: float
+    ) -> List[Metric]:
+        """Collect disk and network I/O metrics.
+
+        Helper for collect_system_metrics (#825).
+        """
+        host = os.uname().nodename
+        metrics = []
+
+        disk = psutil.disk_usage("/")
+        metrics.append(Metric(
+            name="system_disk_usage", value=disk.percent,
+            timestamp=timestamp,
+            labels={"host": host, "mount": "/"}, unit="percent",
+        ))
+
+        net_io = psutil.net_io_counters()
+        metrics.append(Metric(
+            name="system_network_bytes_sent", value=net_io.bytes_sent,
+            timestamp=timestamp, labels={"host": host}, unit="bytes",
+        ))
+        metrics.append(Metric(
+            name="system_network_bytes_recv", value=net_io.bytes_recv,
+            timestamp=timestamp, labels={"host": host}, unit="bytes",
+        ))
+        return metrics
+
+    def _collect_process_metrics(self, timestamp: float) -> List[Metric]:
+        """Collect process-level thread and file metrics.
+
+        Helper for collect_system_metrics (#825).
+        """
+        metrics = []
+        process = psutil.Process()
+        metrics.append(Metric(
+            name="process_thread_count", value=process.num_threads(),
+            timestamp=timestamp,
+            labels={"process": "autobot"}, unit="threads",
+        ))
+        metrics.append(Metric(
+            name="process_open_files",
+            value=len(process.open_files()),
+            timestamp=timestamp,
+            labels={"process": "autobot"}, unit="files",
+        ))
+        return metrics
+
     async def collect_system_metrics(self) -> List[Metric]:
         """Collect system-level metrics."""
-        metrics = []
         timestamp = time.time()
-
-        # CPU metrics
-        cpu_percent = psutil.cpu_percent(interval=1)
-        metrics.append(
-            Metric(
-                name="system_cpu_usage",
-                value=cpu_percent,
-                timestamp=timestamp,
-                labels={"host": os.uname().nodename},
-                unit="percent",
-            )
-        )
-
-        # Memory metrics
-        memory = psutil.virtual_memory()
-        metrics.append(
-            Metric(
-                name="system_memory_usage",
-                value=memory.percent,
-                timestamp=timestamp,
-                labels={"host": os.uname().nodename},
-                unit="percent",
-            )
-        )
-        metrics.append(
-            Metric(
-                name="system_memory_available",
-                value=memory.available / (1024 * 1024 * 1024),  # GB
-                timestamp=timestamp,
-                labels={"host": os.uname().nodename},
-                unit="gigabytes",
-            )
-        )
-
-        # Disk metrics
-        disk = psutil.disk_usage("/")
-        metrics.append(
-            Metric(
-                name="system_disk_usage",
-                value=disk.percent,
-                timestamp=timestamp,
-                labels={"host": os.uname().nodename, "mount": "/"},
-                unit="percent",
-            )
-        )
-
-        # Network metrics
-        net_io = psutil.net_io_counters()
-        metrics.append(
-            Metric(
-                name="system_network_bytes_sent",
-                value=net_io.bytes_sent,
-                timestamp=timestamp,
-                labels={"host": os.uname().nodename},
-                unit="bytes",
-            )
-        )
-        metrics.append(
-            Metric(
-                name="system_network_bytes_recv",
-                value=net_io.bytes_recv,
-                timestamp=timestamp,
-                labels={"host": os.uname().nodename},
-                unit="bytes",
-            )
-        )
-
-        # Process metrics
-        process = psutil.Process()
-        metrics.append(
-            Metric(
-                name="process_thread_count",
-                value=process.num_threads(),
-                timestamp=timestamp,
-                labels={"process": "autobot"},
-                unit="threads",
-            )
-        )
-        metrics.append(
-            Metric(
-                name="process_open_files",
-                value=len(process.open_files()),
-                timestamp=timestamp,
-                labels={"process": "autobot"},
-                unit="files",
-            )
-        )
-
+        metrics = self._collect_cpu_and_memory_metrics(timestamp)
+        metrics.extend(self._collect_disk_and_network_metrics(timestamp))
+        metrics.extend(self._collect_process_metrics(timestamp))
         return metrics
 
     async def collect_service_metrics(self) -> List[Metric]:
@@ -348,7 +339,7 @@ class MetricsCollector:
     async def start_collection(self, interval: int = 30) -> None:
         """Start continuous metrics collection."""
         self.print_header("Starting Metrics Collection")
-        print(f"Collection interval: {interval} seconds")
+        logger.info(f"Collection interval: {interval} seconds")
 
         while True:
             try:
@@ -543,120 +534,145 @@ class MetricsCollector:
             # Send email notification
             pass
 
+    def _export_prometheus(self, metrics: List[Metric]) -> str:
+        """Export metrics in Prometheus text format.
+
+        Helper for export_metrics (#825).
+        """
+        output_lines = []
+        by_name = defaultdict(list)
+        for metric in metrics:
+            by_name[metric.name].append(metric)
+
+        for name, metric_list in by_name.items():
+            output_lines.append(
+                f"# HELP {name} {name.replace('_', ' ').title()}"
+            )
+            output_lines.append(f"# TYPE {name} gauge")
+            for metric in metric_list:
+                output_lines.append(metric.to_prometheus())
+            output_lines.append("")
+
+        return "\n".join(output_lines)
+
+    def _export_csv(self, metrics: List[Metric]) -> str:
+        """Export metrics in CSV format.
+
+        Helper for export_metrics (#825).
+        """
+        import csv
+        import io
+
+        output = io.StringIO()
+        if metrics:
+            fieldnames = ["timestamp", "name", "value", "unit", "labels"]
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            for metric in metrics:
+                writer.writerow({
+                    "timestamp": datetime.fromtimestamp(
+                        metric.timestamp
+                    ).isoformat(),
+                    "name": metric.name,
+                    "value": metric.value,
+                    "unit": metric.unit,
+                    "labels": json.dumps(metric.labels),
+                })
+        return output.getvalue()
+
     def export_metrics(
         self, format_type: str = "prometheus", last_hours: int = 1
     ) -> str:
         """Export metrics in specified format."""
         self.print_header(f"Exporting Metrics ({format_type})")
 
-        # Collect metrics from buffer
         cutoff_time = time.time() - (last_hours * 3600)
         metrics = []
-
         for key, metrics_deque in self.metrics_buffer.items():
             for metric in metrics_deque:
                 if metric.timestamp >= cutoff_time:
                     metrics.append(metric)
 
         if format_type == "prometheus":
-            # Prometheus text format
-            output_lines = []
-
-            # Group by metric name
-            by_name = defaultdict(list)
-            for metric in metrics:
-                by_name[metric.name].append(metric)
-
-            for name, metric_list in by_name.items():
-                # Add HELP and TYPE comments
-                output_lines.append(f"# HELP {name} {name.replace('_', ' ').title()}")
-                output_lines.append(f"# TYPE {name} gauge")
-
-                # Add metric lines
-                for metric in metric_list:
-                    output_lines.append(metric.to_prometheus())
-
-                output_lines.append("")  # Empty line between metrics
-
-            return "\n".join(output_lines)
-
+            return self._export_prometheus(metrics)
         elif format_type == "json":
-            # JSON format
             metrics_data = [asdict(m) for m in metrics]
-            return json.dumps(
-                {
-                    "metrics": metrics_data,
-                    "exported_at": datetime.now().isoformat(),
-                    "total_metrics": len(metrics_data),
-                },
-                indent=2,
-            )
-
+            return json.dumps({
+                "metrics": metrics_data,
+                "exported_at": datetime.now().isoformat(),
+                "total_metrics": len(metrics_data),
+            }, indent=2)
         else:
-            # CSV format
-            import csv
-            import io
+            return self._export_csv(metrics)
 
-            output = io.StringIO()
-            if metrics:
-                fieldnames = ["timestamp", "name", "value", "unit", "labels"]
-                writer = csv.DictWriter(output, fieldnames=fieldnames)
-                writer.writeheader()
+    def _load_disk_metrics(
+        self, metric_name: str, cutoff_time: float, last_hours: int
+    ) -> List[Metric]:
+        """Load historical metrics from disk files.
 
-                for metric in metrics:
-                    writer.writerow(
-                        {
-                            "timestamp": datetime.fromtimestamp(
-                                metric.timestamp
-                            ).isoformat(),
-                            "name": metric.name,
-                            "value": metric.value,
-                            "unit": metric.unit,
-                            "labels": json.dumps(metric.labels),
-                        }
-                    )
+        Helper for analyze_metrics (#825).
+        """
+        disk_metrics = []
+        for hours_ago in range(1, last_hours + 1):
+            timestamp = datetime.now() - timedelta(hours=hours_ago)
+            hour_file = (
+                self.storage_dir
+                / f"metrics_{timestamp.strftime('%Y%m%d_%H')}.json"
+            )
+            if not hour_file.exists():
+                continue
+            try:
+                with open(hour_file, "r") as f:
+                    data = json.load(f)
+                for metric_data in data:
+                    if metric_data["timestamp"] >= cutoff_time:
+                        if not metric_name or metric_data["name"] == metric_name:
+                            disk_metrics.append(Metric(**metric_data))
+            except Exception:
+                pass  # Metrics file read/parse error
+        return disk_metrics
 
-            return output.getvalue()
+    def _compute_metric_stats(
+        self, values: List[float]
+    ) -> Dict[str, Any]:
+        """Compute statistical summary for a list of metric values.
+
+        Helper for analyze_metrics (#825).
+        """
+        return {
+            "count": len(values),
+            "mean": statistics.mean(values),
+            "median": statistics.median(values),
+            "min": min(values),
+            "max": max(values),
+            "std_dev": (
+                statistics.stdev(values) if len(values) > 1 else 0
+            ),
+            "percentiles": {
+                "p50": statistics.median(values),
+                "p95": self._percentile(values, 0.95),
+                "p99": self._percentile(values, 0.99),
+            },
+        }
 
     def analyze_metrics(
         self, metric_name: str = None, last_hours: int = 24
     ) -> Dict[str, Any]:
         """Analyze metrics and generate statistics."""
         self.print_header("Analyzing Metrics")
-
         cutoff_time = time.time() - (last_hours * 3600)
 
-        # Load historical data if needed
         all_metrics = []
-
-        # From buffer
         for key, metrics_deque in self.metrics_buffer.items():
             for metric in metrics_deque:
                 if metric.timestamp >= cutoff_time:
                     if not metric_name or metric.name == metric_name:
                         all_metrics.append(metric)
 
-        # From disk
-        for hours_ago in range(1, last_hours + 1):
-            timestamp = datetime.now() - timedelta(hours=hours_ago)
-            hour_file = (
-                self.storage_dir / f"metrics_{timestamp.strftime('%Y%m%d_%H')}.json"
-            )
+        all_metrics.extend(
+            self._load_disk_metrics(metric_name, cutoff_time, last_hours)
+        )
 
-            if hour_file.exists():
-                try:
-                    with open(hour_file, "r") as f:
-                        data = json.load(f)
-
-                    for metric_data in data:
-                        if metric_data["timestamp"] >= cutoff_time:
-                            if not metric_name or metric_data["name"] == metric_name:
-                                metric = Metric(**metric_data)
-                                all_metrics.append(metric)
-                except Exception:
-                    pass  # Metrics file read/parse error
-
-        # Analyze by metric name
         by_metric = defaultdict(list)
         for metric in all_metrics:
             by_metric[metric.name].append(metric.value)
@@ -673,19 +689,9 @@ class MetricsCollector:
 
         for name, values in by_metric.items():
             if values:
-                analysis["metrics"][name] = {
-                    "count": len(values),
-                    "mean": statistics.mean(values),
-                    "median": statistics.median(values),
-                    "min": min(values),
-                    "max": max(values),
-                    "std_dev": statistics.stdev(values) if len(values) > 1 else 0,
-                    "percentiles": {
-                        "p50": statistics.median(values),
-                        "p95": self._percentile(values, 0.95),
-                        "p99": self._percentile(values, 0.99),
-                    },
-                }
+                analysis["metrics"][name] = self._compute_metric_stats(
+                    values
+                )
 
         return analysis
 
@@ -745,9 +751,9 @@ async def _handle_export_command(collector, args) -> int:
     if args.output:
         with open(args.output, "w") as f:
             f.write(output)
-        print(f"✅ Metrics exported to: {args.output}")
+        logger.info(f"✅ Metrics exported to: {args.output}")
     else:
-        print(output)
+        logger.info(output)
     return 0
 
 
@@ -758,18 +764,18 @@ async def _handle_analyze_command(collector, args) -> int:
     if args.output:
         with open(args.output, "w") as f:
             json.dump(analysis, f, indent=2)
-        print(f"✅ Analysis saved to: {args.output}")
+        logger.info(f"✅ Analysis saved to: {args.output}")
         return 0
 
-    print("\n📊 Metrics Analysis:")
-    print(f"   Period: {analysis['period']['hours']} hours")
-    print(f"   Total data points: {analysis['total_data_points']}")
+    logger.info("\n📊 Metrics Analysis:")
+    logger.info(f"   Period: {analysis['period']['hours']} hours")
+    logger.info(f"   Total data points: {analysis['total_data_points']}")
 
     for metric_name, stats in analysis["metrics"].items():
-        print(f"\n   {metric_name}:")
-        print(f"     Mean: {stats['mean']:.2f}")
-        print(f"     Min/Max: {stats['min']:.2f} / {stats['max']:.2f}")
-        print(f"     P95: {stats['percentiles']['p95']:.2f}")
+        logger.info(f"\n   {metric_name}:")
+        logger.info(f"     Mean: {stats['mean']:.2f}")
+        logger.info(f"     Min/Max: {stats['min']:.2f} / {stats['max']:.2f}")
+        logger.info(f"     P95: {stats['percentiles']['p95']:.2f}")
     return 0
 
 
@@ -815,7 +821,7 @@ async def _handle_setup_alerts_command(collector, args) -> int:
     with open(config_file, "w") as f:
         yaml.dump(sample_config, f)
 
-    print(f"✅ Sample alert configuration created: {config_file}")
+    logger.info(f"✅ Sample alert configuration created: {config_file}")
     return 0
 
 
@@ -826,14 +832,17 @@ async def _handle_dashboard_command(collector, args) -> int:
     if args.output:
         with open(args.output, "w") as f:
             json.dump(dashboard, f, indent=2)
-        print(f"✅ Grafana dashboard saved to: {args.output}")
+        logger.info(f"✅ Grafana dashboard saved to: {args.output}")
     else:
-        print(json.dumps(dashboard, indent=2))
+        logger.info(json.dumps(dashboard, indent=2))
     return 0
 
 
-async def main():
-    """Entry point for metrics collection and analysis CLI."""
+def _build_metrics_argparser() -> argparse.ArgumentParser:
+    """Build the argument parser for the metrics CLI.
+
+    Helper for main (#825).
+    """
     parser = argparse.ArgumentParser(
         description="AutoBot Performance Metrics Collection and Alerting",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -846,47 +855,57 @@ Examples:
   python scripts/metrics_collector.py --dashboard --output grafana_dashboard.json
         """,
     )
-
-    # Actions
     parser.add_argument(
         "--collect", action="store_true", help="Start metrics collection"
     )
-    parser.add_argument("--export", action="store_true", help="Export metrics")
-    parser.add_argument("--analyze", action="store_true", help="Analyze metrics")
-    parser.add_argument("--setup-alerts", action="store_true", help="Setup alert rules")
     parser.add_argument(
-        "--dashboard", action="store_true", help="Generate Grafana dashboard"
-    )
-
-    # Options
-    parser.add_argument(
-        "--interval", type=int, default=30, help="Collection interval (seconds)"
+        "--export", action="store_true", help="Export metrics"
     )
     parser.add_argument(
-        "--format",
-        choices=["prometheus", "json", "csv"],
-        default="prometheus",
-        help="Export format",
+        "--analyze", action="store_true", help="Analyze metrics"
+    )
+    parser.add_argument(
+        "--setup-alerts", action="store_true", help="Setup alert rules"
+    )
+    parser.add_argument(
+        "--dashboard", action="store_true",
+        help="Generate Grafana dashboard",
+    )
+    parser.add_argument(
+        "--interval", type=int, default=30,
+        help="Collection interval (seconds)",
+    )
+    parser.add_argument(
+        "--format", choices=["prometheus", "json", "csv"],
+        default="prometheus", help="Export format",
     )
     parser.add_argument("--metric", help="Specific metric to analyze")
-    parser.add_argument("--last-hours", type=int, default=1, help="Hours to look back")
+    parser.add_argument(
+        "--last-hours", type=int, default=1, help="Hours to look back"
+    )
     parser.add_argument("--config", help="Alert configuration file")
     parser.add_argument("--output", help="Output file")
     parser.add_argument(
-        "--storage-dir", default="data/metrics", help="Metrics storage directory"
+        "--storage-dir", default="data/metrics",
+        help="Metrics storage directory",
     )
+    return parser
 
+
+async def main():
+    """Entry point for metrics collection and analysis CLI."""
+    parser = _build_metrics_argparser()
     args = parser.parse_args()
 
-    if not any(
-        [args.collect, args.export, args.analyze, args.setup_alerts, args.dashboard]
-    ):
+    if not any([
+        args.collect, args.export, args.analyze,
+        args.setup_alerts, args.dashboard,
+    ]):
         parser.print_help()
         return 1
 
     collector = MetricsCollector(args.storage_dir)
 
-    # Command dispatch table (Issue #315: reduces nesting)
     command_handlers = {
         "collect": (_handle_collect_command, args.collect),
         "export": (_handle_export_command, args.export),
@@ -900,15 +919,12 @@ Examples:
             if is_active:
                 return await handler(collector, args)
         return 0
-
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        logger.warning("\n⚠️  Operation cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        logger.error(f"\n❌ Error: {e}")
         return 1
-
-    return 0
 
 
 if __name__ == "__main__":

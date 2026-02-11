@@ -12,14 +12,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import yaml
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from backend.security.service_auth import ServiceAuthManager
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 logger = structlog.get_logger()
 
@@ -59,15 +61,88 @@ SERVICES = [
 ]
 
 
+
+async def _generate_keys_block_3():
+    """Generate 256-bit key.
+
+    Helper for generate_keys (Issue #825).
+    """
+    # Generate 256-bit key
+    logger.info(f"Generating key for {service_id}...", end=" ")
+    key = await auth_manager.generate_service_key(service_id)
+    generated_keys[service_id] = {
+        "key": key,
+        "host": service["host"],
+        "description": service["description"],
+        "generated_at": datetime.now().isoformat(),
+    }
+    logger.info(f"✅ {key[:16]}...{key[-8:]}")
+
+
+async def _generate_keys_block_2():
+    """with open(backup_file, "w") as f:.
+
+    Helper for generate_keys (Issue #825).
+    """
+    with open(backup_file, "w") as f:
+        yaml.safe_dump(
+            {
+                "generated_at": datetime.now().isoformat(),
+                "redis_host": "172.16.168.23",
+                "redis_port": 6379,
+                "services": generated_keys,
+            },
+            f,
+            default_flow_style=False,
+        )
+
+
+async def _generate_keys_block_4():
+    """Verify keys are in Redis.
+
+    Helper for generate_keys (Issue #825).
+    """
+    # Verify keys are in Redis
+    logger.info("🔍 Verifying keys in Redis...")
+    for service_id in generated_keys:
+        stored_key = await auth_manager.get_service_key(service_id)
+        if stored_key:
+            logger.info(f"  ✅ {service_id}: Key verified in Redis")
+        else:
+            logger.error(f"  ❌ {service_id}: FAILED - Key not found in Redis!")
+
+
+async def _generate_keys_block_1():
+    """logger.info("").
+
+    Helper for generate_keys (Issue #825).
+    """
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("🎉 Service key generation complete!")
+    logger.info("")
+    logger.info("Next steps:")
+    logger.info(
+        "  1. Deploy keys to VMs: ansible-playbook ansible/playbooks/deploy-service-auth.yml"
+    )
+    logger.info(
+        "  2. Verify deployment: ansible all -m shell -a 'ls -la /etc/autobot/service-keys/'"
+    )
+    logger.info(f"  3. Backup location: {backup_file}")
+    logger.info("")
+    logger.info(
+        "⚠️  SECURITY: Keep backup file secure and delete after deployment verification"
+    )
+
 async def generate_keys():
     """Generate API keys for all services and store in Redis"""
 
-    print("🔐 AutoBot Service Key Generation")
-    print("=" * 60)
-    print(f"Timestamp: {datetime.now().isoformat()}")
-    print("Redis Host: 172.16.168.23:6379")
-    print(f"Services: {len(SERVICES)}")
-    print()
+    logger.info("🔐 AutoBot Service Key Generation")
+    logger.info("=" * 60)
+    logger.info(f"Timestamp: {datetime.now().isoformat()}")
+    logger.info("Redis Host: 172.16.168.23:6379")
+    logger.info(f"Services: {len(SERVICES)}")
+    logger.info("")
 
     # Get Redis client for main database
     redis = await get_redis_client(async_client=True, database="main")
@@ -81,20 +156,11 @@ async def generate_keys():
     for service in SERVICES:
         service_id = service["id"]
 
-        # Generate 256-bit key
-        print(f"Generating key for {service_id}...", end=" ")
-        key = await auth_manager.generate_service_key(service_id)
-        generated_keys[service_id] = {
-            "key": key,
-            "host": service["host"],
-            "description": service["description"],
-            "generated_at": datetime.now().isoformat(),
-        }
-        print(f"✅ {key[:16]}...{key[-8:]}")
+    await _generate_keys_block_3()
 
-    print()
-    print(f"✅ Generated {len(generated_keys)} service keys")
-    print()
+    logger.info("")
+    logger.info(f"✅ Generated {len(generated_keys)} service keys")
+    logger.info("")
 
     # Create backup configuration file
     backup_dir = Path("config/service-keys")
@@ -104,46 +170,14 @@ async def generate_keys():
         backup_dir / f"service-keys-{datetime.now().strftime('%Y%m%d-%H%M%S')}.yaml"
     )
 
-    with open(backup_file, "w") as f:
-        yaml.safe_dump(
-            {
-                "generated_at": datetime.now().isoformat(),
-                "redis_host": "172.16.168.23",
-                "redis_port": 6379,
-                "services": generated_keys,
-            },
-            f,
-            default_flow_style=False,
-        )
+    await _generate_keys_block_2()
 
-    print(f"💾 Backup saved: {backup_file}")
-    print()
+    logger.info(f"💾 Backup saved: {backup_file}")
+    logger.info("")
 
-    # Verify keys are in Redis
-    print("🔍 Verifying keys in Redis...")
-    for service_id in generated_keys:
-        stored_key = await auth_manager.get_service_key(service_id)
-        if stored_key:
-            print(f"  ✅ {service_id}: Key verified in Redis")
-        else:
-            print(f"  ❌ {service_id}: FAILED - Key not found in Redis!")
+    await _generate_keys_block_4()
 
-    print()
-    print("=" * 60)
-    print("🎉 Service key generation complete!")
-    print()
-    print("Next steps:")
-    print(
-        "  1. Deploy keys to VMs: ansible-playbook ansible/playbooks/deploy-service-auth.yml"
-    )
-    print(
-        "  2. Verify deployment: ansible all -m shell -a 'ls -la /etc/autobot/service-keys/'"
-    )
-    print(f"  3. Backup location: {backup_file}")
-    print()
-    print(
-        "⚠️  SECURITY: Keep backup file secure and delete after deployment verification"
-    )
+    await _generate_keys_block_1()
 
     return generated_keys
 

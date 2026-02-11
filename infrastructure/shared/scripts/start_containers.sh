@@ -1,4 +1,8 @@
 #!/bin/bash
+# =============================================================================
+# DEV/SANDBOX ONLY - This script assumes Docker containers.
+# Production uses native deployments. See Ansible roles for equivalent.
+# =============================================================================
 # Smart container startup script that checks and starts existing containers
 
 set -e

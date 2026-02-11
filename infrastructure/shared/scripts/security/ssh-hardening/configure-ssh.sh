@@ -5,6 +5,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -99,45 +102,45 @@ Host *
     ControlPersist 600
 
 # AutoBot WSL Host (Main Backend)
-Host autobot-wsl autobot-host 172.16.168.20
-    HostName 172.16.168.20
-    User autobot
-    IdentityFile ~/.ssh/autobot_key
+Host autobot-wsl autobot-host ${AUTOBOT_BACKEND_HOST}
+    HostName ${AUTOBOT_BACKEND_HOST}
+    User ${AUTOBOT_SSH_USER}
+    IdentityFile ${AUTOBOT_SSH_KEY}
     Port 22
 
 # AutoBot Frontend VM
-Host autobot-frontend frontend-vm 172.16.168.21
-    HostName 172.16.168.21
-    User autobot
-    IdentityFile ~/.ssh/autobot_key
+Host autobot-frontend frontend-vm ${AUTOBOT_FRONTEND_HOST}
+    HostName ${AUTOBOT_FRONTEND_HOST}
+    User ${AUTOBOT_SSH_USER}
+    IdentityFile ${AUTOBOT_SSH_KEY}
     Port 22
 
 # AutoBot NPU Worker VM
-Host autobot-npu npu-worker 172.16.168.22
-    HostName 172.16.168.22
-    User autobot
-    IdentityFile ~/.ssh/autobot_key
+Host autobot-npu npu-worker ${AUTOBOT_NPU_WORKER_HOST}
+    HostName ${AUTOBOT_NPU_WORKER_HOST}
+    User ${AUTOBOT_SSH_USER}
+    IdentityFile ${AUTOBOT_SSH_KEY}
     Port 22
 
 # AutoBot Redis/Database VM
-Host autobot-redis redis-vm database-vm 172.16.168.23
-    HostName 172.16.168.23
-    User autobot
-    IdentityFile ~/.ssh/autobot_key
+Host autobot-redis redis-vm database-vm ${AUTOBOT_REDIS_HOST}
+    HostName ${AUTOBOT_REDIS_HOST}
+    User ${AUTOBOT_SSH_USER}
+    IdentityFile ${AUTOBOT_SSH_KEY}
     Port 22
 
 # AutoBot AI Stack VM
-Host autobot-aiml ai-stack aiml-vm 172.16.168.24
-    HostName 172.16.168.24
-    User autobot
-    IdentityFile ~/.ssh/autobot_key
+Host autobot-aiml ai-stack aiml-vm ${AUTOBOT_AI_STACK_HOST}
+    HostName ${AUTOBOT_AI_STACK_HOST}
+    User ${AUTOBOT_SSH_USER}
+    IdentityFile ${AUTOBOT_SSH_KEY}
     Port 22
 
 # AutoBot Browser VM
-Host autobot-browser browser-vm 172.16.168.25
-    HostName 172.16.168.25
-    User autobot
-    IdentityFile ~/.ssh/autobot_key
+Host autobot-browser browser-vm ${AUTOBOT_BROWSER_SERVICE_HOST}
+    HostName ${AUTOBOT_BROWSER_SERVICE_HOST}
+    User ${AUTOBOT_SSH_USER}
+    IdentityFile ${AUTOBOT_SSH_KEY}
     Port 22
 EOF
 

@@ -6,7 +6,7 @@ Service HTTP Client with Automatic Request Signing
 Provides authenticated HTTP client for service-to-service communication
 
 Usage:
-    from src.constants.network_constants import ServiceURLs
+    from constants.network_constants import ServiceURLs
 
     client = ServiceHTTPClient(service_id="main-backend", service_key="...")
     response = await client.get(f"{ServiceURLs.AI_STACK_SERVICE}/api/inference")
@@ -388,7 +388,7 @@ def create_service_client_from_env() -> ServiceHTTPClient:
         ValueError: If credentials not found in environment
 
     Example:
-        from src.constants.network_constants import ServiceURLs
+        from constants.network_constants import ServiceURLs
 
         # Set environment variables
         os.environ["SERVICE_ID"] = "main-backend"
@@ -431,7 +431,7 @@ async def create_service_client(
     """
     try:
         if redis_manager is None:
-            from src.utils.redis_client import get_redis_client as get_redis_manager
+            from utils.redis_client import get_redis_client as get_redis_manager
 
             redis_manager = await get_redis_manager()
 

@@ -27,3 +27,13 @@ backend_redis_password: ""
 # API settings
 backend_secret_key: "change-me-in-production"
 backend_cors_origins: "*"
+
+# Service Authentication
+service_auth_service_id: "main-backend"
+service_auth_keys_dir: "/etc/autobot/service-keys"
+service_auth_enforcement_mode: true
+service_auth_override_token: ""
+service_auth_circuit_breaker_percentage: 100
+service_auth_timestamp_window: 300
+service_auth_rate_limit_window: 300
+service_auth_rate_limit_max_failures: 10

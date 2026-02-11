@@ -118,6 +118,50 @@ class HealthCollector:
         except Exception:
             return False
 
+    def _parse_service_line(self, line: str) -> Optional[Dict]:
+        """Parse a single systemctl output line into service info.
+
+        Helper for discover_all_services (#825).
+        """
+        parts = line.split(None, 4)
+        if len(parts) < 4:
+            return None
+
+        unit_name = parts[0]
+        if "@" in unit_name or not unit_name.endswith(".service"):
+            return None
+
+        load_state = parts[1]
+        if load_state in ("not-found", "masked"):
+            return None
+
+        service_name = unit_name.replace(".service", "")
+        active_state = parts[2]
+        sub_state = parts[3]
+
+        if active_state == "active" and sub_state == "running":
+            status = "running"
+        elif active_state == "failed" or sub_state == "failed":
+            status = "failed"
+        elif active_state == "inactive":
+            status = "stopped"
+        else:
+            status = "unknown"
+
+        service_info = {
+            "name": service_name,
+            "status": status,
+            "active_state": active_state,
+            "sub_state": sub_state,
+            "load_state": load_state,
+        }
+
+        if status == "running":
+            details = self._get_service_details(service_name)
+            service_info.update(details)
+
+        return service_info
+
     def discover_all_services(self) -> List[Dict]:
         """
         Discover all systemd services on the node.
@@ -127,7 +171,6 @@ class HealthCollector:
         """
         services = []
         try:
-            # List all loaded service units with their states
             result = (
                 subprocess.run(  # nosec B607 - systemctl is a trusted system binary
                     [
@@ -149,49 +192,12 @@ class HealthCollector:
                 logger.warning("Failed to list services: %s", result.stderr)
                 return services
 
-            # Parse output: UNIT LOAD ACTIVE SUB DESCRIPTION
             for line in result.stdout.strip().split("\n"):
                 if not line.strip():
                     continue
-
-                parts = line.split(None, 4)
-                if len(parts) < 4:
-                    continue
-
-                unit_name = parts[0]
-                # Skip template units and non-.service units
-                if "@" in unit_name or not unit_name.endswith(".service"):
-                    continue
-
-                service_name = unit_name.replace(".service", "")
-                load_state = parts[1]  # loaded, not-found, masked
-                active_state = parts[2]  # active, inactive, failed
-                sub_state = parts[3]  # running, dead, exited, failed
-
-                # Map to our status enum
-                if active_state == "active" and sub_state == "running":
-                    status = "running"
-                elif active_state == "failed" or sub_state == "failed":
-                    status = "failed"
-                elif active_state == "inactive":
-                    status = "stopped"
-                else:
-                    status = "unknown"
-
-                service_info = {
-                    "name": service_name,
-                    "status": status,
-                    "active_state": active_state,
-                    "sub_state": sub_state,
-                    "load_state": load_state,
-                }
-
-                # Get additional details for running services
-                if status == "running":
-                    details = self._get_service_details(service_name)
-                    service_info.update(details)
-
-                services.append(service_info)
+                info = self._parse_service_line(line)
+                if info:
+                    services.append(info)
 
         except subprocess.TimeoutExpired:
             logger.warning("Timeout discovering services")

@@ -28,8 +28,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 MASTER_ENV="$PROJECT_ROOT/.env"
-FRONTEND_ENV="$PROJECT_ROOT/autobot-vue/.env"
-FRONTEND_DIR="$PROJECT_ROOT/autobot-vue"
+FRONTEND_ENV="$PROJECT_ROOT/autobot-slm-frontend/.env"
+FRONTEND_DIR="$PROJECT_ROOT/autobot-slm-frontend"
 
 # Colors for output
 RED='\033[0;31m'
@@ -298,7 +298,7 @@ case "${1:-}" in
         echo "  --force  Force sync even if up to date"
         echo "  --help   Show this help message"
         echo ""
-        echo "This script generates autobot-vue/.env from the master .env file,"
+        echo "This script generates autobot-slm-frontend/.env from the master .env file,"
         echo "mapping AUTOBOT_* variables to VITE_* for Vite compatibility."
         ;;
     *)

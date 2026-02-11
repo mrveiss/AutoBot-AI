@@ -7,6 +7,10 @@
     update_cache: yes
     cache_valid_time: 3600
   become: yes
+  retries: 3
+  delay: 5
+  register: _apt_update
+  until: _apt_update is success
   tags: ['common', 'packages']
 
 - name: "Common | Install base packages"
@@ -77,12 +81,11 @@
     group: autobot
     mode: '0755'
   loop:
-    - /home/autobot/autobot-vue
-    - /home/autobot/backend
-    - /home/autobot/logs
-    - /home/autobot/data
-    - /home/autobot/config
-    - /home/autobot/scripts
+    - /opt/autobot
+    - /opt/autobot/logs
+    - /opt/autobot/data
+    - /opt/autobot/config
+    - /opt/autobot/scripts
   become: yes
   tags: ['common', 'directories']
 
@@ -151,7 +154,13 @@
   when: dns_servers is defined
   tags: ['common', 'dns']
 
-- name: "Common | Install Python packages"
+- name: "Common | Check for PEP 668 (externally managed Python)"
+  stat:
+    path: /usr/lib/python3/EXTERNALLY-MANAGED
+  register: _pep668
+  tags: ['common', 'python']
+
+- name: "Common | Install Python packages (system-wide)"
   pip:
     name:
       - pip
@@ -160,6 +169,7 @@
     state: latest
     executable: pip3
   become: yes
+  when: not _pep668.stat.exists
   tags: ['common', 'python']
 
 - name: "Common | Create log directory"

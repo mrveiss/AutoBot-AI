@@ -7,8 +7,8 @@ import time
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from src.computer_vision_system import ComputerVisionSystem
-from src.multimodal_processor import (
+from computer_vision_system import ComputerVisionSystem
+from multimodal_processor import (
     ContextProcessor,
     ModalityType,
     MultiModalInput,
@@ -17,7 +17,7 @@ from src.multimodal_processor import (
     VisionProcessor,
     VoiceProcessor,
 )
-from src.utils.config_manager import ConfigManager
+from utils.config_manager import ConfigManager
 
 
 class TestUnifiedMultiModalSystem:
@@ -385,7 +385,7 @@ class TestUnifiedMultiModalSystem:
 
     def test_processor_confidence_calculation(self):
         """Test confidence calculation in base processor"""
-        from src.multimodal_processor import BaseModalProcessor
+        from multimodal_processor import BaseModalProcessor
 
         base_proc = BaseModalProcessor("test")
 
@@ -422,7 +422,7 @@ class TestUnifiedMultiModalSystem:
 
     def test_multimodal_backward_compatibility(self):
         """Test backward compatibility layer"""
-        from src.multimodal_processor import MultiModalProcessor, multimodal_processor
+        from multimodal_processor import MultiModalProcessor, multimodal_processor
 
         # Test compatibility wrapper
         compat_processor = MultiModalProcessor()

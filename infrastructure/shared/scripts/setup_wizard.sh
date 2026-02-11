@@ -20,6 +20,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -32,12 +35,12 @@ NC='\033[0m' # No Color
 
 # Configuration
 AUTOBOT_ROOT=$(cd "$(dirname "$0")/.." && pwd)
-MAIN_HOST_IP="172.16.168.20"
-VM1_IP="172.16.168.21"
-VM2_IP="172.16.168.22"
-VM3_IP="172.16.168.23"
-VM4_IP="172.16.168.24"
-VM5_IP="172.16.168.25"
+MAIN_HOST_IP="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+VM1_IP="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+VM2_IP="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+VM3_IP="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+VM4_IP="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+VM5_IP="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 
 # Logging functions
 print_banner() {
@@ -116,23 +119,23 @@ show_architecture() {
     print_divider
     echo ""
     echo -e "  ${CYAN}┌─────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "  ${CYAN}│${NC}  ${BOLD}Main Host (WSL/Linux)${NC}         ${GREEN}172.16.168.20${NC}                   ${CYAN}│${NC}"
-    echo -e "  ${CYAN}│${NC}  └── Backend API Server (FastAPI on port 8001)               ${CYAN}│${NC}"
-    echo -e "  ${CYAN}│${NC}  └── VNC Desktop (noVNC on port 6080)                        ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  ${BOLD}Main Host (WSL/Linux)${NC}         ${GREEN}${MAIN_HOST_IP}${NC}                   ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  └── Backend API Server (FastAPI on port ${AUTOBOT_BACKEND_PORT:-8001})               ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  └── VNC Desktop (noVNC on port ${AUTOBOT_VNC_PORT:-6080})                        ${CYAN}│${NC}"
     echo -e "  ${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "  ${CYAN}│${NC}  ${BOLD}VM1 - Frontend${NC}                ${GREEN}172.16.168.21${NC}                   ${CYAN}│${NC}"
-    echo -e "  ${CYAN}│${NC}  └── Vue.js Web Interface (Vite on port 5173)                ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  ${BOLD}VM1 - Frontend${NC}                ${GREEN}${VM1_IP}${NC}                   ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  └── Vue.js Web Interface (Vite on port ${AUTOBOT_FRONTEND_PORT:-5173})                ${CYAN}│${NC}"
     echo -e "  ${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "  ${CYAN}│${NC}  ${BOLD}VM2 - NPU Worker${NC}              ${GREEN}172.16.168.22${NC}                   ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  ${BOLD}VM2 - NPU Worker${NC}              ${GREEN}${VM2_IP}${NC}                   ${CYAN}│${NC}"
     echo -e "  ${CYAN}│${NC}  └── Hardware AI Acceleration (Intel NPU/OpenVINO)           ${CYAN}│${NC}"
     echo -e "  ${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "  ${CYAN}│${NC}  ${BOLD}VM3 - Redis${NC}                   ${GREEN}172.16.168.23${NC}                   ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  ${BOLD}VM3 - Redis${NC}                   ${GREEN}${VM3_IP}${NC}                   ${CYAN}│${NC}"
     echo -e "  ${CYAN}│${NC}  └── Redis Stack (Cache, Queues, Vector Search)              ${CYAN}│${NC}"
     echo -e "  ${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "  ${CYAN}│${NC}  ${BOLD}VM4 - AI Stack${NC}                ${GREEN}172.16.168.24${NC}                   ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  ${BOLD}VM4 - AI Stack${NC}                ${GREEN}${VM4_IP}${NC}                   ${CYAN}│${NC}"
     echo -e "  ${CYAN}│${NC}  └── AI Processing (Ollama, vLLM, Model Inference)           ${CYAN}│${NC}"
     echo -e "  ${CYAN}├─────────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "  ${CYAN}│${NC}  ${BOLD}VM5 - Browser${NC}                 ${GREEN}172.16.168.25${NC}                   ${CYAN}│${NC}"
+    echo -e "  ${CYAN}│${NC}  ${BOLD}VM5 - Browser${NC}                 ${GREEN}${VM5_IP}${NC}                   ${CYAN}│${NC}"
     echo -e "  ${CYAN}│${NC}  └── Web Automation (Playwright MCP Server)                  ${CYAN}│${NC}"
     echo -e "  ${CYAN}└─────────────────────────────────────────────────────────────────┘${NC}"
     echo ""
@@ -195,7 +198,7 @@ check_prerequisites() {
 
     # Check if running from correct directory
     print_step "Checking AutoBot directory..."
-    if [ -d "$AUTOBOT_ROOT/backend" ] && [ -d "$AUTOBOT_ROOT/autobot-vue" ]; then
+    if [ -d "$AUTOBOT_ROOT/autobot-user-backend" ] && [ -d "$AUTOBOT_ROOT/autobot-slm-frontend" ]; then
         print_success "AutoBot directory structure valid"
     else
         print_error "Invalid AutoBot directory structure"
@@ -398,7 +401,7 @@ run_full_setup() {
         echo ""
         echo -e "${BOLD}Next Steps:${NC}"
         echo "  1. Start AutoBot: ${GREEN}./run_autobot.sh --dev${NC}"
-        echo "  2. Access the UI: ${CYAN}http://172.16.168.21:5173${NC}"
+        echo "  2. Access the UI: ${CYAN}http://${VM1_IP}:${AUTOBOT_FRONTEND_PORT:-5173}${NC}"
         echo "  3. Access VNC:    ${CYAN}http://127.0.0.1:6080/vnc.html${NC}"
         echo ""
         echo "For help, run: ${CYAN}/help${NC} in the chat interface"

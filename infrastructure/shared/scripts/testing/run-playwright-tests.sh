@@ -27,7 +27,7 @@ print_error() {
 }
 
 # Check if we're in the right directory
-if [ ! -f "autobot-vue/package.json" ]; then
+if [ ! -f "autobot-slm-frontend/package.json" ]; then
     print_error "Please run this script from the AutoBot root directory"
     exit 1
 fi
@@ -97,7 +97,7 @@ else
 fi
 
 # Navigate to Vue app directory
-cd autobot-vue
+cd autobot-slm-frontend
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
@@ -174,7 +174,7 @@ TEST_EXIT_CODE=$?
 # Show results
 if [ $TEST_EXIT_CODE -eq 0 ]; then
     print_status "✅ All tests completed successfully!"
-    print_status "Test report available at: autobot-vue/playwright-report/index.html"
+    print_status "Test report available at: autobot-slm-frontend/playwright-report/index.html"
 else
     print_error "❌ Some tests failed. Check the report for details."
 fi
@@ -187,7 +187,7 @@ elif command -v open &> /dev/null; then
     print_status "Opening test report in browser..."
     open playwright-report/index.html 2>/dev/null || true
 else
-    print_status "Test report saved to: autobot-vue/playwright-report/index.html"
+    print_status "Test report saved to: autobot-slm-frontend/playwright-report/index.html"
 fi
 
 exit $TEST_EXIT_CODE

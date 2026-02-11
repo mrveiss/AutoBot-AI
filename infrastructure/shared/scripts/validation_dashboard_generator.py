@@ -22,12 +22,118 @@ from typing import Any, Dict, List
 sys.path.append(str(Path(__file__).parent.parent))
 
 from scripts.phase_validation_system import PhaseValidator
-from src.enhanced_project_state_tracker import get_state_tracker
-from src.phase_progression_manager import get_progression_manager
-from src.utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
-from src.utils.template_loader import load_css, template_exists
+from enhanced_project_state_tracker import get_state_tracker
+from phase_progression_manager import get_progression_manager
+from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
+from utils.template_loader import load_css, template_exists
 
 logger = logging.getLogger(__name__)
+
+# Module-level HTML template for the validation dashboard (#825)
+_DASHBOARD_HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoBot Validation Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+{light_theme_css}
+{additional_css}
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="refresh-info">
+            Auto-refresh: {refresh_interval}s | Last updated: {current_time}
+        </div>
+
+{header_html}
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value health-{system_health}">\
+{overall_maturity:.1f}%</div>
+                <div class="stat-label">System Maturity</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">\
+{completed_phases}/{total_phases}</div>
+                <div class="stat-label">Phases Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{active_capabilities}</div>
+                <div class="stat-label">Active Capabilities</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value health-{system_health}">\
+{system_health_display}</div>
+                <div class="stat-label">System Health</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="phases-section">
+                <h2>Phase Completion Status</h2>
+                <div class="phases-list">
+                    {phase_html}
+                </div>
+
+                <h3>Maturity Trend</h3>
+                <div class="chart-container">
+                    <canvas id="maturityChart"></canvas>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <h3>System Alerts</h3>
+                    {alerts_html}
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Recommendations</h3>
+                    {recommendations_html}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('maturityChart')\
+.getContext('2d');
+        new Chart(ctx, {{
+            type: 'line',
+            data: {{
+                labels: {maturity_labels},
+                datasets: [{{
+                    label: 'System Maturity %',
+                    data: {maturity_data},
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.1
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        max: 100
+                    }}
+                }}
+            }}
+        }});
+
+        setTimeout(() => {{
+            window.location.reload();
+        }}, {refresh_timeout});
+    </script>
+</body>
+</html>
+"""
 
 
 class ValidationDashboardGenerator:
@@ -51,86 +157,109 @@ class ValidationDashboardGenerator:
 
         logger.info("Validation Dashboard Generator initialized")
 
+    async def _gather_validation_data(self):
+        """Gather validation results, state summary, and progression status.
+
+        Helper for generate_real_time_report (#825).
+        """
+        try:
+            validation_results = await asyncio.wait_for(
+                self.validator.validate_all_phases(), timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.debug("Validation timed out, using fallback results")
+            validation_results = self._get_minimal_validation_results()
+        except Exception as e:
+            logger.debug("Validation failed: %s", e)
+            validation_results = self._get_minimal_validation_results()
+
+        try:
+            state_summary = await self.state_tracker.get_state_summary()
+        except Exception as e:
+            logger.debug("State tracker unavailable: %s", e)
+            state_summary = self._get_default_state_summary()
+
+        try:
+            progression_status = (
+                await self.progression_manager.check_progression_eligibility()
+            )
+        except Exception as e:
+            logger.debug("Progression manager unavailable: %s", e)
+            progression_status = self._get_default_progression_status()
+
+        return validation_results, state_summary, progression_status
+
+    def _build_report_dict(
+        self, validation_results, state_summary, progression_status,
+        current_metrics, trend_data, recommendations, alerts,
+    ) -> Dict[str, Any]:
+        """Build the comprehensive report dictionary.
+
+        Helper for generate_real_time_report (#825).
+        """
+        phases = validation_results["phases"]
+        return {
+            "generated_at": datetime.now().isoformat(),
+            "system_overview": {
+                "overall_maturity": validation_results[
+                    "overall_assessment"
+                ]["system_maturity_score"],
+                "total_phases": len(phases),
+                "completed_phases": len(
+                    [
+                        p for p in phases.values()
+                        if p["completion_percentage"] >= 95.0
+                    ]
+                ),
+                "system_health": self._assess_system_health(
+                    validation_results
+                ),
+                "active_capabilities": state_summary[
+                    "current_state"
+                ]["system_metrics"]["capability_count"],
+            },
+            "phase_details": self._format_phase_details(phases),
+            "progression_status": {
+                "can_progress": len(
+                    progression_status.get("eligible_phases", [])
+                ) > 0,
+                "current_phase": "phase_validation_complete",
+                "next_available": progression_status.get(
+                    "eligible_phases", []
+                ),
+                "blocked_phases": progression_status.get(
+                    "blocked_phases", []
+                ),
+            },
+            "metrics": current_metrics,
+            "trends": trend_data,
+            "recommendations": recommendations,
+            "alerts": alerts,
+        }
+
     async def generate_real_time_report(self) -> Dict[str, Any]:
         """Generate comprehensive real-time validation report"""
         logger.info("Generating real-time validation report...")
 
         try:
-            # Get current validation results with timeout
-            try:
-                validation_results = await asyncio.wait_for(
-                    self.validator.validate_all_phases(), timeout=30.0
-                )
-            except asyncio.TimeoutError:
-                logger.debug("Validation timed out, using fallback results")
-                validation_results = self._get_minimal_validation_results()
-            except Exception as e:
-                logger.debug("Validation failed: %s", e)
-                validation_results = self._get_minimal_validation_results()
+            data = await self._gather_validation_data()
+            validation_results, state_summary, progression_status = data
 
-            # Get system state with error handling
-            try:
-                state_summary = await self.state_tracker.get_state_summary()
-            except Exception as e:
-                logger.debug("State tracker unavailable: %s", e)
-                state_summary = self._get_default_state_summary()
-
-            # Get progression status with error handling
-            try:
-                progression_status = (
-                    await self.progression_manager.check_progression_eligibility()
-                )
-            except Exception as e:
-                logger.debug("Progression manager unavailable: %s", e)
-                progression_status = self._get_default_progression_status()
-
-            # Calculate metrics
             current_metrics = self._calculate_current_metrics(
                 validation_results, state_summary, progression_status
             )
-
-            # Generate trending data
             trend_data = await self._generate_trend_data()
+            recommendations = await self._generate_recommendations(
+                validation_results
+            )
+            alerts = self._check_system_alerts(
+                validation_results, state_summary
+            )
 
-            # Create comprehensive report
-            report = {
-                "generated_at": datetime.now().isoformat(),
-                "system_overview": {
-                    "overall_maturity": validation_results["overall_assessment"][
-                        "system_maturity_score"
-                    ],
-                    "total_phases": len(validation_results["phases"]),
-                    "completed_phases": len(
-                        [
-                            p
-                            for p in validation_results["phases"].values()
-                            if p["completion_percentage"] >= 95.0
-                        ]
-                    ),
-                    "system_health": self._assess_system_health(validation_results),
-                    "active_capabilities": state_summary["current_state"][
-                        "system_metrics"
-                    ]["capability_count"],
-                },
-                "phase_details": self._format_phase_details(
-                    validation_results["phases"]
-                ),
-                "progression_status": {
-                    "can_progress": len(progression_status.get("eligible_phases", []))
-                    > 0,
-                    "current_phase": "phase_validation_complete",  # All phases are complete based on validation
-                    "next_available": progression_status.get("eligible_phases", []),
-                    "blocked_phases": progression_status.get("blocked_phases", []),
-                },
-                "metrics": current_metrics,
-                "trends": trend_data,
-                "recommendations": await self._generate_recommendations(
-                    validation_results
-                ),
-                "alerts": self._check_system_alerts(validation_results, state_summary),
-            }
-
-            return report
+            return self._build_report_dict(
+                validation_results, state_summary, progression_status,
+                current_metrics, trend_data, recommendations, alerts,
+            )
 
         except Exception as e:
             logger.error("Error generating real-time report: %s", e)
@@ -545,157 +674,68 @@ class ValidationDashboardGenerator:
         .alert-info { background: #e3f2fd; border-color: #2196f3; }
     """
 
-    def _create_dashboard_html(self, report_data: Dict) -> str:
-        """
-        Create HTML dashboard content.
+    def _get_dashboard_format_kwargs(
+        self, report_data: Dict, system_overview: Dict,
+        phase_details: List, alerts: List, recommendations: List,
+    ) -> Dict[str, Any]:
+        """Build format kwargs for the dashboard HTML template.
 
-        Issue #281: CSS extracted to _get_dashboard_css() to reduce function
-        length from 284 to ~140 lines.
+        Helper for _create_dashboard_html (#825).
         """
-        system_overview = report_data["system_overview"]
-        phase_details = report_data["phase_details"]
-        alerts = report_data["alerts"]
-        recommendations = report_data["recommendations"]
-
-        # Generate dashboard components using utility functions
         light_theme_css = get_light_theme_css()
+        generated_at = report_data["generated_at"][:19].replace("T", " ")
         header_html = create_dashboard_header(
-            title="🤖 AutoBot Validation Dashboard",
-            subtitle=f"Real-time system validation and progress monitoring<br>Generated: {report_data['generated_at'][:19].replace('T', ' ')}",
+            title="AutoBot Validation Dashboard",
+            subtitle=(
+                "Real-time system validation and progress monitoring"
+                f"<br>Generated: {generated_at}"
+            ),
             theme="light",
         )
-
-        # Issue #281: Use extracted helper for CSS
-        additional_css = self._get_dashboard_css()
-
-        html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoBot Validation Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-{light_theme_css}
-{additional_css}
-    </style>
-</head>
-<body>
-    <div class="dashboard">
-        <div class="refresh-info">
-            Auto-refresh: {refresh_interval}s | Last updated: {current_time}
-        </div>
-
-{header_html}
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value health-{system_health}">{overall_maturity:.1f}%</div>
-                <div class="stat-label">System Maturity</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{completed_phases}/{total_phases}</div>
-                <div class="stat-label">Phases Completed</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">{active_capabilities}</div>
-                <div class="stat-label">Active Capabilities</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value health-{system_health}">{system_health_display}</div>
-                <div class="stat-label">System Health</div>
-            </div>
-        </div>
-
-        <div class="main-content">
-            <div class="phases-section">
-                <h2>📊 Phase Completion Status</h2>
-                <div class="phases-list">
-                    {phase_html}
-                </div>
-
-                <h3>📈 Maturity Trend</h3>
-                <div class="chart-container">
-                    <canvas id="maturityChart"></canvas>
-                </div>
-            </div>
-
-            <div class="sidebar">
-                <div class="sidebar-section">
-                    <h3>🚨 System Alerts</h3>
-                    {alerts_html}
-                </div>
-
-                <div class="sidebar-section">
-                    <h3>💡 Recommendations</h3>
-                    {recommendations_html}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Initialize maturity trend chart
-        const ctx = document.getElementById('maturityChart').getContext('2d');
-        new Chart(ctx, {{
-            type: 'line',
-            data: {{
-                labels: {maturity_labels},
-                datasets: [{{
-                    label: 'System Maturity %',
-                    data: {maturity_data},
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    tension: 0.1
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {{
-                    y: {{
-                        beginAtZero: true,
-                        max: 100
-                    }}
-                }}
-            }}
-        }});
-
-        // Auto-refresh functionality
-        setTimeout(() => {{
-            window.location.reload();
-        }}, {refresh_timeout});
-    </script>
-</body>
-</html>
-""".format(
-            light_theme_css=light_theme_css,
-            additional_css=additional_css,
-            header_html=header_html,
-            refresh_interval=self.refresh_interval,
-            current_time=datetime.now().strftime("%H:%M:%S"),
-            system_health=system_overview["system_health"],
-            overall_maturity=system_overview["overall_maturity"],
-            completed_phases=system_overview["completed_phases"],
-            total_phases=system_overview["total_phases"],
-            active_capabilities=system_overview["active_capabilities"],
-            system_health_display=system_overview["system_health"]
-            .replace("_", " ")
-            .title(),
-            phase_html=self._generate_phase_html(phase_details),
-            alerts_html=self._generate_alerts_html(alerts),
-            recommendations_html=self._generate_recommendations_html(recommendations),
-            maturity_labels=json.dumps(
-                [p["timestamp"][-8:-3] for p in report_data["trends"]["maturity_trend"]]
+        trends = report_data["trends"]["maturity_trend"]
+        return {
+            "light_theme_css": light_theme_css,
+            "additional_css": self._get_dashboard_css(),
+            "header_html": header_html,
+            "refresh_interval": self.refresh_interval,
+            "current_time": datetime.now().strftime("%H:%M:%S"),
+            "system_health": system_overview["system_health"],
+            "overall_maturity": system_overview["overall_maturity"],
+            "completed_phases": system_overview["completed_phases"],
+            "total_phases": system_overview["total_phases"],
+            "active_capabilities": system_overview["active_capabilities"],
+            "system_health_display": (
+                system_overview["system_health"]
+                .replace("_", " ").title()
             ),
-            maturity_data=json.dumps(
-                [p["value"] for p in report_data["trends"]["maturity_trend"]]
+            "phase_html": self._generate_phase_html(phase_details),
+            "alerts_html": self._generate_alerts_html(alerts),
+            "recommendations_html": (
+                self._generate_recommendations_html(recommendations)
             ),
-            refresh_timeout=self.refresh_interval * 1000,
+            "maturity_labels": json.dumps(
+                [p["timestamp"][-8:-3] for p in trends]
+            ),
+            "maturity_data": json.dumps(
+                [p["value"] for p in trends]
+            ),
+            "refresh_timeout": self.refresh_interval * 1000,
+        }
+
+    def _create_dashboard_html(self, report_data: Dict) -> str:
+        """Create HTML dashboard content.
+
+        Issue #281: CSS extracted to _get_dashboard_css().
+        Issue #825: format kwargs extracted to helper.
+        """
+        system_overview = report_data["system_overview"]
+        kwargs = self._get_dashboard_format_kwargs(
+            report_data, system_overview,
+            report_data["phase_details"],
+            report_data["alerts"],
+            report_data["recommendations"],
         )
-
-        return html
+        return _DASHBOARD_HTML_TEMPLATE.format(**kwargs)
 
     def _generate_phase_html(self, phase_details: List[Dict]) -> str:
         """Generate HTML for phase details"""
@@ -819,27 +859,27 @@ def main():
         try:
             if args.command == "generate":
                 dashboard_path = await generator.generate_html_dashboard()
-                print(f"✅ Dashboard generated: {dashboard_path}")
+                logger.info(f"✅ Dashboard generated: {dashboard_path}")
 
             elif args.command == "report":
                 report = await generator.generate_real_time_report()
                 if args.ci_mode:
                     # Simple CI output
                     system_overview = report.get("system_overview", {})
-                    print(
+                    logger.info(
                         f"System Maturity: {system_overview.get('overall_maturity', 0):.1f}%"
                     )
-                    print(
+                    logger.info(
                         f"Completed Phases: {system_overview.get('completed_phases', 0)}/{system_overview.get('total_phases', 0)}"
                     )
-                    print(
+                    logger.info(
                         f"System Health: {system_overview.get('system_health', 'unknown')}"
                     )
                 else:
-                    print(json.dumps(report, indent=2, default=str))
+                    logger.info(json.dumps(report, indent=2, default=str))
 
             elif args.command == "monitor":
-                print("🔄 Starting real-time monitoring...")
+                logger.info("🔄 Starting real-time monitoring...")
                 await generator.start_real_time_monitoring()
 
         except Exception as e:

@@ -15,7 +15,7 @@ from typing import Any, Dict
 
 import aiohttp
 import requests
-from src.constants.network_constants import NetworkConstants, ServiceURLs
+from constants.network_constants import NetworkConstants, ServiceURLs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

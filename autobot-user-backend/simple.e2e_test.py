@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 print("Testing imports...")
 try:
-    from src.circuit_breaker import CircuitBreaker
+    from circuit_breaker import CircuitBreaker
 
     print("✅ Import successful")
 

@@ -124,9 +124,9 @@ echo "🌐 Starting frontend..."
 
 if [ "$TEST_MODE" = true ]; then
     echo "📝 Frontend logs visible in test mode"
-    cd autobot-vue && npm run dev &
+    cd autobot-slm-frontend && npm run dev &
 else
-    cd autobot-vue && npm run dev > /dev/null 2>&1 &
+    cd autobot-slm-frontend && npm run dev > /dev/null 2>&1 &
 fi
 
 FRONTEND_PID=$!

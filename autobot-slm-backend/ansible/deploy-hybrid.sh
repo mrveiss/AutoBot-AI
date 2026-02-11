@@ -8,6 +8,11 @@ set -euo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 INVENTORY_FILE="$SCRIPT_DIR/inventory/production.yml"
 PLAYBOOK_FILE="$SCRIPT_DIR/playbooks/deploy-hybrid-docker.yml"
 LOG_DIR="/tmp/autobot-deployment"
@@ -82,24 +87,24 @@ test_connectivity() {
 show_deployment_plan() {
     log "INFO" "🚀 AutoBot Hybrid Deployment Plan:"
     log "INFO" ""
-    log "INFO" "VM1 (172.16.168.21) - autobot-frontend:"
+    log "INFO" "VM1 (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}) - autobot-frontend:"
     log "INFO" "  • Vue.js Frontend (port 5173)"
     log "INFO" "  • Nginx reverse proxy (port 80/443)"
     log "INFO" ""
-    log "INFO" "VM2 (172.16.168.22) - Backend (STAYS ON HOST):"
+    log "INFO" "VM2 (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}) - Backend (STAYS ON HOST):"
     log "INFO" "  • FastAPI backend running locally"
     log "INFO" "  • Will connect to services on VMs"
     log "INFO" ""
-    log "INFO" "VM3 (172.16.168.23) - autobot-database:"
+    log "INFO" "VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23}) - autobot-database:"
     log "INFO" "  • Redis Stack (port 6379)"
     log "INFO" "  • RedisInsight (port 8002)"
     log "INFO" ""
-    log "INFO" "VM4 (172.16.168.24) - autobot-aiml:"
+    log "INFO" "VM4 (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}) - autobot-aiml:"
     log "INFO" "  • AI Stack (port 8080)"
     log "INFO" "  • NPU Worker (port 8081)"
     log "INFO" "  • Ollama LLM server (port 11434)"
     log "INFO" ""
-    log "INFO" "VM5 (172.16.168.25) - autobot-browser:"
+    log "INFO" "VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}) - autobot-browser:"
     log "INFO" "  • Playwright browser service (port 3000)"
     log "INFO" "  • VNC server for desktop access (port 5900)"
     log "INFO" ""
@@ -133,23 +138,23 @@ AUTOBOT_BACKEND_HOST=127.0.0.1
 AUTOBOT_BACKEND_PORT=8001
 
 # VM Service Endpoints
-AUTOBOT_REDIS_HOST=172.16.168.23
+AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
 AUTOBOT_REDIS_PORT=6379
 AUTOBOT_REDIS_PASSWORD=autobot123
 
-AUTOBOT_AI_STACK_HOST=172.16.168.24
+AUTOBOT_AI_STACK_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
 AUTOBOT_AI_STACK_PORT=8080
 
-AUTOBOT_NPU_WORKER_HOST=172.16.168.24
+AUTOBOT_NPU_WORKER_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
 AUTOBOT_NPU_WORKER_PORT=8081
 
-AUTOBOT_OLLAMA_HOST=172.16.168.24
+AUTOBOT_OLLAMA_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
 AUTOBOT_OLLAMA_PORT=11434
 
-AUTOBOT_BROWSER_HOST=172.16.168.25
+AUTOBOT_BROWSER_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}
 AUTOBOT_BROWSER_PORT=3000
 
-AUTOBOT_FRONTEND_HOST=172.16.168.21
+AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-172.16.168.21}
 AUTOBOT_FRONTEND_PORT=5173
 
 # Deployment mode
@@ -189,11 +194,11 @@ migrate_data() {
     fi
 
     # Copy backup to VM and import
-    if scp "$backup_dir/redis-backup.rdb" autobot@172.16.168.23:/tmp/; then
+    if scp "$backup_dir/redis-backup.rdb" ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_REDIS_HOST:-172.16.168.23}:/tmp/; then
         log "INFO" "Backup copied to VM"
 
         # Import to VM Redis
-        ssh autobot@172.16.168.23 "docker exec autobot-redis redis-cli --rdb /tmp/redis-backup.rdb restore"
+        ssh ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_REDIS_HOST:-172.16.168.23} "docker exec autobot-redis redis-cli --rdb /tmp/redis-backup.rdb restore"
         success "Data migration completed"
     else
         log "WARN" "Data migration failed - you may need to manually transfer data"
@@ -206,13 +211,13 @@ validate_deployment() {
 
     # Test VM services
     local services=(
-        "172.16.168.21:5173|Frontend"
-        "172.16.168.23:6379|Redis"
-        "172.16.168.23:8002|RedisInsight"
-        "172.16.168.24:8080|AI Stack"
-        "172.16.168.24:8081|NPU Worker"
-        "172.16.168.24:11434|Ollama"
-        "172.16.168.25:3000|Browser Service"
+        "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:5173|Frontend"
+        "${AUTOBOT_REDIS_HOST:-172.16.168.23}:6379|Redis"
+        "${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002|RedisInsight"
+        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8080|AI Stack"
+        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8081|NPU Worker"
+        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:11434|Ollama"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:3000|Browser Service"
     )
 
     local failed_services=()
@@ -241,7 +246,7 @@ validate_deployment() {
 import redis
 import os
 try:
-    r = redis.Redis(host='172.16.168.23', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
+    r = redis.Redis(host='${AUTOBOT_REDIS_HOST:-172.16.168.23}', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
     r.ping()
     print('✅ Backend can connect to VM Redis')
 except Exception as e:
@@ -266,19 +271,19 @@ show_summary() {
     log "INFO" "🎉 AutoBot Hybrid Deployment Complete!"
     log "INFO" ""
     log "INFO" "Service Endpoints:"
-    log "INFO" "  Frontend (VM):    http://172.16.168.21:5173"
+    log "INFO" "  Frontend (VM):    http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:5173"
     log "INFO" "  Backend (Host):   http://localhost:8001"
-    log "INFO" "  Redis (VM):       redis://172.16.168.23:6379"
-    log "INFO" "  RedisInsight:     http://172.16.168.23:8002"
-    log "INFO" "  AI Stack (VM):    http://172.16.168.24:8080"
-    log "INFO" "  NPU Worker (VM):  http://172.16.168.24:8081"
-    log "INFO" "  Ollama (VM):      http://172.16.168.24:11434"
-    log "INFO" "  Browser (VM):     http://172.16.168.25:3000"
+    log "INFO" "  Redis (VM):       redis://${AUTOBOT_REDIS_HOST:-172.16.168.23}:6379"
+    log "INFO" "  RedisInsight:     http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002"
+    log "INFO" "  AI Stack (VM):    http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8080"
+    log "INFO" "  NPU Worker (VM):  http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8081"
+    log "INFO" "  Ollama (VM):      http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:11434"
+    log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:3000"
     log "INFO" ""
     log "INFO" "Next Steps:"
     log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=/home/kali/Desktop/AutoBot/.env.hybrid"
     log "INFO" "  2. Restart backend: python backend/main.py"
-    log "INFO" "  3. Access frontend: http://172.16.168.21:5173"
+    log "INFO" "  3. Access frontend: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:5173"
     log "INFO" ""
     log "INFO" "Log file: $LOG_FILE"
 }

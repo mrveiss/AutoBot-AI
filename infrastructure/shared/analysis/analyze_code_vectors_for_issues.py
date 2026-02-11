@@ -23,10 +23,10 @@ from typing import Any, Dict, List
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 # Use canonical Redis client utility
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -212,6 +212,116 @@ class CodeIssueAnalyzer:
             logger.error(f"❌ Duplicate code analysis failed: {e}")
             return []
 
+    def _compile_hardcode_patterns(self) -> Dict[str, re.Pattern]:
+        """Compile regex patterns for hardcoded value detection.
+
+        Helper for find_hardcoded_values (Issue #825).
+        """
+        patterns = {
+            "ip_addresses": [
+                r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+                r"\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b",
+            ],
+            "urls": [
+                r'https?://[^\s"\'<>]+',
+                r'ftp://[^\s"\'<>]+',
+                r'ws://[^\s"\'<>]+',
+                r'wss://[^\s"\'<>]+',
+            ],
+            "passwords": [
+                r'password\s*[:=]\s*["\']([^"\']+)["\']',
+                r'pwd\s*[:=]\s*["\']([^"\']+)["\']',
+                r'secret\s*[:=]\s*["\']([^"\']+)["\']',
+            ],
+            "api_keys": [
+                r'api[_-]?key\s*[:=]\s*["\']([^"\']+)["\']',
+                r'access[_-]?token\s*[:=]\s*["\']([^"\']+)["\']',
+                r"bearer\s+([a-zA-Z0-9_-]{20,})",
+            ],
+            "database_connections": [
+                r'mongodb://[^\s"\'<>]+',
+                r'postgresql://[^\s"\'<>]+',
+                r'mysql://[^\s"\'<>]+',
+                r'redis://[^\s"\'<>]+',
+            ],
+            "file_paths": [
+                r'(?:/[^/\s"\'<>]+){2,}',
+                r'[C-Z]:\\[^\\s"\'<>\\]+(?:\\[^\\s"\'<>\\]+)+',
+                r'~/[^\s"\'<>]+',
+            ],
+        }
+
+        compiled_patterns = {}
+        for category, pattern_list in patterns.items():
+            combined = "|".join(f"({p})" for p in pattern_list)
+            compiled_patterns[category] = re.compile(combined, re.IGNORECASE | re.MULTILINE)
+
+        return compiled_patterns
+
+    def _extract_hardcoded_matches(
+        self, text: str, doc_id: str, compiled_patterns: Dict[str, re.Pattern]
+    ) -> Dict[str, List[Dict]]:
+        """Extract hardcoded matches from text.
+
+        Helper for find_hardcoded_values (Issue #825).
+        """
+        hardcoded = {
+            "ip_addresses": [],
+            "urls": [],
+            "passwords": [],
+            "api_keys": [],
+            "database_connections": [],
+            "file_paths": [],
+        }
+
+        for category, compiled_pattern in compiled_patterns.items():
+            try:
+                matches = compiled_pattern.findall(text)
+
+                for match in matches:
+                    value = match[0] if isinstance(match, tuple) and len(match) > 0 else match
+
+                    if self.is_likely_hardcoded_value(category, value):
+                        hardcoded[category].append(
+                            {
+                                "value": value,
+                                "file": doc_id,
+                                "context": text[
+                                    max(0, text.find(value) - 50) : text.find(value) + 100
+                                ],
+                                "severity": self.assess_hardcode_severity(category, value),
+                            }
+                        )
+
+            except Exception as e:
+                logger.warning(f"⚠️ Pattern matching failed for {category}: {e}")
+                continue
+
+        return hardcoded
+
+    def _deduplicate_and_sort(
+        self, hardcoded: Dict[str, List[Dict]]
+    ) -> Dict[str, List[Dict]]:
+        """Remove duplicates and sort by severity.
+
+        Helper for find_hardcoded_values (Issue #825).
+        """
+        for category in hardcoded:
+            seen_values = set()
+            unique_items = []
+
+            for item in hardcoded[category]:
+                if item["value"] not in seen_values:
+                    seen_values.add(item["value"])
+                    unique_items.append(item)
+
+            severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            unique_items.sort(key=lambda x: severity_order.get(x["severity"], 3))
+
+            hardcoded[category] = unique_items
+
+        return hardcoded
+
     async def find_hardcoded_values(
         self, code_samples: List[Dict[str, Any]]
     ) -> Dict[str, List[Dict[str, Any]]]:
@@ -219,7 +329,9 @@ class CodeIssueAnalyzer:
         try:
             logger.info("🔍 Analyzing for hardcoded values...")
 
-            hardcoded = {
+            compiled_patterns = self._compile_hardcode_patterns()
+
+            all_hardcoded = {
                 "ip_addresses": [],
                 "urls": [],
                 "passwords": [],
@@ -228,118 +340,26 @@ class CodeIssueAnalyzer:
                 "file_paths": [],
             }
 
-            # Regex patterns for different types of hardcoded values
-            patterns = {
-                "ip_addresses": [
-                    r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
-                    r"\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b",
-                ],
-                "urls": [
-                    r'https?://[^\s"\'<>]+',
-                    r'ftp://[^\s"\'<>]+',
-                    r'ws://[^\s"\'<>]+',
-                    r'wss://[^\s"\'<>]+',
-                ],
-                "passwords": [
-                    r'password\s*[:=]\s*["\']([^"\']+)["\']',
-                    r'pwd\s*[:=]\s*["\']([^"\']+)["\']',
-                    r'secret\s*[:=]\s*["\']([^"\']+)["\']',
-                ],
-                "api_keys": [
-                    r'api[_-]?key\s*[:=]\s*["\']([^"\']+)["\']',
-                    r'access[_-]?token\s*[:=]\s*["\']([^"\']+)["\']',
-                    r"bearer\s+([a-zA-Z0-9_-]{20,})",
-                ],
-                "database_connections": [
-                    r'mongodb://[^\s"\'<>]+',
-                    r'postgresql://[^\s"\'<>]+',
-                    r'mysql://[^\s"\'<>]+',
-                    r'redis://[^\s"\'<>]+',
-                ],
-                "file_paths": [
-                    r'(?:/[^/\s"\'<>]+){2,}',  # Unix paths
-                    r'[C-Z]:\\[^\\s"\'<>\\]+(?:\\[^\\s"\'<>\\]+)+',  # Windows paths
-                    r'~/[^\s"\'<>]+',  # Home directory paths
-                ],
-            }
-
-            # Issue #506: Precompile and combine patterns per category
-            # Reduces O(n⁴) to O(n²) by eliminating per-pattern loop
-            compiled_patterns = {}
-            for category, pattern_list in patterns.items():
-                # Combine all patterns for this category into one regex
-                combined = "|".join(f"({p})" for p in pattern_list)
-                compiled_patterns[category] = re.compile(
-                    combined, re.IGNORECASE | re.MULTILINE
-                )
-
-            # Analyze each code sample
             for sample in code_samples:
                 text = sample["text"]
                 doc_id = sample["doc_id"]
 
-                # Issue #506: Single pass per category instead of per-pattern
-                for category, compiled_pattern in compiled_patterns.items():
-                    try:
-                        matches = compiled_pattern.findall(text)
+                sample_hardcoded = self._extract_hardcoded_matches(
+                    text, doc_id, compiled_patterns
+                )
 
-                        for match in matches:
-                            # Extract the actual value (handle tuple results from groups)
-                            value = (
-                                match[0]
-                                if isinstance(match, tuple) and len(match) > 0
-                                else match
-                            )
+                for category in all_hardcoded:
+                    all_hardcoded[category].extend(sample_hardcoded[category])
 
-                            # Skip common false positives
-                            if self.is_likely_hardcoded_value(category, value):
-                                hardcoded[category].append(
-                                    {
-                                        "value": value,
-                                        "file": doc_id,
-                                        "context": text[
-                                            max(0, text.find(value) - 50) : text.find(
-                                                value
-                                            )
-                                            + 100
-                                        ],
-                                        "severity": self.assess_hardcode_severity(
-                                            category, value
-                                        ),
-                                    }
-                                )
+            all_hardcoded = self._deduplicate_and_sort(all_hardcoded)
 
-                    except Exception as e:
-                        logger.warning(
-                            f"⚠️ Pattern matching failed for {category}: {e}"
-                        )
-                        continue
-
-            # Remove duplicates and sort by severity
-            for category in hardcoded:
-                # Remove duplicates based on value
-                seen_values = set()
-                unique_items = []
-
-                for item in hardcoded[category]:
-                    if item["value"] not in seen_values:
-                        seen_values.add(item["value"])
-                        unique_items.append(item)
-
-                # Sort by severity (critical first)
-                severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-                unique_items.sort(key=lambda x: severity_order.get(x["severity"], 3))
-
-                hardcoded[category] = unique_items
-
-            # Log summary
-            total_hardcoded = sum(len(items) for items in hardcoded.values())
+            total_hardcoded = sum(len(items) for items in all_hardcoded.values())
             logger.info(f"📊 Found {total_hardcoded} hardcoded values:")
-            for category, items in hardcoded.items():
+            for category, items in all_hardcoded.items():
                 if items:
                     logger.info(f"  - {category}: {len(items)}")
 
-            return hardcoded
+            return all_hardcoded
 
         except Exception as e:
             logger.error(f"❌ Hardcoded values analysis failed: {e}")
@@ -423,6 +443,68 @@ class CodeIssueAnalyzer:
         # Low severity (default)
         return "low"
 
+    def _analyze_sample_architecture(self, sample, issues, import_patterns, dep_files):
+        """Analyze a single code sample for architectural issues.
+
+        Helper for analyze_architectural_issues (Issue #825).
+        """
+        text = sample["text"]
+        doc_id = sample["doc_id"]
+
+        import_matches = re.findall(
+            r"(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)", text
+        )
+        for imp in import_matches:
+            import_patterns[imp] += 1
+
+        if "import" in text and doc_id:
+            dep_files.append((doc_id, import_matches))
+
+        function_matches = re.findall(
+            r"def\s+\w+.*?(?=\ndef|\nclass|\n\n|\Z)", text, re.DOTALL
+        )
+        for func in function_matches:
+            if len(func) > 1000:
+                issues.append(
+                    {
+                        "type": "large_function",
+                        "file": doc_id,
+                        "severity": "medium",
+                        "description": f"Large function detected ({len(func)} characters)",
+                        "recommendation": "Consider breaking down into smaller functions",
+                    }
+                )
+
+        if_count = len(re.findall(r"\bif\b", text))
+        for_count = len(re.findall(r"\bfor\b", text))
+        while_count = len(re.findall(r"\bwhile\b", text))
+        complexity_score = if_count + for_count + while_count
+
+        if complexity_score > 20:
+            issues.append(
+                {
+                    "type": "high_complexity",
+                    "file": doc_id,
+                    "severity": "medium",
+                    "description": f"High cyclomatic complexity (score: {complexity_score})",
+                    "recommendation": "Refactor to reduce complexity",
+                }
+            )
+
+        todo_matches = re.findall(
+            r"#.*(?:TODO|FIXME|XXX|HACK).*", text, re.IGNORECASE
+        )
+        if len(todo_matches) > 5:
+            issues.append(
+                {
+                    "type": "technical_debt",
+                    "file": doc_id,
+                    "severity": "low",
+                    "description": f"High number of TODO/FIXME comments ({len(todo_matches)})",
+                    "recommendation": "Address technical debt items",
+                }
+            )
+
     async def analyze_architectural_issues(
         self, code_samples: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -438,69 +520,9 @@ class CodeIssueAnalyzer:
 
             # Analyze patterns that indicate architectural issues
             for sample in code_samples:
-                text = sample["text"]
-                doc_id = sample["doc_id"]
-
-                # Look for import statements
-                import_matches = re.findall(
-                    r"(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_.]*)", text
+                self._analyze_sample_architecture(
+                    sample, issues, import_patterns, dependency_files
                 )
-                for imp in import_matches:
-                    import_patterns[imp] += 1
-
-                # Check for architectural anti-patterns
-
-                # Circular imports
-                if "import" in text and doc_id:
-                    dependency_files.append((doc_id, import_matches))
-
-                # Large functions (rough heuristic)
-                function_matches = re.findall(
-                    r"def\s+\w+.*?(?=\ndef|\nclass|\n\n|\Z)", text, re.DOTALL
-                )
-                for func in function_matches:
-                    if len(func) > 1000:  # Very large function
-                        issues.append(
-                            {
-                                "type": "large_function",
-                                "file": doc_id,
-                                "severity": "medium",
-                                "description": f"Large function detected ({len(func)} characters)",
-                                "recommendation": "Consider breaking down into smaller functions",
-                            }
-                        )
-
-                # High cyclomatic complexity (rough heuristic)
-                if_count = len(re.findall(r"\bif\b", text))
-                for_count = len(re.findall(r"\bfor\b", text))
-                while_count = len(re.findall(r"\bwhile\b", text))
-                complexity_score = if_count + for_count + while_count
-
-                if complexity_score > 20:  # High complexity
-                    issues.append(
-                        {
-                            "type": "high_complexity",
-                            "file": doc_id,
-                            "severity": "medium",
-                            "description": f"High cyclomatic complexity (score: {complexity_score})",
-                            "recommendation": "Refactor to reduce complexity",
-                        }
-                    )
-
-                # TODO/FIXME comments
-                todo_matches = re.findall(
-                    r"#.*(?:TODO|FIXME|XXX|HACK).*", text, re.IGNORECASE
-                )
-                if len(todo_matches) > 5:
-                    issues.append(
-                        {
-                            "type": "technical_debt",
-                            "file": doc_id,
-                            "severity": "low",
-                            "description": f"High number of TODO/FIXME comments ({len(todo_matches)})",
-                            "recommendation": "Address technical debt items",
-                        }
-                    )
 
             # Note: Circular reference detection would analyze dependency_files
             # but is not implemented in this simplified version
@@ -517,24 +539,14 @@ class CodeIssueAnalyzer:
             logger.error(f"❌ Architectural analysis failed: {e}")
             return []
 
-    async def generate_summary_report(self) -> str:
-        """Generate a comprehensive summary report.
+    def _build_report_header(
+        self, duplicates: List, total_hardcoded: int, critical_hardcoded: int
+    ) -> str:
+        """Build report header and executive summary.
 
-        Uses list accumulation + join() instead of += for O(n) performance.
-        Issue #622: Fix excessive string concatenation in loops.
+        Helper for generate_summary_report (Issue #825).
         """
-        try:
-            logger.info("📝 Generating summary report...")
-
-            duplicates = self.analysis_results["duplicates"]
-            hardcoded = self.analysis_results["hardcoded_values"]
-            architectural = self.analysis_results["architectural_issues"]
-
-            # Use list accumulation for O(n) string building instead of += (O(n²))
-            report_parts = []
-
-            report_parts.append(
-                f"""
+        return f"""
 # AutoBot Codebase Analysis Report
 Generated: {datetime.now().isoformat()}
 
@@ -550,74 +562,100 @@ This analysis examined code vectors from the AutoBot codebase to identify:
 ### 🔄 Code Duplication
 - **{len(duplicates)} duplicate patterns** identified
 - **Top duplicates:**"""
-            )
 
-            # Add top 5 duplicates using list comprehension + join
-            duplicate_lines = [
-                f"\n  {i+1}. {dup['occurrences']} occurrences ({dup['severity']} severity)"
-                for i, dup in enumerate(duplicates[:5])
-            ]
-            report_parts.append("".join(duplicate_lines))
+    def _build_hardcoded_section(
+        self, hardcoded: Dict, total_hardcoded: int, critical_hardcoded: int
+    ) -> str:
+        """Build hardcoded values section.
 
-            # Hardcoded values summary
+        Helper for generate_summary_report (Issue #825).
+        """
+        hardcoded_lines = [
+            f"\n  - {category}: {len(items)} total "
+            f"({len([item for item in items if item.get('severity') == 'critical'])} critical)"
+            for category, items in hardcoded.items()
+            if items
+        ]
+
+        return (
+            f"""
+
+### 🔒 Hardcoded Values
+- **{total_hardcoded} hardcoded values** found
+- **{critical_hardcoded} critical security issues**
+- **Breakdown by category:**"""
+            + "".join(hardcoded_lines)
+        )
+
+    def _build_architectural_section(
+        self, architectural: List, critical_arch: int, high_arch: int
+    ) -> str:
+        """Build architectural issues section.
+
+        Helper for generate_summary_report (Issue #825).
+        """
+        issue_types = defaultdict(int)
+        for issue in architectural:
+            issue_types[issue["type"]] += 1
+
+        issue_type_lines = [
+            f"\n  - {issue_type}: {count} occurrences"
+            for issue_type, count in sorted(issue_types.items(), key=lambda x: x[1], reverse=True)
+        ]
+
+        return (
+            f"""
+
+### 🏗️ Architectural Issues
+- **{len(architectural)} architectural issues** identified
+- **{critical_arch} critical** and **{high_arch} high** severity issues
+- **Common issues:**"""
+            + "".join(issue_type_lines)
+        )
+
+    async def generate_summary_report(self) -> str:
+        """Generate a comprehensive summary report.
+
+        Uses list accumulation + join() instead of += for O(n) performance.
+        Issue #622: Fix excessive string concatenation in loops.
+        """
+        try:
+            logger.info("📝 Generating summary report...")
+
+            duplicates = self.analysis_results["duplicates"]
+            hardcoded = self.analysis_results["hardcoded_values"]
+            architectural = self.analysis_results["architectural_issues"]
+
+            report_parts = []
+
             total_hardcoded = sum(len(items) for items in hardcoded.values())
             critical_hardcoded = sum(
                 len([item for item in items if item.get("severity") == "critical"])
                 for items in hardcoded.values()
             )
 
-            report_parts.append(
-                f"""
-
-### 🔒 Hardcoded Values
-- **{total_hardcoded} hardcoded values** found
-- **{critical_hardcoded} critical security issues**
-- **Breakdown by category:**"""
-            )
-
-            # Add hardcoded breakdown using list comprehension + join
-            hardcoded_lines = [
-                f"\n  - {category}: {len(items)} total "
-                f"({len([item for item in items if item.get('severity') == 'critical'])} critical)"
-                for category, items in hardcoded.items()
-                if items
-            ]
-            report_parts.append("".join(hardcoded_lines))
-
-            # Architectural issues
             critical_arch = len(
-                [
-                    issue
-                    for issue in architectural
-                    if issue.get("severity") == "critical"
-                ]
+                [issue for issue in architectural if issue.get("severity") == "critical"]
             )
-            high_arch = len(
-                [issue for issue in architectural if issue.get("severity") == "high"]
+            high_arch = len([issue for issue in architectural if issue.get("severity") == "high"])
+
+            report_parts.append(
+                self._build_report_header(duplicates, total_hardcoded, critical_hardcoded)
+            )
+
+            duplicate_lines = [
+                f"\n  {i+1}. {dup['occurrences']} occurrences ({dup['severity']} severity)"
+                for i, dup in enumerate(duplicates[:5])
+            ]
+            report_parts.append("".join(duplicate_lines))
+
+            report_parts.append(
+                self._build_hardcoded_section(hardcoded, total_hardcoded, critical_hardcoded)
             )
 
             report_parts.append(
-                f"""
-
-### 🏗️ Architectural Issues
-- **{len(architectural)} architectural issues** identified
-- **{critical_arch} critical** and **{high_arch} high** severity issues
-- **Common issues:**"""
+                self._build_architectural_section(architectural, critical_arch, high_arch)
             )
-
-            # Group architectural issues by type
-            issue_types = defaultdict(int)
-            for issue in architectural:
-                issue_types[issue["type"]] += 1
-
-            # Add issue types using list comprehension + join
-            issue_type_lines = [
-                f"\n  - {issue_type}: {count} occurrences"
-                for issue_type, count in sorted(
-                    issue_types.items(), key=lambda x: x[1], reverse=True
-                )
-            ]
-            report_parts.append("".join(issue_type_lines))
 
             report_parts.append(
                 f"""
@@ -648,101 +686,120 @@ This analysis examined code vectors from the AutoBot codebase to identify:
             return "Report generation failed"
 
 
+async def _run_analysis_steps(analyzer: CodeIssueAnalyzer) -> tuple:
+    """Run analysis steps and collect results.
+
+    Helper for main (Issue #825).
+    """
+    code_samples = await analyzer.get_code_samples(limit=3000)
+
+    if not code_samples:
+        logger.error("❌ No code samples found")
+        return None, None, None, None
+
+    logger.info(f"✅ Extracted {len(code_samples)} code samples")
+
+    logger.info("\n🔄 Step 2: Analyzing for duplicate code...")
+    duplicates = await analyzer.find_duplicate_code(code_samples)
+    analyzer.analysis_results["duplicates"] = duplicates
+
+    if duplicates:
+        logger.info(f"✅ Found {len(duplicates)} duplicate patterns")
+    else:
+        logger.info("ℹ️ No significant duplicates found")
+
+    logger.info("\n🔒 Step 3: Analyzing for hardcoded values...")
+    hardcoded = await analyzer.find_hardcoded_values(code_samples)
+    analyzer.analysis_results["hardcoded_values"] = hardcoded
+
+    total_hardcoded = sum(len(items) for items in hardcoded.values())
+    if total_hardcoded > 0:
+        logger.info(f"✅ Found {total_hardcoded} hardcoded values")
+    else:
+        logger.info("ℹ️ No significant hardcoded values found")
+
+    logger.info("\n🏗️ Step 4: Analyzing architectural issues...")
+    architectural = await analyzer.analyze_architectural_issues(code_samples)
+    analyzer.analysis_results["architectural_issues"] = architectural
+
+    if architectural:
+        logger.info(f"✅ Found {len(architectural)} architectural issues")
+    else:
+        logger.info("ℹ️ No significant architectural issues found")
+
+    return code_samples, duplicates, total_hardcoded, architectural
+
+
+async def _save_and_report(
+    analyzer: CodeIssueAnalyzer,
+    code_samples: List,
+    duplicates: List,
+    total_hardcoded: int,
+    architectural: List,
+) -> None:
+    """Save report and print summary.
+
+    Helper for main (Issue #825).
+    """
+    logger.info("\n📝 Step 5: Generating summary report...")
+    report = await analyzer.generate_summary_report()
+
+    project_root = Path(__file__).parent.parent
+    report_path = (
+        project_root
+        / "tests"
+        / "results"
+        / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _write_report():
+        with open(str(report_path), "w", encoding="utf-8") as f:
+            f.write(report)
+
+    await asyncio.to_thread(_write_report)
+
+    logger.info(f"✅ Report saved to: {str(report_path)}")
+
+    logger.info("\n🎉 Code Analysis Complete!")
+    logger.info("📊 Summary:")
+    logger.info(f"  - Code samples analyzed: {len(code_samples)}")
+    logger.info(f"  - Duplicate patterns: {len(duplicates)}")
+    logger.info(f"  - Hardcoded values: {total_hardcoded}")
+    logger.info(f"  - Architectural issues: {len(architectural)}")
+    logger.info(f"  - Report saved: {str(report_path)}")
+
+    logger.info("\n💡 This analysis will help identify:")
+    logger.info("   - Code that can be deduplicated")
+    logger.info("   - Values that should be moved to configuration")
+    logger.info("   - Architecture improvements needed")
+
+
 async def main():
     """Main execution function"""
     try:
-        print("🔍 Analyzing Code Vectors for Issues...")
-        print(f"⏰ Started at: {datetime.now().isoformat()}")
+        logger.info("🔍 Analyzing Code Vectors for Issues...")
+        logger.info(f"⏰ Started at: {datetime.now().isoformat()}")
 
         analyzer = CodeIssueAnalyzer()
 
-        # Initialize
         if not await analyzer.initialize():
-            print("❌ Failed to initialize analyzer")
+            logger.error("❌ Failed to initialize analyzer")
             return
 
-        # Get code samples
-        print("\n📦 Step 1: Extracting code samples...")
-        code_samples = await analyzer.get_code_samples(
-            limit=3000
-        )  # Reasonable sample size
+        logger.info("\n📦 Step 1: Extracting code samples...")
+        result = await _run_analysis_steps(analyzer)
 
-        if not code_samples:
-            print("❌ No code samples found")
+        if result[0] is None:
             return
 
-        print(f"✅ Extracted {len(code_samples)} code samples")
-
-        # Find duplicates
-        print("\n🔄 Step 2: Analyzing for duplicate code...")
-        duplicates = await analyzer.find_duplicate_code(code_samples)
-        analyzer.analysis_results["duplicates"] = duplicates
-
-        if duplicates:
-            print(f"✅ Found {len(duplicates)} duplicate patterns")
-        else:
-            print("ℹ️ No significant duplicates found")
-
-        # Find hardcoded values
-        print("\n🔒 Step 3: Analyzing for hardcoded values...")
-        hardcoded = await analyzer.find_hardcoded_values(code_samples)
-        analyzer.analysis_results["hardcoded_values"] = hardcoded
-
-        total_hardcoded = sum(len(items) for items in hardcoded.values())
-        if total_hardcoded > 0:
-            print(f"✅ Found {total_hardcoded} hardcoded values")
-        else:
-            print("ℹ️ No significant hardcoded values found")
-
-        # Analyze architectural issues
-        print("\n🏗️ Step 4: Analyzing architectural issues...")
-        architectural = await analyzer.analyze_architectural_issues(code_samples)
-        analyzer.analysis_results["architectural_issues"] = architectural
-
-        if architectural:
-            print(f"✅ Found {len(architectural)} architectural issues")
-        else:
-            print("ℹ️ No significant architectural issues found")
-
-        # Generate report
-        print("\n📝 Step 5: Generating summary report...")
-        report = await analyzer.generate_summary_report()
-
-        # Save report - use project-relative path
-        project_root = Path(__file__).parent.parent
-        report_path = (
-            project_root
-            / "tests"
-            / "results"
-            / f"code_analysis_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        code_samples, duplicates, total_hardcoded, architectural = result
+        await _save_and_report(
+            analyzer, code_samples, duplicates, total_hardcoded, architectural
         )
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Issue #666: Use asyncio.to_thread to avoid blocking the event loop
-        def _write_report():
-            with open(str(report_path), "w", encoding="utf-8") as f:
-                f.write(report)
-
-        await asyncio.to_thread(_write_report)
-
-        print(f"✅ Report saved to: {str(report_path)}")
-
-        # Summary
-        print("\n🎉 Code Analysis Complete!")
-        print("📊 Summary:")
-        print(f"  - Code samples analyzed: {len(code_samples)}")
-        print(f"  - Duplicate patterns: {len(duplicates)}")
-        print(f"  - Hardcoded values: {total_hardcoded}")
-        print(f"  - Architectural issues: {len(architectural)}")
-        print(f"  - Report saved: {str(report_path)}")
-
-        print("\n💡 This analysis will help identify:")
-        print("   - Code that can be deduplicated")
-        print("   - Values that should be moved to configuration")
-        print("   - Architecture improvements needed")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         import traceback
 
         traceback.print_exc()

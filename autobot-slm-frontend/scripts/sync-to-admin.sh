@@ -9,9 +9,14 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-REMOTE_HOST="172.16.168.19"
-REMOTE_USER="autobot"
+REMOTE_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
+REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 REMOTE_PATH="/home/autobot/slm-admin"
 
 echo "==================================="

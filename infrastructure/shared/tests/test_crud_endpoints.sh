@@ -4,6 +4,13 @@
 
 set -e  # Exit on error
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+
 # Source environment variables if available, otherwise use defaults from NetworkConstants
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"

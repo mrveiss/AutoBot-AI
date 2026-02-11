@@ -15,12 +15,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 INFRA_ROOT="${PROJECT_ROOT}/infrastructure"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="${PROJECT_ROOT}/bootstrap-slm-${TIMESTAMP}.log"
 
 # Defaults
-TARGET_HOST="172.16.168.19"
+TARGET_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
 SSH_USER=""
 SSH_KEY=""
 SSH_PASSWORD=""
@@ -400,7 +401,7 @@ PORT=8000
 DATABASE_URL=sqlite:///${REMOTE_BACKEND}/data/slm.db
 
 # Redis (optional but recommended)
-REDIS_HOST=172.16.168.23
+REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
 REDIS_PORT=6379
 REDIS_DB=0
 

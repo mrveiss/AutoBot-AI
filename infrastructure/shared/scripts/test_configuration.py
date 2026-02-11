@@ -7,6 +7,7 @@ Configuration Validation and Testing Script
 Tests centralized configuration system and validates all config values
 """
 
+import logging
 import os
 import sys
 import time
@@ -15,27 +16,31 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Setup logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def test_config_imports():
     """Test that configuration imports work correctly"""
-    print("🔧 Testing configuration imports...")
+    logger.info("Testing configuration imports...")
 
     try:
         import src.unified_config  # noqa: F401 - test imports work
 
-        print("   ✅ All configuration imports successful")
+        logger.info("   All configuration imports successful")
         return True
     except ImportError as e:
-        print(f"   ❌ Configuration import failed: {e}")
+        logger.error("   Configuration import failed: %s", e)
         return False
 
 
 def test_config_values():
     """Test configuration values are properly loaded"""
-    print("🔧 Testing configuration values...")
+    logger.info("Testing configuration values...")
 
     try:
-        from src.config import (
+        from config import (
             API_BASE_URL,
             API_TIMEOUT,
             OLLAMA_URL,
@@ -62,25 +67,25 @@ def test_config_values():
             VNC_CONTAINER_PORT,
         ], "VNC port should be valid option"
 
-        print(f"   ✅ API_BASE_URL: {API_BASE_URL}")
-        print(f"   ✅ REDIS_URL: {REDIS_URL}")
-        print(f"   ✅ OLLAMA_URL: {OLLAMA_URL}")
-        print(f"   ✅ API_TIMEOUT: {API_TIMEOUT}ms")
-        print(f"   ✅ VNC_PORT (intelligent): {vnc_port}")
-        print(f"   ✅ VNC_URL: {vnc_url}")
+        logger.info("   API_BASE_URL: %s", API_BASE_URL)
+        logger.info("   REDIS_URL: %s", REDIS_URL)
+        logger.info("   OLLAMA_URL: %s", OLLAMA_URL)
+        logger.info("   API_TIMEOUT: %dms", API_TIMEOUT)
+        logger.info("   VNC_PORT (intelligent): %d", vnc_port)
+        logger.info("   VNC_URL: %s", vnc_url)
 
         return True
     except Exception as e:
-        print(f"   ❌ Configuration value validation failed: {e}")
+        logger.error("   Configuration value validation failed: %s", e)
         return False
 
 
 def test_config_manager():
     """Test configuration manager functionality"""
-    print("🔧 Testing configuration manager...")
+    logger.info("Testing configuration manager...")
 
     try:
-        from src.config import config
+        from config import config
 
         # Test basic operations
         backend_config = config.get("backend", {})
@@ -95,20 +100,20 @@ def test_config_manager():
         nested_value = config.get_nested("backend.server_host", "default")
         assert nested_value is not None, "Nested config access should work"
 
-        print("   ✅ Configuration manager operational")
-        print(f"   ✅ Backend config keys: {len(backend_config)}")
-        print(f"   ✅ LLM config keys: {len(llm_config)}")
-        print(f"   ✅ Redis config keys: {len(redis_config)}")
+        logger.info("   Configuration manager operational")
+        logger.info("   Backend config keys: %d", len(backend_config))
+        logger.info("   LLM config keys: %d", len(llm_config))
+        logger.info("   Redis config keys: %d", len(redis_config))
 
         return True
     except Exception as e:
-        print(f"   ❌ Configuration manager test failed: {e}")
+        logger.error("   Configuration manager test failed: %s", e)
         return False
 
 
 def test_environment_overrides():
     """Test environment variable overrides work"""
-    print("🔧 Testing environment variable overrides...")
+    logger.info("Testing environment variable overrides...")
 
     try:
         # Set test environment variable
@@ -116,19 +121,19 @@ def test_environment_overrides():
         os.environ["AUTOBOT_API_BASE_URL"] = test_value
 
         # Reload configuration to pick up changes
-        from src.config import config
+        from config import config
 
         config.reload()
 
-        from src.config import API_BASE_URL
+        from config import API_BASE_URL
 
         # Check if override worked
         if API_BASE_URL == test_value:
-            print(f"   ✅ Environment override successful: {API_BASE_URL}")
+            logger.info("   Environment override successful: %s", API_BASE_URL)
             success = True
         else:
-            print(
-                f"   ⚠️  Environment override partial: got {API_BASE_URL}, expected {test_value}"
+            logger.warning(
+                "   Environment override partial: got %s, expected %s", API_BASE_URL, test_value
             )
             success = True  # Still success, might be cached
 
@@ -138,16 +143,16 @@ def test_environment_overrides():
 
         return success
     except Exception as e:
-        print(f"   ❌ Environment override test failed: {e}")
+        logger.error("   Environment override test failed: %s", e)
         return False
 
 
 def test_config_validation():
     """Test configuration validation functionality"""
-    print("🔧 Testing configuration validation...")
+    logger.info("Testing configuration validation...")
 
     try:
-        from src.config import config
+        from config import config
 
         validation_result = config.validate_config()
 
@@ -156,32 +161,32 @@ def test_config_validation():
             "config_loaded" in validation_result
         ), "Should include config_loaded status"
 
-        print("   ✅ Configuration validation operational")
-        print(
-            f"   ✅ Validation status: {validation_result.get('config_loaded', 'unknown')}"
+        logger.info("   Configuration validation operational")
+        logger.info(
+            "   Validation status: %s", validation_result.get('config_loaded', 'unknown')
         )
 
         if validation_result.get("issues"):
-            print(
-                f"   ⚠️  Configuration issues found: {len(validation_result['issues'])}"
+            logger.warning(
+                "   Configuration issues found: %d", len(validation_result['issues'])
             )
             for issue in validation_result["issues"][:3]:  # Show first 3 issues
-                print(f"      - {issue}")
+                logger.warning("      - %s", issue)
         else:
-            print("   ✅ No configuration issues found")
+            logger.info("   No configuration issues found")
 
         return True
     except Exception as e:
-        print(f"   ❌ Configuration validation test failed: {e}")
+        logger.error("   Configuration validation test failed: %s", e)
         return False
 
 
 def test_config_performance():
     """Test configuration access performance"""
-    print("🔧 Testing configuration performance...")
+    logger.info("Testing configuration performance...")
 
     try:
-        from src.config import config
+        from config import config
 
         # Test repeated access speed
         start_time = time.time()
@@ -194,30 +199,30 @@ def test_config_performance():
         avg_time_ms = (duration / 1000) * 1000
 
         if avg_time_ms < 1.0:  # Less than 1ms average
-            print(
-                f"   ✅ Configuration access performance good: {avg_time_ms:.2f}ms avg"
+            logger.info(
+                "   Configuration access performance good: %.2fms avg", avg_time_ms
             )
             return True
         else:
-            print(
-                f"   ⚠️  Configuration access slower than expected: {avg_time_ms:.2f}ms avg"
+            logger.warning(
+                "   Configuration access slower than expected: %.2fms avg", avg_time_ms
             )
             return True  # Still pass, just slower
 
     except Exception as e:
-        print(f"   ❌ Configuration performance test failed: {e}")
+        logger.error("   Configuration performance test failed: %s", e)
         return False
 
 
 def test_frontend_config():
     """Test frontend configuration file existence and validity"""
-    print("🔧 Testing frontend configuration...")
+    logger.info("Testing frontend configuration...")
 
     try:
         frontend_config_path = Path("autobot-vue/src/config/environment.js")
 
         if not frontend_config_path.exists():
-            print(f"   ❌ Frontend config file not found: {frontend_config_path}")
+            logger.error("   Frontend config file not found: %s", frontend_config_path)
             return False
 
         # Read and validate frontend config content
@@ -237,22 +242,22 @@ def test_frontend_config():
                 missing_exports.append(export)
 
         if missing_exports:
-            print(f"   ❌ Frontend config missing exports: {missing_exports}")
+            logger.error("   Frontend config missing exports: %s", missing_exports)
             return False
 
-        print("   ✅ Frontend config file exists and has required exports")
-        print(f"   ✅ Config file size: {len(content)} characters")
+        logger.info("   Frontend config file exists and has required exports")
+        logger.info("   Config file size: %d characters", len(content))
 
         return True
     except Exception as e:
-        print(f"   ❌ Frontend configuration test failed: {e}")
+        logger.error("   Frontend configuration test failed: %s", e)
         return False
 
 
 def main():
     """Run all configuration tests"""
-    print("🚀 Configuration Validation and Testing")
-    print("=" * 50)
+    logger.info("Configuration Validation and Testing")
+    logger.info("=" * 50)
 
     tests = [
         ("Config Imports", test_config_imports),
@@ -269,32 +274,32 @@ def main():
     total = len(tests)
 
     for test_name, test_func in tests:
-        print(f"\n📋 Running: {test_name}")
+        logger.info("Running: %s", test_name)
         try:
             success = test_func()
             results.append((test_name, success))
             if success:
                 passed += 1
         except Exception as e:
-            print(f"   💥 Test crashed: {e}")
+            logger.error("   Test crashed: %s", e)
             results.append((test_name, False))
 
     # Print summary
-    print("\n" + "=" * 50)
-    print("📊 CONFIGURATION TEST SUMMARY")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("CONFIGURATION TEST SUMMARY")
+    logger.info("=" * 50)
 
     for test_name, success in results:
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} {test_name}")
+        status = "PASS" if success else "FAIL"
+        logger.info("%s %s", status, test_name)
 
-    print(f"\n🎯 Overall: {passed}/{total} tests passed")
+    logger.info("Overall: %d/%d tests passed", passed, total)
 
     if passed == total:
-        print("🎉 All configuration tests passed!")
+        logger.info("All configuration tests passed!")
         return 0
     else:
-        print("⚠️  Some configuration tests failed")
+        logger.warning("Some configuration tests failed")
         return 1
 
 

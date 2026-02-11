@@ -130,13 +130,13 @@ async def populate_with_chromadb():
     from llama_index.embeddings.ollama import OllamaEmbedding
     from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
     from llama_index.vector_stores.chroma import ChromaVectorStore
-    from src.constants import ServiceURLs
+    from constants import ServiceURLs
 
     # Set up LLM and embedding model with configurable URL
     ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", ServiceURLs.OLLAMA_LOCAL)
 
     # Use ModelConstants for centralized model configuration
-    from src.constants.model_constants import ModelConstants
+    from constants.model_constants import ModelConstants
 
     default_model = ModelConstants.DEFAULT_OLLAMA_MODEL
 

@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Any, Dict
 
 import psutil
-from src.config import API_BASE_URL
-from src.constants import ServiceURLs
-from src.constants.threshold_constants import TimingConstants
+from config import API_BASE_URL
+from constants import ServiceURLs
+from constants.threshold_constants import TimingConstants
 
 try:
     import aiofiles
@@ -40,7 +40,7 @@ except ImportError:
     import aiohttp
 
 # Import centralized Redis client
-from src.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -945,29 +945,29 @@ async def main():
             system = results.get("system_metrics", {})
             health = results.get("health_results", {})
 
-            print("\n" + "=" * 60)
-            print("📊 AUTOBOT MONITORING SUMMARY")
-            print("=" * 60)
-            print("⚡ System Status:")
-            print(f"  • CPU Usage: {system.get('cpu_percent', 0):.1f}%")
-            print(f"  • Memory Usage: {system.get('memory_percent', 0):.1f}%")
-            print(f"  • Disk Usage: {system.get('disk_percent', 0):.1f}%")
+            logger.info("=" * 60)
+            logger.info("AUTOBOT MONITORING SUMMARY")
+            logger.info("=" * 60)
+            logger.info("System Status:")
+            logger.info("  • CPU Usage: %.1f%%", system.get('cpu_percent', 0))
+            logger.info("  • Memory Usage: %.1f%%", system.get('memory_percent', 0))
+            logger.info("  • Disk Usage: %.1f%%", system.get('disk_percent', 0))
 
-            print(
-                f"\n🏥 Health Status: {health.get('overall_status', 'unknown').upper()}"
+            logger.info(
+                "Health Status: %s", health.get('overall_status', 'unknown').upper()
             )
 
             services = health.get("services", {})
             for service_name, service_data in services.items():
                 status = service_data.get("status", "unknown")
-                print(f"  • {service_name}: {status.upper()}")
+                logger.info("  • %s: %s", service_name, status.upper())
 
             if health.get("issues"):
-                print("\n⚠️  Issues Detected:")
+                logger.warning("Issues Detected:")
                 for issue in health["issues"]:
-                    print(f"  • {issue}")
+                    logger.warning("  • %s", issue)
 
-            print("=" * 60)
+            logger.info("=" * 60)
         else:
             logger.error("❌ Monitoring cycle failed")
             return 1

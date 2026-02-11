@@ -135,23 +135,6 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'config']
 
-- name: "SLM Agent | Stop and disable old autobot-agent service"
-  systemd:
-    name: autobot-agent
-    state: stopped
-    enabled: no
-  become: yes
-  ignore_errors: yes
-  tags: ['slm_agent', 'cleanup']
-
-- name: "SLM Agent | Remove old autobot-agent service file"
-  file:
-    path: /etc/systemd/system/autobot-agent.service
-    state: absent
-  become: yes
-  notify: Reload systemd
-  tags: ['slm_agent', 'cleanup']
-
 - name: "SLM Agent | Deploy systemd service unit"
   template:
     src: slm-agent.service.j2

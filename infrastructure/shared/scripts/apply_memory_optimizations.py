@@ -17,7 +17,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.utils.memory_optimization import (
+from utils.memory_optimization import (
     MemoryOptimizedLogging,
     get_memory_monitor,
     optimize_memory_usage,
@@ -157,6 +157,52 @@ class MemoryOptimizationApplier:
 
         return rotating_loggers
 
+    def _analyze_single_data_file(self, data_file: Path, size_mb: float) -> dict:
+        """
+        Analyze and optimize a single data file.
+
+        Helper for optimize_large_data_files (#825).
+
+        Args:
+            data_file: Path to the file to analyze
+            size_mb: File size in MB
+
+        Returns:
+            Dictionary with optimization details or None if already handled
+        """
+        # SQLite database optimization
+        if data_file.suffix.lower() in [".db", ".sqlite", ".sqlite3"]:
+            self._optimize_sqlite_database(data_file)
+            return None
+
+        # JSON file compression opportunity
+        if data_file.suffix.lower() == ".json":
+            compressed_size = self._analyze_json_compression(data_file)
+            if compressed_size and compressed_size < size_mb * 0.7:
+                return {
+                    "file": str(data_file.relative_to(self.project_root)),
+                    "size_mb": round(size_mb, 2),
+                    "optimization": f"JSON compression could save ~{round(size_mb - compressed_size, 2)}MB",
+                    "recommendation": "Consider compressing JSON data or using binary format",
+                }
+
+        # Binary data files
+        if data_file.suffix.lower() in [".bin", ".dat"]:
+            return {
+                "file": str(data_file.relative_to(self.project_root)),
+                "size_mb": round(size_mb, 2),
+                "optimization": "Binary data file",
+                "recommendation": "Consider memory mapping for large binary files",
+            }
+
+        # Generic large file
+        return {
+            "file": str(data_file.relative_to(self.project_root)),
+            "size_mb": round(size_mb, 2),
+            "optimization": "Large file detected",
+            "recommendation": "Review if file is necessary or can be optimized",
+        }
+
     def optimize_large_data_files(self):
         """Optimize large data files in the project"""
         logger.info("🗂️  Analyzing large data files...")
@@ -171,52 +217,9 @@ class MemoryOptimizationApplier:
                     data_file.is_file() and data_file.stat().st_size > 5 * 1024 * 1024
                 ):  # >5MB
                     size_mb = data_file.stat().st_size / (1024**2)
-                    optimization_applied = False
-
-                    # SQLite database optimization
-                    if data_file.suffix.lower() in [".db", ".sqlite", ".sqlite3"]:
-                        self._optimize_sqlite_database(data_file)
-                        optimization_applied = True
-
-                    # JSON file compression opportunity
-                    elif data_file.suffix.lower() == ".json":
-                        compressed_size = self._analyze_json_compression(data_file)
-                        if (
-                            compressed_size and compressed_size < size_mb * 0.7
-                        ):  # >30% compression
-                            large_files_optimized.append(
-                                {
-                                    "file": str(
-                                        data_file.relative_to(self.project_root)
-                                    ),
-                                    "size_mb": round(size_mb, 2),
-                                    "optimization": f"JSON compression could save ~{round(size_mb - compressed_size, 2)}MB",
-                                    "recommendation": "Consider compressing JSON data or using binary format",
-                                }
-                            )
-                            optimization_applied = True
-
-                    # Binary data files
-                    elif data_file.suffix.lower() in [".bin", ".dat"]:
-                        large_files_optimized.append(
-                            {
-                                "file": str(data_file.relative_to(self.project_root)),
-                                "size_mb": round(size_mb, 2),
-                                "optimization": "Binary data file",
-                                "recommendation": "Consider memory mapping for large binary files",
-                            }
-                        )
-                        optimization_applied = True
-
-                    if not optimization_applied:
-                        large_files_optimized.append(
-                            {
-                                "file": str(data_file.relative_to(self.project_root)),
-                                "size_mb": round(size_mb, 2),
-                                "optimization": "Large file detected",
-                                "recommendation": "Review if file is necessary or can be optimized",
-                            }
-                        )
+                    result = self._analyze_single_data_file(data_file, size_mb)
+                    if result:
+                        large_files_optimized.append(result)
 
         self.optimizations_applied.append(
             {

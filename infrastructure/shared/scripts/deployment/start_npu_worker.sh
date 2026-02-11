@@ -1,4 +1,8 @@
 #!/bin/bash
+# =============================================================================
+# DEV/SANDBOX ONLY - This script assumes Docker containers.
+# Production uses native deployments. See Ansible roles for equivalent.
+# =============================================================================
 # Start NPU Worker Separately
 # Useful for testing NPU capabilities
 

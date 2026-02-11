@@ -11,6 +11,8 @@ import logging
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -20,16 +22,16 @@ logging.basicConfig(level=logging.INFO)
 
 async def test_research_disabled():
     """Test behavior when research is disabled"""
-    from src.chat_workflow import ChatWorkflowManager
+    from chat_workflow import ChatWorkflowManager
 
-    print("=== Testing Research Agent Disabled Scenario ===\n")
+    logger.info("=== Testing Research Agent Disabled Scenario ===\n")
 
     # Create workflow manager with research disabled
     workflow = ChatWorkflowManager()
     workflow.web_research_enabled = False  # Simulate disabled research
 
     try:
-        print("Testing unknown topic with research disabled...")
+        logger.info("Testing unknown topic with research disabled...")
         result = await asyncio.wait_for(
             workflow.process_message(
                 "tell me about quantum computing in 2024", "test-chat"
@@ -37,12 +39,12 @@ async def test_research_disabled():
             timeout=15.0,
         )
 
-        print(f"✅ Response: {result.response}")
-        print(f"   Knowledge Status: {result.knowledge_status.value}")
-        print(f"   Processing Time: {result.processing_time:.2f}s\n")
+        logger.info("✅ Response: %s", result.response)
+        logger.info("   Knowledge Status: %s", result.knowledge_status.value)
+        logger.info("   Processing Time: %.2fs\n", result.processing_time)
 
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        logger.error("❌ Test failed: %s", e)
         import traceback
 
         traceback.print_exc()

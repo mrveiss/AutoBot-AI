@@ -79,7 +79,7 @@ npu:
 @pytest.mark.asyncio
 async def test_task_routes_to_highest_priority_worker(two_worker_config_file):
     """Tasks should route to highest priority worker when healthy."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=two_worker_config_file)
 
@@ -103,7 +103,7 @@ async def test_task_routes_to_highest_priority_worker(two_worker_config_file):
 @pytest.mark.asyncio
 async def test_failover_to_secondary_on_primary_failure(two_worker_config_file):
     """Task should failover to secondary worker when primary fails."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=two_worker_config_file)
 
@@ -127,7 +127,7 @@ async def test_failover_to_secondary_on_primary_failure(two_worker_config_file):
 @pytest.mark.asyncio
 async def test_load_distribution_with_concurrent_tasks(two_worker_config_file):
     """Multiple concurrent tasks should distribute based on active_tasks."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=two_worker_config_file)
 
@@ -167,7 +167,7 @@ async def test_circuit_opens_after_consecutive_failures(single_worker_config_fil
     """Circuit breaker should open after threshold failures."""
     import time
 
-    from src.npu_integration import CircuitState, NPUWorkerPool
+    from npu_integration import CircuitState, NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
@@ -190,7 +190,7 @@ async def test_half_open_circuit_allows_test_request(single_worker_config_file):
     """Circuit in HALF_OPEN state should allow one test request."""
     import time
 
-    from src.npu_integration import CircuitState, NPUWorkerPool
+    from npu_integration import CircuitState, NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
@@ -218,7 +218,7 @@ async def test_half_open_circuit_allows_test_request(single_worker_config_file):
 @pytest.mark.asyncio
 async def test_health_monitor_updates_worker_status(single_worker_config_file):
     """Background health monitor should update worker health status."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
@@ -237,7 +237,7 @@ async def test_health_monitor_updates_worker_status(single_worker_config_file):
 @pytest.mark.asyncio
 async def test_health_monitor_marks_unhealthy_on_failure(single_worker_config_file):
     """Health check failure should mark worker as unhealthy."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
@@ -255,7 +255,7 @@ async def test_health_monitor_marks_unhealthy_on_failure(single_worker_config_fi
 @pytest.mark.asyncio
 async def test_health_monitor_starts_and_stops(single_worker_config_file):
     """Health monitor task should start and stop cleanly."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
@@ -277,7 +277,7 @@ async def test_health_monitor_starts_and_stops(single_worker_config_file):
 @pytest.mark.asyncio
 async def test_reload_adds_new_worker_dynamically():
     """Hot reload should add new workers without restart."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     initial_config = """
 npu:
@@ -328,7 +328,7 @@ npu:
 @pytest.mark.asyncio
 async def test_reload_during_active_tasks_defers_removal():
     """Workers with active tasks should not be removed immediately."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     initial_config = """
 npu:
@@ -386,7 +386,7 @@ npu:
 @pytest.mark.asyncio
 async def test_single_worker_mode_backward_compatible(single_worker_config_file):
     """Pool should work correctly with a single worker (backward compatible)."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=single_worker_config_file)
 
@@ -406,7 +406,7 @@ async def test_single_worker_mode_backward_compatible(single_worker_config_file)
 @pytest.mark.asyncio
 async def test_pool_stats_accurate_after_operations(two_worker_config_file):
     """Pool statistics should accurately reflect operations."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=two_worker_config_file)
 
@@ -437,7 +437,7 @@ async def test_pool_stats_accurate_after_operations(two_worker_config_file):
 @pytest.mark.asyncio
 async def test_graceful_degradation_all_workers_fail(two_worker_config_file):
     """Pool should return fallback error when all workers fail."""
-    from src.npu_integration import NPUWorkerPool
+    from npu_integration import NPUWorkerPool
 
     pool = NPUWorkerPool(config_path=two_worker_config_file)
 

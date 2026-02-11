@@ -4,11 +4,15 @@
 
 set -e
 
-# Load unified configuration system
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
-if [[ -f "${SCRIPT_DIR}/config/load_config.sh" ]]; then
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
+# Load unified configuration system (legacy)
+_NATIVE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
+if [[ -f "${_NATIVE_SCRIPT_DIR}/config/load_config.sh" ]]; then
     export PATH="$HOME/bin:$PATH"  # Ensure yq is available
-    source "${SCRIPT_DIR}/config/load_config.sh"
+    source "${_NATIVE_SCRIPT_DIR}/config/load_config.sh"
     echo -e "\033[0;32m✓ Loaded unified configuration system\033[0m"
 else
     echo -e "\033[0;31m✗ Warning: Unified configuration not found, using fallback values\033[0m"
@@ -22,13 +26,13 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# VM Configuration (from unified config)
+# VM Configuration (from unified config, with SSOT fallback)
 declare -A VMS
-VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")
-VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22")
-VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
-VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24")
-VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25")
+VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}")
+VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}")
+VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "${AUTOBOT_REDIS_HOST:-172.16.168.23}")
+VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}")
+VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}")
 
 # Service Configuration
 declare -A SERVICES
@@ -40,14 +44,14 @@ SERVICES[browser]="autobot-browser-service.service"
 
 # Health Check URLs
 declare -A HEALTH_URLS
-HEALTH_URLS[frontend]="http://172.16.168.21/"
-HEALTH_URLS[npu-worker]="http://172.16.168.22:8081/health"
-HEALTH_URLS[redis]="172.16.168.23:6379"
-HEALTH_URLS[ai-stack]="http://172.16.168.24:8080/health"
-HEALTH_URLS[browser]="http://172.16.168.25:3000/health"
+HEALTH_URLS[frontend]="http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/"
+HEALTH_URLS[npu-worker]="http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
+HEALTH_URLS[redis]="${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}"
+HEALTH_URLS[ai-stack]="http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
+HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
 
-SSH_KEY="$HOME/.ssh/autobot_key"
-SSH_USER="autobot"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 
 # Options
 DETAILED=false
@@ -173,7 +177,7 @@ test_health_endpoint() {
 
     if [ "$vm_name" = "redis" ]; then
         # Special case for Redis
-        if timeout 3 bash -c "echo 'PING' | nc -w 2 172.16.168.23 6379" | grep -q "PONG" 2>/dev/null; then
+        if timeout 3 bash -c "echo 'PING' | nc -w 2 ${AUTOBOT_REDIS_HOST:-172.16.168.23} ${AUTOBOT_REDIS_PORT:-6379}" | grep -q "PONG" 2>/dev/null; then
             echo -e "${GREEN}Healthy${NC}"
             return 0
         else
@@ -194,7 +198,7 @@ test_health_endpoint() {
 }
 
 check_wsl_backend() {
-    echo -e "${CYAN}WSL Backend (172.16.168.20:8001):${NC}"
+    echo -e "${CYAN}WSL Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}):${NC}"
 
     local backend_pids=$(pgrep -f "main.py\|uvicorn.*api.main:app" 2>/dev/null || true)
 

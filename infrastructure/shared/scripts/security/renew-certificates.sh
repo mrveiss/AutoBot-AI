@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Configuration
 CERT_DIR="/home/kali/Desktop/AutoBot/certs"
 CA_DIR="${CERT_DIR}/ca"
@@ -78,12 +81,12 @@ done
 
 # VM Configuration
 declare -a VMS=(
-    "main-host:172.16.168.20:autobot-backend"
-    "frontend:172.16.168.21:autobot-frontend"
-    "npu-worker:172.16.168.22:autobot-npu-worker"
-    "redis:172.16.168.23:autobot-redis"
-    "ai-stack:172.16.168.24:autobot-ai-stack"
-    "browser:172.16.168.25:autobot-browser"
+    "main-host:${AUTOBOT_BACKEND_HOST:-172.16.168.20}:autobot-backend"
+    "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:autobot-frontend"
+    "npu-worker:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:autobot-npu-worker"
+    "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}:autobot-redis"
+    "ai-stack:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:autobot-ai-stack"
+    "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:autobot-browser"
 )
 
 ################################################################################

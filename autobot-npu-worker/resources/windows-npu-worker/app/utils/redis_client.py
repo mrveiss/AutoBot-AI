@@ -9,7 +9,7 @@ This module provides Redis client initialization with connection pooling,
 retry logic, and health monitoring for the Windows NPU worker.
 
 STANDALONE DESIGN: This is a self-contained utility for the Windows NPU worker
-deployment. It does NOT import from src.utils and has its own implementation.
+deployment. It does NOT import from utils and has its own implementation.
 
 Issue #725: Added mTLS support for secure Redis connections.
 
@@ -79,7 +79,7 @@ class RedisConnectionManager:
             config: Configuration dictionary from npu_worker.yaml
         """
         self.config = config
-        self.redis_config = config.get('redis', {})
+        self.redis_config = config.get("redis", {})
         self._connection_pool = None
         self._client = None
 
@@ -122,75 +122,123 @@ class RedisConnectionManager:
             ConnectionPool instance
         """
         # Extract configuration values
-        host = self.redis_config.get('host', 'localhost')
-        password = self.redis_config.get('password')
-        db = self.redis_config.get('db', 0)
-        max_connections = self.redis_config.get('max_connections', 20)
-        socket_timeout = self.redis_config.get('socket_timeout', 5)
-        socket_connect_timeout = self.redis_config.get('socket_connect_timeout', 2)
-        retry_on_timeout = self.redis_config.get('retry_on_timeout', True)
-
-        # Issue #725: TLS configuration
-        tls_enabled = self.redis_config.get('tls_enabled', False)
-        port = self.redis_config.get('tls_port', 6380) if tls_enabled else self.redis_config.get('port', 6379)
-
-        # Configure retry logic
-        retry = Retry(
-            ExponentialBackoff(base=0.05, cap=1.0),
-            retries=3
-        ) if retry_on_timeout else None
+        config_params = self._extract_config_params()
 
         # Base connection pool parameters
-        pool_kwargs = {
-            "host": host,
-            "port": port,
-            "password": password,
-            "db": db,
-            "max_connections": max_connections,
-            "socket_timeout": socket_timeout,
-            "socket_connect_timeout": socket_connect_timeout,
-            "socket_keepalive": True,
-            "socket_keepalive_options": {},
-            "decode_responses": True,
-            "retry": retry,
-            "retry_on_timeout": retry_on_timeout,
-            "health_check_interval": 30,
-        }
+        pool_kwargs = self._build_base_pool_kwargs(config_params)
 
         # Issue #725: Add TLS/SSL configuration if enabled
-        if tls_enabled:
-            tls_ca_cert = self.redis_config.get('tls_ca_cert')
-            tls_cert_file = self.redis_config.get('tls_cert_file')
-            tls_key_file = self.redis_config.get('tls_key_file')
-
-            # Create SSL context for mTLS
-            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-            if tls_ca_cert:
-                ssl_context.load_verify_locations(tls_ca_cert)
-            if tls_cert_file and tls_key_file:
-                ssl_context.load_cert_chain(tls_cert_file, tls_key_file)
-
-            pool_kwargs["connection_class"] = SSLConnection
-            pool_kwargs["ssl"] = ssl_context
-
-            logger.info(
-                f"Redis TLS connection pool created: "
-                f"host={host}, port={port}, db={db}, "
-                f"max_connections={max_connections}, "
-                f"socket_timeout={socket_timeout}s, TLS=enabled"
-            )
+        if config_params["tls_enabled"]:
+            self._configure_tls_for_pool(pool_kwargs, config_params)
+            self._log_tls_connection_info(config_params)
         else:
-            logger.info(
-                f"Redis connection pool created: "
-                f"host={host}, port={port}, db={db}, "
-                f"max_connections={max_connections}, "
-                f"socket_timeout={socket_timeout}s"
-            )
+            self._log_plain_connection_info(config_params)
 
         # Create connection pool
         pool = ConnectionPool(**pool_kwargs)
 
         return pool
+
+    def _extract_config_params(self) -> dict:
+        """
+        Extract Redis configuration parameters.
+
+        Helper for _create_connection_pool (#825).
+        """
+        tls_enabled = self.redis_config.get("tls_enabled", False)
+        return {
+            "host": self.redis_config.get("host", "localhost"),
+            "password": self.redis_config.get("password"),
+            "db": self.redis_config.get("db", 0),
+            "max_connections": self.redis_config.get("max_connections", 20),
+            "socket_timeout": self.redis_config.get("socket_timeout", 5),
+            "socket_connect_timeout": self.redis_config.get(
+                "socket_connect_timeout", 2
+            ),
+            "retry_on_timeout": self.redis_config.get("retry_on_timeout", True),
+            "tls_enabled": tls_enabled,
+            "port": (
+                self.redis_config.get("tls_port", 6380)
+                if tls_enabled
+                else self.redis_config.get("port", 6379)
+            ),
+            "tls_ca_cert": self.redis_config.get("tls_ca_cert"),
+            "tls_cert_file": self.redis_config.get("tls_cert_file"),
+            "tls_key_file": self.redis_config.get("tls_key_file"),
+        }
+
+    def _build_base_pool_kwargs(self, config_params: dict) -> dict:
+        """
+        Build base connection pool parameters.
+
+        Helper for _create_connection_pool (#825).
+        """
+        retry = (
+            Retry(ExponentialBackoff(base=0.05, cap=1.0), retries=3)
+            if config_params["retry_on_timeout"]
+            else None
+        )
+
+        return {
+            "host": config_params["host"],
+            "port": config_params["port"],
+            "password": config_params["password"],
+            "db": config_params["db"],
+            "max_connections": config_params["max_connections"],
+            "socket_timeout": config_params["socket_timeout"],
+            "socket_connect_timeout": config_params["socket_connect_timeout"],
+            "socket_keepalive": True,
+            "socket_keepalive_options": {},
+            "decode_responses": True,
+            "retry": retry,
+            "retry_on_timeout": config_params["retry_on_timeout"],
+            "health_check_interval": 30,
+        }
+
+    def _configure_tls_for_pool(self, pool_kwargs: dict, config_params: dict):
+        """
+        Configure TLS/SSL for connection pool.
+
+        Helper for _create_connection_pool (#825).
+        """
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        if config_params["tls_ca_cert"]:
+            ssl_context.load_verify_locations(config_params["tls_ca_cert"])
+        if config_params["tls_cert_file"] and config_params["tls_key_file"]:
+            ssl_context.load_cert_chain(
+                config_params["tls_cert_file"], config_params["tls_key_file"]
+            )
+
+        pool_kwargs["connection_class"] = SSLConnection
+        pool_kwargs["ssl"] = ssl_context
+
+    def _log_tls_connection_info(self, config_params: dict):
+        """
+        Log TLS connection info.
+
+        Helper for _create_connection_pool (#825).
+        """
+        logger.info(
+            f"Redis TLS connection pool created: "
+            f"host={config_params['host']}, port={config_params['port']}, "
+            f"db={config_params['db']}, "
+            f"max_connections={config_params['max_connections']}, "
+            f"socket_timeout={config_params['socket_timeout']}s, TLS=enabled"
+        )
+
+    def _log_plain_connection_info(self, config_params: dict):
+        """
+        Log plain connection info.
+
+        Helper for _create_connection_pool (#825).
+        """
+        logger.info(
+            f"Redis connection pool created: "
+            f"host={config_params['host']}, port={config_params['port']}, "
+            f"db={config_params['db']}, "
+            f"max_connections={config_params['max_connections']}, "
+            f"socket_timeout={config_params['socket_timeout']}s"
+        )
 
     async def health_check(self) -> bool:
         """

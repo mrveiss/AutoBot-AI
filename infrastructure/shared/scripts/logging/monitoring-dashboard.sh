@@ -4,9 +4,10 @@
 # Real-time monitoring interface for distributed AutoBot infrastructure
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Color codes
 RED='\033[0;31m'
@@ -19,11 +20,11 @@ NC='\033[0m'
 
 # VM Configuration
 declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 show_header() {
@@ -42,7 +43,7 @@ check_vm_health() {
     local vm_ip="$2"
 
     # Test SSH connectivity
-    if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o BatchMode=yes autobot@"$vm_ip" "echo 'test'" &>/dev/null; then
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o BatchMode=yes "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "echo 'test'" &>/dev/null; then
         echo -e "${GREEN}✓${NC}"
     else
         echo -e "${RED}✗${NC}"
@@ -55,16 +56,16 @@ get_service_status() {
 
     case "$vm_name" in
         "vm1-frontend")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "ps aux | grep -c 'npm run dev\|node.*vite'" 2>/dev/null || echo "0"
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "ps aux | grep -c 'npm run dev\|node.*vite'" 2>/dev/null || echo "0"
             ;;
         "vm3-redis")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "redis-cli ping 2>/dev/null | grep -c PONG" 2>/dev/null || echo "0"
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "redis-cli ping 2>/dev/null | grep -c PONG" 2>/dev/null || echo "0"
             ;;
         "vm5-browser")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "docker ps | grep -c autobot-playwright" 2>/dev/null || echo "0"
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "docker ps | grep -c autobot-playwright" 2>/dev/null || echo "0"
             ;;
         *)
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "ps aux | grep -c python | head -1" 2>/dev/null || echo "0"
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "ps aux | grep -c python | head -1" 2>/dev/null || echo "0"
             ;;
     esac
 }

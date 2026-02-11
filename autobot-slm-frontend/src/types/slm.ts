@@ -73,6 +73,8 @@ export interface SLMNode {
   health: NodeHealth | null
   created_at: string
   updated_at: string
+  code_status?: 'up_to_date' | 'outdated' | 'unknown'
+  code_version?: string
 }
 
 /**
@@ -314,6 +316,28 @@ export interface FleetSummary {
   degraded_nodes: number
   unhealthy_nodes: number
   offline_nodes: number
+}
+
+/**
+ * Per-node update summary from fleet update check (#682)
+ */
+export interface NodeUpdateSummary {
+  node_id: string
+  hostname: string
+  system_updates: number
+  code_update_available: boolean
+  code_status: string
+  total_updates: number
+}
+
+/**
+ * Fleet-wide update summary response (#682)
+ */
+export interface FleetUpdateSummary {
+  nodes: NodeUpdateSummary[]
+  total_system_updates: number
+  total_code_updates: number
+  nodes_needing_updates: number
 }
 
 // =============================================================================

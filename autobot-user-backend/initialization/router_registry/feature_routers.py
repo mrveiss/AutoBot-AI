@@ -248,6 +248,49 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
+    # External tool integrations (Issue #61)
+    (
+        "backend.api.integration_database",
+        "/integrations/database",
+        ["integrations-database"],
+        "integration_database",
+    ),
+    (
+        "backend.api.integration_cloud",
+        "/integrations/cloud",
+        ["integrations-cloud"],
+        "integration_cloud",
+    ),
+    (
+        "backend.api.integration_cicd",
+        "/integrations/cicd",
+        ["integrations-cicd"],
+        "integration_cicd",
+    ),
+    (
+        "backend.api.integration_project_management",
+        "/integrations/project-management",
+        ["integrations-project-management"],
+        "integration_project_management",
+    ),
+    (
+        "backend.api.integration_communication",
+        "/integrations/communication",
+        ["integrations-communication"],
+        "integration_communication",
+    ),
+    (
+        "backend.api.integration_version_control",
+        "/integrations/version-control",
+        ["integrations-version-control"],
+        "integration_version_control",
+    ),
+    (
+        "backend.api.integration_monitoring",
+        "/integrations/monitoring",
+        ["integrations-monitoring"],
+        "integration_monitoring",
+    ),
 ]
 
 

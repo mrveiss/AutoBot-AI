@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.service_registry import ServiceStatus, get_service_registry
+from utils.service_registry import ServiceStatus, get_service_registry
 
 # Optional web dependencies
 try:
@@ -40,6 +40,9 @@ try:
 except ImportError:
     FLASK_AVAILABLE = False
     logging.warning("Flask not available. Web dashboard disabled.")
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 
 class ServiceMonitor:
@@ -117,7 +120,7 @@ class ServiceMonitor:
     async def start_monitoring(self, interval: int = 30):
         """Start continuous monitoring with specified interval."""
         self.is_monitoring = True
-        print(f"🔄 Starting service monitoring (interval: {interval}s)")
+        logger.info("Starting service monitoring (interval: %ds)", interval)
 
         while self.is_monitoring:
             try:
@@ -128,7 +131,7 @@ class ServiceMonitor:
                 self.is_monitoring = False
                 break
             except Exception as e:
-                print(f"❌ Monitoring error: {e}")
+                logger.error("Monitoring error: %s", e)
                 await asyncio.sleep(interval)
 
     def stop_monitoring(self):
@@ -199,17 +202,20 @@ class CLIMonitor:
 
     def print_status_table(self, status: Dict[str, Any]):
         """Print status in a nice table format."""
-        print("\n" + "=" * 80)
-        print(f"AutoBot Service Monitor - {status.get('timestamp', 'Unknown')}")
-        print(f"Deployment Mode: {status.get('deployment_mode', 'Unknown')}")
-        print(
-            f"Overall Health: {status.get('healthy_services', 0)}/{status.get('total_services', 0)} services healthy ({status.get('health_percentage', 0):.1f}%)"
+        logger.info("=" * 80)
+        logger.info("AutoBot Service Monitor - %s", status.get('timestamp', 'Unknown'))
+        logger.info("Deployment Mode: %s", status.get('deployment_mode', 'Unknown'))
+        logger.info(
+            "Overall Health: %d/%d services healthy (%.1f%%)",
+            status.get('healthy_services', 0),
+            status.get('total_services', 0),
+            status.get('health_percentage', 0)
         )
-        print("=" * 80)
+        logger.info("=" * 80)
 
         # Service status table
-        print(f"{'Service':<20} {'Status':<12} {'URL':<35} {'Response':<10}")
-        print("-" * 80)
+        logger.info("%-20s %-12s %-35s %-10s", 'Service', 'Status', 'URL', 'Response')
+        logger.info("-" * 80)
 
         services = status.get("services", {})
         for service_name, service_data in services.items():
@@ -223,22 +229,27 @@ class CLIMonitor:
             response_time = service_data.get("response_time", 0)
             response_str = f"{response_time:.3f}s" if response_time > 0 else "N/A"
 
-            print(
-                f"{service_name:<20} {status_icon} {service_data['status']:<10} {service_data['url']:<35} {response_str:<10}"
+            logger.info(
+                "%-20s %s %-10s %-35s %-10s",
+                service_name,
+                status_icon,
+                service_data['status'],
+                service_data['url'],
+                response_str
             )
 
-        print("-" * 80)
+        logger.info("-" * 80)
 
     async def run_continuous(self, interval: int = 30):
         """Run continuous CLI monitoring."""
         try:
             async for status in self.monitor.start_monitoring(interval):
                 # Clear screen (works on most terminals)
-                print("\033[2J\033[H", end="")
+                logger.info("\033[2J\033[H")
                 self.print_status_table(status)
-                print(f"\n🔄 Next check in {interval}s... (Ctrl+C to stop)")
+                logger.info("Next check in %ds... (Ctrl+C to stop)", interval)
         except KeyboardInterrupt:
-            print("\n\n👋 Monitoring stopped by user")
+            logger.info("Monitoring stopped by user")
 
 
 class WebDashboard:
@@ -287,8 +298,8 @@ class WebDashboard:
 
     def run(self):
         """Start the web dashboard server and open browser automatically."""
-        print(f"🌐 Starting web dashboard on http://localhost:{self.port}")
-        print("🔄 Dashboard will auto-refresh every 30 seconds")
+        logger.info("Starting web dashboard on http://localhost:%d", self.port)
+        logger.info("Dashboard will auto-refresh every 30 seconds")
 
         # Open browser automatically
         webbrowser.open(f"http://localhost:{self.port}")
@@ -550,9 +561,9 @@ async def main():
             if args.output:
                 with open(args.output, "w") as f:
                     json.dump(output_data, f, indent=2)
-                print(f"📄 Report saved to: {args.output}")
+                logger.info("Report saved to: %s", args.output)
             else:
-                print(json.dumps(output_data, indent=2))
+                logger.info(json.dumps(output_data, indent=2))
 
         elif args.web:
             # Start web dashboard
@@ -574,9 +585,9 @@ async def main():
 
     except KeyboardInterrupt:
         monitor.stop_monitoring()
-        print("\n👋 Monitoring stopped")
+        logger.info("Monitoring stopped")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error("Error: %s", e)
         return 1
 
     return 0

@@ -13,10 +13,9 @@ import os
 from datetime import datetime
 from typing import Optional, Tuple
 
+from models.database import Setting
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.database import Setting
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +96,9 @@ class GitTracker:
         """
         Get the current commit hash of the local repository.
 
+        Falls back to slm_agent_latest_commit DB setting when
+        the repo path is not a git repository (rsync deployments).
+
         Returns:
             Current commit hash or None if error
         """
@@ -104,7 +106,27 @@ class GitTracker:
 
         if returncode == 0 and output:
             return output
-        return None
+
+        # Fallback: read from DB setting (rsync deployments have no .git)
+        return await self._get_commit_from_db()
+
+    async def _get_commit_from_db(self) -> Optional[str]:
+        """Read slm_agent_latest_commit from DB.
+
+        Helper for get_local_commit (Issue #829).
+        """
+        if db_service is None:
+            return None
+        try:
+            async with db_service.session() as db:
+                result = await db.execute(
+                    select(Setting).where(Setting.key == "slm_agent_latest_commit")
+                )
+                setting = result.scalar_one_or_none()
+                return setting.value if setting else None
+        except Exception as e:
+            logger.debug("DB fallback for commit hash failed: %s", e)
+            return None
 
     async def fetch_remote(self) -> bool:
         """
@@ -143,6 +165,9 @@ class GitTracker:
         """
         Check if updates are available from the remote.
 
+        For rsync deployments (no .git), reads the latest commit from
+        the DB setting populated by the post-commit hook notification.
+
         Args:
             fetch: Whether to fetch from remote first (default: True)
 
@@ -154,6 +179,10 @@ class GitTracker:
 
         local_commit = await self.get_local_commit()
         remote_commit = await self.get_remote_commit()
+
+        # Fallback for rsync deployments: use DB commit as remote_commit
+        if remote_commit is None:
+            remote_commit = await self._get_commit_from_db()
 
         has_update = (
             local_commit is not None

@@ -8,8 +8,8 @@ import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from src.metrics.system_monitor import system_monitor
-from src.metrics.workflow_metrics import workflow_metrics
+from metrics.system_monitor import system_monitor
+from metrics.workflow_metrics import workflow_metrics
 
 
 async def test_workflow_metrics():

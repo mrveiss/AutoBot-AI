@@ -3,6 +3,7 @@
 # Author: mrveiss
 ---
 # Frontend configuration defaults
+network_subnet: "172.16.168.0/24"
 frontend_user: autobot
 frontend_group: autobot
 frontend_install_dir: /opt/autobot
@@ -22,7 +23,9 @@ frontend_host: "0.0.0.0"
 frontend_port: 5173
 
 # Backend connection
-frontend_backend_url: "http://{{ backend_host | default('127.0.0.1') }}:{{ backend_port | default(8001) }}"
+backend_host: "172.16.168.20"
+backend_port: 8001
+frontend_backend_url: "http://{{ backend_host }}:{{ backend_port }}"
 
 # TLS Configuration (Issue #164)
 frontend_tls_enabled: false

@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import subprocess
 
-from src.config import config
+from config import config
 
 
 def test_ollama_models():

@@ -28,12 +28,15 @@ import tarfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.script_utils import ScriptFormatter
-from src.utils.service_registry import get_service_registry
+from utils.script_utils import ScriptFormatter
+from utils.service_registry import get_service_registry
 
 
 class BackupManager:
@@ -69,9 +72,9 @@ class BackupManager:
             "deployment_info.json",
         ]
 
-        print("🗄️  AutoBot Backup Manager initialized")
-        print(f"   Backup Directory: {self.backup_dir}")
-        print(f"   Project Root: {self.project_root}")
+        logger.info("🗄️  AutoBot Backup Manager initialized")
+        logger.info(f"   Backup Directory: {self.backup_dir}")
+        logger.info(f"   Project Root: {self.project_root}")
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -547,6 +550,65 @@ class BackupManager:
 
         return None
 
+    def _validate_restore_backup(self, backup_id: str) -> tuple:
+        """Validate backup exists and is accessible.
+
+        Helper for restore_backup (Issue #825).
+        """
+        backups = self.list_backups()
+        if backup_id not in backups:
+            self.print_step(f"Backup {backup_id} not found", "error")
+            return None, None
+
+        backup_info = backups[backup_id]
+        archive_path = Path(backup_info["archive_path"])
+
+        if not archive_path.exists():
+            self.print_step(f"Backup archive not found: {archive_path}", "error")
+            return None, None
+
+        return backup_info, archive_path
+
+    def _show_backup_metadata(self, backup_id: str) -> None:
+        """Display backup metadata.
+
+        Helper for restore_backup (Issue #825).
+        """
+        metadata = self.get_backup_metadata(backup_id)
+        if metadata:
+            self.print_step(f"Backup type: {metadata['backup_type']}", "info")
+            self.print_step(f"Created: {metadata['timestamp']}", "info")
+            self.print_step(f"Deployment mode: {metadata['deployment_mode']}", "info")
+
+    def _restore_backup_items(
+        self, backup_content_path: Path, target_path: Path
+    ) -> int:
+        """Restore backup items to target.
+
+        Helper for restore_backup (Issue #825).
+        """
+        restored_items = 0
+        for item in backup_content_path.iterdir():
+            if item.name == "backup_metadata.json":
+                continue
+
+            dest_path = target_path / item.name
+            self.print_step(f"Restoring: {item.name} -> {dest_path}", "running")
+
+            if item.is_dir():
+                if dest_path.exists():
+                    shutil.rmtree(dest_path)
+                shutil.copytree(item, dest_path)
+            else:
+                if dest_path.exists():
+                    dest_path.unlink()
+                shutil.copy2(item, dest_path)
+
+            restored_items += 1
+            self.print_step(f"Restored: {item.name}", "success")
+
+        return restored_items
+
     def restore_backup(
         self, backup_id: str, target_dir: Optional[str] = None, dry_run: bool = False
     ) -> bool:
@@ -561,28 +623,13 @@ class BackupManager:
         if dry_run:
             self.print_step("DRY RUN MODE - No changes will be made", "warning")
 
-        backups = self.list_backups()
-        if backup_id not in backups:
-            self.print_step(f"Backup {backup_id} not found", "error")
-            return False
-
-        backup_info = backups[backup_id]
-        archive_path = Path(backup_info["archive_path"])
-
-        if not archive_path.exists():
-            self.print_step(f"Backup archive not found: {archive_path}", "error")
+        backup_info, archive_path = self._validate_restore_backup(backup_id)
+        if not backup_info:
             return False
 
         try:
-            metadata = self.get_backup_metadata(backup_id)
-            if metadata:
-                self.print_step(f"Backup type: {metadata['backup_type']}", "info")
-                self.print_step(f"Created: {metadata['timestamp']}", "info")
-                self.print_step(
-                    f"Deployment mode: {metadata['deployment_mode']}", "info"
-                )
+            self._show_backup_metadata(backup_id)
 
-            # Extract archive to temporary location
             temp_extract_path = self.backup_dir / f"restore_temp_{backup_id}"
 
             if not dry_run:
@@ -590,7 +637,6 @@ class BackupManager:
                 with tarfile.open(archive_path, "r:gz") as tar:
                     tar.extractall(temp_extract_path)
 
-                # Find extracted backup directory
                 extracted_dirs = list(temp_extract_path.glob("autobot_*"))
                 if not extracted_dirs:
                     self.print_step("No backup directory found in archive", "error")
@@ -598,48 +644,22 @@ class BackupManager:
 
                 backup_content_path = extracted_dirs[0]
 
-                # Restore files
-                restored_items = 0
-                for item in backup_content_path.iterdir():
-                    if item.name == "backup_metadata.json":
-                        continue
+                restored_items = self._restore_backup_items(backup_content_path, target_path)
 
-                    dest_path = target_path / item.name
-                    self.print_step(f"Restoring: {item.name} -> {dest_path}", "running")
-
-                    if item.is_dir():
-                        if dest_path.exists():
-                            shutil.rmtree(dest_path)
-                        shutil.copytree(item, dest_path)
-                    else:
-                        if dest_path.exists():
-                            dest_path.unlink()
-                        shutil.copy2(item, dest_path)
-
-                    restored_items += 1
-                    self.print_step(f"Restored: {item.name}", "success")
-
-                # Cleanup temporary directory
                 shutil.rmtree(temp_extract_path)
 
-                self.print_step(
-                    f"Restore completed: {restored_items} items restored", "success"
-                )
+                self.print_step(f"Restore completed: {restored_items} items restored", "success")
             else:
-                # Dry run - just show what would be restored
                 with tarfile.open(archive_path, "r:gz") as tar:
                     self.print_step("Files that would be restored:", "info")
                     for member in tar.getmembers():
-                        if member.isfile() and not member.name.endswith(
-                            "backup_metadata.json"
-                        ):
+                        if member.isfile() and not member.name.endswith("backup_metadata.json"):
                             self.print_step(f"  - {member.name}", "info")
 
             return True
 
         except Exception as e:
             self.print_step(f"Restore failed: {e}", "error")
-            # Cleanup on failure
             temp_path = self.backup_dir / f"restore_temp_{backup_id}"
             if temp_path.exists():
                 shutil.rmtree(temp_path)
@@ -739,16 +759,16 @@ def _handle_backup_command(backup_manager, args) -> int:
         backup_id = backup_manager.create_incremental_backup()
 
     if backup_id:
-        print(f"\n✅ Backup completed successfully: {backup_id}")
+        logger.info(f"\n✅ Backup completed successfully: {backup_id}")
         return 0
-    print("\n❌ Backup failed")
+    logger.error("\n❌ Backup failed")
     return 1
 
 
 def _handle_restore_command(backup_manager, args) -> int:
     """Handle --restore command (Issue #315: extracted helper)."""
     if not args.backup_id:
-        print("❌ --backup-id required for restore")
+        logger.error("❌ --backup-id required for restore")
         return 1
 
     success = backup_manager.restore_backup(
@@ -762,18 +782,18 @@ def _handle_list_command(backup_manager, args) -> int:
     backups = backup_manager.list_backups()
 
     if not backups:
-        print("No backups found")
+        logger.info("No backups found")
         return 0
 
-    print("\n📋 Available Backups:")
-    print("=" * 80)
-    print(f"{'Backup ID':<20} {'Type':<12} {'Date':<20} {'Size (MB)':<10} {'Mode':<15}")
-    print("-" * 80)
+    logger.info("\n📋 Available Backups:")
+    logger.info("=" * 80)
+    logger.info(f"{'Backup ID':<20} {'Type':<12} {'Date':<20} {'Size (MB)':<10} {'Mode':<15}")
+    logger.info("-" * 80)
 
     for backup_id, info in sorted(backups.items(), reverse=True):
         created = datetime.fromisoformat(info["created_at"])
         size_mb = info["size"] / (1024 * 1024)
-        print(
+        logger.info(
             f"{backup_id:<20} {info['backup_type']:<12} "
             f"{created.strftime('%Y-%m-%d %H:%M'):<20} {size_mb:<10.1f} {info['deployment_mode']:<15}"
         )
@@ -789,7 +809,7 @@ def _handle_cleanup_command(backup_manager, args) -> int:
 def _handle_verify_command(backup_manager, args) -> int:
     """Handle --verify command (Issue #315: extracted helper)."""
     if not args.backup_id:
-        print("❌ --backup-id required for verify")
+        logger.error("❌ --backup-id required for verify")
         return 1
 
     success = backup_manager.verify_backup(args.backup_id)
@@ -851,10 +871,10 @@ Examples:
         return 0
 
     except KeyboardInterrupt:
-        print("\n⚠️  Operation cancelled by user")
+        logger.warning("\n⚠️  Operation cancelled by user")
         return 1
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        logger.error(f"\n❌ Error: {e}")
         return 1
 
 

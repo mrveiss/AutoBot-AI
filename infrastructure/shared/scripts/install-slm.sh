@@ -13,6 +13,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/ssot-config.sh" 2>/dev/null || true
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -32,7 +35,7 @@ DEFAULT_BRANCH="main"
 DEFAULT_ADMIN_USER="admin"
 DEFAULT_SLM_PORT=8000
 DEFAULT_UI_PORT=5174
-DEFAULT_DEV_HOST="172.16.168.20"
+DEFAULT_DEV_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 
 # Runtime variables
 UNATTENDED=false

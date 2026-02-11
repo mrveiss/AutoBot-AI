@@ -11,31 +11,51 @@ import glob
 import os
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+async def _test_search_functionality_directly(error_count, success_count):
+    """Display Test Search Functionality Directly.
+
+    Helper for populate_directly (Issue #825).
+    """
+    logger.info("\n=== Results ===")
+    logger.info(f"✓ Successfully added: {success_count} documents")
+    logger.error(f"❌ Errors: {error_count}")
+
+    # Test search functionality directly
+    if success_count > 0:
+        logger.info("\n=== Testing Direct Search ===")
+        test_queries = ["installation", "autobot", "debian", "configuration"]
+
+    return success_count > 0
+
+
 async def populate_directly():
     """Populate knowledge base directly using KnowledgeBase.add_file()."""
 
-    print("=== Direct Knowledge Base Population ===")
+    logger.info("=== Direct Knowledge Base Population ===")
 
     # Import and initialize knowledge base directly
-    from src.knowledge_base import KnowledgeBase
+    from knowledge_base import KnowledgeBase
 
     kb = KnowledgeBase()
     await kb.ainit()
 
     if kb.index is None:
-        print("❌ Knowledge base index not initialized")
+        logger.error("❌ Knowledge base index not initialized")
         return False
 
-    print("✓ Knowledge base initialized successfully")
-    print(
+    logger.info("✓ Knowledge base initialized successfully")
+    logger.info(
         f"  Vector store type: {type(kb.vector_store).__name__ if kb.vector_store else 'In-memory'}"
     )
-    print(f"  Embedding model: {kb.embedding_model_name}")
+    logger.info(f"  Embedding model: {kb.embedding_model_name}")
 
     # Find documentation files
     project_root = Path("/home/kali/Desktop/AutoBot")
@@ -52,7 +72,7 @@ async def populate_directly():
         f for f in unique_files if os.path.isfile(f) and "node_modules" not in f
     ]
 
-    print(f"Found {len(filtered_files)} documentation files")
+    logger.info(f"Found {len(filtered_files)} documentation files")
 
     success_count = 0
     error_count = 0
@@ -81,7 +101,7 @@ async def populate_directly():
                 "filename": os.path.basename(file_path),
             }
 
-            print(f"Adding: {rel_path} [{category}]")
+            logger.info(f"Adding: {rel_path} [{category}]")
 
             # Use add_file method directly
             result = await kb.add_file(
@@ -90,45 +110,25 @@ async def populate_directly():
 
             if result["status"] == "success":
                 success_count += 1
-                print(f"  ✓ {result['message']}")
+                logger.info(f"  ✓ {result['message']}")
             else:
                 error_count += 1
-                print(f"  ❌ {result['message']}")
+                logger.error(f"  ❌ {result['message']}")
 
         except Exception as e:
             error_count += 1
-            print(f"  ❌ Error: {str(e)}")
+            logger.error(f"  ❌ Error: {str(e)}")
 
-    print("\n=== Results ===")
-    print(f"✓ Successfully added: {success_count} documents")
-    print(f"❌ Errors: {error_count}")
+    await _test_search_functionality_directly(error_count, success_count)
 
-    # Test search functionality directly
-    if success_count > 0:
-        print("\n=== Testing Direct Search ===")
-        test_queries = ["installation", "autobot", "debian", "configuration"]
-
-        for query in test_queries:
-            try:
-                results = await kb.search(query, n_results=2)
-                print(f"Query '{query}': {len(results)} results")
-                if results:
-                    print(
-                        f"  Top result: {results[0].get('metadata', {}).get('filename', 'Unknown')}"
-                    )
-                    print(f"  Score: {results[0].get('score', 'N/A')}")
-            except Exception as e:
-                print(f"  ❌ Search error: {str(e)}")
-
-    return success_count > 0
 
 
 if __name__ == "__main__":
     success = asyncio.run(populate_directly())
     if success:
-        print("\n🎉 Knowledge base populated successfully!")
+        logger.info("\n🎉 Knowledge base populated successfully!")
         print(
             "You can now search for 'debian', 'installation', etc. in the AutoBot interface"
         )
     else:
-        print("\n💥 Knowledge base population failed!")
+        logger.error("\n💥 Knowledge base population failed!")

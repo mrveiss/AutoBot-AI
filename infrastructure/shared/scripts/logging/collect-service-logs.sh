@@ -4,9 +4,10 @@
 # Collects service-specific logs from all VMs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 CENTRALIZED_DIR="$PROJECT_ROOT/logs/autobot-centralized"
-SSH_KEY="$HOME/.ssh/autobot_key"
+SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
 # Color codes
 GREEN='\033[0;32m'
@@ -16,11 +17,11 @@ NC='\033[0m'
 
 # VM Configuration
 declare -A VMS=(
-    ["vm1-frontend"]="172.16.168.21"
-    ["vm2-npu-worker"]="172.16.168.22"
-    ["vm3-redis"]="172.16.168.23"
-    ["vm4-ai-stack"]="172.16.168.24"
-    ["vm5-browser"]="172.16.168.25"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 )
 
 collect_service_logs() {
@@ -31,13 +32,13 @@ collect_service_logs() {
     echo -e "${CYAN}Collecting service logs from $vm_name ($vm_ip)...${NC}"
 
     # Collect journald logs for autobot services (without sudo)
-    ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
         journalctl --user -u 'autobot*' --since '1 hour ago' --no-pager 2>/dev/null || echo 'No user autobot services found'
         journalctl --user --since '1 hour ago' --no-pager | grep -i autobot 2>/dev/null || echo 'No autobot-related logs in user journal'
     " > "$CENTRALIZED_DIR/$vm_name/service/autobot-services-$timestamp.log" 2>/dev/null
 
     # Collect available system logs (what we can access without sudo)
-    ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+    ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
         # Get process information for autobot services
         ps aux | grep -i autobot | grep -v grep || echo 'No autobot processes found'
         echo '--- Docker containers ---'
@@ -53,7 +54,7 @@ collect_service_logs() {
     # Collect service-specific logs based on VM type
     case "$vm_name" in
         "vm1-frontend")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # Nginx access logs if readable
                 tail -n 100 /var/log/nginx/access.log 2>/dev/null || echo 'Nginx access log not accessible'
                 echo '--- Nginx error log ---'
@@ -63,7 +64,7 @@ collect_service_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/service/nginx-$timestamp.log" 2>/dev/null
             ;;
         "vm3-redis")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # Redis logs if accessible
                 tail -n 100 /var/log/redis/redis-server.log 2>/dev/null || echo 'Redis log not accessible via file'
                 echo '--- Redis info ---'
@@ -73,7 +74,7 @@ collect_service_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/service/redis-$timestamp.log" 2>/dev/null
             ;;
         "vm5-browser")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # Docker logs if accessible
                 docker logs autobot-playwright --tail 100 2>/dev/null || echo 'Playwright container logs not accessible'
                 echo '--- VNC processes ---'
@@ -83,7 +84,7 @@ collect_service_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/service/browser-$timestamp.log" 2>/dev/null
             ;;
         "vm2-npu-worker")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # NPU and AI workload information
                 echo '--- Intel GPU info ---'
                 intel_gpu_top -l 2>/dev/null || echo 'Intel GPU tools not available'
@@ -92,7 +93,7 @@ collect_service_logs() {
             " > "$CENTRALIZED_DIR/$vm_name/service/npu-worker-$timestamp.log" 2>/dev/null
             ;;
         "vm4-ai-stack")
-            ssh -i "$SSH_KEY" autobot@"$vm_ip" "
+            ssh -i "$SSH_KEY" "${AUTOBOT_SSH_USER:-autobot}"@"$vm_ip" "
                 # AI stack processes
                 echo '--- Python AI processes ---'
                 ps aux | grep -i 'python.*api\|flask\|fastapi\|uvicorn' | grep -v grep || echo 'No Python API processes found'

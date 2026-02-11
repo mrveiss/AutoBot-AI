@@ -4,6 +4,10 @@
 
 set -e
 
+# Load SSOT configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,7 +17,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${GREEN}🚀 Starting AutoBot Backend Coordinator${NC}"
-echo -e "${BLUE}Coordinator Node: 172.16.168.20${NC}"
+echo -e "${BLUE}Coordinator Node: ${AUTOBOT_BACKEND_HOST:-172.16.168.20}${NC}"
 echo -e "${CYAN}Architecture: 6-VM Distributed System${NC}"
 echo ""
 
@@ -29,29 +33,29 @@ else
     echo -e "${YELLOW}⚠️  .env file not found, using defaults${NC}"
 fi
 
-# Set distributed mode environment variables
+# Set distributed mode environment variables (SSOT provides defaults)
 export AUTOBOT_DEPLOYMENT_MODE=distributed
-export AUTOBOT_BACKEND_HOST=172.16.168.20
-export AUTOBOT_REDIS_HOST=172.16.168.23
-export AUTOBOT_FRONTEND_HOST=172.16.168.21
-export AUTOBOT_AI_STACK_HOST=172.16.168.24
-export AUTOBOT_NPU_WORKER_HOST=172.16.168.22
-export AUTOBOT_BROWSER_SERVICE_HOST=172.16.168.25
+export AUTOBOT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+export AUTOBOT_REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+export AUTOBOT_FRONTEND_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+export AUTOBOT_AI_STACK_HOST="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
+export AUTOBOT_NPU_WORKER_HOST="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
+export AUTOBOT_BROWSER_SERVICE_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
 
 echo -e "${CYAN}🔧 Distributed Configuration:${NC}"
-echo "  Backend Coordinator: ${AUTOBOT_BACKEND_HOST}:8001"
-echo "  Redis VM: ${AUTOBOT_REDIS_HOST}:6379"
-echo "  Frontend VM: ${AUTOBOT_FRONTEND_HOST}:5173"
-echo "  NPU Worker VM: ${AUTOBOT_NPU_WORKER_HOST}:8081"
-echo "  AI Stack VM: ${AUTOBOT_AI_STACK_HOST}:8080"
-echo "  Browser VM: ${AUTOBOT_BROWSER_SERVICE_HOST}:3000"
+echo "  Backend Coordinator: ${AUTOBOT_BACKEND_HOST}:${AUTOBOT_BACKEND_PORT:-8001}"
+echo "  Redis VM: ${AUTOBOT_REDIS_HOST}:${AUTOBOT_REDIS_PORT:-6379}"
+echo "  Frontend VM: ${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT:-5173}"
+echo "  NPU Worker VM: ${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
+echo "  AI Stack VM: ${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT:-8080}"
+echo "  Browser VM: ${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
 
 # Test connectivity to remote VMs
 echo ""
 echo -e "${CYAN}📡 Testing distributed services connectivity...${NC}"
 
 # Test Redis VM
-if nc -z -w3 ${AUTOBOT_REDIS_HOST} 6379; then
+if nc -z -w3 ${AUTOBOT_REDIS_HOST} ${AUTOBOT_REDIS_PORT:-6379}; then
     echo -e "  Redis VM: ${GREEN}✅ Connected${NC}"
 else
     echo -e "  Redis VM: ${RED}❌ Failed${NC}"
@@ -60,10 +64,10 @@ fi
 
 # Test other VMs
 VMS_TO_TEST=(
-    "Frontend:${AUTOBOT_FRONTEND_HOST}:5173"
-    "NPU Worker:${AUTOBOT_NPU_WORKER_HOST}:8081"
-    "AI Stack:${AUTOBOT_AI_STACK_HOST}:8080"
-    "Browser:${AUTOBOT_BROWSER_SERVICE_HOST}:3000"
+    "Frontend:${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT:-5173}"
+    "NPU Worker:${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
+    "AI Stack:${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT:-8080}"
+    "Browser:${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
 )
 
 for vm_test in "${VMS_TO_TEST[@]}"; do
@@ -77,7 +81,7 @@ done
 
 # Test local Ollama
 echo -n "  Ollama (Local): "
-if nc -z -w3 127.0.0.1 11434; then
+if nc -z -w3 "${AUTOBOT_OLLAMA_HOST:-127.0.0.1}" "${AUTOBOT_OLLAMA_PORT:-11434}"; then
     echo -e "${GREEN}✅ Connected${NC}"
 else
     echo -e "${YELLOW}⚠️  Not running${NC}"
@@ -121,7 +125,7 @@ echo "Backend coordinator started with PID: $BACKEND_PID"
 # Wait for backend to start
 echo "Waiting for backend to initialize..."
 for i in {1..30}; do
-    if curl -s http://127.0.0.1:8001/api/health > /dev/null 2>&1; then
+    if curl -s "http://${AUTOBOT_BACKEND_HOST}:${AUTOBOT_BACKEND_PORT:-8001}/api/health" > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Backend coordinator is running and healthy!${NC}"
         break
     fi
@@ -140,14 +144,14 @@ echo ""
 echo -e "${GREEN}🎉 AutoBot Distributed Architecture Started Successfully!${NC}"
 echo ""
 echo -e "${CYAN}📊 Access Points:${NC}"
-echo "  Backend API: http://172.16.168.20:8001"
-echo "  Frontend: http://172.16.168.21:5173"
-echo "  Redis Insight: http://172.16.168.23:8002"
-echo "  NPU Worker: http://172.16.168.22:8081"
-echo "  AI Stack: http://172.16.168.24:8080"
-echo "  Browser Service: http://172.16.168.25:3000"
-echo "  Ollama: http://127.0.0.1:11434"
-echo "  VNC Desktop: http://127.0.0.1:6080"
+echo "  Backend API: http://${AUTOBOT_BACKEND_HOST}:${AUTOBOT_BACKEND_PORT:-8001}"
+echo "  Frontend: http://${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT:-5173}"
+echo "  Redis Insight: http://${AUTOBOT_REDIS_HOST}:8002"
+echo "  NPU Worker: http://${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT:-8081}"
+echo "  AI Stack: http://${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT:-8080}"
+echo "  Browser Service: http://${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
+echo "  Ollama: http://${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}"
+echo "  VNC Desktop: http://127.0.0.1:${AUTOBOT_VNC_PORT:-6080}"
 echo ""
 echo -e "${CYAN}📋 Management Commands:${NC}"
 echo "  Health Check: bash scripts/distributed/check-health.sh"

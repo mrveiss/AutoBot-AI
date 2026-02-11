@@ -9,6 +9,7 @@ Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 import asyncio
 import json
 import logging
+import os
 import statistics
 import time
 import traceback
@@ -109,9 +110,8 @@ class AIPerformanceAnalytics:
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.redis_client = None
-        self.analytics_data_path = Path(
-            "/home/kali/Desktop/AutoBot/logs/ai_performance"
-        )
+        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        self.analytics_data_path = Path(_base) / "logs" / "ai_performance"
         self.analytics_data_path.mkdir(parents=True, exist_ok=True)
 
         # Performance baselines and targets
@@ -210,7 +210,7 @@ else:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             # Estimate NPU usage based on AI workload indicators
             return min(cpu_percent * 0.3, 100.0)  # Conservative estimate
-        except:
+        except Exception:
             return 0.0
 
     async def _get_npu_memory(self) -> Tuple[float, float]:
@@ -219,7 +219,7 @@ else:
             # Intel NPU typically has dedicated memory
             # This would use Intel NPU APIs
             return 512.0, 2048.0  # Example: 512MB used of 2GB total
-        except:
+        except Exception:
             return 0.0, 0.0
 
     async def _benchmark_npu_inference(self) -> float:
@@ -229,7 +229,7 @@ else:
             # Simple inference benchmark (placeholder)
             await asyncio.sleep(0.05)  # Simulate 50ms inference
             return (time.time() - start_time) * 1000
-        except:
+        except Exception:
             return 0.0
 
     async def monitor_multimodal_pipeline(
@@ -323,7 +323,7 @@ else:
                 process.kill()
                 await process.wait()
         except Exception:
-            pass
+            pass  # nosec B110 - NPU check failed, not available
         return None
 
     async def monitor_knowledge_base_search(

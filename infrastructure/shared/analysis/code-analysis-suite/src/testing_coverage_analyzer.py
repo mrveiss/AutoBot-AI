@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.config import config
-from src.utils.redis_client import get_redis_client
+from config import config
+from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -554,6 +554,89 @@ class TestingCoverageAnalyzer:
             indicator in function_content.lower() for indicator in edge_case_indicators
         )
 
+
+    async def __analyze_coverage_gaps_block_2(self):
+        """Create coverage gaps.
+
+        Helper for _analyze_coverage_gaps (Issue #825).
+        """
+        # Create coverage gaps
+        if critical_untested:
+            gaps.append(
+                CoverageGap(
+                    gap_type="critical_untested_functions",
+                    severity="critical",
+                    description=f"{len(critical_untested)} critical functions lack tests",
+                    affected_functions=critical_untested,
+                    suggested_tests=self._suggest_tests_for_functions(
+                        critical_untested
+                    ),
+                    priority_score=100,
+                )
+            )
+
+
+    async def __analyze_coverage_gaps_block_3(self):
+        """if high_priority_untested:.
+
+        Helper for _analyze_coverage_gaps (Issue #825).
+        """
+        if high_priority_untested:
+            gaps.append(
+                CoverageGap(
+                    gap_type="high_priority_untested_functions",
+                    severity="high",
+                    description=f"{len(high_priority_untested)} high-priority functions lack tests",
+                    affected_functions=high_priority_untested,
+                    suggested_tests=self._suggest_tests_for_functions(
+                        high_priority_untested
+                    ),
+                    priority_score=80,
+                )
+            )
+
+
+    async def __analyze_coverage_gaps_block_1(self):
+        """if len(functions_needing_integration_tests) > len(integratio.
+
+        Helper for _analyze_coverage_gaps (Issue #825).
+        """
+        if len(functions_needing_integration_tests) > len(integration_tests):
+            gaps.append(
+                CoverageGap(
+                    gap_type="missing_integration_tests",
+                    severity="high",
+                    description=(
+                        f"Missing integration tests for "
+                        f"{len(functions_needing_integration_tests)} "
+                        "functions with external dependencies"
+                    ),
+                    affected_functions=functions_needing_integration_tests,
+                    suggested_tests=self._suggest_integration_tests(
+                        functions_needing_integration_tests
+                    ),
+                    priority_score=75,
+                )
+            )
+
+
+    async def __analyze_coverage_gaps_block_4(self):
+        """if len(complex_functions) > len(edge_case_tests):.
+
+        Helper for _analyze_coverage_gaps (Issue #825).
+        """
+        if len(complex_functions) > len(edge_case_tests):
+            gaps.append(
+                CoverageGap(
+                    gap_type="missing_edge_case_tests",
+                    severity="medium",
+                    description=f"Missing edge case tests for {len(complex_functions)} complex functions",
+                    affected_functions=complex_functions,
+                    suggested_tests=self._suggest_edge_case_tests(complex_functions),
+                    priority_score=60,
+                )
+            )
+
     async def _analyze_coverage_gaps(
         self, functions: List[CodeFunction], tests: List[TestFunction]
     ) -> List[CoverageGap]:
@@ -581,34 +664,9 @@ class TestingCoverageAnalyzer:
             f for f in untested_functions if self._is_high_priority_function(f)
         ]
 
-        # Create coverage gaps
-        if critical_untested:
-            gaps.append(
-                CoverageGap(
-                    gap_type="critical_untested_functions",
-                    severity="critical",
-                    description=f"{len(critical_untested)} critical functions lack tests",
-                    affected_functions=critical_untested,
-                    suggested_tests=self._suggest_tests_for_functions(
-                        critical_untested
-                    ),
-                    priority_score=100,
-                )
-            )
+        await self.__analyze_coverage_gaps_block_2()
 
-        if high_priority_untested:
-            gaps.append(
-                CoverageGap(
-                    gap_type="high_priority_untested_functions",
-                    severity="high",
-                    description=f"{len(high_priority_untested)} high-priority functions lack tests",
-                    affected_functions=high_priority_untested,
-                    suggested_tests=self._suggest_tests_for_functions(
-                        high_priority_untested
-                    ),
-                    priority_score=80,
-                )
-            )
+        await self.__analyze_coverage_gaps_block_3()
 
         # Check for missing integration tests
         functions_needing_integration_tests = [
@@ -619,39 +677,13 @@ class TestingCoverageAnalyzer:
 
         integration_tests = [t for t in tests if t.test_type == "integration"]
 
-        if len(functions_needing_integration_tests) > len(integration_tests):
-            gaps.append(
-                CoverageGap(
-                    gap_type="missing_integration_tests",
-                    severity="high",
-                    description=(
-                        f"Missing integration tests for "
-                        f"{len(functions_needing_integration_tests)} "
-                        "functions with external dependencies"
-                    ),
-                    affected_functions=functions_needing_integration_tests,
-                    suggested_tests=self._suggest_integration_tests(
-                        functions_needing_integration_tests
-                    ),
-                    priority_score=75,
-                )
-            )
+        await self.__analyze_coverage_gaps_block_1()
 
         # Check for missing edge case tests
         complex_functions = [f for f in functions if f.complexity > 5 and f.is_public]
         edge_case_tests = [t for t in tests if t.covers_edge_cases]
 
-        if len(complex_functions) > len(edge_case_tests):
-            gaps.append(
-                CoverageGap(
-                    gap_type="missing_edge_case_tests",
-                    severity="medium",
-                    description=f"Missing edge case tests for {len(complex_functions)} complex functions",
-                    affected_functions=complex_functions,
-                    suggested_tests=self._suggest_edge_case_tests(complex_functions),
-                    priority_score=60,
-                )
-            )
+        await self.__analyze_coverage_gaps_block_4()
 
         return gaps
 
@@ -906,35 +938,35 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Testing Coverage Analysis Results ===")
-    print(f"Total functions: {results['total_functions']}")
-    print(f"Total tests: {results['total_tests']}")
-    print(f"Test coverage: {results['test_coverage_percentage']}%")
-    print(f"Coverage gaps found: {results['coverage_gaps']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    logger.info(f"\n=== Testing Coverage Analysis Results ===")
+    logger.info(f"Total functions: {results['total_functions']}")
+    logger.info(f"Total tests: {results['total_tests']}")
+    logger.info(f"Test coverage: {results['test_coverage_percentage']}%")
+    logger.info(f"Coverage gaps found: {results['coverage_gaps']}")
+    logger.info(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print(f"\n=== Detailed Metrics ===")
-    print(f"Tested functions: {metrics['tested_functions']}")
-    print(f"Untested functions: {metrics['untested_functions']}")
-    print(f"Critical untested functions: {metrics['critical_untested_functions']}")
-    print(f"Missing integration tests: {metrics['missing_integration_tests']}")
-    print(f"Missing edge case tests: {metrics['missing_edge_case_tests']}")
+    logger.info(f"\n=== Detailed Metrics ===")
+    logger.info(f"Tested functions: {metrics['tested_functions']}")
+    logger.info(f"Untested functions: {metrics['untested_functions']}")
+    logger.error(f"Critical untested functions: {metrics['critical_untested_functions']}")
+    logger.info(f"Missing integration tests: {metrics['missing_integration_tests']}")
+    logger.info(f"Missing edge case tests: {metrics['missing_edge_case_tests']}")
 
     # Print coverage gaps
     if results["coverage_gaps"]:
-        print(f"\n=== Coverage Gaps ===")
+        logger.info(f"\n=== Coverage Gaps ===")
         for gap in results["coverage_gaps"]:
-            print(f"{gap['type']} ({gap['severity']}): {gap['description']}")
-            print(f"  Affects {gap['affected_functions_count']} functions")
-            print(f"  Priority score: {gap['priority_score']}")
+            logger.info(f"{gap['type']} ({gap['severity']}): {gap['description']}")
+            logger.info(f"  Affects {gap['affected_functions_count']} functions")
+            logger.info(f"  Priority score: {gap['priority_score']}")
 
     # Print recommendations
     if results["recommendations"]:
-        print(f"\n=== Testing Recommendations ===")
+        logger.info(f"\n=== Testing Recommendations ===")
         for i, rec in enumerate(results["recommendations"], 1):
-            print(f"{i}. {rec}")
+            logger.info(f"{i}. {rec}")
 
 
 if __name__ == "__main__":

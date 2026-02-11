@@ -8,7 +8,11 @@ Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
 import os
-from typing import List
+import random
+import secrets
+import time
+from collections import defaultdict
+from typing import Dict, List
 
 import structlog
 from fastapi import HTTPException, Request
@@ -17,6 +21,9 @@ from fastapi.responses import JSONResponse
 from backend.security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
+
+# Rate limiting tracker for failed auth attempts per IP
+_failed_auth_tracker: Dict[str, List[float]] = defaultdict(list)
 
 # ============================================================================
 # ENDPOINT CATEGORIZATION
@@ -162,9 +169,7 @@ def requires_service_auth(path: str) -> bool:
 # ============================================================================
 
 
-async def _handle_auth_success(
-    request: Request, service_info: dict, path: str
-) -> None:
+async def _handle_auth_success(request: Request, service_info: dict, path: str) -> None:
     """
     Handle successful service authentication.
 
@@ -213,11 +218,97 @@ def _handle_auth_failure(e: HTTPException, path: str, method: str) -> JSONRespon
     )
 
 
+def _has_override_token(request: Request) -> bool:
+    """Check for emergency override token to bypass service auth.
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    override_token = request.headers.get("X-Override-Token")
+    expected = os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")
+    if not override_token or not expected:
+        return False
+    return secrets.compare_digest(override_token, expected)
+
+
+def _get_enforcement_percentage() -> int:
+    """Get circuit breaker enforcement percentage (0-100).
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    return int(os.getenv("SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE", "100"))
+
+
+def _should_enforce_by_circuit_breaker() -> bool:
+    """Determine if request should be enforced based on circuit breaker.
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    pct = _get_enforcement_percentage()
+    if pct >= 100:
+        return True
+    if pct <= 0:
+        return False
+    return random.randint(1, 100) <= pct
+
+
+def _is_rate_limited(ip: str) -> bool:
+    """Check if IP is rate-limited due to excessive auth failures.
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    window = int(os.getenv("SERVICE_AUTH_RATE_LIMIT_WINDOW", "300"))
+    max_failures = int(os.getenv("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "10"))
+    now = time.time()
+    cutoff = now - window
+    _failed_auth_tracker[ip] = [t for t in _failed_auth_tracker[ip] if t > cutoff]
+    return len(_failed_auth_tracker[ip]) >= max_failures
+
+
+def _record_failed_auth(ip: str) -> None:
+    """Record a failed authentication attempt for rate limiting.
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    _failed_auth_tracker[ip].append(time.time())
+
+
+async def _handle_override_bypass(request: Request, path: str):
+    """Log and allow override token bypass.
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    logger.warning(
+        "Override token used - bypassing service auth",
+        path=path,
+        method=request.method,
+        ip=request.client.host if request.client else "unknown",
+    )
+
+
+async def _enforce_auth_on_path(request: Request, path: str):
+    """Enforce authentication on a service-only path.
+
+    Helper for enforce_service_auth (Issue #255).
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    if _is_rate_limited(client_ip):
+        logger.warning("Rate limit exceeded", ip=client_ip, path=path)
+        raise HTTPException(status_code=429, detail="Too many auth failures")
+
+    try:
+        service_info = await validate_service_auth(request)
+        await _handle_auth_success(request, service_info, path)
+    except HTTPException:
+        _record_failed_auth(client_ip)
+        raise
+
+
 async def enforce_service_auth(request: Request, call_next):
     """
     Enforce service authentication on required endpoints.
 
-    Issue #665: Refactored to use extracted helper methods.
+    Supports override token, circuit breaker, and rate limiting (Issue #255).
 
     Args:
         request: FastAPI request object
@@ -228,38 +319,23 @@ async def enforce_service_auth(request: Request, call_next):
     """
     path = request.url.path
 
-    # Check if path is exempt (frontend-accessible)
     if is_path_exempt(path):
-        logger.debug("Request allowed - exempt path", path=path, method=request.method)
         return await call_next(request)
 
-    # Check if path requires service authentication
     if requires_service_auth(path):
-        logger.info(
-            "Enforcing service authentication", path=path, method=request.method
-        )
+        if _has_override_token(request):
+            await _handle_override_bypass(request, path)
+            return await call_next(request)
+
+        if not _should_enforce_by_circuit_breaker():
+            logger.debug("Circuit breaker: request allowed", path=path)
+            return await call_next(request)
 
         try:
-            service_info = await validate_service_auth(request)
-            await _handle_auth_success(request, service_info, path)
-
+            await _enforce_auth_on_path(request, path)
         except HTTPException as e:
             return _handle_auth_failure(e, path, request.method)
 
-        except Exception as e:
-            logger.error(
-                "Service authentication error",
-                path=path,
-                method=request.method,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
-            raise HTTPException(
-                status_code=500, detail=f"Authentication system error: {str(e)}"
-            )
-
-    # Path doesn't require service auth - allow through
-    logger.debug("Request allowed - no auth required", path=path, method=request.method)
     return await call_next(request)
 
 
@@ -283,14 +359,15 @@ def log_enforcement_status():
     """Log the current enforcement status at startup."""
     if get_enforcement_mode():
         logger.info(
-            "✅ Service Authentication ENFORCEMENT MODE enabled",
+            "Service Authentication ENFORCEMENT MODE enabled",
             exempt_paths_count=len(EXEMPT_PATHS),
             service_only_paths_count=len(SERVICE_ONLY_PATHS),
+            circuit_breaker_pct=_get_enforcement_percentage(),
+            override_token_set=bool(os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")),
         )
-        logger.info("Frontend-accessible paths (first 10)", paths=EXEMPT_PATHS[:10])
         logger.info("Service-only paths", paths=SERVICE_ONLY_PATHS)
     else:
-        logger.info("ℹ️  Service Authentication in LOGGING MODE (enforcement disabled)")
+        logger.info("Service Authentication in LOGGING MODE (enforcement disabled)")
 
 
 # ============================================================================
@@ -309,6 +386,11 @@ def get_endpoint_categories() -> dict:
     """
     return {
         "enforcement_mode": get_enforcement_mode(),
+        "circuit_breaker_percentage": _get_enforcement_percentage(),
+        "override_token_configured": bool(os.getenv("SERVICE_AUTH_OVERRIDE_TOKEN", "")),
+        "rate_limit_max_failures": int(
+            os.getenv("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "10")
+        ),
         "exempt_paths": EXEMPT_PATHS,
         "service_only_paths": SERVICE_ONLY_PATHS,
         "total_exempt": len(EXEMPT_PATHS),

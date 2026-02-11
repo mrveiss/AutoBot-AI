@@ -8,7 +8,7 @@ This bulletproof frontend architecture eliminates all critical failure points id
 
 ### 1. **Deployment Architecture Failure** ✅ FIXED
 - **Problem**: Wrong directories (`/home/autobot` vs `//opt/autobot`), wrong permissions, disconnected workflow
-- **Solution**: Correct service directory (`/opt/autobot/src/autobot-vue`), proper ownership, atomic deployments
+- **Solution**: Correct service directory (`/opt/autobot/src/autobot-slm-frontend`), proper ownership, atomic deployments
 - **Implementation**: `deploy-bulletproof-frontend.sh` with directory verification and atomic swaps
 
 ### 2. **Vue Router Breakdown** ✅ FIXED
@@ -100,7 +100,7 @@ scripts/bulletproof-frontend/test-bulletproof-architecture.sh
 
 ### Daily Development Workflow
 
-1. **Make changes locally** in `/home/kali/Desktop/AutoBot/autobot-vue/`
+1. **Make changes locally** in `/home/kali/Desktop/AutoBot/autobot-slm-frontend/`
 2. **Test changes** locally before deployment
 3. **Deploy with verification**:
    ```bash
@@ -139,9 +139,9 @@ Run comprehensive tests to verify bulletproof status:
 ```
 /opt/autobot/
 ├── src/
-│   ├── autobot-vue/          # Active service directory
-│   ├── autobot-vue-staging/  # Blue-green staging directory
-│   └── autobot-vue-primary/  # Blue-green primary directory
+│   ├── autobot-slm-frontend/          # Active service directory
+│   ├── autobot-slm-frontend-staging/  # Blue-green staging directory
+│   └── autobot-slm-frontend-primary/  # Blue-green primary directory
 ├── backups/                  # Deployment backups
 ├── config/                   # Configuration files
 └── logs/                     # Service logs
@@ -180,7 +180,7 @@ NODE_ENV=development
 
 ### Logs & Monitoring
 
-- **Frontend Logs**: `/opt/autobot/src/autobot-vue/logs/frontend.log`
+- **Frontend Logs**: `/opt/autobot/src/autobot-slm-frontend/logs/frontend.log`
 - **Deployment Logs**: `/tmp/deployment-*.log`
 - **Test Results**: `/tmp/bulletproof-test-results/`
 - **Browser Console**: Real-time health status and debugging
@@ -220,11 +220,11 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
 ls -t /opt/autobot/backups/
 
 # Restore backup
-sudo mv /opt/autobot/backups/[latest-backup] /opt/autobot/src/autobot-vue
-sudo chown -R autobot-service:autobot-service /opt/autobot/src/autobot-vue
+sudo mv /opt/autobot/backups/[latest-backup] /opt/autobot/src/autobot-slm-frontend
+sudo chown -R autobot-service:autobot-service /opt/autobot/src/autobot-slm-frontend
 
 # Restart service
-cd /opt/autobot/src/autobot-vue
+cd /opt/autobot/src/autobot-slm-frontend
 pkill -f "vite.*5173"
 npm run dev -- --host 0.0.0.0 --port 5173
 ```

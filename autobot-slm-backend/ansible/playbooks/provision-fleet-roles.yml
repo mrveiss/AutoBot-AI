@@ -1,0 +1,178 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Auto-Provision Fleet Nodes by Role (#837)
+#
+# After seed-fleet-nodes.yml registers nodes, this playbook
+# provisions each node with its assigned Ansible roles.
+# Runs automatically as part of deploy-slm-manager.yml.
+#
+# Can also run standalone:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml
+#
+# Limit to specific nodes:
+#   --limit "02-Frontend,04-Databases"
+---
+
+# -------------------------------------------------------------------
+# Phase 1: Common baseline on ALL nodes (SSH keys, packages, users)
+# -------------------------------------------------------------------
+- name: "Provision Phase 1: Common Baseline"
+  hosts: slm_nodes:!00-SLM-Manager
+  become: true
+  gather_facts: true
+  serial: "100%"
+
+  tasks:
+    - name: "Common | Apply common role to all fleet nodes"
+      ansible.builtin.include_role:
+        name: common
+      tags: ['common', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 2: SLM Agent on ALL managed nodes
+# -------------------------------------------------------------------
+- name: "Provision Phase 2: SLM Agent"
+  hosts: slm_nodes:!00-SLM-Manager
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "Agent | Deploy SLM agent"
+      ansible.builtin.include_role:
+        name: slm_agent
+      tags: ['slm-agent', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 3: Data layer (Redis, PostgreSQL)
+# -------------------------------------------------------------------
+- name: "Provision Phase 3: Data Layer"
+  hosts: 04-Databases
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "Data | Deploy Redis role"
+      ansible.builtin.include_role:
+        name: redis
+      tags: ['redis', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 4: Application layer (Backend, Frontend)
+# -------------------------------------------------------------------
+- name: "Provision Phase 4a: Backend"
+  hosts: 01-Backend
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "App | Deploy backend role"
+      ansible.builtin.include_role:
+        name: backend
+      tags: ['backend', 'provision']
+
+    - name: "App | Deploy VNC role"
+      ansible.builtin.include_role:
+        name: vnc
+      tags: ['vnc', 'provision']
+
+- name: "Provision Phase 4b: Frontend"
+  hosts: 02-Frontend
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "App | Deploy frontend role"
+      ansible.builtin.include_role:
+        name: frontend
+      tags: ['frontend', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5: AI layer (AI Stack, NPU, LLM)
+# -------------------------------------------------------------------
+- name: "Provision Phase 5a: AI Stack"
+  hosts: 03-AI-Stack
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "AI | Deploy AI stack role"
+      ansible.builtin.include_role:
+        name: ai-stack
+      tags: ['ai-stack', 'provision']
+
+    - name: "AI | Deploy LLM role"
+      ansible.builtin.include_role:
+        name: llm
+      tags: ['llm', 'provision']
+
+- name: "Provision Phase 5b: NPU Worker"
+  hosts: npu-worker
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "AI | Deploy NPU worker role"
+      ansible.builtin.include_role:
+        name: npu-worker
+      tags: ['npu-worker', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 6: Automation layer (Browser)
+# -------------------------------------------------------------------
+- name: "Provision Phase 6: Browser Automation"
+  hosts: browser-automation
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "Auto | Deploy browser role"
+      ansible.builtin.include_role:
+        name: browser
+      tags: ['browser', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 7: Monitoring on all nodes (node_exporter)
+# -------------------------------------------------------------------
+- name: "Provision Phase 7: Node Monitoring"
+  hosts: slm_nodes:!00-SLM-Manager
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "Monitor | Deploy node_exporter via monitoring role"
+      ansible.builtin.include_role:
+        name: monitoring
+      vars:
+        monitoring_install_prometheus: false
+        monitoring_install_grafana: false
+        monitoring_install_node_exporter: true
+      tags: ['monitoring', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 8: Summary
+# -------------------------------------------------------------------
+- name: "Provision Summary"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: "Summary | Fleet provisioning complete"
+      ansible.builtin.debug:
+        msg:
+          - "=== Fleet Auto-Provisioning Complete ==="
+          - ""
+          - "Provisioned nodes:"
+          - "  01-Backend      : backend, vnc, slm-agent"
+          - "  02-Frontend     : frontend, slm-agent"
+          - "  npu-worker      : npu-worker, slm-agent"
+          - "  03-AI-Stack     : ai-stack, llm, slm-agent"
+          - "  04-Databases    : redis, slm-agent"
+          - "  browser-auto    : browser, slm-agent"
+          - ""
+          - "All nodes have: common + slm-agent + node_exporter"
+          - ""
+          - "Next: Verify with health-check.yml"

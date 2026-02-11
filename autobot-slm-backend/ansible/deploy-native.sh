@@ -8,6 +8,11 @@ set -euo pipefail
 
 # Load unified configuration system
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PROJECT_ROOT="$SCRIPT_DIR"
+while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
+    _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
+done
+source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 CONFIG_SCRIPT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 if [[ -f "${CONFIG_SCRIPT_DIR}/config/load_config.sh" ]]; then
     export PATH="$HOME/bin:$PATH"  # Ensure yq is available
@@ -92,36 +97,36 @@ test_connectivity() {
 show_deployment_plan() {
     log "INFO" "🚀 AutoBot Native Deployment Plan:"
     log "INFO" ""
-    log "INFO" "VM1 (172.16.168.21) - autobot-frontend:"
+    log "INFO" "VM1 (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}) - autobot-frontend:"
     log "INFO" "  • Node.js 18.x runtime"
     log "INFO" "  • Vue.js Frontend application"
     log "INFO" "  • Nginx reverse proxy (port 80/443)"
     log "INFO" "  • SystemD service: autobot-frontend"
     log "INFO" ""
-    log "INFO" "WSL (172.16.168.20) - autobot-backend:"
+    log "INFO" "WSL (${AUTOBOT_BACKEND_HOST:-172.16.168.20}) - autobot-backend:"
     log "INFO" "  • FastAPI backend service (port 8001)"
     log "INFO" "  • Terminal service (ttyd) on port 7681"
     log "INFO" "  • noVNC service on port 6080"
     log "INFO" "  • Connects to services on VMs"
     log "INFO" ""
-    log "INFO" "VM2 (172.16.168.22) - autobot-npu:"
+    log "INFO" "VM2 (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}) - autobot-npu:"
     log "INFO" "  • NPU Worker service (port 8081)"
     log "INFO" "  • OpenVINO runtime with NPU + GPU access"
     log "INFO" "  • Hardware passthrough for AI acceleration"
     log "INFO" "  • SystemD service: autobot-npu-worker"
     log "INFO" ""
-    log "INFO" "VM3 (172.16.168.23) - autobot-database:"
+    log "INFO" "VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23}) - autobot-database:"
     log "INFO" "  • Redis Stack 7.4 (native installation)"
     log "INFO" "  • RedisInsight web UI (port 8002)"
     log "INFO" "  • SystemD service: redis-stack-server"
     log "INFO" ""
-    log "INFO" "VM4 (172.16.168.24) - autobot-aistack:"
+    log "INFO" "VM4 (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}) - autobot-aistack:"
     log "INFO" "  • Python 3.11 runtime environment"
     log "INFO" "  • AI Stack service (port 8080)"
     log "INFO" "  • Ollama LLM server (port 11434)"
     log "INFO" "  • SystemD services: autobot-ai-stack, ollama"
     log "INFO" ""
-    log "INFO" "VM5 (172.16.168.25) - autobot-browser:"
+    log "INFO" "VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}) - autobot-browser:"
     log "INFO" "  • Node.js runtime for Playwright"
     log "INFO" "  • Browser service (port 3000)"
     log "INFO" "  • VNC server for desktop access (port 5900)"
@@ -157,23 +162,23 @@ AUTOBOT_BACKEND_HOST=127.0.0.1
 AUTOBOT_BACKEND_PORT=8001
 
 # VM Service Endpoints - NATIVE DEPLOYMENT
-AUTOBOT_REDIS_HOST=172.16.168.23
+AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
 AUTOBOT_REDIS_PORT=6379
 AUTOBOT_REDIS_PASSWORD=autobot123
 
-AUTOBOT_AI_STACK_HOST=172.16.168.24
+AUTOBOT_AI_STACK_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
 AUTOBOT_AI_STACK_PORT=8080
 
-AUTOBOT_NPU_WORKER_HOST=172.16.168.24
+AUTOBOT_NPU_WORKER_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
 AUTOBOT_NPU_WORKER_PORT=8081
 
-AUTOBOT_OLLAMA_HOST=172.16.168.24
+AUTOBOT_OLLAMA_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
 AUTOBOT_OLLAMA_PORT=11434
 
-AUTOBOT_BROWSER_HOST=172.16.168.25
+AUTOBOT_BROWSER_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}
 AUTOBOT_BROWSER_PORT=3000
 
-AUTOBOT_FRONTEND_HOST=172.16.168.21
+AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-172.16.168.21}
 AUTOBOT_FRONTEND_PORT=80
 
 # Deployment mode
@@ -204,13 +209,13 @@ validate_deployment() {
 
     # Test VM services
     local services=(
-        "172.16.168.21:80|Frontend"
-        "172.16.168.23:6379|Redis Stack"
-        "172.16.168.23:8002|RedisInsight"
-        "172.16.168.24:8080|AI Stack"
-        "172.16.168.24:8081|NPU Worker"
-        "172.16.168.24:11434|Ollama"
-        "172.16.168.25:3000|Browser Service"
+        "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:80|Frontend"
+        "${AUTOBOT_REDIS_HOST:-172.16.168.23}:6379|Redis Stack"
+        "${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002|RedisInsight"
+        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8080|AI Stack"
+        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8081|NPU Worker"
+        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:11434|Ollama"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:3000|Browser Service"
     )
 
     local failed_services=()
@@ -239,7 +244,7 @@ validate_deployment() {
 import redis
 import os
 try:
-    r = redis.Redis(host='172.16.168.23', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
+    r = redis.Redis(host='${AUTOBOT_REDIS_HOST:-172.16.168.23}', port=6379, password=os.environ.get('REDIS_PASSWORD', os.environ.get('AUTOBOT_REDIS_PASSWORD', '')), decode_responses=True)
     r.ping()
     print('✅ Backend can connect to VM Redis')
 except Exception as e:
@@ -264,37 +269,37 @@ show_summary() {
     log "INFO" "🎉 AutoBot Native Deployment Complete!"
     log "INFO" ""
     log "INFO" "🌐 PRIMARY ACCESS POINT:"
-    log "INFO" "  AutoBot App:  http://172.16.168.21"
+    log "INFO" "  AutoBot App:  http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
     log "INFO" ""
     log "INFO" "📡 Service Endpoints:"
-    log "INFO" "  Frontend:     http://172.16.168.21 (PRIMARY APP ACCESS)"
-    log "INFO" "  Backend:      http://172.16.168.20:8001 (WSL)"
-    log "INFO" "  NPU Worker:   http://172.16.168.22:8081"
-    log "INFO" "  Redis:        redis://172.16.168.23:6379"
-    log "INFO" "  RedisInsight: http://172.16.168.23:8002"
-    log "INFO" "  AI Stack:     http://172.16.168.24:8080"
-    log "INFO" "  Ollama:       http://172.16.168.24:11434"
-    log "INFO" "  Browser:      http://172.16.168.25:3000"
+    log "INFO" "  Frontend:     http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21} (PRIMARY APP ACCESS)"
+    log "INFO" "  Backend:      http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:8001 (WSL)"
+    log "INFO" "  NPU Worker:   http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:8081"
+    log "INFO" "  Redis:        redis://${AUTOBOT_REDIS_HOST:-172.16.168.23}:6379"
+    log "INFO" "  RedisInsight: http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002"
+    log "INFO" "  AI Stack:     http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:8080"
+    log "INFO" "  Ollama:       http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:11434"
+    log "INFO" "  Browser:      http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:3000"
     log "INFO" ""
     log "INFO" "🖥️  Management Access:"
-    log "INFO" "  Terminal:     http://172.16.168.20:7681 (WSL)"
-    log "INFO" "  noVNC:        http://172.16.168.20:6080 (WSL)"
-    log "INFO" "  VNC:          vnc://172.16.168.25:5900 (Browser VM)"
+    log "INFO" "  Terminal:     http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:7681 (WSL)"
+    log "INFO" "  noVNC:        http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:6080 (WSL)"
+    log "INFO" "  VNC:          vnc://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:5900 (Browser VM)"
     log "INFO" ""
     log "INFO" "💻 SystemD Services:"
-    log "INFO" "  WSL (172.16.168.20): autobot-backend, ttyd, tigervnc"
-    log "INFO" "  VM1 (172.16.168.21): autobot-frontend, nginx"
-    log "INFO" "  VM2 (172.16.168.22): autobot-npu-worker"
-    log "INFO" "  VM3 (172.16.168.23): redis-stack-server"
-    log "INFO" "  VM4 (172.16.168.24): autobot-ai-stack, ollama"
-    log "INFO" "  VM5 (172.16.168.25): autobot-browser, autobot-vnc"
+    log "INFO" "  WSL (${AUTOBOT_BACKEND_HOST:-172.16.168.20}): autobot-backend, ttyd, tigervnc"
+    log "INFO" "  VM1 (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}): autobot-frontend, nginx"
+    log "INFO" "  VM2 (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}): autobot-npu-worker"
+    log "INFO" "  VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23}): redis-stack-server"
+    log "INFO" "  VM4 (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}): autobot-ai-stack, ollama"
+    log "INFO" "  VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}): autobot-browser, autobot-vnc"
     log "INFO" ""
     log "INFO" "🚀 Next Steps:"
     log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=/home/kali/Desktop/AutoBot/.env.native"
     log "INFO" "  2. Start backend on WSL: python backend/main.py"
-    log "INFO" "  3. Access AutoBot: http://172.16.168.21"
+    log "INFO" "  3. Access AutoBot: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
     log "INFO" ""
-    log "INFO" "🎯 PRIMARY APP ACCESS: http://172.16.168.21"
+    log "INFO" "🎯 PRIMARY APP ACCESS: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
     log "INFO" ""
     log "INFO" "Log file: $LOG_FILE"
 }

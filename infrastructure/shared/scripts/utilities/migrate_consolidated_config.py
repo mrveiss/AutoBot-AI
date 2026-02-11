@@ -45,14 +45,14 @@ class ConfigMigrator:
 
         # Define import mappings
         self.import_mappings = {
-            "from src.config import": "from src.config_consolidated import",
-            "from src.config_helper import cfg": "from src.config_consolidated import cfg",
-            "from src.utils.config_manager import config_manager": "from src.config_consolidated import config",
-            "from src.async_config_manager import": "from src.config_consolidated import config",
+            "from config import": "from config_consolidated import",
+            "from config_helper import cfg": "from config_consolidated import cfg",
+            "from utils.config_manager import config_manager": "from config_consolidated import config",
+            "from async_config_manager import": "from config_consolidated import config",
             # Legacy variable imports
-            "from src.config import config as global_config_manager": "from src.config_consolidated import config as global_config_manager",
-            "from src.config_helper import cfg": "from src.config_consolidated import cfg",
-            "from src.utils.config_manager import ConfigManager": "from src.config_consolidated import ConsolidatedConfigManager as ConfigManager",
+            "from config import config as global_config_manager": "from config_consolidated import config as global_config_manager",
+            "from config_helper import cfg": "from config_consolidated import cfg",
+            "from utils.config_manager import ConfigManager": "from config_consolidated import ConsolidatedConfigManager as ConfigManager",
         }
 
     def scan_files_for_migration(self) -> List[Path]:
@@ -264,11 +264,11 @@ def main():
 
     stats = migrator.run_migration(dry_run=args.dry_run)
 
-    print("\n🎊 CONSOLIDATION COMPLETE!")
-    print(f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}")
-    print(f"🔧 Changes made: {stats['changes_made']}")
+    logger.info("\n🎊 CONSOLIDATION COMPLETE!")
+    logger.info(f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}")
+    logger.info(f"🔧 Changes made: {stats['changes_made']}")
     if stats["files_failed"] > 0:
-        print(f"⚠️  Files failed: {stats['files_failed']}")
+        logger.error(f"⚠️  Files failed: {stats['files_failed']}")
 
 
 if __name__ == "__main__":

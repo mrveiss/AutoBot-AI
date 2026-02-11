@@ -8,11 +8,16 @@ Shows the complete transformation from generic responses to intelligent orchestr
 """
 
 import asyncio
+import logging
 import time
 from datetime import datetime
 
 import aiohttp
-from src.constants import ServiceURLs
+from constants import ServiceURLs
+
+# Setup logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class WorkflowDemo:
@@ -51,16 +56,16 @@ class WorkflowDemo:
     async def demonstrate_transformation(self):
         """Show the before/after transformation."""
 
-        print("🚀 AutoBot Workflow Orchestration Demonstration")
-        print("=" * 70)
-        print(f"🕐 Demo started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print()
+        logger.info("🚀 AutoBot Workflow Orchestration Demonstration")
+        logger.info("=" * 70)
+        logger.info(f"🕐 Demo started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info()
 
-        print("📊 BEFORE vs AFTER Comparison:")
-        print("-" * 50)
-        print("❌ OLD: Generic, unhelpful responses")
-        print("✅ NEW: Intelligent multi-agent workflows")
-        print()
+        logger.info("📊 BEFORE vs AFTER Comparison:")
+        logger.info("-" * 50)
+        logger.info("❌ OLD: Generic, unhelpful responses")
+        logger.info("✅ NEW: Intelligent multi-agent workflows")
+        logger.info()
 
         # Test backend connectivity first
         if not await self.test_connectivity():
@@ -69,7 +74,7 @@ class WorkflowDemo:
         # Run demonstration scenarios
         for i, scenario in enumerate(self.demo_scenarios, 1):
             await self.demonstrate_scenario(i, scenario)
-            print()
+            logger.info()
 
         # Show workflow capabilities summary
         await self.show_capabilities_summary()
@@ -79,48 +84,48 @@ class WorkflowDemo:
     async def test_connectivity(self):
         """Test if the backend is accessible."""
 
-        print("🔍 Testing Backend Connectivity")
-        print("-" * 40)
+        logger.info("🔍 Testing Backend Connectivity")
+        logger.info("-" * 40)
 
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(f"{self.base_url}/api/hello") as response:
                     if response.status == 200:
                         result = await response.json()
-                        print(f"✅ Backend connected: {result.get('message', 'OK')}")
+                        logger.info(f"✅ Backend connected: {result.get('message', 'OK')}")
 
                         # Test workflow endpoints
                         async with session.get(
                             f"{self.base_url}/api/workflow/workflows"
                         ) as wf_response:
                             if wf_response.status == 200:
-                                print("✅ Workflow API accessible")
+                                logger.info("✅ Workflow API accessible")
                                 return True
                             else:
-                                print(
+                                logger.info(
                                     f"❌ Workflow API not accessible: {wf_response.status}"
                                 )
-                                print(
+                                logger.info(
                                     "   Please restart backend to load workflow endpoints"
                                 )
                                 return False
 
                     else:
-                        print(f"❌ Backend connection failed: {response.status}")
+                        logger.info(f"❌ Backend connection failed: {response.status}")
                         return False
 
             except Exception as e:
-                print(f"❌ Cannot connect to backend: {e}")
-                print("   Make sure AutoBot is running: python main.py")
+                logger.info(f"❌ Cannot connect to backend: {e}")
+                logger.info("   Make sure AutoBot is running: python main.py")
                 return False
 
     async def demonstrate_scenario(self, index, scenario):
         """Demonstrate a specific scenario."""
 
-        print(f"{index}. {scenario['name']}")
-        print("   Query: \"{scenario['request']}\"")
-        print(f"   Expected: {scenario['expected']}")
-        print("   " + "-" * 60)
+        logger.info(f"{index}. {scenario['name']}")
+        logger.info("   Query: \"{scenario['request']}\"")
+        logger.info(f"   Expected: {scenario['expected']}")
+        logger.info("   " + "-" * 60)
 
         async with aiohttp.ClientSession() as session:
             try:
@@ -146,11 +151,11 @@ class WorkflowDemo:
 
                     else:
                         error_text = await response.text()
-                        print(f"   ❌ Request failed: {response.status}")
-                        print(f"   Error: {error_text}")
+                        logger.info(f"   ❌ Request failed: {response.status}")
+                        logger.info(f"   Error: {error_text}")
 
             except Exception as e:
-                print(f"   ❌ Execution error: {e}")
+                logger.info(f"   ❌ Execution error: {e}")
 
     async def analyze_workflow_response(self, result, scenario, execution_time):
         """Analyze and display workflow response details."""
@@ -163,11 +168,11 @@ class WorkflowDemo:
             classification_match = classification == scenario["classification"]
             status_icon = "✅" if classification_match else "⚠️"
 
-            print(f"   {status_icon} Classification: {classification.upper()}")
-            print(f"   🕐 Response Time: {execution_time:.2f}s")
+            logger.info(f"   {status_icon} Classification: {classification.upper()}")
+            logger.info(f"   🕐 Response Time: {execution_time:.2f}s")
 
             if classification == "simple":
-                print("   💬 Direct response provided - no workflow needed")
+                logger.info("   💬 Direct response provided - no workflow needed")
 
             elif classification in ["research", "install", "complex"]:
                 agents = workflow_response.get("agents_involved", [])
@@ -175,36 +180,36 @@ class WorkflowDemo:
                 duration = workflow_response.get("estimated_duration", "unknown")
                 approvals = workflow_response.get("user_approvals_needed", 0)
 
-                print(f"   🤖 Agents: {', '.join(agents)}")
-                print(f"   📋 Steps: {steps}")
-                print(f"   ⏱️  Duration: {duration}")
-                print(f"   👤 Approvals: {approvals}")
+                logger.info(f"   🤖 Agents: {', '.join(agents)}")
+                logger.info(f"   📋 Steps: {steps}")
+                logger.info(f"   ⏱️  Duration: {duration}")
+                logger.info(f"   👤 Approvals: {approvals}")
 
                 # Show workflow preview for complex requests
                 if classification == "complex":
-                    print("   📝 Workflow Steps:")
+                    logger.info("   📝 Workflow Steps:")
                     preview = workflow_response.get("workflow_preview", [])
                     for j, step in enumerate(preview[:4], 1):
-                        print(f"      {j}. {step}")
+                        logger.info(f"      {j}. {step}")
                     if len(preview) > 4:
-                        print(f"      ... and {len(preview) - 4} more steps")
+                        logger.info(f"      ... and {len(preview) - 4} more steps")
 
             # Show workflow ID if available
             if result.get("workflow_id"):
-                print(f"   🔗 Workflow ID: {result['workflow_id']}")
+                logger.info(f"   🔗 Workflow ID: {result['workflow_id']}")
 
         elif result.get("type") == "direct_execution":
-            print("   💬 Direct execution - simple response")
+            logger.info("   💬 Direct execution - simple response")
 
         else:
-            print(f"   ❓ Unknown response type: {result.get('type', 'none')}")
+            logger.info(f"   ❓ Unknown response type: {result.get('type', 'none')}")
 
     async def show_capabilities_summary(self):
         """Show a summary of system capabilities."""
 
-        print("=" * 70)
-        print("🎯 AutoBot Workflow Orchestration Capabilities Summary")
-        print("=" * 70)
+        logger.info("=" * 70)
+        logger.info("🎯 AutoBot Workflow Orchestration Capabilities Summary")
+        logger.info("=" * 70)
 
         capabilities = [
             {
@@ -240,22 +245,22 @@ class WorkflowDemo:
         ]
 
         for cap in capabilities:
-            print(f"\n🔧 {cap['feature']}")
-            print(f"   📄 {cap['description']}")
-            print(f"   💡 Benefit: {cap['benefit']}")
+            logger.info(f"\n🔧 {cap['feature']}")
+            logger.info(f"   📄 {cap['description']}")
+            logger.info(f"   💡 Benefit: {cap['benefit']}")
 
-        print("\n" + "=" * 70)
-        print("🎉 TRANSFORMATION COMPLETE!")
-        print("   From: Generic AI responses")
-        print("   To:   Intelligent workflow orchestration")
-        print("=" * 70)
+        logger.info("\n" + "=" * 70)
+        logger.info("🎉 TRANSFORMATION COMPLETE!")
+        logger.info("   From: Generic AI responses")
+        logger.info("   To:   Intelligent workflow orchestration")
+        logger.info("=" * 70)
 
     async def test_specific_workflow(self, request_text):
         """Test a specific workflow request in detail."""
 
-        print("\n🔬 Detailed Workflow Analysis")
-        print(f'Request: "{request_text}"')
-        print("-" * 50)
+        logger.info("\n🔬 Detailed Workflow Analysis")
+        logger.info(f'Request: "{request_text}"')
+        logger.info("-" * 50)
 
         async with aiohttp.ClientSession() as session:
             try:
@@ -274,26 +279,26 @@ class WorkflowDemo:
                         workflow_id = result.get("workflow_id")
 
                         if workflow_id:
-                            print(f"✅ Workflow created: {workflow_id}")
+                            logger.info(f"✅ Workflow created: {workflow_id}")
 
                             # Monitor workflow progress
                             await self.monitor_workflow_execution(session, workflow_id)
 
                         else:
-                            print("✅ Direct execution - no workflow needed")
+                            logger.info("✅ Direct execution - no workflow needed")
 
                     else:
                         error_text = await response.text()
-                        print(f"❌ Workflow creation failed: {error_text}")
+                        logger.info(f"❌ Workflow creation failed: {error_text}")
 
             except Exception as e:
-                print(f"❌ Workflow test error: {e}")
+                logger.info(f"❌ Workflow test error: {e}")
 
     async def monitor_workflow_execution(self, session, workflow_id):
         """Monitor workflow execution in real-time."""
 
-        print(f"📊 Monitoring Workflow: {workflow_id}")
-        print("-" * 40)
+        logger.info(f"📊 Monitoring Workflow: {workflow_id}")
+        logger.info("-" * 40)
 
         for i in range(10):  # Check up to 10 times
             try:
@@ -308,26 +313,26 @@ class WorkflowDemo:
                         progress = status.get("progress", 0) * 100
                         workflow_status = status.get("status", "unknown")
 
-                        print(
+                        logger.info(
                             f"   Step {current_step}/{total_steps} ({progress:.0f}%) - {workflow_status}"
                         )
 
                         if workflow_status in ["completed", "failed", "cancelled"]:
-                            print(f"   🏁 Workflow {workflow_status}")
+                            logger.info(f"   🏁 Workflow {workflow_status}")
                             break
 
                         # Check for pending approvals
                         if workflow_status == "waiting_approval":
-                            print("   👤 User approval required - workflow paused")
-                            print("   💡 In production, user would see approval dialog")
+                            logger.info("   👤 User approval required - workflow paused")
+                            logger.info("   💡 In production, user would see approval dialog")
                             break
 
                     else:
-                        print(f"   ❌ Status check failed: {response.status}")
+                        logger.info(f"   ❌ Status check failed: {response.status}")
                         break
 
             except Exception as e:
-                print(f"   ❌ Monitoring error: {e}")
+                logger.info(f"   ❌ Monitoring error: {e}")
                 break
 
             await asyncio.sleep(2)  # Wait 2 seconds between checks
@@ -347,18 +352,18 @@ async def main():
             "find tools that would require to do network scan"
         )
 
-        print("\n🎯 Demo Complete - Key Takeaways:")
-        print("   • AutoBot now intelligently classifies requests")
-        print("   • Complex requests trigger multi-agent workflows")
-        print("   • Users get specific, actionable solutions")
-        print("   • No more generic, unhelpful responses")
-        print("   • Full transparency with progress tracking")
-        print("   • Human oversight maintained through approvals")
-        print("\n🚀 AutoBot has evolved from simple chat to intelligent orchestration!")
+        logger.info("\n🎯 Demo Complete - Key Takeaways:")
+        logger.info("   • AutoBot now intelligently classifies requests")
+        logger.info("   • Complex requests trigger multi-agent workflows")
+        logger.info("   • Users get specific, actionable solutions")
+        logger.info("   • No more generic, unhelpful responses")
+        logger.info("   • Full transparency with progress tracking")
+        logger.info("   • Human oversight maintained through approvals")
+        logger.info("\n🚀 AutoBot has evolved from simple chat to intelligent orchestration!")
 
     else:
-        print("\n❌ Demo failed - check backend status")
-        print("   Restart backend: source venv/bin/activate && python main.py")
+        logger.info("\n❌ Demo failed - check backend status")
+        logger.info("   Restart backend: source venv/bin/activate && python main.py")
 
 
 if __name__ == "__main__":

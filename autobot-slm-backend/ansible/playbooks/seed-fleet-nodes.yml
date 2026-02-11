@@ -1,0 +1,119 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Seed Fleet Nodes into SLM Database
+#
+# Registers all inventory nodes via the SLM REST API so that
+# heartbeats from agents are accepted and the fleet dashboard
+# shows all machines.
+#
+# Prerequisites:
+#   - SLM backend must be running on the SLM Manager node
+#   - Default admin user must exist (auto-created on first boot)
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/seed-fleet-nodes.yml
+#
+# Override credentials:
+#   -e "slm_admin_user=myuser" -e "slm_admin_password=mypass"
+#
+# Override API URL:
+#   -e "slm_api_url=https://172.16.168.19"
+---
+- name: Seed Fleet Nodes into SLM Database
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    slm_api_url: "https://172.16.168.19"
+    slm_admin_user: "admin"
+    # Password comes from hostvars (set by slm_manager role) or override
+    slm_admin_password: >-
+      {{ hostvars['00-SLM-Manager']['slm_admin_password']
+         | default(lookup('env', 'SLM_ADMIN_PASSWORD'))
+         | default('admin') }}
+
+    # Map inventory hostnames to SLM deployment roles.
+    # Role names must match AVAILABLE_ROLES in api/deployments.py.
+    node_role_map:
+      00-SLM-Manager:
+        - slm-agent
+        - postgresql
+        - monitoring
+      01-Backend:
+        - slm-agent
+        - backend
+        - vnc
+      02-Frontend:
+        - slm-agent
+        - frontend
+      npu-worker:
+        - slm-agent
+        - npu-worker
+      03-AI-Stack:
+        - slm-agent
+        - ai-stack
+        - llm
+      04-Databases:
+        - slm-agent
+        - redis
+      browser-automation:
+        - slm-agent
+        - browser-automation
+      05-Node-26:
+        - slm-agent
+      06-Node-27:
+        - slm-agent
+
+  tasks:
+    - name: "Authenticate with SLM API"
+      ansible.builtin.uri:
+        url: "{{ slm_api_url }}/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "{{ slm_admin_user }}"
+          password: "{{ slm_admin_password | trim }}"
+        status_code: 200
+        validate_certs: false
+      register: auth_result
+      retries: 5
+      delay: 5
+      until: auth_result.status == 200
+
+    - name: "Register fleet nodes"
+      ansible.builtin.uri:
+        url: "{{ slm_api_url }}/api/nodes"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ auth_result.json.access_token }}"
+        body_format: json
+        body:
+          hostname: "{{ item }}"
+          ip_address: "{{ hostvars[item].ansible_host }}"
+          node_id: "{{ hostvars[item].slm_node_id }}"
+          roles: "{{ node_role_map[item] | default(['slm-agent']) }}"
+          ssh_user: "{{ hostvars[item].ansible_user | default('autobot') }}"
+          ssh_port: 22
+          auth_method: "key"
+          import_existing: true
+          auto_enroll: false
+        # 201 = created, 400 = already exists (idempotent)
+        status_code: [201, 400]
+        validate_certs: false
+      loop: "{{ groups['slm_nodes'] }}"
+      loop_control:
+        label: "{{ item }} ({{ hostvars[item].ansible_host }})"
+      register: register_results
+
+    - name: "Registration summary"
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }} ({{ hostvars[item.item].ansible_host }}):
+          {{ 'REGISTERED' if item.status == 201 else 'ALREADY EXISTS' }}
+      loop: "{{ register_results.results }}"
+      loop_control:
+        label: "{{ item.item }}"

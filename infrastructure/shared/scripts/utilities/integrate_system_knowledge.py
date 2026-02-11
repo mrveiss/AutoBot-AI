@@ -20,6 +20,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _build_man_content_parts(man_data: dict, command: str, section: int) -> list:
+    """Build content parts for man page.
+
+    Helper for integrate_cached_man_pages (Issue #825).
+    """
+    description = man_data.get("description", f"Manual page for {command}")
+    content_parts = [
+        f"# {command}({section}) - {description}",
+        "",
+        f"**Synopsis:** {man_data.get('synopsis', 'N/A')}",
+        "",
+        "## Options:",
+    ]
+
+    for opt in man_data.get("options", [])[:20]:  # Top 20 options
+        if isinstance(opt, dict):
+            content_parts.append(
+                f"- `{opt.get('flag', '')}`: {opt.get('description', '')}"
+            )
+        else:
+            content_parts.append(f"- {opt}")
+
+    if man_data.get("examples"):
+        content_parts.append("")
+        content_parts.append("## Examples:")
+        for ex in man_data.get("examples", [])[:5]:  # Top 5 examples
+            if isinstance(ex, dict):
+                content_parts.append(
+                    f"- `{ex.get('command', '')}`: {ex.get('description', '')}"
+                )
+            else:
+                content_parts.append(f"- {ex}")
+
+    if man_data.get("see_also"):
+        content_parts.append("")
+        content_parts.append(
+            f"**See Also:** {', '.join(man_data.get('see_also', []))}"
+        )
+
+    return content_parts
+
+
 async def integrate_cached_man_pages(kb_v2):
     """Integrate cached man pages from data/system_knowledge/man_pages/"""
     logger.info("Starting cached man pages integration...")
@@ -41,42 +83,9 @@ async def integrate_cached_man_pages(kb_v2):
 
             command = man_data.get("command", man_file.stem.split("_")[0])
             section = man_data.get("section", 1)
-            description = man_data.get("description", f"Manual page for {command}")
 
             # Build comprehensive content
-            content_parts = [
-                f"# {command}({section}) - {description}",
-                "",
-                f"**Synopsis:** {man_data.get('synopsis', 'N/A')}",
-                "",
-                "## Options:",
-            ]
-
-            for opt in man_data.get("options", [])[:20]:  # Top 20 options
-                if isinstance(opt, dict):
-                    content_parts.append(
-                        f"- `{opt.get('flag', '')}`: {opt.get('description', '')}"
-                    )
-                else:
-                    content_parts.append(f"- {opt}")
-
-            if man_data.get("examples"):
-                content_parts.append("")
-                content_parts.append("## Examples:")
-                for ex in man_data.get("examples", [])[:5]:  # Top 5 examples
-                    if isinstance(ex, dict):
-                        content_parts.append(
-                            f"- `{ex.get('command', '')}`: {ex.get('description', '')}"
-                        )
-                    else:
-                        content_parts.append(f"- {ex}")
-
-            if man_data.get("see_also"):
-                content_parts.append("")
-                content_parts.append(
-                    f"**See Also:** {', '.join(man_data.get('see_also', []))}"
-                )
-
+            content_parts = _build_man_content_parts(man_data, command, section)
             content = "\n".join(content_parts)
 
             # Store in Knowledge Base V2
@@ -208,7 +217,7 @@ async def main():
 
     try:
         # Import and initialize Knowledge Base V2
-        from src.knowledge_base import KnowledgeBase
+        from knowledge_base import KnowledgeBase
 
         logger.info("\n1. Initializing Knowledge Base V2...")
         kb_v2 = KnowledgeBase()

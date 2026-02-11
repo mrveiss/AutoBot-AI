@@ -1,4 +1,8 @@
 #!/bin/bash
+# =============================================================================
+# DEV/SANDBOX ONLY - This script assumes Docker containers.
+# Production uses native deployments. See Ansible roles for equivalent.
+# =============================================================================
 
 # Script to start ALL AutoBot containers for full functionality
 # This ensures Redis, NPU Worker, AI Stack, and Playwright are all running

@@ -13,5 +13,6 @@ if _backend_path.exists() and str(_backend_path) not in sys.path:
 
 from .redis_client import get_redis_client
 from .ssot_config import config
+from .tracing import get_tracer, init_tracing
 
-__all__ = ["get_redis_client", "config"]
+__all__ = ["get_redis_client", "config", "get_tracer", "init_tracing"]
