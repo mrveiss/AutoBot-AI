@@ -131,7 +131,7 @@ export function useSsoApi() {
     if (orgId) params.org_id = orgId
     if (activeOnly !== undefined) params.active_only = activeOnly
     const response = await client.get<SSOProviderListResponse>(
-      '/sso/providers',
+      '/sso-providers',
       { params }
     )
     return response.data
@@ -141,7 +141,7 @@ export function useSsoApi() {
     data: SSOProviderCreate
   ): Promise<SSOProviderResponse> {
     const response = await client.post<SSOProviderResponse>(
-      '/sso/providers',
+      '/sso-providers',
       data
     )
     return response.data
@@ -151,7 +151,7 @@ export function useSsoApi() {
     providerId: string
   ): Promise<SSOProviderResponse> {
     const response = await client.get<SSOProviderResponse>(
-      `/sso/providers/${providerId}`
+      `/sso-providers/${providerId}`
     )
     return response.data
   }
@@ -161,21 +161,21 @@ export function useSsoApi() {
     data: SSOProviderUpdate
   ): Promise<SSOProviderResponse> {
     const response = await client.patch<SSOProviderResponse>(
-      `/sso/providers/${providerId}`,
+      `/sso-providers/${providerId}`,
       data
     )
     return response.data
   }
 
   async function deleteProvider(providerId: string): Promise<void> {
-    await client.delete(`/sso/providers/${providerId}`)
+    await client.delete(`/sso-providers/${providerId}`)
   }
 
   async function testProvider(
     providerId: string
   ): Promise<SSOTestResponse> {
-    const response = await client.post<SSOTestResponse>(
-      `/sso/providers/${providerId}/test`
+    const response = await client.get<SSOTestResponse>(
+      `/sso-providers/${providerId}/test`
     )
     return response.data
   }
@@ -186,7 +186,7 @@ export function useSsoApi() {
 
   async function getActiveProviders(): Promise<ActiveProvider[]> {
     const response = await client.get<ActiveProvider[]>(
-      '/sso/providers/active'
+      '/auth/sso/providers'
     )
     return response.data
   }
@@ -194,8 +194,8 @@ export function useSsoApi() {
   async function initiateSSOLogin(
     providerId: string
   ): Promise<SSOLoginInitResponse> {
-    const response = await client.post<SSOLoginInitResponse>(
-      `/sso/login/${providerId}/initiate`
+    const response = await client.get<SSOLoginInitResponse>(
+      `/auth/sso/${providerId}/login`
     )
     return response.data
   }
@@ -206,8 +206,8 @@ export function useSsoApi() {
     password: string
   ): Promise<LDAPLoginResponse> {
     const response = await client.post<LDAPLoginResponse>(
-      `/sso/login/${providerId}/ldap`,
-      { username, password }
+      '/auth/sso/ldap/login',
+      { provider_id: providerId, username, password }
     )
     return response.data
   }

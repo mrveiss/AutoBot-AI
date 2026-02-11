@@ -126,7 +126,13 @@ async def lifespan(app: FastAPI):
 
 
 async def _ensure_admin_user():
-    """Create default admin user if none exists."""
+    """Create default admin user if none exists.
+
+    Reads SLM_ADMIN_PASSWORD env var; generates random if not set.
+    """
+    import os
+    import secrets
+
     from models.database import User
     from services.auth import auth_service
     from sqlalchemy import select
@@ -136,15 +142,22 @@ async def _ensure_admin_user():
         if result.scalar_one_or_none():
             return
 
+        password = os.getenv("SLM_ADMIN_PASSWORD", "")
+        if not password:
+            password = secrets.token_urlsafe(16)
+            logger.critical(
+                "Initial admin password: %s — CHANGE IMMEDIATELY",
+                password,
+            )
+
         admin_user = User(
             username="admin",
-            password_hash=auth_service.hash_password("admin"),
+            password_hash=auth_service.hash_password(password),
             is_admin=True,
         )
         db.add(admin_user)
         await db.commit()
-        logger.warning("Created default admin user (username: admin, password: admin)")
-        logger.warning("CHANGE THE DEFAULT PASSWORD IMMEDIATELY!")
+        logger.warning("Created default admin user (username: admin)")
 
 
 async def _seed_default_roles():

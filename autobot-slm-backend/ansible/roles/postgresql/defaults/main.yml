@@ -60,6 +60,7 @@ db_env_prefix: "SLM"
 databases:
   - slm
   - slm_users
+  - autobot_users
 
 # AutoBot user
 autobot_user: "autobot"

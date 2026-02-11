@@ -8,11 +8,45 @@ Centralized configuration for the standalone SLM backend.
 PostgreSQL replaces SQLite for all database operations (Issue #786).
 """
 
+import logging
 import os
+import secrets
 from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
+
+
+def _get_cors_origins() -> list:
+    """Build CORS origins from env var or infrastructure SSOT.
+
+    Override with SLM_CORS_ORIGINS (comma-separated).
+    Otherwise, generates origins from all known infrastructure VMs.
+    """
+    env_origins = os.getenv("SLM_CORS_ORIGINS", "")
+    if env_origins:
+        return [o.strip() for o in env_origins.split(",") if o.strip()]
+
+    try:
+        from autobot_shared.network_constants import NetworkConstants
+
+        origins: set[str] = set()
+        for host in NetworkConstants.get_host_configs():
+            ip = host["ip"]
+            port = host["port"]
+            origins.add(f"http://{ip}:{port}")
+            origins.add(f"https://{ip}")
+        origins.add("https://172.16.168.19")
+        origins.add("https://172.16.168.21")
+        return sorted(origins)
+    except ImportError:
+        logger.warning("autobot_shared not available; using SLM-only CORS")
+        return [
+            "https://172.16.168.19",
+            "https://172.16.168.21",
+        ]
 
 
 class Settings(BaseSettings):
@@ -32,7 +66,8 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Main SLM operational database (nodes, deployments, backups, etc.)
     database_url: str = os.getenv(
-        "SLM_DATABASE_URL", "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm"
+        "SLM_DATABASE_URL",
+        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm",
     )
 
     # SLM admin users database (fleet administrators)
@@ -41,10 +76,10 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm_users",
     )
 
-    # AutoBot application users database (on Redis VM)
+    # AutoBot application users database (colocated on SLM server)
     autobot_users_database_url: str = os.getenv(
         "AUTOBOT_USERS_DATABASE_URL",
-        "postgresql+asyncpg://autobot_app@172.16.168.23:5432/autobot_users",
+        "postgresql+asyncpg://slm_app@127.0.0.1:5432/autobot_users",
     )
 
     # Database connection pool settings
@@ -53,7 +88,7 @@ class Settings(BaseSettings):
     db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", "3600"))
 
     # Server
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 — bound behind nginx reverse proxy
     port: int = 8000
     debug: bool = False
 
@@ -64,6 +99,26 @@ class Settings(BaseSettings):
 
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
+
+    def validate_secrets(self) -> None:
+        """Generate random keys if not configured.
+
+        Logs CRITICAL warnings — keys won't persist across restarts.
+        """
+        if not self.secret_key:
+            self.secret_key = secrets.token_urlsafe(32)
+            logger.critical(
+                "SLM_SECRET_KEY not set - using random key. "
+                "Tokens invalidate on restart. "
+                "Set SLM_SECRET_KEY in environment."
+            )
+        if not self.encryption_key:
+            self.encryption_key = secrets.token_urlsafe(32)
+            logger.critical(
+                "SLM_ENCRYPTION_KEY not set - using random key. "
+                "Encrypted data unreadable after restart. "
+                "Set SLM_ENCRYPTION_KEY in environment."
+            )
 
     # VNC defaults (configurable via env vars)
     vnc_default_port: int = int(os.getenv("SLM_VNC_DEFAULT_PORT", "6080"))
@@ -84,10 +139,9 @@ class Settings(BaseSettings):
     reconcile_interval: int = 60  # seconds
 
     # CORS settings
-    cors_origins: list = ["*"]
+    cors_origins: list = _get_cors_origins()
 
-    # External URL - the address remote nodes use to reach the SLM backend
-    # Backend binds to 127.0.0.1:8000, so remote agents use nginx reverse proxy
+    # External URL - remote nodes use nginx reverse proxy
     external_url: str = os.getenv("SLM_EXTERNAL_URL", "https://172.16.168.19")
 
     class Config:
@@ -96,6 +150,9 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Validate secrets on import (generate random if not set)
+settings.validate_secrets()
 
 # Ensure directories exist
 settings.data_dir.mkdir(parents=True, exist_ok=True)

@@ -266,7 +266,7 @@ export function usePerformanceMonitoring(options: {
     error.value = null
     try {
       const data = await apiRequest<{ rules: AlertRule[] }>(
-        `${API_BASE}/performance/alert-rules`
+        `${API_BASE}/performance/alerts/rules`
       )
       alertRules.value = data.rules ?? []
     } catch (err) {
@@ -283,7 +283,7 @@ export function usePerformanceMonitoring(options: {
   ): Promise<AlertRule | null> {
     try {
       const created = await apiRequest<AlertRule>(
-        `${API_BASE}/performance/alert-rules`,
+        `${API_BASE}/performance/alerts/rules`,
         { method: 'POST', body: JSON.stringify(rule) }
       )
       await fetchAlertRules()
@@ -301,8 +301,8 @@ export function usePerformanceMonitoring(options: {
   ): Promise<AlertRule | null> {
     try {
       const updated = await apiRequest<AlertRule>(
-        `${API_BASE}/performance/alert-rules/${ruleId}`,
-        { method: 'PATCH', body: JSON.stringify(updates) }
+        `${API_BASE}/performance/alerts/rules/${ruleId}`,
+        { method: 'PUT', body: JSON.stringify(updates) }
       )
       await fetchAlertRules()
       return updated
@@ -316,7 +316,7 @@ export function usePerformanceMonitoring(options: {
   async function deleteAlertRule(ruleId: string): Promise<boolean> {
     try {
       await apiRequest<void>(
-        `${API_BASE}/performance/alert-rules/${ruleId}`,
+        `${API_BASE}/performance/alerts/rules/${ruleId}`,
         { method: 'DELETE' }
       )
       await fetchAlertRules()

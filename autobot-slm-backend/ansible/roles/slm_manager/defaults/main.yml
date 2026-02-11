@@ -31,5 +31,9 @@ slm_tls_key: "{{ slm_certs_dir }}/slm.key"
 slm_tls_days: 365
 slm_tls_subject: "/CN={{ ansible_host | default('172.16.168.19') }}/O=AutoBot/C=US"
 
+# Credentials
+slm_credentials_dir: /etc/autobot
+slm_credentials_file: slm-secrets.env
+
 # Nginx
 slm_nginx_config: autobot-slm
