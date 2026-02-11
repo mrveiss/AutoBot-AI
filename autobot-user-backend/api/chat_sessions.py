@@ -171,6 +171,21 @@ class ActivityBatchCreate(BaseModel):
     )
 
 
+# Issue #689: Session sharing model
+class SessionShareRequest(BaseModel):
+    """Request to share a session with users"""
+
+    share_with: list[str] = Field(
+        ..., min_length=1, description="User IDs to share with"
+    )
+    include_knowledge: bool = Field(
+        False, description="Include KB facts from this session"
+    )
+    knowledge_facts: Optional[list[str]] = Field(
+        None, description="Specific fact IDs to share (all if omitted)"
+    )
+
+
 # ====================================================================
 # Configuration Constants
 # ====================================================================
@@ -392,10 +407,10 @@ async def list_sessions(
     scope: Optional[str] = None,
     team_id: Optional[str] = None,
 ):
-    """List chat sessions with optional org/team scope filtering (#684).
+    """List chat sessions with optional org/team/shared scope filtering (#684, #689).
 
     Query params:
-        scope: "user" (default) | "org" | "team"
+        scope: "user" (default) | "org" | "team" | "shared"
         team_id: required when scope=team
     """
     request_id = generate_request_id()
@@ -413,6 +428,10 @@ async def list_sessions(
             "Chat history manager not initialized",
             details={"component": "chat_history_manager"},
         )
+
+    # Issue #689: Shared session listing
+    if scope == "shared":
+        return await _list_shared_sessions(request, request_id, chat_history_manager)
 
     # Issue #684: Scoped session listing
     if scope in ("org", "team"):
@@ -584,6 +603,54 @@ async def _list_team_sessions(
             "team_id": team_id,
         },
         message="Team sessions retrieved",
+        request_id=request_id,
+    )
+
+
+async def _list_shared_sessions(
+    request: Request,
+    request_id: str,
+    chat_history_manager,
+):
+    """List sessions shared with the authenticated user (#689).
+
+    Helper for list_sessions.
+    """
+    user_data = auth_middleware.get_user_from_request(request)
+    if not user_data:
+        return create_success_response(
+            data={"sessions": [], "count": 0, "scope": "shared"},
+            message="Authentication required",
+            request_id=request_id,
+        )
+
+    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+
+    redis = await get_redis_mgr(async_client=True, database="main")
+    from backend.security.session_ownership import SessionOwnershipValidator
+
+    validator = SessionOwnershipValidator(redis)
+    user_id = user_data.get("user_id", user_data.get("username"))
+    session_ids = set(await validator.get_shared_sessions(user_id))
+
+    if not session_ids:
+        return create_success_response(
+            data={"sessions": [], "count": 0, "scope": "shared"},
+            message="No shared sessions",
+            request_id=request_id,
+        )
+
+    all_sessions = await chat_history_manager.list_sessions_fast()
+    filtered = [s for s in all_sessions if s.get("id") in session_ids]
+    filtered.sort(key=lambda x: x.get("lastModified", ""), reverse=True)
+
+    return create_success_response(
+        data={
+            "sessions": filtered,
+            "count": len(filtered),
+            "scope": "shared",
+        },
+        message="Shared sessions retrieved",
         request_id=request_id,
     )
 
@@ -1755,3 +1822,128 @@ async def get_session_activities(
             message="Failed to retrieve activities",
             request_id=request_id,
         )
+
+
+# ====================================================================
+# Session Sharing (Issue #689)
+# ====================================================================
+
+
+async def _share_session_facts(
+    request: Request,
+    session_id: str,
+    share_with: list[str],
+    shared_by: str,
+    knowledge_facts: Optional[list[str]],
+) -> Dict:
+    """Share KB facts from a session with other users.
+
+    Helper for share_session (#689).
+    """
+    kb_manager = getattr(request.app.state, "kb_manager", None)
+    if not kb_manager:
+        return {"shared_count": 0, "errors": ["KB manager unavailable"]}
+
+    if knowledge_facts:
+        fact_ids = knowledge_facts
+    else:
+        fact_ids = await kb_manager.get_facts_by_session(session_id)
+
+    if not fact_ids:
+        return {"shared_count": 0, "errors": []}
+
+    return await kb_manager.share_facts(fact_ids, share_with, shared_by)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="share_session",
+    error_code_prefix="CHAT",
+)
+@router.post("/chat/sessions/{session_id}/share")
+async def share_session(
+    session_id: str,
+    share_data: SessionShareRequest,
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership),
+):
+    """Share a conversation with other users, optionally including KB facts (#689)."""
+    request_id = generate_request_id()
+    log_request_context(request, "share_session", request_id)
+
+    _validate_session_id_or_raise(session_id)
+
+    user_data = ownership.get("user_data", {})
+    shared_by = user_data.get("username", "unknown")
+
+    # Share session access
+    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from backend.security.session_ownership import SessionOwnershipValidator
+
+    redis = await get_redis_mgr(async_client=True, database="main")
+    validator = SessionOwnershipValidator(redis)
+    await validator.share_session(session_id, share_data.share_with, shared_by)
+
+    # Optionally share KB facts
+    facts_result = None
+    if share_data.include_knowledge:
+        facts_result = await _share_session_facts(
+            request,
+            session_id,
+            share_data.share_with,
+            shared_by,
+            share_data.knowledge_facts,
+        )
+
+    return create_success_response(
+        data={
+            "session_id": session_id,
+            "shared_with": share_data.share_with,
+            "include_knowledge": share_data.include_knowledge,
+            "facts_shared": facts_result,
+        },
+        message="Session shared successfully",
+        request_id=request_id,
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_session_share_preview",
+    error_code_prefix="CHAT",
+)
+@router.get("/chat/sessions/{session_id}/share/preview")
+async def get_share_preview(
+    session_id: str,
+    request: Request,
+    ownership: Dict = Depends(validate_session_ownership),
+):
+    """Preview KB facts that would be shared with a session (#689)."""
+    request_id = generate_request_id()
+    _validate_session_id_or_raise(session_id)
+
+    kb_manager = getattr(request.app.state, "kb_manager", None)
+    facts = []
+    if kb_manager:
+        fact_ids = await kb_manager.get_facts_by_session(session_id)
+        for fid in fact_ids:
+            fact = kb_manager.get_fact(fid)
+            if fact:
+                facts.append(
+                    {
+                        "id": fact.get("fact_id", fid),
+                        "content": fact.get("content", "")[:200],
+                        "full_content": fact.get("content", ""),
+                        "metadata": fact.get("metadata", {}),
+                    }
+                )
+
+    return create_success_response(
+        data={
+            "session_id": session_id,
+            "fact_count": len(facts),
+            "facts": facts,
+        },
+        message="Share preview retrieved",
+        request_id=request_id,
+    )

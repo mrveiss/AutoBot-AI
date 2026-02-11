@@ -7,6 +7,10 @@
  * Role Management Modal (Issue #779)
  *
  * Allows viewing and managing roles for a node.
+ *
+ * Issue #754: Added role="dialog", aria-modal, aria-labelledby,
+ * keyboard escape handling, accessible labels on buttons,
+ * scope attributes on table headers, role="status" on sync message.
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -109,21 +113,30 @@ function formatDate(dateStr: string | null): string {
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="emit('close')">
+  <div
+    class="modal-overlay"
+    @click.self="emit('close')"
+    @keydown.escape="emit('close')"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="role-mgmt-title"
+  >
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Role Management</h3>
+        <h3 id="role-mgmt-title">Role Management</h3>
         <span class="hostname">{{ hostname }}</span>
-        <button class="close-btn" @click="emit('close')">×</button>
+        <button class="close-btn" @click="emit('close')" aria-label="Close role management">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
 
-      <div v-if="isLoading" class="loading">
+      <div v-if="isLoading" class="loading" role="status">
         Loading role information...
       </div>
 
       <div v-else class="modal-body">
         <!-- Detected Roles Section -->
-        <section class="section">
+        <section class="section" aria-label="Auto-detected roles">
           <h4>Auto-Detected Roles</h4>
           <div v-if="detectedRolesList.length === 0" class="empty-message">
             No roles auto-detected on this node.
@@ -141,16 +154,16 @@ function formatDate(dateStr: string | null): string {
         </section>
 
         <!-- All Role Statuses -->
-        <section class="section">
+        <section class="section" aria-label="Role status table">
           <h4>Role Status</h4>
           <table class="role-table" v-if="allNodeRoles.length > 0">
             <thead>
               <tr>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Version</th>
-                <th>Last Synced</th>
-                <th>Actions</th>
+                <th scope="col">Role</th>
+                <th scope="col">Status</th>
+                <th scope="col">Version</th>
+                <th scope="col">Last Synced</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -173,6 +186,7 @@ function formatDate(dateStr: string | null): string {
                     class="btn btn-sm btn-primary"
                     :disabled="isSyncing"
                     @click="handleSyncRole(role.role_name)"
+                    :aria-label="`Sync ${role.role_name}`"
                   >
                     Sync
                   </button>
@@ -181,6 +195,7 @@ function formatDate(dateStr: string | null): string {
                     class="btn btn-sm btn-danger"
                     :disabled="isSaving"
                     @click="handleRemoveRole(role.role_name)"
+                    :aria-label="`Remove ${role.role_name}`"
                   >
                     Remove
                   </button>
@@ -194,10 +209,11 @@ function formatDate(dateStr: string | null): string {
         </section>
 
         <!-- Assign Role Section -->
-        <section class="section">
+        <section class="section" aria-label="Assign role">
           <h4>Assign Role Manually</h4>
           <div class="assign-form">
-            <select v-model="selectedRole" class="role-select">
+            <label for="role-select" class="sr-only">Select a role to assign</label>
+            <select id="role-select" v-model="selectedRole" class="role-select">
               <option value="">Select a role...</option>
               <option
                 v-for="role in availableRoles"
@@ -218,7 +234,7 @@ function formatDate(dateStr: string | null): string {
         </section>
 
         <!-- Listening Ports -->
-        <section class="section" v-if="nodeRoles?.listening_ports?.length">
+        <section class="section" v-if="nodeRoles?.listening_ports?.length" aria-label="Listening ports">
           <h4>Listening Ports</h4>
           <div class="port-list">
             <span
@@ -233,7 +249,7 @@ function formatDate(dateStr: string | null): string {
         </section>
 
         <!-- Sync Message -->
-        <div v-if="syncMessage" class="sync-message">
+        <div v-if="syncMessage" class="sync-message" role="status">
           {{ syncMessage }}
         </div>
       </div>
@@ -484,5 +500,18 @@ function formatDate(dateStr: string | null): string {
 .btn-danger {
   background: var(--danger-color, #ef4444);
   color: white;
+}
+
+/* Screen reader only utility (Issue #754) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 </style>

@@ -8,6 +8,9 @@
  *
  * Provides navigation tabs for settings sub-routes and displays
  * the active sub-view via router-view.
+ *
+ * Issue #754: Added ARIA tablist/tab roles, aria-selected,
+ * aria-current, accessible error/success messages.
  */
 
 import { computed, ref, onMounted } from 'vue'
@@ -80,11 +83,18 @@ onMounted(() => {
       </div>
 
       <!-- Tab Navigation -->
-      <div class="flex gap-1 mt-4 -mb-4 overflow-x-auto">
+      <div
+        class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
+        role="tablist"
+        aria-label="Settings sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.id"
           @click="navigateTo(tab.path)"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
+          :aria-current="activeTab === tab.id ? 'page' : undefined"
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
             activeTab === tab.id
@@ -92,7 +102,7 @@ onMounted(() => {
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           ]"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tab.icon" />
           </svg>
           {{ tab.name }}
@@ -101,10 +111,10 @@ onMounted(() => {
     </div>
 
     <!-- Messages -->
-    <div v-if="error" class="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+    <div v-if="error" class="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700" role="alert">
       {{ error }}
     </div>
-    <div v-if="success" class="mx-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
+    <div v-if="success" class="mx-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700" role="status">
       {{ success }}
     </div>
 

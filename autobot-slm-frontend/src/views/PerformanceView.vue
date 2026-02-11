@@ -9,6 +9,9 @@
  * Provides navigation tabs for performance sub-routes and displays
  * the active sub-view via router-view.
  * Issue #752 - Comprehensive performance monitoring.
+ *
+ * Issue #754: Added ARIA tablist/tab roles, aria-selected,
+ * accessible status indicators and labels.
  */
 
 import { computed } from 'vue'
@@ -86,7 +89,7 @@ function navigateTo(path: string): void {
         </div>
 
         <!-- Quick Stats Bar -->
-        <div class="flex items-center gap-6 text-sm">
+        <div class="flex items-center gap-6 text-sm" role="status" aria-label="Performance summary">
           <div class="flex items-center gap-2 text-gray-600">
             <span class="text-gray-400">Avg Latency:</span>
             <span class="font-semibold">{{ avgLatency.toFixed(1) }}ms</span>
@@ -112,13 +115,14 @@ function navigateTo(path: string): void {
             @click="fetchOverview"
             :disabled="loading"
             class="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
-            title="Refresh"
+            aria-label="Refresh performance data"
           >
             <svg
               :class="['w-4 h-4', loading ? 'animate-spin' : '']"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 stroke-linecap="round"
@@ -132,11 +136,18 @@ function navigateTo(path: string): void {
       </div>
 
       <!-- Tab Navigation -->
-      <div class="flex gap-1 mt-4 -mb-4 overflow-x-auto">
+      <div
+        class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
+        role="tablist"
+        aria-label="Performance sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.id"
           @click="navigateTo(tab.path)"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
+          :aria-current="activeTab === tab.id ? 'page' : undefined"
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors',
             'flex items-center gap-2 whitespace-nowrap',
@@ -145,7 +156,7 @@ function navigateTo(path: string): void {
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           ]"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tab.icon" />
           </svg>
           {{ tab.name }}

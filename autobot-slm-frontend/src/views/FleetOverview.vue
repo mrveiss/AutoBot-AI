@@ -3,6 +3,13 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+/**
+ * FleetOverview - Main fleet management page.
+ *
+ * Issue #754: Added ARIA roles for tabs, dialogs, status indicators,
+ * aria-labels for icon-only buttons, and role="dialog" for modals.
+ */
+
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
@@ -77,15 +84,9 @@ const availableRoles = computed(() =>
 // Lifecycle
 onMounted(async () => {
   await refreshFleet()
-
-  // Fetch update summary for fleet update badges (#682)
   fleetStore.fetchFleetUpdateSummary()
-
-  // Connect WebSocket for real-time updates
   ws.connect()
 
-  // Subscribe to all nodes once connected
-  // Use a watcher to subscribe when connection is established
   const unwatch = watch(() => ws.connected.value, (connected) => {
     if (connected) {
       ws.subscribeAll()
@@ -93,7 +94,15 @@ onMounted(async () => {
     }
   }, { immediate: true })
 
-  // Register WebSocket event handlers
+  registerWsHandlers()
+})
+
+/**
+ * Register all WebSocket event handlers.
+ *
+ * Helper for FleetOverview onMounted (Issue #754 refactor).
+ */
+function registerWsHandlers(): void {
   ws.onHealthUpdate((nodeId: string, health: NodeHealth) => {
     logger.debug('WebSocket health update:', nodeId, health)
     fleetStore.updateNodeHealth(nodeId, health)
@@ -106,7 +115,6 @@ onMounted(async () => {
 
   ws.onRemediationEvent((nodeId: string, event) => {
     logger.info('Remediation event:', nodeId, event)
-    // Refresh the node to get latest state after remediation
     if (event.event_type === 'completed') {
       fleetStore.refreshNode(nodeId).catch(err => {
         logger.error('Failed to refresh node after remediation:', err)
@@ -116,12 +124,10 @@ onMounted(async () => {
 
   ws.onServiceStatus((nodeId: string, data) => {
     logger.debug('Service status update:', nodeId, data)
-    // Could update service-specific state here if needed
   })
 
   ws.onBackupStatus((nodeId: string, backup) => {
     logger.info('Backup status update:', nodeId, backup)
-    // Notify user of backup progress/completion
     if (backup.status === 'completed') {
       logger.info(`Backup completed for node ${nodeId}`)
     } else if (backup.status === 'failed') {
@@ -131,7 +137,6 @@ onMounted(async () => {
 
   ws.onDeploymentStatus((nodeId: string, deployment) => {
     logger.info('Deployment status update:', nodeId, deployment)
-    // Refresh node to reflect deployment changes
     if (deployment.status === 'completed' || deployment.status === 'failed') {
       fleetStore.refreshNode(nodeId).catch(err => {
         logger.error('Failed to refresh node after deployment:', err)
@@ -147,10 +152,9 @@ onMounted(async () => {
       })
     }
   })
-})
+}
 
 onUnmounted(() => {
-  // Disconnect WebSocket when leaving the page
   ws.disconnect()
 })
 
@@ -202,7 +206,6 @@ function handleNodeAction(action: string, nodeId: string): void {
   }
 }
 
-// Add Node Modal
 function openAddNodeModal(): void {
   editingNode.value = null
   showAddNodeModal.value = true
@@ -223,7 +226,6 @@ async function handleNodeSaved(): Promise<void> {
   await refreshFleet()
 }
 
-// Delete Confirmation
 function openDeleteConfirm(): void {
   showDeleteConfirm.value = true
 }
@@ -247,7 +249,6 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-// Enrollment
 async function handleEnroll(nodeId: string): Promise<void> {
   isEnrolling.value = true
   try {
@@ -259,7 +260,6 @@ async function handleEnroll(nodeId: string): Promise<void> {
   }
 }
 
-// Connection Test - using useNodeConnectionTest composable (Issue #737)
 async function handleTestConnection(nodeId: string): Promise<void> {
   connectionTest.reset()
   await connectionTest.testByNodeId(nodeId)
@@ -271,7 +271,6 @@ function closeConnectionTestResult(): void {
   connectionTest.reset()
 }
 
-// Role Management - using RoleManagementModal component (Issue #779)
 function openRoleModal(node: SLMNode): void {
   selectedNodeForRoles.value = { id: node.node_id, hostname: node.hostname }
   showRoleModal.value = true
@@ -282,7 +281,6 @@ function closeRoleModal(): void {
   selectedNodeForRoles.value = null
 }
 
-// Lifecycle Panel
 function openLifecyclePanel(node: SLMNode): void {
   selectedNode.value = node
   showLifecyclePanel.value = true
@@ -292,7 +290,6 @@ function closeLifecyclePanel(): void {
   showLifecyclePanel.value = false
 }
 
-// Services Panel
 function openServicesPanel(node: SLMNode): void {
   selectedNode.value = node
   showServicesPanel.value = true
@@ -302,7 +299,6 @@ function closeServicesPanel(): void {
   showServicesPanel.value = false
 }
 
-// Restart node via SSH (Issue #813)
 const isRestarting = ref(false)
 
 async function handleRestart(nodeId: string): Promise<void> {
@@ -334,8 +330,10 @@ async function handleRestart(nodeId: string): Promise<void> {
         <h1 class="text-2xl font-bold text-gray-900">Fleet Overview</h1>
         <p class="text-sm text-gray-500 mt-1 flex items-center gap-2">
           Real-time health status of all managed nodes
-          <!-- WebSocket Connection Indicator -->
+          <!-- WebSocket Connection Indicator (Issue #754: aria) -->
           <span
+            role="status"
+            :aria-label="`WebSocket: ${ws.connected.value ? 'Connected' : ws.reconnecting.value ? 'Reconnecting' : 'Disconnected'}`"
             class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
             :class="ws.connected.value
               ? 'bg-green-100 text-green-800'
@@ -345,6 +343,7 @@ async function handleRestart(nodeId: string): Promise<void> {
           >
             <span
               class="w-1.5 h-1.5 rounded-full"
+              aria-hidden="true"
               :class="ws.connected.value
                 ? 'bg-green-500'
                 : ws.reconnecting.value
@@ -359,29 +358,21 @@ async function handleRestart(nodeId: string): Promise<void> {
         <button
           @click="refreshFleet"
           :disabled="isLoading"
+          aria-label="Refresh fleet data"
           class="btn btn-secondary flex items-center gap-2"
         >
-          <svg
-            :class="['w-4 h-4', isLoading ? 'animate-spin' : '']"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
+          <svg :class="['w-4 h-4', isLoading ? 'animate-spin' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           Refresh
         </button>
         <button
           v-if="activeTab === 'overview'"
           @click="openAddNodeModal"
+          aria-label="Add new node to fleet"
           class="btn btn-primary flex items-center gap-2"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
           Add Node
@@ -389,11 +380,14 @@ async function handleRestart(nodeId: string): Promise<void> {
       </div>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs (Issue #754: ARIA tablist) -->
     <div class="border-b border-gray-200 mb-6">
-      <nav class="-mb-px flex space-x-8">
+      <nav class="-mb-px flex space-x-8" role="tablist" aria-label="Fleet view tabs">
         <button
           @click="activeTab = 'overview'"
+          role="tab"
+          :aria-selected="activeTab === 'overview'"
+          aria-controls="tabpanel-overview"
           :class="[
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'overview'
@@ -402,7 +396,7 @@ async function handleRestart(nodeId: string): Promise<void> {
           ]"
         >
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
             </svg>
             Nodes
@@ -410,6 +404,9 @@ async function handleRestart(nodeId: string): Promise<void> {
         </button>
         <button
           @click="activeTab = 'tools'"
+          role="tab"
+          :aria-selected="activeTab === 'tools'"
+          aria-controls="tabpanel-tools"
           :class="[
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'tools'
@@ -418,7 +415,7 @@ async function handleRestart(nodeId: string): Promise<void> {
           ]"
         >
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -427,6 +424,9 @@ async function handleRestart(nodeId: string): Promise<void> {
         </button>
         <button
           @click="activeTab = 'npu'"
+          role="tab"
+          :aria-selected="activeTab === 'npu'"
+          aria-controls="tabpanel-npu"
           :class="[
             'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors',
             activeTab === 'npu'
@@ -435,7 +435,7 @@ async function handleRestart(nodeId: string): Promise<void> {
           ]"
         >
           <div class="flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
             NPU Workers
@@ -445,50 +445,43 @@ async function handleRestart(nodeId: string): Promise<void> {
     </div>
 
     <!-- Overview Tab Content -->
-    <div v-show="activeTab === 'overview'">
-      <!-- Fleet Summary -->
+    <div v-show="activeTab === 'overview'" id="tabpanel-overview" role="tabpanel" aria-label="Nodes overview">
       <FleetSummary class="mb-6" />
 
-    <!-- Node Grid -->
-    <div v-if="nodes.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      <NodeCard
-        v-for="node in nodes"
-        :key="node.node_id"
-        :node="node"
-        @action="handleNodeAction"
-      />
-    </div>
+      <!-- Node Grid -->
+      <div v-if="nodes.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" role="list" aria-label="Fleet nodes">
+        <NodeCard
+          v-for="node in nodes"
+          :key="node.node_id"
+          :node="node"
+          @action="handleNodeAction"
+        />
+      </div>
 
-    <!-- Empty State -->
-    <div v-else-if="!isLoading" class="card p-12 text-center">
-      <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-      </svg>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No nodes registered</h3>
-      <p class="text-gray-500 mb-4">
-        Add a node to start managing your infrastructure.
-      </p>
-      <button
-        @click="openAddNodeModal"
-        class="btn btn-primary"
-      >
-        Add First Node
-      </button>
-    </div>
+      <!-- Empty State -->
+      <div v-else-if="!isLoading" class="card p-12 text-center">
+        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No nodes registered</h3>
+        <p class="text-gray-500 mb-4">Add a node to start managing your infrastructure.</p>
+        <button @click="openAddNodeModal" class="btn btn-primary">Add First Node</button>
+      </div>
 
-    <!-- Loading State -->
-    <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12">
-      <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
-    </div>
+      <!-- Loading State -->
+      <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12" role="status" aria-label="Loading fleet data">
+        <div class="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+        <span class="sr-only">Loading fleet data...</span>
+      </div>
     </div>
 
     <!-- Tools Tab Content -->
-    <div v-show="activeTab === 'tools'">
+    <div v-show="activeTab === 'tools'" id="tabpanel-tools" role="tabpanel" aria-label="Fleet tools">
       <FleetToolsTab />
     </div>
 
     <!-- NPU Workers Tab Content -->
-    <div v-show="activeTab === 'npu'">
+    <div v-show="activeTab === 'npu'" id="tabpanel-npu" role="tabpanel" aria-label="NPU workers">
       <NPUWorkersTab />
     </div>
 
@@ -502,7 +495,7 @@ async function handleRestart(nodeId: string): Promise<void> {
       @updated="handleNodeSaved"
     />
 
-    <!-- Delete Confirmation Modal -->
+    <!-- Delete Confirmation Modal (Issue #754: role=dialog) -->
     <Teleport to="body">
       <Transition
         enter-active-class="transition duration-200 ease-out"
@@ -515,17 +508,21 @@ async function handleRestart(nodeId: string): Promise<void> {
         <div
           v-if="showDeleteConfirm"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          @keydown.escape="closeDeleteConfirm"
         >
           <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeDeleteConfirm"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
-              <div class="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+              <div class="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center" aria-hidden="true">
                 <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
               <div>
-                <h3 class="text-lg font-semibold text-gray-900">Delete Node</h3>
+                <h3 id="delete-dialog-title" class="text-lg font-semibold text-gray-900">Delete Node</h3>
                 <p class="text-sm text-gray-500">This action cannot be undone.</p>
               </div>
             </div>
@@ -535,18 +532,8 @@ async function handleRestart(nodeId: string): Promise<void> {
               All associated data will be permanently removed.
             </p>
             <div class="flex justify-end gap-3">
-              <button
-                @click="closeDeleteConfirm"
-                :disabled="isDeleting"
-                class="btn btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                @click="confirmDelete"
-                :disabled="isDeleting"
-                class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-              >
+              <button @click="closeDeleteConfirm" :disabled="isDeleting" class="btn btn-secondary">Cancel</button>
+              <button @click="confirmDelete" :disabled="isDeleting" class="btn bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
                 {{ isDeleting ? 'Deleting...' : 'Delete Node' }}
               </button>
             </div>
@@ -564,7 +551,7 @@ async function handleRestart(nodeId: string): Promise<void> {
       @saved="refreshFleet"
     />
 
-    <!-- Connection Test Result Modal -->
+    <!-- Connection Test Result Modal (Issue #754: role=dialog) -->
     <Teleport to="body">
       <Transition
         enter-active-class="transition duration-200 ease-out"
@@ -577,6 +564,10 @@ async function handleRestart(nodeId: string): Promise<void> {
         <div
           v-if="showConnectionTestResult"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Connection test result"
+          @keydown.escape="closeConnectionTestResult"
         >
           <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeConnectionTestResult"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
@@ -584,23 +575,12 @@ async function handleRestart(nodeId: string): Promise<void> {
               <div
                 class="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
                 :class="connectionTestResult?.success ? 'bg-green-100' : 'bg-red-100'"
+                aria-hidden="true"
               >
-                <svg
-                  v-if="connectionTestResult?.success"
-                  class="w-6 h-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg v-if="connectionTestResult?.success" class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>
-                <svg
-                  v-else
-                  class="w-6 h-6 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
+                <svg v-else class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </div>
@@ -621,21 +601,19 @@ async function handleRestart(nodeId: string): Promise<void> {
               </div>
             </div>
             <div v-else class="mb-6">
-              <p class="text-sm text-red-600">
+              <p class="text-sm text-red-600" role="alert">
                 {{ connectionTestResult?.error || 'Failed to connect to node' }}
               </p>
             </div>
             <div class="flex justify-end">
-              <button @click="closeConnectionTestResult" class="btn btn-primary">
-                Close
-              </button>
+              <button @click="closeConnectionTestResult" class="btn btn-primary">Close</button>
             </div>
           </div>
         </div>
       </Transition>
     </Teleport>
 
-    <!-- Lifecycle Panel Slide-over -->
+    <!-- Lifecycle Panel Slide-over (Issue #754: role=dialog) -->
     <Teleport to="body">
       <Transition
         enter-active-class="transition duration-300 ease-out"
@@ -648,6 +626,10 @@ async function handleRestart(nodeId: string): Promise<void> {
         <div
           v-if="showLifecyclePanel"
           class="fixed inset-0 z-50 overflow-hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Node details panel"
+          @keydown.escape="closeLifecyclePanel"
         >
           <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeLifecyclePanel"></div>
           <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
@@ -661,28 +643,19 @@ async function handleRestart(nodeId: string): Promise<void> {
             >
               <div v-if="showLifecyclePanel" class="w-screen max-w-2xl">
                 <div class="h-full flex flex-col bg-white shadow-xl">
-                  <!-- Header -->
                   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
                       <h2 class="text-lg font-semibold text-gray-900">Node Details</h2>
                       <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
                     </div>
-                    <button
-                      @click="closeLifecyclePanel"
-                      class="rounded-md text-gray-400 hover:text-gray-600"
-                    >
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button @click="closeLifecyclePanel" aria-label="Close node details panel" class="rounded-md text-gray-400 hover:text-gray-600">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
-                  <!-- Content -->
                   <div class="flex-1 overflow-y-auto">
-                    <NodeLifecyclePanel
-                      v-if="selectedNode"
-                      :node-id="selectedNode.node_id"
-                      @close="closeLifecyclePanel"
-                    />
+                    <NodeLifecyclePanel v-if="selectedNode" :node-id="selectedNode.node_id" @close="closeLifecyclePanel" />
                   </div>
                 </div>
               </div>
@@ -692,7 +665,7 @@ async function handleRestart(nodeId: string): Promise<void> {
       </Transition>
     </Teleport>
 
-    <!-- Services Panel Slide-over -->
+    <!-- Services Panel Slide-over (Issue #754: role=dialog) -->
     <Teleport to="body">
       <Transition
         enter-active-class="transition duration-300 ease-out"
@@ -705,6 +678,10 @@ async function handleRestart(nodeId: string): Promise<void> {
         <div
           v-if="showServicesPanel"
           class="fixed inset-0 z-50 overflow-hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Node services panel"
+          @keydown.escape="closeServicesPanel"
         >
           <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeServicesPanel"></div>
           <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
@@ -718,29 +695,19 @@ async function handleRestart(nodeId: string): Promise<void> {
             >
               <div v-if="showServicesPanel" class="w-screen max-w-3xl">
                 <div class="h-full flex flex-col bg-white shadow-xl">
-                  <!-- Header -->
                   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                     <div>
                       <h2 class="text-lg font-semibold text-gray-900">Services</h2>
                       <p class="text-sm text-gray-500">{{ selectedNode?.hostname }}</p>
                     </div>
-                    <button
-                      @click="closeServicesPanel"
-                      class="rounded-md text-gray-400 hover:text-gray-600"
-                    >
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button @click="closeServicesPanel" aria-label="Close services panel" class="rounded-md text-gray-400 hover:text-gray-600">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
-                  <!-- Content -->
                   <div class="flex-1 overflow-y-auto">
-                    <NodeServicesPanel
-                      v-if="selectedNode"
-                      :node-id="selectedNode.node_id"
-                      :node-name="selectedNode.hostname"
-                      @close="closeServicesPanel"
-                    />
+                    <NodeServicesPanel v-if="selectedNode" :node-id="selectedNode.node_id" :node-name="selectedNode.hostname" @close="closeServicesPanel" />
                   </div>
                 </div>
               </div>

@@ -8,6 +8,10 @@
  *
  * Modal form for creating and editing update schedules with cron expression
  * support, preset options, and role-based targeting.
+ *
+ * Issue #754: Added role="dialog", aria-modal, aria-labelledby,
+ * keyboard escape handling, for/id on form labels,
+ * aria-label on close button, aria-hidden on decorative elements.
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
@@ -183,16 +187,21 @@ const isFormValid = computed(() => {
         v-if="show"
         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
         @click.self="handleClose"
+        @keydown.escape="handleClose"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-modal-title"
       >
         <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden">
           <!-- Header -->
           <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-900">{{ modalTitle }}</h2>
+            <h2 id="schedule-modal-title" class="text-lg font-semibold text-gray-900">{{ modalTitle }}</h2>
             <button
               @click="handleClose"
               class="text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close schedule dialog"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -202,10 +211,11 @@ const isFormValid = computed(() => {
           <div class="px-6 py-4 overflow-y-auto max-h-[60vh]">
             <!-- Schedule Name -->
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="schedule-name" class="block text-sm font-medium text-gray-700 mb-1">
                 Schedule Name
               </label>
               <input
+                id="schedule-name"
                 v-model="name"
                 type="text"
                 placeholder="e.g., Nightly Updates"
@@ -215,19 +225,20 @@ const isFormValid = computed(() => {
 
             <!-- Cron Expression -->
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="cron-expression" class="block text-sm font-medium text-gray-700 mb-1">
                 Schedule (Cron Expression)
               </label>
               <input
+                id="cron-expression"
                 v-model="cronExpression"
                 type="text"
                 placeholder="0 2 * * *"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md font-mono focus:ring-primary-500 focus:border-primary-500"
               />
-              <p class="mt-1 text-sm text-gray-500">{{ cronDescription }}</p>
+              <p class="mt-1 text-sm text-gray-500" aria-live="polite">{{ cronDescription }}</p>
 
               <!-- Presets -->
-              <div class="mt-2 flex flex-wrap gap-2">
+              <div class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Cron schedule presets">
                 <button
                   v-for="preset in cronPresets"
                   :key="preset.value"
@@ -238,6 +249,7 @@ const isFormValid = computed(() => {
                       ? 'bg-primary-100 text-primary-700 border border-primary-300'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
                   ]"
+                  :aria-pressed="cronExpression === preset.value"
                 >
                   {{ preset.label }}
                 </button>
@@ -246,10 +258,11 @@ const isFormValid = computed(() => {
 
             <!-- Target Type -->
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="target-type" class="block text-sm font-medium text-gray-700 mb-1">
                 Target Nodes
               </label>
               <select
+                id="target-type"
                 v-model="targetType"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >
@@ -264,7 +277,7 @@ const isFormValid = computed(() => {
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Select Nodes
               </label>
-              <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto">
+              <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" aria-label="Node selection">
                 <div
                   v-for="node in nodes"
                   :key="node.node_id"
@@ -278,13 +291,14 @@ const isFormValid = computed(() => {
                     type="checkbox"
                     :checked="targetNodes.includes(node.node_id)"
                     class="w-4 h-4 text-primary-600 rounded"
+                    :aria-label="`Select ${node.hostname}`"
                     @click.stop
                     @change="toggleNodeSelection(node.node_id)"
                   />
                   <span class="text-sm text-gray-900">{{ node.hostname }}</span>
                 </div>
               </div>
-              <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-gray-500">
+              <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-gray-500" role="status">
                 {{ targetNodes.length }} node(s) selected
               </p>
             </div>
@@ -294,7 +308,7 @@ const isFormValid = computed(() => {
               <label class="block text-sm font-medium text-gray-700 mb-2">
                 Target Roles
               </label>
-              <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto">
+              <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" aria-label="Role selection">
                 <div
                   v-for="role in availableRoles"
                   :key="role.name"
@@ -309,6 +323,7 @@ const isFormValid = computed(() => {
                     :checked="targetRoles.includes(role.name)"
                     :value="role.name"
                     class="w-4 h-4 text-primary-600 rounded border-gray-300"
+                    :aria-label="`Select ${role.display_name || role.name}`"
                     @click.stop
                     @change="toggleRoleSelection(role.name)"
                   />
@@ -318,17 +333,18 @@ const isFormValid = computed(() => {
               <div v-else class="text-sm text-gray-500 italic">
                 No roles available. Please configure roles first.
               </div>
-              <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500">
+              <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500" role="status">
                 {{ targetRoles.length }} role(s) selected
               </p>
             </div>
 
             <!-- Restart Strategy -->
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label for="restart-strategy" class="block text-sm font-medium text-gray-700 mb-1">
                 Restart Strategy
               </label>
               <select
+                id="restart-strategy"
                 v-model="restartStrategy"
                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >

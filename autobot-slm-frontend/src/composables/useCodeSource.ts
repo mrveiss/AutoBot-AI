@@ -12,6 +12,7 @@
 
 import { ref } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
 import { getBackendUrl } from '@/config/ssot-config'
 
 export interface CodeSource {
@@ -37,6 +38,16 @@ export function useCodeSource() {
   const error = ref<string | null>(null)
 
   const API_BASE = getBackendUrl()
+  const authStore = useAuthStore()
+
+  const api = axios.create({ baseURL: API_BASE, timeout: 15000 })
+  api.interceptors.request.use((config) => {
+    const token = authStore.token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  })
 
   /**
    * Fetch the current code source configuration.
@@ -46,7 +57,7 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      const response = await axios.get<CodeSource | null>(`${API_BASE}/api/code-source`)
+      const response = await api.get<CodeSource | null>('/api/code-source')
       codeSource.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -72,7 +83,7 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      const response = await axios.post<CodeSource>(`${API_BASE}/api/code-source/assign`, {
+      const response = await api.post<CodeSource>('/api/code-source/assign', {
         node_id: nodeId,
         repo_path: repoPath,
         branch,
@@ -96,7 +107,7 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      await axios.delete(`${API_BASE}/api/code-source/assign`)
+      await api.delete('/api/code-source/assign')
       codeSource.value = null
       return true
     } catch (e: unknown) {

@@ -8,6 +8,9 @@
  *
  * Top-bar notification banner that appears when nodes need code updates.
  * Provides quick access to the Code Sync page and can be dismissed.
+ *
+ * Issue #754: Added role="alert", aria-live, accessible labels
+ * on dismiss button, aria-hidden on decorative icons.
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -68,11 +71,13 @@ function goToCodeSync(): void {
     <div
       v-if="shouldShow"
       class="update-notification"
+      role="alert"
+      aria-live="polite"
     >
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <!-- Warning icon -->
-          <div class="flex-shrink-0">
+          <div class="flex-shrink-0" aria-hidden="true">
             <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
@@ -105,9 +110,9 @@ function goToCodeSync(): void {
           <button
             @click="dismiss"
             class="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-200 rounded-md transition-colors"
-            title="Dismiss"
+            aria-label="Dismiss update notification"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

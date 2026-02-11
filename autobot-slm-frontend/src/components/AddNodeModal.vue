@@ -12,10 +12,14 @@
         v-if="visible"
         class="fixed inset-0 z-50 overflow-y-auto"
         @click.self="handleOverlayClick"
+        @keydown.escape="handleClose"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-node-modal-title"
       >
         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
           <!-- Background overlay -->
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+          <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
 
           <!-- Modal panel -->
           <div
@@ -24,22 +28,23 @@
           >
             <!-- Header -->
             <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <h3 class="text-lg font-semibold text-gray-900">{{ modalTitle }}</h3>
+              <h3 id="add-node-modal-title" class="text-lg font-semibold text-gray-900">{{ modalTitle }}</h3>
               <button
                 @click="handleClose"
                 :disabled="isSubmitting"
                 class="rounded-md text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                aria-label="Close dialog"
               >
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
             <!-- Replace Mode Warning -->
-            <div v-if="isReplaceMode" class="mx-6 mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+            <div v-if="isReplaceMode" class="mx-6 mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg" role="alert">
               <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div>
@@ -57,19 +62,20 @@
               <form @submit.prevent="handleSubmit" class="space-y-6">
 
                 <!-- Connection Information Section -->
-                <div class="space-y-4">
-                  <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
-                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <fieldset class="space-y-4">
+                  <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                     </svg>
                     Connection Information
-                  </h4>
+                  </legend>
 
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <!-- Hostname -->
                     <div class="sm:col-span-1">
                       <label for="hostname" class="block text-sm font-medium text-gray-700 mb-1">
-                        Hostname <span class="text-danger-500">*</span>
+                        Hostname <span class="text-danger-500" aria-hidden="true">*</span>
+                        <span class="sr-only">(required)</span>
                       </label>
                       <input
                         v-model="formData.hostname"
@@ -77,15 +83,19 @@
                         id="hostname"
                         :class="['input', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.hostname }]"
                         placeholder="e.g., npu-worker-02"
+                        aria-required="true"
+                        :aria-invalid="!!errors.hostname"
+                        :aria-describedby="errors.hostname ? 'hostname-error' : undefined"
                         @blur="validateField('hostname')"
                       />
-                      <p v-if="errors.hostname" class="mt-1 text-xs text-danger-500">{{ errors.hostname }}</p>
+                      <p v-if="errors.hostname" id="hostname-error" class="mt-1 text-xs text-danger-500" role="alert">{{ errors.hostname }}</p>
                     </div>
 
                     <!-- IP Address -->
                     <div class="sm:col-span-1">
                       <label for="ip_address" class="block text-sm font-medium text-gray-700 mb-1">
-                        IP Address <span class="text-danger-500">*</span>
+                        IP Address <span class="text-danger-500" aria-hidden="true">*</span>
+                        <span class="sr-only">(required)</span>
                       </label>
                       <input
                         v-model="formData.ip_address"
@@ -93,9 +103,12 @@
                         id="ip_address"
                         :class="['input', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ip_address }]"
                         placeholder="e.g., 172.16.168.26"
+                        aria-required="true"
+                        :aria-invalid="!!errors.ip_address"
+                        :aria-describedby="errors.ip_address ? 'ip-error' : undefined"
                         @blur="validateField('ip_address')"
                       />
-                      <p v-if="errors.ip_address" class="mt-1 text-xs text-danger-500">{{ errors.ip_address }}</p>
+                      <p v-if="errors.ip_address" id="ip-error" class="mt-1 text-xs text-danger-500" role="alert">{{ errors.ip_address }}</p>
                     </div>
 
                     <!-- SSH Port -->
@@ -114,19 +127,19 @@
                       />
                     </div>
                   </div>
-                </div>
+                </fieldset>
 
                 <!-- Authentication Method Section -->
-                <div class="space-y-4">
-                  <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
-                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <fieldset class="space-y-4">
+                  <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                     </svg>
                     Authentication Method
-                  </h4>
+                  </legend>
 
                   <!-- Auth Method Selection -->
-                  <div class="flex gap-4">
+                  <div class="flex gap-4" role="radiogroup" aria-label="Authentication method">
                     <label
                       :class="[
                         'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
@@ -141,7 +154,7 @@
                         value="password"
                         class="sr-only"
                       />
-                      <div class="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg">
+                      <div class="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg" aria-hidden="true">
                         <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                         </svg>
@@ -166,7 +179,7 @@
                         value="pki"
                         class="sr-only"
                       />
-                      <div class="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg">
+                      <div class="flex items-center justify-center w-10 h-10 bg-primary-100 rounded-lg" aria-hidden="true">
                         <svg class="h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
@@ -184,7 +197,8 @@
                       <!-- SSH User -->
                       <div>
                         <label for="ssh_user" class="block text-sm font-medium text-gray-700 mb-1">
-                          Username <span class="text-danger-500">*</span>
+                          Username <span class="text-danger-500" aria-hidden="true">*</span>
+                          <span class="sr-only">(required)</span>
                         </label>
                         <input
                           v-model="formData.ssh_user"
@@ -192,6 +206,7 @@
                           id="ssh_user"
                           class="input"
                           placeholder="autobot"
+                          aria-required="true"
                         />
                       </div>
 
@@ -199,7 +214,8 @@
                       <div>
                         <label for="ssh_password" class="block text-sm font-medium text-gray-700 mb-1">
                           Password
-                          <span v-if="!isEditMode || needsCredentialsForEdit" class="text-danger-500">*</span>
+                          <span v-if="!isEditMode || needsCredentialsForEdit" class="text-danger-500" aria-hidden="true">*</span>
+                          <span v-if="!isEditMode || needsCredentialsForEdit" class="sr-only">(required)</span>
                           <span v-else class="text-gray-400 text-xs ml-1">(optional)</span>
                         </label>
                         <div class="relative">
@@ -209,23 +225,28 @@
                             id="ssh_password"
                             :class="['input pr-10', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ssh_password }]"
                             :placeholder="isEditMode && !needsCredentialsForEdit ? 'Leave empty for basic edit' : 'Enter password'"
+                            :aria-required="!isEditMode || needsCredentialsForEdit ? 'true' : undefined"
+                            :aria-invalid="!!errors.ssh_password"
+                            :aria-describedby="errors.ssh_password ? 'password-error' : undefined"
                             @blur="validateField('ssh_password')"
                           />
                           <button
                             type="button"
                             @click="showPassword = !showPassword"
                             class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                            :aria-pressed="showPassword"
                           >
-                            <svg v-if="!showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg v-if="!showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
-                            <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                             </svg>
                           </button>
                         </div>
-                        <p v-if="errors.ssh_password" class="mt-1 text-xs text-danger-500">{{ errors.ssh_password }}</p>
+                        <p v-if="errors.ssh_password" id="password-error" class="mt-1 text-xs text-danger-500" role="alert">{{ errors.ssh_password }}</p>
                       </div>
                     </div>
 
@@ -245,7 +266,8 @@
                     <!-- SSH User -->
                     <div>
                       <label for="ssh_user_pki" class="block text-sm font-medium text-gray-700 mb-1">
-                        Username <span class="text-danger-500">*</span>
+                        Username <span class="text-danger-500" aria-hidden="true">*</span>
+                        <span class="sr-only">(required)</span>
                       </label>
                       <input
                         v-model="formData.ssh_user"
@@ -253,13 +275,14 @@
                         id="ssh_user_pki"
                         class="input"
                         placeholder="autobot"
+                        aria-required="true"
                       />
                     </div>
 
                     <!-- Key Source Selection -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">SSH Key Source</label>
-                      <div class="space-y-2">
+                      <div class="space-y-2" role="radiogroup" aria-label="SSH key source">
                         <label
                           v-for="option in keySourceOptions"
                           :key="option.value"
@@ -306,23 +329,25 @@
                         rows="5"
                         :class="['input font-mono text-xs', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ssh_key }]"
                         placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
+                        :aria-invalid="!!errors.ssh_key"
+                        :aria-describedby="errors.ssh_key ? 'ssh-key-error' : undefined"
                         @blur="validateField('ssh_key')"
                       ></textarea>
-                      <p v-if="errors.ssh_key" class="mt-1 text-xs text-danger-500">{{ errors.ssh_key }}</p>
+                      <p v-if="errors.ssh_key" id="ssh-key-error" class="mt-1 text-xs text-danger-500" role="alert">{{ errors.ssh_key }}</p>
                     </div>
                   </div>
-                </div>
+                </fieldset>
 
                 <!-- Role Assignment Section -->
-                <div class="space-y-4">
-                  <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
-                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <fieldset class="space-y-4">
+                  <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     Role Assignment
-                  </h4>
+                  </legend>
 
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="Available roles">
                     <label
                       v-for="role in availableRoles"
                       :key="role.id"
@@ -338,6 +363,7 @@
                         :value="role.id"
                         v-model="formData.roles"
                         class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        :aria-label="`${role.name}: ${role.description}`"
                       />
                       <div>
                         <p class="font-medium text-gray-900 text-sm">{{ role.name }}</p>
@@ -345,30 +371,30 @@
                       </div>
                     </label>
                   </div>
-                  <p v-if="errors.roles" class="text-xs text-danger-500">{{ errors.roles }}</p>
+                  <p v-if="errors.roles" class="text-xs text-danger-500" role="alert">{{ errors.roles }}</p>
 
                   <!-- Selected Roles Details -->
-                  <div v-if="selectedRolesDetails.length > 0" class="p-3 bg-gray-50 rounded-lg">
+                  <div v-if="selectedRolesDetails.length > 0" class="p-3 bg-gray-50 rounded-lg" role="status">
                     <p class="text-xs font-medium text-gray-600 mb-2">Selected roles will configure:</p>
                     <div class="space-y-1">
                       <div v-for="role in selectedRolesDetails" :key="role.id" class="flex items-center gap-2 text-xs">
-                        <span class="w-2 h-2 bg-primary-500 rounded-full"></span>
+                        <span class="w-2 h-2 bg-primary-500 rounded-full" aria-hidden="true"></span>
                         <span class="text-gray-700">{{ role.name }}: {{ role.services?.join(', ') || 'No services' }}</span>
                         <span v-if="role.default_port" class="text-gray-500">(Port {{ role.default_port }})</span>
                       </div>
                     </div>
                   </div>
-                </div>
+                </fieldset>
 
                 <!-- Enrollment Options Section -->
-                <div class="space-y-4">
-                  <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
-                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <fieldset class="space-y-4">
+                  <legend class="flex items-center gap-2 text-sm font-semibold text-gray-700 border-b border-gray-100 pb-2">
+                    <svg class="h-4 w-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     {{ isEditMode ? 'Update Options' : 'Enrollment Options' }}
-                  </h4>
+                  </legend>
 
                   <!-- Add/Replace Mode Options -->
                   <div v-if="!isEditMode" class="space-y-3">
@@ -421,8 +447,8 @@
                   <!-- Edit Mode Options -->
                   <div v-if="isEditMode" class="space-y-3">
                     <!-- Info: PKI auth - no password ever needed -->
-                    <div v-if="formData.auth_method === 'pki'" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div v-if="formData.auth_method === 'pki'" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="status">
+                      <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                       </svg>
                       <p class="text-sm text-blue-700">
@@ -430,8 +456,8 @@
                       </p>
                     </div>
                     <!-- Info: Password auth - credentials optional for basic edits -->
-                    <div v-else-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <svg class="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div v-else-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg" role="status">
+                      <svg class="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p class="text-sm text-green-700">
@@ -439,8 +465,8 @@
                       </p>
                     </div>
                     <!-- Info: Password auth with SSH ops - password required -->
-                    <div v-else class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <svg class="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div v-else class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg" role="alert">
+                      <svg class="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <p class="text-sm text-amber-700">
@@ -478,15 +504,15 @@
                   </div>
 
                   <!-- PKI Migration Notice -->
-                  <div v-if="isEditMode && formData.auth_method === 'password' && formData.ssh_password" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div v-if="isEditMode && formData.auth_method === 'password' && formData.ssh_password" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="status">
+                    <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p class="text-sm text-blue-700">
                       Password will be used to establish connection and deploy PKI certificates.
                     </p>
                   </div>
-                </div>
+                </fieldset>
 
                 <!-- Replace Confirmation (for replace mode) -->
                 <div v-if="isReplaceMode" class="space-y-3">
@@ -513,7 +539,7 @@
                   testResult.success
                     ? 'bg-green-50 border-green-200'
                     : 'bg-red-50 border-red-200'
-                ]">
+                ]" :role="testResult.success ? 'status' : 'alert'">
                   <svg
                     :class="[
                       'h-5 w-5 mt-0.5 flex-shrink-0',
@@ -522,6 +548,7 @@
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
+                    aria-hidden="true"
                   >
                     <path
                       v-if="testResult.success"
@@ -552,6 +579,7 @@
                 <div
                   v-if="error"
                   class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
+                  role="alert"
                 >
                   {{ error }}
                 </div>
@@ -560,6 +588,7 @@
                 <div
                   v-if="success"
                   class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm"
+                  role="status"
                 >
                   {{ success }}
                 </div>
@@ -584,11 +613,11 @@
                   :disabled="!canTest || isTesting"
                   class="btn btn-secondary flex items-center gap-2"
                 >
-                  <svg v-if="isTesting" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <svg v-if="isTesting" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   {{ isTesting ? 'Testing...' : 'Test Connection' }}
@@ -603,14 +632,14 @@
                     isReplaceMode ? 'btn-danger' : 'btn-primary'
                   ]"
                 >
-                  <svg v-if="isSubmitting" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <svg v-if="isSubmitting" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <svg v-else-if="isEditMode" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg v-else-if="isEditMode" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                   </svg>
-                  <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
                   {{ submitButtonText }}
@@ -628,6 +657,19 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
+
+/**
+ * AddNodeModal - Modal for adding, editing, or replacing fleet nodes.
+ *
+ * Issue #754: Added role="dialog", aria-modal, aria-labelledby,
+ * @keydown.escape, aria-hidden on decorative elements,
+ * aria-label/aria-pressed on password toggle, aria-required/aria-invalid
+ * on required fields, aria-describedby linking errors to inputs,
+ * role="alert" on error messages, role="status" on info/success,
+ * role="radiogroup" on auth method and key source, fieldset/legend
+ * on form sections, role="group" on role checkboxes,
+ * sr-only text for required indicators.
+ */
 
 import { ref, computed, watch, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
@@ -1128,3 +1170,18 @@ function handleClose() {
   emit('close')
 }
 </script>
+
+<style scoped>
+/* Screen reader only utility (Issue #754) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+</style>

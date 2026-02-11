@@ -1,5 +1,6 @@
 ---
-# Frontend role - Vue.js + nginx deployment for AutoBot web interface
+# Frontend role - User frontend (autobot-user-frontend) deployment
+# Serves production build via nginx + SSL on Frontend VM (.21)
 
 - name: "Frontend | Check if Node.js is already installed"
   ansible.builtin.command:
@@ -61,37 +62,81 @@
   changed_when: false
   tags: ['frontend', 'validation']
 
-- name: "Frontend | Display Node.js version"
-  debug:
-    msg: "Node.js version: {{ node_version.stdout }}"
-  tags: ['frontend', 'validation']
-
-- name: "Frontend | Ensure autobot-vue directory exists"
+- name: "Frontend | Ensure frontend directory exists"
   file:
-    path: /home/autobot/autobot-vue
+    path: "{{ frontend_install_dir }}/autobot-user-frontend"
     state: directory
-    owner: autobot
-    group: autobot
+    owner: "{{ frontend_user }}"
+    group: "{{ frontend_group }}"
     mode: '0755'
   become: yes
   tags: ['frontend', 'directories']
 
+- name: "Frontend | Ensure TLS cert directory exists"
+  file:
+    path: "{{ frontend_tls_cert_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Check existing TLS certificate"
+  stat:
+    path: "{{ frontend_tls_cert }}"
+  register: _tls_cert
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Generate self-signed TLS certificate"
+  command: >
+    openssl req -x509 -nodes
+    -newkey rsa:2048
+    -days 365
+    -keyout {{ frontend_tls_key }}
+    -out {{ frontend_tls_cert }}
+    -subj "/CN={{ ansible_host | default('172.16.168.21') }}/O=AutoBot/C=US"
+  become: yes
+  when: not _tls_cert.stat.exists
+  notify: restart nginx
+  tags: ['frontend', 'tls']
+
+- name: "Frontend | Set TLS key permissions"
+  file:
+    path: "{{ frontend_tls_key }}"
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  when: not _tls_cert.stat.exists
+  tags: ['frontend', 'tls']
+
 - name: "Frontend | Check if package.json exists"
   stat:
-    path: /home/autobot/autobot-vue/package.json
+    path: "{{ frontend_install_dir }}/autobot-user-frontend/package.json"
   register: package_json_path
   tags: ['frontend', 'npm']
 
-- name: "Frontend | Install npm dependencies (if package.json exists)"
-  npm:
-    path: /home/autobot/autobot-vue
+- name: "Frontend | Install npm dependencies"
+  community.general.npm:
+    path: "{{ frontend_install_dir }}/autobot-user-frontend"
     state: present
   become: yes
-  become_user: autobot
+  become_user: "{{ frontend_user }}"
+  environment:
+    CYPRESS_INSTALL_BINARY: "0"
   when: package_json_path.stat.exists
   tags: ['frontend', 'npm']
-  register: npm_install_result
   ignore_errors: yes
+
+- name: "Frontend | Build production frontend"
+  command: npx vite build
+  args:
+    chdir: "{{ frontend_install_dir }}/autobot-user-frontend"
+  become: yes
+  become_user: "{{ frontend_user }}"
+  when: package_json_path.stat.exists
+  tags: ['frontend', 'build']
 
 - name: "Frontend | Configure nginx"
   template:
@@ -122,23 +167,12 @@
   notify: restart nginx
   tags: ['frontend', 'nginx']
 
-- name: "Frontend | Create systemd service"
-  template:
-    src: frontend.service.j2
-    dest: /etc/systemd/system/autobot-frontend.service
-    mode: '0644'
-  become: yes
-  notify:
-    - reload systemd
-    - restart frontend
-  tags: ['frontend', 'systemd']
-
 - name: "Frontend | Configure firewall - Allow HTTP"
   ufw:
     rule: allow
-    port: "80"
+    port: "{{ nginx_http_port }}"
     proto: tcp
-    comment: "HTTP"
+    comment: "HTTP (redirects to HTTPS)"
   become: yes
   notify: reload firewall
   tags: ['frontend', 'firewall']
@@ -146,20 +180,9 @@
 - name: "Frontend | Configure firewall - Allow HTTPS"
   ufw:
     rule: allow
-    port: "443"
-    proto: tcp
-    comment: "HTTPS"
-  become: yes
-  notify: reload firewall
-  tags: ['frontend', 'firewall']
-
-- name: "Frontend | Configure firewall - Allow Frontend Dev Server"
-  ufw:
-    rule: allow
     port: "{{ frontend_port }}"
     proto: tcp
-    from_ip: "{{ network_subnet }}"
-    comment: "Frontend Dev Server"
+    comment: "HTTPS"
   become: yes
   notify: reload firewall
   tags: ['frontend', 'firewall']
@@ -173,22 +196,22 @@
   become: yes
   tags: ['frontend', 'service']
 
-- name: "Frontend | Enable frontend service"
+- name: "Frontend | Stop legacy Vite dev server (if running)"
   systemd:
     name: autobot-frontend
-    enabled: yes
-    daemon_reload: yes
+    state: stopped
+    enabled: no
   become: yes
-  tags: ['frontend', 'service']
+  ignore_errors: yes
+  tags: ['frontend', 'cleanup']
 
 - name: "Frontend | Display configuration summary"
   debug:
     msg:
       - "=== Frontend Configuration Complete ==="
       - "Node.js: {{ node_version.stdout }}"
-      - "Frontend URL: http://{{ ansible_default_ipv4.address }}"
-      - "Dev Server: http://{{ ansible_default_ipv4.address }}:{{ frontend_port }}"
-      - "Nginx: Enabled"
-      - "Service: autobot-frontend (configured)"
-      - "Note: Service will start when code is synced"
+      - "Frontend URL: https://{{ ansible_default_ipv4.address }}"
+      - "TLS: Enabled ({{ frontend_tls_cert }})"
+      - "API Proxy: {{ backend_host }}:{{ backend_port }}"
+      - "Nginx: Enabled (production build)"
   tags: ['frontend', 'report']
