@@ -174,14 +174,48 @@ check_service_keys() {
     done
 }
 
+# Function to check auth logs across all VMs (merged from monitor-service-auth-logs.sh)
+check_vm_auth_logs() {
+    echo -e "${YELLOW}🔍 Checking auth logs across all VMs${NC}"
+    echo ""
+
+    # Check local backend logs
+    echo -e "${BLUE}=== Main Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}) ===${NC}"
+    if [ -f /var/log/autobot/backend.log ]; then
+        tail -20 /var/log/autobot/backend.log | grep -i "auth" || echo "No auth logs yet"
+    elif [ -f "$PROJECT_ROOT/logs/backend.log" ]; then
+        tail -20 "$PROJECT_ROOT/logs/backend.log" | grep -i "auth" || echo "No auth logs yet"
+    else
+        echo "No backend logs found"
+    fi
+    echo ""
+
+    # Check each remote VM
+    local ssh_key="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
+    local ssh_user="${AUTOBOT_SSH_USER:-autobot}"
+    for vm in "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" \
+              "npu:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" \
+              "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}" \
+              "aiml:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" \
+              "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"; do
+        IFS=':' read -r name ip <<< "$vm"
+        echo -e "${BLUE}=== ${name^} ($ip) ===${NC}"
+        ssh -i "$ssh_key" "$ssh_user@$ip" \
+            "tail -20 /var/log/autobot/*.log 2>/dev/null | grep -i auth || echo 'No auth logs yet'" \
+            2>/dev/null || echo "Cannot connect to $name"
+        echo ""
+    done
+}
+
 # Main menu
 echo "Select monitoring mode:"
 echo "  1) Generate analysis report (recommended)"
 echo "  2) Real-time monitoring"
 echo "  3) Check service keys in Redis"
-echo "  4) Run all checks"
+echo "  4) Check auth logs across all VMs"
+echo "  5) Run all checks"
 echo ""
-read -p "Enter choice [1-4]: " choice
+read -p "Enter choice [1-5]: " choice
 
 case $choice in
     1)
@@ -194,7 +228,12 @@ case $choice in
         check_service_keys
         ;;
     4)
+        check_vm_auth_logs
+        ;;
+    5)
         check_service_keys
+        echo ""
+        check_vm_auth_logs
         echo ""
         analyze_auth_logs
         echo ""

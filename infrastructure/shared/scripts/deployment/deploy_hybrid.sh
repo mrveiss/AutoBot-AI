@@ -252,13 +252,85 @@ cleanup() {
     fi
 }
 
+cleanup_port() {
+    local port=$1
+    local service_name=$2
+
+    log_info "Stopping any existing $service_name on port $port..."
+    if sudo lsof -i :"$port" -t > /dev/null 2>&1; then
+        PIDS=$(sudo lsof -t -i :"$port" 2>/dev/null)
+        if [ -n "$PIDS" ]; then
+            sudo kill -9 $PIDS 2>/dev/null
+        fi
+    fi
+}
+
+run_all_signal_cleanup() {
+    log_info "Shutting down all processes..."
+    [ -n "$BACKEND_PID" ] && kill -TERM "$BACKEND_PID" 2>/dev/null
+    [ -n "$FRONTEND_PID" ] && kill -TERM "$FRONTEND_PID" 2>/dev/null
+    sleep 1
+    [ -n "$BACKEND_PID" ] && kill -9 "$BACKEND_PID" 2>/dev/null
+    [ -n "$FRONTEND_PID" ] && kill -9 "$FRONTEND_PID" 2>/dev/null
+    for port in 8001 5173; do
+        PIDS=$(sudo lsof -t -i :"$port" 2>/dev/null)
+        [ -n "$PIDS" ] && sudo kill -9 $PIDS 2>/dev/null
+    done
+    exit 0
+}
+
+# Combined run: start containers + local backend + frontend (merged from run_hybrid.sh)
+run_all() {
+    trap run_all_signal_cleanup SIGINT SIGTERM SIGQUIT
+    cleanup_port 8001 "backend"
+    cleanup_port 5173 "frontend"
+
+    start_containers
+    log_info "Waiting for containers..."
+    sleep 10
+    check_container_health || log_warning "Some containers may not be ready"
+
+    export AUTOBOT_DEPLOYMENT_MODE=hybrid
+    export REDIS_HOST=localhost
+    export AI_STACK_URL=http://localhost:8080
+
+    log_info "Starting FastAPI backend on port 8001..."
+    uvicorn main:app --host 0.0.0.0 --port 8001 --log-level info &
+    BACKEND_PID=$!
+    sleep 5
+
+    if ! ps -p $BACKEND_PID > /dev/null; then
+        log_error "Backend failed to start"
+        run_all_signal_cleanup
+    fi
+
+    log_info "Starting Vue frontend..."
+    cd "$PROJECT_ROOT/autobot-slm-frontend"
+    npm run dev &
+    FRONTEND_PID=$!
+    cd "$PROJECT_ROOT"
+    sleep 5
+
+    if ! ps -p $FRONTEND_PID > /dev/null; then
+        log_error "Frontend failed to start"
+        run_all_signal_cleanup
+    fi
+
+    log_success "All services running!"
+    echo "  Backend:  http://localhost:8001 (PID: $BACKEND_PID)"
+    echo "  Frontend: http://localhost:5173 (PID: $FRONTEND_PID)"
+    echo "Press Ctrl+C to stop."
+    wait
+}
+
 show_help() {
     echo "AutoBot Hybrid Deployment Manager"
     echo
     echo "Usage: $0 [command]"
     echo
     echo "Commands:"
-    echo "  start     - Start hybrid deployment (build + run)"
+    echo "  start     - Start hybrid deployment (build + run containers)"
+    echo "  run       - Start containers + local backend + frontend"
     echo "  stop      - Stop container services"
     echo "  restart   - Restart container services"
     echo "  status    - Show deployment status"
@@ -270,6 +342,7 @@ show_help() {
     echo
     echo "Examples:"
     echo "  $0 start"
+    echo "  $0 run"
     echo "  $0 logs ai-stack"
     echo "  $0 status"
 }
@@ -293,6 +366,11 @@ case "${1:-help}" in
             show_logs all
             exit 1
         fi
+        ;;
+
+    "run")
+        check_dependencies
+        run_all
         ;;
 
     "stop")
