@@ -43,7 +43,7 @@
         - slm-agent
         - postgresql
         - monitoring
-      01-Code-Source:
+      01-Backend:
         - slm-agent
         - backend
         - vnc
