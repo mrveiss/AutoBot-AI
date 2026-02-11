@@ -155,9 +155,10 @@
   tags: ['common', 'dns']
 
 - name: "Common | Check for PEP 668 (externally managed Python)"
-  stat:
-    path: /usr/lib/python3/EXTERNALLY-MANAGED
+  shell: ls /usr/lib/python3*/EXTERNALLY-MANAGED 2>/dev/null
   register: _pep668
+  changed_when: false
+  failed_when: false
   tags: ['common', 'python']
 
 - name: "Common | Install Python packages (system-wide)"
@@ -169,7 +170,7 @@
     state: latest
     executable: pip3
   become: yes
-  when: not _pep668.stat.exists
+  when: _pep668.rc != 0
   tags: ['common', 'python']
 
 - name: "Common | Create log directory"
