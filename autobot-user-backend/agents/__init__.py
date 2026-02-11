@@ -25,4 +25,12 @@ __all__ = [
     "get_enhanced_system_commands_agent",
     "get_containerized_librarian_assistant",
     "security_scanner_agent",
+    # Issue #60: Specialized agents
+    "get_data_analysis_agent",
+    "get_code_generation_agent",
+    "get_translation_agent",
+    "get_summarization_agent",
+    "get_sentiment_analysis_agent",
+    "get_image_analysis_agent",
+    "get_audio_processing_agent",
 ]
