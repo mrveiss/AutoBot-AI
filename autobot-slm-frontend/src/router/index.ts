@@ -301,6 +301,13 @@ const router = createRouter({
       meta: { title: 'Role Registry' }
     },
     {
+      // Issue #731: Skills system management
+      path: '/skills',
+      name: 'skills',
+      component: () => import('@/views/SkillsView.vue'),
+      meta: { title: 'Skills' }
+    },
+    {
       path: '/security',
       name: 'security',
       component: () => import('@/views/SecurityView.vue'),

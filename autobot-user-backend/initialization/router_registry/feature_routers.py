@@ -291,6 +291,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["integrations-monitoring"],
         "integration_monitoring",
     ),
+    # Skills system (Issue #731)
+    ("backend.api.skills", "/skills", ["skills"], "skills"),
 ]
 
 

@@ -44,6 +44,8 @@ const navItems = [
   { name: 'Updates', path: '/updates', icon: 'updates' },
   // Issue #841: Role Registry management page
   { name: 'Roles', path: '/roles', icon: 'roles' },
+  // Issue #731: Skills system management
+  { name: 'Skills', path: '/skills', icon: 'skills' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
   { name: 'Settings', path: '/settings', icon: 'cog' },
   { name: 'Performance', path: '/performance', icon: 'performance' },
