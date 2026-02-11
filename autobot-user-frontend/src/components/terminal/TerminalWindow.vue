@@ -93,20 +93,28 @@
           v-html="formatTerminalLine(line)"
         ></div>
 
-        <div class="terminal-input-line">
-          <span class="prompt" v-html="currentPrompt"></span>
-          <input
-            ref="terminalInput"
-            v-model="currentInput"
-            @keydown="handleKeydown"
-            @keyup.enter="sendCommand"
-            class="terminal-input"
-            :disabled="!canInput"
-            autocomplete="off"
-            spellcheck="false"
-            autofocus
+        <div class="terminal-input-wrapper">
+          <CompletionSuggestions
+            :items="tabCompletion.suggestions.value"
+            :selected-index="tabCompletion.selectedIndex.value"
+            :visible="tabCompletion.isVisible.value"
+            @select="handleCompletionSelect"
           />
-          <span class="cursor" :class="{ 'blink': showCursor }">█</span>
+          <div class="terminal-input-line">
+            <span class="prompt" v-html="currentPrompt"></span>
+            <input
+              ref="terminalInput"
+              v-model="currentInput"
+              @keydown="handleKeydown"
+              @keyup.enter="sendCommand"
+              class="terminal-input"
+              :disabled="!canInput"
+              autocomplete="off"
+              spellcheck="false"
+              autofocus
+            />
+            <span class="cursor" :class="{ 'blink': showCursor }">█</span>
+          </div>
         </div>
       </div>
     </div>
@@ -326,14 +334,17 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useTerminalService } from '@/services/TerminalService';
 import { useRoute, useRouter } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
+import CompletionSuggestions from './CompletionSuggestions.vue';
 import { createLogger } from '@/utils/debugUtils';
+import { useTabCompletion } from '@/composables/useTabCompletion';
 
 const logger = createLogger('TerminalWindow');
 
 export default {
   name: 'TerminalWindow',
   components: {
-    AdvancedStepConfirmationModal
+    AdvancedStepConfirmationModal,
+    CompletionSuggestions
   },
   setup() {
     const route = useRoute();
@@ -412,6 +423,9 @@ export default {
     const passwordPromptActive = ref(false);
     const currentPasswordPrompt = ref(null);
 
+    // Tab completion (Issue #503)
+    const tabCompletion = useTabCompletion({ commandHistory });
+
     // Refs
     const terminalMain = ref(null);
     const terminalOutput = ref(null);
@@ -478,6 +492,7 @@ export default {
 
     // Enhanced sendCommand with safety checks
     const sendCommand = () => {
+      tabCompletion.dismiss();
       if (!currentInput.value.trim() || !canInput.value) return;
 
       const command = currentInput.value.trim();
@@ -1007,7 +1022,32 @@ export default {
           break;
 
         case 'Tab':
-          // Allow default Tab behavior (focus navigation)
+          event.preventDefault();
+          {
+            const cursorPos = terminalInput.value?.selectionStart ?? currentInput.value.length;
+            const result = tabCompletion.complete(currentInput.value, cursorPos);
+            if (result !== null) {
+              currentInput.value = result;
+            }
+          }
+          break;
+
+        case 'Escape':
+          if (tabCompletion.isVisible.value) {
+            event.preventDefault();
+            tabCompletion.dismiss();
+          }
+          break;
+
+        case 'Enter':
+          if (tabCompletion.isVisible.value) {
+            event.preventDefault();
+            const accepted = tabCompletion.acceptSelected(currentInput.value);
+            if (accepted !== null) {
+              currentInput.value = accepted;
+            }
+            return;
+          }
           break;
 
         case 'c':
@@ -1304,7 +1344,21 @@ export default {
       }
     });
 
+    // Handle clicking a suggestion in the dropdown
+    const handleCompletionSelect = (index) => {
+      tabCompletion.selectedIndex.value = index;
+      const accepted = tabCompletion.acceptSelected(currentInput.value);
+      if (accepted !== null) {
+        currentInput.value = accepted;
+      }
+      nextTick(() => focusInput());
+    };
+
     return {
+      // Tab completion (Issue #503)
+      tabCompletion,
+      handleCompletionSelect,
+
       // Data
       sessionId,
       sessionTitle,
@@ -1612,6 +1666,11 @@ export default {
 
 .line-system {
   color: #9370db;
+}
+
+.terminal-input-wrapper {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .terminal-input-line {

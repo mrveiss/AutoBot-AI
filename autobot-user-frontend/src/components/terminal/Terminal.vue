@@ -49,17 +49,25 @@
           <span class="line-prefix">{{ line.prefix }}</span>
           <span :class="line.type">{{ line.content }}</span>
         </div>
-        <div v-if="isConnected" class="terminal-prompt">
-          <span class="prompt">{{ currentPrompt }}</span>
-          <input
-            ref="commandInput"
-            v-model="currentCommand"
-            @keydown="handleKeydown"
-            @keyup="handleKeyup"
-            class="command-input"
-            :disabled="!isConnected"
-            placeholder="Enter command..."
+        <div v-if="isConnected" class="terminal-prompt-wrapper">
+          <CompletionSuggestions
+            :items="tabCompletion.suggestions.value"
+            :selected-index="tabCompletion.selectedIndex.value"
+            :visible="tabCompletion.isVisible.value"
+            @select="handleCompletionSelect"
           />
+          <div class="terminal-prompt">
+            <span class="prompt">{{ currentPrompt }}</span>
+            <input
+              ref="commandInput"
+              v-model="currentCommand"
+              @keydown="handleKeydown"
+              @keyup="handleKeyup"
+              class="command-input"
+              :disabled="!isConnected"
+              placeholder="Enter command..."
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -71,6 +79,8 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
+import { useTabCompletion } from '@/composables/useTabCompletion'
+import CompletionSuggestions from './CompletionSuggestions.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('Terminal')
@@ -102,6 +112,9 @@ const currentCommand = ref('')
 const currentPrompt = ref('$ ')
 const commandHistory = ref<string[]>([])
 const historyIndex = ref(-1)
+
+// Tab completion (Issue #503)
+const tabCompletion = useTabCompletion({ commandHistory })
 
 // Refs
 const terminalElement = ref<HTMLElement>()
@@ -295,6 +308,7 @@ const toggleConnection = () => {
 }
 
 const sendCommand = (command: string) => {
+  tabCompletion.dismiss()
   if (!isConnected.value) {
     addTerminalLine('system', 'Not connected to terminal', 'error')
     return
@@ -361,35 +375,52 @@ const handleTerminalMessage = (data: any) => {
   }
 }
 
-// Issue #756: Handle tab completion response from backend
-const handleTabCompletionResponse = (data: { completions: string[], prefix: string, error?: string }) => {
-  if (data.error) {
-    // Silently ignore errors - don't disrupt user experience
-    return
-  }
-
+// Issue #756 / #503: Handle tab completion response from backend
+const handleTabCompletionResponse = (
+  data: { completions: string[]; prefix: string; error?: string },
+) => {
+  if (data.error) return
   const completions = data.completions || []
-
-  if (completions.length === 0) {
-    // No completions found - do nothing
-    return
-  }
+  if (completions.length === 0) return
 
   if (completions.length === 1) {
-    // Single completion - apply it directly
     applyCompletion(data.prefix, completions[0])
+    tabCompletion.dismiss()
   } else {
-    // Multiple completions - show them as output
-    addTerminalLine('', completions.join('  '), 'info')
+    // Feed backend completions into the dropdown
+    tabCompletion.suggestions.value = completions.map(
+      (c: string) => ({
+        value: c,
+        type: 'path' as const,
+        description: 'From server',
+      }),
+    )
+    tabCompletion.selectedIndex.value = 0
+    tabCompletion.isVisible.value = true
   }
 }
 
 // Issue #756: Apply a single completion to the current command
-const applyCompletion = (prefix: string, completion: string) => {
+const applyCompletion = (
+  prefix: string, completion: string,
+) => {
   const cmd = currentCommand.value
   const lastSpaceIdx = cmd.lastIndexOf(' ')
-  const beforePrefix = lastSpaceIdx >= 0 ? cmd.slice(0, lastSpaceIdx + 1) : ''
+  const beforePrefix = lastSpaceIdx >= 0
+    ? cmd.slice(0, lastSpaceIdx + 1) : ''
   currentCommand.value = beforePrefix + completion
+}
+
+// Issue #503: Handle clicking a suggestion in the dropdown
+const handleCompletionSelect = (index: number) => {
+  tabCompletion.selectedIndex.value = index
+  const accepted = tabCompletion.acceptSelected(
+    currentCommand.value,
+  )
+  if (accepted !== null) {
+    currentCommand.value = accepted
+  }
+  nextTick(() => commandInput.value?.focus())
 }
 
 const addTerminalLine = (prefix: string, content: string, type: string = 'output') => {
@@ -433,9 +464,25 @@ const copyTerminalOutput = async () => {
 const handleKeydown = (event: KeyboardEvent) => {
   switch (event.key) {
     case 'Enter':
+      if (tabCompletion.isVisible.value) {
+        event.preventDefault()
+        const accepted = tabCompletion.acceptSelected(
+          currentCommand.value,
+        )
+        if (accepted !== null) currentCommand.value = accepted
+        return
+      }
       event.preventDefault()
+      tabCompletion.dismiss()
       if (currentCommand.value.trim()) {
         sendCommand(currentCommand.value.trim())
+      }
+      break
+
+    case 'Escape':
+      if (tabCompletion.isVisible.value) {
+        event.preventDefault()
+        tabCompletion.dismiss()
       }
       break
 
@@ -447,16 +494,20 @@ const handleKeydown = (event: KeyboardEvent) => {
         } else if (historyIndex.value > 0) {
           historyIndex.value--
         }
-        currentCommand.value = commandHistory.value[historyIndex.value] || ''
+        currentCommand.value =
+          commandHistory.value[historyIndex.value] || ''
       }
       break
 
     case 'ArrowDown':
       event.preventDefault()
       if (historyIndex.value !== -1) {
-        if (historyIndex.value < commandHistory.value.length - 1) {
+        if (
+          historyIndex.value < commandHistory.value.length - 1
+        ) {
           historyIndex.value++
-          currentCommand.value = commandHistory.value[historyIndex.value]
+          currentCommand.value =
+            commandHistory.value[historyIndex.value]
         } else {
           historyIndex.value = -1
           currentCommand.value = ''
@@ -466,15 +517,24 @@ const handleKeydown = (event: KeyboardEvent) => {
 
     case 'Tab':
       event.preventDefault()
-      // Issue #756: Send tab completion request
-      if (isConnected.value) {
-        const cursorPos = (event.target as HTMLInputElement)?.selectionStart ?? currentCommand.value.length
-        wsSend({
-          type: 'tab_completion',
-          text: currentCommand.value,
-          cursor: cursorPos,
-          session_id: sessionId.value
-        })
+      {
+        const el = event.target as HTMLInputElement
+        const cursorPos = el?.selectionStart
+          ?? currentCommand.value.length
+        // Local completion first (Issue #503)
+        const result = tabCompletion.complete(
+          currentCommand.value, cursorPos,
+        )
+        if (result !== null) currentCommand.value = result
+        // Also send WS request if connected (Issue #756)
+        if (isConnected.value) {
+          wsSend({
+            type: 'tab_completion',
+            text: currentCommand.value,
+            cursor: cursorPos,
+            session_id: sessionId.value,
+          })
+        }
       }
       break
   }
@@ -607,6 +667,11 @@ onUnmounted(() => {
 
 .info {
   color: var(--color-info, #17a2b8);
+}
+
+.terminal-prompt-wrapper {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .terminal-prompt {
