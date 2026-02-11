@@ -3,6 +3,12 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+/**
+ * FleetSummary - Fleet health statistics cards.
+ *
+ * Issue #754: Added ARIA roles, region landmark, descriptive labels.
+ */
+
 import { computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 
@@ -49,14 +55,19 @@ const stats = computed(() => [
 </script>
 
 <template>
-  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+  <div
+    class="grid grid-cols-2 md:grid-cols-5 gap-4"
+    role="region"
+    aria-label="Fleet health summary"
+  >
     <div
       v-for="stat in stats"
       :key="stat.label"
       class="card p-4"
+      :aria-label="`${stat.label}: ${stat.value}`"
     >
       <div class="flex items-center gap-3">
-        <div :class="['p-2 rounded-lg', stat.bgColor]">
+        <div :class="['p-2 rounded-lg', stat.bgColor]" aria-hidden="true">
           <!-- Server icon -->
           <svg v-if="stat.icon === 'server'" :class="['w-5 h-5', stat.color]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />

@@ -7,20 +7,24 @@
  * Main App Component
  *
  * Issue #741: Added UpdateNotification for code sync alerts.
+ * Issue #754: Added SkipLink, ARIA landmarks, high contrast init.
  */
 
 import { onMounted, watch, computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/common/Sidebar.vue'
+import SkipLink from '@/components/common/SkipLink.vue'
 import UpdateNotification from '@/components/UpdateNotification.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
+import { useHighContrast } from '@/composables/useAccessibility'
 
 const route = useRoute()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const ws = useSlmWebSocket()
+const highContrast = useHighContrast()
 
 const isLoginPage = computed(() => route.name === 'login')
 
@@ -55,6 +59,9 @@ async function initializeApp(): Promise<void> {
 }
 
 onMounted(async () => {
+  // Issue #754: Initialize high contrast preference from localStorage
+  highContrast.init()
+
   if (authStore.isAuthenticated) {
     await initializeApp()
   }
@@ -62,6 +69,9 @@ onMounted(async () => {
 </script>
 
 <template>
+  <!-- Issue #754: Skip link for keyboard navigation -->
+  <SkipLink />
+
   <!-- Login page - no sidebar -->
   <template v-if="isLoginPage">
     <RouterView />
@@ -74,7 +84,12 @@ onMounted(async () => {
       <div class="flex-1 flex flex-col overflow-hidden">
         <!-- Issue #741: Top-bar notification for code updates -->
         <UpdateNotification />
-        <main class="flex-1 overflow-auto">
+        <main
+          id="main-content"
+          class="flex-1 overflow-auto"
+          role="main"
+          aria-label="Main content"
+        >
           <RouterView />
         </main>
       </div>

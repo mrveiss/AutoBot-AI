@@ -8,6 +8,9 @@
  *
  * Provides navigation tabs for monitoring sub-routes and displays
  * the active sub-view via router-view.
+ *
+ * Issue #754: Added ARIA tablist/tab roles, aria-selected,
+ * status indicators, accessible labels.
  */
 
 import { computed } from 'vue'
@@ -68,9 +71,10 @@ function getStatusColor(status: string): string {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
           <h1 class="text-2xl font-bold text-gray-900">Monitoring</h1>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2" role="status" :aria-label="`System health: ${systemHealth}`">
             <span
               :class="['w-2.5 h-2.5 rounded-full', getStatusColor(systemHealth)]"
+              aria-hidden="true"
             ></span>
             <span class="text-sm text-gray-600 capitalize">{{ systemHealth }}</span>
           </div>
@@ -79,13 +83,13 @@ function getStatusColor(status: string): string {
         <!-- Quick Stats -->
         <div class="flex items-center gap-4 text-sm">
           <div class="flex items-center gap-2 text-gray-600">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
             </svg>
             <span>{{ fleetStore.nodeList.length }} Nodes</span>
           </div>
-          <div v-if="hasCriticalAlerts" class="flex items-center gap-2 text-danger-600">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div v-if="hasCriticalAlerts" class="flex items-center gap-2 text-danger-600" role="alert">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <span>{{ activeAlertCount }} Alert{{ activeAlertCount !== 1 ? 's' : '' }}</span>
@@ -94,11 +98,18 @@ function getStatusColor(status: string): string {
       </div>
 
       <!-- Tab Navigation -->
-      <div class="flex gap-1 mt-4 -mb-4 overflow-x-auto">
+      <div
+        class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
+        role="tablist"
+        aria-label="Monitoring sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.id"
           @click="navigateTo(tab.path)"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
+          :aria-current="activeTab === tab.id ? 'page' : undefined"
           :class="[
             'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
             activeTab === tab.id
@@ -106,13 +117,14 @@ function getStatusColor(status: string): string {
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           ]"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tab.icon" />
           </svg>
           {{ tab.name }}
           <span
             v-if="tab.id === 'alerts' && activeAlertCount > 0"
             class="px-1.5 py-0.5 text-xs font-bold bg-danger-500 text-white rounded-full"
+            :aria-label="`${activeAlertCount} active alerts`"
           >
             {{ activeAlertCount }}
           </span>
