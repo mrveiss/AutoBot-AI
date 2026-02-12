@@ -32,7 +32,8 @@ let codeSyncPollTimer: ReturnType<typeof setInterval> | null = null
 
 const navItems = [
   { name: 'Fleet Overview', path: '/', icon: 'grid' },
-  { name: 'Services', path: '/services', icon: 'server' },
+  // Issue #850: Consolidated Services and Roles into Orchestration
+  { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
   // Issue #786: Infrastructure setup wizard
   { name: 'Infrastructure', path: '/infrastructure', icon: 'infra' },
@@ -41,12 +42,8 @@ const navItems = [
   { name: 'Code Sync', path: '/code-sync', icon: 'download', showBadge: true },
   // Issue #760: Agent LLM configuration management
   { name: 'Agent Config', path: '/agent-config', icon: 'agents' },
-  // Issue #838: Service Orchestration page
-  { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
   // Issue #840: Updates management page
   { name: 'Updates', path: '/updates', icon: 'updates' },
-  // Issue #841: Role Registry management page
-  { name: 'Roles', path: '/roles', icon: 'roles' },
   // Issue #731: Skills system management
   { name: 'Skills', path: '/skills', icon: 'skills' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },

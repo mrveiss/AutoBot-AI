@@ -34,9 +34,10 @@ const router = createRouter({
       meta: { title: 'Fleet Overview' }
     },
     {
+      // Issue #850: Consolidated into unified orchestration view
       path: '/services',
       name: 'services',
-      component: () => import('@/views/ServicesView.vue'),
+      redirect: '/orchestration',
       meta: { title: 'Services' }
     },
     {
@@ -102,9 +103,10 @@ const router = createRouter({
           meta: { title: 'General Settings', parent: 'settings' }
         },
         {
+          // Issue #850: Consolidated into unified orchestration view (Tab 5)
           path: 'infrastructure',
           name: 'settings-infrastructure',
-          component: () => import('@/views/settings/InfrastructureSettings.vue'),
+          redirect: '/orchestration',
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
@@ -294,10 +296,10 @@ const router = createRouter({
       meta: { title: 'Updates' }
     },
     {
-      // Issue #841: Role Registry management
+      // Issue #850: Consolidated into unified orchestration view (Tab 3)
       path: '/roles',
       name: 'roles',
-      component: () => import('@/views/RolesView.vue'),
+      redirect: '/orchestration',
       meta: { title: 'Role Registry' }
     },
     {
