@@ -12,9 +12,9 @@
   gather_facts: false
 
   vars:
-    reboot_timeout: "{{ reboot_timeout | default(300) }}"
-    pre_reboot_delay: "{{ pre_reboot_delay | default(5) }}"
-    post_reboot_delay: "{{ post_reboot_delay | default(30) }}"
+    _reboot_timeout: "{{ reboot_timeout | default(300) }}"
+    _pre_reboot_delay: "{{ pre_reboot_delay | default(5) }}"
+    _post_reboot_delay: "{{ post_reboot_delay | default(30) }}"
 
   tasks:
     - name: Display reboot info
@@ -25,22 +25,22 @@
           ╠════════════════════════════════════════════════════════════╣
           ║ Target: {{ inventory_hostname }}                           ║
           ║ Action: System reboot                                      ║
-          ║ Timeout: {{ reboot_timeout }}s                             ║
+          ║ Timeout: {{ _reboot_timeout }}s                             ║
           ╚════════════════════════════════════════════════════════════╝
       run_once: false
 
     - name: Reboot the node
       ansible.builtin.reboot:
-        reboot_timeout: "{{ reboot_timeout }}"
+        reboot_timeout: "{{ _reboot_timeout }}"
         msg: "AutoBot initiated reboot via API"
-        pre_reboot_delay: "{{ pre_reboot_delay }}"
-        post_reboot_delay: "{{ post_reboot_delay }}"
+        pre_reboot_delay: "{{ _pre_reboot_delay }}"
+        post_reboot_delay: "{{ _post_reboot_delay }}"
       register: reboot_result
 
     - name: Wait for node to come back online
       ansible.builtin.wait_for_connection:
-        delay: "{{ post_reboot_delay }}"
-        timeout: "{{ reboot_timeout }}"
+        delay: "{{ _post_reboot_delay }}"
+        timeout: "{{ _reboot_timeout }}"
 
     - name: Verify node is responsive
       ansible.builtin.ping:
