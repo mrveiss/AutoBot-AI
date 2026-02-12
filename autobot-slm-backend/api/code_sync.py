@@ -16,10 +16,6 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import (
     CodeSource,
     CodeStatus,
@@ -50,7 +46,11 @@ from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
 from services.git_tracker import get_git_tracker
+from services.playbook_executor import get_playbook_executor
 from services.sync_orchestrator import get_sync_orchestrator
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -241,7 +241,7 @@ async def sync_node(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> NodeSyncResponse:
     """
-    Trigger code sync on a specific node.
+    Trigger code sync on a specific node using Ansible playbook.
     """
     # Get node
     result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -253,31 +253,37 @@ async def sync_node(
             detail="Node not found",
         )
 
-    distributor = get_code_distributor()
+    executor = get_playbook_executor()
 
-    success, message = await distributor.trigger_node_sync(
-        node_id=node.node_id,
-        ip_address=node.ip_address,
-        ssh_user=node.ssh_user or "autobot",
-        ssh_port=node.ssh_port or 22,
-        restart=request.restart,
-        strategy=request.strategy,
+    # Build playbook parameters
+    limit = [node.hostname]
+    tags = []
+    if not request.restart:
+        tags.append("!restart")  # Skip restart tasks
+
+    # Execute update playbook
+    playbook_result = await executor.execute_playbook(
+        playbook_name="update-all-nodes.yml",
+        limit=limit,
+        tags=tags if tags else None,
     )
 
     return NodeSyncResponse(
-        success=success,
-        message=message,
+        success=playbook_result["success"],
+        message=playbook_result["output"]
+        if playbook_result["success"]
+        else f"Playbook failed: {playbook_result['output']}",
         node_id=node_id,
     )
 
 
 async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     """
-    Background task to execute fleet sync job (Issue #741 Phase 8).
+    Background task to execute fleet sync job using Ansible playbooks.
 
     Processes nodes according to the specified strategy and batch size.
     """
-    distributor = get_code_distributor()
+    executor = get_playbook_executor()
     job.status = "running"
 
     node_list = list(job.nodes.values())
@@ -295,7 +301,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
                 node_state.started_at = datetime.utcnow()
 
                 task = asyncio.create_task(
-                    _sync_single_node(distributor, node_state, job.restart)
+                    _sync_single_node(executor, node_state, job.restart)
                 )
                 tasks.append(task)
 
@@ -328,22 +334,28 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     )
 
 
-async def _sync_single_node(
-    distributor, node_state: NodeSyncState, restart: bool
-) -> None:
-    """Sync a single node and update its state."""
+async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) -> None:
+    """Sync a single node using Ansible playbook and update its state."""
     try:
-        success, message = await distributor.trigger_node_sync(
-            node_id=node_state.node_id,
-            ip_address=node_state.ip_address,
-            ssh_user=node_state.ssh_user,
-            ssh_port=node_state.ssh_port,
-            restart=restart,
-            strategy="graceful",
+        # Build playbook parameters
+        limit = [node_state.hostname]
+        tags = []
+        if not restart:
+            tags.append("!restart")  # Skip restart tasks
+
+        # Execute update playbook
+        result = await executor.execute_playbook(
+            playbook_name="update-all-nodes.yml",
+            limit=limit,
+            tags=tags if tags else None,
         )
 
-        node_state.status = "success" if success else "failed"
-        node_state.message = message
+        node_state.status = "success" if result["success"] else "failed"
+        node_state.message = (
+            result["output"][:500]
+            if result["success"]
+            else f"Playbook failed: {result['output'][:500]}"
+        )
         node_state.completed_at = datetime.utcnow()
 
     except Exception as e:
