@@ -1,0 +1,69 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install Redis CLI tools
+
+- name: Check if redis-cli is already installed
+  command: which redis-cli
+  register: redis_cli_check
+  failed_when: false
+  changed_when: false
+
+- name: Install redis-tools via package manager
+  package:
+    name: redis-tools
+    state: present
+  when: redis_cli_check.rc != 0 and not redis_cli_build_from_source
+  become: true
+  ignore_errors: yes
+  register: redis_tools_install
+
+- name: Build redis-cli from source if package install failed
+  block:
+    - name: Download Redis source
+      get_url:
+        url: "http://download.redis.io/releases/redis-{{ redis_cli_version }}.tar.gz"
+        dest: "/tmp/redis-{{ redis_cli_version }}.tar.gz"
+
+    - name: Extract Redis source
+      unarchive:
+        src: "/tmp/redis-{{ redis_cli_version }}.tar.gz"
+        dest: /tmp
+        remote_src: yes
+
+    - name: Compile redis-cli
+      command: make redis-cli
+      args:
+        chdir: "/tmp/redis-{{ redis_cli_version }}"
+
+    - name: Create local bin directory
+      file:
+        path: "{{ ansible_env.HOME }}/.local/bin"
+        state: directory
+        mode: '0755'
+
+    - name: Install redis-cli to local bin
+      copy:
+        src: "/tmp/redis-{{ redis_cli_version }}/src/redis-cli"
+        dest: "{{ ansible_env.HOME }}/.local/bin/redis-cli"
+        mode: '0755'
+        remote_src: yes
+
+    - name: Add local bin to PATH in bashrc
+      lineinfile:
+        path: "{{ ansible_env.HOME }}/.bashrc"
+        line: 'export PATH="{{ ansible_env.HOME }}/.local/bin:$PATH"'
+        state: present
+        create: yes
+
+  when: (redis_cli_check.rc != 0 and redis_cli_build_from_source) or (redis_tools_install is defined and redis_tools_install.failed)
+
+- name: Verify redis-cli installation
+  command: redis-cli --version
+  register: redis_cli_version_output
+  changed_when: false
+
+- name: Display redis-cli version
+  debug:
+    msg: "redis-cli installed: {{ redis_cli_version_output.stdout }}"

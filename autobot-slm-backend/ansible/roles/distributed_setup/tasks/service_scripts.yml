@@ -1,0 +1,61 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Create service management scripts
+
+- name: Create scripts directory
+  file:
+    path: "{{ scripts_dir }}/distributed"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy health check script
+  template:
+    src: check-health.sh.j2
+    dest: "{{ scripts_dir }}/distributed/check-health.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy distributed status script
+  template:
+    src: distributed-status.sh.j2
+    dest: "{{ scripts_dir}}/distributed/distributed-status.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy coordinator start script
+  template:
+    src: start-coordinator.sh.j2
+    dest: "{{ scripts_dir }}/distributed/start-coordinator.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+  when: inventory_hostname == groups['slm_server'][0]
+
+- name: Deploy fleet management script
+  template:
+    src: manage-fleet.sh.j2
+    dest: "{{ scripts_dir }}/distributed/manage-fleet.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Create systemd service for coordinator
+  template:
+    src: autobot-coordinator.service.j2
+    dest: /etc/systemd/system/autobot-coordinator.service
+    mode: '0644'
+  when: create_systemd_services and inventory_hostname == groups['slm_server'][0]
+  notify: reload systemd
+
+- name: Enable coordinator service
+  systemd:
+    name: autobot-coordinator
+    enabled: yes
+    daemon_reload: yes
+  when: create_systemd_services and inventory_hostname == groups['slm_server'][0]

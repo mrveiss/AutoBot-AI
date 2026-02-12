@@ -1,0 +1,58 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup distributed backup collection
+
+- name: Create backup directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0750'
+  loop:
+    - "{{ backup_dir }}"
+    - "{{ backup_dir }}/distributed"
+    - "{{ backup_dir }}/logs"
+    - "{{ backup_dir }}/configs"
+
+- name: Deploy backup collection script
+  template:
+    src: collect-backups.sh.j2
+    dest: "{{ scripts_dir }}/distributed/collect-backups.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Create backup cleanup script
+  template:
+    src: cleanup-backups.sh.j2
+    dest: "{{ scripts_dir }}/distributed/cleanup-backups.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Setup cron job for automated backups
+  cron:
+    name: "AutoBot distributed backup"
+    minute: "{{ backup_schedule.split()[0] }}"
+    hour: "{{ backup_schedule.split()[1] }}"
+    day: "{{ backup_schedule.split()[2] }}"
+    month: "{{ backup_schedule.split()[3] }}"
+    weekday: "{{ backup_schedule.split()[4] }}"
+    job: "{{ scripts_dir }}/distributed/collect-backups.sh >> {{ logs_dir }}/backup.log 2>&1"
+    user: "{{ service_user }}"
+    state: present
+
+- name: Setup cron job for backup cleanup
+  cron:
+    name: "AutoBot backup cleanup"
+    minute: "30"
+    hour: "3"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    job: "{{ scripts_dir }}/distributed/cleanup-backups.sh >> {{ logs_dir }}/backup-cleanup.log 2>&1"
+    user: "{{ service_user }}"
+    state: present

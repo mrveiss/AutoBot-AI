@@ -1,0 +1,20 @@
+{
+  "generated_at": "{{ ansible_date_time.iso8601 }}",
+  "coordinator": {
+    "host": "{{ coordinator_host }}",
+    "port": {{ backend_port }}
+  },
+  "fleet_nodes": [
+{% for node in fleet_nodes %}
+    {
+      "name": "{{ node.name }}",
+      "host": "{{ node.host }}",
+      "role": "{{ node.role }}",
+      "port": {{ node.port }},
+      "health_endpoint": "{{ node.health_endpoint }}"
+    }{{ "," if not loop.last else "" }}
+{% endfor %}
+  ],
+  "deployment_mode": "distributed",
+  "total_nodes": {{ fleet_nodes | length }}
+}

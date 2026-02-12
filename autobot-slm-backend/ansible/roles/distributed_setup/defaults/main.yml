@@ -1,0 +1,80 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Distributed setup role default variables
+
+# Service user and group
+service_user: autobot
+service_group: autobot
+
+# Project directories
+project_root: /opt/autobot
+config_dir: /etc/autobot
+logs_dir: /var/log/autobot
+scripts_dir: "{{ project_root }}/scripts"
+backup_dir: "{{ project_root }}/backups"
+
+# Distributed architecture configuration (from SSOT)
+distributed_mode: true
+coordinator_host: "{{ ansible_default_ipv4.address }}"
+
+# Fleet nodes (derived from inventory)
+fleet_nodes: []  # Populated dynamically from slm_nodes group
+
+# Redis configuration
+redis_cli_install: true
+redis_cli_version: "7.4.0"
+redis_cli_build_from_source: false  # Set true if no sudo access
+
+# SSH configuration
+ssh_key_path: "{{ ansible_env.HOME }}/.ssh/autobot_fleet"
+ssh_key_type: rsa
+ssh_key_bits: 4096
+ssh_setup_required: true
+
+# Connectivity testing
+connectivity_timeout: 5
+connectivity_retries: 3
+
+# Health monitoring
+health_check_enabled: true
+health_check_interval: 60  # seconds
+health_check_endpoints:
+  - name: "Backend API"
+    url: "http://{{ coordinator_host }}:8001/api/health"
+    expected_status: 200
+  - name: "Redis"
+    host: "{{ hostvars[groups['redis'][0]]['ansible_host'] }}"
+    port: 6379
+    check_type: tcp
+
+# Backup configuration
+backup_enabled: true
+backup_schedule: "0 2 * * *"  # Daily at 2 AM
+backup_retention_days: 7
+backup_destinations:
+  - redis_dump
+  - logs
+  - configs
+  - local_data
+
+# Service ports (from SSOT)
+backend_port: 8001
+frontend_port: 5173
+redis_port: 6379
+npu_worker_port: 8081
+ai_stack_port: 8080
+browser_service_port: 3000
+ollama_port: 11434
+vnc_port: 6080
+
+# Distributed service orchestration
+create_systemd_services: true
+enable_auto_restart: true
+restart_policy: always
+restart_sec: 10
+
+# Logging configuration
+log_level: INFO
+syslog_identifier: "autobot-distributed"

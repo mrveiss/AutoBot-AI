@@ -1,0 +1,51 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup health monitoring for distributed fleet
+
+- name: Deploy health monitor script
+  template:
+    src: health-monitor.sh.j2
+    dest: "{{ scripts_dir }}/distributed/health-monitor.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Create health monitoring systemd service
+  template:
+    src: autobot-health-monitor.service.j2
+    dest: /etc/systemd/system/autobot-health-monitor.service
+    mode: '0644'
+  when: create_systemd_services
+
+- name: Create health monitoring timer
+  template:
+    src: autobot-health-monitor.timer.j2
+    dest: /etc/systemd/system/autobot-health-monitor.timer
+    mode: '0644'
+  when: create_systemd_services
+
+- name: Enable and start health monitoring timer
+  systemd:
+    name: autobot-health-monitor.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: create_systemd_services
+
+- name: Create health check status directory
+  file:
+    path: "{{ logs_dir }}/health"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy health check result viewer
+  template:
+    src: view-health-status.sh.j2
+    dest: "{{ scripts_dir }}/distributed/view-health-status.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'

@@ -1,0 +1,63 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# distributed_setup role - Main tasks
+
+- name: Gather fleet node information
+  include_tasks: fleet_discovery.yml
+  tags:
+    - discovery
+    - fleet
+
+- name: Test connectivity to fleet nodes
+  include_tasks: connectivity.yml
+  tags:
+    - connectivity
+    - test
+
+- name: Install Redis CLI tools
+  include_tasks: redis_cli.yml
+  when: redis_cli_install
+  tags:
+    - redis
+    - tools
+
+- name: Setup SSH keys for inter-node communication
+  include_tasks: ssh_setup.yml
+  when: ssh_setup_required
+  tags:
+    - ssh
+    - security
+
+- name: Deploy distributed configuration
+  include_tasks: config.yml
+  tags:
+    - config
+    - distributed
+
+- name: Create service management scripts
+  include_tasks: service_scripts.yml
+  tags:
+    - scripts
+    - services
+
+- name: Setup health monitoring
+  include_tasks: health_monitoring.yml
+  when: health_check_enabled
+  tags:
+    - monitoring
+    - health
+
+- name: Configure backup collection
+  include_tasks: backup_setup.yml
+  when: backup_enabled
+  tags:
+    - backup
+    - cron
+
+- name: Verify distributed setup
+  include_tasks: verify.yml
+  tags:
+    - verify
+    - always

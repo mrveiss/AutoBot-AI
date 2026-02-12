@@ -1,0 +1,65 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Verify distributed setup
+
+- name: Verify redis-cli is available
+  command: redis-cli --version
+  register: redis_cli_verify
+  changed_when: false
+  when: redis_cli_install
+
+- name: Verify SSH key exists
+  stat:
+    path: "{{ ssh_key_path }}"
+  register: ssh_key_verify
+  delegate_to: localhost
+  run_once: true
+
+- name: Verify configuration files exist
+  stat:
+    path: "{{ item }}"
+  register: config_files_verify
+  loop:
+    - "{{ config_dir }}/distributed/environment.env"
+    - "{{ config_dir }}/distributed/fleet_topology.yml"
+    - "{{ config_dir }}/fleet_registry.json"
+
+- name: Verify script files exist
+  stat:
+    path: "{{ item }}"
+  register: script_files_verify
+  loop:
+    - "{{ scripts_dir }}/distributed/check-health.sh"
+    - "{{ scripts_dir }}/distributed/distributed-status.sh"
+    - "{{ scripts_dir }}/distributed/collect-backups.sh"
+
+- name: Run connectivity test to verify fleet
+  command: "nc -z -w3 {{ item.host }} {{ item.port }}"
+  loop: "{{ fleet_nodes }}"
+  register: final_connectivity_test
+  changed_when: false
+  failed_when: false
+
+- name: Count accessible nodes
+  set_fact:
+    accessible_nodes: "{{ final_connectivity_test.results | selectattr('rc', 'equalto', 0) | list | length }}"
+
+- name: Display verification summary
+  debug:
+    msg:
+      - "=== Distributed Setup Verification ==="
+      - "Redis CLI: {{ 'Installed' if redis_cli_verify.rc == 0 else 'Not installed' }}"
+      - "SSH Key: {{ 'Present' if ssh_key_verify.stat.exists else 'Missing' }}"
+      - "Configuration files: {{ config_files_verify.results | selectattr('stat.exists') | list | length }}/{{ config_files_verify.results | length }}"
+      - "Script files: {{ script_files_verify.results | selectattr('stat.exists') | list | length }}/{{ script_files_verify.results | length }}"
+      - "Accessible nodes: {{ accessible_nodes }}/{{ fleet_nodes | length }}"
+      - "Fleet discovery: {{ 'Complete' if fleet_nodes | length > 0 else 'No nodes found' }}"
+
+- name: Verification status
+  debug:
+    msg: "✅ Distributed setup verified successfully"
+  when:
+    - accessible_nodes | int > 0
+    - config_files_verify.results | selectattr('stat.exists') | list | length == config_files_verify.results | length

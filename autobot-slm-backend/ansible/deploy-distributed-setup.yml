@@ -1,0 +1,50 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy distributed architecture setup
+#
+# Usage:
+#   ansible-playbook deploy-distributed-setup.yml                    # Full setup
+#   ansible-playbook deploy-distributed-setup.yml --tags discovery   # Discovery only
+#   ansible-playbook deploy-distributed-setup.yml --tags ssh         # SSH setup only
+#   ansible-playbook deploy-distributed-setup.yml --tags monitoring  # Monitoring only
+#
+# Available tags:
+#   - discovery: Fleet node discovery
+#   - connectivity: Connectivity testing
+#   - redis: Redis CLI installation
+#   - ssh: SSH key setup
+#   - config: Configuration deployment
+#   - scripts: Service management scripts
+#   - monitoring: Health monitoring setup
+#   - backup: Backup collection setup
+#   - verify: Verification tasks
+
+- name: Setup distributed architecture
+  hosts: slm_server
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: distributed_setup
+      tags:
+        - distributed
+        - setup
+
+  post_tasks:
+    - name: Display distributed setup summary
+      debug:
+        msg:
+          - "Distributed architecture setup complete"
+          - "Coordinator: {{ coordinator_host }}"
+          - "Fleet nodes: {{ fleet_nodes | length }}"
+          - "Health monitoring: {{ 'Enabled' if health_check_enabled else 'Disabled' }}"
+          - "Automated backups: {{ 'Enabled' if backup_enabled else 'Disabled' }}"
+          - ""
+          - "Management scripts:"
+          - "  Health check: {{ scripts_dir }}/distributed/check-health.sh"
+          - "  Status: {{ scripts_dir }}/distributed/distributed-status.sh"
+          - "  Backups: {{ scripts_dir }}/distributed/collect-backups.sh"
+      tags:
+        - always

@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Test connectivity to all fleet nodes
+
+- name: Test TCP connectivity to fleet nodes
+  wait_for:
+    host: "{{ item.host }}"
+    port: "{{ item.port }}"
+    timeout: "{{ connectivity_timeout }}"
+    state: started
+  loop: "{{ fleet_nodes }}"
+  register: connectivity_test
+  failed_when: false
+  changed_when: false
+
+- name: Display connectivity test results
+  debug:
+    msg: "{{ item.item.name }} ({{ item.item.host }}:{{ item.item.port }}): {{ 'OK' if item.failed == false else 'FAILED' }}"
+  loop: "{{ connectivity_test.results }}"
+
+- name: Count failed connectivity tests
+  set_fact:
+    failed_nodes: "{{ connectivity_test.results | selectattr('failed', 'equalto', true) | list | length }}"
+
+- name: Warning for failed nodes
+  debug:
+    msg: "WARNING: {{ failed_nodes }} node(s) are not accessible. Distributed setup may be incomplete."
+  when: failed_nodes | int > 0
+
+- name: Test SSH connectivity to fleet nodes
+  command: "ssh -o ConnectTimeout={{ connectivity_timeout }} -o BatchMode=yes {{ service_user }}@{{ item.host }} 'echo SSH OK'"
+  loop: "{{ fleet_nodes }}"
+  register: ssh_test
+  failed_when: false
+  changed_when: false
+
+- name: Display SSH connectivity results
+  debug:
+    msg: "{{ item.item.name }} SSH: {{ 'OK' if item.rc == 0 else 'FAILED (setup required)' }}"
+  loop: "{{ ssh_test.results }}"

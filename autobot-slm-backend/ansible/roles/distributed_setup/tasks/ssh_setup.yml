@@ -1,0 +1,63 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup SSH keys for passwordless access between nodes
+
+- name: Check if SSH key already exists
+  stat:
+    path: "{{ ssh_key_path }}"
+  register: ssh_key_stat
+  delegate_to: localhost
+  run_once: true
+
+- name: Generate SSH keypair
+  community.crypto.openssh_keypair:
+    path: "{{ ssh_key_path }}"
+    type: "{{ ssh_key_type }}"
+    size: "{{ ssh_key_bits }}"
+    comment: "AutoBot fleet communication key"
+  when: not ssh_key_stat.stat.exists
+  delegate_to: localhost
+  run_once: true
+
+- name: Read public key content
+  slurp:
+    src: "{{ ssh_key_path }}.pub"
+  register: ssh_public_key
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure .ssh directory exists on fleet nodes
+  file:
+    path: "{{ ansible_env.HOME }}/.ssh"
+    state: directory
+    mode: '0700'
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+
+- name: Deploy public key to fleet nodes
+  authorized_key:
+    user: "{{ service_user }}"
+    key: "{{ ssh_public_key.content | b64decode }}"
+    state: present
+
+- name: Configure SSH client config for fleet access
+  template:
+    src: ssh_config.j2
+    dest: "{{ ansible_env.HOME }}/.ssh/config"
+    mode: '0600'
+  delegate_to: localhost
+  run_once: true
+
+- name: Test SSH connectivity after key deployment
+  command: "ssh -o ConnectTimeout=5 -o BatchMode=yes {{ service_user }}@{{ item.host }} 'echo SSH test successful'"
+  loop: "{{ fleet_nodes }}"
+  register: ssh_verify
+  changed_when: false
+  failed_when: false
+
+- name: Display SSH verification results
+  debug:
+    msg: "{{ item.item.name }}: {{ 'SSH configured' if item.rc == 0 else 'SSH setup failed' }}"
+  loop: "{{ ssh_verify.results }}"
