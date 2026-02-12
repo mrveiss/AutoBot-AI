@@ -89,21 +89,22 @@ const servicesByNode = computed<NodeServiceGroup[]>(() => {
   }
 
   // Populate with services
-  for (const fleetService of orchestration.fleetServices) {
-    // Apply category filter
-    if (categoryFilter.value !== 'all' && fleetService.category !== categoryFilter.value) {
-      continue
-    }
+  if (Array.isArray(orchestration.fleetServices)) {
+    for (const fleetService of orchestration.fleetServices) {
+      // Apply category filter
+      if (categoryFilter.value !== 'all' && fleetService.category !== categoryFilter.value) {
+        continue
+      }
 
-    // Apply search filter
-    if (
-      searchQuery.value &&
-      !fleetService.service_name.toLowerCase().includes(searchQuery.value.toLowerCase())
-    ) {
-      continue
-    }
+      // Apply search filter
+      if (
+        searchQuery.value &&
+        !fleetService.service_name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      ) {
+        continue
+      }
 
-    for (const nodeStatus of fleetService.nodes) {
+      for (const nodeStatus of fleetService.nodes) {
       const nodeGroup = nodeMap.get(nodeStatus.node_id)
       if (!nodeGroup) continue
 
@@ -124,6 +125,7 @@ const servicesByNode = computed<NodeServiceGroup[]>(() => {
       else if (nodeStatus.status === 'failed') nodeGroup.failedCount++
     }
   }
+  }
 
   // Filter out nodes with no services (after filtering)
   return Array.from(nodeMap.values()).filter((node) => node.services.length > 0)
@@ -131,9 +133,11 @@ const servicesByNode = computed<NodeServiceGroup[]>(() => {
 
 const categoryCounts = computed(() => {
   const counts = { autobot: 0, system: 0, all: 0 }
-  for (const svc of orchestration.fleetServices) {
-    counts[svc.category as 'autobot' | 'system']++
-    counts.all++
+  if (Array.isArray(orchestration.fleetServices)) {
+    for (const svc of orchestration.fleetServices) {
+      counts[svc.category as 'autobot' | 'system']++
+      counts.all++
+    }
   }
   return counts
 })
@@ -146,6 +150,9 @@ const fleetSearchQuery = ref('')
 const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('all')
 
 const filteredFleetServices = computed(() => {
+  if (!Array.isArray(orchestration.fleetServices)) {
+    return []
+  }
   return orchestration.fleetServices.filter((svc) => {
     // Category filter
     if (fleetCategoryFilter.value !== 'all' && svc.category !== fleetCategoryFilter.value) {
@@ -992,7 +999,7 @@ onUnmounted(() => {
               >
                 <option value="">Select a service...</option>
                 <option
-                  v-for="svc in orchestration.fleetServices"
+                  v-for="svc in (orchestration.fleetServices || [])"
                   :key="svc.service_name"
                   :value="svc.service_name"
                 >
@@ -1107,10 +1114,12 @@ onUnmounted(() => {
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">
                   {{
-                    orchestration.fleetServices.reduce(
-                      (sum, svc) => sum + svc.nodes.filter((n) => n.node_id === node.node_id).length,
-                      0
-                    )
+                    Array.isArray(orchestration.fleetServices)
+                      ? orchestration.fleetServices.reduce(
+                          (sum, svc) => sum + svc.nodes.filter((n) => n.node_id === node.node_id).length,
+                          0
+                        )
+                      : 0
                   }}
                   services
                 </td>
