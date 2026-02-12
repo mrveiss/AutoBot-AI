@@ -35,6 +35,7 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from services.playbook_executor import get_playbook_executor
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -133,90 +134,96 @@ async def _get_update_job_data(
     return (job, node, updates)
 
 
-async def _process_single_update(
-    db: AsyncSession,
-    job: UpdateJob,
-    node: Node,
-    update: UpdateInfo,
-    output_lines: List[str],
-    completed: int,
-    total: int,
-) -> bool:
+async def _execute_update_playbook(
+    node: Node, updates: List[UpdateInfo]
+) -> Dict[str, any]:
     """
+    Execute Ansible playbook to apply updates.
+
     Helper for _run_update_job (Issue #665).
-
-    Install one package via SSH, update progress, and broadcast status.
-    Returns True if installation succeeded, False otherwise.
     """
-    step_msg = f"Installing {update.package_name} ({update.available_version})"
-    job.current_step = step_msg
-    await db.commit()
+    executor = get_playbook_executor()
+    package_names = [u.package_name for u in updates]
 
-    progress = int((completed / total) * 100)
-    await _broadcast_job_update(job.job_id, "running", progress, step_msg)
+    limit = [node.hostname]
+    extra_vars = {
+        "update_type": "specific",
+        "specific_packages": ",".join(package_names),
+        "dry_run": "false",
+        "auto_reboot": "false",
+    }
 
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-
-    success = await _install_package_via_ssh(
-        node.ip_address, ssh_user, ssh_port, update.package_name, output_lines
+    return await executor.execute_playbook(
+        playbook_name="apply-system-updates.yml",
+        limit=limit,
+        extra_vars=extra_vars,
     )
 
-    if success:
-        update.is_applied = True
-        update.applied_at = datetime.utcnow()
 
-    job.output = "\n".join(output_lines[-100:])
-    await db.commit()
-    return success
-
-
-async def _finalize_update_job(
+async def _handle_successful_update(
     db: AsyncSession,
     job: UpdateJob,
     node_id: str,
-    completed: int,
-    failed: int,
-    total: int,
+    updates: List[UpdateInfo],
+    output: str,
 ) -> None:
     """
+    Handle successful update completion.
+
     Helper for _run_update_job (Issue #665).
-
-    Set final job status and create completion event.
     """
-    if failed > 0:
-        job.status = UpdateJobStatus.FAILED.value
-        job.error = f"Failed to install {failed} package(s)"
-    else:
-        job.status = UpdateJobStatus.COMPLETED.value
-
+    job.status = UpdateJobStatus.COMPLETED.value
+    job.output = output
     job.progress = 100
     job.current_step = "Completed"
-    job.completed_at = datetime.utcnow()
+    job.completed_steps = len(updates)
+
+    for update in updates:
+        update.is_applied = True
+        update.applied_at = datetime.utcnow()
+
     await db.commit()
-
     await _broadcast_job_update(
-        job.job_id, job.status, 100, f"Completed: {completed}/{total} updates applied"
+        job.job_id, "completed", 100, f"Completed: {len(updates)} updates applied"
     )
-
-    event_type = (
-        EventType.DEPLOYMENT_COMPLETED if failed == 0 else EventType.DEPLOYMENT_FAILED
-    )
-    severity = EventSeverity.INFO if failed == 0 else EventSeverity.WARNING
 
     await _create_node_event(
         db,
         node_id,
-        event_type,
-        severity,
-        f"Update job {job.job_id} completed: {completed}/{total} applied",
-        {"job_id": job.job_id, "applied": completed, "failed": failed},
+        EventType.DEPLOYMENT_COMPLETED,
+        EventSeverity.INFO,
+        f"Update job {job.job_id} completed: {len(updates)} applied",
+        {"job_id": job.job_id, "applied": len(updates)},
     )
+
+
+async def _handle_failed_update(
+    db: AsyncSession, job: UpdateJob, node_id: str, output: str
+) -> None:
+    """
+    Handle failed update completion.
+
+    Helper for _run_update_job (Issue #665).
+    """
+    job.status = UpdateJobStatus.FAILED.value
+    job.error = f"Playbook failed: {output[:500]}"
+    job.output = output
+
     await db.commit()
+    await _broadcast_job_update(job.job_id, "failed", job.progress, job.error)
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.DEPLOYMENT_FAILED,
+        EventSeverity.WARNING,
+        f"Update job {job.job_id} failed",
+        {"job_id": job.job_id, "error": job.error},
+    )
 
 
 async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> None:
-    """Execute update job in background."""
+    """Execute update job using Ansible playbook."""
     from services.database import db_service
 
     async with db_service.session() as db:
@@ -233,24 +240,22 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
 
         await _broadcast_job_update(job_id, "running", 0, "Starting update process...")
 
-        output_lines = []
-        failed_updates = []
-        completed = 0
-
         try:
-            for update in updates:
-                success = await _process_single_update(
-                    db, job, node, update, output_lines, completed, len(updates)
-                )
-                if success:
-                    completed += 1
-                    job.completed_steps = completed
-                else:
-                    failed_updates.append(update.update_id)
+            job.current_step = f"Applying {len(updates)} update(s) via Ansible"
+            await db.commit()
+            await _broadcast_job_update(job_id, "running", 50, job.current_step)
 
-            await _finalize_update_job(
-                db, job, node_id, completed, len(failed_updates), len(updates)
-            )
+            result = await _execute_update_playbook(node, updates)
+
+            if result["success"]:
+                await _handle_successful_update(
+                    db, job, node_id, updates, result["output"]
+                )
+            else:
+                await _handle_failed_update(db, job, node_id, result["output"])
+
+            job.completed_at = datetime.utcnow()
+            await db.commit()
 
         except asyncio.CancelledError:
             job.status = UpdateJobStatus.CANCELLED.value
@@ -266,64 +271,6 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             job.completed_at = datetime.utcnow()
             await db.commit()
             await _broadcast_job_update(job_id, "failed", job.progress, str(e))
-
-
-async def _install_package_via_ssh(
-    ip_address: str,
-    ssh_user: str,
-    ssh_port: int,
-    package_name: str,
-    output_lines: List[str],
-) -> bool:
-    """Install a package on remote node via SSH."""
-    try:
-        # Use apt-get with non-interactive mode
-        ssh_cmd = [
-            "ssh",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "ConnectTimeout=30",
-            "-o",
-            "BatchMode=yes",
-            "-p",
-            str(ssh_port),
-            f"{ssh_user}@{ip_address}",
-            f"sudo DEBIAN_FRONTEND=noninteractive apt-get install -y {package_name}",
-        ]
-
-        proc = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        output = stdout.decode("utf-8", errors="replace")
-        output_lines.extend(output.strip().split("\n"))
-
-        if proc.returncode == 0:
-            logger.info("Installed %s on %s", package_name, ip_address)
-            return True
-        else:
-            logger.warning(
-                "Failed to install %s on %s: exit code %d",
-                package_name,
-                ip_address,
-                proc.returncode,
-            )
-            return False
-
-    except asyncio.TimeoutError:
-        logger.warning("Timeout installing %s on %s", package_name, ip_address)
-        output_lines.append(f"ERROR: Timeout installing {package_name}")
-        return False
-    except Exception as e:
-        logger.error("Error installing %s on %s: %s", package_name, ip_address, e)
-        output_lines.append(f"ERROR: {e}")
-        return False
 
 
 @router.get("/check", response_model=UpdateCheckResponse)
