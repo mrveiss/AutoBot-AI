@@ -452,11 +452,9 @@ class ReconcilerService:
             message=f"Attempting to restart SLM agent on {node.hostname}",
         )
 
-        # Try to restart the SLM agent via SSH
-        success = await self._restart_service_via_ssh(
-            node.ip_address,
-            node.ssh_user or "autobot",
-            node.ssh_port or 22,
+        # Try to restart the SLM agent via Ansible
+        success = await self._restart_service_via_ansible(
+            node.hostname,
             "slm-agent",
         )
 
@@ -470,63 +468,43 @@ class ReconcilerService:
         await self._record_remediation_result(db, node, success, tracker)
         return True
 
-    async def _restart_service_via_ssh(
+    async def _restart_service_via_ansible(
         self,
-        ip_address: str,
-        ssh_user: str,
-        ssh_port: int,
+        hostname: str,
         service_name: str,
     ) -> bool:
-        """Restart a systemd service on a remote node via SSH.
+        """Restart a systemd service on a remote node via Ansible playbook.
 
         Returns True if successful, False otherwise.
         """
         try:
-            # Use SSH with BatchMode to avoid password prompts
-            ssh_cmd = [
-                "ssh",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ConnectTimeout=10",
-                "-o",
-                "BatchMode=yes",
-                "-p",
-                str(ssh_port),
-                f"{ssh_user}@{ip_address}",
-                f"sudo systemctl restart {service_name}",
-            ]
+            from services.playbook_executor import get_playbook_executor
 
-            proc = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            executor = get_playbook_executor()
+            result = await executor.execute_playbook(
+                playbook_name="manage-service.yml",
+                limit=[hostname],
+                extra_vars={
+                    "service_name": service_name,
+                    "service_action": "restarted",
+                },
             )
 
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=30.0,
-            )
-
-            if proc.returncode == 0:
-                logger.info("Successfully restarted %s on %s", service_name, ip_address)
+            if result.get("success"):
+                logger.info("Successfully restarted %s on %s", service_name, hostname)
                 return True
             else:
+                error_msg = result.get("error", "Unknown error")
                 logger.warning(
                     "Failed to restart %s on %s: %s",
                     service_name,
-                    ip_address,
-                    stderr.decode("utf-8", errors="replace").strip(),
+                    hostname,
+                    error_msg,
                 )
                 return False
 
-        except asyncio.TimeoutError:
-            logger.warning("SSH timeout restarting %s on %s", service_name, ip_address)
-            return False
         except Exception as e:
-            logger.warning("Error restarting %s on %s: %s", service_name, ip_address, e)
+            logger.warning("Error restarting %s on %s: %s", service_name, hostname, e)
             return False
 
     def reset_remediation_tracker(self, node_id: str) -> None:
@@ -760,11 +738,9 @@ class ReconcilerService:
             message=f"Attempting to restart {service.service_name} on {node.hostname}",
         )
 
-        # Try to restart via SSH
-        success = await self._restart_service_via_ssh(
-            node.ip_address,
-            node.ssh_user or "autobot",
-            node.ssh_port or 22,
+        # Try to restart via Ansible
+        success = await self._restart_service_via_ansible(
+            node.hostname,
             service.service_name,
         )
 

@@ -495,78 +495,57 @@ async def _run_ssh_service_action(
     action: str,
 ) -> tuple[bool, str]:
     """
-    Run SSH command to control a service via systemctl.
+    Control a service via Ansible playbook.
 
     Helper for fleet operations. Returns (success, message).
 
-    Issue #850: Extracted from services.py for orchestration consolidation.
+    Migrated from SSH to Ansible playbook execution.
     """
-    import asyncio
+    from services.playbook_executor import get_playbook_executor
 
-    # Map action to systemctl command
-    systemctl_action = action
-    if action not in ["start", "stop", "restart"]:
+    # Map action to Ansible service state
+    action_to_state = {
+        "start": "started",
+        "stop": "stopped",
+        "restart": "restarted",
+        "reload": "reloaded",
+    }
+
+    if action not in action_to_state:
         return False, f"Invalid action: {action}"
 
-    # Build SSH command
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"
-
-    # Use sudo -n (non-interactive) to run systemctl as root
-    remote_cmd = f"sudo -n systemctl {systemctl_action} {service_name}"
-
-    ssh_cmd = [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "ConnectTimeout=10",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        remote_cmd,
-    ]
-
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout_data, stderr_data = await asyncio.wait_for(
-            proc.communicate(), timeout=30
+        executor = get_playbook_executor()
+        result = await executor.execute_playbook(
+            playbook_name="manage-service.yml",
+            limit=[node.hostname],
+            extra_vars={
+                "service_name": service_name,
+                "service_action": action_to_state[action],
+            },
         )
 
-        if proc.returncode == 0:
-            return True, f"{action.capitalize()} successful"
-        else:
-            error_msg = stderr_data.decode().strip() or stdout_data.decode().strip()
-            logger.warning(
-                "SSH service action failed: node=%s service=%s action=%s rc=%d error=%s",
+        if result["success"]:
+            logger.info(
+                "Ansible service action successful: node=%s service=%s action=%s",
                 node.node_id,
                 service_name,
                 action,
-                proc.returncode,
-                error_msg,
             )
-            return False, f"Failed: {error_msg[:200]}"
+            return True, f"{action.capitalize()} successful"
+        else:
+            logger.warning(
+                "Ansible service action failed: node=%s service=%s action=%s output=%s",
+                node.node_id,
+                service_name,
+                action,
+                result["output"][:200],
+            )
+            return False, f"Failed: {result['output'][:200]}"
 
-    except asyncio.TimeoutError:
-        logger.error(
-            "SSH service action timeout: node=%s service=%s action=%s",
-            node.node_id,
-            service_name,
-            action,
-        )
-        return False, "Timeout waiting for service action"
     except Exception as e:
         logger.error(
-            "SSH service action exception: node=%s service=%s action=%s error=%s",
+            "Ansible service action exception: node=%s service=%s action=%s error=%s",
             node.node_id,
             service_name,
             action,

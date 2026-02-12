@@ -1,0 +1,60 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Management Playbook
+# Manages systemd services across fleet nodes (start/stop/restart/reload)
+---
+
+- name: Manage Service State
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+
+  vars:
+    service_name: "{{ service_name | mandatory }}"
+    service_action: "{{ service_action | default('started') }}"  # started, stopped, restarted, reloaded
+    service_enabled: "{{ service_enabled | default(omit) }}"  # true, false, or omit to not change
+
+  tasks:
+    - name: Display service management info
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          SERVICE MANAGEMENT                                ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Target: {{ inventory_hostname }}                           ║
+          ║ Service: {{ service_name }}                                ║
+          ║ Action: {{ service_action }}                               ║
+          ╚════════════════════════════════════════════════════════════╝
+      run_once: false
+
+    - name: Manage service state
+      ansible.builtin.service:
+        name: "{{ service_name }}"
+        state: "{{ service_action }}"
+        enabled: "{{ service_enabled }}"
+      register: service_result
+
+    - name: Wait for service to stabilize
+      ansible.builtin.pause:
+        seconds: 2
+      when: service_action in ['started', 'restarted']
+
+    - name: Verify service is running (if started/restarted)
+      ansible.builtin.service:
+        name: "{{ service_name }}"
+        state: started
+      check_mode: true
+      register: verify_result
+      when: service_action in ['started', 'restarted']
+
+    - name: Display service status
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          SERVICE MANAGEMENT COMPLETE                       ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Service: {{ service_name }}                                ║
+          ║ Status: ✅ {{ service_action }}                            ║
+          ╚════════════════════════════════════════════════════════════╝
