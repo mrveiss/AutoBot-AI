@@ -350,6 +350,62 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         estimated_duration="10-30 minutes (depends on data size)",
         requires_confirmation=True,
     ),
+    # =========================================================================
+    # SYSTEM UPDATE PLAYBOOKS (Package updates)
+    # =========================================================================
+    PlaybookInfo(
+        id="check-system-updates",
+        name="Check System Updates",
+        description="Check for available system package updates across fleet. "
+        "Reports total updates, security updates, kernel status, and "
+        "whether reboot is required. Generates JSON report per node.",
+        category=PlaybookCategory.MONITORING,
+        playbook_file="check-system-updates.yml",
+        target_hosts=["all"],
+        variables={
+            "check_security_only": False,
+            "output_format": "json",
+        },
+        estimated_duration="1-2 minutes",
+        requires_confirmation=False,
+    ),
+    PlaybookInfo(
+        id="apply-system-updates",
+        name="Apply System Updates",
+        description="Safely apply system package updates with rollback capability. "
+        "Supports update types: all, security, specific packages. "
+        "Optional auto-reboot, rolling updates (3 nodes at a time), "
+        "pre-update backups, and service verification.",
+        category=PlaybookCategory.SECURITY,
+        playbook_file="apply-system-updates.yml",
+        target_hosts=["all"],
+        variables={
+            "update_type": "security",
+            "auto_reboot": False,
+            "backup_before_update": True,
+            "dry_run": False,
+            "update_batch_size": 3,
+        },
+        estimated_duration="10-30 minutes (depends on update count)",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="reboot-node",
+        name="Reboot Node",
+        description="Safely reboot a fleet node and wait for it to come back online. "
+        "Uses Ansible's reboot module with configurable timeout and delays. "
+        "Verifies node is responsive after reboot completes.",
+        category=PlaybookCategory.OPERATIONS,
+        playbook_file="reboot-node.yml",
+        target_hosts=["all"],
+        variables={
+            "reboot_timeout": 300,
+            "pre_reboot_delay": 5,
+            "post_reboot_delay": 30,
+        },
+        estimated_duration="5-10 minutes",
+        requires_confirmation=True,
+    ),
 ]
 
 # In-memory storage for executions (in production, use database)

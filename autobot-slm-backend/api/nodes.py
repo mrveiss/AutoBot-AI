@@ -14,11 +14,6 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import (
     Certificate,
     CodeStatus,
@@ -49,10 +44,14 @@ from models.schemas import (
     NodeUpdate,
     PortInfo,
 )
+from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -993,63 +992,28 @@ async def reboot_node(
         {"hostname": node.hostname, "ip_address": node.ip_address},
     )
 
-    # Execute reboot via SSH
-    success, message = await _reboot_via_ssh(
-        node.ip_address,
-        node.ssh_user or "autobot",
-        node.ssh_port or 22,
+    # Execute reboot via Ansible playbook
+    from services.playbook_executor import get_playbook_executor
+
+    executor = get_playbook_executor()
+    result = await executor.execute_playbook(
+        playbook_name="reboot-node.yml",
+        limit=[node.hostname],
     )
 
-    if success:
-        logger.info("Reboot initiated for node %s (%s)", node_id, node.ip_address)
+    if result["success"]:
+        logger.info("Reboot completed for node %s (%s)", node_id, node.ip_address)
         return {
             "success": True,
-            "message": f"Reboot initiated for {node.hostname}. Node will be temporarily offline.",
+            "message": f"Reboot completed for {node.hostname}. Node is back online.",
             "node_id": node_id,
         }
     else:
-        logger.error("Failed to reboot node %s: %s", node_id, message)
+        logger.error("Failed to reboot node %s: %s", node_id, result["output"])
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reboot node: {message}",
+            detail=f"Failed to reboot node: {result['output'][:500]}",
         )
-
-
-async def _reboot_via_ssh(ip_address: str, ssh_user: str, ssh_port: int) -> tuple:
-    """Execute reboot command on a remote node via SSH."""
-    try:
-        ssh_cmd = [
-            "ssh",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "BatchMode=yes",
-            "-p",
-            str(ssh_port),
-            f"{ssh_user}@{ip_address}",
-            "sudo reboot",
-        ]
-
-        proc = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
-
-        # Reboot command often returns non-zero or connection closes
-        # Success is if the command was accepted (might get connection reset)
-        return True, "Reboot command sent"
-
-    except asyncio.TimeoutError:
-        return False, "SSH connection timed out"
-    except Exception as e:
-        return False, str(e)
 
 
 @router.post("/{node_id}/acknowledge-remediation")
@@ -1478,10 +1442,9 @@ async def get_node_updates(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Get available updates for a node."""
-    from sqlalchemy import or_
-
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
+    from sqlalchemy import or_
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
