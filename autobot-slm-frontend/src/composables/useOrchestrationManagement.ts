@@ -70,10 +70,11 @@ export function useOrchestrationManagement() {
   const fleetStore = useFleetStore()
   const { connect, subscribeAll, onServiceStatus, connected } = useSlmWebSocket()
 
-  // Create axios client
+  // Create axios client with timeout to prevent infinite loading
   const client: AxiosInstance = axios.create({
     baseURL: API_BASE,
     headers: { 'Content-Type': 'application/json' },
+    timeout: 30000, // 30 second timeout
   })
 
   // Add auth token to all requests
@@ -206,21 +207,36 @@ export function useOrchestrationManagement() {
   async function fetchFleetServices(): Promise<FleetServicesResponse | null> {
     loading.value = true
     error.value = null
+    logger.info('Fetching fleet services from /orchestration/fleet/services')
 
     try {
       const response = await client.get<FleetServicesResponse>(
         '/orchestration/fleet/services'
       )
+      logger.info('Fleet services response:', {
+        serviceCount: response.data.services?.length,
+        totalServices: response.data.total_services,
+      })
       fleetServices.value = response.data.services
       totalFleetServices.value = response.data.total_services
       lastRefresh.value = new Date()
       return response.data
     } catch (e) {
+      if (axios.isAxiosError(e)) {
+        logger.error('Fleet services API error:', {
+          status: e.response?.status,
+          statusText: e.response?.statusText,
+          data: e.response?.data,
+          message: e.message,
+        })
+      } else {
+        logger.error('Failed to fetch fleet services:', e)
+      }
       error.value = extractErrorMessage(e, 'Failed to fetch fleet services')
-      logger.error('Failed to fetch fleet services:', e)
       return null
     } finally {
       loading.value = false
+      logger.info('Fleet services loading complete, loading=false')
     }
   }
 
