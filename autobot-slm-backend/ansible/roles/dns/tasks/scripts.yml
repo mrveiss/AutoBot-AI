@@ -1,0 +1,37 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Create DNS management scripts
+
+- name: Create DNS scripts directory
+  file:
+    path: /opt/autobot/scripts/dns
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy test DNS resolution script
+  template:
+    src: test-dns-resolution.sh.j2
+    dest: /opt/autobot/scripts/dns/test-dns-resolution.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy show DNS entries script
+  template:
+    src: show-dns-entries.sh.j2
+    dest: /opt/autobot/scripts/dns/show-dns-entries.sh
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy refresh DNS script
+  template:
+    src: refresh-dns.sh.j2
+    dest: /opt/autobot/scripts/dns/refresh-dns.sh
+    owner: root
+    group: root
+    mode: '0755'

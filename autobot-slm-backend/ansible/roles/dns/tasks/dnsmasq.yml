@@ -1,0 +1,44 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup dnsmasq for DNS caching
+
+- name: Install dnsmasq
+  package:
+    name: dnsmasq
+    state: present
+
+- name: Configure dnsmasq
+  template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/autobot.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart dnsmasq
+
+- name: Enable dnsmasq service
+  systemd:
+    name: dnsmasq
+    enabled: yes
+    state: started
+
+- name: Configure resolv.conf to use dnsmasq
+  template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: not use_systemd_resolved
+
+- name: Verify dnsmasq is running
+  command: systemctl is-active dnsmasq
+  register: dnsmasq_status
+  changed_when: false
+  failed_when: false
+
+- name: Display dnsmasq status
+  debug:
+    msg: "dnsmasq status: {{ dnsmasq_status.stdout }}"

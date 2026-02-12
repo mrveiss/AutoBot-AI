@@ -1,0 +1,48 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Test DNS resolution across fleet
+
+- name: Test hostname resolution
+  command: "getent hosts {{ item.hostname }}"
+  loop: "{{ fleet_host_entries }}"
+  register: dns_resolution_test
+  changed_when: false
+  failed_when: false
+
+- name: Display DNS resolution results
+  debug:
+    msg: "{{ item.item.hostname }}: {{ 'RESOLVED' if item.rc == 0 else 'FAILED' }} - {{ item.stdout if item.rc == 0 else 'Not found' }}"
+  loop: "{{ dns_resolution_test.results }}"
+
+- name: Test connectivity to required nodes
+  wait_for:
+    host: "{{ item }}"
+    port: 22
+    timeout: "{{ dns_test_timeout }}"
+    state: started
+  loop: "{{ dns_test_required_nodes }}"
+  register: connectivity_test
+  failed_when: false
+  changed_when: false
+
+- name: Display connectivity test results
+  debug:
+    msg: "{{ item.item }}: {{ 'REACHABLE' if not item.failed else 'UNREACHABLE' }}"
+  loop: "{{ connectivity_test.results }}"
+
+- name: Count failed DNS resolutions
+  set_fact:
+    failed_resolutions: "{{ dns_resolution_test.results | selectattr('rc', 'ne', 0) | list | length }}"
+
+- name: Count failed connectivity tests
+  set_fact:
+    failed_connectivity: "{{ connectivity_test.results | selectattr('failed', 'equalto', true) | list | length }}"
+
+- name: Display DNS test summary
+  debug:
+    msg:
+      - "DNS Resolution Tests: {{ fleet_host_entries | length - (failed_resolutions | int) }}/{{ fleet_host_entries | length }} passed"
+      - "Connectivity Tests: {{ dns_test_required_nodes | length - (failed_connectivity | int) }}/{{ dns_test_required_nodes | length }} passed"
+      - "{{ 'DNS configuration successful' if (failed_resolutions | int) == 0 and (failed_connectivity | int) == 0 else 'DNS configuration has issues' }}"

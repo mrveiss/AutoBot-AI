@@ -1,0 +1,48 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure systemd-resolved
+
+- name: Check if systemd-resolved is available
+  command: systemctl status systemd-resolved
+  register: resolved_check
+  changed_when: false
+  failed_when: false
+
+- name: Configure systemd-resolved
+  template:
+    src: resolved.conf.j2
+    dest: /etc/systemd/resolved.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: resolved_check.rc == 0
+  notify: restart systemd-resolved
+
+- name: Enable systemd-resolved
+  systemd:
+    name: systemd-resolved
+    enabled: yes
+    state: started
+  when: resolved_check.rc == 0
+
+- name: Link resolv.conf to systemd-resolved
+  file:
+    src: /run/systemd/resolve/stub-resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: yes
+  when: resolved_check.rc == 0
+
+- name: Verify systemd-resolved status
+  command: systemctl is-active systemd-resolved
+  register: resolved_status
+  changed_when: false
+  failed_when: false
+  when: resolved_check.rc == 0
+
+- name: Display systemd-resolved status
+  debug:
+    msg: "systemd-resolved status: {{ resolved_status.stdout }}"
+  when: resolved_check.rc == 0

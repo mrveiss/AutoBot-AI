@@ -1,0 +1,25 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Generate fleet DNS mappings from inventory
+
+- name: Build fleet host entries from inventory
+  set_fact:
+    fleet_host_entries: "{{ fleet_host_entries | default([]) + [{
+      'ip': hostvars[item]['ansible_host'],
+      'hostname': item,
+      'fqdn': item + '.' + dns_domain,
+      'aliases': [
+        item.replace('_', '-'),
+        (item.split('_')[0] if '_' in item else item)
+      ] | unique
+    }] }}"
+  loop: "{{ groups['all'] | difference(['localhost']) }}"
+  run_once: true
+  delegate_to: localhost
+
+- name: Display generated DNS mappings
+  debug:
+    msg: "Generated {{ fleet_host_entries | length }} DNS mappings for fleet nodes"
+  run_once: true

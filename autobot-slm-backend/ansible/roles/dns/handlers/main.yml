@@ -1,0 +1,15 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Handlers for dns role
+
+- name: restart dnsmasq
+  systemd:
+    name: dnsmasq
+    state: restarted
+
+- name: restart systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: restarted
