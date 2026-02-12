@@ -453,13 +453,26 @@ async function executeMigration(): Promise<void> {
 // =============================================================================
 
 async function refresh(): Promise<void> {
-  await Promise.all([
-    orchestration.fetchFleetServices(),
-    orchestration.fetchFleetStatus(),
-    orchestration.fetchServiceDefinitions(),
-    orchestration.fleetStore.fetchNodes(),
-    roles.fetchRoles(),
-  ])
+  try {
+    // Use Promise.allSettled to continue even if some calls fail
+    const results = await Promise.allSettled([
+      orchestration.fetchFleetServices(),
+      orchestration.fetchFleetStatus(),
+      orchestration.fetchServiceDefinitions(),
+      orchestration.fleetStore.fetchNodes(),
+      roles.fetchRoles(),
+    ])
+
+    // Log any failures for debugging
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const names = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles']
+        logger.warn(`Failed to fetch ${names[index]}:`, result.reason)
+      }
+    })
+  } catch (err) {
+    logger.error('Unexpected error during refresh:', err)
+  }
 }
 
 function toggleAutoRefresh(): void {
@@ -478,14 +491,26 @@ onMounted(async () => {
   logger.info('Auth token present:', !!token)
   if (!token) {
     logger.error('NO AUTH TOKEN - Please log in first')
+    logger.error('Please navigate to /login to authenticate')
   }
 
   logger.info('Calling refresh()')
   await refresh()
   logger.info('After refresh:', {
+    nodes: orchestration.fleetStore.nodeList.length,
     fleetServices: orchestration.fleetServices?.length || 0,
     serviceDefinitions: orchestration.serviceDefinitions?.length || 0,
-    error: orchestration.error
+    roles: roles.roles.length,
+    fleetStoreError: orchestration.fleetStore.error,
+    orchestrationError: orchestration.error,
+    rolesError: roles.error,
+    categoryFilter: categoryFilter.value,
+  })
+
+  // Log computed data for debugging
+  logger.info('Computed data:', {
+    servicesByNode: servicesByNode.value.length,
+    categoryCounts: categoryCounts.value,
   })
 
   orchestration.initializeWebSocket((nodeId, data) => {
