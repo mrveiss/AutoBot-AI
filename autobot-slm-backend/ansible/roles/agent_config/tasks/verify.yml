@@ -1,0 +1,58 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Verify agent installation and configuration
+
+- name: Verify Python version
+  command: "{{ venv_dir }}/bin/python --version"
+  register: python_version_check
+  changed_when: false
+  failed_when: python_version_check.rc != 0
+
+- name: Verify required Python packages
+  command: "{{ venv_dir }}/bin/pip list"
+  register: pip_packages
+  changed_when: false
+  failed_when: "'openvino' not in pip_packages.stdout or 'playwright' not in pip_packages.stdout"
+
+- name: Check Ollama service status
+  systemd:
+    name: ollama
+    state: started
+  register: ollama_status
+  when: install_ollama
+
+- name: Verify Ollama models are downloaded
+  command: ollama list
+  register: ollama_models_check
+  changed_when: false
+  when: install_ollama
+  failed_when: false
+
+- name: Check Node.js version
+  command: node --version
+  register: node_version_final
+  changed_when: false
+  when: install_nodejs
+
+- name: Verify directory permissions
+  stat:
+    path: "{{ item }}"
+  register: dir_perms
+  loop:
+    - "{{ project_root }}"
+    - "{{ config_dir }}"
+    - "{{ logs_dir }}"
+    - "{{ models_dir }}"
+  failed_when: not dir_perms.results | map(attribute='stat.exists') | list | select | list | length == 4
+
+- name: Display verification summary
+  debug:
+    msg:
+      - "Python: {{ python_version_check.stdout }}"
+      - "OpenVINO: {{ 'Installed' if install_openvino else 'Skipped' }}"
+      - "Ollama: {{ 'Running' if (install_ollama and ollama_status.status.ActiveState == 'active') else 'Skipped' }}"
+      - "Node.js: {{ node_version_final.stdout if install_nodejs else 'Skipped' }}"
+      - "Playwright: Installed"
+      - "Service: autobot-agent"

@@ -1,0 +1,24 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Set up Python environment
+
+- name: Check if venv exists
+  stat:
+    path: "{{ venv_dir }}"
+  register: venv_stat
+
+- name: Create Python virtual environment
+  command: "python3 -m venv {{ venv_dir }}"
+  args:
+    creates: "{{ venv_dir }}/bin/activate"
+  become_user: "{{ service_user }}"
+  when: not venv_stat.stat.exists
+
+- name: Upgrade pip in venv
+  pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ venv_dir }}"
+  become_user: "{{ service_user }}"

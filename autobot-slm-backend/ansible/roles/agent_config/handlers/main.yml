@@ -1,0 +1,12 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Handlers for agent_config role
+
+- name: restart autobot-agent
+  systemd:
+    name: autobot-agent
+    state: restarted
+    daemon_reload: yes
+  when: create_systemd_service

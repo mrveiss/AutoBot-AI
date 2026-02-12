@@ -1,0 +1,17 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install Python dependencies
+
+- name: Check if requirements file exists
+  stat:
+    path: "{{ project_root }}/{{ requirements_file }}"
+  register: requirements_stat
+
+- name: Install Python packages from requirements.txt
+  pip:
+    requirements: "{{ project_root }}/{{ requirements_file }}"
+    virtualenv: "{{ venv_dir }}"
+  become_user: "{{ service_user }}"
+  when: requirements_stat.stat.exists

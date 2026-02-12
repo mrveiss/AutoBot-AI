@@ -1,0 +1,53 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install Playwright and browser dependencies
+
+- name: Install Playwright system dependencies
+  package:
+    name:
+      - libnss3
+      - libnspr4
+      - libatk1.0-0
+      - libatk-bridge2.0-0
+      - libcups2
+      - libdrm2
+      - libdbus-1-3
+      - libxkbcommon0
+      - libxcomposite1
+      - libxdamage1
+      - libxfixes3
+      - libxrandr2
+      - libgbm1
+      - libasound2
+    state: present
+
+- name: Install Playwright via pip in venv
+  pip:
+    name: playwright
+    virtualenv: "{{ venv_dir }}"
+  become_user: "{{ service_user }}"
+
+- name: Check if Playwright browsers are installed
+  stat:
+    path: "{{ ansible_env.HOME }}/.cache/ms-playwright"
+  register: playwright_browsers
+  become_user: "{{ service_user }}"
+
+- name: Install Playwright browsers
+  command: "{{ venv_dir }}/bin/playwright install {{ item }}"
+  loop: "{{ playwright_browsers_list }}"
+  become_user: "{{ service_user }}"
+  when: not playwright_browsers.stat.exists
+
+- name: Install Playwright system dependencies via playwright CLI
+  command: "{{ venv_dir }}/bin/playwright install-deps"
+  become_user: "{{ service_user }}"
+  when: not playwright_browsers.stat.exists
+
+- name: Verify Playwright installation
+  command: "{{ venv_dir }}/bin/playwright --version"
+  register: playwright_version_check
+  changed_when: false
+  become_user: "{{ service_user }}"

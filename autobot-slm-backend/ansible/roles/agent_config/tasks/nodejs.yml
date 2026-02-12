@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install Node.js via NodeSource repository
+
+- name: Check if Node.js is already installed
+  command: node --version
+  register: node_check
+  failed_when: false
+  changed_when: false
+
+- name: Download NodeSource setup script
+  get_url:
+    url: "https://deb.nodesource.com/setup_{{ nodejs_version.split('.')[0] }}.x"
+    dest: /tmp/nodesource_setup.sh
+    mode: '0755'
+  when: node_check.rc != 0
+
+- name: Run NodeSource setup script
+  command: bash /tmp/nodesource_setup.sh
+  when: node_check.rc != 0
+
+- name: Install Node.js
+  package:
+    name: nodejs
+    state: present
+    update_cache: yes
+
+- name: Verify Node.js installation
+  command: node --version
+  register: node_version_output
+  changed_when: false
+
+- name: Verify npm installation
+  command: npm --version
+  register: npm_version_output
+  changed_when: false
+
+- name: Display Node.js and npm versions
+  debug:
+    msg: "Node.js {{ node_version_output.stdout }}, npm {{ npm_version_output.stdout }}"

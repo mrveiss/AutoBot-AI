@@ -1,0 +1,54 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install OpenVINO for NPU/GPU acceleration
+
+- name: Add OpenVINO GPG key
+  apt_key:
+    url: https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+    state: present
+
+- name: Add OpenVINO repository
+  apt_repository:
+    repo: "deb https://apt.repos.intel.com/openvino/{{ openvino_version }} ubuntu22 main"
+    state: present
+    filename: intel-openvino
+
+- name: Update apt cache after adding OpenVINO repo
+  apt:
+    update_cache: yes
+
+- name: Install OpenVINO Runtime
+  package:
+    name: "openvino-{{ openvino_version }}"
+    state: present
+
+- name: Check if NPU driver is needed
+  stat:
+    path: /dev/accel/accel0
+  register: npu_device
+
+- name: Install Intel NPU driver
+  package:
+    name: intel-driver-compiler-npu
+    state: present
+  when: npu_device.stat.exists
+
+- name: Add service user to render group for GPU access
+  user:
+    name: "{{ service_user }}"
+    groups: render
+    append: yes
+
+- name: Set up OpenVINO environment in venv
+  pip:
+    name: openvino
+    virtualenv: "{{ venv_dir }}"
+  become_user: "{{ service_user }}"
+
+- name: Verify OpenVINO installation
+  command: "{{ venv_dir }}/bin/python -c 'import openvino; print(openvino.__version__)'"
+  register: openvino_version_check
+  changed_when: false
+  failed_when: openvino_version_check.rc != 0

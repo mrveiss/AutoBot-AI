@@ -1,0 +1,64 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# agent_config role - Default variables
+
+# Python configuration
+python_version: "3.10.13"
+use_pyenv: true
+venv_dir: "/opt/autobot/venv"
+requirements_file: "requirements.txt"
+
+# Project directories
+project_root: "/opt/autobot"
+config_dir: "{{ project_root }}/config"
+logs_dir: "{{ project_root }}/logs"
+docs_dir: "{{ project_root }}/docs"
+uploads_dir: "{{ project_root }}/uploads"
+models_dir: "/var/lib/autobot/models"
+
+# AI/ML configuration
+install_openvino: true
+openvino_version: "2023.3.0"
+install_ollama: true
+ollama_models:
+  - "llama2"
+  - "codellama"
+  - "mistral"
+
+# Node.js configuration
+install_nodejs: true
+nodejs_version: "20"
+use_nvm: false  # Use apt repository instead
+
+# Playwright configuration
+install_playwright: true
+playwright_browsers:
+  - "chromium"
+  - "firefox"
+
+# Environment variables
+env_vars:
+  TF_USE_LEGACY_KERAS: "1"
+  KERAS_BACKEND: "tensorflow"
+  TRANSFORMERS_CACHE: "{{ models_dir }}/transformers"
+  HF_HOME: "{{ models_dir }}/huggingface"
+
+# System packages
+system_packages:
+  - build-essential
+  - python3-dev
+  - libpq-dev
+  - libssl-dev
+  - libffi-dev
+  - git
+  - curl
+  - wget
+  - unzip
+
+# Service configuration
+create_systemd_service: true
+service_name: "autobot-agent"
+service_user: "autobot"
+service_group: "autobot"

@@ -1,0 +1,37 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Create systemd service for AutoBot agent
+
+- name: Create systemd service file
+  template:
+    src: autobot-agent.service.j2
+    dest: /etc/systemd/system/autobot-agent.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart autobot-agent
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Enable autobot-agent service
+  systemd:
+    name: autobot-agent
+    enabled: yes
+
+- name: Start autobot-agent service
+  systemd:
+    name: autobot-agent
+    state: started
+  register: service_start
+  failed_when: false
+
+- name: Wait for agent to be ready
+  wait_for:
+    port: "{{ agent_port }}"
+    host: localhost
+    timeout: 30
+  when: service_start.changed

@@ -1,0 +1,45 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Install and configure Ollama
+
+- name: Check if Ollama is installed
+  command: which ollama
+  register: ollama_check
+  failed_when: false
+  changed_when: false
+
+- name: Download Ollama installer
+  get_url:
+    url: https://ollama.ai/install.sh
+    dest: /tmp/ollama-install.sh
+    mode: '0755'
+  when: ollama_check.rc != 0
+
+- name: Install Ollama
+  shell: /tmp/ollama-install.sh
+  when: ollama_check.rc != 0
+
+- name: Start Ollama service
+  systemd:
+    name: ollama
+    state: started
+    enabled: yes
+
+- name: Pull Ollama models
+  command: "ollama pull {{ item }}"
+  loop: "{{ ollama_models }}"
+  async: 1800
+  poll: 0
+  register: model_pulls
+  changed_when: false
+
+- name: Wait for model downloads
+  async_status:
+    jid: "{{ item.ansible_job_id }}"
+  loop: "{{ model_pulls.results }}"
+  register: model_pull_results
+  until: model_pull_results.finished
+  retries: 60
+  delay: 30
