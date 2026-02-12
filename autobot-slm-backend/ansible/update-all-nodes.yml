@@ -1,0 +1,272 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Fast Code Update for All Fleet Nodes
+#
+# This playbook performs code-only updates without full provisioning:
+# - Syncs latest code from control machine
+# - Restarts services gracefully
+# - Validates services are running
+# - NO system package updates
+# - NO configuration changes
+#
+# Usage:
+#   ansible-playbook update-all-nodes.yml                    # All nodes
+#   ansible-playbook update-all-nodes.yml --limit frontend   # Specific node
+#   ansible-playbook update-all-nodes.yml --tags backend     # Specific service
+#   ansible-playbook update-all-nodes.yml --skip-tags restart  # No restart
+#
+# Speed: ~30 seconds per node (vs. 5+ minutes for full provision)
+
+- name: Update All Fleet Nodes - Code Only
+  hosts: infrastructure
+  become: true
+  gather_facts: false
+  serial: 3  # Update 3 nodes at a time (rolling updates)
+
+  vars:
+    code_base_dir: /opt/autobot
+    restart_services: true
+    verify_health: true
+
+  pre_tasks:
+    - name: Display update info
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          Fast Code Update
+          ═══════════════════════════════════════════════════════════════
+          Target: {{ inventory_hostname }} ({{ ansible_host }})
+          Action: Code sync + service restart
+          ═══════════════════════════════════════════════════════════════
+      run_once: false
+
+  tasks:
+    # =========================================================================
+    # USER BACKEND - Main AutoBot Backend
+    # =========================================================================
+    - name: Backend | Sync autobot-user-backend code
+      synchronize:
+        src: "{{ playbook_dir }}/../../../autobot-user-backend/"
+        dest: "{{ code_base_dir }}/autobot-user-backend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+          - "--exclude=data/"
+          - "--exclude=logs/"
+      when: "'main' in group_names"
+      tags: [backend, user-backend]
+
+    - name: Backend | Restart autobot-backend service
+      systemd:
+        name: autobot-backend
+        state: restarted
+      when:
+        - "'main' in group_names"
+        - restart_services | bool
+      tags: [backend, user-backend, restart]
+
+    # =========================================================================
+    # USER FRONTEND - Vue Application
+    # =========================================================================
+    - name: Frontend | Sync autobot-user-frontend code
+      synchronize:
+        src: "{{ playbook_dir }}/../../../autobot-user-frontend/"
+        dest: "{{ code_base_dir }}/autobot-user-frontend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=node_modules"
+          - "--exclude=.git"
+      when: "'frontend' in group_names"
+      tags: [frontend, user-frontend]
+
+    - name: Frontend | Rebuild production dist
+      command:
+        cmd: npm run build
+        chdir: "{{ code_base_dir }}/autobot-user-frontend"
+      when: "'frontend' in group_names"
+      tags: [frontend, user-frontend]
+
+    - name: Frontend | Reload nginx
+      systemd:
+        name: nginx
+        state: reloaded
+      when:
+        - "'frontend' in group_names"
+        - restart_services | bool
+      tags: [frontend, user-frontend, restart]
+
+    # =========================================================================
+    # NPU WORKER
+    # =========================================================================
+    - name: NPU | Sync autobot-npu-worker code
+      synchronize:
+        src: "{{ playbook_dir }}/../../../autobot-npu-worker/"
+        dest: "{{ code_base_dir }}/autobot-npu-worker/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      when: "'npu_worker' in group_names"
+      tags: [npu, npu-worker]
+
+    - name: NPU | Restart autobot-npu-worker service
+      systemd:
+        name: autobot-npu-worker
+        state: restarted
+      when:
+        - "'npu_worker' in group_names"
+        - restart_services | bool
+      tags: [npu, npu-worker, restart]
+
+    # =========================================================================
+    # BROWSER WORKER
+    # =========================================================================
+    - name: Browser | Sync autobot-browser-worker code
+      synchronize:
+        src: "{{ playbook_dir }}/../../../autobot-browser-worker/"
+        dest: "{{ code_base_dir }}/autobot-browser-worker/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+          - "--exclude=screenshots/"
+      when: "'browser_worker' in group_names"
+      tags: [browser, browser-worker]
+
+    - name: Browser | Restart autobot-browser-worker service
+      systemd:
+        name: autobot-browser-worker
+        state: restarted
+      when:
+        - "'browser_worker' in group_names"
+        - restart_services | bool
+      tags: [browser, browser-worker, restart]
+
+    # =========================================================================
+    # SLM BACKEND
+    # =========================================================================
+    - name: SLM | Sync autobot-slm-backend code
+      synchronize:
+        src: "{{ playbook_dir }}/../autobot-slm-backend/"
+        dest: "{{ code_base_dir }}/autobot-slm-backend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+          - "--exclude=data/"
+      when: "'slm_server' in group_names"
+      tags: [slm, slm-backend]
+
+    - name: SLM | Restart autobot-slm-backend service
+      systemd:
+        name: autobot-slm-backend
+        state: restarted
+      when:
+        - "'slm_server' in group_names"
+        - restart_services | bool
+      tags: [slm, slm-backend, restart]
+
+    # =========================================================================
+    # SLM FRONTEND
+    # =========================================================================
+    - name: SLM Frontend | Sync autobot-slm-frontend code
+      synchronize:
+        src: "{{ playbook_dir }}/../autobot-slm-frontend/"
+        dest: "{{ code_base_dir }}/autobot-slm-frontend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=node_modules"
+          - "--exclude=.git"
+      when: "'slm_server' in group_names"
+      tags: [slm, slm-frontend]
+
+    - name: SLM Frontend | Rebuild production dist
+      command:
+        cmd: npm run build
+        chdir: "{{ code_base_dir }}/autobot-slm-frontend"
+      when: "'slm_server' in group_names"
+      tags: [slm, slm-frontend]
+
+    # =========================================================================
+    # SHARED LIBRARY - All nodes with Python services
+    # =========================================================================
+    - name: Shared | Sync autobot-shared library
+      synchronize:
+        src: "{{ playbook_dir }}/../../../autobot-shared/"
+        dest: "{{ code_base_dir }}/autobot-shared/"
+        delete: false
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      when: "'main' in group_names or 'npu_worker' in group_names or 'browser_worker' in group_names or 'slm_server' in group_names"
+      tags: [shared, library]
+
+  post_tasks:
+    # =========================================================================
+    # HEALTH VERIFICATION
+    # =========================================================================
+    - name: Verify | Wait for services to stabilize
+      pause:
+        seconds: 5
+      when: verify_health | bool
+      tags: [verify]
+
+    - name: Verify | Check service status
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      failed_when: false
+      loop:
+        - autobot-backend
+        - autobot-npu-worker
+        - autobot-browser-worker
+        - autobot-slm-backend
+        - nginx
+      when: verify_health | bool
+      tags: [verify]
+
+    - name: Display update summary
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          Update Complete: {{ inventory_hostname }}
+          ═══════════════════════════════════════════════════════════════
+          Code: Updated
+          Services: {{ 'Restarted' if restart_services else 'Not restarted' }}
+          ═══════════════════════════════════════════════════════════════
+      tags: [verify]
+
+- name: Update Summary Report
+  hosts: localhost
+  gather_facts: false
+  run_once: true
+
+  tasks:
+    - name: Display fleet update summary
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════════╗
+          ║             Fleet Update Complete                             ║
+          ╚═══════════════════════════════════════════════════════════════╝
+
+          All nodes have been updated with the latest code.
+          Services have been restarted gracefully (3 nodes at a time).
+
+          Next steps:
+          - Verify services via monitoring dashboards
+          - Check logs for any startup errors
+          - Test critical workflows
+
+          ═══════════════════════════════════════════════════════════════

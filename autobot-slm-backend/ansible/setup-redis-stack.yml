@@ -1,0 +1,82 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup Redis Stack from Blank Ubuntu 22.04
+#
+# This playbook provisions Redis Stack with:
+# - Redis 7.x with modules (JSON, Search, TimeSeries)
+# - Persistence configuration
+# - Memory optimization
+# - TLS support (optional)
+# - Monitoring integration
+#
+# Usage:
+#   ansible-playbook setup-redis-stack.yml --limit redis
+#   ansible-playbook setup-redis-stack.yml --limit 172.16.168.23
+
+- name: Setup Redis Stack Node
+  hosts: redis
+  become: true
+  gather_facts: true
+
+  vars:
+    redis_port: 6379
+    redis_tls_port: 6380
+    redis_user: redis
+    redis_group: redis
+    redis_data_dir: /var/lib/redis
+    redis_log_dir: /var/log/redis
+    redis_enable_tls: false
+    redis_max_memory: "4gb"
+    redis_persistence: true
+
+  pre_tasks:
+    - name: Display provisioning info
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          Redis Stack Node Provisioning
+          ═══════════════════════════════════════════════════════════════
+          Target: {{ inventory_hostname }} ({{ ansible_host }})
+          Port: {{ redis_port }}
+          TLS Port: {{ redis_tls_port }}
+          Max Memory: {{ redis_max_memory }}
+          Persistence: {{ redis_persistence }}
+          ═══════════════════════════════════════════════════════════════
+
+  roles:
+    - role: common
+      tags: [common, base]
+
+    - role: redis
+      tags: [redis, data]
+
+  post_tasks:
+    - name: Verify Redis service
+      systemd:
+        name: redis-server
+        state: started
+        enabled: true
+      tags: [verify]
+
+    - name: Check Redis connectivity
+      command: redis-cli -h {{ ansible_host }} ping
+      register: redis_ping
+      failed_when: false
+      changed_when: false
+      tags: [verify]
+
+    - name: Display setup summary
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          Redis Stack Setup Complete
+          ═══════════════════════════════════════════════════════════════
+          Service: redis-server
+          Status: {{ 'Running' if redis_ping.rc == 0 else 'Not responding' }}
+          URL: redis://{{ ansible_host }}:{{ redis_port }}
+          Data: {{ redis_data_dir }}
+          Logs: {{ redis_log_dir }}
+          ═══════════════════════════════════════════════════════════════
+      tags: [verify]

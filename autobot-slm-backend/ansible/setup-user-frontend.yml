@@ -1,0 +1,87 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup User Frontend VM from Blank Ubuntu 22.04
+#
+# This playbook provisions a complete user frontend server with:
+# - nginx with HTTPS (port 443)
+# - autobot-user-frontend production build
+# - TLS certificates
+# - API proxy to backend
+# - WebSocket support
+#
+# Usage:
+#   ansible-playbook setup-user-frontend.yml --limit frontend
+#   ansible-playbook setup-user-frontend.yml --limit 172.16.168.21
+
+- name: Setup User Frontend Node
+  hosts: frontend
+  become: true
+  gather_facts: true
+
+  vars:
+    frontend_install_dir: /opt/autobot
+    frontend_code_dir: "{{ frontend_install_dir }}/autobot-user-frontend"
+    frontend_dist_dir: "{{ frontend_code_dir }}/dist"
+    frontend_user: autobot
+    frontend_group: autobot
+    frontend_port: 443
+    nginx_http_port: 80
+    backend_host: "172.16.168.20"
+    backend_port: 8001
+    frontend_tls_cert_dir: /etc/autobot/certs
+    frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
+    frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
+
+  pre_tasks:
+    - name: Display provisioning info
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          User Frontend Node Provisioning
+          ═══════════════════════════════════════════════════════════════
+          Target: {{ inventory_hostname }} ({{ ansible_host }})
+          Code: {{ frontend_code_dir }}
+          HTTPS Port: {{ frontend_port }}
+          Backend: {{ backend_host }}:{{ backend_port }}
+          ═══════════════════════════════════════════════════════════════
+
+  roles:
+    - role: common
+      tags: [common, base]
+
+    - role: frontend
+      tags: [frontend, nginx]
+
+  post_tasks:
+    - name: Verify nginx is running
+      systemd:
+        name: nginx
+        state: started
+        enabled: true
+      tags: [verify]
+
+    - name: Check HTTPS endpoint
+      uri:
+        url: "https://{{ ansible_host }}/"
+        validate_certs: false
+        status_code: [200, 301, 302]
+        timeout: 5
+      register: https_check
+      failed_when: false
+      tags: [verify]
+
+    - name: Display setup summary
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          User Frontend Setup Complete
+          ═══════════════════════════════════════════════════════════════
+          Service: nginx
+          HTTPS: {{ 'Working' if https_check.status in [200, 301, 302] else 'Not responding' }}
+          URL: https://{{ ansible_host }}/
+          Dist: {{ frontend_dist_dir }}
+          Backend Proxy: http://{{ backend_host }}:{{ backend_port }}
+          ═══════════════════════════════════════════════════════════════
+      tags: [verify]
