@@ -75,14 +75,20 @@ server {
     }
 
     # Grafana reverse proxy (monitoring dashboards)
-    # Issue #853: Keep /grafana/ prefix for serve_from_sub_path
+    # Issue #853: Support both local and external Grafana instances
     location /grafana/ {
-        proxy_pass http://127.0.0.1:{{ grafana_port | default(3000) }}/grafana/;
+        proxy_pass http://{{ grafana_host | default('127.0.0.1') }}:{{ grafana_port | default(3000) }}/grafana/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+{% if grafana_enable_cors | default(false) %}
+
+        # CORS headers for external Grafana iframe embedding
+        add_header Access-Control-Allow-Origin "{{ grafana_cors_origin }}" always;
+        add_header Access-Control-Allow-Credentials "true" always;
+{% endif %}
     }
 
     # Prometheus reverse proxy (metrics queries)

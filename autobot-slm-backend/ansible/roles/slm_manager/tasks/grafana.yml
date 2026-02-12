@@ -7,12 +7,13 @@
 ---
 
 # ==========================================================
-# Install Grafana
+# Install Grafana (only when grafana_install is true)
 # ==========================================================
 - name: "Grafana | Add Grafana GPG key"
   ansible.builtin.apt_key:
     url: https://apt.grafana.com/gpg.key
     state: present
+  when: grafana_install | bool
   tags: ['grafana', 'packages']
 
 - name: "Grafana | Add Grafana APT repository"
@@ -20,17 +21,19 @@
     repo: deb https://apt.grafana.com stable main
     state: present
     filename: grafana
+  when: grafana_install | bool
   tags: ['grafana', 'packages']
 
 - name: "Grafana | Install Grafana"
   ansible.builtin.apt:
     name: grafana
-    state: present
+    state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
     update_cache: true
+  when: grafana_install | bool
   tags: ['grafana', 'packages']
 
 # ==========================================================
-# Configure Grafana for subpath serving
+# Configure Grafana for subpath serving (only when grafana_configure is true)
 # ==========================================================
 - name: "Grafana | Configure serve_from_sub_path"
   ansible.builtin.lineinfile:
@@ -39,6 +42,7 @@
     line: 'serve_from_sub_path = true'
     insertafter: '^\[server\]'
     state: present
+  when: grafana_configure | bool
   notify: restart grafana
   tags: ['grafana', 'config']
 
@@ -49,6 +53,7 @@
     line: 'enabled = true'
     insertafter: '^\[auth.anonymous\]'
     state: present
+  when: grafana_configure | bool
   notify: restart grafana
   tags: ['grafana', 'config']
 
@@ -59,6 +64,7 @@
     line: 'org_role = Viewer'
     insertafter: '^\[auth.anonymous\]'
     state: present
+  when: grafana_configure | bool
   notify: restart grafana
   tags: ['grafana', 'config']
 
@@ -69,6 +75,7 @@
     line: 'allow_embedding = true'
     insertafter: '^\[security\]'
     state: present
+  when: grafana_configure | bool
   notify: restart grafana
   tags: ['grafana', 'config']
 
@@ -79,11 +86,12 @@
     line: 'cookie_samesite = none'
     insertafter: '^\[security\]'
     state: present
+  when: grafana_configure | bool
   notify: restart grafana
   tags: ['grafana', 'config']
 
 # ==========================================================
-# Deploy dashboard files
+# Deploy dashboard files (can deploy to local or external Grafana)
 # ==========================================================
 - name: "Grafana | Create dashboard directory"
   ansible.builtin.file:
@@ -92,6 +100,7 @@
     owner: root
     group: grafana
     mode: "0755"
+  when: grafana_deploy_dashboards | bool
   tags: ['grafana', 'dashboards']
 
 - name: "Grafana | Deploy AutoBot dashboards"
@@ -101,6 +110,7 @@
     owner: root
     group: grafana
     mode: "0640"
+  when: grafana_deploy_dashboards | bool
   notify: restart grafana
   tags: ['grafana', 'dashboards']
 
@@ -122,24 +132,27 @@
     owner: root
     group: grafana
     mode: "0640"
+  when: grafana_deploy_dashboards | bool
   notify: restart grafana
   tags: ['grafana', 'dashboards']
 
 # ==========================================================
-# Start Grafana service
+# Start Grafana service (only when grafana_install is true)
 # ==========================================================
 - name: "Grafana | Enable and start Grafana"
   ansible.builtin.systemd:
     name: grafana-server
     enabled: true
     state: started
+  when: grafana_install | bool
   tags: ['grafana', 'service']
 
 - name: "Grafana | Wait for Grafana to be ready"
   ansible.builtin.wait_for:
     host: 127.0.0.1
-    port: 3000
+    port: "{{ grafana_port }}"
     delay: 2
     timeout: 60
     state: started
+  when: grafana_install | bool
   tags: ['grafana', 'service']

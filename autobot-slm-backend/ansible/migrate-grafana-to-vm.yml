@@ -1,0 +1,473 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Grafana Migration Playbook - Move Grafana to Dedicated VM
+#
+# This playbook migrates Grafana from the SLM server to a dedicated monitoring VM.
+# It handles installation, configuration, data source setup, and proxy reconfiguration.
+#
+# Usage:
+#   ansible-playbook migrate-grafana-to-vm.yml -i inventory.ini
+#
+# Prerequisites:
+#   - Target VM added to inventory as 'monitoring_vm'
+#   - SSH access configured
+#   - SLM server has Grafana currently running
+
+- name: "Grafana Migration - Backup and Prepare"
+  hosts: slm_server
+  become: true
+  vars:
+    backup_dir: "/tmp/grafana-backup-{{ ansible_date_time.epoch }}"
+
+  tasks:
+    - name: "Backup | Create backup directory"
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: "0755"
+      tags: ['backup']
+
+    - name: "Backup | Export Grafana configuration"
+      ansible.builtin.copy:
+        src: /etc/grafana/grafana.ini
+        dest: "{{ backup_dir }}/grafana.ini"
+        remote_src: true
+      tags: ['backup']
+
+    - name: "Backup | Export dashboard files"
+      ansible.builtin.archive:
+        path: /var/lib/grafana/dashboards/
+        dest: "{{ backup_dir }}/dashboards.tar.gz"
+        format: gz
+      tags: ['backup']
+
+    - name: "Backup | Export provisioning config"
+      ansible.builtin.archive:
+        path: /etc/grafana/provisioning/
+        dest: "{{ backup_dir }}/provisioning.tar.gz"
+        format: gz
+      tags: ['backup']
+
+    - name: "Backup | Fetch backup to control node"
+      ansible.builtin.fetch:
+        src: "{{ backup_dir }}/{{ item }}"
+        dest: "/tmp/grafana-migration-{{ ansible_date_time.date }}/"
+        flat: true
+      loop:
+        - grafana.ini
+        - dashboards.tar.gz
+        - provisioning.tar.gz
+      tags: ['backup']
+
+    - name: "Backup | Display backup location"
+      ansible.builtin.debug:
+        msg: "Backup saved to: /tmp/grafana-migration-{{ ansible_date_time.date }}/"
+      tags: ['backup']
+
+- name: "Grafana Migration - Install on Monitoring VM"
+  hosts: monitoring_vm
+  become: true
+  vars:
+    grafana_version: "latest"
+    grafana_host: "{{ ansible_host }}"
+    grafana_port: 3000
+    slm_server_ip: "172.16.168.19"
+    slm_server_domain: "172.16.168.19"
+    prometheus_url: "http://{{ slm_server_ip }}:9090"
+
+  tasks:
+    # ==========================================================
+    # Install Grafana
+    # ==========================================================
+    - name: "Install | Add Grafana GPG key"
+      ansible.builtin.apt_key:
+        url: https://apt.grafana.com/gpg.key
+        state: present
+      tags: ['install']
+
+    - name: "Install | Add Grafana APT repository"
+      ansible.builtin.apt_repository:
+        repo: deb https://apt.grafana.com stable main
+        state: present
+        filename: grafana
+      tags: ['install']
+
+    - name: "Install | Install Grafana"
+      ansible.builtin.apt:
+        name: grafana
+        state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
+        update_cache: true
+      tags: ['install']
+
+    # ==========================================================
+    # Configure Grafana for External Access
+    # ==========================================================
+    - name: "Config | Set server address to listen on all interfaces"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?http_addr\s*='
+        line: 'http_addr = 0.0.0.0'
+        insertafter: '^\[server\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Set domain to SLM server (nginx proxy)"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?domain\s*='
+        line: 'domain = {{ slm_server_domain }}'
+        insertafter: '^\[server\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Set root_url for reverse proxy"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?root_url\s*='
+        line: 'root_url = https://{{ slm_server_domain }}/grafana/'
+        insertafter: '^\[server\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Enable serve_from_sub_path"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?serve_from_sub_path\s*='
+        line: 'serve_from_sub_path = true'
+        insertafter: '^\[server\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Enable anonymous authentication"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?enabled\s*=\s*(false|true)'
+        line: 'enabled = true'
+        insertafter: '^\[auth.anonymous\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Set anonymous org role to Viewer"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?org_role\s*='
+        line: 'org_role = Viewer'
+        insertafter: '^\[auth.anonymous\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Allow iframe embedding"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?allow_embedding\s*='
+        line: 'allow_embedding = true'
+        insertafter: '^\[security\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Set cookie_samesite for embedding"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?cookie_samesite\s*='
+        line: 'cookie_samesite = none'
+        insertafter: '^\[security\]'
+        state: present
+      tags: ['config']
+
+    - name: "Config | Disable cookie_secure (nginx handles HTTPS)"
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?cookie_secure\s*='
+        line: 'cookie_secure = false'
+        insertafter: '^\[security\]'
+        state: present
+      tags: ['config']
+
+    # ==========================================================
+    # Restore Dashboards and Provisioning
+    # ==========================================================
+    - name: "Restore | Create dashboard directory"
+      ansible.builtin.file:
+        path: /var/lib/grafana/dashboards
+        state: directory
+        owner: root
+        group: grafana
+        mode: "0755"
+      tags: ['restore']
+
+    - name: "Restore | Copy dashboards from control node"
+      ansible.builtin.unarchive:
+        src: "/tmp/grafana-migration-{{ hostvars[groups['slm_server'][0]].ansible_date_time.date }}/dashboards.tar.gz"
+        dest: /var/lib/grafana/dashboards/
+        owner: root
+        group: grafana
+        mode: "0640"
+      tags: ['restore']
+
+    - name: "Restore | Copy provisioning config from control node"
+      ansible.builtin.unarchive:
+        src: "/tmp/grafana-migration-{{ hostvars[groups['slm_server'][0]].ansible_date_time.date }}/provisioning.tar.gz"
+        dest: /etc/grafana/
+        owner: root
+        group: grafana
+      tags: ['restore']
+
+    - name: "Restore | Ensure provisioning directory ownership"
+      ansible.builtin.file:
+        path: /etc/grafana/provisioning
+        state: directory
+        owner: root
+        group: grafana
+        recurse: true
+      tags: ['restore']
+
+    # ==========================================================
+    # Configure Data Sources
+    # ==========================================================
+    - name: "DataSource | Create datasource provisioning directory"
+      ansible.builtin.file:
+        path: /etc/grafana/provisioning/datasources
+        state: directory
+        owner: root
+        group: grafana
+        mode: "0755"
+      tags: ['datasource']
+
+    - name: "DataSource | Deploy Prometheus datasource config"
+      ansible.builtin.copy:
+        dest: /etc/grafana/provisioning/datasources/prometheus.yml
+        owner: root
+        group: grafana
+        mode: "0640"
+        content: |
+          apiVersion: 1
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: {{ prometheus_url }}
+              isDefault: true
+              editable: false
+              jsonData:
+                timeInterval: 5s
+                queryTimeout: 300s
+      tags: ['datasource']
+
+    # ==========================================================
+    # Firewall Configuration
+    # ==========================================================
+    - name: "Firewall | Allow Grafana port from SLM server"
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ slm_server_ip }}"
+        to_port: "{{ grafana_port }}"
+        proto: tcp
+        comment: "Nginx proxy to Grafana"
+      ignore_errors: true
+      tags: ['firewall']
+
+    - name: "Firewall | Display firewall status"
+      ansible.builtin.command:
+        cmd: ufw status numbered
+      register: ufw_status
+      changed_when: false
+      ignore_errors: true
+      tags: ['firewall']
+
+    - name: "Firewall | Show firewall rules"
+      ansible.builtin.debug:
+        var: ufw_status.stdout_lines
+      when: ufw_status.rc == 0
+      tags: ['firewall']
+
+    # ==========================================================
+    # Start Grafana Service
+    # ==========================================================
+    - name: "Service | Enable and start Grafana"
+      ansible.builtin.systemd:
+        name: grafana-server
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      tags: ['service']
+
+    - name: "Service | Wait for Grafana to be ready"
+      ansible.builtin.wait_for:
+        host: 0.0.0.0
+        port: "{{ grafana_port }}"
+        delay: 3
+        timeout: 60
+        state: started
+      tags: ['service']
+
+    - name: "Service | Verify Grafana health"
+      ansible.builtin.uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+      register: grafana_health
+      retries: 5
+      delay: 2
+      until: grafana_health.status == 200
+      tags: ['service']
+
+    - name: "Service | Display Grafana status"
+      ansible.builtin.debug:
+        msg:
+          - "Grafana is running on {{ grafana_host }}:{{ grafana_port }}"
+          - "Health status: {{ grafana_health.json }}"
+      tags: ['service']
+
+- name: "Grafana Migration - Update SLM Server Proxy"
+  hosts: slm_server
+  become: true
+  vars:
+    grafana_vm_ip: "{{ hostvars[groups['monitoring_vm'][0]].ansible_host }}"
+    grafana_port: 3000
+
+  tasks:
+    # ==========================================================
+    # Update Nginx Proxy Configuration
+    # ==========================================================
+    - name: "Proxy | Backup current nginx config"
+      ansible.builtin.copy:
+        src: /etc/nginx/sites-available/autobot-slm
+        dest: "/etc/nginx/sites-available/autobot-slm.backup-{{ ansible_date_time.epoch }}"
+        remote_src: true
+      tags: ['proxy']
+
+    - name: "Proxy | Update Grafana proxy_pass to external VM"
+      ansible.builtin.replace:
+        path: /etc/nginx/sites-available/autobot-slm
+        regexp: 'proxy_pass http://127\.0\.0\.1:{{ grafana_port }}/grafana/;'
+        replace: 'proxy_pass http://{{ grafana_vm_ip }}:{{ grafana_port }}/grafana/;'
+      notify: reload nginx
+      tags: ['proxy']
+
+    - name: "Proxy | Add CORS headers for external Grafana"
+      ansible.builtin.blockinfile:
+        path: /etc/nginx/sites-available/autobot-slm
+        marker: "# {mark} ANSIBLE MANAGED - Grafana CORS"
+        insertafter: 'location /grafana/ {'
+        block: |2
+                  # Allow cross-origin iframe embedding from SLM server
+                  add_header Access-Control-Allow-Origin "https://{{ ansible_host }}" always;
+                  add_header Access-Control-Allow-Credentials "true" always;
+      notify: reload nginx
+      tags: ['proxy']
+
+    - name: "Proxy | Test nginx configuration"
+      ansible.builtin.command:
+        cmd: nginx -t
+      register: nginx_test
+      changed_when: false
+      tags: ['proxy']
+
+    - name: "Proxy | Display nginx test result"
+      ansible.builtin.debug:
+        var: nginx_test.stderr_lines
+      tags: ['proxy']
+
+    # ==========================================================
+    # Firewall Configuration
+    # ==========================================================
+    - name: "Firewall | Open Prometheus port for Grafana VM"
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ grafana_vm_ip }}"
+        to_port: "9090"
+        proto: tcp
+        comment: "Grafana to Prometheus"
+      ignore_errors: true
+      tags: ['firewall']
+
+    # ==========================================================
+    # Stop Local Grafana (Optional)
+    # ==========================================================
+    - name: "Cleanup | Stop local Grafana service"
+      ansible.builtin.systemd:
+        name: grafana-server
+        state: stopped
+        enabled: false
+      when: grafana_cleanup | default(false) | bool
+      tags: ['cleanup', 'never']
+
+    - name: "Cleanup | Remove local Grafana package"
+      ansible.builtin.apt:
+        name: grafana
+        state: absent
+      when: grafana_cleanup | default(false) | bool
+      tags: ['cleanup', 'never']
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+- name: "Grafana Migration - Verification"
+  hosts: slm_server
+  become: false
+  vars:
+    grafana_vm_ip: "{{ hostvars[groups['monitoring_vm'][0]].ansible_host }}"
+    slm_server_ip: "{{ ansible_host }}"
+    dashboard_ids:
+      - autobot-system
+      - autobot-overview
+      - autobot-performance
+      - autobot-multi-machine
+      - autobot-redis
+      - autobot-api-health
+
+  tasks:
+    - name: "Verify | Test direct Grafana access"
+      ansible.builtin.uri:
+        url: "http://{{ grafana_vm_ip }}:3000/grafana/api/health"
+        method: GET
+        status_code: 200
+      register: direct_health
+      tags: ['verify']
+
+    - name: "Verify | Test proxied Grafana access"
+      ansible.builtin.uri:
+        url: "https://{{ slm_server_ip }}/grafana/api/health"
+        method: GET
+        validate_certs: false
+        status_code: 200
+      register: proxy_health
+      tags: ['verify']
+
+    - name: "Verify | Test dashboard accessibility"
+      ansible.builtin.uri:
+        url: "https://{{ slm_server_ip }}/grafana/d/{{ item }}?kiosk=tv"
+        method: GET
+        validate_certs: false
+        status_code: 200
+      loop: "{{ dashboard_ids }}"
+      register: dashboard_tests
+      tags: ['verify']
+
+    - name: "Verify | Display verification results"
+      ansible.builtin.debug:
+        msg:
+          - "=== Grafana Migration Verification ==="
+          - "Direct access: {{ 'OK' if direct_health.status == 200 else 'FAILED' }}"
+          - "Proxied access: {{ 'OK' if proxy_health.status == 200 else 'FAILED' }}"
+          - "Dashboards tested: {{ dashboard_ids | length }}"
+          - "Dashboard failures: {{ dashboard_tests.results | selectattr('status', 'ne', 200) | list | length }}"
+          - ""
+          - "Migration complete! Access dashboards at:"
+          - "https://{{ slm_server_ip }}/monitoring/system"
+      tags: ['verify']
+
+    - name: "Verify | Fail if any verification failed"
+      ansible.builtin.fail:
+        msg: "Migration verification failed. Check the results above."
+      when: >
+        direct_health.status != 200 or
+        proxy_health.status != 200 or
+        (dashboard_tests.results | selectattr('status', 'ne', 200) | list | length > 0)
+      tags: ['verify']

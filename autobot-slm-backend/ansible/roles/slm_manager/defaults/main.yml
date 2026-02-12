@@ -1,42 +1,94 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+#
+# SLM Manager Role - Default Variables
 ---
-# SLM Manager role defaults
 
-# User/group
+# ==========================================================
+# Basic Configuration
+# ==========================================================
 slm_user: autobot
 slm_group: autobot
-
-# Directory layout
 slm_base_dir: /opt/autobot
 slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
 slm_shared_dir: "{{ slm_base_dir }}/autobot-shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"
 slm_certs_dir: "{{ slm_base_dir }}/nginx/certs"
-slm_ansible_dir: "{{ slm_backend_dir }}/ansible"
+slm_credentials_dir: /etc/autobot
+slm_credentials_file: slm-secrets.env
 
-# Backend
-slm_backend_port: 8000
-slm_backend_host: "127.0.0.1"
+# ==========================================================
+# Service Configuration
+# ==========================================================
 slm_backend_service: autobot-slm-backend
+slm_backend_host: 127.0.0.1
+slm_backend_port: 8000
 
-# Frontend build
-slm_frontend_build: true
-
-# TLS
+# ==========================================================
+# TLS Configuration
+# ==========================================================
 slm_tls_cert: "{{ slm_certs_dir }}/slm.crt"
 slm_tls_key: "{{ slm_certs_dir }}/slm.key"
 slm_tls_days: 365
-slm_tls_subject: "/CN={{ ansible_host | default('172.16.168.19') }}/O=AutoBot/C=US"
+slm_tls_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ ansible_host }}"
 
-# Credentials
-slm_credentials_dir: /etc/autobot
-slm_credentials_file: slm-secrets.env
-# Admin password - set this to use a specific password.
-# If empty, a random password is auto-generated on first deploy.
+# ==========================================================
+# Nginx Configuration
+# ==========================================================
+slm_nginx_config: autobot-slm
+
+# ==========================================================
+# Frontend Build
+# ==========================================================
+slm_frontend_build: true
+
+# ==========================================================
+# Security Secrets (empty = auto-generate on first run)
+# ==========================================================
+slm_secret_key: ""
+slm_encryption_key: ""
 slm_admin_password: ""
 
-# Nginx
-slm_nginx_config: autobot-slm
+# ==========================================================
+# Grafana Configuration
+# Issue #853: Support both local and external Grafana
+# ==========================================================
+
+# Grafana deployment mode:
+#   - "local": Install and configure Grafana on this server (default)
+#   - "external": Use external Grafana instance (no local installation)
+grafana_mode: local
+
+# Grafana host configuration
+# For local mode: uses localhost
+# For external mode: IP or hostname of external Grafana server
+grafana_host: "{{ '127.0.0.1' if grafana_mode == 'local' else grafana_external_host }}"
+grafana_external_host: ""  # Set this when using grafana_mode: external
+
+# Grafana port (default: 3000)
+grafana_port: 3000
+
+# Install Grafana when in local mode
+grafana_install: "{{ grafana_mode == 'local' }}"
+
+# Configure local Grafana when in local mode
+grafana_configure: "{{ grafana_mode == 'local' }}"
+
+# Deploy dashboards (both local and external modes)
+grafana_deploy_dashboards: true
+
+# Grafana version (only used when grafana_install is true)
+grafana_version: latest
+
+# Prometheus URL for Grafana data source
+# When Grafana is external, this must be accessible from the external host
+prometheus_host: 127.0.0.1
+prometheus_port: 9090
+prometheus_url: "http://{{ prometheus_host }}:{{ prometheus_port }}"
+
+# CORS configuration for external Grafana
+# Enable CORS headers when Grafana is on a different host
+grafana_enable_cors: "{{ grafana_mode == 'external' }}"
+grafana_cors_origin: "https://{{ ansible_host }}"
