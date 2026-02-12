@@ -70,12 +70,22 @@ export function useRoles() {
   // NOT /autobot-api/* which goes to the Main AutoBot backend
   const API_BASE = ''
 
+  // Create axios instance with auth
+  const client = axios.create({ baseURL: API_BASE })
+  client.interceptors.request.use((config) => {
+    const token = localStorage.getItem('slm_access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  })
+
   async function fetchRoles(): Promise<void> {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await axios.get<Role[]>(`${API_BASE}/api/roles`)
+      const response = await client.get<Role[]>('/api/roles')
       roles.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -87,8 +97,8 @@ export function useRoles() {
 
   async function getNodeRoles(nodeId: string): Promise<NodeRolesInfo | null> {
     try {
-      const response = await axios.get<NodeRolesInfo>(
-        `${API_BASE}/api/nodes/${nodeId}/detected-roles`
+      const response = await client.get<NodeRolesInfo>(
+        `/api/nodes/${nodeId}/detected-roles`
       )
       return response.data
     } catch (e: unknown) {
@@ -104,8 +114,8 @@ export function useRoles() {
     assignmentType: string = 'manual'
   ): Promise<NodeRoleItem | null> {
     try {
-      const response = await axios.post<NodeRoleItem>(
-        `${API_BASE}/api/nodes/${nodeId}/detected-roles`,
+      const response = await client.post<NodeRoleItem>(
+        `/api/nodes/${nodeId}/detected-roles`,
         { role_name: roleName, assignment_type: assignmentType }
       )
       return response.data
@@ -118,7 +128,7 @@ export function useRoles() {
 
   async function removeRole(nodeId: string, roleName: string): Promise<boolean> {
     try {
-      await axios.delete(`${API_BASE}/api/nodes/${nodeId}/detected-roles/${roleName}`)
+      await client.delete(`/api/nodes/${nodeId}/detected-roles/${roleName}`)
       return true
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -137,8 +147,8 @@ export function useRoles() {
       if (nodeIds && nodeIds.length > 0) {
         params.node_ids = nodeIds
       }
-      const response = await axios.post<SyncResult>(
-        `${API_BASE}/api/code-sync/roles/${roleName}/sync`,
+      const response = await client.post<SyncResult>(
+        `/api/code-sync/roles/${roleName}/sync`,
         null,
         { params }
       )
@@ -155,8 +165,8 @@ export function useRoles() {
 
   async function pullFromSource(): Promise<{ success: boolean; message: string; commit: string | null }> {
     try {
-      const response = await axios.post<{ success: boolean; message: string; commit: string | null }>(
-        `${API_BASE}/api/code-sync/pull`
+      const response = await client.post<{ success: boolean; message: string; commit: string | null }>(
+        `/api/code-sync/pull`
       )
       return response.data
     } catch (e: unknown) {
