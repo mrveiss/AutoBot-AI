@@ -10,8 +10,8 @@ server {
 }
 
 server {
-    listen {{ frontend_port }} ssl http2 default_server;
-    listen [::]:{{ frontend_port }} ssl http2 default_server;
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
     server_name _;
 
     # TLS
@@ -31,6 +31,11 @@ server {
     # SPA fallback - serve index.html for client-side routes
     location / {
         try_files $uri $uri/ /index.html;
+
+        # Prevent caching of HTML (new deployments picked up immediately)
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
 
         # Security headers
         add_header X-Frame-Options SAMEORIGIN;
