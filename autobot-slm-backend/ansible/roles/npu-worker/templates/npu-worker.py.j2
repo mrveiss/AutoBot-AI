@@ -10,8 +10,16 @@ Handles model inference requests using OpenVINO.
 import logging
 import os
 from pathlib import Path
+from typing import Dict, Any
 
-logging.basicConfig(level=logging.INFO)
+import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("npu-worker")
 
 DEVICE = os.getenv("NPU_DEVICE", "NPU")
@@ -19,17 +27,87 @@ MODELS_DIR = Path(os.getenv("NPU_MODELS_DIR", "/var/lib/autobot/models"))
 HOST = os.getenv("NPU_HOST", "0.0.0.0")
 PORT = int(os.getenv("NPU_PORT", "8081"))
 
+app = FastAPI(title="AutoBot NPU Worker", version="1.0.0")
+
+
+def _detect_npu_capabilities() -> Dict[str, Any]:
+    """Detect NPU hardware capabilities."""
+    capabilities = {
+        "device": DEVICE,
+        "available": False,
+        "models_dir": str(MODELS_DIR),
+        "models_loaded": []
+    }
+
+    try:
+        import openvino.runtime as ov
+        core = ov.Core()
+        available_devices = core.available_devices
+        capabilities["available_devices"] = available_devices
+        capabilities["available"] = DEVICE in available_devices
+
+        if capabilities["available"]:
+            device_info = core.get_property(DEVICE, "FULL_DEVICE_NAME")
+            capabilities["device_name"] = device_info
+            logger.info("NPU device detected: %s", device_info)
+        else:
+            logger.warning("NPU device not available, available: %s",
+                           available_devices)
+    except ImportError:
+        logger.warning("OpenVINO not installed, NPU unavailable")
+        capabilities["error"] = "OpenVINO not installed"
+    except Exception as e:
+        logger.error("Error detecting NPU: %s", e)
+        capabilities["error"] = str(e)
+
+    return capabilities
+
+
+@app.get("/health")
+async def health_check() -> JSONResponse:
+    """Health check endpoint with NPU capabilities."""
+    capabilities = _detect_npu_capabilities()
+
+    status = "healthy" if capabilities.get("available", False) else "degraded"
+
+    return JSONResponse({
+        "status": status,
+        "service": "npu-worker",
+        "version": "1.0.0",
+        "capabilities": capabilities
+    })
+
+
+@app.get("/")
+async def root() -> Dict[str, str]:
+    """Root endpoint."""
+    return {
+        "service": "AutoBot NPU Worker",
+        "version": "1.0.0",
+        "endpoints": ["/health", "/"]
+    }
+
 
 def main():
     """Start NPU worker service."""
-    logger.info("NPU Worker starting on %s:%d (device=%s)", HOST, PORT, DEVICE)
+    logger.info("=" * 60)
+    logger.info("NPU Worker starting...")
+    logger.info("Binding to %s:%d", HOST, PORT)
+    logger.info("Device: %s", DEVICE)
     logger.info("Models directory: %s", MODELS_DIR)
+    logger.info("=" * 60)
 
-    # Placeholder - full implementation in main codebase
-    import time
-    while True:
-        logger.debug("NPU Worker heartbeat")
-        time.sleep(60)
+    try:
+        uvicorn.run(
+            app,
+            host=HOST,
+            port=PORT,
+            log_level="info",
+            access_log=True
+        )
+    except Exception as e:
+        logger.error("Failed to start NPU worker: %s", e)
+        raise
 
 
 if __name__ == "__main__":
