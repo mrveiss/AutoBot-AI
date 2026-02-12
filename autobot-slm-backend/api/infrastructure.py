@@ -38,6 +38,7 @@ class PlaybookCategory(str, Enum):
     SECURITY = "security"
     NETWORKING = "networking"
     STORAGE = "storage"
+    OPERATIONS = "operations"
 
 
 class PlaybookStatus(str, Enum):
