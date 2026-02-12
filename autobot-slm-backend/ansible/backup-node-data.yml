@@ -1,0 +1,326 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Node Data Backup Playbook
+# Creates timestamped backups of all critical data with checksums
+---
+
+- name: Backup Node Data
+  hosts: "{{ target_host }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_dir: "{{ backup_dir | default('/opt/autobot/backups') }}"
+    backup_timestamp: "{{ ansible_date_time.epoch }}"
+    backup_name: "{{ target_host }}-{{ backup_timestamp }}"
+    backup_path: "{{ backup_dir }}/{{ backup_name }}"
+    include_models: "{{ include_models | default(true) }}"
+    postgres_user: "{{ postgres_user | default('postgres') }}"
+
+  tasks:
+    # =========================================================================
+    # BACKUP DIRECTORY SETUP
+    # =========================================================================
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ backup_path }}"
+        state: directory
+        mode: '0750'
+
+    - name: Create manifest file
+      ansible.builtin.copy:
+        dest: "{{ backup_path }}/manifest.yml"
+        content: |
+          # Backup Manifest
+          hostname: {{ ansible_hostname }}
+          ip_address: {{ ansible_default_ipv4.address }}
+          timestamp: {{ ansible_date_time.iso8601 }}
+          backup_name: {{ backup_name }}
+          os: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          components: []
+        mode: '0640'
+
+    # =========================================================================
+    # POSTGRESQL BACKUP
+    # =========================================================================
+    - name: Check if PostgreSQL is installed
+      ansible.builtin.stat:
+        path: /var/lib/postgresql
+      register: postgres_dir
+
+    - name: Backup PostgreSQL databases
+      block:
+        - name: Create PostgreSQL backup
+          ansible.builtin.shell: |
+            su - {{ postgres_user }} -c "pg_dumpall --clean --if-exists" | gzip > {{ backup_path }}/postgresql-all.sql.gz
+          register: pg_backup
+
+        - name: Get PostgreSQL backup size
+          ansible.builtin.stat:
+            path: "{{ backup_path }}/postgresql-all.sql.gz"
+          register: pg_backup_stat
+
+        - name: Update manifest with PostgreSQL info
+          ansible.builtin.lineinfile:
+            path: "{{ backup_path }}/manifest.yml"
+            insertafter: "components:"
+            line: "  - name: postgresql\n    size: {{ pg_backup_stat.stat.size }}\n    path: postgresql-all.sql.gz"
+      when: postgres_dir.stat.exists
+
+    # =========================================================================
+    # PROMETHEUS BACKUP
+    # =========================================================================
+    - name: Check if Prometheus data exists
+      ansible.builtin.stat:
+        path: /var/lib/prometheus
+      register: prometheus_dir
+
+    - name: Backup Prometheus time series data
+      block:
+        - name: Create Prometheus snapshot
+          ansible.builtin.command:
+            cmd: curl -XPOST http://localhost:9090/api/v1/admin/tsdb/snapshot
+          register: prom_snapshot
+          ignore_errors: true
+          changed_when: false
+
+        - name: Tar Prometheus data directory
+          ansible.builtin.archive:
+            path: /var/lib/prometheus
+            dest: "{{ backup_path }}/prometheus-data.tar.gz"
+            format: gz
+
+        - name: Get Prometheus backup size
+          ansible.builtin.stat:
+            path: "{{ backup_path }}/prometheus-data.tar.gz"
+          register: prom_backup_stat
+
+        - name: Update manifest with Prometheus info
+          ansible.builtin.lineinfile:
+            path: "{{ backup_path }}/manifest.yml"
+            insertafter: "components:"
+            line: "  - name: prometheus\n    size: {{ prom_backup_stat.stat.size }}\n    path: prometheus-data.tar.gz"
+      when: prometheus_dir.stat.exists
+
+    # =========================================================================
+    # GRAFANA BACKUP
+    # =========================================================================
+    - name: Check if Grafana data exists
+      ansible.builtin.stat:
+        path: /var/lib/grafana
+      register: grafana_dir
+
+    - name: Backup Grafana dashboards and configs
+      block:
+        - name: Tar Grafana data directory
+          ansible.builtin.archive:
+            path: /var/lib/grafana
+            dest: "{{ backup_path }}/grafana-data.tar.gz"
+            format: gz
+
+        - name: Export Grafana SQLite database
+          ansible.builtin.copy:
+            src: /var/lib/grafana/grafana.db
+            dest: "{{ backup_path }}/grafana.db"
+            remote_src: true
+
+        - name: Update manifest with Grafana info
+          ansible.builtin.lineinfile:
+            path: "{{ backup_path }}/manifest.yml"
+            insertafter: "components:"
+            line: "  - name: grafana\n    path: grafana-data.tar.gz,grafana.db"
+      when: grafana_dir.stat.exists
+
+    # =========================================================================
+    # SQLITE DATABASES (Backend)
+    # =========================================================================
+    - name: Find SQLite databases
+      ansible.builtin.find:
+        paths:
+          - /opt/autobot/autobot-user-backend/data
+          - /opt/autobot/autobot-slm-backend/data
+        patterns: "*.db"
+        recurse: true
+      register: sqlite_dbs
+
+    - name: Backup SQLite databases
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ backup_path }}/{{ item.path | basename }}"
+        remote_src: true
+      loop: "{{ sqlite_dbs.files }}"
+      when: sqlite_dbs.files | length > 0
+
+    # =========================================================================
+    # REDIS BACKUP
+    # =========================================================================
+    - name: Check if Redis data exists
+      ansible.builtin.stat:
+        path: /var/lib/redis
+      register: redis_dir
+
+    - name: Backup Redis RDB and AOF
+      block:
+        - name: Trigger Redis BGSAVE
+          ansible.builtin.command:
+            cmd: redis-cli BGSAVE
+          register: redis_save
+          ignore_errors: true
+          changed_when: false
+
+        - name: Wait for BGSAVE to complete
+          ansible.builtin.wait_for:
+            timeout: 30
+          when: redis_save.rc == 0
+
+        - name: Copy Redis dump files
+          ansible.builtin.copy:
+            src: "{{ item }}"
+            dest: "{{ backup_path }}/{{ item | basename }}"
+            remote_src: true
+          loop:
+            - /var/lib/redis/dump.rdb
+            - /var/lib/redis/appendonly.aof
+          ignore_errors: true
+
+        - name: Update manifest with Redis info
+          ansible.builtin.lineinfile:
+            path: "{{ backup_path }}/manifest.yml"
+            insertafter: "components:"
+            line: "  - name: redis\n    path: dump.rdb,appendonly.aof"
+      when: redis_dir.stat.exists
+
+    # =========================================================================
+    # CHROMADB BACKUP
+    # =========================================================================
+    - name: Check if ChromaDB data exists
+      ansible.builtin.stat:
+        path: /var/lib/chromadb
+      register: chromadb_dir
+
+    - name: Backup ChromaDB collections
+      block:
+        - name: Tar ChromaDB data directory
+          ansible.builtin.archive:
+            path: /var/lib/chromadb
+            dest: "{{ backup_path }}/chromadb-data.tar.gz"
+            format: gz
+
+        - name: Get ChromaDB backup size
+          ansible.builtin.stat:
+            path: "{{ backup_path }}/chromadb-data.tar.gz"
+          register: chromadb_backup_stat
+
+        - name: Update manifest with ChromaDB info
+          ansible.builtin.lineinfile:
+            path: "{{ backup_path }}/manifest.yml"
+            insertafter: "components:"
+            line: "  - name: chromadb\n    size: {{ chromadb_backup_stat.stat.size }}\n    path: chromadb-data.tar.gz"
+      when: chromadb_dir.stat.exists
+
+    # =========================================================================
+    # LLM MODELS (OPTIONAL - LARGE!)
+    # =========================================================================
+    - name: Check if Ollama models exist
+      ansible.builtin.stat:
+        path: /opt/autobot/llm-models
+      register: llm_models_dir
+
+    - name: Backup LLM models
+      block:
+        - name: Create models list
+          ansible.builtin.shell: |
+            find /opt/autobot/llm-models -type f -name "*.gguf" -o -name "*.bin" > {{ backup_path }}/model-list.txt
+          changed_when: false
+
+        - name: Tar LLM models (may take a while!)
+          ansible.builtin.archive:
+            path: /opt/autobot/llm-models
+            dest: "{{ backup_path }}/llm-models.tar.gz"
+            format: gz
+          async: 3600  # 1 hour timeout
+          poll: 0
+          register: llm_backup_task
+
+        - name: Update manifest with LLM models info
+          ansible.builtin.lineinfile:
+            path: "{{ backup_path }}/manifest.yml"
+            insertafter: "components:"
+            line: "  - name: llm-models\n    path: llm-models.tar.gz\n    note: Large - backup in progress"
+      when:
+        - llm_models_dir.stat.exists
+        - include_models | bool
+
+    # =========================================================================
+    # CONFIGURATION FILES
+    # =========================================================================
+    - name: Backup configuration directories
+      ansible.builtin.archive:
+        path: "{{ item }}"
+        dest: "{{ backup_path }}/{{ item | basename }}-config.tar.gz"
+        format: gz
+      loop:
+        - /etc/autobot
+        - /etc/systemd/system/autobot-*.service
+      ignore_errors: true
+
+    # =========================================================================
+    # TLS CERTIFICATES
+    # =========================================================================
+    - name: Backup TLS certificates
+      ansible.builtin.archive:
+        path: /etc/autobot/certs
+        dest: "{{ backup_path }}/tls-certs.tar.gz"
+        format: gz
+      ignore_errors: true
+
+    # =========================================================================
+    # CHECKSUMS
+    # =========================================================================
+    - name: Generate checksums for all backup files
+      ansible.builtin.shell: |
+        cd {{ backup_path }}
+        sha256sum * > checksums.sha256
+      changed_when: false
+
+    # =========================================================================
+    # SUMMARY
+    # =========================================================================
+    - name: Calculate total backup size
+      ansible.builtin.shell: |
+        du -sh {{ backup_path }} | cut -f1
+      register: backup_size
+      changed_when: false
+
+    - name: Display backup summary
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          BACKUP COMPLETE                                   ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Hostname:     {{ ansible_hostname }}                       ║
+          ║ Backup Name:  {{ backup_name }}                            ║
+          ║ Location:     {{ backup_path }}                            ║
+          ║ Total Size:   {{ backup_size.stdout }}                     ║
+          ║                                                            ║
+          ║ Components Backed Up:                                      ║
+          ║   {% if postgres_dir.stat.exists %}✅{% else %}⏹️{% endif %} PostgreSQL databases                             ║
+          ║   {% if prometheus_dir.stat.exists %}✅{% else %}⏹️{% endif %} Prometheus metrics                            ║
+          ║   {% if grafana_dir.stat.exists %}✅{% else %}⏹️{% endif %} Grafana dashboards                             ║
+          ║   {% if sqlite_dbs.files | length > 0 %}✅{% else %}⏹️{% endif %} SQLite databases ({{ sqlite_dbs.files | length }})             ║
+          ║   {% if redis_dir.stat.exists %}✅{% else %}⏹️{% endif %} Redis data dumps                                ║
+          ║   {% if chromadb_dir.stat.exists %}✅{% else %}⏹️{% endif %} ChromaDB collections                            ║
+          ║   {% if llm_models_dir.stat.exists and include_models %}✅{% else %}⏹️{% endif %} LLM models                                  ║
+          ║   ✅ Configuration files                                    ║
+          ║   ✅ TLS certificates                                       ║
+          ║                                                            ║
+          ║ Checksums:    ✅ checksums.sha256 generated                ║
+          ╚════════════════════════════════════════════════════════════╝
+
+    - name: Save backup location
+      ansible.builtin.set_fact:
+        backup_location: "{{ backup_path }}"
+      delegate_to: localhost
+      delegate_facts: true

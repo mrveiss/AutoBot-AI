@@ -26,7 +26,7 @@ router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
 
 # Directory where infrastructure playbooks are stored
 PLAYBOOKS_DIR = os.getenv(
-    "SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/ansible/playbooks"
+    "SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/autobot-slm-backend/ansible"
 )
 
 
@@ -217,6 +217,137 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         target_hosts=["00-SLM-Manager", "slm_nodes"],
         variables={},
         estimated_duration="30-45 minutes",
+        requires_confirmation=True,
+    ),
+    # =========================================================================
+    # NODE SETUP PLAYBOOKS (Fresh provisioning from blank Ubuntu 22.04)
+    # =========================================================================
+    PlaybookInfo(
+        id="setup-npu-worker",
+        name="Setup NPU Worker Node",
+        description="Provision NPU worker from scratch with OpenVINO, "
+        "hardware acceleration drivers, and systemd service. "
+        "Auto-migrates from old directory structure.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="setup-npu-worker.yml",
+        target_hosts=["npu_worker"],
+        variables={"npu_worker_port": 8081},
+        estimated_duration="6 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="setup-user-backend",
+        name="Setup User Backend Node",
+        description="Provision main AutoBot backend with FastAPI, "
+        "VNC server, database migrations, and TLS certificates.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="setup-user-backend.yml",
+        target_hosts=["main"],
+        variables={"backend_port": 8001},
+        estimated_duration="8 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="setup-user-frontend",
+        name="Setup User Frontend Node",
+        description="Provision user frontend with nginx HTTPS, Vue "
+        "production build, API proxy, and WebSocket support.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="setup-user-frontend.yml",
+        target_hosts=["frontend"],
+        variables={"frontend_port": 443},
+        estimated_duration="5 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="setup-browser-worker",
+        name="Setup Browser Worker Node",
+        description="Provision browser automation worker with Playwright, "
+        "Chromium, and systemd service for GUI automation tasks.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="setup-browser-worker.yml",
+        target_hosts=["browser_worker"],
+        variables={"browser_port": 3000},
+        estimated_duration="7 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="setup-redis-stack",
+        name="Setup Redis Stack Node",
+        description="Provision Redis Stack with modules (Search, JSON, "
+        "Graph, TimeSeries), persistence, TLS, and memory optimization.",
+        category=PlaybookCategory.DATABASE,
+        playbook_file="setup-redis-stack.yml",
+        target_hosts=["redis"],
+        variables={"redis_maxmemory": "4gb"},
+        estimated_duration="3 minutes",
+        requires_confirmation=True,
+    ),
+    PlaybookInfo(
+        id="setup-ai-stack",
+        name="Setup AI Stack Node",
+        description="Provision ChromaDB vector database with optional "
+        "Ollama integration for LLM model storage and inference.",
+        category=PlaybookCategory.DATABASE,
+        playbook_file="setup-ai-stack.yml",
+        target_hosts=["ai_stack"],
+        variables={"chromadb_port": 8080},
+        estimated_duration="4 minutes",
+        requires_confirmation=True,
+    ),
+    # =========================================================================
+    # FLEET UPDATE PLAYBOOKS (Fast code-only updates)
+    # =========================================================================
+    PlaybookInfo(
+        id="update-all-nodes",
+        name="Update All Nodes (Code Only)",
+        description="Fast code synchronization across entire fleet. "
+        "Syncs latest code, restarts services gracefully (3 nodes at a time). "
+        "NO system package updates or configuration changes. ~30s per node.",
+        category=PlaybookCategory.NETWORKING,
+        playbook_file="update-all-nodes.yml",
+        target_hosts=["infrastructure"],
+        variables={},
+        estimated_duration="2 minutes (fleet-wide)",
+        requires_confirmation=False,
+    ),
+    # =========================================================================
+    # MIGRATION PLAYBOOKS (Node migration workflow)
+    # =========================================================================
+    PlaybookInfo(
+        id="pre-migration-check",
+        name="Pre-Migration Validation",
+        description="Validates disk space, network connectivity, and "
+        "dependencies before migration. Ensures destination has enough "
+        "space (data + 20% buffer) and minimum 10GB free remains. "
+        "FAILS migration if insufficient resources.",
+        category=PlaybookCategory.STORAGE,
+        playbook_file="pre-migration-check.yml",
+        target_hosts=["all"],
+        variables={
+            "source_host": "",
+            "required_space_gb": 100,
+            "buffer_percent": 20,
+            "min_free_gb": 10,
+        },
+        estimated_duration="1-2 minutes",
+        requires_confirmation=False,
+    ),
+    PlaybookInfo(
+        id="backup-node-data",
+        name="Comprehensive Node Backup",
+        description="Creates timestamped backup of ALL critical data: "
+        "PostgreSQL (pg_dumpall), Prometheus (56GB TSDB), Grafana, "
+        "Redis (RDB+AOF), ChromaDB, SQLite databases, LLM models, "
+        "configs, and TLS certs. Generates SHA256 checksums for verification.",
+        category=PlaybookCategory.STORAGE,
+        playbook_file="backup-node-data.yml",
+        target_hosts=["all"],
+        variables={
+            "backup_dir": "/opt/autobot/backups",
+            "include_models": True,
+        },
+        estimated_duration="10-30 minutes (depends on data size)",
         requires_confirmation=True,
     ),
 ]
