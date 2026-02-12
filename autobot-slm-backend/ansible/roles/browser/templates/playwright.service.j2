@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=autobot
 Group=autobot
-WorkingDirectory=/home/autobot/backend
+WorkingDirectory=/opt/autobot/autobot-browser-worker
 
 # Environment
 Environment="PLAYWRIGHT_PORT={{ playwright_port }}"
@@ -15,8 +15,8 @@ Environment="BROWSER_TIMEOUT={{ browser_timeout }}"
 Environment="HEADLESS_MODE={{ headless_mode }}"
 Environment="DISPLAY={{ vnc_display }}"
 
-# Start command (placeholder - will be updated when code is synced)
-ExecStart=/usr/bin/python3 -m uvicorn playwright_api:app --host 0.0.0.0 --port {{ playwright_port }}
+# Start command - Node.js Express server
+ExecStart=/usr/bin/node /opt/autobot/autobot-browser-worker/playwright-server.js
 
 # Restart policy
 Restart=always

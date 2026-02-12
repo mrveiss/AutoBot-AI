@@ -14,6 +14,24 @@
   become: yes
   tags: ['browser', 'packages']
 
+- name: "Browser | Check if Node.js is already installed"
+  command: node --version
+  register: node_check
+  failed_when: false
+  changed_when: false
+  become: yes
+  tags: ['browser', 'packages']
+
+- name: "Browser | Install Node.js from NodeSource"
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+  args:
+    creates: /usr/bin/node
+  when: node_check.rc != 0
+  become: yes
+  tags: ['browser', 'packages']
+
 - name: "Browser | Install Playwright system dependencies"
   apt:
     name:
@@ -36,11 +54,13 @@
   become: yes
   tags: ['browser', 'packages']
 
-- name: "Browser | Install Playwright via pip"
+- name: "Browser | Install Playwright and FastAPI dependencies via pip"
   pip:
     name:
       - playwright
       - playwright-stealth
+      - uvicorn
+      - fastapi
     state: present
     executable: pip3
   become: yes
@@ -50,6 +70,15 @@
   command: playwright install chromium firefox
   become: yes
   changed_when: false
+  tags: ['browser', 'packages']
+
+- name: "Browser | Install Node.js dependencies for browser worker"
+  npm:
+    path: /opt/autobot/autobot-browser-worker
+    state: present
+  become: yes
+  when: "'autobot-browser-worker' is exists"
+  failed_when: false
   tags: ['browser', 'packages']
 
 - name: "Browser | Create VNC directory"

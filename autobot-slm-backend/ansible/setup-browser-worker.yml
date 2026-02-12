@@ -16,7 +16,7 @@
 #   ansible-playbook setup-browser-worker.yml --limit 172.16.168.25
 
 - name: Setup Browser Worker Node
-  hosts: browser_worker
+  hosts: browser
   become: true
   gather_facts: true
 
@@ -26,7 +26,7 @@
     browser_worker_user: autobot
     browser_worker_group: autobot
     browser_worker_port: 3000
-    browser_worker_service_name: autobot-browser-worker
+    browser_worker_service_name: autobot-playwright
     backend_host: "172.16.168.20"
     backend_port: 8001
 
